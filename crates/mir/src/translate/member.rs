@@ -561,13 +561,11 @@ impl MiddleEnvironment {
                                       member: &str,
                                       match_tail: bool| {
             env.symbols.variables.iter().find_map(|(name, var)| {
-                if match_tail {
-                    if calibre_parser::qualified_name_tail(name) != member {
-                        return None;
-                    }
-                } else if !name.ends_with(&format!("::{member}")) {
+                let name = ParserText::get_temp_name_prefix(name)?;
+                if !(name.ends_with(&format!("::{member}")) || name.ends_with(&format!(".{member}"))) {
                     return None;
                 }
+
                 let param_inner = first_param_inner(&var.data_type)?;
                 if param_inner.matches(target_inner, &Vec::new()) {
                     Some(name.clone())
@@ -620,45 +618,26 @@ impl MiddleEnvironment {
         }
 
         let target_family: Option<String> = match &target_inner {
-            ParserInnerType::Int
-            | ParserInnerType::UInt
-            | ParserInnerType::Byte
-            | ParserInnerType::Float
-            | ParserInnerType::Bool
-            | ParserInnerType::Char
-            | ParserInnerType::Dynamic
-            | ParserInnerType::Null
-            | ParserInnerType::Range
-            | ParserInnerType::Str => Some(target_inner.to_string()),
-            ParserInnerType::List(_) => Some("list".to_string()),
-            ParserInnerType::DynamicTraits(_) => Some("dyn".to_string()),
-            ParserInnerType::Struct(name) => {
-                Some(calibre_parser::qualified_name_base(&normalize_owner(name)).to_string())
-            }
+            _ => Some(target_inner.to_string()),
             ParserInnerType::StructWithGenerics { identifier, .. } => {
-                Some(calibre_parser::qualified_name_base(&normalize_owner(identifier)).to_string())
+                Some(identifier.to_string())
             }
             _ => None,
         };
 
         if let Some(target_family) = &target_family
             && let Some(found) = self.symbols.variables.keys().find(|name| {
-                let Some((owner, meth)) = name.rsplit_once("::") else {
+                let Some((owner, meth)) = name.rsplit_once(".") else {
                     return false;
                 };
                 if meth != member {
                     return false;
                 }
-                let owner = normalize_owner(owner);
-                let owner_base = calibre_parser::qualified_name_base(&owner);
-                let owner_family = owner_base
-                    .rsplit_once("::")
-                    .map(|(_, rhs)| rhs)
-                    .unwrap_or(owner_base);
+
                 if target_family == "list" {
-                    return owner_family.starts_with("list:<") || owner.starts_with("list:<");
+                    return owner.starts_with("list:<") || owner.starts_with("list:<");
                 }
-                owner_family == target_family
+                owner == target_family
             })
         {
             return Some(found.clone());
@@ -678,17 +657,10 @@ impl MiddleEnvironment {
                     | ParserInnerType::List(_)
             )
         {
-            return Some(format!("{target_family}::{member}"));
+            return Some(format!("{target_family}.{member}"));
         }
 
         let target = resolved.clone();
-        let target_name = match &target.data_type {
-            ParserInnerType::Struct(name) => {
-                Some(calibre_parser::qualified_name_tail(&name).to_string())
-            }
-            _ => None,
-        }?;
-        let target_family = calibre_parser::qualified_name_base(&target_name).to_string();
 
         let template = self.typing.impls.values().find_map(|imp| {
             let imp_name = match &imp.data_type.data_type {

@@ -6,7 +6,6 @@ use crate::{
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{CallArg, Node, NodeType, Overload, TypeDefType},
     },
-    qualified_name_base, qualified_name_tail,
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -40,41 +39,26 @@ impl ParserDataType {
         let mut names = Vec::new();
         let base = self.key();
         let base_key = base.to_string();
+
         names.push(base_key.clone());
+        if let Some(x) = ParserText::get_temp_name_prefix(&base_key) {
+            names.push(x);
+        }
 
         match &base {
             ParserInnerType::Struct(name) => {
-                let de_prefixed = qualified_name_tail(name);
-                if de_prefixed != name {
-                    names.push(de_prefixed.to_string());
-                }
-                let short = name.rsplit_once("::").map(|(_, rhs)| rhs).unwrap_or(name);
-                if short != name {
-                    names.push(short.to_string());
+                names.push(name.clone());
+                if let Some(x) = ParserText::get_temp_name_prefix(name) {
+                    names.push(x);
                 }
             }
             ParserInnerType::StructWithGenerics { identifier, .. } => {
                 names.push(identifier.clone());
-                let de_prefixed = qualified_name_tail(identifier);
-                if de_prefixed != identifier {
-                    names.push(de_prefixed.to_string());
-                }
-                let short = identifier
-                    .rsplit_once("::")
-                    .map(|(_, rhs)| rhs)
-                    .unwrap_or(identifier);
-                if short != identifier {
-                    names.push(short.to_string());
+                if let Some(x) = ParserText::get_temp_name_prefix(identifier) {
+                    names.push(x);
                 }
             }
             _ => {
-                let short = base_key
-                    .rsplit_once("::")
-                    .map(|(_, rhs)| rhs)
-                    .unwrap_or(base_key.as_str());
-                if short != base_key {
-                    names.push(short.to_string());
-                }
             }
         }
 
@@ -491,14 +475,13 @@ impl ParserInnerType {
     }
 
     pub fn matches(&self, other: &Self, generic_params: &[String]) -> bool {
-        fn struct_base(name: &str) -> &str {
-            let short = name.rsplit_once("::").map(|(lhs, _)| lhs).unwrap_or(name);
-            qualified_name_base(short)
+        fn struct_base(name: &impl ToString) -> String {
+            ParserText::get_temp_name_prefix(name).unwrap_or(name.to_string())
         }
 
         match (self, other) {
             (ParserInnerType::Struct(s), target)
-                if ParserInnerType::from_str(struct_base(s)).as_ref() == Ok(target) =>
+                if ParserInnerType::from_str(&struct_base(s)).as_ref() == Ok(target) =>
             {
                 true
             }
@@ -513,11 +496,11 @@ impl ParserInnerType {
             (
                 ParserInnerType::StructWithGenerics { identifier: a, .. },
                 ParserInnerType::Struct(b),
-            ) if b == a || b.starts_with(&format!("{}->", a)) || struct_base(b) == a => true,
+            ) if b == a || b.starts_with(&format!("{}->", a)) || &struct_base(b) == a => true,
             (
                 ParserInnerType::Struct(a),
                 ParserInnerType::StructWithGenerics { identifier: b, .. },
-            ) => a == b || struct_base(a) == b,
+            ) => a == b || &struct_base(a) == b,
             (
                 ParserInnerType::StructWithGenerics {
                     identifier: a,

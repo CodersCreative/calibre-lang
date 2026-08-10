@@ -186,8 +186,7 @@ impl MiddleEnvironment {
         let find_named_index = |name: &str| -> Option<usize> {
             defaults.iter().position(|d| {
                 d.name == name
-                    || calibre_parser::qualified_name_tail(d.name.as_str()) == name
-                    || d.name.ends_with(&format!(":{name}"))
+                    || ParserText::get_temp_name_prefix(&d.name).unwrap_or_default() == name
             })
         };
 

@@ -165,61 +165,13 @@ impl MiddleEnvironment {
         }
 
         let scope_ref = self.scoping.scopes.get(scope)?;
-
-        let current_mapping = scope_ref.mappings.get(iden).cloned();
-        if current_mapping.is_none() {
-            let mut parent_id = scope_ref.parent;
-            while let Some(parent) = parent_id {
-                let Some(parent_scope) = self.scoping.scopes.get(&parent) else {
-                    break;
-                };
-                if let Some(mapped) = parent_scope.mappings.get(iden) {
-                    return Some(mapped.clone());
-                }
-                parent_id = parent_scope.parent;
+        match scope_ref.mappings.get(iden).cloned() {
+            Some(x) => return Some(x),
+            _ => if let Some(x) = &scope_ref.parent {
+                return self.resolve_str(x, iden)
+            }else{
+                return None;
             }
-        }
-        if let Some(current) = current_mapping {
-            let mut parent_id = scope_ref.parent;
-            let mut root_mapping: Option<String> = None;
-            while let Some(parent) = parent_id {
-                let Some(parent_scope) = self.scoping.scopes.get(&parent) else {
-                    break;
-                };
-                if parent_scope.parent.is_none() {
-                    root_mapping = parent_scope.mappings.get(iden).cloned();
-                    break;
-                }
-                parent_id = parent_scope.parent;
-            }
-
-            if let Some(root) = root_mapping {
-                let in_impl_scope = scope_ref.mappings.contains_key("Self");
-                let collides_with_impl_member = current != root
-                    && ParserText::is_temp_name(&current)
-                    && calibre_parser::qualified_name_tail(&current) == iden;
-                if in_impl_scope && collides_with_impl_member {
-                    return Some(root);
-                }
-            }
-
-            return Some(current);
-        }
-
-        if let Some(parent) = scope_ref.parent.as_ref() {
-            self.resolve_str(parent, iden).or_else(|| {
-                self.scoping
-                    .scopes
-                    .values()
-                    .find(|s| s.mappings.contains_key(iden))
-                    .and_then(|s| s.mappings.get(iden).cloned())
-            })
-        } else {
-            self.scoping
-                .scopes
-                .values()
-                .find(|s| s.mappings.contains_key(iden))
-                .and_then(|s| s.mappings.get(iden).cloned())
         }
     }
 

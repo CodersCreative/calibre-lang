@@ -20,6 +20,7 @@ pub struct Typing {
     pub type_specializations: FxHashMap<String, String>,
 }
 
+// TODO Implement resolving into these
 impl Typing {
     pub fn member_fn_candidates(&self, ty: &ParserDataType, member: &str) -> Vec<String> {
         let mut candidates = Vec::new();
@@ -32,6 +33,7 @@ impl Typing {
 
         for base in ty.member_base_name_candidates() {
             candidates.push(format!("{base}::{member}"));
+            candidates.push(format!("{base}.{member}"));
         }
         candidates.dedup();
         candidates
@@ -71,10 +73,6 @@ impl Typing {
     pub fn find_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
         if let Some(obj) = self.objects.get(struct_name) {
             return Some(obj);
-        }
-        let base = calibre_parser::qualified_name_base(struct_name);
-        if base != struct_name {
-            return self.objects.get(base);
         }
         None
     }
