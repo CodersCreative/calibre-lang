@@ -223,9 +223,9 @@ impl VM {
         member: &str,
         short_member: Option<&str>,
     ) {
-        let short_owner = calibre_parser::qualified_name_tail(owner);
+        let short_owner = ParserText::get_temp_name_prefix(&owner).unwrap_or_else(|| owner.to_string());
         if short_owner != owner {
-            Self::push_owner_member_candidates(candidates, short_owner, member, short_member);
+            Self::push_owner_member_candidates(candidates, &short_owner, member, short_member);
         }
     }
 
@@ -244,10 +244,10 @@ impl VM {
         None
     }
 
-    fn normalize_generic_owner(owner: &str) -> &str {
-        let tail = calibre_parser::qualified_name_tail(owner);
-        let base = tail.split("->").next().unwrap_or(tail);
-        base.split('<').next().unwrap_or(base)
+    fn normalize_generic_owner(owner: &str) -> String {
+        let tail = ParserText::get_temp_name_prefix(&owner).unwrap_or_else(|| owner.to_string());
+        let base = tail.split("->").next().unwrap_or(&tail);
+        base.split('<').next().map_or(base.to_string(), |x| x.to_string())
     }
 
     fn resolve_native_member(&self, owner: &str, member: &str) -> Option<RuntimeValue> {
@@ -478,11 +478,11 @@ impl VM {
         trait_name: &str,
     ) -> Option<&FxHashMap<String, String>> {
         for (imp_ty, traits) in self.registry.dyn_vtables.iter() {
-            if !calibre_parser::qualified_name_matches(imp_ty, concrete) {
+            if !ParserText::temp_name_prefix_matches(imp_ty, &concrete) {
                 continue;
             }
             for (imp_trait, table) in traits {
-                if calibre_parser::qualified_name_matches(imp_trait, trait_name) {
+                if ParserText::temp_name_prefix_matches(imp_trait, &trait_name) {
                     return Some(table);
                 }
             }
@@ -542,11 +542,11 @@ impl VM {
                 return Some(found);
             }
         }
-        let owner_tail = calibre_parser::qualified_name_tail(owner);
+        let owner_tail = ParserText::get_temp_name_prefix(&owner).unwrap_or_else(|| owner.to_string());
         let owner_base = owner_tail
             .split_once("->")
             .map(|(base, _)| base)
-            .unwrap_or(owner_tail);
+            .unwrap_or(&owner_tail);
         let member_name = short_member.unwrap_or(member);
         let suffix = format!("{}_{}", owner_base.to_ascii_lowercase(), member_name);
         if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&suffix) {
@@ -557,7 +557,7 @@ impl VM {
         }
         let mut matched: Option<String> = None;
         for name in self.variables.keys() {
-            let tail = calibre_parser::qualified_name_tail(name);
+            let tail = ParserText::get_temp_name_prefix(&name).unwrap_or_else(|| name.to_string());
             if tail != suffix
                 && !name.ends_with(&format!(".{suffix}"))
                 && !name.ends_with(&format!("::{suffix}"))
@@ -584,11 +584,11 @@ impl VM {
                     return Some(resolved);
                 }
             }
-            let std_owner_tail = calibre_parser::qualified_name_tail(&std_owner);
+            let std_owner_tail = ParserText::get_temp_name_prefix(&std_owner).unwrap_or_else(|| std_owner.to_string());
             let std_owner_base = std_owner_tail
                 .split_once("->")
                 .map(|(base, _)| base)
-                .unwrap_or(std_owner_tail);
+                .unwrap_or(&std_owner_tail);
             let std_suffix = format!("{}_{}", std_owner_base.to_ascii_lowercase(), member_name);
             if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&std_suffix) {
                 return Some(resolved);
@@ -774,7 +774,7 @@ impl VM {
                 ParserInnerType::DynamicTraits(traits) => traits.iter().all(|tr| {
                     constraints
                         .iter()
-                        .any(|x| calibre_parser::qualified_name_matches(x, tr))
+                        .any(|x| ParserText::temp_name_prefix_matches(x, tr))
                 }),
                 _ => self.runtime_matches_type(inner.as_ref(), target),
             };
@@ -786,7 +786,7 @@ impl VM {
                 RuntimeValue::DynObject { constraints, .. } => traits.iter().all(|tr| {
                     constraints
                         .iter()
-                        .any(|x| calibre_parser::qualified_name_matches(x, tr))
+                        .any(|x| ParserText::temp_name_prefix_matches(x, tr))
                 }),
                 other => self
                     .build_dyn_vtable_for_value(other, traits.as_slice())
@@ -856,10 +856,10 @@ impl VM {
             ParserInnerType::Struct(identifier)
             | ParserInnerType::StructWithGenerics { identifier, .. } => match value {
                 RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
-                    calibre_parser::qualified_name_matches(actual, identifier)
+                    ParserText::temp_name_prefix_matches(actual, identifier)
                 }
                 RuntimeValue::Generator { type_name, .. } => {
-                    calibre_parser::qualified_name_matches(type_name, type_name)
+                    ParserText::temp_name_prefix_matches(type_name, type_name)
                 }
                 _ => false,
             },
@@ -881,7 +881,7 @@ impl VM {
             }
         }
 
-        let Some(short_name) = calibre_parser::short_name_if_qualified(name) else {
+        let Some(short_name) = ParserText::get_temp_name_prefix(&name) else {
             if ParserText::is_temp_name(&name) {
                 if let Some((owner, member)) = name.rsplit_once("::") {
                     if let Some(resolved) =
@@ -897,9 +897,9 @@ impl VM {
                     return Some(found);
                 }
 
-                let base = calibre_parser::qualified_name_base(name);
+                let base = ParserText::get_temp_name_prefix(&name).unwrap_or_else(|| name.to_string());
                 if base != name
-                    && let Some(found) = self.resolve_suffix_global_runtime_value(base)
+                    && let Some(found) = self.resolve_suffix_global_runtime_value(&base)
                 {
                     return Some(found);
                 }
@@ -907,18 +907,18 @@ impl VM {
             return None;
         };
 
-        if let Some(found) = self.resolve_named_global_runtime_value(short_name) {
+        if let Some(found) = self.resolve_named_global_runtime_value(&short_name) {
             return Some(found);
         }
 
-        let base = calibre_parser::qualified_name_base(short_name);
+        let base = ParserText::get_temp_name_prefix(&short_name).unwrap_or_else(|| short_name.to_string());
         if base != short_name
-            && let Some(found) = self.resolve_suffix_global_runtime_value(base)
+            && let Some(found) = self.resolve_suffix_global_runtime_value(&base)
         {
             return Some(found);
         }
 
-        let direct = self.resolve_suffix_global_runtime_value(short_name);
+        let direct = self.resolve_suffix_global_runtime_value(&short_name);
         if direct.is_some() {
             return direct;
         }
@@ -968,15 +968,15 @@ impl VM {
             return None;
         }
 
-        let Some(short_name) = calibre_parser::short_name_if_qualified(name) else {
+        let Some(short_name) = ParserText::get_temp_name_prefix(&name) else {
             return None;
         };
 
-        if let Some(found) = self.move_named_global_runtime_value(short_name) {
+        if let Some(found) = self.move_named_global_runtime_value(&short_name) {
             return Some(found);
         }
 
-        self.move_suffix_global_runtime_value(short_name)
+        self.move_suffix_global_runtime_value(&short_name)
     }
 
     #[inline]

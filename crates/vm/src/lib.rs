@@ -7,6 +7,7 @@ use crate::{
     variables::VariableStore,
 };
 use calibre_lir::ast::BlockId;
+use calibre_parser::ast::idents::ParserText;
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::OnceLock;
@@ -837,7 +838,7 @@ fn build_function_suffix_index(
     let mut out: FxHashMap<String, Option<Arc<VMFunction>>> =
         FxHashMap::with_capacity_and_hasher(registry.functions.len(), Default::default());
     for (name, func) in registry.functions.iter() {
-        let short = calibre_parser::qualified_name_tail(name);
+        let short = &ParserText::get_temp_name_prefix(name).unwrap_or(name.to_string());
         if short == name {
             continue;
         }

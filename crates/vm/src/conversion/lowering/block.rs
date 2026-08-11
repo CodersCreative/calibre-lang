@@ -1,5 +1,5 @@
 use super::*;
-use calibre_parser::ast::binary::BinaryOperator;
+use calibre_parser::ast::{binary::BinaryOperator, idents::ParserText};
 
 impl<'a> BlockLoweringCtx<'a> {
     pub(super) fn resolve_local_key(&self, name: &str) -> Option<String> {
@@ -13,10 +13,9 @@ impl<'a> BlockLoweringCtx<'a> {
             return None;
         }
 
-        let tail = calibre_parser::qualified_name_tail(name);
         let mut found: Option<String> = None;
         for candidate in &self.locals {
-            if calibre_parser::qualified_name_tail(candidate.as_str()) == tail {
+            if ParserText::temp_name_prefix_matches(&candidate, &name) {
                 if found.is_some() {
                     return None;
                 }
@@ -34,10 +33,9 @@ impl<'a> BlockLoweringCtx<'a> {
             return None;
         }
 
-        let tail = calibre_parser::qualified_name_tail(name);
         let mut found: Option<Reg> = None;
         for (candidate, reg) in &self.map {
-            if calibre_parser::qualified_name_tail(candidate.as_str()) == tail {
+            if ParserText::temp_name_prefix_matches(&candidate, &name) {
                 if found.is_some() {
                     return None;
                 }

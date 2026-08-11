@@ -475,32 +475,21 @@ impl ParserInnerType {
     }
 
     pub fn matches(&self, other: &Self, generic_params: &[String]) -> bool {
-        fn struct_base(name: &impl ToString) -> String {
-            ParserText::get_temp_name_prefix(name).unwrap_or(name.to_string())
-        }
-
         match (self, other) {
-            (ParserInnerType::Struct(s), target)
-                if ParserInnerType::from_str(&struct_base(s)).as_ref() == Ok(target) =>
-            {
-                true
-            }
             (ParserInnerType::Struct(a), _) if generic_params.contains(a) => true,
             (ParserInnerType::Struct(a), ParserInnerType::Struct(b))
-                if b == a
-                    || b.starts_with(&format!("{}->", a))
-                    || struct_base(a) == struct_base(b) =>
+                if ParserText::temp_name_prefix_matches(a, b) =>
             {
                 true
             }
             (
                 ParserInnerType::StructWithGenerics { identifier: a, .. },
                 ParserInnerType::Struct(b),
-            ) if b == a || b.starts_with(&format!("{}->", a)) || &struct_base(b) == a => true,
+            ) if ParserText::temp_name_prefix_matches(b, a) => true,
             (
                 ParserInnerType::Struct(a),
                 ParserInnerType::StructWithGenerics { identifier: b, .. },
-            ) => a == b || &struct_base(a) == b,
+            ) => ParserText::temp_name_prefix_matches(a,b),
             (
                 ParserInnerType::StructWithGenerics {
                     identifier: a,
@@ -511,7 +500,7 @@ impl ParserInnerType {
                     generic_types: bg,
                 },
             ) => {
-                if struct_base(a) != struct_base(b) || ag.len() != bg.len() {
+                if !ParserText::temp_name_prefix_matches(a, b) || ag.len() != bg.len() {
                     return false;
                 }
                 ag.iter()

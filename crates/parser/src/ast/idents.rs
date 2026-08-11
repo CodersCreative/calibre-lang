@@ -297,6 +297,16 @@ impl ParserText {
             .and_then(|x| x.split('[').next())
             .map(|x| x.to_string());
     }
+
+    #[deprecated(note = "Needs to be phased out in favour of proper identifier resolving")]
+    pub fn temp_name_prefix_matches(left: &impl ToString, right : &impl ToString) -> bool {
+        let (left, right) = (left.to_string(), right.to_string());
+        if left == right {
+            return true
+        }
+
+        Self::get_temp_name_prefix(&left).unwrap_or(left) == Self::get_temp_name_prefix(&right).unwrap_or(right)
+    }
 }
 
 impl From<String> for ParserText {

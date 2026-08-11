@@ -41,7 +41,7 @@ impl MiddleEnvironment {
         ) -> Option<ParserDataType> {
             let root = defs
                 .iter()
-                .find(|(name, _)| calibre_parser::qualified_name_matches(name, trait_name))
+                .find(|(name, _)| ParserText::temp_name_prefix_matches(name, &trait_name))
                 .map(|(name, _)| name.clone())?;
             let mut stack = vec![root];
             let mut visited = FxHashSet::default();
@@ -59,7 +59,7 @@ impl MiddleEnvironment {
                 for implied in &def.implied_traits {
                     if let Some((resolved, _)) = defs
                         .iter()
-                        .find(|(name, _)| calibre_parser::qualified_name_matches(name, implied))
+                        .find(|(name, _)| ParserText::temp_name_prefix_matches(name, implied))
                     {
                         stack.push(resolved.clone());
                     } else {

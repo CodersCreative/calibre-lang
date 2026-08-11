@@ -163,7 +163,7 @@ impl VM {
         if let RuntimeValue::Ref(name) = raw_receiver
             && (!name.contains(':') || name.contains("->"))
             && let Some(ty) = self.concrete_runtime_type_name(&resolved_receiver)
-            && calibre_parser::qualified_name_matches(&ty, name)
+            && ParserText::temp_name_prefix_matches(&ty, name)
         {
             return callee;
         }
@@ -463,8 +463,7 @@ impl VM {
             && let Ok(receiver) = self.resolve_value_for_op_ref(self.get_reg_value(*first))
             && let Some(receiver_type) = self.concrete_runtime_type_name(&receiver)
         {
-            let owner_tail = calibre_parser::qualified_name_tail(owner);
-            if !calibre_parser::qualified_name_matches(&receiver_type, owner_tail) {
+            if !ParserText::temp_name_prefix_matches(&receiver_type, &owner) {
                 if let Some(resolved) =
                     self.resolve_associated_member_value(&receiver_type, member, Some(member))
                     && resolved.is_callable()
@@ -561,10 +560,10 @@ impl VM {
                 RuntimeValue::Ref(owner) => self
                     .resolve_associated_member_value(owner, &member_name, short_name)
                     .or_else(|| {
-                        let owner_short = calibre_parser::qualified_name_tail(owner);
-                        if owner_short != owner {
+                        let owner_short = ParserText::get_temp_name_prefix(owner).unwrap_or(owner.to_string());
+                        if &owner_short != owner {
                             self.resolve_associated_member_value(
-                                owner_short,
+                                &owner_short,
                                 &member_name,
                                 short_name,
                             )
@@ -585,9 +584,8 @@ impl VM {
             && let Ok(receiver) = self.resolve_value_for_op_ref(self.get_reg_value(*first))
             && let Some(receiver_type) = self.concrete_runtime_type_name(&receiver)
         {
-            let owner_tail = calibre_parser::qualified_name_tail(owner);
             if self.callee_expects_receiver(&func)
-                && !calibre_parser::qualified_name_matches(&receiver_type, owner_tail)
+                && !ParserText::temp_name_prefix_matches(&receiver_type, &owner)
                 && let Some(resolved) =
                     self.resolve_associated_member_value(&receiver_type, member, Some(member))
                 && resolved.is_callable()
@@ -875,11 +873,11 @@ impl VM {
                     && let Some((owner, method)) = name.rsplit_once("::")
                 {
                     let owner = owner.rsplit(':').next().unwrap_or(owner);
-                    let owner = calibre_parser::qualified_name_tail(owner);
+                    let owner = ParserText::get_temp_name_prefix(&owner).unwrap_or_else(|| owner.to_string());
                     let owner = owner
                         .split_once("->")
                         .map(|(base, _)| base)
-                        .unwrap_or(owner);
+                        .unwrap_or(&owner);
                     let short_candidate = format!("{}_{}", owner.to_ascii_lowercase(), method);
                     let long_candidate = format!("async.{}", short_candidate);
                     if let Some((resolved, _)) = self
@@ -1471,7 +1469,7 @@ impl VM {
                             vtable.get(member_short).or_else(|| vtable.get(name))
                         {
                             let mapped = callee_name.rsplit_once("::").and_then(|(owner, _)| {
-                                if calibre_parser::qualified_name_matches(owner, type_name.as_str())
+                                if ParserText::temp_name_prefix_matches(&owner, &type_name)
                                 {
                                     Some(callee_name.as_str())
                                 } else {

@@ -35,18 +35,19 @@ impl VM {
         if ParserText::is_temp_name(&name) {
             return None;
         }
-        let short_name = calibre_parser::qualified_name_tail(name);
+        
+        let short_name = ParserText::get_temp_name_prefix(&name).unwrap_or_else(|| name.to_string());
         if short_name == name {
             return None;
         }
-        let func = self.func_suffix.get(short_name)?.as_ref()?;
+
+        let func = self.func_suffix.get(&short_name)?.as_ref()?;
         (!self.moved_functions.contains(&func.name)).then(|| func.clone())
     }
 
     pub(crate) fn find_unique_var_by_suffix(&self, short_name: &str) -> Option<String> {
         self.variables.keys().find_map(|name| {
-            let suffix = calibre_parser::qualified_name_tail(name);
-            (suffix == short_name).then(|| name.to_string())
+            ParserText::temp_name_prefix_matches(&name, &short_name).then(|| name.to_string())
         })
     }
 
@@ -159,19 +160,11 @@ impl VM {
 
         if !is_local_style {
             let frame = self.current_frame();
-            let target_tail = calibre_parser::qualified_name_tail(name);
             let mut found: Option<Reg> = None;
             let mut ambiguous = false;
-            let tail_matches = |key: &Arc<str>, target: &str| {
-                let local = key.as_ref();
-                let colon_tail = local
-                    .rsplit_once(':')
-                    .map(|(_, tail)| tail)
-                    .unwrap_or(local);
-                calibre_parser::qualified_name_tail(colon_tail) == target
-            };
+
             for (key, reg) in frame.local_map.iter() {
-                if tail_matches(key, target_tail) {
+                if ParserText::temp_name_prefix_matches(key, &name) {
                     if found.is_some() {
                         ambiguous = true;
                         break;
@@ -186,7 +179,7 @@ impl VM {
                     .into_iter()
                     .flat_map(|base| base.iter())
                 {
-                    if tail_matches(key, target_tail) {
+                    if ParserText::temp_name_prefix_matches(key, &name) {
                         if found.is_some() {
                             ambiguous = true;
                             break;
@@ -236,9 +229,9 @@ impl VM {
                 .map(|f| self.make_runtime_function_inner(f, seen))
                 .unwrap_or_else(|| RuntimeValue::Null),
             VarName::Global => {
-                let short_name = calibre_parser::qualified_name_tail(name);
+                let short_name = ParserText::get_temp_name_prefix(&name).unwrap_or_else(|| name.to_string());
                 if short_name != name
-                    && let Some(func) = self.find_unique_function_by_suffix_ref(short_name)
+                    && let Some(func) = self.find_unique_function_by_suffix_ref(&short_name)
                 {
                     return self.make_runtime_function_inner(func, seen);
                 }
@@ -288,8 +281,8 @@ impl VM {
 
     #[inline]
     pub(crate) fn is_gen_type_name(type_name: &str) -> bool {
-        let short = calibre_parser::qualified_name_tail(type_name);
-        short == "gen" || short.starts_with("gen->")
+        let short = ParserText::get_temp_name_prefix(&type_name).unwrap_or_else(|| type_name.to_string());
+        short == "gen" || short.starts_with("gen:<")
     }
 
     pub(crate) fn resolve_aggregate_member_slot(
@@ -335,9 +328,9 @@ impl VM {
             return VarName::Global;
         }
 
-        let short_name = calibre_parser::qualified_name_tail(name);
+        let short_name = ParserText::get_temp_name_prefix(&name).unwrap_or_else(|| name.to_string());
         if short_name != name {
-            if let Some(resolved) = resolve_by_suffix(short_name) {
+            if let Some(resolved) = resolve_by_suffix(&short_name) {
                 return resolved;
             };
         } else if let Some(resolved) = resolve_by_suffix(name) {

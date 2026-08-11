@@ -664,11 +664,11 @@ impl MiddleEnvironment {
 
         let template = self.typing.impls.values().find_map(|imp| {
             let imp_name = match &imp.data_type.data_type {
-                ParserInnerType::Struct(name) => calibre_parser::qualified_name_tail(name),
+                ParserInnerType::Struct(name) => name,
                 ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
                 _ => return None,
             };
-            let imp_family = calibre_parser::qualified_name_base(imp_name);
+            let imp_family = ParserText::get_temp_name_prefix(imp_name);
             if imp_family == target_family && imp.variables.contains_key(member) {
                 Some(imp.clone())
             } else {
