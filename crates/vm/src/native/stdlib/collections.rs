@@ -3,7 +3,10 @@ use std::sync::{Arc, Mutex};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    VM, error::RuntimeError, native::{NativeFunction, pop_or_null}, value::{GcVec, HashKey, RuntimeValue},
+    VM,
+    error::RuntimeError,
+    native::{NativeFunction, pop_or_null},
+    value::{GcVec, HashKey, RuntimeValue},
 };
 use dumpster::sync::Gc;
 

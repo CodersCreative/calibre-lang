@@ -1,5 +1,10 @@
 use crate::{
-    config::VMConfig, conversion::{Reg, VMBlock, VMFunction, VMRegistry}, error::RuntimeError, native::NativeFunction, value::{ExternFunction, GcMap, GcVec, RuntimeValue, WaitGroupInner}, variables::VariableStore,
+    config::VMConfig,
+    conversion::{Reg, VMBlock, VMFunction, VMRegistry},
+    error::RuntimeError,
+    native::NativeFunction,
+    value::{ExternFunction, GcMap, GcVec, RuntimeValue, WaitGroupInner},
+    variables::VariableStore,
 };
 use calibre_lir::ast::BlockId;
 use dumpster::sync::Gc;
@@ -191,11 +196,7 @@ impl VM {
         }
     }
 
-    pub(crate) fn propagate_list_aliases(
-        &mut self,
-        old_list: &Gc<GcVec>,
-        new_list: &Gc<GcVec>,
-    ) {
+    pub(crate) fn propagate_list_aliases(&mut self, old_list: &Gc<GcVec>, new_list: &Gc<GcVec>) {
         let frame_count = self.frames.len();
         for frame_idx in 0..frame_count {
             let reg_count = self.frames[frame_idx].reg_count as u16;

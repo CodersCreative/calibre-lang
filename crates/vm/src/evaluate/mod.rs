@@ -219,7 +219,8 @@ impl VM {
         member: &str,
         short_member: Option<&str>,
     ) {
-        let short_owner = ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
+        let short_owner =
+            ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
         if short_owner != owner {
             Self::push_owner_member_candidates(candidates, &short_owner, member, short_member);
         }
@@ -243,9 +244,10 @@ impl VM {
     fn normalize_generic_owner(owner: &str) -> String {
         let tail = ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
         let base = tail.split("->").next().unwrap_or(&tail);
-        base.split('<').next().map_or(base.to_string(), |x| x.to_string())
+        base.split('<')
+            .next()
+            .map_or(base.to_string(), |x| x.to_string())
     }
-
 
     #[inline]
     fn build_member_candidates(
@@ -526,7 +528,8 @@ impl VM {
                 return Some(found);
             }
         }
-        let owner_tail = ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
+        let owner_tail =
+            ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
         let owner_base = owner_tail
             .split_once("->")
             .map(|(base, _)| base)
@@ -566,7 +569,8 @@ impl VM {
                     return Some(resolved);
                 }
             }
-            let std_owner_tail = ParserText::get_temp_name_suffix(&std_owner).unwrap_or_else(|| std_owner.to_string());
+            let std_owner_tail = ParserText::get_temp_name_suffix(&std_owner)
+                .unwrap_or_else(|| std_owner.to_string());
             let std_owner_base = std_owner_tail
                 .split_once("->")
                 .map(|(base, _)| base)
@@ -895,7 +899,6 @@ impl VM {
             )
         })
     }
-
 
     #[inline]
     fn move_runtime_value(&mut self, name: &str) -> Option<RuntimeValue> {

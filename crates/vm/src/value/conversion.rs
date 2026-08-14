@@ -1,4 +1,8 @@
-use crate::{VM, error::RuntimeError, value::{GcVec, RuntimeValue}};
+use crate::{
+    VM,
+    error::RuntimeError,
+    value::{GcVec, RuntimeValue},
+};
 use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
 use std::sync::Arc;

@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use crate::{
-    VM, error::RuntimeError, native::{NativeFunction, expect_str_ref, first_arg}, value::{GcVec, RuntimeValue},
+    VM,
+    error::RuntimeError,
+    native::{NativeFunction, expect_str_ref, first_arg},
+    value::{GcVec, RuntimeValue},
 };
 use dumpster::sync::Gc;
 

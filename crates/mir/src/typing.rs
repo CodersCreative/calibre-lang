@@ -8,7 +8,7 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[derive(Debug, Clone, Default)]
 pub struct Typing {
@@ -20,24 +20,7 @@ pub struct Typing {
     pub type_specializations: FxHashMap<String, String>,
 }
 
-// TODO Implement resolving into these
 impl Typing {
-    pub fn member_fn_candidates(&self, ty: &ParserDataType, member: &str) -> Vec<String> {
-        let mut candidates = Vec::new();
-
-        if let Some(imp) = self.find_impl_for_type(ty)
-            && let Some((mapped_name, _)) = imp.variables.get(member)
-        {
-            candidates.push(mapped_name.clone());
-        }
-
-        for base in ty.member_base_name_candidates() {
-            candidates.push(format!("{base}.{member}"));
-        }
-        candidates.dedup();
-        candidates
-    }
-
     pub fn find_impl_for_type(&self, ty: &ParserDataType) -> Option<&MiddleImpl> {
         let key = ty.key();
         if let Some(imp) = self.impls.get(&key) {
@@ -67,6 +50,106 @@ impl Typing {
             })
             .map(|(k, _)| k.clone())?;
         self.impls.get_mut(&key)
+    }
+
+    pub fn find_impl_member(&self, ty: &ParserDataType, member: &str) -> Option<&MiddleImplMember> {
+        self.find_impl_for_type(ty)?.members.get(member)
+    }
+
+    pub fn ensure_concrete_impl(
+        &mut self,
+        ty: ParserDataType,
+        location: Option<Location>,
+    ) -> ParserInnerType {
+        let key = ty.key();
+        if self
+            .impls
+            .get(&key)
+            .is_some_and(|imp| !imp.members.is_empty())
+        {
+            return key;
+        }
+
+        let template = self.find_impl_for_type(&ty).cloned();
+        if let Some(template) = template {
+            if template.data_type.key() != key {
+                let mut new_impl = MiddleImpl {
+                    data_type: ty,
+                    generic_params: template.generic_params.clone(),
+                    members: template.members.clone(),
+                    traits: template.traits.clone(),
+                    assoc_types: template.assoc_types.clone(),
+                    location: location.or(template.location),
+                };
+
+                Self::populate_trait_members(&self.trait_defs, &mut new_impl);
+
+                self.impls.insert(key.clone(), new_impl);
+            }
+        } else if !self.impls.contains_key(&key) {
+            self.get_or_create_impl(ty, Vec::new(), location);
+            if let Some(imp) = self.impls.get_mut(&key) {
+                Self::populate_trait_members(&self.trait_defs, imp);
+            }
+        }
+
+        key
+    }
+
+    fn populate_trait_members(trait_defs: &FxHashMap<String, MiddleTrait>, imp: &mut MiddleImpl) {
+        let mut provided_members = rustc_hash::FxHashSet::default();
+        for member_name in imp.members.keys() {
+            provided_members.insert(member_name.clone());
+        }
+
+        for trait_name in &imp.traits.clone() {
+            let default_members =
+                Self::collect_trait_default_members(trait_defs, trait_name, &provided_members);
+            for (member_name, _trait_member) in default_members {
+                let symbol_name = format!("{}.{}", trait_name, member_name);
+                imp.insert_member(member_name.clone(), symbol_name, false);
+                provided_members.insert(member_name);
+            }
+        }
+    }
+
+    pub fn collect_trait_default_members(
+        trait_defs: &FxHashMap<String, MiddleTrait>,
+        root_trait: &str,
+        provided: &FxHashSet<String>,
+    ) -> Vec<(String, MiddleTraitMember)> {
+        let mut out = Vec::new();
+        let mut seen_members = FxHashSet::default();
+        let mut stack = vec![root_trait.to_string()];
+        let mut visited_traits = FxHashSet::default();
+
+        while let Some(current) = stack.pop() {
+            if !visited_traits.insert(current.clone()) {
+                continue;
+            }
+
+            let Some(def) = trait_defs.get(&current) else {
+                continue;
+            };
+
+            for implied in &def.implied_traits {
+                stack.push(implied.clone());
+            }
+
+            for (name, member) in &def.members {
+                if member.default.is_none()
+                    || provided.contains(name)
+                    || seen_members.contains(name)
+                {
+                    continue;
+                }
+
+                seen_members.insert(name.clone());
+                out.push((name.clone(), member.clone()));
+            }
+        }
+
+        out
     }
 
     pub fn find_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
@@ -101,7 +184,7 @@ impl Typing {
             MiddleImpl {
                 data_type: ty,
                 generic_params,
-                variables: FxHashMap::default(),
+                members: FxHashMap::default(),
                 traits: Vec::new(),
                 assoc_types: FxHashMap::default(),
                 location,
@@ -121,13 +204,41 @@ pub struct MiddleObject {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct MiddleImplMember {
+    pub symbol_name: String,
+    pub dependant: bool,
+}
+
+impl MiddleImplMember {
+    pub fn new(symbol_name: String, dependant: bool) -> Self {
+        Self {
+            symbol_name,
+            dependant,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct MiddleImpl {
     pub data_type: ParserDataType,
     pub generic_params: Vec<String>,
-    pub variables: FxHashMap<String, (String, bool)>,
+    pub members: FxHashMap<String, MiddleImplMember>,
     pub traits: Vec<String>,
     pub assoc_types: FxHashMap<String, ParserDataType>,
     pub location: Option<Location>,
+}
+
+impl MiddleImpl {
+    pub fn insert_member(&mut self, name: String, symbol_name: String, dependant: bool) {
+        self.members
+            .insert(name, MiddleImplMember::new(symbol_name, dependant));
+    }
+
+    pub fn register_member_placeholder(&mut self, name: &str, symbol_name: String) {
+        self.members
+            .entry(name.to_string())
+            .or_insert_with(|| MiddleImplMember::new(symbol_name, false));
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

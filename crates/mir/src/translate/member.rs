@@ -414,14 +414,15 @@ impl MiddleEnvironment {
         let family = text.rsplit_once(".").map(|(lhs, _)| lhs).unwrap_or(text);
 
         for imp in self.typing.impls.values() {
-            if let Some((mapped, _)) = imp.variables.get(member) {
+            if let Some(mapped) = imp.members.get(member) {
                 let mapped_family = mapped
+                    .symbol_name
                     .rsplit_once(".")
                     .map(|(lhs, _)| lhs)
-                    .unwrap_or(mapped.as_str());
+                    .unwrap_or(mapped.symbol_name.as_str());
 
                 if mapped_family == family {
-                    return Some(mapped.clone());
+                    return Some(mapped.symbol_name.clone());
                 }
             }
         }
@@ -521,152 +522,23 @@ impl MiddleEnvironment {
         data_type: &ParserDataType,
         member: &str,
     ) -> Option<String> {
-        let resolve_from = |env: &MiddleEnvironment, ty: &ParserDataType, m: &str| {
-            env.resolve_member_fn_name(ty, m)
-        };
+        let resolved = self.resolve_data_type(scope, data_type.clone());
 
-        let impl_var = |env: &MiddleEnvironment, key: &ParserDataType, m: &str| {
-            let key = key.key();
-            env.typing
-                .impls
-                .get(&key)
-                .and_then(|imp| imp.variables.get(m))
-                .map(|(mapped, _)| mapped.clone())
-        };
-
-        let first_param_inner = |ty: &ParserDataType| {
-            let ParserInnerType::Function { parameters, .. } = &ty.data_type else {
-                return None;
-            };
-
-            let first = parameters.first()?;
-            Some(match &first.data_type {
-                ParserInnerType::Ref(inner, _) => inner.data_type.clone(),
-                other => other.clone(),
-            })
-        };
-
-        let find_impl_var_by_param = |env: &MiddleEnvironment,
-                                      target_inner: &ParserInnerType,
-                                      member: &str,
-                                      match_tail: bool| {
-            env.symbols.variables.iter().find_map(|(name, var)| {
-                let name = ParserText::get_temp_name_suffix(name)?;
-                if !name.ends_with(&format!(".{member}")) {
-                    return None;
-                }
-
-                let param_inner = first_param_inner(&var.data_type)?;
-                if param_inner.matches(target_inner, &Vec::new()) {
-                    Some(name.clone())
-                } else {
-                    None
-                }
-            })
-        };
-
-        let resolved = self
-            .resolve_data_type(scope, data_type.clone())
-            .unwrap_all_refs();
-
-        if let Some(mapped) = impl_var(self, &resolved, member) {
-            return Some(mapped);
-        }
-
-        if let Some(mapped) = impl_var(self, data_type, member) {
-            return Some(mapped);
-        }
-
-        if let Some(found) =
-            resolve_from(self, &resolved, member).or_else(|| resolve_from(self, data_type, member))
+        if let Some(symbol_name) = self
+            .typing
+            .find_impl_member(&resolved, member)
+            .map(|x| x.symbol_name.clone())
         {
-            return Some(found);
-        }
-
-        let target_inner = resolved.clone().unwrap_all_refs().data_type;
-        if let Some(found) = find_impl_var_by_param(self, &target_inner, member, false) {
-            return Some(found);
-        }
-
-        if let Some(found) = find_impl_var_by_param(self, &target_inner, member, true) {
-            return Some(found);
-        }
-
-        let target_family: Option<String> = match &target_inner {
-            ParserInnerType::StructWithGenerics { identifier, .. } => {
-                Some(identifier.to_string())
-            }
-            _ => Some(target_inner.to_string()),
-        };
-
-        if let Some(target_family) = &target_family
-            && let Some(found) = self.symbols.variables.keys().find(|name| {
-                let Some((owner, meth)) = name.rsplit_once(".") else {
-                    return false;
-                };
-                if meth != member {
-                    return false;
-                }
-
-                if target_family == "list" {
-                    return owner.starts_with("list:<") || owner.starts_with("list:<");
-                }
-                owner == target_family
-            })
+            Some(symbol_name)
+        } else if let Some(symbol_name) = self
+            .typing
+            .find_impl_member(&resolved.unwrap_all_refs(), member)
+            .map(|x| x.symbol_name.clone())
         {
-            return Some(found.clone());
+            Some(symbol_name)
+        } else {
+            None
         }
-
-        if let Some(target_family) = target_family.as_ref()
-            && matches!(
-                &target_inner,
-                ParserInnerType::Int
-                    | ParserInnerType::UInt
-                    | ParserInnerType::Byte
-                    | ParserInnerType::Float
-                    | ParserInnerType::Bool
-                    | ParserInnerType::Char
-                    | ParserInnerType::Str
-                    | ParserInnerType::Range
-                    | ParserInnerType::List(_)
-            )
-        {
-            let candidate = format!("{target_family}.{member}");
-            if self.symbols.variables.contains_key(&candidate) {
-                return Some(candidate);
-            }
-        }
-
-        let target = resolved.clone();
-
-        let template = self.typing.impls.values().find_map(|imp| {
-            let imp_name = match &imp.data_type.data_type {
-                ParserInnerType::Struct(name) => name,
-                ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
-                _ => return None,
-            };
-            let imp_family = ParserText::get_temp_name_suffix(imp_name);
-            if imp_family == target_family && imp.variables.contains_key(member) {
-                Some(imp.clone())
-            } else {
-                None
-            }
-        })?;
-
-        let impl_key = self.typing.get_or_create_impl(
-            target.clone(),
-            template.generic_params.clone(),
-            self.context.current_location.clone(),
-        );
-        if let Some(new_impl) = self.typing.impls.get_mut(&impl_key)
-            && new_impl.variables.is_empty()
-        {
-            new_impl.variables = template.variables.clone();
-            new_impl.assoc_types = template.assoc_types.clone();
-            new_impl.traits = template.traits.clone();
-        }
-
-        resolve_from(self, &target, member).or_else(|| resolve_from(self, data_type, member))
     }
 
     fn resolve_type_from_ident(
@@ -705,12 +577,11 @@ impl MiddleEnvironment {
             && let NodeType::Identifier(x) = &path[0].0.node_type
         {
             let resolved_ident = self.resolve_potential_generic_ident(scope, x);
-            
+
             first_is_variable = resolved_ident
                 .as_ref()
                 .map(|id| self.symbols.variables.contains_key(&id.text))
                 .unwrap_or(false);
-
 
             if let Some(Some(object)) = resolved_ident
                 .as_ref()

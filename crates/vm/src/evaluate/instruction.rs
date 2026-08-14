@@ -1,5 +1,8 @@
 use super::*;
-use crate::{native::stdlib::generator::{GeneratorResumeFn, GeneratorState}, value::GcVec};
+use crate::{
+    native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
+    value::GcVec,
+};
 use calibre_parser::ast::{idents::ParserText, nodes::AsFailureMode};
 
 impl VM {
@@ -560,7 +563,8 @@ impl VM {
                 RuntimeValue::Ref(owner) => self
                     .resolve_associated_member_value(owner, &member_name, short_name)
                     .or_else(|| {
-                        let owner_short = ParserText::get_temp_name_suffix(owner).unwrap_or(owner.to_string());
+                        let owner_short =
+                            ParserText::get_temp_name_suffix(owner).unwrap_or(owner.to_string());
                         if &owner_short != owner {
                             self.resolve_associated_member_value(
                                 &owner_short,
@@ -817,25 +821,25 @@ impl VM {
             VMInstruction::MoveGlobal { dst, name } => {
                 let name = self.local_string(block, *name)?;
                 let resolved = self.resolve_var_name(name);
-                let value =
-                    self.move_runtime_value(name)
-                        .unwrap_or_else(|| match &resolved {
-                            Some(VarName::Func(func)) => {
-                                if let Some(func) = self.take_function(func) {
-                                    self.make_runtime_function(&func)
-                                } else {
-                                    RuntimeValue::Null
-                                }
+                let value = self
+                    .move_runtime_value(name)
+                    .unwrap_or_else(|| match &resolved {
+                        Some(VarName::Func(func)) => {
+                            if let Some(func) = self.take_function(func) {
+                                self.make_runtime_function(&func)
+                            } else {
+                                RuntimeValue::Null
                             }
-                            Some(VarName::Var(var)) => {
-                                if let Some(var) = self.variables.remove(var) {
-                                    self.resolve_saveable_runtime_value_ref(&var)
-                                } else {
-                                    RuntimeValue::Null
-                                }
+                        }
+                        Some(VarName::Var(var)) => {
+                            if let Some(var) = self.variables.remove(var) {
+                                self.resolve_saveable_runtime_value_ref(&var)
+                            } else {
+                                RuntimeValue::Null
                             }
-                            _ => RuntimeValue::Null,
-                        });
+                        }
+                        _ => RuntimeValue::Null,
+                    });
 
                 self.set_reg_value(*dst, value);
             }
@@ -1114,10 +1118,7 @@ impl VM {
                     .iter()
                     .map(|item| self.get_reg_value(*item).clone())
                     .collect();
-                self.set_reg_value(
-                    *dst,
-                    RuntimeValue::List(Gc::new(GcVec(values))),
-                );
+                self.set_reg_value(*dst, RuntimeValue::List(Gc::new(GcVec(values))));
             }
             VMInstruction::Aggregate {
                 dst,
@@ -1379,8 +1380,7 @@ impl VM {
                             vtable.get(member_short).or_else(|| vtable.get(name))
                         {
                             let mapped = callee_name.rsplit_once("::").and_then(|(owner, _)| {
-                                if ParserText::temp_name_suffix_matches(&owner, &type_name)
-                                {
+                                if ParserText::temp_name_suffix_matches(&owner, &type_name) {
                                     Some(callee_name.as_str())
                                 } else {
                                     None
@@ -1908,29 +1908,28 @@ impl VM {
                     }
                 }
 
-                let index_list =
-                    |list: &Gc<GcVec>| -> Result<RuntimeValue, RuntimeError> {
-                        match &index_val {
-                            RuntimeValue::Int(index) => {
-                                Ok(Self::resolve_index(list.as_ref().0.len(), *index)
-                                    .and_then(|i| list.as_ref().0.get(i).cloned())
-                                    .unwrap_or_else(|| RuntimeValue::Null))
-                            }
-                            RuntimeValue::UInt(index) => Ok(list
-                                .as_ref()
-                                .0
-                                .get(*index as usize)
-                                .cloned()
-                                .unwrap_or_else(|| RuntimeValue::Null)),
-                            RuntimeValue::Range(start, end) => {
-                                let (s, e) =
-                                    Self::resolve_slice_range(list.as_ref().0.len(), *start, *end);
-                                let slice = list.as_ref().0[s..e].to_vec();
-                                Ok(RuntimeValue::List(Gc::new(GcVec(slice))))
-                            }
-                            _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                let index_list = |list: &Gc<GcVec>| -> Result<RuntimeValue, RuntimeError> {
+                    match &index_val {
+                        RuntimeValue::Int(index) => {
+                            Ok(Self::resolve_index(list.as_ref().0.len(), *index)
+                                .and_then(|i| list.as_ref().0.get(i).cloned())
+                                .unwrap_or_else(|| RuntimeValue::Null))
                         }
-                    };
+                        RuntimeValue::UInt(index) => Ok(list
+                            .as_ref()
+                            .0
+                            .get(*index as usize)
+                            .cloned()
+                            .unwrap_or_else(|| RuntimeValue::Null)),
+                        RuntimeValue::Range(start, end) => {
+                            let (s, e) =
+                                Self::resolve_slice_range(list.as_ref().0.len(), *start, *end);
+                            let slice = list.as_ref().0[s..e].to_vec();
+                            Ok(RuntimeValue::List(Gc::new(GcVec(slice))))
+                        }
+                        _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                    }
+                };
 
                 let index_map = |map: &std::sync::Arc<
                     std::sync::Mutex<rustc_hash::FxHashMap<crate::value::HashKey, RuntimeValue>>,

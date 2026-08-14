@@ -133,12 +133,12 @@ impl MiddleEnvironment {
         }
 
         if let Some(imp) = self.typing.find_impl_for_type(&resolved)
-            && let Some((mapped_name, _)) = imp.variables.get(member)
+            && let Some(mapped_member) = imp.members.get(member)
         {
             return self
                 .symbols
                 .variables
-                .get(mapped_name)
+                .get(&mapped_member.symbol_name)
                 .map(|var| var.data_type.clone());
         }
 
@@ -146,17 +146,22 @@ impl MiddleEnvironment {
     }
 
     pub fn resolve_member_fn_name(&self, ty: &ParserDataType, member: &str) -> Option<String> {
-        self.typing
-            .member_fn_candidates(ty, member)
-            .into_iter()
-            .find(|name| {
-                self.symbols.variables.get(name).is_some_and(|var| {
-                    matches!(
-                        var.data_type.data_type,
-                        ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
-                    )
-                })
-            })
+        let symbol_name = self
+            .typing
+            .find_impl_member(ty, member)?
+            .symbol_name
+            .clone();
+
+        self.symbols.variables.get(&symbol_name).and_then(|var| {
+            if matches!(
+                var.data_type.clone().unwrap_all_refs().data_type,
+                ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
+            ) {
+                Some(symbol_name)
+            } else {
+                None
+            }
+        })
     }
 
     pub fn resolve_str(&self, scope: &u64, iden: &str) -> Option<String> {
@@ -167,11 +172,7 @@ impl MiddleEnvironment {
         let scope_ref = self.scoping.scopes.get(scope)?;
         match scope_ref.mappings.get(iden).cloned() {
             Some(x) => return Some(x),
-            _ => if let Some(x) = &scope_ref.parent {
-                return self.resolve_str(x, iden)
-            }else{
-                return None;
-            }
+            _ => scope_ref.parent.and_then(|x| self.resolve_str(&x, iden)),
         }
     }
 

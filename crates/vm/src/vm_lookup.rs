@@ -12,8 +12,7 @@ pub(crate) enum VarName {
 
 impl VM {
     pub(crate) fn resolve_function_by_name(&self, name: &str) -> Option<Arc<VMFunction>> {
-        if let Some(found) = self.registry.functions.get(name)
-        {
+        if let Some(found) = self.registry.functions.get(name) {
             Some(found.clone())
         } else {
             None
@@ -79,7 +78,6 @@ impl VM {
     }
 
     pub(crate) fn capture_value(&self, name: &str, seen: &mut FxHashSet<String>) -> RuntimeValue {
-
         let current_frame = self.frames.len().saturating_sub(1);
         if let Some(id) = self.variables.id_of(name)
             && let Some(RuntimeValue::RegRef { frame, .. }) = self.variables.get_by_id(id)
@@ -87,7 +85,6 @@ impl VM {
         {
             return RuntimeValue::VarRef(id);
         }
-
 
         for (frame_idx, frame) in self.frames.iter().enumerate().rev() {
             if let Some(reg) = frame.local_map.get(name).copied() {
@@ -105,7 +102,6 @@ impl VM {
                 }
             }
         }
-     
 
         if let Some(id) = self.variables.id_of(name) {
             return RuntimeValue::VarRef(id);
@@ -181,7 +177,8 @@ impl VM {
 
     #[inline]
     pub(crate) fn is_gen_type_name(type_name: &str) -> bool {
-        let short = ParserText::get_temp_name_suffix(&type_name).unwrap_or_else(|| type_name.to_string());
+        let short =
+            ParserText::get_temp_name_suffix(&type_name).unwrap_or_else(|| type_name.to_string());
         short == "gen" || short.starts_with("gen:<")
     }
 

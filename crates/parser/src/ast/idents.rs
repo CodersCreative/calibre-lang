@@ -287,19 +287,18 @@ impl ParserText {
             return Some(ident);
         }
 
-        Some(ident
-            .split_once(']')?
-            .1.to_string())
+        Some(ident.split_once(']')?.1.to_string())
     }
 
     #[deprecated(note = "Needs to be phased out in favour of proper identifier resolving")]
-    pub fn temp_name_suffix_matches(left: &impl ToString, right : &impl ToString) -> bool {
+    pub fn temp_name_suffix_matches(left: &impl ToString, right: &impl ToString) -> bool {
         let (left, right) = (left.to_string(), right.to_string());
         if left == right {
-            return true
+            return true;
         }
 
-        Self::get_temp_name_suffix(&left).unwrap_or(left) == Self::get_temp_name_suffix(&right).unwrap_or(right)
+        Self::get_temp_name_suffix(&left).unwrap_or(left)
+            == Self::get_temp_name_suffix(&right).unwrap_or(right)
     }
 }
 

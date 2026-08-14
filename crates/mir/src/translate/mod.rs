@@ -2,7 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    typing::{MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType},
+    typing::{MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType, Typing},
 };
 use calibre_parser::{
     IdentifiersUsed, Span,
@@ -1804,13 +1804,14 @@ impl MiddleEnvironment {
                             Box::new(MiddleErr::Internal(format!("missing impl {impl_key:?}"))),
                         )
                     })?;
+
                     for var in &variables {
                         if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type {
                             let resolved_iden = format!("{}.{}", target_key, identifier);
-                            impl_ref
-                                .variables
-                                .entry(identifier.to_string())
-                                .or_insert((resolved_iden, false));
+                            impl_ref.register_member_placeholder(
+                                &identifier.to_string(),
+                                resolved_iden,
+                            );
                         }
                     }
                 }
@@ -1936,8 +1937,7 @@ impl MiddleEnvironment {
                                 Box::new(MiddleErr::Internal(format!("missing impl {impl_key:?}"))),
                             )
                         })?
-                        .variables
-                        .insert(iden, (new_name, dependant));
+                        .insert_member(iden, new_name, dependant);
 
                     statements.push(dec);
                 }
@@ -2003,7 +2003,6 @@ impl MiddleEnvironment {
                     .unwrap_all_refs();
                 let target_key = resolved_target.key().to_string();
                 let self_name = resolved_target.impl_name();
-                let trait_def = self.typing.trait_defs.get(&resolved_trait.text).cloned();
 
                 let mut provided = FxHashSet::default();
                 let mut assoc_types = Vec::new();
@@ -2022,29 +2021,26 @@ impl MiddleEnvironment {
                 }
 
                 let mut all_vars = variables;
-                if let Some(trait_def) = trait_def {
-                    for (name, member) in trait_def.members {
-                        if member.default.is_none() || provided.contains(&name) {
-                            continue;
-                        }
-
-                        let default = if let Some(default) = member.default {
-                            default
-                        } else {
-                            continue;
-                        };
-                        all_vars.push(Node::new(
-                            default.span,
-                            NodeType::VariableDeclaration {
-                                var_type: VarType::Constant,
-                                identifier: PotentialDollarIdentifier::Identifier(
-                                    ParserText::from(name.clone()),
-                                ),
-                                data_type: PotentialNewType::DataType(member.data_type.clone()),
-                                value: Box::new(default),
-                            },
-                        ));
+                for (name, member) in Typing::collect_trait_default_members(
+                    &self.typing.trait_defs,
+                    &resolved_trait.text,
+                    &provided,
+                ) {
+                    if member.default.is_none() {
+                        continue;
                     }
+                    let default = member.default.unwrap();
+                    all_vars.push(Node::new(
+                        default.span,
+                        NodeType::VariableDeclaration {
+                            var_type: VarType::Constant,
+                            identifier: PotentialDollarIdentifier::Identifier(ParserText::from(
+                                name.clone(),
+                            )),
+                            data_type: PotentialNewType::DataType(member.data_type.clone()),
+                            value: Box::new(default),
+                        },
+                    ));
                 }
 
                 let previous_self = self
@@ -2102,10 +2098,10 @@ impl MiddleEnvironment {
                     for var in &all_vars {
                         if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type {
                             let resolved_iden = format!("{}.{}", target_key, identifier);
-                            impl_ref
-                                .variables
-                                .entry(identifier.to_string())
-                                .or_insert((resolved_iden, false));
+                            impl_ref.register_member_placeholder(
+                                &identifier.to_string(),
+                                resolved_iden,
+                            );
                         }
                     }
                 }
@@ -2216,7 +2212,7 @@ impl MiddleEnvironment {
                             Box::new(MiddleErr::Internal(format!("missing impl {impl_key:?}"))),
                         )
                     })?;
-                    impl_ref.variables.insert(iden, (new_name, dependant));
+                    impl_ref.insert_member(iden, new_name, dependant);
                     if !impl_ref.traits.contains(&resolved_trait.text) {
                         impl_ref.traits.push(resolved_trait.text.clone());
                     }

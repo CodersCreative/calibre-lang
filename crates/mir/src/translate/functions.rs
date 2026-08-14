@@ -184,9 +184,9 @@ impl MiddleEnvironment {
         }
 
         let find_named_index = |name: &str| -> Option<usize> {
-            defaults.iter().position(|d| {
-                ParserText::temp_name_suffix_matches(&d.name, &name)
-            })
+            defaults
+                .iter()
+                .position(|d| ParserText::temp_name_suffix_matches(&d.name, &name))
         };
 
         let mut next_pos = 0usize;

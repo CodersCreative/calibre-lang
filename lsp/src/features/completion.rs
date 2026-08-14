@@ -669,14 +669,14 @@ impl CalibreLanguageServer {
         }
 
         if let Some(imp) = env.typing.find_impl_for_type(&base_ty) {
-            for (member_name, (canonical_fn, _)) in &imp.variables {
+            for (member_name, canonical_member) in &imp.members {
                 if !prefix.is_empty() && !member_name.starts_with(prefix) {
                     continue;
                 }
                 let detail = env
                     .symbols
                     .variables
-                    .get(canonical_fn)
+                    .get(&canonical_member.symbol_name)
                     .and_then(|v| Self::format_function_signature(&v.data_type))
                     .unwrap_or_else(|| "method".to_string());
                 out.entry(member_name.clone()).or_insert(CompletionItem {
@@ -686,7 +686,7 @@ impl CalibreLanguageServer {
                     documentation: Some(Documentation::String(format!(
                         "Method from impl/trait on `{}`\n\nCanonical: `{}`",
                         Self::format_type_for_completion(&base_ty),
-                        canonical_fn
+                        canonical_member.symbol_name
                     ))),
                     sort_text: Some(format!("1_{}", member_name)),
                     ..CompletionItem::default()

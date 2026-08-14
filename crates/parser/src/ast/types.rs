@@ -58,8 +58,7 @@ impl ParserDataType {
                     names.push(x);
                 }
             }
-            _ => {
-            }
+            _ => {}
         }
 
         names
@@ -74,16 +73,7 @@ impl ParserDataType {
 
     pub fn impl_name(&self) -> String {
         match self.key() {
-            ParserInnerType::Struct(name) => name,
             ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
-            ParserInnerType::Int => String::from("int"),
-            ParserInnerType::UInt => String::from("uint"),
-            ParserInnerType::Byte => String::from("byte"),
-            ParserInnerType::Float => String::from("float"),
-            ParserInnerType::Bool => String::from("bool"),
-            ParserInnerType::Char => String::from("char"),
-            ParserInnerType::Str => String::from("str"),
-            ParserInnerType::Range => String::from("range"),
             other => other.to_string(),
         }
     }
@@ -489,7 +479,7 @@ impl ParserInnerType {
             (
                 ParserInnerType::Struct(a),
                 ParserInnerType::StructWithGenerics { identifier: b, .. },
-            ) => ParserText::temp_name_suffix_matches(a,b),
+            ) => ParserText::temp_name_suffix_matches(a, b),
             (
                 ParserInnerType::StructWithGenerics {
                     identifier: a,
