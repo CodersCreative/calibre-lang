@@ -502,10 +502,6 @@ impl MiddleEnvironment {
                 )
                 .as_ref()
                 .is_some_and(|resolved| self.symbols.variables.contains_key(&resolved.text))
-                || self
-                    .resolve_str(scope, &ident.text)
-                    .is_some_and(|resolved| self.symbols.variables.contains_key(&resolved))
-                || self.symbols.variables.contains_key(&ident.text)
             {
                 return true;
             }
@@ -597,11 +593,10 @@ impl MiddleEnvironment {
         }
 
         let target_family: Option<String> = match &target_inner {
-            _ => Some(target_inner.to_string()),
             ParserInnerType::StructWithGenerics { identifier, .. } => {
                 Some(identifier.to_string())
             }
-            _ => None,
+            _ => Some(target_inner.to_string()),
         };
 
         if let Some(target_family) = &target_family
@@ -704,12 +699,14 @@ impl MiddleEnvironment {
             });
         }
 
+        let mut first_is_variable = false;
+
         if path.len() > 1
             && let NodeType::Identifier(x) = &path[0].0.node_type
         {
             let resolved_ident = self.resolve_potential_generic_ident(scope, x);
             
-            let is_variable = resolved_ident
+            first_is_variable = resolved_ident
                 .as_ref()
                 .map(|id| self.symbols.variables.contains_key(&id.text))
                 .unwrap_or(false);
@@ -755,7 +752,7 @@ impl MiddleEnvironment {
                         generic_types,
                         args,
                         reverse_args,
-                    } if !is_variable => {
+                    } if !first_is_variable => {
                         if let NodeType::Identifier(second) = &caller.node_type
                             && let Some(static_fn) =
                                 self.resolve_impl_member(scope, &ty, &second.to_string())
@@ -796,7 +793,7 @@ impl MiddleEnvironment {
                             path.remove(1);
                         }
                     }
-                    NodeType::Identifier(ident) if !is_variable => {
+                    NodeType::Identifier(ident) if !first_is_variable => {
                         let ident = self.resolve_dollar_ident_potential_generic_only(scope, ident);
                         if let Some(ident) = ident
                             && let Some(var) = self.resolve_impl_member(scope, &ty, &ident.text)
@@ -847,8 +844,6 @@ impl MiddleEnvironment {
                     .map(|x| x.unwrap_all_refs())
                     .or_else(|| self.member_base_type(scope, &receiver_expr));
 
-                let receiver_is_value = self.member_base_is_value(scope, &receiver_expr);
-
                 let receiver_txt = receiver_expr.to_string();
                 let mut args = args;
                 let mut reverse_args = reverse_args;
@@ -879,7 +874,7 @@ impl MiddleEnvironment {
                     generic_types,
                     args,
                     reverse_args,
-                    receiver_is_value,
+                    first_is_variable,
                     target_type,
                 )?;
 

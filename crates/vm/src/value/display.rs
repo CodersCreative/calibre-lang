@@ -1,3 +1,5 @@
+use calibre_parser::ast::idents::ParserText;
+
 use super::*;
 
 fn print_list_from_iter<I>(mut iter: I, open: char, close: char) -> String
@@ -15,10 +17,6 @@ where
     }
     txt.push(close);
     txt
-}
-
-fn pretty_name(name: &str) -> &str {
-    name.rsplitn(2, ':').next().unwrap_or(name)
 }
 
 impl RuntimeValue {
@@ -77,22 +75,22 @@ impl RuntimeValue {
                 let iter = x.0.iter().map(|item| item.display(vm));
                 print_list_from_iter(iter, '[', ']')
             }
-            Self::Generator { type_name, .. } => format!("{} {{ ... }}", pretty_name(type_name)),
+            Self::Generator { type_name, .. } => format!("{} {{ ... }}", ParserText::get_temp_name_suffix(type_name).unwrap_or_default()),
             Self::GeneratorSuspend(value) => format!("<gen-suspend {}>", value.display(vm)),
             Self::Option(Some(x)) => format!("Some : {}", x.display(vm)),
             Self::Result(Ok(x)) => format!("Ok : {}", x.display(vm)),
             Self::Result(Err(x)) => format!("Err : {}", x.display(vm)),
-            Self::Enum(x, y, Some(z)) => format!("{}[{}] : {}", pretty_name(x), y, z.display(vm)),
-            Self::Enum(x, y, _) => format!("{}[{}]", pretty_name(x), y),
+            Self::Enum(x, y, Some(z)) => format!("{}[{}] : {}", ParserText::get_temp_name_suffix(x).unwrap_or_default(), y, z.display(vm)),
+            Self::Enum(x, y, _) => format!("{}[{}]", ParserText::get_temp_name_suffix(x).unwrap_or_default(), y),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
                     let iter = data.as_ref().0.0.iter().map(|x| x.1.display(vm));
                     print_list_from_iter(iter, '(', ')')
                 } else if data.as_ref().0.is_empty() {
-                    let name = x.as_deref().unwrap_or("tuple");
+                    let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple")).unwrap_or_default();
                     format!("{} {{}}", name)
                 } else {
-                    let mut txt = pretty_name(x.as_deref().unwrap_or("tuple")).to_string();
+                    let mut txt = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple")).unwrap_or_default();
                     txt.push_str(" {\n");
 
                     let fields = &data.as_ref().0.0;
@@ -141,8 +139,8 @@ impl Display for RuntimeValue {
             Self::Byte(x) => write!(f, "{}b", x),
             Self::Ptr(x) => write!(f, "ptr -> {}", x),
             Self::Int(x) => write!(f, "{}", x),
-            Self::Enum(x, y, Some(z)) => write!(f, "{}[{}] : {}", x, y, z.as_ref()),
-            Self::Enum(x, y, _) => write!(f, "{}[{}]", x, y),
+            Self::Enum(x, y, Some(z)) => write!(f, "{}[{}] : {}", ParserText::get_temp_name_suffix(x).unwrap_or_default(), y, z.as_ref()),
+            Self::Enum(x, y, _) => write!(f, "{}[{}]", ParserText::get_temp_name_suffix(x).unwrap_or_default(), y),
             Self::Range(from, to) => write!(f, "{}..{}", from, to),
             Self::Ref(x) => write!(f, "ref -> {}", x),
             Self::VarRef(id) => write!(f, "varref -> {}", id),
@@ -161,10 +159,10 @@ impl Display for RuntimeValue {
                     txt.push(')');
                     write!(f, "{}", txt)
                 } else if data.as_ref().0.is_empty() {
-                    let name = x.as_deref().unwrap_or("tuple");
+                    let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple")).unwrap_or_default();
                     write!(f, "{}{{}}", name)
                 } else {
-                    let name = x.as_deref().unwrap_or("tuple");
+                    let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple")).unwrap_or_default();
                     let mut txt = format!("{}{{\n", name);
 
                     for val in data.as_ref().0.iter() {
@@ -198,7 +196,7 @@ impl Display for RuntimeValue {
             Self::Str(x) => write!(f, "{}", x),
             Self::Char(x) => write!(f, "{}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
-            Self::Generator { type_name, .. } => write!(f, "{}{{ ... }}", type_name),
+            Self::Generator { type_name: x, .. } => write!(f, "{}{{ ... }}", ParserText::get_temp_name_suffix(x).unwrap_or_default()),
             Self::DynObject {
                 type_name,
                 constraints,
