@@ -1,13 +1,7 @@
 use crate::{
-    config::VMConfig,
-    conversion::{Reg, VMBlock, VMFunction, VMRegistry},
-    error::RuntimeError,
-    native::NativeFunction,
-    value::{ExternFunction, GcMap, RuntimeValue, WaitGroupInner},
-    variables::VariableStore,
+    config::VMConfig, conversion::{Reg, VMBlock, VMFunction, VMRegistry}, error::RuntimeError, native::NativeFunction, value::{ExternFunction, GcMap, GcVec, RuntimeValue, WaitGroupInner}, variables::VariableStore,
 };
 use calibre_lir::ast::BlockId;
-use calibre_parser::ast::idents::ParserText;
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::OnceLock;
@@ -87,7 +81,6 @@ pub struct VM {
     pub frames: Vec<VMFrame>,
     frame_pool: Vec<VMFrame>,
     caches: VMCaches,
-    func_suffix: FxHashMap<String, Option<Arc<VMFunction>>>,
     gc: VMGC,
     scheduler: Option<scheduler::SchedulerHandle>,
     task_state: TaskState,
@@ -99,28 +92,22 @@ pub struct VM {
 #[derive(Debug, Clone)]
 pub struct VMCaches {
     call: FxHashMap<String, Arc<VMFunction>>,
-    globals: FxHashMap<String, RuntimeValue>,
     callsite: FxHashMap<(usize, usize, u32), Arc<VMFunction>>,
-    globals_direct: FxHashMap<String, RuntimeValue>,
     locals: FxHashMap<usize, Arc<FxHashMap<Arc<str>, Reg>>>,
     globals_id: FxHashMap<String, usize>,
     local_str: FxHashMap<(u32, u16), Arc<str>>,
     prepared_direct_calls: FxHashMap<(usize, usize, u32), PreparedDirectCall>,
-    unique_var_suffix: FxHashMap<String, Option<String>>,
 }
 
 impl Default for VMCaches {
     fn default() -> Self {
         Self {
             call: FxHashMap::default(),
-            globals: FxHashMap::default(),
             callsite: FxHashMap::default(),
-            globals_direct: FxHashMap::default(),
             locals: FxHashMap::default(),
             globals_id: FxHashMap::default(),
             local_str: FxHashMap::default(),
             prepared_direct_calls: FxHashMap::default(),
-            unique_var_suffix: FxHashMap::default(),
         }
     }
 }
@@ -162,14 +149,14 @@ impl From<VMRegistry> for VM {
 
 impl VM {
     #[inline]
-    fn list_identity_eq(a: &Gc<crate::value::GcVec>, b: &Gc<crate::value::GcVec>) -> bool {
+    fn list_identity_eq(a: &Gc<GcVec>, b: &Gc<GcVec>) -> bool {
         std::ptr::eq(a.as_ref(), b.as_ref())
     }
 
     fn replace_list_aliases_in_runtime_value(
         value: &mut RuntimeValue,
-        old_list: &Gc<crate::value::GcVec>,
-        new_list: &Gc<crate::value::GcVec>,
+        old_list: &Gc<GcVec>,
+        new_list: &Gc<GcVec>,
     ) {
         match value {
             RuntimeValue::List(list) => {
@@ -206,8 +193,8 @@ impl VM {
 
     pub(crate) fn propagate_list_aliases(
         &mut self,
-        old_list: &Gc<crate::value::GcVec>,
-        new_list: &Gc<crate::value::GcVec>,
+        old_list: &Gc<GcVec>,
+        new_list: &Gc<GcVec>,
     ) {
         let frame_count = self.frames.len();
         for frame_idx in 0..frame_count {
@@ -236,8 +223,6 @@ impl VM {
         config: VMConfig,
         install_builtins: bool,
     ) -> Self {
-        let func_suffix = build_function_suffix_index(registry.as_ref());
-        let globals_direct = build_globals_direct_cache(registry.as_ref());
         let mut vm = Self {
             registry,
             mappings,
@@ -253,10 +238,8 @@ impl VM {
             frames: vec![VMFrame::default()],
             frame_pool: Vec::new(),
             caches: VMCaches {
-                globals_direct,
                 ..VMCaches::default()
             },
-            func_suffix,
             gc: VMGC::default(),
             scheduler: None,
             task_state: TaskState::default(),
@@ -830,42 +813,4 @@ impl VM {
             );
         }
     }
-}
-
-fn build_function_suffix_index(
-    registry: &VMRegistry,
-) -> FxHashMap<String, Option<Arc<VMFunction>>> {
-    let mut out: FxHashMap<String, Option<Arc<VMFunction>>> =
-        FxHashMap::with_capacity_and_hasher(registry.functions.len(), Default::default());
-    for (name, func) in registry.functions.iter() {
-        let short = &ParserText::get_temp_name_prefix(name).unwrap_or(name.to_string());
-        if short == name {
-            continue;
-        }
-        match out.get(short) {
-            None => {
-                out.insert(short.to_string(), Some(func.clone()));
-            }
-            Some(Some(_)) => {
-                out.insert(short.to_string(), None);
-            }
-            Some(None) => {}
-        }
-    }
-    out
-}
-
-fn build_globals_direct_cache(registry: &VMRegistry) -> FxHashMap<String, RuntimeValue> {
-    let mut out: FxHashMap<String, RuntimeValue> =
-        FxHashMap::with_capacity_and_hasher(registry.functions.len(), Default::default());
-    for name in registry.functions.keys() {
-        out.insert(
-            name.clone(),
-            RuntimeValue::Function {
-                name: Arc::new(name.clone()),
-                captures: std::sync::Arc::new(Vec::new()),
-            },
-        );
-    }
-    out
 }

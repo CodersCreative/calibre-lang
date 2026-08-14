@@ -1,4 +1,4 @@
-use crate::{VM, error::RuntimeError, value::RuntimeValue};
+use crate::{VM, error::RuntimeError, value::{GcVec, RuntimeValue}};
 use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
 use std::sync::Arc;
@@ -149,7 +149,7 @@ impl RuntimeValue {
             (RuntimeValue::Str(x), ParserInnerType::List(t))
                 if t.data_type == ParserInnerType::Str =>
             {
-                Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(
+                Ok(RuntimeValue::List(Gc::new(GcVec(
                     x.chars()
                         .map(|x| RuntimeValue::Str(Arc::new(x.to_string())))
                         .collect::<Vec<RuntimeValue>>(),
@@ -158,7 +158,7 @@ impl RuntimeValue {
             (RuntimeValue::Str(x), ParserInnerType::List(t))
                 if t.data_type == ParserInnerType::Char =>
             {
-                Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(
+                Ok(RuntimeValue::List(Gc::new(GcVec(
                     x.chars()
                         .map(|x| RuntimeValue::Char(x))
                         .collect::<Vec<RuntimeValue>>(),
@@ -194,11 +194,11 @@ impl RuntimeValue {
                     lst.push(d.convert(env, &t.data_type)?);
                 }
 
-                Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(lst))))
+                Ok(RuntimeValue::List(Gc::new(GcVec(lst))))
             }
             (x, ParserInnerType::List(t)) => {
                 let x = x.convert(env, &t)?;
-                Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(vec![x]))))
+                Ok(RuntimeValue::List(Gc::new(GcVec(vec![x]))))
             }
             (RuntimeValue::Option(x), ParserInnerType::Option(t)) => {
                 if let Some(x) = x {

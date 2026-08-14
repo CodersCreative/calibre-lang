@@ -1,10 +1,7 @@
 use dumpster::sync::Gc;
 
 use crate::{
-    VM,
-    error::RuntimeError,
-    native::{NativeFunction, expect_char_arg, expect_str_arg_or_empty},
-    value::RuntimeValue,
+    VM, error::RuntimeError, native::{NativeFunction, expect_char_arg, expect_str_arg_or_empty}, value::{GcVec, RuntimeValue},
 };
 
 pub struct CharLowercase;
@@ -54,7 +51,7 @@ impl NativeFunction for StrSplit {
                 .collect::<Vec<_>>()
         };
 
-        Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(parts))))
+        Ok(RuntimeValue::List(Gc::new(GcVec(parts))))
     }
 }
 

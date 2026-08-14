@@ -3,10 +3,7 @@ use std::sync::{Arc, Mutex};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    VM,
-    error::RuntimeError,
-    native::{NativeFunction, pop_or_null},
-    value::{HashKey, RuntimeValue},
+    VM, error::RuntimeError, native::{NativeFunction, pop_or_null}, value::{GcVec, HashKey, RuntimeValue},
 };
 use dumpster::sync::Gc;
 
@@ -78,7 +75,7 @@ impl NativeFunction for HashMapNew {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let entries = args
             .pop()
-            .unwrap_or(RuntimeValue::List(Gc::new(crate::value::GcVec(Vec::new()))));
+            .unwrap_or(RuntimeValue::List(Gc::new(GcVec(Vec::new()))));
         let mut map: FxHashMap<HashKey, RuntimeValue> = FxHashMap::default();
 
         let RuntimeValue::List(list) = env.resolve_value_for_op_ref(&entries)? else {
@@ -200,7 +197,7 @@ impl NativeFunction for HashMapKeys {
             }
         }
 
-        Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(out))))
+        Ok(RuntimeValue::List(Gc::new(GcVec(out))))
     }
 }
 
@@ -220,7 +217,7 @@ impl NativeFunction for HashMapValues {
             }
         }
 
-        Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(out))))
+        Ok(RuntimeValue::List(Gc::new(GcVec(out))))
     }
 }
 
@@ -250,7 +247,7 @@ impl NativeFunction for HashMapEntries {
             }
         }
 
-        Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(out))))
+        Ok(RuntimeValue::List(Gc::new(GcVec(out))))
     }
 }
 
@@ -286,7 +283,7 @@ impl NativeFunction for HashSetNew {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let entries = args
             .pop()
-            .unwrap_or(RuntimeValue::List(Gc::new(crate::value::GcVec(Vec::new()))));
+            .unwrap_or(RuntimeValue::List(Gc::new(GcVec(Vec::new()))));
         let mut set: FxHashSet<HashKey> = FxHashSet::default();
 
         let RuntimeValue::List(list) = env.resolve_value_for_op_ref(&entries)? else {
@@ -390,7 +387,7 @@ impl NativeFunction for HashSetValues {
             }
         }
 
-        Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(out))))
+        Ok(RuntimeValue::List(Gc::new(GcVec(out))))
     }
 }
 

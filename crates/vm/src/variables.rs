@@ -85,27 +85,22 @@ impl VariableStore {
         self.map.get(name).copied()
     }
 
-    pub fn bind_alias(&mut self, name: &str, id: usize) {
+    pub fn bind_alias_by_id(&mut self, name: &str, id: usize) {
         let name = self.intern(name);
         self.map.insert(name, id);
     }
 
-    pub fn remove_name(&mut self, name: &str) -> bool {
+    pub fn remove_name_only(&mut self, name: &str) -> bool {
         self.map.remove(name).is_some()
     }
 
     pub fn remove(&mut self, name: &str) -> Option<RuntimeValue> {
-        let idx = self.map.remove(name)?;
-        let out = self.values.get_mut(idx)?.take();
-        if out.is_some() {
-            self.free.push(idx);
-        }
-        out
+        let id = self.map.remove(name)?;
+        self.remove_by_id(id)
     }
 
     pub fn remove_by_id(&mut self, id: usize) -> Option<RuntimeValue> {
-        let slot = self.values.get_mut(id)?;
-        let out = slot.take();
+        let out = self.values.get_mut(id)?.take();
         if out.is_some() {
             self.free.push(id);
         }

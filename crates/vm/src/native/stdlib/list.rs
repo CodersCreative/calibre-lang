@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use dumpster::sync::Gc;
 
-use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
+use crate::{VM, error::RuntimeError, native::NativeFunction, value::{GcVec, RuntimeValue}};
 
 fn compare_callback_result(result: RuntimeValue) -> Result<Ordering, RuntimeError> {
     match result {
@@ -105,7 +105,7 @@ impl NativeFunction for ListSortBy {
             return Err(err);
         }
 
-        Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(items))))
+        Ok(RuntimeValue::List(Gc::new(GcVec(items))))
     }
 }
 
@@ -158,7 +158,7 @@ fn normalize_remove_index(len: usize, idx: i64) -> Option<usize> {
     Some(idx as usize)
 }
 
-fn remove_from_list_value(list: &mut Gc<crate::value::GcVec>, idx: i64) -> Option<RuntimeValue> {
+fn remove_from_list_value(list: &mut Gc<GcVec>, idx: i64) -> Option<RuntimeValue> {
     let vec = &mut Gc::make_mut(list).0;
     let idx = normalize_remove_index(vec.len(), idx)?;
     Some(vec.remove(idx))

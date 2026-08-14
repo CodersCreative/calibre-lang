@@ -72,11 +72,7 @@ impl VM {
                             self.write_back_runtime_value(current, value);
                         }
                         _ => {
-                            let existed = self.variables.contains_key(&name);
                             self.variables.insert(&name, value);
-                            if !existed {
-                                self.invalidate_name_resolution_caches();
-                            }
                         }
                     }
                 } else {
@@ -234,7 +230,7 @@ impl VM {
         I: IntoIterator<Item = String>,
     {
         for candidate in candidates {
-            if let Some((resolved, _)) = self.try_resolve_global_runtime_value(&candidate) {
+            if let Some((resolved, _)) = self.resolve_runtime_value(&candidate) {
                 if matches!(resolved, RuntimeValue::Null) {
                     continue;
                 }
@@ -250,18 +246,6 @@ impl VM {
         base.split('<').next().map_or(base.to_string(), |x| x.to_string())
     }
 
-    fn resolve_native_member(&self, owner: &str, member: &str) -> Option<RuntimeValue> {
-        let owner_base = Self::normalize_generic_owner(owner);
-        if owner_base.is_empty() {
-            return None;
-        }
-        if owner_base == "Channel" && member == "raw_send" {
-            return RuntimeValue::natives().get("async.channel_send").cloned();
-        }
-        let owner_lower = owner_base.to_ascii_lowercase();
-        let candidate = format!("async.{owner_lower}_{member}");
-        RuntimeValue::natives().get(candidate.as_str()).cloned()
-    }
 
     #[inline]
     fn build_member_candidates(
@@ -530,7 +514,7 @@ impl VM {
     ) -> Option<RuntimeValue> {
         let candidates = Self::build_member_candidates(owner, member, short_member, true, None);
         for candidate in candidates {
-            if let Some((resolved, _)) = self.resolve_named_global_runtime_value(&candidate) {
+            if let Some((resolved, _)) = self.resolve_runtime_value(&candidate) {
                 if matches!(resolved, RuntimeValue::Null) {
                     continue;
                 }
@@ -549,12 +533,10 @@ impl VM {
             .unwrap_or(&owner_tail);
         let member_name = short_member.unwrap_or(member);
         let suffix = format!("{}_{}", owner_base.to_ascii_lowercase(), member_name);
-        if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&suffix) {
-            return Some(resolved);
-        }
-        if let Some(resolved) = Self::resolve_native_member(self, owner, member_name) {
-            return Some(resolved);
-        }
+        // TODO Replace
+        // if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&suffix) {
+        //     return Some(resolved);
+        // }
         let mut matched: Option<String> = None;
         for name in self.variables.keys() {
             let tail = ParserText::get_temp_name_prefix(&name).unwrap_or_else(|| name.to_string());
@@ -571,7 +553,7 @@ impl VM {
             matched = Some(name.to_string());
         }
         if let Some(name) = matched {
-            if let Some((resolved, _)) = self.resolve_named_global_runtime_value(&name) {
+            if let Some((resolved, _)) = self.resolve_runtime_value(&name) {
                 return Some(resolved);
             }
         }
@@ -580,7 +562,7 @@ impl VM {
             let candidates =
                 Self::build_member_candidates(&std_owner, member, short_member, true, None);
             for candidate in candidates {
-                if let Some((resolved, _)) = self.resolve_named_global_runtime_value(&candidate) {
+                if let Some((resolved, _)) = self.resolve_runtime_value(&candidate) {
                     return Some(resolved);
                 }
             }
@@ -590,9 +572,10 @@ impl VM {
                 .map(|(base, _)| base)
                 .unwrap_or(&std_owner_tail);
             let std_suffix = format!("{}_{}", std_owner_base.to_ascii_lowercase(), member_name);
-            if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&std_suffix) {
-                return Some(resolved);
-            }
+            // TODO Replace
+            // if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&std_suffix) {
+            //     return Some(resolved);
+            // }
         }
         None
     }
@@ -642,7 +625,7 @@ impl VM {
                 let old = self.variables.get(key).cloned();
 
                 if let RuntimeValue::VarRef(id) = value {
-                    self.variables.bind_alias(key, *id);
+                    self.variables.bind_alias_by_id(key, *id);
                     prev_vars.push((
                         key.to_string(),
                         if old.is_some() {
@@ -682,7 +665,7 @@ impl VM {
                     self.variables.remove(&name);
                 }
                 CaptureRestore::AliasOnly => {
-                    let _ = self.variables.remove_name(&name);
+                    let _ = self.variables.remove_name_only(&name);
                 }
                 CaptureRestore::Keep => {}
             }
@@ -869,67 +852,6 @@ impl VM {
         }
     }
 
-    fn try_resolve_global_runtime_value(&mut self, name: &str) -> Option<(RuntimeValue, String)> {
-        if let Some(found) = self.resolve_named_global_runtime_value(name) {
-            return Some(found);
-        }
-
-        if name.contains('.') && !ParserText::is_temp_name(&name) {
-            let normalized = name.replace('.', "::");
-            if let Some(found) = self.resolve_named_global_runtime_value(&normalized) {
-                return Some(found);
-            }
-        }
-
-        let Some(short_name) = ParserText::get_temp_name_prefix(&name) else {
-            if ParserText::is_temp_name(&name) {
-                if let Some((owner, member)) = name.rsplit_once("::") {
-                    if let Some(resolved) =
-                        self.resolve_associated_member_value(owner, member, Some(member))
-                    {
-                        if !matches!(resolved, RuntimeValue::Null) {
-                            return Some((resolved, name.to_string()));
-                        }
-                    }
-                }
-
-                if let Some(found) = self.resolve_suffix_global_runtime_value(name) {
-                    return Some(found);
-                }
-
-                let base = ParserText::get_temp_name_prefix(&name).unwrap_or_else(|| name.to_string());
-                if base != name
-                    && let Some(found) = self.resolve_suffix_global_runtime_value(&base)
-                {
-                    return Some(found);
-                }
-            }
-            return None;
-        };
-
-        if let Some(found) = self.resolve_named_global_runtime_value(&short_name) {
-            return Some(found);
-        }
-
-        let base = ParserText::get_temp_name_prefix(&short_name).unwrap_or_else(|| short_name.to_string());
-        if base != short_name
-            && let Some(found) = self.resolve_suffix_global_runtime_value(&base)
-        {
-            return Some(found);
-        }
-
-        let direct = self.resolve_suffix_global_runtime_value(&short_name);
-        if direct.is_some() {
-            return direct;
-        }
-
-        if let Some((_, member)) = short_name.rsplit_once("::") {
-            return self.resolve_suffix_global_runtime_value(member);
-        }
-
-        None
-    }
-
     fn resolve_callable_cached(
         &mut self,
         name: &str,
@@ -960,27 +882,8 @@ impl VM {
         found
     }
 
-    fn try_move_global_runtime_value(&mut self, name: &str) -> Option<RuntimeValue> {
-        if let Some(found) = self.move_named_global_runtime_value(name) {
-            return Some(found);
-        }
-        if ParserText::is_temp_name(&name) {
-            return None;
-        }
-
-        let Some(short_name) = ParserText::get_temp_name_prefix(&name) else {
-            return None;
-        };
-
-        if let Some(found) = self.move_named_global_runtime_value(&short_name) {
-            return Some(found);
-        }
-
-        self.move_suffix_global_runtime_value(&short_name)
-    }
-
     #[inline]
-    fn resolve_named_global_runtime_value(&self, name: &str) -> Option<(RuntimeValue, String)> {
+    fn resolve_runtime_value(&self, name: &str) -> Option<(RuntimeValue, String)> {
         if let Some(func) = self.get_function_ref(name) {
             return Some((self.make_runtime_function(func), name.to_string()));
         }
@@ -993,41 +896,14 @@ impl VM {
         })
     }
 
-    #[inline]
-    fn resolve_suffix_global_runtime_value(
-        &mut self,
-        short_name: &str,
-    ) -> Option<(RuntimeValue, String)> {
-        if let Some(func) = self.find_unique_function_by_suffix_ref(short_name) {
-            return Some((self.make_runtime_function(func), func.name.clone()));
-        }
-        let var_name = self.find_unique_var_by_suffix_cached(short_name)?;
-        let var = self.variables.get(&var_name)?;
-        Some((self.resolve_saveable_runtime_value_ref(var), var_name))
-    }
 
     #[inline]
-    fn move_named_global_runtime_value(&mut self, name: &str) -> Option<RuntimeValue> {
+    fn move_runtime_value(&mut self, name: &str) -> Option<RuntimeValue> {
         if let Some(func) = self.take_function(name) {
             return Some(self.make_runtime_function(&func));
         }
         self.variables
             .remove(name)
-            .map(|var| self.resolve_saveable_runtime_value_ref(&var))
-    }
-
-    #[inline]
-    fn move_suffix_global_runtime_value(&mut self, short_name: &str) -> Option<RuntimeValue> {
-        if let Some(func) = self.find_unique_function_by_suffix_ref(short_name) {
-            let func_name = func.name.clone();
-            let value = self.make_runtime_function(func);
-            self.moved_functions.insert(func_name);
-            return Some(value);
-        }
-
-        let var_name = self.find_unique_var_by_suffix_cached(short_name)?;
-        self.variables
-            .remove(&var_name)
             .map(|var| self.resolve_saveable_runtime_value_ref(&var))
     }
 
@@ -1293,7 +1169,7 @@ impl VM {
             }
         }
 
-        let Some((value, _)) = self.try_resolve_global_runtime_value(func_name) else {
+        let Some((value, _)) = self.resolve_runtime_value(func_name) else {
             return Ok(None);
         };
 

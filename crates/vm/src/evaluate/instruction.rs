@@ -1,5 +1,5 @@
 use super::*;
-use crate::native::stdlib::generator::{GeneratorResumeFn, GeneratorState};
+use crate::{native::stdlib::generator::{GeneratorResumeFn, GeneratorState}, value::GcVec};
 use calibre_parser::ast::{idents::ParserText, nodes::AsFailureMode};
 
 impl VM {
@@ -792,151 +792,67 @@ impl VM {
             }
             VMInstruction::LoadGlobal { dst, name } => {
                 let name = self.local_string(block, *name)?;
-                let is_local_style = ParserText::is_temp_name(&name);
-                if is_local_style {
-                    let value = match self.resolve_var_name(name) {
-                        VarName::Var(var) => {
-                            if let Some(id) = self.global_id_cached(&var) {
-                                RuntimeValue::VarRef(id)
-                            } else if let Some(v) = self.variables.get(&var) {
-                                self.resolve_saveable_runtime_value_ref(v)
-                            } else {
-                                RuntimeValue::Null
-                            }
+                let value = match self.resolve_var_name(name) {
+                    Some(VarName::Var(var)) => {
+                        if let Some(id) = self.global_id_cached(&var) {
+                            RuntimeValue::VarRef(id)
+                        } else if let Some(v) = self.variables.get(&var) {
+                            self.resolve_saveable_runtime_value_ref(v)
+                        } else {
+                            RuntimeValue::Null
                         }
-                        VarName::Func(func) => {
-                            if let Some(f) = self.get_function_ref(&func) {
-                                self.make_runtime_function(f)
-                            } else {
-                                RuntimeValue::Null
-                            }
-                        }
-                        VarName::Global => RuntimeValue::Null,
-                    };
-                    self.set_reg_value(*dst, value);
-                    return Ok(TerminateValue::None);
-                }
-
-                if let Some(cache) = self
-                    .caches
-                    .globals_direct
-                    .get(name)
-                    .or_else(|| self.caches.globals.get(name))
-                {
-                    self.set_reg_value(*dst, cache.clone());
-                    return Ok(TerminateValue::None);
-                }
-
-                let mut resolved_name: Option<String> = None;
-                let mut value = if let Some((v, n)) = self.try_resolve_global_runtime_value(name) {
-                    resolved_name = Some(n);
-                    v
-                } else {
-                    match self.resolve_var_name(name) {
-                        VarName::Func(func) => {
-                            if let Some(f) = self.get_function_ref(&func) {
-                                resolved_name = Some(func);
-                                self.make_runtime_function(f)
-                            } else {
-                                RuntimeValue::Null
-                            }
-                        }
-                        VarName::Var(var) => {
-                            if self.variables.get(&var).is_none() {
-                                let global = self.registry.globals.get(&var).cloned();
-                                if let Some(global) = global {
-                                    let _ = self.run_global(&global);
-                                }
-                            }
-
-                            if let Some(v) = self.variables.get(&var) {
-                                let resolved = var.as_str();
-                                resolved_name = Some(var.clone());
-                                if resolved.contains(':') || resolved.contains("->") {
-                                    if let Some(id) = self.global_id_cached(resolved) {
-                                        RuntimeValue::VarRef(id)
-                                    } else {
-                                        RuntimeValue::Ref(resolved.to_string())
-                                    }
-                                } else {
-                                    self.resolve_saveable_runtime_value_ref(v)
-                                }
-                            } else {
-                                RuntimeValue::Null
-                            }
-                        }
-                        VarName::Global => RuntimeValue::Null,
                     }
+                    Some(VarName::Func(func)) => {
+                        if let Some(f) = self.get_function_ref(&func) {
+                            self.make_runtime_function(f)
+                        } else {
+                            RuntimeValue::Null
+                        }
+                    }
+                    None => RuntimeValue::Null,
                 };
-
-                if value.is_null()
-                    && let Some((owner, method)) = name.rsplit_once("::")
-                {
-                    let owner = owner.rsplit(':').next().unwrap_or(owner);
-                    let owner = ParserText::get_temp_name_prefix(&owner).unwrap_or_else(|| owner.to_string());
-                    let owner = owner
-                        .split_once("->")
-                        .map(|(base, _)| base)
-                        .unwrap_or(&owner);
-                    let short_candidate = format!("{}_{}", owner.to_ascii_lowercase(), method);
-                    let long_candidate = format!("async.{}", short_candidate);
-                    if let Some((resolved, _)) = self
-                        .try_resolve_global_runtime_value(&short_candidate)
-                        .or_else(|| self.try_resolve_global_runtime_value(&long_candidate))
-                    {
-                        value = resolved;
-                    }
-                }
-
-                if let Some(resolved_name) = resolved_name
-                    && !value.is_null()
-                {
-                    self.caches.globals.insert(resolved_name, value.clone());
-                }
-
                 self.set_reg_value(*dst, value);
+                return Ok(TerminateValue::None);
             }
             VMInstruction::MoveGlobal { dst, name } => {
                 let name = self.local_string(block, *name)?;
                 let resolved = self.resolve_var_name(name);
                 let value =
-                    self.try_move_global_runtime_value(name)
+                    self.move_runtime_value(name)
                         .unwrap_or_else(|| match &resolved {
-                            VarName::Func(func) => {
+                            Some(VarName::Func(func)) => {
                                 if let Some(func) = self.take_function(func) {
                                     self.make_runtime_function(&func)
                                 } else {
                                     RuntimeValue::Null
                                 }
                             }
-                            VarName::Var(var) => {
+                            Some(VarName::Var(var)) => {
                                 if let Some(var) = self.variables.remove(var) {
                                     self.resolve_saveable_runtime_value_ref(&var)
                                 } else {
                                     RuntimeValue::Null
                                 }
                             }
-                            VarName::Global => RuntimeValue::Null,
+                            _ => RuntimeValue::Null,
                         });
 
                 self.set_reg_value(*dst, value);
-                self.invalidate_name_resolution_caches();
             }
             VMInstruction::DropGlobal { name } => {
                 let name = self.local_string(block, *name)?;
                 match self.resolve_var_name(name) {
-                    VarName::Var(var) => {
+                    Some(VarName::Var(var)) => {
                         self.caches.globals_id.remove(var.as_str());
                         if let Some(val) = self.variables.remove(&var) {
                             self.drop_runtime_value(val);
                         }
                     }
-                    VarName::Func(func) => {
+                    Some(VarName::Func(func)) => {
                         self.moved_functions.insert(func);
                     }
-                    VarName::Global => {}
+                    None => {}
                 }
-                self.invalidate_name_resolution_caches();
             }
             VMInstruction::StoreGlobal { name, src } => {
                 let name = self.local_string(block, *name)?;
@@ -955,17 +871,11 @@ impl VM {
                     };
                 }
 
-                let existed = self.variables.contains_key(name);
-
                 if let Some(id) = self.global_id_cached(name) {
                     let _ = self.variables.set_by_id(id, value);
                 } else {
                     let id = self.variables.insert_with_id(name, value);
                     self.caches.globals_id.insert(name.to_string(), id);
-                }
-
-                if !existed {
-                    self.invalidate_name_resolution_caches();
                 }
             }
             VMInstruction::SetLocalName { name, src } => {
@@ -1206,7 +1116,7 @@ impl VM {
                     .collect();
                 self.set_reg_value(
                     *dst,
-                    RuntimeValue::List(Gc::new(crate::value::GcVec(values))),
+                    RuntimeValue::List(Gc::new(GcVec(values))),
                 );
             }
             VMInstruction::Aggregate {
@@ -1491,7 +1401,7 @@ impl VM {
                         } else if member_short == "type" {
                             RuntimeValue::Str(type_name)
                         } else if member_short == "traits" {
-                            RuntimeValue::List(Gc::new(crate::value::GcVec(
+                            RuntimeValue::List(Gc::new(GcVec(
                                 constraints
                                     .iter()
                                     .map(|x| RuntimeValue::Str(Arc::new(x.clone())))
@@ -1999,7 +1909,7 @@ impl VM {
                 }
 
                 let index_list =
-                    |list: &Gc<crate::value::GcVec>| -> Result<RuntimeValue, RuntimeError> {
+                    |list: &Gc<GcVec>| -> Result<RuntimeValue, RuntimeError> {
                         match &index_val {
                             RuntimeValue::Int(index) => {
                                 Ok(Self::resolve_index(list.as_ref().0.len(), *index)
@@ -2016,7 +1926,7 @@ impl VM {
                                 let (s, e) =
                                     Self::resolve_slice_range(list.as_ref().0.len(), *start, *end);
                                 let slice = list.as_ref().0[s..e].to_vec();
-                                Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(slice))))
+                                Ok(RuntimeValue::List(Gc::new(GcVec(slice))))
                             }
                             _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
                         }
@@ -2420,11 +2330,7 @@ impl VM {
                 let value = self.get_reg_value(*value).clone();
                 match target {
                     RuntimeValue::Ref(name) => {
-                        let existed = self.variables.contains_key(&name);
                         self.variables.insert(&name, value);
-                        if !existed {
-                            self.invalidate_name_resolution_caches();
-                        }
                     }
                     RuntimeValue::VarRef(id) => {
                         let _ = self.variables.set_by_id(id, value);

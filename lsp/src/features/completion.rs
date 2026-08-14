@@ -120,10 +120,7 @@ impl CalibreLanguageServer {
         data_type: &ParserDataType,
     ) -> Option<&'a MiddleObject> {
         match &data_type.clone().unwrap_all_refs().data_type {
-            ParserInnerType::Struct(name) => env.typing.objects.get(name).or_else(|| {
-                name.split_once("->")
-                    .and_then(|(base, _)| env.typing.objects.get(base))
-            }),
+            ParserInnerType::Struct(name) => env.typing.objects.get(name),
             ParserInnerType::StructWithGenerics { identifier, .. } => {
                 env.typing.objects.get(identifier)
             }

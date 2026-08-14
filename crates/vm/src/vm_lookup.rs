@@ -1,3 +1,5 @@
+use std::unreachable;
+
 use calibre_parser::ast::idents::ParserText;
 
 use super::*;
@@ -6,66 +8,16 @@ use super::*;
 pub(crate) enum VarName {
     Var(String),
     Func(String),
-    Global,
 }
 
 impl VM {
-    pub(crate) fn find_unique_function_by_suffix_ref(
-        &self,
-        short_name: &str,
-    ) -> Option<&VMFunction> {
-        let func = self.func_suffix.get(short_name)?.as_ref()?;
-        (!self.moved_functions.contains(&func.name)).then(|| func.as_ref())
-    }
-
     pub(crate) fn resolve_function_by_name(&self, name: &str) -> Option<Arc<VMFunction>> {
         if let Some(found) = self.registry.functions.get(name)
-            && !self.moved_functions.contains(name)
         {
-            return Some(found.clone());
-        } else if let Some((prefix, _)) = name.split_once("->") {
-            return self
-                .registry
-                .functions
-                .iter()
-                .filter(|(k, _)| !self.moved_functions.contains(*k))
-                .find(|(k, _)| k.starts_with(prefix))
-                .map(|(_, v)| Arc::clone(v));
+            Some(found.clone())
+        } else {
+            None
         }
-        if ParserText::is_temp_name(&name) {
-            return None;
-        }
-        
-        let short_name = ParserText::get_temp_name_prefix(&name).unwrap_or_else(|| name.to_string());
-        if short_name == name {
-            return None;
-        }
-
-        let func = self.func_suffix.get(&short_name)?.as_ref()?;
-        (!self.moved_functions.contains(&func.name)).then(|| func.clone())
-    }
-
-    pub(crate) fn find_unique_var_by_suffix(&self, short_name: &str) -> Option<String> {
-        self.variables.keys().find_map(|name| {
-            ParserText::temp_name_prefix_matches(&name, &short_name).then(|| name.to_string())
-        })
-    }
-
-    #[inline]
-    pub(crate) fn find_unique_var_by_suffix_cached(&mut self, short_name: &str) -> Option<String> {
-        if let Some(cached) = self.caches.unique_var_suffix.get(short_name) {
-            return cached.clone();
-        }
-        let found = self.find_unique_var_by_suffix(short_name);
-        self.caches
-            .unique_var_suffix
-            .insert(short_name.to_string(), found.clone());
-        found
-    }
-
-    #[inline]
-    pub(crate) fn invalidate_name_resolution_caches(&mut self) {
-        self.caches.unique_var_suffix.clear();
     }
 
     pub(crate) fn resolve_library_candidates(name: &str) -> Vec<String> {
@@ -127,70 +79,25 @@ impl VM {
     }
 
     pub(crate) fn capture_value(&self, name: &str, seen: &mut FxHashSet<String>) -> RuntimeValue {
-        let is_local_style = name.contains(':') || name.contains("->");
 
-        if is_local_style {
-            let current_frame = self.frames.len().saturating_sub(1);
-            if let Some(id) = self.variables.id_of(name)
-                && let Some(RuntimeValue::RegRef { frame, .. }) = self.variables.get_by_id(id)
-                && *frame != current_frame
-            {
-                return RuntimeValue::VarRef(id);
-            }
+        let current_frame = self.frames.len().saturating_sub(1);
+        if let Some(id) = self.variables.id_of(name)
+            && let Some(RuntimeValue::RegRef { frame, .. }) = self.variables.get_by_id(id)
+            && *frame != current_frame
+        {
+            return RuntimeValue::VarRef(id);
         }
 
-        if is_local_style {
-            for (frame_idx, frame) in self.frames.iter().enumerate().rev() {
-                if let Some(reg) = frame.local_map.get(name).copied() {
-                    return RuntimeValue::RegRef {
-                        frame: frame_idx,
-                        reg,
-                    };
-                }
-                if let Some(base) = frame.local_map_base.as_ref() {
-                    if let Some(reg) = base.get(name).copied() {
-                        return RuntimeValue::RegRef {
-                            frame: frame_idx,
-                            reg,
-                        };
-                    }
-                }
-            }
-        }
 
-        if !is_local_style {
-            let frame = self.current_frame();
-            let mut found: Option<Reg> = None;
-            let mut ambiguous = false;
-
-            for (key, reg) in frame.local_map.iter() {
-                if ParserText::temp_name_prefix_matches(key, &name) {
-                    if found.is_some() {
-                        ambiguous = true;
-                        break;
-                    }
-                    found = Some(*reg);
-                }
+        for (frame_idx, frame) in self.frames.iter().enumerate().rev() {
+            if let Some(reg) = frame.local_map.get(name).copied() {
+                return RuntimeValue::RegRef {
+                    frame: frame_idx,
+                    reg,
+                };
             }
-            if !ambiguous {
-                for (key, reg) in frame
-                    .local_map_base
-                    .as_ref()
-                    .into_iter()
-                    .flat_map(|base| base.iter())
-                {
-                    if ParserText::temp_name_prefix_matches(key, &name) {
-                        if found.is_some() {
-                            ambiguous = true;
-                            break;
-                        }
-                        found = Some(*reg);
-                    }
-                }
-            }
-            if !ambiguous {
-                if let Some(reg) = found {
-                    let frame_idx = self.frames.len().saturating_sub(1);
+            if let Some(base) = frame.local_map_base.as_ref() {
+                if let Some(reg) = base.get(name).copied() {
                     return RuntimeValue::RegRef {
                         frame: frame_idx,
                         reg,
@@ -198,6 +105,7 @@ impl VM {
                 }
             }
         }
+     
 
         if let Some(id) = self.variables.id_of(name) {
             return RuntimeValue::VarRef(id);
@@ -207,36 +115,28 @@ impl VM {
             return self.resolve_saveable_runtime_value_ref(value);
         }
 
-        if is_local_style
-            && let Ok(value) = self.resolve_value_for_op_ref(&RuntimeValue::Ref(name.to_string()))
-            && !matches!(value, RuntimeValue::Null)
+        if let Ok(value) = self.resolve_value_for_op_ref(&RuntimeValue::Ref(name.to_string()))
+            && !value.is_null()
         {
             return self.resolve_saveable_runtime_value_ref(&value);
         }
 
+        // TODO Handle unresolved names
         match self.resolve_var_name(name) {
-            VarName::Var(var) => {
+            Some(VarName::Var(var)) => {
                 if let Some(value) = self.variables.get(&var) {
                     self.resolve_saveable_runtime_value_ref(value)
                 } else {
-                    RuntimeValue::Null
+                    unreachable!()
                 }
             }
-            VarName::Func(func) => self
+            Some(VarName::Func(func)) => self
                 .registry
                 .functions
                 .get(&func)
                 .map(|f| self.make_runtime_function_inner(f, seen))
                 .unwrap_or_else(|| RuntimeValue::Null),
-            VarName::Global => {
-                let short_name = ParserText::get_temp_name_prefix(&name).unwrap_or_else(|| name.to_string());
-                if short_name != name
-                    && let Some(func) = self.find_unique_function_by_suffix_ref(&short_name)
-                {
-                    return self.make_runtime_function_inner(func, seen);
-                }
-                RuntimeValue::Null
-            }
+            _ => RuntimeValue::Null,
         }
     }
 
@@ -302,42 +202,14 @@ impl VM {
         })
     }
 
-    pub(crate) fn resolve_var_name(&self, name: &str) -> VarName {
-        let resolve_by_suffix = |short_name: &str| {
-            self.find_unique_var_by_suffix(short_name)
-                .map(VarName::Var)
-                .or_else(|| {
-                    self.find_unique_function_by_suffix_ref(short_name)
-                        .map(|f| VarName::Func(f.name.clone()))
-                })
-        };
-
+    pub(crate) fn resolve_var_name(&self, name: &str) -> Option<VarName> {
         if self.get_function_ref(name).is_some() {
-            return VarName::Func(name.to_string());
+            Some(VarName::Func(name.to_string()))
         } else if self.variables.contains_key(name) {
-            return VarName::Var(name.to_string());
-        } else if name.contains('.') && !ParserText::is_temp_name(&name) {
-            let normalized = name.replace('.', "::");
-            if self.get_function_ref(&normalized).is_some() {
-                return VarName::Func(normalized);
-            }
-            if self.variables.contains_key(&normalized) {
-                return VarName::Var(normalized);
-            }
-        } else if ParserText::is_temp_name(&name) {
-            return VarName::Global;
+            Some(VarName::Var(name.to_string()))
+        } else {
+            None
         }
-
-        let short_name = ParserText::get_temp_name_prefix(&name).unwrap_or_else(|| name.to_string());
-        if short_name != name {
-            if let Some(resolved) = resolve_by_suffix(&short_name) {
-                return resolved;
-            };
-        } else if let Some(resolved) = resolve_by_suffix(name) {
-            return resolved;
-        }
-
-        VarName::Global
     }
 
     #[inline]

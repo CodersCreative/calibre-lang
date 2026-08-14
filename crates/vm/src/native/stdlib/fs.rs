@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    VM,
-    error::RuntimeError,
-    native::{NativeFunction, expect_str_ref, first_arg},
-    value::RuntimeValue,
+    VM, error::RuntimeError, native::{NativeFunction, expect_str_ref, first_arg}, value::{GcVec, RuntimeValue},
 };
 use dumpster::sync::Gc;
 
@@ -37,7 +34,7 @@ impl NativeFunction for FsReadDir {
                 }
 
                 Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::List(
-                    Gc::new(crate::value::GcVec(out)),
+                    Gc::new(GcVec(out)),
                 )))))
             }
             Err(err) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(

@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    VM,
-    error::RuntimeError,
-    native::{NativeFunction, expect_str_ref, first_arg},
-    value::RuntimeValue,
+    VM, error::RuntimeError, native::{NativeFunction, expect_str_ref, first_arg}, value::{GcVec, RuntimeValue},
 };
 use dumpster::sync::Gc;
 
@@ -102,6 +99,6 @@ impl NativeFunction for EnvVars {
             .map(|(k, v)| RuntimeValue::Str(Arc::new(format!("{k}={v}"))))
             .collect();
 
-        Ok(RuntimeValue::List(Gc::new(crate::value::GcVec(vars))))
+        Ok(RuntimeValue::List(Gc::new(GcVec(vars))))
     }
 }
