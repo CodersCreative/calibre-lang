@@ -200,6 +200,7 @@ impl MiddleEnvironment {
         );
         add("random", &[], false);
         add("fs", &["read_dir"], false);
+        add("math", &[], true);
         add("list", &["sort_by", "binary_search_by", "raw_remove"], true);
         add(
             "collections",
@@ -246,7 +247,6 @@ impl MiddleEnvironment {
         add("crypto", &["sha256", "sha512", "blake3"], false);
         add("regex", &["is_match", "find", "replace"], false);
         add("process", &["raw_exec"], false);
-        add("math", &[], true);
         add(
             "net",
             &[

@@ -596,21 +596,6 @@ impl MiddleEnvironment {
             return Some(found);
         }
 
-        fn normalize_owner(owner: impl ToString) -> String {
-            let mut cur = owner.to_string();
-            loop {
-                if !ParserText::is_temp_name(&cur) {
-                    break;
-                }
-
-                let Some((_, rest)) = cur.split_once(':') else {
-                    break;
-                };
-                cur = rest.to_string();
-            }
-            cur
-        }
-
         let target_family: Option<String> = match &target_inner {
             _ => Some(target_inner.to_string()),
             ParserInnerType::StructWithGenerics { identifier, .. } => {
@@ -651,7 +636,10 @@ impl MiddleEnvironment {
                     | ParserInnerType::List(_)
             )
         {
-            return Some(format!("{target_family}.{member}"));
+            let candidate = format!("{target_family}.{member}");
+            if self.symbols.variables.contains_key(&candidate) {
+                return Some(candidate);
+            }
         }
 
         let target = resolved.clone();
@@ -720,17 +708,13 @@ impl MiddleEnvironment {
             && let NodeType::Identifier(x) = &path[0].0.node_type
         {
             let resolved_ident = self.resolve_potential_generic_ident(scope, x);
-            let base_has_value_binding = resolved_ident
+            
+            let is_variable = resolved_ident
                 .as_ref()
                 .map(|id| self.symbols.variables.contains_key(&id.text))
-                .unwrap_or(false)
-                || self
-                    .resolve_str(scope, &x.to_string())
-                    .as_ref()
-                    .is_some_and(|name| self.symbols.variables.contains_key(name))
-                || self.symbols.variables.contains_key(&x.to_string());
-            let base_type = self.resolve_type_from_ident(scope, x);
-            let base_is_value = base_has_value_binding;
+                .unwrap_or(false);
+
+
             if let Some(Some(object)) = resolved_ident
                 .as_ref()
                 .map(|x| self.typing.objects.get(&x.text))
@@ -761,6 +745,8 @@ impl MiddleEnvironment {
                 }
             }
 
+            let base_type = self.resolve_type_from_ident(scope, x);
+
             if let Some(ty) = base_type {
                 match &path[1].0.node_type {
                     NodeType::CallExpression {
@@ -769,7 +755,7 @@ impl MiddleEnvironment {
                         generic_types,
                         args,
                         reverse_args,
-                    } if !base_is_value => {
+                    } if !is_variable => {
                         if let NodeType::Identifier(second) = &caller.node_type
                             && let Some(static_fn) =
                                 self.resolve_impl_member(scope, &ty, &second.to_string())
@@ -810,7 +796,7 @@ impl MiddleEnvironment {
                             path.remove(1);
                         }
                     }
-                    NodeType::Identifier(ident) if !base_is_value => {
+                    NodeType::Identifier(ident) if !is_variable => {
                         let ident = self.resolve_dollar_ident_potential_generic_only(scope, ident);
                         if let Some(ident) = ident
                             && let Some(var) = self.resolve_impl_member(scope, &ty, &ident.text)
@@ -910,10 +896,11 @@ impl MiddleEnvironment {
                     MiddleNodeType::MemberExpression { path: list.clone() },
                     self.context.current_span(),
                 );
+
                 if let Some(overloaded) = self.handle_operator_overloads(
                     scope,
                     item.0.span,
-                    base_node.clone().into(),
+                    base_node.into(),
                     item.0.clone(),
                     Operator::Index,
                 )? {
@@ -921,9 +908,9 @@ impl MiddleEnvironment {
                     continue;
                 }
             }
+
             list.push((
                 match item.0.node_type {
-                    NodeType::Identifier(_) if item.1 => self.evaluate(scope, item.0),
                     NodeType::Identifier(x) if i == 0 => {
                         let first = list.first().cloned().ok_or_else(|| {
                             MiddleErr::At(
@@ -949,15 +936,6 @@ impl MiddleEnvironment {
                                 node_type: MiddleNodeType::Identifier(x),
                                 span,
                             }
-                        }
-                    }
-                    NodeType::Identifier(x) => {
-                        let resolved = self
-                            .resolve_dollar_ident_potential_generic_only(scope, &x)
-                            .unwrap_or_else(|| Self::unresolved_ident_text(&x));
-                        MiddleNode {
-                            node_type: MiddleNodeType::Identifier(resolved),
-                            span,
                         }
                     }
                     _ => self.evaluate(scope, item.0),
