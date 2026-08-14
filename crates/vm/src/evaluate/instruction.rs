@@ -163,7 +163,7 @@ impl VM {
         if let RuntimeValue::Ref(name) = raw_receiver
             && (!name.contains(':') || name.contains("->"))
             && let Some(ty) = self.concrete_runtime_type_name(&resolved_receiver)
-            && ParserText::temp_name_prefix_matches(&ty, name)
+            && ParserText::temp_name_suffix_matches(&ty, name)
         {
             return callee;
         }
@@ -463,7 +463,7 @@ impl VM {
             && let Ok(receiver) = self.resolve_value_for_op_ref(self.get_reg_value(*first))
             && let Some(receiver_type) = self.concrete_runtime_type_name(&receiver)
         {
-            if !ParserText::temp_name_prefix_matches(&receiver_type, &owner) {
+            if !ParserText::temp_name_suffix_matches(&receiver_type, &owner) {
                 if let Some(resolved) =
                     self.resolve_associated_member_value(&receiver_type, member, Some(member))
                     && resolved.is_callable()
@@ -560,7 +560,7 @@ impl VM {
                 RuntimeValue::Ref(owner) => self
                     .resolve_associated_member_value(owner, &member_name, short_name)
                     .or_else(|| {
-                        let owner_short = ParserText::get_temp_name_prefix(owner).unwrap_or(owner.to_string());
+                        let owner_short = ParserText::get_temp_name_suffix(owner).unwrap_or(owner.to_string());
                         if &owner_short != owner {
                             self.resolve_associated_member_value(
                                 &owner_short,
@@ -585,7 +585,7 @@ impl VM {
             && let Some(receiver_type) = self.concrete_runtime_type_name(&receiver)
         {
             if self.callee_expects_receiver(&func)
-                && !ParserText::temp_name_prefix_matches(&receiver_type, &owner)
+                && !ParserText::temp_name_suffix_matches(&receiver_type, &owner)
                 && let Some(resolved) =
                     self.resolve_associated_member_value(&receiver_type, member, Some(member))
                 && resolved.is_callable()
@@ -1379,7 +1379,7 @@ impl VM {
                             vtable.get(member_short).or_else(|| vtable.get(name))
                         {
                             let mapped = callee_name.rsplit_once("::").and_then(|(owner, _)| {
-                                if ParserText::temp_name_prefix_matches(&owner, &type_name)
+                                if ParserText::temp_name_suffix_matches(&owner, &type_name)
                                 {
                                     Some(callee_name.as_str())
                                 } else {

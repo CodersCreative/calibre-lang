@@ -289,7 +289,7 @@ impl MiddleEnvironment {
             .collect();
 
         for var in funcs.iter().cloned() {
-            let name = ParserText::temp_name_with_prefix(var.0.trim(), var.1.span).text;
+            let name = ParserText::temp_name_with_suffix(var.0.trim(), var.1.span).text;
             let _ = self.symbols.variables.insert(
                 name.clone(),
                 MiddleVariable {

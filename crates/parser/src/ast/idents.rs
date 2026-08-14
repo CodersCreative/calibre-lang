@@ -253,7 +253,7 @@ impl ParserText {
     pub fn temp_name(span: Span) -> Self {
         Self::new(
             span,
-            format!("[]-{}-{}", span, {
+            format!("[{}-{}]", span, {
                 let mut counter = COUNTER.write().unwrap();
                 *counter += 1;
                 *counter
@@ -261,15 +261,15 @@ impl ParserText {
         )
     }
 
-    pub fn temp_name_with_prefix(prefix: impl ToString, span: Span) -> Self {
-        let prefix = prefix.to_string();
-        if Self::is_temp_name(&prefix) {
-            return Self::new(span, prefix);
+    pub fn temp_name_with_suffix(suffix: impl ToString, span: Span) -> Self {
+        let suffix = suffix.to_string();
+        if Self::is_temp_name(&suffix) {
+            return Self::new(span, suffix);
         }
 
         Self::new(
             span,
-            format!("[{prefix}]-{}-{}", span, {
+            format!("[{}-{}]{suffix}", span, {
                 let mut counter = COUNTER.write().unwrap();
                 *counter += 1;
                 *counter
@@ -281,31 +281,25 @@ impl ParserText {
         ident.to_string().contains("[")
     }
 
-    pub fn get_temp_name_prefix(ident: &impl ToString) -> Option<String> {
+    pub fn get_temp_name_suffix(ident: &impl ToString) -> Option<String> {
         let ident = ident.to_string();
         if !Self::is_temp_name(&ident) {
             return Some(ident);
         }
 
-        if ident.contains("[]") {
-            return None;
-        }
-
-        return ident
-            .split(']')
-            .next()
-            .and_then(|x| x.split('[').next())
-            .map(|x| x.to_string());
+        Some(ident
+            .split_once(']')?
+            .1.to_string())
     }
 
     #[deprecated(note = "Needs to be phased out in favour of proper identifier resolving")]
-    pub fn temp_name_prefix_matches(left: &impl ToString, right : &impl ToString) -> bool {
+    pub fn temp_name_suffix_matches(left: &impl ToString, right : &impl ToString) -> bool {
         let (left, right) = (left.to_string(), right.to_string());
         if left == right {
             return true
         }
 
-        Self::get_temp_name_prefix(&left).unwrap_or(left) == Self::get_temp_name_prefix(&right).unwrap_or(right)
+        Self::get_temp_name_suffix(&left).unwrap_or(left) == Self::get_temp_name_suffix(&right).unwrap_or(right)
     }
 }
 

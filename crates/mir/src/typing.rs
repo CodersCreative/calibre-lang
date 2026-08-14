@@ -32,7 +32,6 @@ impl Typing {
         }
 
         for base in ty.member_base_name_candidates() {
-            candidates.push(format!("{base}::{member}"));
             candidates.push(format!("{base}.{member}"));
         }
         candidates.dedup();

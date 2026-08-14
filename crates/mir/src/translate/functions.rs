@@ -125,7 +125,7 @@ impl MiddleEnvironment {
             let mut matched: Option<Vec<FunctionParamDefault>> = None;
             for (key, value) in &self.symbols.function_param_defaults {
                 let suffix_match = key == raw_name.as_str()
-                    || key.ends_with(&format!("::{raw_name}"))
+                    || key.ends_with(&format!(".{raw_name}"))
                     || key.ends_with(&format!(":{raw_name}"));
                 if !suffix_match {
                     continue;
@@ -185,7 +185,7 @@ impl MiddleEnvironment {
 
         let find_named_index = |name: &str| -> Option<usize> {
             defaults.iter().position(|d| {
-                ParserText::temp_name_prefix_matches(&d.name, &name)
+                ParserText::temp_name_suffix_matches(&d.name, &name)
             })
         };
 
@@ -408,7 +408,7 @@ impl MiddleEnvironment {
     }
 
     pub(crate) fn wrap_generator_body(body: Node, elem_type: ParserDataType, span: Span) -> Node {
-        let next_name = ParserText::temp_name_with_prefix("gen_next", span);
+        let next_name = ParserText::temp_name_with_suffix("gen_next", span);
         let rewritten = Self::rewrite_generator_returns(body);
 
         let next_body = match rewritten.node_type {
@@ -595,7 +595,7 @@ impl MiddleEnvironment {
                     .err_at_current(MiddleErr::Scope(identifier.to_string()))
             })?;
 
-        let new_name = ParserText::temp_name_with_prefix(ident.trim(), span).text;
+        let new_name = ParserText::temp_name_with_suffix(ident.trim(), span).text;
 
         let mut params = Vec::new();
         for ty in parameters {
@@ -660,7 +660,7 @@ impl MiddleEnvironment {
                     self.context
                         .err_at_current(MiddleErr::Scope(param.0.to_string()))
                 })?;
-            let new_name = ParserText::temp_name_with_prefix(og_name.text.trim(), span).text;
+            let new_name = ParserText::temp_name_with_suffix(og_name.text.trim(), span).text;
 
             let data_type = if let Some(x) = param.1 {
                 self.resolve_potential_new_type(scope, x)
@@ -690,7 +690,7 @@ impl MiddleEnvironment {
 
         if needs_caller_context {
             let caller_context_name =
-                ParserText::temp_name_with_prefix("caller_context", span).text;
+                ParserText::temp_name_with_suffix("caller_context", span).text;
             let caller_context_type =
                 ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
 
@@ -973,12 +973,12 @@ impl MiddleEnvironment {
                     let target_ty = first_ty.unwrap_all_refs();
                     let caller_member_name = caller_ident
                         .to_string()
-                        .rsplit_once("::")
+                        .rsplit_once(".")
                         .map(|(_, member)| member.to_string())
                         .unwrap_or_else(|| caller_ident.to_string());
                     let mapped_from_param =
                         self.symbols.variables.iter().find_map(|(name, var)| {
-                            if !name.ends_with(&format!("::{}", caller_member_name)) {
+                            if !name.ends_with(&format!(".{}", caller_member_name)) {
                                 return None;
                             }
                             let ParserInnerType::Function { parameters, .. } =

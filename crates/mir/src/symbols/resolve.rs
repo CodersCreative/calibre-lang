@@ -41,7 +41,7 @@ impl MiddleEnvironment {
         ) -> Option<ParserDataType> {
             let root = defs
                 .iter()
-                .find(|(name, _)| ParserText::temp_name_prefix_matches(name, &trait_name))
+                .find(|(name, _)| ParserText::temp_name_suffix_matches(name, &trait_name))
                 .map(|(name, _)| name.clone())?;
             let mut stack = vec![root];
             let mut visited = FxHashSet::default();
@@ -59,7 +59,7 @@ impl MiddleEnvironment {
                 for implied in &def.implied_traits {
                     if let Some((resolved, _)) = defs
                         .iter()
-                        .find(|(name, _)| ParserText::temp_name_prefix_matches(name, implied))
+                        .find(|(name, _)| ParserText::temp_name_suffix_matches(name, implied))
                     {
                         stack.push(resolved.clone());
                     } else {
@@ -336,7 +336,7 @@ impl MiddleEnvironment {
                     .resolve_dollar_ident_only(scope, &identifier)
                     .unwrap_or_else(|| ParserText::from(identifier.to_string()).into());
                 let new_name =
-                    ParserText::temp_name_with_prefix(identifier.text.trim(), identifier.span).text;
+                    ParserText::temp_name_with_suffix(identifier.text.trim(), identifier.span).text;
                 let type_def = MiddleTypeDefType::from_type_def_type(self, scope, type_def);
                 self.typing.objects.insert(
                     new_name.clone(),

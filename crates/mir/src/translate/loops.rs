@@ -805,8 +805,8 @@ impl MiddleEnvironment {
         }
 
         let (result_raw, broke_raw, result_ident, broke_ident) = if else_body.is_some() {
-            let result = ParserText::temp_name_with_prefix("loop_result", span).to_string();
-            let broke = ParserText::temp_name_with_prefix("loop_broke", span).to_string();
+            let result = ParserText::temp_name_with_suffix("loop_result", span).to_string();
+            let broke = ParserText::temp_name_with_suffix("loop_broke", span).to_string();
 
             if let Some(scope_data) = self.scoping.scopes.get_mut(&scope) {
                 scope_data.mappings.insert(result.clone(), result.clone());
@@ -898,7 +898,7 @@ impl MiddleEnvironment {
                         })
                 {
                     let item_ident: PotentialDollarIdentifier =
-                        ParserText::temp_name_with_prefix("for_let_item", value.span).into();
+                        ParserText::temp_name_with_suffix("for_let_item", value.span).into();
                     let item_node = Node::identifier(span, &item_ident);
                     let filtered_body = Node::new(
                         span,
@@ -988,15 +988,15 @@ impl MiddleEnvironment {
                 };
 
                 let iter_id: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_prefix("loop_iterable", range.span).into();
+                    ParserText::temp_name_with_suffix("loop_iterable", range.span).into();
 
                 let iter_node = Node::identifier(span, &iter_id);
 
                 let idx_id: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_prefix("loop_index", range.span).into();
+                    ParserText::temp_name_with_suffix("loop_index", range.span).into();
 
                 let next_id: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_prefix("loop_next", range.span).into();
+                    ParserText::temp_name_with_suffix("loop_next", range.span).into();
 
                 let is_count_loop = explicit_range.is_some()
                     || matches!(

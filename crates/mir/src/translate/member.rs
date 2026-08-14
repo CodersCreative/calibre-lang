@@ -35,10 +35,10 @@ impl MiddleEnvironment {
             return Some(m);
         }
 
-        let short = function_name.rsplit("::").next().unwrap_or(function_name);
+        let short = function_name.rsplit(".").next().unwrap_or(function_name);
         let mut found: Option<RefMutability> = None;
         for (name, var) in &self.symbols.variables {
-            if !name.ends_with(&format!("::{short}")) {
+            if !name.ends_with(&format!(".{short}")) {
                 continue;
             }
             if let Some(m) = from_var(var) {
@@ -82,7 +82,7 @@ impl MiddleEnvironment {
 
     #[inline]
     fn normalize_member_path_name(name: &str) -> String {
-        let mut parts: Vec<&str> = name.split("::").collect();
+        let mut parts: Vec<&str> = name.split(".").collect();
         let mut i = 1;
 
         while i < parts.len() {
@@ -93,16 +93,10 @@ impl MiddleEnvironment {
             }
         }
 
-        let mut out = parts.join("::");
+        let mut out = parts.join(".");
 
-        if let Some((lhs, rhs)) = out.split_once("::")
+        if let Some((lhs, rhs)) = out.split_once(".")
             && rhs.starts_with(&format!("{lhs}:<"))
-        {
-            out = rhs.to_string();
-        }
-
-        if let Some((_, rhs)) = out.rsplit_once('.')
-            && rhs.contains("::")
         {
             out = rhs.to_string();
         }
@@ -187,7 +181,7 @@ impl MiddleEnvironment {
             {
                 let receiver_name = receiver_ident.to_string();
                 let member_name = member_ident.to_string();
-                let candidate = format!("{receiver_name}::{member_name}");
+                let candidate = format!("{receiver_name}.{member_name}");
                 if self.symbols.variables.contains_key(&candidate) {
                     Some(candidate)
                 } else {
@@ -417,12 +411,12 @@ impl MiddleEnvironment {
         };
 
         let text = caller_name.text.as_str();
-        let family = text.rsplit_once("::").map(|(lhs, _)| lhs).unwrap_or(text);
+        let family = text.rsplit_once(".").map(|(lhs, _)| lhs).unwrap_or(text);
 
         for imp in self.typing.impls.values() {
             if let Some((mapped, _)) = imp.variables.get(member) {
                 let mapped_family = mapped
-                    .rsplit_once("::")
+                    .rsplit_once(".")
                     .map(|(lhs, _)| lhs)
                     .unwrap_or(mapped.as_str());
 
@@ -443,9 +437,9 @@ impl MiddleEnvironment {
         };
 
         let text = caller_name.text.as_str();
-        let family = text.rsplit_once("::").map(|(lhs, _)| lhs).unwrap_or(text);
+        let family = text.rsplit_once(".").map(|(lhs, _)| lhs).unwrap_or(text);
 
-        let needle = format!("{family}::{member}");
+        let needle = format!("{family}.{member}");
         let mut found = None;
         for key in self.symbols.variables.keys() {
             if key.ends_with(&needle) {
@@ -561,8 +555,8 @@ impl MiddleEnvironment {
                                       member: &str,
                                       match_tail: bool| {
             env.symbols.variables.iter().find_map(|(name, var)| {
-                let name = ParserText::get_temp_name_prefix(name)?;
-                if !(name.ends_with(&format!("::{member}")) || name.ends_with(&format!(".{member}"))) {
+                let name = ParserText::get_temp_name_suffix(name)?;
+                if !name.ends_with(&format!(".{member}")) {
                     return None;
                 }
 
@@ -668,7 +662,7 @@ impl MiddleEnvironment {
                 ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
                 _ => return None,
             };
-            let imp_family = ParserText::get_temp_name_prefix(imp_name);
+            let imp_family = ParserText::get_temp_name_suffix(imp_name);
             if imp_family == target_family && imp.variables.contains_key(member) {
                 Some(imp.clone())
             } else {

@@ -33,7 +33,7 @@ impl MiddleEnvironment {
                     .err_at_current(MiddleErr::Scope(identifier.to_string()))
             })?;
 
-        let new_name = ParserText::temp_name_with_prefix(identifier.text.trim(), span).text;
+        let new_name = ParserText::temp_name_with_suffix(identifier.text.trim(), span).text;
 
         if let NodeType::CallExpression {
             caller,
@@ -163,7 +163,7 @@ impl MiddleEnvironment {
                             .err_at_current(MiddleErr::Scope(param.0.to_string()))
                     })?;
 
-                let new_name = ParserText::temp_name_with_prefix(og_name.trim(), span);
+                let new_name = ParserText::temp_name_with_suffix(og_name.trim(), span);
 
                 let data_type = if let Some(x) = param.1.clone() {
                     self.resolve_potential_new_type(scope, x)
@@ -417,7 +417,7 @@ impl MiddleEnvironment {
                 MiddleErr::At(span, Box::new(MiddleErr::Scope(identifier.to_string())))
             })?;
 
-        let new_name = ParserText::temp_name_with_prefix(identifier.text.trim(), span).text;
+        let new_name = ParserText::temp_name_with_suffix(identifier.text.trim(), span).text;
 
         let object = MiddleTypeDefType::from_type_def_type(self, scope, object.clone());
 

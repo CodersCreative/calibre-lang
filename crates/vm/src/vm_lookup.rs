@@ -181,7 +181,7 @@ impl VM {
 
     #[inline]
     pub(crate) fn is_gen_type_name(type_name: &str) -> bool {
-        let short = ParserText::get_temp_name_prefix(&type_name).unwrap_or_else(|| type_name.to_string());
+        let short = ParserText::get_temp_name_suffix(&type_name).unwrap_or_else(|| type_name.to_string());
         short == "gen" || short.starts_with("gen:<")
     }
 

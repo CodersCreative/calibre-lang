@@ -15,7 +15,7 @@ impl<'a> BlockLoweringCtx<'a> {
 
         let mut found: Option<String> = None;
         for candidate in &self.locals {
-            if ParserText::temp_name_prefix_matches(&candidate, &name) {
+            if ParserText::temp_name_suffix_matches(&candidate, &name) {
                 if found.is_some() {
                     return None;
                 }
@@ -35,7 +35,7 @@ impl<'a> BlockLoweringCtx<'a> {
 
         let mut found: Option<Reg> = None;
         for (candidate, reg) in &self.map {
-            if ParserText::temp_name_prefix_matches(&candidate, &name) {
+            if ParserText::temp_name_suffix_matches(&candidate, &name) {
                 if found.is_some() {
                     return None;
                 }

@@ -219,7 +219,7 @@ impl VM {
         member: &str,
         short_member: Option<&str>,
     ) {
-        let short_owner = ParserText::get_temp_name_prefix(&owner).unwrap_or_else(|| owner.to_string());
+        let short_owner = ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
         if short_owner != owner {
             Self::push_owner_member_candidates(candidates, &short_owner, member, short_member);
         }
@@ -241,7 +241,7 @@ impl VM {
     }
 
     fn normalize_generic_owner(owner: &str) -> String {
-        let tail = ParserText::get_temp_name_prefix(&owner).unwrap_or_else(|| owner.to_string());
+        let tail = ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
         let base = tail.split("->").next().unwrap_or(&tail);
         base.split('<').next().map_or(base.to_string(), |x| x.to_string())
     }
@@ -462,11 +462,11 @@ impl VM {
         trait_name: &str,
     ) -> Option<&FxHashMap<String, String>> {
         for (imp_ty, traits) in self.registry.dyn_vtables.iter() {
-            if !ParserText::temp_name_prefix_matches(imp_ty, &concrete) {
+            if !ParserText::temp_name_suffix_matches(imp_ty, &concrete) {
                 continue;
             }
             for (imp_trait, table) in traits {
-                if ParserText::temp_name_prefix_matches(imp_trait, &trait_name) {
+                if ParserText::temp_name_suffix_matches(imp_trait, &trait_name) {
                     return Some(table);
                 }
             }
@@ -526,7 +526,7 @@ impl VM {
                 return Some(found);
             }
         }
-        let owner_tail = ParserText::get_temp_name_prefix(&owner).unwrap_or_else(|| owner.to_string());
+        let owner_tail = ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
         let owner_base = owner_tail
             .split_once("->")
             .map(|(base, _)| base)
@@ -539,7 +539,7 @@ impl VM {
         // }
         let mut matched: Option<String> = None;
         for name in self.variables.keys() {
-            let tail = ParserText::get_temp_name_prefix(&name).unwrap_or_else(|| name.to_string());
+            let tail = ParserText::get_temp_name_suffix(&name).unwrap_or_else(|| name.to_string());
             if tail != suffix
                 && !name.ends_with(&format!(".{suffix}"))
                 && !name.ends_with(&format!("::{suffix}"))
@@ -566,7 +566,7 @@ impl VM {
                     return Some(resolved);
                 }
             }
-            let std_owner_tail = ParserText::get_temp_name_prefix(&std_owner).unwrap_or_else(|| std_owner.to_string());
+            let std_owner_tail = ParserText::get_temp_name_suffix(&std_owner).unwrap_or_else(|| std_owner.to_string());
             let std_owner_base = std_owner_tail
                 .split_once("->")
                 .map(|(base, _)| base)
@@ -757,7 +757,7 @@ impl VM {
                 ParserInnerType::DynamicTraits(traits) => traits.iter().all(|tr| {
                     constraints
                         .iter()
-                        .any(|x| ParserText::temp_name_prefix_matches(x, tr))
+                        .any(|x| ParserText::temp_name_suffix_matches(x, tr))
                 }),
                 _ => self.runtime_matches_type(inner.as_ref(), target),
             };
@@ -769,7 +769,7 @@ impl VM {
                 RuntimeValue::DynObject { constraints, .. } => traits.iter().all(|tr| {
                     constraints
                         .iter()
-                        .any(|x| ParserText::temp_name_prefix_matches(x, tr))
+                        .any(|x| ParserText::temp_name_suffix_matches(x, tr))
                 }),
                 other => self
                     .build_dyn_vtable_for_value(other, traits.as_slice())
@@ -839,10 +839,10 @@ impl VM {
             ParserInnerType::Struct(identifier)
             | ParserInnerType::StructWithGenerics { identifier, .. } => match value {
                 RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
-                    ParserText::temp_name_prefix_matches(actual, identifier)
+                    ParserText::temp_name_suffix_matches(actual, identifier)
                 }
                 RuntimeValue::Generator { type_name, .. } => {
-                    ParserText::temp_name_prefix_matches(type_name, type_name)
+                    ParserText::temp_name_suffix_matches(type_name, type_name)
                 }
                 _ => false,
             },

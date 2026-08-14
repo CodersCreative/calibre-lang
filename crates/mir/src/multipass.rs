@@ -290,7 +290,7 @@ impl MiddleEnvironment {
 
     fn predeclare_type_binding(&mut self, scope: &u64, identifier: &str) {
         let new_name =
-            ParserText::temp_name_with_prefix(identifier.trim(), self.context.current_span()).text;
+            ParserText::temp_name_with_suffix(identifier.trim(), self.context.current_span()).text;
 
         if self.symbols.variables.contains_key(&new_name) {
             return;
@@ -326,7 +326,7 @@ impl MiddleEnvironment {
             return;
         };
 
-        let new_name = ParserText::temp_name_with_prefix(identifier.text.trim(), span).text;
+        let new_name = ParserText::temp_name_with_suffix(identifier.text.trim(), span).text;
 
         if self.symbols.variables.contains_key(&new_name) {
             return;
@@ -366,7 +366,7 @@ impl MiddleEnvironment {
         };
 
         let new_name =
-            ParserText::temp_name_with_prefix(identifier.text.trim(), identifier.span).text;
+            ParserText::temp_name_with_suffix(identifier.text.trim(), identifier.span).text;
 
         if self.symbols.variables.contains_key(&new_name) {
             return;

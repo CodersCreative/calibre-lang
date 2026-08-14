@@ -294,7 +294,7 @@ impl MiddleEnvironment {
                         );
 
                         let fn_ident: PotentialDollarIdentifier =
-                            ParserText::temp_name_with_prefix("spawn_fn", node.span).into();
+                            ParserText::temp_name_with_suffix("spawn_fn", node.span).into();
 
                         body.push(Node::new(
                             self.context.current_span(),
@@ -331,12 +331,12 @@ impl MiddleEnvironment {
                         label,
                         else_body,
                     } => {
-                        let wg_name = ParserText::temp_name_with_prefix("spawn_wg", node.span);
+                        let wg_name = ParserText::temp_name_with_suffix("spawn_wg", node.span);
                         let wg_ident: PotentialDollarIdentifier =
                             ParserText::from(wg_name.clone()).into();
 
                         let start_name =
-                            ParserText::temp_name_with_prefix("spawn_start", node.span);
+                            ParserText::temp_name_with_suffix("spawn_start", node.span);
                         let start_ident: PotentialDollarIdentifier =
                             ParserText::from(start_name.clone()).into();
 
@@ -456,7 +456,7 @@ impl MiddleEnvironment {
                     }
                     NodeType::FunctionDeclaration { header, body } => {
                         let fn_ident: PotentialDollarIdentifier =
-                            ParserText::temp_name_with_prefix("spawn_fn", body.span).into();
+                            ParserText::temp_name_with_suffix("spawn_fn", body.span).into();
 
                         let scope_node = Node::new(
                             self.context.current_span(),
@@ -492,7 +492,7 @@ impl MiddleEnvironment {
 
                 if auto_wait {
                     let wg_ident: PotentialDollarIdentifier =
-                        ParserText::temp_name_with_prefix("spawn_wait_wg", node.span).into();
+                        ParserText::temp_name_with_suffix("spawn_wait_wg", node.span).into();
                     let wait_scope = Node::new_temp_scope_with_create(
                         vec![
                             Node::new(
@@ -538,7 +538,7 @@ impl MiddleEnvironment {
             NodeType::Spawn { items, auto_wait } => {
                 let span = node.span;
                 let wg_ident: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_prefix("spawn_wg", span).into();
+                    ParserText::temp_name_with_suffix("spawn_wg", span).into();
                 let wg_ident_node = Node::new(
                     span,
                     NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
@@ -673,7 +673,7 @@ impl MiddleEnvironment {
                     };
 
                     let tmp_ident: PotentialDollarIdentifier =
-                        ParserText::temp_name_with_prefix("move", node.span).into();
+                        ParserText::temp_name_with_suffix("move", node.span).into();
 
                     let tmp_decl = Node::new(
                         node.span,
@@ -1091,7 +1091,7 @@ impl MiddleEnvironment {
                 value,
             } => {
                 let tmp_ident: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_prefix("destructure_tmp", node.span).into();
+                    ParserText::temp_name_with_suffix("destructure_tmp", node.span).into();
 
                 let tmp_decl = Node::new(
                     node.span,
@@ -1125,7 +1125,7 @@ impl MiddleEnvironment {
             }
             NodeType::DestructureAssignment { pattern, value } => {
                 let tmp_ident: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_prefix("destructure_tmp", node.span).into();
+                    ParserText::temp_name_with_suffix("destructure_tmp", node.span).into();
 
                 let tmp_decl = Node::new(
                     node.span,
@@ -1259,7 +1259,7 @@ impl MiddleEnvironment {
                     match failure_mode {
                         AsFailureMode::Result | AsFailureMode::Option => {}
                         AsFailureMode::Panic => {
-                            let temp_ident = ParserText::temp_name_with_prefix("as_res", node.span);
+                            let temp_ident = ParserText::temp_name_with_suffix("as_res", node.span);
                             return self.evaluate_inner(
                                 scope,
                                 Node {
@@ -1589,7 +1589,7 @@ impl MiddleEnvironment {
             NodeType::TestDeclaration { identifier, body } => {
                 let func_identifier = format!(
                     "test::{}",
-                    ParserText::temp_name_with_prefix(identifier.text.trim(), node.span).text
+                    ParserText::temp_name_with_suffix(identifier.text.trim(), node.span).text
                 );
                 let file_path = self.scoping.scopes.get(scope).map(|s| s.path.clone());
 
@@ -1806,7 +1806,7 @@ impl MiddleEnvironment {
                     })?;
                     for var in &variables {
                         if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type {
-                            let resolved_iden = format!("{}::{}", target_key, identifier);
+                            let resolved_iden = format!("{}.{}", target_key, identifier);
                             impl_ref
                                 .variables
                                 .entry(identifier.to_string())
@@ -1839,7 +1839,7 @@ impl MiddleEnvironment {
                             data_type,
                         } => {
                             let iden = identifier.to_string();
-                            let resolved_iden = format!("{}::{}", target_key, identifier);
+                            let resolved_iden = format!("{}.{}", target_key, identifier);
 
                             let dependant = match &value.node_type {
                                 NodeType::FunctionDeclaration { header, .. } => {
@@ -2101,7 +2101,7 @@ impl MiddleEnvironment {
                     })?;
                     for var in &all_vars {
                         if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type {
-                            let resolved_iden = format!("{}::{}", target_key, identifier);
+                            let resolved_iden = format!("{}.{}", target_key, identifier);
                             impl_ref
                                 .variables
                                 .entry(identifier.to_string())
@@ -2121,7 +2121,7 @@ impl MiddleEnvironment {
                             data_type,
                         } => {
                             let iden = identifier.to_string();
-                            let resolved_iden = format!("{}::{}", target_key, identifier);
+                            let resolved_iden = format!("{}.{}", target_key, identifier);
 
                             let dependant = match &value.node_type {
                                 NodeType::FunctionDeclaration { header, .. } => {
@@ -2289,7 +2289,7 @@ impl MiddleEnvironment {
                     }
                 };
 
-                let new_name = ParserText::temp_name_with_prefix(base_name.clone(), node.span).text;
+                let new_name = ParserText::temp_name_with_suffix(base_name.clone(), node.span).text;
 
                 self.typing.objects.insert(
                     new_name.clone(),
@@ -2745,7 +2745,7 @@ impl MiddleEnvironment {
             }
             NodeType::SelectStatement { arms } => {
                 let done_ident: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_prefix("select_done", node.span).into();
+                    ParserText::temp_name_with_suffix("select_done", node.span).into();
 
                 let done_decl = Node::new(
                     node.span,
@@ -2807,7 +2807,7 @@ impl MiddleEnvironment {
                                 let Some(left) = left.clone() else { continue };
                                 let Some(right) = right.clone() else { continue };
                                 let tmp_ident = PotentialDollarIdentifier::Identifier(
-                                    ParserText::temp_name_with_prefix("select", node.span),
+                                    ParserText::temp_name_with_suffix("select", node.span),
                                 );
 
                                 let try_get_call = Self::scope_member_call(

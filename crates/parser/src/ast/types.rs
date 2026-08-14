@@ -41,20 +41,20 @@ impl ParserDataType {
         let base_key = base.to_string();
 
         names.push(base_key.clone());
-        if let Some(x) = ParserText::get_temp_name_prefix(&base_key) {
+        if let Some(x) = ParserText::get_temp_name_suffix(&base_key) {
             names.push(x);
         }
 
         match &base {
             ParserInnerType::Struct(name) => {
                 names.push(name.clone());
-                if let Some(x) = ParserText::get_temp_name_prefix(name) {
+                if let Some(x) = ParserText::get_temp_name_suffix(name) {
                     names.push(x);
                 }
             }
             ParserInnerType::StructWithGenerics { identifier, .. } => {
                 names.push(identifier.clone());
-                if let Some(x) = ParserText::get_temp_name_prefix(identifier) {
+                if let Some(x) = ParserText::get_temp_name_suffix(identifier) {
                     names.push(x);
                 }
             }
@@ -478,18 +478,18 @@ impl ParserInnerType {
         match (self, other) {
             (ParserInnerType::Struct(a), _) if generic_params.contains(a) => true,
             (ParserInnerType::Struct(a), ParserInnerType::Struct(b))
-                if ParserText::temp_name_prefix_matches(a, b) =>
+                if ParserText::temp_name_suffix_matches(a, b) =>
             {
                 true
             }
             (
                 ParserInnerType::StructWithGenerics { identifier: a, .. },
                 ParserInnerType::Struct(b),
-            ) if ParserText::temp_name_prefix_matches(b, a) => true,
+            ) if ParserText::temp_name_suffix_matches(b, a) => true,
             (
                 ParserInnerType::Struct(a),
                 ParserInnerType::StructWithGenerics { identifier: b, .. },
-            ) => ParserText::temp_name_prefix_matches(a,b),
+            ) => ParserText::temp_name_suffix_matches(a,b),
             (
                 ParserInnerType::StructWithGenerics {
                     identifier: a,
@@ -500,7 +500,7 @@ impl ParserInnerType {
                     generic_types: bg,
                 },
             ) => {
-                if !ParserText::temp_name_prefix_matches(a, b) || ag.len() != bg.len() {
+                if !ParserText::temp_name_suffix_matches(a, b) || ag.len() != bg.len() {
                     return false;
                 }
                 ag.iter()

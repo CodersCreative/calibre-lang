@@ -247,7 +247,7 @@ impl MiddleEnvironment {
                         .ok_or_else(|| {
                             MiddleErr::At(span, Box::new(MiddleErr::Scope(identifier.to_string())))
                         })?;
-                    let new_name = ParserText::temp_name_with_prefix(ident.text.trim(), span).text;
+                    let new_name = ParserText::temp_name_with_suffix(ident.text.trim(), span).text;
                     self.scoping
                         .scope_mut_or_err(&new_scope)?
                         .mappings

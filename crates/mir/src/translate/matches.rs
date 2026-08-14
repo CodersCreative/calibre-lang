@@ -552,7 +552,7 @@ impl MiddleEnvironment {
                                 Node::member(self.context.current_span(), cur.clone(), "next");
                             if name.is_some() || destructure.is_some() {
                                 let bind_name = name.clone().unwrap_or_else(|| {
-                                    ParserText::temp_name_with_prefix(
+                                    ParserText::temp_name_with_suffix(
                                         "match_payload",
                                         Span::default(),
                                     )
@@ -751,7 +751,7 @@ impl MiddleEnvironment {
         body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
     ) -> Result<MiddleNode, MiddleErr> {
         let (resolved_data_type, decl, value) = if let Some(value) = value {
-            let tmp_name = ParserText::temp_name_with_prefix("match_tmp", span);
+            let tmp_name = ParserText::temp_name_with_suffix("match_tmp", span);
             let resolved = self.resolve_type_from_node(scope, &value);
             (
                 resolved.clone(),
@@ -1213,7 +1213,7 @@ impl MiddleEnvironment {
                                                                 || destructure.is_some()
                                                             {
                                                                 let bind_name = name.clone().unwrap_or_else(|| {
-                                                                    ParserText::temp_name_with_prefix(
+                                                                    ParserText::temp_name_with_suffix(
                                                                         "match_tuple_nested_destructure",
                                                                         Span::default()
                                                                     ).into()
@@ -1314,7 +1314,7 @@ impl MiddleEnvironment {
 
                                     if name.is_some() || destructure.is_some() {
                                         let bind_name = name.clone().unwrap_or_else(|| {
-                                            ParserText::temp_name_with_prefix(
+                                            ParserText::temp_name_with_suffix(
                                                 "match_tuple_destructure",
                                                 Span::default(),
                                             )
@@ -1725,7 +1725,7 @@ impl MiddleEnvironment {
                                 let bind_name = if let Some(name) = name {
                                     name
                                 } else {
-                                    ParserText::temp_name_with_prefix(
+                                    ParserText::temp_name_with_suffix(
                                         "match_destructure",
                                         self.context.current_span(),
                                     )
@@ -1993,7 +1993,7 @@ impl MiddleEnvironment {
                             let bind_name = if let Some(name) = name {
                                 name
                             } else {
-                                ParserText::temp_name_with_prefix(
+                                ParserText::temp_name_with_suffix(
                                     "match_destructure",
                                     self.context.current_span(),
                                 )
