@@ -9,12 +9,26 @@ use crate::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, ops::Deref, str::FromStr};
+use std::{fmt::Display, hash::Hash, ops::Deref, str::FromStr};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParserDataType {
     pub data_type: ParserInnerType,
     pub span: Span,
+}
+
+impl PartialEq for ParserDataType {
+    fn eq(&self, other: &Self) -> bool {
+        self.data_type == other.data_type
+    }
+}
+
+impl Eq for ParserDataType {}
+
+impl Hash for ParserDataType {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.data_type.hash(state);
+    }
 }
 
 impl From<ParserInnerType> for ParserDataType {

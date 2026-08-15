@@ -14,7 +14,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 pub struct Typing {
     pub objects: FxHashMap<String, MiddleObject>,
     pub impls: FxHashMap<ParserInnerType, MiddleImpl>,
-    pub type_aliases: FxHashMap<String, ParserDataType>,
     pub trait_defs: FxHashMap<String, MiddleTrait>,
     pub generic_type_templates: FxHashMap<String, (Vec<String>, TypeDefType, Vec<Overload>)>,
     pub type_specializations: FxHashMap<String, String>,

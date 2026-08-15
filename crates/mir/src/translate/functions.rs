@@ -1152,6 +1152,7 @@ impl MiddleEnvironment {
                     id: *scope,
                     parent: None,
                     mappings: FxHashMap::default(),
+                            type_mappings: FxHashMap::default(),
                     macros: FxHashMap::default(),
                     macro_args: FxHashMap::default(),
                     children: FxHashMap::default(),

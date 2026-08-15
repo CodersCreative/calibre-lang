@@ -492,17 +492,11 @@ impl MiddleEnvironment {
                     .apply_callable(args.len(), 0, node.span)
             }
             NodeType::Identifier(x) => {
-                if let Some(iden) = self.resolve_potential_generic_ident(scope, x) {
-                    if let Some(x) = self.symbols.variables.get(&iden.text) {
-                        return Some(x.data_type.clone());
-                    }
+                if let Some(iden) = self.resolve_potential_generic_ident(scope, x) && let Some(x) = self.symbols.variables.get(&iden.text) {
+                    Some(x.data_type.clone())
+                }else  {
 
-                    if let Some(alias) = self.typing.type_aliases.get(&iden.text) {
-                        return Some(alias.clone());
-                    }
-                }
-
-                None
+                None}
             }
             NodeType::MemberExpression { path } => {
                 if path.is_empty() {

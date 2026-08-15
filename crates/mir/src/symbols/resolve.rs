@@ -211,9 +211,7 @@ impl MiddleEnvironment {
                 let resolved = self
                     .resolve_potential_dollar_ident(scope, x)
                     .unwrap_or_else(|| ParserText::from(x.to_string()));
-                if let Some(alias) = self.typing.type_aliases.get(&resolved.text) {
-                    return Some(alias.clone());
-                }
+
                 Some(ParserDataType {
                     data_type: ParserInnerType::Struct(resolved.text.to_string()),
                     span: resolved.span,
@@ -414,26 +412,34 @@ impl MiddleEnvironment {
                     self.symbols.overloads.push(overload);
                 }
 
-                if let Some(prev) = previous_self {
-                    if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
-                        scope_ref.mappings.insert(String::from("Self"), prev);
-                    }
+                if let Some(prev) = previous_self && let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
+                    scope_ref.mappings.insert(String::from("Self"), prev);
                 }
-
+                
                 ParserDataType::new(data_type_span, ParserInnerType::Struct(new_name))
             }
         }
     }
 
+    pub fn resolve_type_from_type_mappings(&self, scope: &u64, data_type: &ParserInnerType) -> Option<&ParserInnerType> {
+        let scope_ref = self.scoping.scopes.get(scope)?;
+        match scope_ref.type_mappings.get(data_type) {
+            Some(x) => return Some(x),
+            _ => scope_ref.parent.and_then(|x| self.resolve_type_from_type_mappings(&x, data_type)),
+        }
+    }
+
     pub fn resolve_data_type(&mut self, scope: &u64, data_type: ParserDataType) -> ParserDataType {
+        let mut data_type = self.resolve_type_from_type_mappings(scope, &data_type.data_type).map(|x| ParserDataType::new(data_type.span, x.clone())).unwrap_or(data_type);
+        data_type = self.resolve_type_from_mappings(scope, data_type);
+        self.resolve_type_from_type_mappings(scope, &data_type.data_type).map(|x| ParserDataType::new(data_type.span, x.clone())).unwrap_or(data_type)
+    }
+
+    pub fn resolve_type_from_mappings(&mut self, scope: &u64, data_type: ParserDataType) -> ParserDataType {
         match data_type.data_type {
             ParserInnerType::Struct(identifier) => {
-                let id = self.resolve_str(scope, &identifier).unwrap_or(identifier);
-                if let Some(alias) = self.typing.type_aliases.get(&id) {
-                    return alias.clone();
-                }
                 ParserDataType {
-                    data_type: ParserInnerType::Struct(id),
+                    data_type: ParserInnerType::Struct(self.resolve_str(scope, &identifier).unwrap_or(identifier)),
                     span: data_type.span,
                 }
             }

@@ -251,19 +251,8 @@ impl MiddleEnvironment {
             }
         }
 
+        // TODO Work on NewTypes
         if let TypeDefType::NewType(inner) = &object {
-            let identifier_text = identifier.to_string();
-            let is_overload_auto = !overloads.is_empty()
-                && matches!(
-                    inner.as_ref(),
-                    PotentialNewType::DataType(dt) if dt.is_auto()
-                );
-            let is_overload_self = !is_overload_auto
-                && !overloads.is_empty()
-                && matches!(
-                    inner.as_ref(),
-                    PotentialNewType::DataType(dt) if dt.to_string() == identifier_text
-                );
             let mut generic_params: Vec<String> = match &identifier {
                 PotentialGenericTypeIdentifier::Generic { generic_types, .. } => generic_types
                     .iter()
@@ -277,64 +266,28 @@ impl MiddleEnvironment {
                     .collect(),
                 _ => Vec::new(),
             };
-            if generic_params.is_empty()
-                && let Some(start) = identifier_text.find('<')
-                && let Some(end) = identifier_text.rfind('>')
-                && end > start + 1
-            {
-                let inner = &identifier_text[start + 1..end];
-                for raw in inner.split(',') {
-                    let mut name = raw.trim().to_string();
-                    if let Some(idx) = name.find('<') {
-                        name = name[..idx].trim().to_string();
-                    }
-                    if !name.is_empty() {
-                        generic_params.push(name);
-                    }
-                }
-            }
 
             let identifier = self
-                .resolve_dollar_ident_potential_generic_only(scope, &identifier)
-                .unwrap_or_else(|| ParserText::from(identifier_text.clone()));
-            if !is_overload_self && !is_overload_auto {
-                let resolved = self.resolve_potential_new_type(scope, *inner.clone());
-                let resolved_name = resolved.data_type.to_string();
-                let is_self_alias = identifier.text == resolved_name;
+            .resolve_dollar_ident_potential_generic_only(scope, &identifier)
+            .unwrap_or_else(|| ParserText::from(identifier.to_string()));
 
-                let is_builtin_alias = matches!(
-                    resolved.data_type,
-                    ParserInnerType::Int
-                        | ParserInnerType::UInt
-                        | ParserInnerType::Float
-                        | ParserInnerType::Bool
-                        | ParserInnerType::Str
-                        | ParserInnerType::Char
-                        | ParserInnerType::Range
-                        | ParserInnerType::Dynamic
-                        | ParserInnerType::DynamicTraits(_)
-                        | ParserInnerType::Null
-                        | ParserInnerType::Auto(_)
-                );
+            let inner = self.resolve_potential_new_type(scope, *inner.clone());
 
-                if !is_builtin_alias && !is_self_alias {
-                    self.typing
-                        .type_aliases
-                        .insert(identifier.text.clone(), resolved.clone());
-                }
+            {
+                let scope_ref = self.scoping
+                    .scopes
+                    .get_mut(scope)
+                    .ok_or_else(|| {
+                        MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                        )
+                    })?;
+
+                scope_ref
+                .type_mappings
+                .insert(ParserInnerType::Struct(identifier.to_string()), inner.data_type);
             }
-
-            self.scoping
-                .scopes
-                .get_mut(scope)
-                .ok_or_else(|| {
-                    MiddleErr::At(
-                        span,
-                        Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                    )
-                })?
-                .mappings
-                .insert(identifier.text.clone(), identifier.text.clone());
 
             if !overloads.is_empty() {
                 for overload in overloads {
@@ -444,30 +397,26 @@ impl MiddleEnvironment {
             },
         );
 
-        self.scoping
-            .scopes
-            .get_mut(scope)
-            .ok_or_else(|| {
-                MiddleErr::At(
-                    span,
-                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                )
-            })?
-            .mappings
-            .insert(identifier.text.clone(), new_name.clone());
+            let (previous_self, previous_self_type) = {
+                let scope = self
+                .scoping
+                .scopes
+                .get_mut(scope)
+                .ok_or_else(|| {
+                    MiddleErr::At(
+                        span,
+                        Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                    )
+                })?;
+                
+                scope.mappings.insert(identifier.text.clone(), new_name.clone());
 
-        let previous_self = self
-            .scoping
-            .scopes
-            .get_mut(scope)
-            .ok_or_else(|| {
-                MiddleErr::At(
-                    span,
-                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                )
-            })?
-            .mappings
-            .insert(String::from("Self"), new_name.clone());
+                (scope
+                .mappings
+                .insert(String::from("Self"), new_name.clone()), scope
+                .type_mappings
+                .insert(ParserInnerType::Struct(String::from("Self")), ParserInnerType::Struct(new_name.clone())))
+            };
 
         let default_node = if has_default {
             Some(self.generate_default_impl(scope, span, identifier.clone(), object.clone())?)
@@ -483,18 +432,27 @@ impl MiddleEnvironment {
             }
         }
 
-        if let Some(prev) = previous_self {
-            self.scoping
-                .scopes
-                .get_mut(scope)
-                .ok_or_else(|| {
-                    MiddleErr::At(
-                        span,
-                        Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                    )
-                })?
-                .mappings
-                .insert(String::from("Self"), prev);
+
+                {
+            let scope =                         self.scoping
+                    .scopes
+                    .get_mut(scope)
+                    .ok_or_else(|| {
+                        MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                        )
+                    })?;
+
+            if let Some(prev) = previous_self {
+                    scope.mappings
+                    .insert(String::from("Self"), prev);
+            }
+
+            if let Some(prev) = previous_self_type {
+                    scope.type_mappings
+                    .insert(ParserInnerType::Struct(String::from("Self")), prev);
+            }
         }
 
         if let Some(node) = default_node {

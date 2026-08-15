@@ -1816,7 +1816,8 @@ impl MiddleEnvironment {
                     }
                 }
 
-                let previous_self = self
+                let (previous_self, previous_self_type) = {
+                    let scope = self
                     .scoping
                     .scopes
                     .get_mut(scope)
@@ -1825,9 +1826,14 @@ impl MiddleEnvironment {
                             node.span,
                             Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
                         )
-                    })?
+                    })?;
+                    
+                    (scope
                     .mappings
-                    .insert(String::from("Self"), self_name.clone());
+                    .insert(String::from("Self"), self_name.clone()), scope
+                    .type_mappings
+                    .insert(ParserInnerType::Struct(String::from("Self")), resolved.data_type.clone()))
+                };
 
                 let mut statements = Vec::new();
 
@@ -1942,26 +1948,32 @@ impl MiddleEnvironment {
                     statements.push(dec);
                 }
 
-                if let Some(prev) = previous_self {
-                    self.scoping
-                        .scopes
-                        .get_mut(scope)
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                            )
-                        })?
-                        .mappings
-                        .insert(String::from("Self"), prev);
-                }
+                {
+                    let scope =                         self.scoping
+                            .scopes
+                            .get_mut(scope)
+                            .ok_or_else(|| {
+                                MiddleErr::At(
+                                    node.span,
+                                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                                )
+                            })?;
 
-                if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
+                    if let Some(prev) = previous_self {
+                            scope.mappings
+                            .insert(String::from("Self"), prev);
+                    }
+
+                    if let Some(prev) = previous_self_type {
+                            scope.type_mappings
+                            .insert(ParserInnerType::Struct(String::from("Self")), prev);
+                    }
+
                     for (name, prev) in prev_generics {
                         if let Some(prev) = prev {
-                            scope_ref.mappings.insert(name, prev);
+                            scope.mappings.insert(name, prev);
                         } else {
-                            scope_ref.mappings.remove(&name);
+                            scope.mappings.remove(&name);
                         }
                     }
                 }
@@ -2043,7 +2055,8 @@ impl MiddleEnvironment {
                     ));
                 }
 
-                let previous_self = self
+                let (previous_self, previous_self_type) = {
+                    let scope = self
                     .scoping
                     .scopes
                     .get_mut(scope)
@@ -2052,9 +2065,14 @@ impl MiddleEnvironment {
                             node.span,
                             Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
                         )
-                    })?
+                    })?;
+
+                    (scope
                     .mappings
-                    .insert(String::from("Self"), self_name.clone());
+                    .insert(String::from("Self"), self_name.clone()), scope
+                    .type_mappings
+                    .insert(ParserInnerType::Struct(String::from("Self")), resolved_target.data_type.clone()))
+                };
 
                 let generic_params: Vec<String> = generics
                     .0
@@ -2227,25 +2245,32 @@ impl MiddleEnvironment {
                     statements.push(dec);
                 }
 
-                if let Some(prev) = previous_self {
-                    self.scoping
-                        .scopes
-                        .get_mut(scope)
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                            )
-                        })?
-                        .mappings
-                        .insert(String::from("Self"), prev);
-                }
-                if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
+                {
+                    let scope =                         self.scoping
+                            .scopes
+                            .get_mut(scope)
+                            .ok_or_else(|| {
+                                MiddleErr::At(
+                                    node.span,
+                                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                                )
+                            })?;
+
+                    if let Some(prev) = previous_self {
+                            scope.mappings
+                            .insert(String::from("Self"), prev);
+                    }
+
+                    if let Some(prev) = previous_self_type {
+                            scope.type_mappings
+                            .insert(ParserInnerType::Struct(String::from("Self")), prev);
+                    }
+
                     for (name, prev) in prev_generics {
                         if let Some(prev) = prev {
-                            scope_ref.mappings.insert(name, prev);
+                            scope.mappings.insert(name, prev);
                         } else {
-                            scope_ref.mappings.remove(&name);
+                            scope.mappings.remove(&name);
                         }
                     }
                 }
