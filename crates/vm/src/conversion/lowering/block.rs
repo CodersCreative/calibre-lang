@@ -190,22 +190,80 @@ impl<'a> BlockLoweringCtx<'a> {
                                 node.span,
                             );
                         }
-                        self.emit(
-                            VMInstruction::StoreGlobal {
-                                name: name_idx,
-                                src: target_reg,
-                            },
-                            node.span,
-                        );
+
+                        if !self.is_global && self.map.contains_key(dest.as_ref()) {
+                            let target = assigned.unwrap_or(target_reg);
+                            if target != target_reg {
+                                self.emit(
+                                    VMInstruction::Copy {
+                                        dst: target,
+                                        src: target_reg,
+                                    },
+                                    node.span,
+                                );
+                            }
+                            self.map.insert(dest.to_string(), target);
+                            self.emit(
+                                VMInstruction::SetLocalName {
+                                    name: name_idx,
+                                    src: target,
+                                },
+                                node.span,
+                            );
+                            self.emit(
+                                VMInstruction::StoreGlobal {
+                                    name: name_idx,
+                                    src: target,
+                                },
+                                node.span,
+                            );
+                        } else {
+                            self.emit(
+                                VMInstruction::StoreGlobal {
+                                    name: name_idx,
+                                    src: target_reg,
+                                },
+                                node.span,
+                            );
+                        }
+
                     } else {
                         let reg = self.lower_node(*value, node.span);
-                        self.emit(
-                            VMInstruction::StoreGlobal {
-                                name: name_idx,
-                                src: reg,
-                            },
-                            node.span,
-                        );
+                        if !self.is_global && self.map.contains_key(dest.as_ref()) {
+                            let target = assigned.unwrap_or(reg);
+                            if target != reg {
+                                self.emit(
+                                    VMInstruction::Copy {
+                                        dst: target,
+                                        src: reg,
+                                    },
+                                    node.span,
+                                );
+                            }
+                            self.map.insert(dest.to_string(), target);
+                            self.emit(
+                                VMInstruction::SetLocalName {
+                                    name: name_idx,
+                                    src: target,
+                                },
+                                node.span,
+                            );
+                            self.emit(
+                                VMInstruction::StoreGlobal {
+                                    name: name_idx,
+                                    src: target,
+                                },
+                                node.span,
+                            );
+                        } else {
+                            self.emit(
+                                VMInstruction::StoreGlobal {
+                                    name: name_idx,
+                                    src: reg,
+                                },
+                                node.span,
+                            );
+                        }
                     }
                 }
                 LirLValue::Ptr(ptr) => {
@@ -355,13 +413,7 @@ impl<'a> BlockLoweringCtx<'a> {
                     self.emit(VMInstruction::MoveGlobal { dst, name: idx }, span);
                     dst
                 } else {
-                    let reg = self
-                        .map
-                        .get(name.as_ref())
-                        .cloned()
-                        .unwrap_or(self.null_reg);
-                    self.map.insert(name.to_string(), self.null_reg);
-                    reg
+                    self.map.insert(name.to_string(), self.null_reg).unwrap_or(self.null_reg)
                 }
             }
             LirNodeType::Drop(name) => {
