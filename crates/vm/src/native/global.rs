@@ -183,7 +183,7 @@ impl NativeFunction for Repr {
         String::from("repr")
     }
 
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         Ok(RuntimeValue::Str(Arc::new(args[0].to_string())))
     }
 }

@@ -308,58 +308,35 @@ impl<'a> BlockLoweringCtx<'a> {
                 dst
             }
             LirNodeType::Literal(x) => {
-                if matches!(x, LirLiteral::Null) {
+                if let LirLiteral::Null = x {
                     return self.null_reg;
                 }
+
                 let lit = self.add_literal(x.into());
                 let dst = self.alloc_reg();
                 self.emit(VMInstruction::LoadLiteral { dst, literal: lit }, span);
+
                 dst
             }
             LirNodeType::Call { caller, args } => {
-                let mut arg_regs = Vec::with_capacity(args.len());
-                for arg in args {
-                    arg_regs.push(self.lower_node(arg, span));
-                }
+                let args = args
+                    .into_iter()
+                    .map(|arg| self.lower_node(arg, span))
+                    .collect();
                 let dst = self.alloc_reg();
+
                 match *caller {
-                    LirNodeType::Load(name) | LirNodeType::Move(name) if !name.contains(':') => {
-                        let current_name = self.current_fn_name.as_str();
-                        let current_short = self.current_fn_short.as_str();
-                        let is_unambiguous_self_call = name.as_ref() == current_name
-                            || (!current_name.contains(':') && name.as_ref() == current_short);
-                        if is_unambiguous_self_call {
-                            self.emit(
-                                VMInstruction::CallSelf {
-                                    dst,
-                                    args: arg_regs,
-                                },
-                                span,
-                            );
-                        } else {
-                            let idx = self.add_string(name.to_string());
-                            self.emit(
-                                VMInstruction::CallDirect {
-                                    dst,
-                                    name: idx,
-                                    args: arg_regs,
-                                },
-                                span,
-                            );
-                        }
+                    LirNodeType::Load(name) | LirNodeType::Move(name)
+                        if name.as_ref() == self.current_fn_name.as_str() =>
+                    {
+                        self.emit(VMInstruction::CallSelf { dst, args }, span);
                     }
                     other => {
                         let callee = self.lower_node(other, span);
-                        self.emit(
-                            VMInstruction::Call {
-                                dst,
-                                callee,
-                                args: arg_regs,
-                            },
-                            span,
-                        );
+                        self.emit(VMInstruction::Call { dst, callee, args }, span);
                     }
                 }
+
                 dst
             }
             LirNodeType::List { elements, .. } => {
@@ -372,7 +349,7 @@ impl<'a> BlockLoweringCtx<'a> {
                 dst
             }
             LirNodeType::Move(name) => {
-                if self.captures.contains(name.as_ref()) {
+                if self.captures.contains(name.as_ref()) || !self.map.contains_key(name.as_ref()) {
                     let idx = self.add_string(name.to_string());
                     let dst = self.alloc_reg();
                     self.emit(VMInstruction::MoveGlobal { dst, name: idx }, span);
@@ -388,7 +365,7 @@ impl<'a> BlockLoweringCtx<'a> {
                 }
             }
             LirNodeType::Drop(name) => {
-                if self.captures.contains(name.as_ref()) {
+                if self.captures.contains(name.as_ref()) || !self.map.contains_key(name.as_ref()) {
                     let idx = self.add_string(name.to_string());
                     self.emit(VMInstruction::DropGlobal { name: idx }, span);
                 } else {
@@ -397,24 +374,34 @@ impl<'a> BlockLoweringCtx<'a> {
                 self.null_reg
             }
             LirNodeType::Load(name) => {
-                let idx = self.add_string(name.to_string());
-                let dst = self.alloc_reg();
-                self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
-                dst
+                if let Some(reg) = self.map.get(name.as_ref())
+                    && reg != &self.null_reg
+                {
+                    reg.clone()
+                } else {
+                    let idx = self.add_string(name.to_string());
+                    let dst = self.alloc_reg();
+                    self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
+                    dst
+                }
             }
             LirNodeType::Aggregate { name, fields } => {
                 let mut layout = Vec::new();
                 let mut values = Vec::new();
+
                 for (k, item) in fields.0 {
                     values.push(self.lower_node(item, span));
                     layout.push(k.to_string());
                 }
+
                 self.block.aggregate_layouts.push(AggregateLayout {
                     name,
                     members: layout,
                 });
+
                 let index = self.block.aggregate_layouts.len() - 1;
                 let dst = self.alloc_reg();
+
                 self.emit(
                     VMInstruction::Aggregate {
                         dst,
@@ -423,6 +410,7 @@ impl<'a> BlockLoweringCtx<'a> {
                     },
                     span,
                 );
+
                 dst
             }
             LirNodeType::Boolean {
@@ -433,6 +421,7 @@ impl<'a> BlockLoweringCtx<'a> {
                 let left = self.lower_node(*left, span);
                 let right = self.lower_node(*right, span);
                 let dst = self.alloc_reg();
+
                 self.emit(
                     VMInstruction::Boolean {
                         dst,
@@ -442,6 +431,7 @@ impl<'a> BlockLoweringCtx<'a> {
                     },
                     span,
                 );
+
                 dst
             }
             LirNodeType::Comparison {

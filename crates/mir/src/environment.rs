@@ -140,7 +140,7 @@ impl MiddleEnvironment {
         }
 
         let specialized_name = format!(
-            "{}->{}",
+            "{}:<{}>",
             base,
             ParserDataType::canonical_args_key(concrete_args)
         );
@@ -195,7 +195,7 @@ impl MiddleEnvironment {
         }
 
         let specialized_name = format!(
-            "{}->{}",
+            "{}:<{}>",
             base,
             ParserDataType::canonical_args_key(concrete_args)
         );

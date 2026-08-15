@@ -25,5 +25,4 @@ struct BlockLoweringCtx<'a> {
     char_literals: FxHashMap<char, u16>,
     string_literals: FxHashMap<String, u16>,
     current_fn_name: String,
-    current_fn_short: String,
 }

@@ -1,4 +1,4 @@
-use calibre_lir::environment::LirEnvironment;
+use calibre_lir::environment::{LirEnvironment, LirRegistry};
 use calibre_mir::{
     ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr,
     tags::context::PackageMetadata, testing::Testing,
@@ -98,6 +98,7 @@ struct NativeBinding {
 pub struct CalibreArtifacts {
     pub ast: Option<Node>,
     pub mir: Option<MiddleNode>,
+    pub lir: Option<LirRegistry>,
     pub registry: VMRegistry,
     pub mappings: Vec<String>,
     pub entry_name: String,
@@ -309,11 +310,14 @@ impl CalibreEngine {
         let fin_functions = std::mem::take(&mut env.tagging.fin_functions);
         let testing = std::mem::take(&mut env.testing);
 
+        let lir = LirEnvironment::lower(&env, mir.clone());
+
         Ok(CalibreArtifacts {
             ast: Some(ast),
-            mir: Some(mir.clone()),
+            mir: Some(mir),
+            lir: Some(lir.clone()),
             mappings: env.symbols.variables.keys().cloned().collect(),
-            registry: VMRegistry::from(LirEnvironment::lower(&env, mir)),
+            registry: VMRegistry::from(lir),
             entry_name: env
                 .resolve_str(&scope, &self.entry_name)
                 .map(|x| x.to_string())
@@ -337,6 +341,7 @@ impl CalibreEngine {
             return Ok(CalibreArtifacts {
                 ast: None,
                 mir: None,
+                lir: None,
                 registry: cached.registry,
                 mappings: cached.mappings,
                 entry_name: cached.entry_name,

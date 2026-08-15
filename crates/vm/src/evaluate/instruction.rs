@@ -450,74 +450,6 @@ impl VM {
         Ok(None)
     }
 
-    fn run_call_direct_instruction(
-        &mut self,
-        dst: u16,
-        name: u16,
-        args: &[u16],
-        block: &VMBlock,
-        ip: u32,
-        prev_block: Option<BlockId>,
-    ) -> Result<Option<TerminateValue>, RuntimeError> {
-        let direct = self.resolve_direct_callsite_cached(block, ip, name)?;
-        if let Some(PreparedDirectCall::Vm(func)) = &direct
-            && let Some((owner, member)) = func.name.rsplit_once("::")
-            && let Some(first) = args.first()
-            && let Ok(receiver) = self.resolve_value_for_op_ref(self.get_reg_value(*first))
-            && let Some(receiver_type) = self.concrete_runtime_type_name(&receiver)
-        {
-            if !ParserText::temp_name_suffix_matches(&receiver_type, &owner) {
-                if let Some(resolved) =
-                    self.resolve_associated_member_value(&receiver_type, member, Some(member))
-                    && resolved.is_callable()
-                {
-                    let call_args = self.collect_call_args_vec(args);
-                    let value = self.call_runtime_callable_at(
-                        resolved,
-                        call_args,
-                        block.id.0 as usize,
-                        ip,
-                    )?;
-                    self.set_reg_value(dst, value);
-                    let frame_idx = self.frames.len().saturating_sub(1);
-                    self.propagate_member_source_args(args, frame_idx)?;
-                    return Ok(None);
-                }
-            }
-        }
-
-        match direct {
-            Some(PreparedDirectCall::Vm(func)) => {
-                let captures = if func.captures.is_empty() {
-                    Self::empty_captures()
-                } else {
-                    let mut seen = FxHashSet::default();
-                    std::sync::Arc::new(self.capture_values(&func.captures, &mut seen))
-                };
-                let value = self.run_function_from_regs(func.as_ref(), args, captures)?;
-                self.set_reg_value(dst, value);
-            }
-            Some(PreparedDirectCall::Native(func)) => {
-                if let Some(step) =
-                    self.handle_call_result(dst, &func, args, block, ip, prev_block)?
-                {
-                    return Ok(Some(step));
-                }
-            }
-            Some(PreparedDirectCall::Extern(func)) => {
-                let value = func.call(self, self.collect_call_args_vec(args))?;
-                self.set_reg_value(dst, value);
-            }
-            None => {
-                let func_name = self.local_string(block, name)?;
-                return Err(RuntimeError::FunctionNotFound(func_name.to_string()));
-            }
-        }
-        let frame_idx = self.frames.len().saturating_sub(1);
-        self.propagate_member_source_args(args, frame_idx)?;
-        Ok(None)
-    }
-
     fn run_call_instruction(
         &mut self,
         dst: u16,
@@ -1207,13 +1139,6 @@ impl VM {
                     RuntimeValue::Enum(name.to_string(), *variant as usize, payload),
                 );
             }
-            VMInstruction::CallDirect { dst, name, args } => {
-                if let Some(step) =
-                    self.run_call_direct_instruction(*dst, *name, args, block, ip, prev_block)?
-                {
-                    return Ok(step);
-                }
-            }
             VMInstruction::CallSelf { dst, args } => {
                 let func_ptr = self.current_frame().func_ptr as *const VMFunction;
                 if func_ptr.is_null() {
@@ -1279,7 +1204,7 @@ impl VM {
                 let mut resolved = self.resolve_value_for_op_ref(&raw_receiver)?;
                 if matches!(resolved, RuntimeValue::Null) {
                     if let Some(owner) = self.find_local_name_for_reg(source_reg)
-                        && !owner.contains(':')
+                        && !ParserText::is_temp_name(&owner)
                         && let Some(callee) =
                             self.resolve_associated_member_value(owner.as_ref(), name, short_name)
                     {

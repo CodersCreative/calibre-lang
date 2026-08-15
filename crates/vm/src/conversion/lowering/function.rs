@@ -375,13 +375,6 @@ impl FunctionLowering {
                 char_literals: FxHashMap::default(),
                 string_literals: FxHashMap::default(),
                 current_fn_name: self.func.name.to_string(),
-                current_fn_short: self
-                    .func
-                    .name
-                    .rsplit(':')
-                    .next()
-                    .unwrap_or(self.func.name.as_ref())
-                    .to_string(),
             };
 
             if block.id == self.entry {

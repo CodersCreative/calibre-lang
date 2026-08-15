@@ -216,9 +216,17 @@ pub struct VMBlock {
 impl Display for VMBlock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut txt = format!("BLK {}:", self.id.0);
+        if !self.local_literals.is_empty() {
+            txt.push_str("\nLITERALS:");
+            for (i, literal) in self.local_literals.iter().enumerate() {
+                txt.push_str(&format!("\n\t{} : {}", i, literal));
+            }
+        }
+
         for instr in &self.instructions {
             txt.push_str(&format!("\n{};", instr));
         }
+
         write!(f, "{}", txt.replace("\n", "\n\t"))
     }
 }
@@ -408,11 +416,6 @@ pub enum VMInstruction {
         callee: Reg,
         args: Vec<Reg>,
     },
-    CallDirect {
-        dst: Reg,
-        name: u16,
-        args: Vec<Reg>,
-    },
     CallSelf {
         dst: Reg,
         args: Vec<Reg>,
@@ -552,9 +555,6 @@ impl Display for VMInstruction {
             }
             VMInstruction::Call { dst, callee, args } => {
                 write!(f, "%r{dst} = CALL %r{callee} {:?}", args)
-            }
-            VMInstruction::CallDirect { dst, name, args } => {
-                write!(f, "%r{dst} = CALL @{name} {:?}", args)
             }
             VMInstruction::CallSelf { dst, .. } => write!(f, "%r{dst} = CALL_SELF"),
             VMInstruction::Spawn { dst, callee } => write!(f, "SPAWN %r{dst}, %r{callee}"),

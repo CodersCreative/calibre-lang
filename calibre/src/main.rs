@@ -1,7 +1,7 @@
 use crate::config::Config;
 use calibre::{CalibreEngine, CalibreError, CompileMode};
 use calibre_diagnostics;
-use calibre_lir::environment::LirEnvironment;
+use calibre_lir::environment::{LirEnvironment, LirRegistry};
 use calibre_mir::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
@@ -127,13 +127,17 @@ async fn run_source(
     }
 
     if verbosity.is_level(&Verbosity::LIR) {
-        println!("Lir/Bytecode - elapsed {}ms:", start.elapsed().as_millis());
-        if module_only {
-            let token = scope_filter_token(&artifacts.entry_name);
-            let filtered = filter_registry_by_scope_text(&artifacts.registry, token.as_deref());
-            println!("{filtered}");
+        println!("Lir - elapsed {}ms:", start.elapsed().as_millis());
+        if let Some(lir) = &artifacts.lir {
+            if module_only {
+                let token = scope_filter_token(&artifacts.entry_name);
+                let filtered = filter_lir_by_scope_text(lir, token.as_deref());
+                println!("{filtered}");
+            } else {
+                println!("{}", lir);
+            }
         } else {
-            println!("{}", artifacts.registry);
+            println!("<LIR unavailable: loaded from cache>");
         }
     }
 
@@ -767,6 +771,28 @@ fn filter_registry_by_scope_text(
     for (name, func) in &registry.functions {
         if name.contains(token) {
             out.push_str(&format!("{}\n\n", func.as_ref()));
+        }
+    }
+
+    out
+}
+
+fn filter_lir_by_scope_text(registry: &LirRegistry, token: Option<&str>) -> String {
+    let Some(token) = token else {
+        return registry.to_string();
+    };
+
+    let mut out = String::new();
+
+    for (name, global) in &registry.globals {
+        if name.contains(token) {
+            out.push_str(&format!("{}\n", global));
+        }
+    }
+
+    for (name, func) in &registry.functions {
+        if name.contains(token) {
+            out.push_str(&format!("{}\n\n", func));
         }
     }
 

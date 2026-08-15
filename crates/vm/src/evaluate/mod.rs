@@ -9,7 +9,7 @@ use smallvec::SmallVec;
 use std::sync::Arc;
 
 use crate::{
-    PreparedDirectCall, VM, VarName,
+    VM, VarName,
     conversion::{VMBlock, VMFunction, VMGlobal, VMInstruction, VMLiteral},
     error::RuntimeError,
     value::{
@@ -1119,70 +1119,6 @@ impl VM {
             }
         }
         Some(TerminateValue::Jump(func.entry))
-    }
-
-    fn resolve_direct_callsite_cached(
-        &mut self,
-        block: &VMBlock,
-        ip: u32,
-        name_idx: u16,
-    ) -> Result<Option<PreparedDirectCall>, RuntimeError> {
-        let callsite = (self.current_frame().func_ptr, block.id.0 as usize, ip);
-        if let Some(cached) = self.caches.prepared_direct_calls.get(&callsite) {
-            return Ok(Some(cached.clone()));
-        }
-
-        let func_name = self.local_string(block, name_idx)?;
-        if let Some(func) = self.resolve_callable_cached(func_name, callsite) {
-            let prepared = PreparedDirectCall::Vm(func);
-            self.caches
-                .prepared_direct_calls
-                .insert(callsite, prepared.clone());
-            return Ok(Some(prepared));
-        }
-
-        if let Some((owner, member)) = func_name.rsplit_once("::") {
-            if let Some(resolved) =
-                self.resolve_associated_member_value(owner, member, Some(member))
-            {
-                let prepared = match resolved {
-                    RuntimeValue::NativeFunction(func) => PreparedDirectCall::Native(func),
-                    RuntimeValue::ExternFunction(func) => PreparedDirectCall::Extern(func),
-                    RuntimeValue::Function { name, captures } if captures.as_ref().is_empty() => {
-                        let Some(func) = self.resolve_callable_cached(name.as_ref(), callsite)
-                        else {
-                            return Ok(None);
-                        };
-                        PreparedDirectCall::Vm(func)
-                    }
-                    _ => return Ok(None),
-                };
-                self.caches
-                    .prepared_direct_calls
-                    .insert(callsite, prepared.clone());
-                return Ok(Some(prepared));
-            }
-        }
-
-        let Some((value, _)) = self.resolve_runtime_value(func_name) else {
-            return Ok(None);
-        };
-
-        let prepared = match value {
-            RuntimeValue::NativeFunction(func) => PreparedDirectCall::Native(func),
-            RuntimeValue::ExternFunction(func) => PreparedDirectCall::Extern(func),
-            RuntimeValue::Function { name, captures } if captures.as_ref().is_empty() => {
-                let Some(func) = self.resolve_callable_cached(name.as_ref(), callsite) else {
-                    return Ok(None);
-                };
-                PreparedDirectCall::Vm(func)
-            }
-            _ => return Ok(None),
-        };
-        self.caches
-            .prepared_direct_calls
-            .insert(callsite, prepared.clone());
-        Ok(Some(prepared))
     }
 
     pub fn run_function_with_budget<I>(

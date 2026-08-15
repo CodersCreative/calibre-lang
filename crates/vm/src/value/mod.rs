@@ -1,3 +1,12 @@
+use crate::{
+    VM,
+    conversion::{Reg, VMLiteral},
+    error::RuntimeError,
+    native::{
+        self, NativeFunction,
+        stdlib::{self, generator::GeneratorState},
+    },
+};
 use calibre_lir::ast::BlockId;
 use calibre_parser::ast::{
     ObjectMap,
@@ -20,15 +29,6 @@ use std::{
     sync::{
         Arc, Condvar, Mutex,
         atomic::{AtomicBool, AtomicIsize, Ordering},
-    },
-};
-use crate::{
-    VM,
-    conversion::{Reg, VMLiteral},
-    error::RuntimeError,
-    native::{
-        self, NativeFunction,
-        stdlib::{self, generator::GeneratorState},
     },
 };
 

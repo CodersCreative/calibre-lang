@@ -3,10 +3,11 @@ use crate::{
     conversion::{Reg, VMBlock, VMFunction, VMRegistry},
     error::RuntimeError,
     native::NativeFunction,
-    value::{ExternFunction, GcMap, GcVec, RuntimeValue, WaitGroupInner},
+    value::{GcMap, GcVec, RuntimeValue, WaitGroupInner},
     variables::VariableStore,
 };
 use calibre_lir::ast::BlockId;
+use calibre_parser::ast::idents::ParserText;
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::OnceLock;
@@ -101,7 +102,6 @@ pub struct VMCaches {
     locals: FxHashMap<usize, Arc<FxHashMap<Arc<str>, Reg>>>,
     globals_id: FxHashMap<String, usize>,
     local_str: FxHashMap<(u32, u16), Arc<str>>,
-    prepared_direct_calls: FxHashMap<(usize, usize, u32), PreparedDirectCall>,
 }
 
 impl Default for VMCaches {
@@ -112,16 +112,8 @@ impl Default for VMCaches {
             locals: FxHashMap::default(),
             globals_id: FxHashMap::default(),
             local_str: FxHashMap::default(),
-            prepared_direct_calls: FxHashMap::default(),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum PreparedDirectCall {
-    Vm(Arc<VMFunction>),
-    Native(Arc<dyn NativeFunction>),
-    Extern(Arc<ExternFunction>),
 }
 
 #[derive(Debug, Clone)]
@@ -627,7 +619,7 @@ impl VM {
                     if !seen_refs.insert(pointer.clone()) {
                         return Err(RuntimeError::DanglingRef(format!("ref-cycle({})", pointer)));
                     }
-                    let local_style = pointer.contains(':') || pointer.contains("->");
+                    let local_style = ParserText::is_temp_name(pointer);
                     let v = if local_style {
                         if let Some(local) = resolve_local_ref(pointer) {
                             local
