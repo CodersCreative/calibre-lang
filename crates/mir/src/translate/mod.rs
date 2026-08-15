@@ -1817,22 +1817,22 @@ impl MiddleEnvironment {
                 }
 
                 let (previous_self, previous_self_type) = {
-                    let scope = self
-                    .scoping
-                    .scopes
-                    .get_mut(scope)
-                    .ok_or_else(|| {
+                    let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
                         MiddleErr::At(
                             node.span,
                             Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
                         )
                     })?;
-                    
-                    (scope
-                    .mappings
-                    .insert(String::from("Self"), self_name.clone()), scope
-                    .type_mappings
-                    .insert(ParserInnerType::Struct(String::from("Self")), resolved.data_type.clone()))
+
+                    (
+                        scope
+                            .mappings
+                            .insert(String::from("Self"), self_name.clone()),
+                        scope.type_mappings.insert(
+                            ParserInnerType::Struct(String::from("Self")),
+                            resolved.data_type.clone(),
+                        ),
+                    )
                 };
 
                 let mut statements = Vec::new();
@@ -1949,23 +1949,20 @@ impl MiddleEnvironment {
                 }
 
                 {
-                    let scope =                         self.scoping
-                            .scopes
-                            .get_mut(scope)
-                            .ok_or_else(|| {
-                                MiddleErr::At(
-                                    node.span,
-                                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                                )
-                            })?;
+                    let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
+                        MiddleErr::At(
+                            node.span,
+                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                        )
+                    })?;
 
                     if let Some(prev) = previous_self {
-                            scope.mappings
-                            .insert(String::from("Self"), prev);
+                        scope.mappings.insert(String::from("Self"), prev);
                     }
 
                     if let Some(prev) = previous_self_type {
-                            scope.type_mappings
+                        scope
+                            .type_mappings
                             .insert(ParserInnerType::Struct(String::from("Self")), prev);
                     }
 
@@ -2056,22 +2053,22 @@ impl MiddleEnvironment {
                 }
 
                 let (previous_self, previous_self_type) = {
-                    let scope = self
-                    .scoping
-                    .scopes
-                    .get_mut(scope)
-                    .ok_or_else(|| {
+                    let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
                         MiddleErr::At(
                             node.span,
                             Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
                         )
                     })?;
 
-                    (scope
-                    .mappings
-                    .insert(String::from("Self"), self_name.clone()), scope
-                    .type_mappings
-                    .insert(ParserInnerType::Struct(String::from("Self")), resolved_target.data_type.clone()))
+                    (
+                        scope
+                            .mappings
+                            .insert(String::from("Self"), self_name.clone()),
+                        scope.type_mappings.insert(
+                            ParserInnerType::Struct(String::from("Self")),
+                            resolved_target.data_type.clone(),
+                        ),
+                    )
                 };
 
                 let generic_params: Vec<String> = generics
@@ -2246,23 +2243,20 @@ impl MiddleEnvironment {
                 }
 
                 {
-                    let scope =                         self.scoping
-                            .scopes
-                            .get_mut(scope)
-                            .ok_or_else(|| {
-                                MiddleErr::At(
-                                    node.span,
-                                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                                )
-                            })?;
+                    let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
+                        MiddleErr::At(
+                            node.span,
+                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                        )
+                    })?;
 
                     if let Some(prev) = previous_self {
-                            scope.mappings
-                            .insert(String::from("Self"), prev);
+                        scope.mappings.insert(String::from("Self"), prev);
                     }
 
                     if let Some(prev) = previous_self_type {
-                            scope.type_mappings
+                        scope
+                            .type_mappings
                             .insert(ParserInnerType::Struct(String::from("Self")), prev);
                     }
 

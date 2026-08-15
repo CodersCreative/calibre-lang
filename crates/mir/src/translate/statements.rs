@@ -268,25 +268,23 @@ impl MiddleEnvironment {
             };
 
             let identifier = self
-            .resolve_dollar_ident_potential_generic_only(scope, &identifier)
-            .unwrap_or_else(|| ParserText::from(identifier.to_string()));
+                .resolve_dollar_ident_potential_generic_only(scope, &identifier)
+                .unwrap_or_else(|| ParserText::from(identifier.to_string()));
 
             let inner = self.resolve_potential_new_type(scope, *inner.clone());
 
             {
-                let scope_ref = self.scoping
-                    .scopes
-                    .get_mut(scope)
-                    .ok_or_else(|| {
-                        MiddleErr::At(
-                            span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                        )
-                    })?;
+                let scope_ref = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
+                    MiddleErr::At(
+                        span,
+                        Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                    )
+                })?;
 
-                scope_ref
-                .type_mappings
-                .insert(ParserInnerType::Struct(identifier.to_string()), inner.data_type);
+                scope_ref.type_mappings.insert(
+                    ParserInnerType::Struct(identifier.to_string()),
+                    inner.data_type,
+                );
             }
 
             if !overloads.is_empty() {
@@ -397,26 +395,28 @@ impl MiddleEnvironment {
             },
         );
 
-            let (previous_self, previous_self_type) = {
-                let scope = self
-                .scoping
-                .scopes
-                .get_mut(scope)
-                .ok_or_else(|| {
-                    MiddleErr::At(
-                        span,
-                        Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                    )
-                })?;
-                
-                scope.mappings.insert(identifier.text.clone(), new_name.clone());
+        let (previous_self, previous_self_type) = {
+            let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
+                MiddleErr::At(
+                    span,
+                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                )
+            })?;
 
-                (scope
+            scope
                 .mappings
-                .insert(String::from("Self"), new_name.clone()), scope
-                .type_mappings
-                .insert(ParserInnerType::Struct(String::from("Self")), ParserInnerType::Struct(new_name.clone())))
-            };
+                .insert(identifier.text.clone(), new_name.clone());
+
+            (
+                scope
+                    .mappings
+                    .insert(String::from("Self"), new_name.clone()),
+                scope.type_mappings.insert(
+                    ParserInnerType::Struct(String::from("Self")),
+                    ParserInnerType::Struct(new_name.clone()),
+                ),
+            )
+        };
 
         let default_node = if has_default {
             Some(self.generate_default_impl(scope, span, identifier.clone(), object.clone())?)
@@ -432,25 +432,21 @@ impl MiddleEnvironment {
             }
         }
 
-
-                {
-            let scope =                         self.scoping
-                    .scopes
-                    .get_mut(scope)
-                    .ok_or_else(|| {
-                        MiddleErr::At(
-                            span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                        )
-                    })?;
+        {
+            let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
+                MiddleErr::At(
+                    span,
+                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                )
+            })?;
 
             if let Some(prev) = previous_self {
-                    scope.mappings
-                    .insert(String::from("Self"), prev);
+                scope.mappings.insert(String::from("Self"), prev);
             }
 
             if let Some(prev) = previous_self_type {
-                    scope.type_mappings
+                scope
+                    .type_mappings
                     .insert(ParserInnerType::Struct(String::from("Self")), prev);
             }
         }

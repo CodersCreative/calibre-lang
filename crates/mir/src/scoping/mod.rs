@@ -1,7 +1,10 @@
 use crate::errors::MiddleErr;
 use calibre_parser::{
-    Location, Span, ast::{
-        idents::{ParserText, PotentialDollarIdentifier}, nodes::Node, types::ParserInnerType,
+    Location, Span,
+    ast::{
+        idents::{ParserText, PotentialDollarIdentifier},
+        nodes::Node,
+        types::ParserInnerType,
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -125,7 +128,7 @@ impl Scoping {
                 parent: Some(parent),
                 children: FxHashMap::default(),
                 mappings: FxHashMap::default(),
-                        type_mappings: FxHashMap::default(),
+                type_mappings: FxHashMap::default(),
                 defined: Vec::new(),
                 defers: Vec::new(),
                 path,
@@ -154,7 +157,7 @@ impl Scoping {
                 parent: None,
                 children: FxHashMap::default(),
                 mappings: FxHashMap::default(),
-                        type_mappings: FxHashMap::default(),
+                type_mappings: FxHashMap::default(),
                 defined: Vec::new(),
                 defers: Vec::new(),
                 path,
