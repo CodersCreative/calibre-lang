@@ -494,28 +494,6 @@ impl MiddleEnvironment {
             .map(|x| x.unwrap_all_refs())
     }
 
-    fn member_base_is_value(&mut self, scope: &u64, base: &MiddleNode) -> bool {
-        if let MiddleNodeType::Identifier(ident) = &base.node_type {
-            if self
-                .resolve_dollar_ident_only(
-                    scope,
-                    &PotentialDollarIdentifier::Identifier(ident.clone()),
-                )
-                .as_ref()
-                .is_some_and(|resolved| self.symbols.variables.contains_key(&resolved.text))
-            {
-                return true;
-            }
-            let generic_ident = PotentialGenericTypeIdentifier::Identifier(
-                PotentialDollarIdentifier::Identifier(ident.clone()),
-            );
-            return self
-                .resolve_type_from_ident(scope, &generic_ident)
-                .is_none();
-        }
-        true
-    }
-
     fn resolve_impl_member(
         &mut self,
         scope: &u64,

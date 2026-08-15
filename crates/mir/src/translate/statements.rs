@@ -253,7 +253,7 @@ impl MiddleEnvironment {
 
         // TODO Work on NewTypes
         if let TypeDefType::NewType(inner) = &object {
-            let mut generic_params: Vec<String> = match &identifier {
+            let generic_params: Vec<String> = match &identifier {
                 PotentialGenericTypeIdentifier::Generic { generic_types, .. } => generic_types
                     .iter()
                     .filter_map(|t| match t {

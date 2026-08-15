@@ -125,32 +125,6 @@ impl VM {
     }
 
     #[inline]
-    fn bind_receiver_if_callable(callee: RuntimeValue, receiver: RuntimeValue) -> RuntimeValue {
-        match callee {
-            RuntimeValue::Function { .. }
-            | RuntimeValue::NativeFunction(_)
-            | RuntimeValue::ExternFunction(_) => RuntimeValue::BoundMethod {
-                callee: Box::new(callee),
-                receiver: Gc::new(receiver),
-            },
-            other => other,
-        }
-    }
-
-    #[inline]
-    fn reg_is_named_local(&self, reg: u16) -> bool {
-        let frame = self.current_frame();
-        frame
-            .local_map
-            .iter()
-            .any(|(name, r)| *r == reg && ParserText::is_temp_name(name))
-            || frame.local_map_base.as_ref().is_some_and(|m| {
-                m.iter()
-                    .any(|(name, r)| *r == reg && ParserText::is_temp_name(name))
-            })
-    }
-
-    #[inline]
     fn bind_member_receiver_if_callable(
         &mut self,
         callee: RuntimeValue,
@@ -174,41 +148,25 @@ impl VM {
         let frame_idx = self.frames.len().saturating_sub(1);
 
         if ParserText::is_temp_name(&member_name) {
-            return Self::bind_receiver_if_callable(callee, resolved_receiver);
+            return callee.bind_if_callable(resolved_receiver);
         }
 
         let receiver = match raw_receiver {
-            RuntimeValue::RegRef { reg, .. } if !self.reg_is_named_local(*reg) => {
-                if let Some(reg) = self.find_local_reg_for_value(&resolved_receiver) {
-                    RuntimeValue::RegRef {
-                        frame: frame_idx,
-                        reg,
-                    }
-                } else {
-                    resolved_receiver
-                }
-            }
             RuntimeValue::Ref(_) | RuntimeValue::VarRef(_) | RuntimeValue::RegRef { .. } => {
                 raw_receiver.clone()
             }
             value if value.should_pass_by_reg_ref() => {
-                if self.reg_is_named_local(src_reg) {
-                    let local_name = self
-                        .current_frame()
-                        .local_map
-                        .iter()
-                        .find(|(name, reg)| **reg == src_reg && name.as_ref().contains(':'))
-                        .map(|(name, _)| name.clone());
-                    if let Some(name) = local_name
-                        && let Some(id) = self.global_id_cached(name.as_ref())
-                    {
-                        RuntimeValue::VarRef(id)
-                    } else {
-                        RuntimeValue::RegRef {
-                            frame: frame_idx,
-                            reg: src_reg,
-                        }
-                    }
+                let local_name = self
+                    .current_frame()
+                    .local_map
+                    .iter()
+                    .find(|(name, reg)| **reg == src_reg && name.as_ref().contains(':'))
+                    .map(|(name, _)| name.clone());
+
+                if let Some(name) = local_name
+                    && let Some(id) = self.global_id_cached(name.as_ref())
+                {
+                    RuntimeValue::VarRef(id)
                 } else {
                     RuntimeValue::RegRef {
                         frame: frame_idx,
@@ -227,7 +185,7 @@ impl VM {
                 }
             }
         };
-        Self::bind_receiver_if_callable(callee, receiver)
+        callee.bind_if_callable(receiver)
     }
 
     fn find_local_reg_for_value(&self, value: &RuntimeValue) -> Option<u16> {
@@ -312,22 +270,6 @@ impl VM {
         let s = s.min(len as i64) as usize;
         let e = e.min(len as i64) as usize;
         if e < s { (s, s) } else { (s, e) }
-    }
-
-    fn materialize_callable_for_reg(&self, value: &RuntimeValue) -> Option<RuntimeValue> {
-        match value {
-            RuntimeValue::Function { name, captures } => Some(RuntimeValue::Function {
-                name: name.clone(),
-                captures: captures.clone(),
-            }),
-            RuntimeValue::NativeFunction(func) => Some(RuntimeValue::NativeFunction(func.clone())),
-            RuntimeValue::ExternFunction(func) => Some(RuntimeValue::ExternFunction(func.clone())),
-            RuntimeValue::BoundMethod { callee, receiver } => Some(RuntimeValue::BoundMethod {
-                callee: callee.clone(),
-                receiver: receiver.clone(),
-            }),
-            _ => None,
-        }
     }
 
     fn run_bound_method_call(
@@ -459,12 +401,14 @@ impl VM {
         ip: u32,
         prev_block: Option<BlockId>,
     ) -> Result<Option<TerminateValue>, RuntimeError> {
-        let func =
-            if let Some(callable) = self.materialize_callable_for_reg(self.get_reg_value(callee)) {
-                callable
-            } else {
-                self.resolve_value_for_op_ref(self.get_reg_value(callee))?
-            };
+        let func = {
+            let value = self.get_reg_value(callee);
+            if value.is_callable() {
+                value.clone()
+            }else {
+                self.resolve_value_for_op_ref(value)?
+            }
+        };
 
         let func = if func.is_callable() {
             func
@@ -552,7 +496,7 @@ impl VM {
                     return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
                 };
 
-                if name.ends_with("::next")
+                if name.ends_with(".next")
                     && let Some(first) = args.first()
                     && matches!(
                         self.resolve_value_for_op_ref(self.get_reg_value(*first))?,
@@ -1318,11 +1262,11 @@ impl VM {
                             ) else {
                                 return Err(RuntimeError::FunctionNotFound(callee_name.clone()));
                             };
-                            Self::bind_receiver_if_callable(callee, value.as_ref().clone())
+                            callee.bind_if_callable(value.as_ref().clone())
                         } else if let Some(callee) =
                             self.resolve_dyn_method_callable(type_name.as_str(), member_short, None)
                         {
-                            Self::bind_receiver_if_callable(callee, value.as_ref().clone())
+                            callee.bind_if_callable(value.as_ref().clone())
                         } else if member_short == "type" {
                             RuntimeValue::Str(type_name)
                         } else if member_short == "traits" {

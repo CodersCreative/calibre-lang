@@ -482,18 +482,18 @@ impl ParserInnerType {
         match (self, other) {
             (ParserInnerType::Struct(a), _) if generic_params.contains(a) => true,
             (ParserInnerType::Struct(a), ParserInnerType::Struct(b))
-                if ParserText::temp_name_suffix_matches(a, b) =>
+                if a == b =>
             {
                 true
             }
             (
                 ParserInnerType::StructWithGenerics { identifier: a, .. },
                 ParserInnerType::Struct(b),
-            ) if ParserText::temp_name_suffix_matches(b, a) => true,
+            ) if b == a => true,
             (
                 ParserInnerType::Struct(a),
                 ParserInnerType::StructWithGenerics { identifier: b, .. },
-            ) => ParserText::temp_name_suffix_matches(a, b),
+            ) => a == b,
             (
                 ParserInnerType::StructWithGenerics {
                     identifier: a,
@@ -504,7 +504,7 @@ impl ParserInnerType {
                     generic_types: bg,
                 },
             ) => {
-                if !ParserText::temp_name_suffix_matches(a, b) || ag.len() != bg.len() {
+                if a != b || ag.len() != bg.len() {
                     return false;
                 }
                 ag.iter()

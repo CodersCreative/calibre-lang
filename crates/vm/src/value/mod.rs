@@ -393,6 +393,20 @@ impl RuntimeValue {
         )
     }
 
+
+    #[inline]
+    pub fn bind_if_callable(self, receiver: RuntimeValue) -> RuntimeValue {
+        match self {
+            RuntimeValue::Function { .. }
+            | RuntimeValue::NativeFunction(_)
+            | RuntimeValue::ExternFunction(_) => RuntimeValue::BoundMethod {
+                callee: Box::new(self),
+                receiver: Gc::new(receiver),
+            },
+            other => other,
+        }
+    }
+
     pub fn is_null(&self) -> bool {
         matches!(self, RuntimeValue::Null)
     }

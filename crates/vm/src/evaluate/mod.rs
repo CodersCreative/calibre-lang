@@ -515,15 +515,14 @@ impl VM {
                 return Some(resolved);
             }
         }
-        if !owner.contains("->") {
-            if let Some(found) = self.resolve_struct_like_member(owner, member, short_member) {
+        if !owner.contains(":<") && let Some(found) = self.resolve_struct_like_member(owner, member, short_member) {
                 return Some(found);
             }
-        }
+        
         let owner_tail =
             ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
         let owner_base = owner_tail
-            .split_once("->")
+            .split_once(":<")
             .map(|(base, _)| base)
             .unwrap_or(&owner_tail);
         let member_name = short_member.unwrap_or(member);
@@ -537,7 +536,6 @@ impl VM {
             let tail = ParserText::get_temp_name_suffix(&name).unwrap_or_else(|| name.to_string());
             if tail != suffix
                 && !name.ends_with(&format!(".{suffix}"))
-                && !name.ends_with(&format!("::{suffix}"))
             {
                 continue;
             }
@@ -564,7 +562,7 @@ impl VM {
             let std_owner_tail = ParserText::get_temp_name_suffix(&std_owner)
                 .unwrap_or_else(|| std_owner.to_string());
             let std_owner_base = std_owner_tail
-                .split_once("->")
+                .split_once(":<")
                 .map(|(base, _)| base)
                 .unwrap_or(&std_owner_tail);
             let std_suffix = format!("{}_{}", std_owner_base.to_ascii_lowercase(), member_name);
@@ -583,20 +581,20 @@ impl VM {
         short_member: Option<&str>,
     ) -> Option<RuntimeValue> {
         let mut resolved: Option<Arc<VMFunction>> = None;
+        
         for func in self.registry.functions.values() {
-            if !func.name.contains(owner) || !func.name.contains("->") {
+            if !func.name.contains(owner) || !(func.name.ends_with(&format!(".{member}"))
+                || short_member.is_some_and(|short| func.name.ends_with(&format!(".{short}")))) {
                 continue;
             }
-            let matches_member = func.name.ends_with(&format!("::{member}"))
-                || short_member.is_some_and(|short| func.name.ends_with(&format!("::{short}")));
-            if !matches_member {
-                continue;
-            }
+
             if resolved.is_some() {
                 return None;
             }
+            
             resolved = Some(Arc::clone(func));
         }
+
         resolved.map(|func| self.make_runtime_function(&func))
     }
 
@@ -753,7 +751,7 @@ impl VM {
                 ParserInnerType::DynamicTraits(traits) => traits.iter().all(|tr| {
                     constraints
                         .iter()
-                        .any(|x| ParserText::temp_name_suffix_matches(x, tr))
+                        .any(|x| x == tr)
                 }),
                 _ => self.runtime_matches_type(inner.as_ref(), target),
             };
@@ -765,7 +763,7 @@ impl VM {
                 RuntimeValue::DynObject { constraints, .. } => traits.iter().all(|tr| {
                     constraints
                         .iter()
-                        .any(|x| ParserText::temp_name_suffix_matches(x, tr))
+                        .any(|x| x == tr)
                 }),
                 other => self
                     .build_dyn_vtable_for_value(other, traits.as_slice())
@@ -835,10 +833,10 @@ impl VM {
             ParserInnerType::Struct(identifier)
             | ParserInnerType::StructWithGenerics { identifier, .. } => match value {
                 RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
-                    ParserText::temp_name_suffix_matches(actual, identifier)
+                    actual == identifier
                 }
                 RuntimeValue::Generator { type_name, .. } => {
-                    ParserText::temp_name_suffix_matches(type_name, type_name)
+                    type_name == type_name
                 }
                 _ => false,
             },
