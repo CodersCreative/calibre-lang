@@ -800,7 +800,7 @@ impl VM {
     }
 
     fn call_drop_trait_for_type(&mut self, type_name: &str, value: &RuntimeValue) {
-        let drop_method_name = format!("{}::drop", type_name);
+        let drop_method_name = format!("{}.drop", type_name);
 
         if let Some(_drop_func) = self.registry.functions.get(&drop_method_name) {
             let _ = self.call_runtime_callable_at(

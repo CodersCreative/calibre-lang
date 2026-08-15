@@ -363,7 +363,6 @@ impl FunctionLowering {
             let mut ctx = BlockLoweringCtx {
                 block: &mut out,
                 reg_count: &mut self.reg_count,
-                locals: self.locals.clone(),
                 captures: self.captures.clone(),
                 map: info.in_map.clone(),
                 null_reg: self.null_reg,

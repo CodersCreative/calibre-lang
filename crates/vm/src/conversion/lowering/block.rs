@@ -1,50 +1,7 @@
 use super::*;
-use calibre_parser::ast::{binary::BinaryOperator, idents::ParserText};
+use calibre_parser::ast::binary::BinaryOperator;
 
 impl<'a> BlockLoweringCtx<'a> {
-    pub(super) fn resolve_local_key(&self, name: &str) -> Option<String> {
-        if self.locals.contains(name) {
-            return Some(name.to_string());
-        }
-        if self.map.contains_key(name) {
-            return Some(name.to_string());
-        }
-        if name.contains(':') || name.contains("::") {
-            return None;
-        }
-
-        let mut found: Option<String> = None;
-        for candidate in &self.locals {
-            if ParserText::temp_name_suffix_matches(&candidate, &name) {
-                if found.is_some() {
-                    return None;
-                }
-                found = Some(candidate.clone());
-            }
-        }
-        found
-    }
-
-    pub(super) fn resolve_mapped_reg(&self, name: &str) -> Option<Reg> {
-        if let Some(reg) = self.map.get(name).copied() {
-            return Some(reg);
-        }
-        if name.contains(':') || name.contains("::") {
-            return None;
-        }
-
-        let mut found: Option<Reg> = None;
-        for (candidate, reg) in &self.map {
-            if ParserText::temp_name_suffix_matches(&candidate, &name) {
-                if found.is_some() {
-                    return None;
-                }
-                found = Some(*reg);
-            }
-        }
-        found
-    }
-
     pub(super) fn alloc_reg(&mut self) -> Reg {
         let r = *self.reg_count;
         *self.reg_count += 1;
@@ -196,12 +153,7 @@ impl<'a> BlockLoweringCtx<'a> {
                     let name_idx = self.add_string(dest.to_string());
 
                     if is_sh || is_bitand {
-                        let target_reg = if !self.is_global && self.locals.contains(dest.as_ref()) {
-                            let target = self
-                                .resolve_mapped_reg(dest.as_ref())
-                                .unwrap_or(self.null_reg);
-                            target
-                        } else {
+                        let target_reg = {
                             let dst = self.alloc_reg();
                             self.emit(
                                 VMInstruction::LoadGlobal {
@@ -238,79 +190,22 @@ impl<'a> BlockLoweringCtx<'a> {
                                 node.span,
                             );
                         }
-
-                        if !self.is_global && self.locals.contains(dest.as_ref()) {
-                            let target = assigned.unwrap_or(target_reg);
-                            if target != target_reg {
-                                self.emit(
-                                    VMInstruction::Copy {
-                                        dst: target,
-                                        src: target_reg,
-                                    },
-                                    node.span,
-                                );
-                            }
-                            self.map.insert(dest.to_string(), target);
-                            self.emit(
-                                VMInstruction::SetLocalName {
-                                    name: name_idx,
-                                    src: target,
-                                },
-                                node.span,
-                            );
-                            self.emit(
-                                VMInstruction::StoreGlobal {
-                                    name: name_idx,
-                                    src: target,
-                                },
-                                node.span,
-                            );
-                        } else {
-                            self.emit(
-                                VMInstruction::StoreGlobal {
-                                    name: name_idx,
-                                    src: target_reg,
-                                },
-                                node.span,
-                            );
-                        }
+                        self.emit(
+                            VMInstruction::StoreGlobal {
+                                name: name_idx,
+                                src: target_reg,
+                            },
+                            node.span,
+                        );
                     } else {
                         let reg = self.lower_node(*value, node.span);
-                        if !self.is_global && self.locals.contains(dest.as_ref()) {
-                            let target = assigned.unwrap_or(reg);
-                            if target != reg {
-                                self.emit(
-                                    VMInstruction::Copy {
-                                        dst: target,
-                                        src: reg,
-                                    },
-                                    node.span,
-                                );
-                            }
-                            self.map.insert(dest.to_string(), target);
-                            self.emit(
-                                VMInstruction::SetLocalName {
-                                    name: name_idx,
-                                    src: target,
-                                },
-                                node.span,
-                            );
-                            self.emit(
-                                VMInstruction::StoreGlobal {
-                                    name: name_idx,
-                                    src: target,
-                                },
-                                node.span,
-                            );
-                        } else {
-                            self.emit(
-                                VMInstruction::StoreGlobal {
-                                    name: name_idx,
-                                    src: reg,
-                                },
-                                node.span,
-                            );
-                        }
+                        self.emit(
+                            VMInstruction::StoreGlobal {
+                                name: name_idx,
+                                src: reg,
+                            },
+                            node.span,
+                        );
                     }
                 }
                 LirLValue::Ptr(ptr) => {
@@ -477,61 +372,35 @@ impl<'a> BlockLoweringCtx<'a> {
                 dst
             }
             LirNodeType::Move(name) => {
-                if self.captures.contains(name.as_ref())
-                    || self.resolve_local_key(name.as_ref()).is_none()
-                {
+                if self.captures.contains(name.as_ref()) {
                     let idx = self.add_string(name.to_string());
                     let dst = self.alloc_reg();
                     self.emit(VMInstruction::MoveGlobal { dst, name: idx }, span);
                     dst
                 } else {
                     let reg = self
-                        .resolve_mapped_reg(name.as_ref())
+                        .map
+                        .get(name.as_ref())
+                        .cloned()
                         .unwrap_or(self.null_reg);
-                    let key = self
-                        .resolve_local_key(name.as_ref())
-                        .unwrap_or_else(|| name.to_string());
-                    self.map.insert(key, self.null_reg);
+                    self.map.insert(name.to_string(), self.null_reg);
                     reg
                 }
             }
             LirNodeType::Drop(name) => {
-                if self.captures.contains(name.as_ref())
-                    || self.resolve_local_key(name.as_ref()).is_none()
-                {
+                if self.captures.contains(name.as_ref()) {
                     let idx = self.add_string(name.to_string());
                     self.emit(VMInstruction::DropGlobal { name: idx }, span);
                 } else {
-                    let key = self
-                        .resolve_local_key(name.as_ref())
-                        .unwrap_or_else(|| name.to_string());
-                    self.map.insert(key, self.null_reg);
+                    self.map.insert(name.to_string(), self.null_reg);
                 }
                 self.null_reg
             }
             LirNodeType::Load(name) => {
-                if self.resolve_local_key(name.as_ref()).is_some() {
-                    if let Some(reg) = self.resolve_mapped_reg(name.as_ref()) {
-                        if reg != self.null_reg {
-                            reg
-                        } else {
-                            let idx = self.add_string(name.to_string());
-                            let dst = self.alloc_reg();
-                            self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
-                            dst
-                        }
-                    } else {
-                        let idx = self.add_string(name.to_string());
-                        let dst = self.alloc_reg();
-                        self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
-                        dst
-                    }
-                } else {
-                    let idx = self.add_string(name.to_string());
-                    let dst = self.alloc_reg();
-                    self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
-                    dst
-                }
+                let idx = self.add_string(name.to_string());
+                let dst = self.alloc_reg();
+                self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
+                dst
             }
             LirNodeType::Aggregate { name, fields } => {
                 let mut layout = Vec::new();

@@ -13,7 +13,6 @@ mod function;
 struct BlockLoweringCtx<'a> {
     block: &'a mut VMBlock,
     reg_count: &'a mut Reg,
-    locals: FxHashSet<String>,
     captures: FxHashSet<String>,
     map: FxHashMap<String, Reg>,
     null_reg: Reg,

@@ -1141,6 +1141,7 @@ impl VM {
                     }
                     entries.push((name.clone(), value));
                 }
+
                 if let Some(type_name) = layout.name.clone()
                     && Self::is_gen_type_name(&type_name)
                 {
@@ -1279,7 +1280,6 @@ impl VM {
                 if matches!(resolved, RuntimeValue::Null) {
                     if let Some(owner) = self.find_local_name_for_reg(source_reg)
                         && !owner.contains(':')
-                        && !owner.contains("->")
                         && let Some(callee) =
                             self.resolve_associated_member_value(owner.as_ref(), name, short_name)
                     {

@@ -629,6 +629,7 @@ impl MiddleEnvironment {
                                 self.resolve_impl_member(scope, &ty, &second.to_string())
                         {
                             let new_args = args.clone();
+
                             if path.len() == 2 {
                                 return self.evaluate_inner(
                                     scope,
@@ -682,6 +683,56 @@ impl MiddleEnvironment {
                     }
                     _ => {}
                 }
+            }
+        } else if path.len() > 1
+            && let NodeType::CallExpression {
+                string_fn,
+                caller,
+                generic_types,
+                args,
+                reverse_args,
+            } = &path[1].0.node_type
+            && let NodeType::Identifier(second) = &caller.node_type
+        {
+            let base_type = self.resolve_type_from_node(scope, &path[0].0.clone().into());
+            if let Some(ty) = base_type
+                && let Some(static_fn) = self.resolve_impl_member(scope, &ty, &second.to_string())
+            {
+                let new_args = args.clone();
+                let mut args_with_receiver: Vec<CallArg> = vec![CallArg::Value(path[0].0.clone())];
+                args_with_receiver.extend(new_args);
+
+                if path.len() == 2 {
+                    return self.evaluate_inner(
+                        scope,
+                        Node::new(
+                            self.context.current_span(),
+                            NodeType::CallExpression {
+                                string_fn: string_fn.clone(),
+                                caller: Box::new(Node::identifier(
+                                    self.context.current_span(),
+                                    static_fn,
+                                )),
+                                generic_types: generic_types.clone(),
+                                args: args_with_receiver,
+                                reverse_args: reverse_args.clone(),
+                            },
+                        ),
+                    );
+                }
+
+                let call_node = Node::new(
+                    path[1].0.span,
+                    NodeType::CallExpression {
+                        string_fn: string_fn.clone(),
+                        caller: Box::new(Node::identifier(self.context.current_span(), static_fn)),
+                        generic_types: generic_types.clone(),
+                        args: args_with_receiver,
+                        reverse_args: reverse_args.clone(),
+                    },
+                );
+                path[0].0 = call_node;
+                path.remove(1);
             }
         }
 

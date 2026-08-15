@@ -241,14 +241,6 @@ impl VM {
         None
     }
 
-    fn normalize_generic_owner(owner: &str) -> String {
-        let tail = ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
-        let base = tail.split("->").next().unwrap_or(&tail);
-        base.split('<')
-            .next()
-            .map_or(base.to_string(), |x| x.to_string())
-    }
-
     #[inline]
     fn build_member_candidates(
         owner: &str,
