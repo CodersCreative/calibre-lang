@@ -650,16 +650,31 @@ impl VM {
                 }
                 RuntimeValue::VarRef(id) => {
                     if !seen_var_refs.insert(*id) {
-                        return Err(RuntimeError::DanglingRef(format!("varref-cycle(#{} )", id)));
+                        return Err(RuntimeError::DanglingRef(format!(
+                            "varref-cycle(id = #{} name = '{}')",
+                            id,
+                            self.variables.name_of(*id).unwrap_or_default()
+                        )));
                     }
+
                     let v = self
                         .variables
                         .get_by_id(*id)
                         .cloned()
                         .ok_or(RuntimeError::DanglingRef(format!("#{}", id)))?;
+
                     if matches!(&v, RuntimeValue::VarRef(next) if next == id) {
+                        if let Some(name) = self.variables.name_of(*id)
+                            && let Ok(local) =
+                                self.resolve_value_for_op_ref(&RuntimeValue::Ref(name.to_string()))
+                            && !matches!(&local, RuntimeValue::VarRef(next) if next == id)
+                        {
+                            owned = Some(local);
+                            continue;
+                        }
                         return Err(RuntimeError::DanglingRef(format!("#{}", id)));
                     }
+
                     owned = Some(v);
                 }
                 RuntimeValue::RegRef { frame, reg } => {

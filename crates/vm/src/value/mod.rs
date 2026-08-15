@@ -393,7 +393,6 @@ impl RuntimeValue {
         )
     }
 
-
     #[inline]
     pub fn bind_if_callable(self, receiver: RuntimeValue) -> RuntimeValue {
         match self {

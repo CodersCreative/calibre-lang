@@ -85,6 +85,10 @@ impl VariableStore {
         self.map.get(name).copied()
     }
 
+    pub fn name_of(&self, id: usize) -> Option<Arc<str>> {
+        self.map.iter().find(|x| x.1 == &id).map(|x| x.0).cloned()
+    }
+
     pub fn bind_alias_by_id(&mut self, name: &str, id: usize) {
         let name = self.intern(name);
         self.map.insert(name, id);

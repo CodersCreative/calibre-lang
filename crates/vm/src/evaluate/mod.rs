@@ -515,10 +515,12 @@ impl VM {
                 return Some(resolved);
             }
         }
-        if !owner.contains(":<") && let Some(found) = self.resolve_struct_like_member(owner, member, short_member) {
-                return Some(found);
-            }
-        
+        if !owner.contains(":<")
+            && let Some(found) = self.resolve_struct_like_member(owner, member, short_member)
+        {
+            return Some(found);
+        }
+
         let owner_tail =
             ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
         let owner_base = owner_tail
@@ -534,9 +536,7 @@ impl VM {
         let mut matched: Option<String> = None;
         for name in self.variables.keys() {
             let tail = ParserText::get_temp_name_suffix(&name).unwrap_or_else(|| name.to_string());
-            if tail != suffix
-                && !name.ends_with(&format!(".{suffix}"))
-            {
+            if tail != suffix && !name.ends_with(&format!(".{suffix}")) {
                 continue;
             }
             if matched.is_some() {
@@ -581,17 +581,19 @@ impl VM {
         short_member: Option<&str>,
     ) -> Option<RuntimeValue> {
         let mut resolved: Option<Arc<VMFunction>> = None;
-        
+
         for func in self.registry.functions.values() {
-            if !func.name.contains(owner) || !(func.name.ends_with(&format!(".{member}"))
-                || short_member.is_some_and(|short| func.name.ends_with(&format!(".{short}")))) {
+            if !func.name.contains(owner)
+                || !(func.name.ends_with(&format!(".{member}"))
+                    || short_member.is_some_and(|short| func.name.ends_with(&format!(".{short}"))))
+            {
                 continue;
             }
 
             if resolved.is_some() {
                 return None;
             }
-            
+
             resolved = Some(Arc::clone(func));
         }
 
@@ -748,11 +750,9 @@ impl VM {
         {
             return match target {
                 ParserInnerType::Dynamic => true,
-                ParserInnerType::DynamicTraits(traits) => traits.iter().all(|tr| {
-                    constraints
-                        .iter()
-                        .any(|x| x == tr)
-                }),
+                ParserInnerType::DynamicTraits(traits) => {
+                    traits.iter().all(|tr| constraints.iter().any(|x| x == tr))
+                }
                 _ => self.runtime_matches_type(inner.as_ref(), target),
             };
         }
@@ -760,11 +760,9 @@ impl VM {
         match target {
             ParserInnerType::Dynamic => true,
             ParserInnerType::DynamicTraits(traits) => match value {
-                RuntimeValue::DynObject { constraints, .. } => traits.iter().all(|tr| {
-                    constraints
-                        .iter()
-                        .any(|x| x == tr)
-                }),
+                RuntimeValue::DynObject { constraints, .. } => {
+                    traits.iter().all(|tr| constraints.iter().any(|x| x == tr))
+                }
                 other => self
                     .build_dyn_vtable_for_value(other, traits.as_slice())
                     .is_some(),
@@ -835,9 +833,7 @@ impl VM {
                 RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
                     actual == identifier
                 }
-                RuntimeValue::Generator { type_name, .. } => {
-                    type_name == type_name
-                }
+                RuntimeValue::Generator { type_name, .. } => type_name == type_name,
                 _ => false,
             },
             ParserInnerType::Scope(_)

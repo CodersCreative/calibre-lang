@@ -103,8 +103,6 @@ impl<'a> BlockLoweringCtx<'a> {
                         },
                         node.span,
                     );
-                    let name = self.add_string(dest.to_string());
-                    self.emit(VMInstruction::StoreGlobal { name, src: target }, node.span);
                 } else {
                     let name = self.add_string(dest.to_string());
                     self.emit(VMInstruction::StoreGlobal { name, src: reg }, node.span);
@@ -210,13 +208,6 @@ impl<'a> BlockLoweringCtx<'a> {
                                 },
                                 node.span,
                             );
-                            self.emit(
-                                VMInstruction::StoreGlobal {
-                                    name: name_idx,
-                                    src: target,
-                                },
-                                node.span,
-                            );
                         } else {
                             self.emit(
                                 VMInstruction::StoreGlobal {
@@ -226,7 +217,6 @@ impl<'a> BlockLoweringCtx<'a> {
                                 node.span,
                             );
                         }
-
                     } else {
                         let reg = self.lower_node(*value, node.span);
                         if !self.is_global && self.map.contains_key(dest.as_ref()) {
@@ -243,13 +233,6 @@ impl<'a> BlockLoweringCtx<'a> {
                             self.map.insert(dest.to_string(), target);
                             self.emit(
                                 VMInstruction::SetLocalName {
-                                    name: name_idx,
-                                    src: target,
-                                },
-                                node.span,
-                            );
-                            self.emit(
-                                VMInstruction::StoreGlobal {
                                     name: name_idx,
                                     src: target,
                                 },
@@ -413,7 +396,9 @@ impl<'a> BlockLoweringCtx<'a> {
                     self.emit(VMInstruction::MoveGlobal { dst, name: idx }, span);
                     dst
                 } else {
-                    self.map.insert(name.to_string(), self.null_reg).unwrap_or(self.null_reg)
+                    self.map
+                        .insert(name.to_string(), self.null_reg)
+                        .unwrap_or(self.null_reg)
                 }
             }
             LirNodeType::Drop(name) => {

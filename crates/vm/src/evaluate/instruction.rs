@@ -405,7 +405,7 @@ impl VM {
             let value = self.get_reg_value(callee);
             if value.is_callable() {
                 value.clone()
-            }else {
+            } else {
                 self.resolve_value_for_op_ref(value)?
             }
         };
@@ -763,18 +763,6 @@ impl VM {
                 let interned = self.intern_local_string(block, *name)?;
                 let frame = self.current_frame_mut();
                 frame.local_map.insert(interned, *src);
-                let frame_idx = self.frames.len().saturating_sub(1);
-                let local_ref = RuntimeValue::RegRef {
-                    frame: frame_idx,
-                    reg: *src,
-                };
-
-                if let Some(id) = self.global_id_cached(full_name) {
-                    let _ = self.variables.set_by_id(id, local_ref.clone());
-                } else {
-                    let id = self.variables.insert_with_id(full_name, local_ref.clone());
-                    self.caches.globals_id.insert(full_name.to_string(), id);
-                }
             }
             VMInstruction::LoadGlobalRef { dst, name } => {
                 let name = self.local_string(block, *name)?;
@@ -2284,7 +2272,10 @@ impl VM {
                 right,
             } => {
                 let value = self.get_reg_value(*value).clone();
-                let target_val = self.get_reg_value(*target).clone();
+                let target_val = self.get_reg_value(*target);
+                let target_val = self
+                    .resolve_value_for_op_ref(target_val)
+                    .unwrap_or_else(|_| target_val.clone());
 
                 match target_val {
                     RuntimeValue::Str(data) => {
@@ -2298,6 +2289,10 @@ impl VM {
                             s
                         };
 
+                        self.set_reg_value(*target, RuntimeValue::Str(Arc::new(s)));
+                    }
+                    RuntimeValue::Null => {
+                        let s = value.display(self);
                         self.set_reg_value(*target, RuntimeValue::Str(Arc::new(s)));
                     }
                     RuntimeValue::Ref(name) => {
