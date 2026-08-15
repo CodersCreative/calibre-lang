@@ -22,7 +22,6 @@ use std::{
         atomic::{AtomicBool, AtomicIsize, Ordering},
     },
 };
-
 use crate::{
     VM,
     conversion::{Reg, VMLiteral},
@@ -442,6 +441,7 @@ impl RuntimeValue {
             ("err", Arc::new(native::global::ErrFn())),
             ("some", Arc::new(native::global::SomeFn())),
             ("repr", Arc::new(native::global::Repr())),
+            ("display", Arc::new(native::global::Display())),
             ("len", Arc::new(native::global::Len())),
             ("trim", Arc::new(native::global::Trim())),
             ("str.split", Arc::new(stdlib::str::StrSplit())),

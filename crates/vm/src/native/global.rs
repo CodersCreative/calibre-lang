@@ -184,6 +184,18 @@ impl NativeFunction for Repr {
     }
 
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        Ok(RuntimeValue::Str(Arc::new(args[0].to_string())))
+    }
+}
+
+pub struct Display();
+
+impl NativeFunction for Display {
+    fn name(&self) -> String {
+        String::from("display")
+    }
+
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         Ok(RuntimeValue::Str(Arc::new(args[0].display(env))))
     }
 }

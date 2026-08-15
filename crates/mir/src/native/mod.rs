@@ -104,6 +104,7 @@ impl MiddleEnvironment {
             "some",
             "trim",
             "repr",
+            "display",
             "len",
             "panic",
             "assert",
