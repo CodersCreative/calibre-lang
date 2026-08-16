@@ -5,14 +5,17 @@ pub(crate) const CLEANUP_MS: u64 = 150;
 
 pub(crate) const KEYWORDS: &[&str] = &[
     "fn", "let", "mut", "const", "struct", "enum", "trait", "impl", "if", "else", "match", "for",
-    "while", "in", "return", "break", "continue", "try", "as", "extern", "type", "range",
+    "while", "in", "return", "break", "continue", "try", "as", "extern", "type", "range", "test", "move", "spawn", "defer", "import", "is"
 ];
 
 pub(crate) fn keyword_doc(keyword: &str) -> &'static str {
     match keyword {
+        "test" => "Declare a test.",
+        "move" => "Move a variable.",
+        "defer" => "Delay running a statement.",
         "fn" => "Declare a function.",
         "let" => "Declare an immutable local variable.",
-        "mut" => "Declare or mark a mutable binding.",
+        "mut" => "Mark a mutable variable.",
         "const" => "Declare a constant value.",
         "struct" => "Declare a struct type.",
         "enum" => "Declare an enum type.",
@@ -28,10 +31,13 @@ pub(crate) fn keyword_doc(keyword: &str) -> &'static str {
         "break" => "Exit the nearest loop.",
         "continue" => "Skip to next loop iteration.",
         "try" => "Error-handling expression.",
-        "as" => "Type cast operation.",
-        "extern" => "Declare external/native functions.",
+        "as" => "Cast a value to a type.",
+        "is" => "Check the type of a value",
+        "extern" => "Declare external functions and types.",
         "type" => "Declare a type alias/new type.",
         "range" => "Construct a range expression.",
+        "spawn" => "Create a new async worker, returns a WaitGroup.",
+        "import" => "Import constants and types from a module",
         _ => "Language keyword.",
     }
 }

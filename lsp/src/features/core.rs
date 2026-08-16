@@ -36,7 +36,7 @@ impl CalibreLanguageServer {
     }
 
     #[inline]
-    fn insert_document_state(&mut self, uri: Url, version: i32, text: String) {
+    pub fn insert_document_state(&mut self, uri: Url, version: i32, text: String) {
         let latest_diagnostics_job = self.latest_diagnostics_job_for(&uri);
         self.documents.insert(
             uri,
@@ -169,10 +169,6 @@ impl CalibreLanguageServer {
         if self.documents.len() > MAX_OPEN_DOCUMENTS {
             self.documents.clear();
         }
-    }
-
-    pub(super) fn set_document_text(&mut self, uri: Url, version: i32, text: String) {
-        self.insert_document_state(uri, version, text);
     }
 
     pub(super) fn hover_for(&self, uri: &Url, position: Position) -> Option<Hover> {

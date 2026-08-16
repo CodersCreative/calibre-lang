@@ -1,9 +1,8 @@
 use crate::config::Config;
 use calibre::{CalibreEngine, CalibreError, CompileMode};
 use calibre_diagnostics;
-use calibre_lir::environment::{LirEnvironment, LirRegistry};
+use calibre_lir::environment::{LirEnvironment};
 use calibre_mir::{
-    ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     tags::context::PackageMetadata,
@@ -34,7 +33,6 @@ async fn run_source(
     vm_config: VMConfig,
     package_metadata: Option<PackageMetadata>,
     cache_base_dir: Option<PathBuf>,
-    module_only: bool,
     no_std: Option<bool>,
 ) -> Result<(), Box<dyn Error>> {
     let start = std::time::Instant::now();
@@ -109,17 +107,7 @@ async fn run_source(
     if verbosity.is_level(&Verbosity::MIR) {
         println!("Mir - elapsed {}ms:", start.elapsed().as_millis());
         if let Some(mir) = &artifacts.mir {
-            if module_only {
-                let token = scope_filter_token(&artifacts.entry_name);
-                if let Some(scope_id) = scope_id_from_token(token.as_deref()) {
-                    let filtered = filter_mir_node_for_scope(mir, scope_id, token.as_deref());
-                    println!("{filtered}");
-                } else {
-                    println!("{mir}");
-                }
-            } else {
-                println!("{}", mir);
-            }
+            println!("{}", mir);
             println!("Starting vm...");
         } else {
             println!("<MIR unavailable: loaded from cache>");
@@ -129,13 +117,7 @@ async fn run_source(
     if verbosity.is_level(&Verbosity::LIR) {
         println!("Lir - elapsed {}ms:", start.elapsed().as_millis());
         if let Some(lir) = &artifacts.lir {
-            if module_only {
-                let token = scope_filter_token(&artifacts.entry_name);
-                let filtered = filter_lir_by_scope_text(lir, token.as_deref());
-                println!("{filtered}");
-            } else {
-                println!("{}", lir);
-            }
+            println!("{}", lir);
         } else {
             println!("<LIR unavailable: loaded from cache>");
         }
@@ -148,13 +130,7 @@ async fn run_source(
 
     if verbosity.is_level(&Verbosity::Byte) {
         println!("Bytecode - elapsed {}ms:", start.elapsed().as_millis());
-        if module_only {
-            let token = scope_filter_token(&artifacts.entry_name);
-            let filtered = filter_registry_by_scope_text(vm.registry.as_ref(), token.as_deref());
-            println!("{filtered}");
-        } else {
-            println!("{}", vm.registry.as_ref());
-        }
+        println!("{}", vm.registry.as_ref());
     };
 
     let mut init_functions = artifacts.init_functions.clone();
@@ -700,105 +676,6 @@ async fn run_benches(
     }
 }
 
-fn scope_filter_token(entry_name: &str) -> Option<String> {
-    let head = entry_name.split(':').next()?;
-    let mut parts = head.split('-');
-    let _ = parts.next()?;
-
-    Some(format!("-{}-", parts.next()?))
-}
-
-#[inline]
-fn scope_id_from_token(token: Option<&str>) -> Option<u64> {
-    token?.trim_matches('-').parse::<u64>().ok()
-}
-
-fn node_matches_scope(node: &MiddleNode, scope_id: u64, token: Option<&str>) -> bool {
-    match &node.node_type {
-        MiddleNodeType::FunctionDeclaration {
-            scope_id: fn_scope, ..
-        } => *fn_scope == scope_id,
-        MiddleNodeType::VariableDeclaration { identifier, .. } => {
-            token.map(|t| identifier.text.contains(t)).unwrap_or(false)
-        }
-        MiddleNodeType::ScopeDeclaration { body, .. } => body
-            .iter()
-            .any(|child| node_matches_scope(child, scope_id, token)),
-        _ => false,
-    }
-}
-
-fn filter_mir_node_for_scope(node: &MiddleNode, scope_id: u64, token: Option<&str>) -> MiddleNode {
-    match &node.node_type {
-        MiddleNodeType::ScopeDeclaration {
-            body,
-            create_new_scope,
-            is_temp,
-            scope_id: s,
-        } => MiddleNode::new(
-            MiddleNodeType::ScopeDeclaration {
-                body: body
-                    .iter()
-                    .filter(|child| node_matches_scope(child, scope_id, token))
-                    .map(|child| filter_mir_node_for_scope(child, scope_id, token))
-                    .collect(),
-                create_new_scope: *create_new_scope,
-                is_temp: *is_temp,
-                scope_id: *s,
-            },
-            node.span,
-        ),
-        _ => node.clone(),
-    }
-}
-
-fn filter_registry_by_scope_text(
-    registry: &calibre_vm::conversion::VMRegistry,
-    token: Option<&str>,
-) -> String {
-    let Some(token) = token else {
-        return registry.to_string();
-    };
-
-    let mut out = String::new();
-
-    for (name, global) in &registry.globals {
-        if name.contains(token) {
-            out.push_str(&format!("{}\n", global));
-        }
-    }
-
-    for (name, func) in &registry.functions {
-        if name.contains(token) {
-            out.push_str(&format!("{}\n\n", func.as_ref()));
-        }
-    }
-
-    out
-}
-
-fn filter_lir_by_scope_text(registry: &LirRegistry, token: Option<&str>) -> String {
-    let Some(token) = token else {
-        return registry.to_string();
-    };
-
-    let mut out = String::new();
-
-    for (name, global) in &registry.globals {
-        if name.contains(token) {
-            out.push_str(&format!("{}\n", global));
-        }
-    }
-
-    for (name, func) in &registry.functions {
-        if name.contains(token) {
-            out.push_str(&format!("{}\n\n", func));
-        }
-    }
-
-    out
-}
-
 async fn run_repl_source(
     contents: String,
     path: &Path,
@@ -1113,8 +990,6 @@ enum Commands {
         verbosity: Option<Verbosity>,
         #[arg(long)]
         no_std: Option<bool>,
-        #[arg(long)]
-        module_only: bool,
         #[arg(last = true)]
         program_args: Vec<String>,
     },
@@ -1217,7 +1092,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                     path,
                     example,
                     verbosity,
-                    module_only,
                     mut no_std,
                     program_args,
                 }) => {
@@ -1251,7 +1125,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                             vm_config,
                             package_metadata,
                             cache_base_dir,
-                            module_only,
                             no_std,
                         )
                         .await

@@ -1,3 +1,4 @@
+use calibre_parser::ast::idents::ParserText;
 use rustc_hash::FxHashMap;
 use std::{cmp::Ordering, fmt::Debug, sync::Arc};
 
@@ -18,7 +19,7 @@ pub trait NativeFunction: Send + Sync {
         let name = env
             .mappings
             .iter()
-            .find(|x| x.split_once(":").map(|v| v.1) == Some(name.as_str()))
+            .find(|x| ParserText::temp_name_suffix_matches(x, &name))
             .map(|x| x.to_string())
             .unwrap_or(name);
 
@@ -131,6 +132,7 @@ impl PartialOrd for dyn NativeFunction {
 }
 
 impl VM {
+    // TODO This needs to be redone
     pub(crate) fn build_mapping_index(
         mappings: &[String],
         prefer_nonzero_scope: bool,
@@ -145,7 +147,7 @@ impl VM {
         let mut buckets: FxHashMap<String, Vec<String>> =
             FxHashMap::with_capacity_and_hasher(mappings.len(), Default::default());
         for full in mappings {
-            if let Some((_, short)) = full.split_once(':') {
+            if let Some(short) = ParserText::get_temp_name_suffix(full) {
                 buckets
                     .entry(short.to_string())
                     .or_default()

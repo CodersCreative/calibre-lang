@@ -1,4 +1,5 @@
 use calibre_mir::typing::MiddleObject;
+use calibre_parser::ast::idents::ParserText;
 
 use super::*;
 
@@ -12,7 +13,9 @@ impl CalibreLanguageServer {
             let base_expr = upto[..idx]
                 .trim_end_matches(|c: char| c.is_whitespace())
                 .to_string();
+            
             let prefix = upto[idx + 2..].to_string();
+
             if !base_expr.is_empty() {
                 return CompletionContext::Member { base_expr, prefix };
             }
@@ -22,7 +25,9 @@ impl CalibreLanguageServer {
             let base_expr = upto[..idx]
                 .trim_end_matches(|c: char| c.is_whitespace())
                 .to_string();
+            
             let prefix = upto[idx + 1..].to_string();
+            
             if !base_expr.is_empty() {
                 return CompletionContext::Member { base_expr, prefix };
             }
@@ -30,6 +35,7 @@ impl CalibreLanguageServer {
 
         let mut chars = upto.chars().collect::<Vec<_>>();
         let mut prefix = String::new();
+        
         while let Some(ch) = chars.pop() {
             if ch.is_ascii_alphanumeric() || ch == '_' {
                 prefix.insert(0, ch);
@@ -45,12 +51,15 @@ impl CalibreLanguageServer {
         if trimmed.is_empty() {
             return String::new();
         }
+
         let mut start = 0usize;
+        
         for (idx, ch) in trimmed.char_indices() {
             if [' ', '(', ')', '[', ']', '{', '}', ',', ';', '='].contains(&ch) {
                 start = idx + ch.len_utf8();
             }
         }
+        
         trimmed[start..].trim().to_string()
     }
 
@@ -115,28 +124,26 @@ impl CalibreLanguageServer {
         Some(current)
     }
 
+    #[inline]
     pub(super) fn object_from_type<'a>(
         env: &'a MiddleEnvironment,
         data_type: &ParserDataType,
     ) -> Option<&'a MiddleObject> {
-        match &data_type.clone().unwrap_all_refs().data_type {
-            ParserInnerType::Struct(name) => env.typing.objects.get(name),
-            ParserInnerType::StructWithGenerics { identifier, .. } => {
-                env.typing.objects.get(identifier)
-            }
-            _ => None,
-        }
+        env.typing.objects.get(&data_type.clone().unwrap_all_refs().impl_name())
     }
 
     pub(super) fn extract_callee_before_open_paren(text: &str, open_idx: usize) -> Option<String> {
         if open_idx == 0 || open_idx > text.len() {
             return None;
         }
+
         let bytes = text.as_bytes();
         let mut i = open_idx;
+        
         while i > 0 && bytes[i - 1].is_ascii_whitespace() {
             i -= 1;
         }
+        
         let end = i;
         while i > 0 {
             let b = bytes[i - 1];
@@ -146,13 +153,16 @@ impl CalibreLanguageServer {
                 break;
             }
         }
+        
         if i >= end {
             return None;
         }
+        
         let raw = text[i..end].trim();
         if raw.is_empty() {
             return None;
         }
+
         raw.split("::")
             .last()
             .map(|x| x.split('.').last().unwrap_or(x).to_string())
@@ -174,41 +184,43 @@ impl CalibreLanguageServer {
         let mut escaped = false;
         let mut stack: Vec<(usize, u32, Option<String>)> = Vec::new();
         let mut i = 0usize;
+
         while i < limit {
             let b = bytes[i];
             let next = bytes.get(i + 1).copied();
             match mode {
                 Mode::Normal => {
-                    if b == b'/' && next == Some(b'/') {
-                        mode = Mode::LineComment;
-                        i += 2;
-                        continue;
-                    }
-                    if b == b'/' && next == Some(b'*') {
-                        mode = Mode::BlockComment;
-                        i += 2;
-                        continue;
-                    }
-                    if b == b'"' {
-                        mode = Mode::String;
-                        escaped = false;
-                        i += 1;
-                        continue;
-                    }
-                    if b == b'\'' {
-                        mode = Mode::Char;
-                        escaped = false;
-                        i += 1;
-                        continue;
-                    }
-                    if b == b'(' {
-                        stack.push((i, 0, Self::extract_callee_before_open_paren(text, i)));
-                    } else if b == b',' {
-                        if let Some(top) = stack.last_mut() {
-                            top.1 = top.1.saturating_add(1);
+                    match (b, next) {
+                        (b'/', Some(b'/')) => {
+                            mode = Mode::LineComment;
+                            i += 2;
+                        },
+                        (b'/', Some(b'*')) => {
+                            mode = Mode::BlockComment;
+                            i += 2;
+                        },
+                        (b'"', _) => {
+                            mode = Mode::String;
+                            escaped = false;
+                            i += 1;
+                        },
+                        (b'\'', _) => {
+                            mode = Mode::Char;
+                            escaped = false;
+                            i += 1;
+                        },
+                        (b'(', _) => {
+                            stack.push((i, 0, Self::extract_callee_before_open_paren(text, i)));
+                        },
+                        (b',', _) => {
+                            if let Some(top) = stack.last_mut() {
+                                top.1 = top.1.saturating_add(1);
+                            }
+                        },
+                        (b')', _) => {
+                            let _ = stack.pop();
                         }
-                    } else if b == b')' {
-                        let _ = stack.pop();
+                        (_, _) => {}
                     }
                 }
                 Mode::String => {
@@ -250,52 +262,37 @@ impl CalibreLanguageServer {
                 return Some((callee, active_param));
             }
         }
+
         None
     }
 
     pub(super) fn signature_information_for_data_type(
-        name: &str,
+        _name: &str,
         data_type: &ParserDataType,
     ) -> Option<SignatureInformation> {
         match &data_type.data_type {
             ParserInnerType::Function {
-                parameters,
-                return_type,
+                parameters, ..
             } => {
-                let params = parameters
-                    .iter()
-                    .map(Self::format_type_for_completion)
-                    .collect::<Vec<_>>();
-                let signature_label = format!(
-                    "{}({}) -> {}",
-                    name,
-                    params.join(", "),
-                    Self::format_type_for_completion(return_type)
-                );
-                let param_infos = params
+                Some(SignatureInformation {
+                    label: data_type.to_string(),
+                    documentation: Some(Documentation::String(
+                        "A function".to_string(),
+                    )),
+                    parameters: Some(parameters
                     .iter()
                     .map(|p| ParameterInformation {
-                        label: ParameterLabel::Simple(p.clone()),
+                        label: ParameterLabel::Simple(p.to_string()),
                         documentation: None,
                     })
-                    .collect::<Vec<_>>();
-                Some(SignatureInformation {
-                    label: signature_label,
-                    documentation: Some(Documentation::String(
-                        "Semantic function signature".to_string(),
-                    )),
-                    parameters: Some(param_infos),
+                    .collect::<Vec<_>>()),
                     active_parameter: None,
                 })
             }
-            ParserInnerType::NativeFunction(return_type) => Some(SignatureInformation {
-                label: format!(
-                    "{}(...) -> {}",
-                    name,
-                    Self::format_type_for_completion(return_type)
-                ),
+            ParserInnerType::NativeFunction(_) => Some(SignatureInformation {
+                label: data_type.to_string(),
                 documentation: Some(Documentation::String(
-                    "Native function signature".to_string(),
+                    "A native function".to_string(),
                 )),
                 parameters: Some(Vec::new()),
                 active_parameter: None,
@@ -336,18 +333,21 @@ impl CalibreLanguageServer {
         }
 
         let params_raw = &text[(open + 1)..(i - 1)];
+
         let params = params_raw
             .split(',')
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(|p| {
-                if let Some((_name, ty)) = p.split_once(':') {
-                    ty.trim().to_string()
+                
+                if let Some(x) = ParserText::get_temp_name_suffix(&p) {
+                    x.trim().to_string()
                 } else {
                     p.to_string()
                 }
             })
             .collect::<Vec<_>>();
+
         let label = format!("{name}({})", params.join(", "));
         let param_infos = params
             .iter()
@@ -410,45 +410,21 @@ impl CalibreLanguageServer {
         })
     }
 
-    pub(super) fn format_type_for_completion(data_type: &ParserDataType) -> String {
-        data_type.to_string()
-    }
-
-    pub(super) fn format_function_signature(data_type: &ParserDataType) -> Option<String> {
-        match &data_type.data_type {
-            ParserInnerType::Function {
-                parameters,
-                return_type,
-            } => {
-                let params = parameters
-                    .iter()
-                    .map(Self::format_type_for_completion)
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                Some(format!(
-                    "fn({params}) -> {}",
-                    Self::format_type_for_completion(return_type)
-                ))
-            }
-            ParserInnerType::NativeFunction(return_type) => Some(format!(
-                "native fn(...) -> {}",
-                Self::format_type_for_completion(return_type)
-            )),
-            _ => None,
-        }
-    }
-
     pub(super) fn is_valid_identifier(name: &str) -> bool {
         if name.is_empty() || KEYWORDS.contains(&name) {
             return false;
         }
+
         let mut chars = name.chars();
+
         let Some(first) = chars.next() else {
             return false;
         };
+
         if !(first.is_ascii_alphabetic() || first == '_') {
             return false;
         }
+        
         chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     }
 
@@ -532,60 +508,44 @@ impl CalibreLanguageServer {
                     parameters,
                     return_type,
                 } => {
-                    let signature =
-                        CalibreLanguageServer::format_function_signature(&var.data_type)
-                            .unwrap_or_else(|| "fn(...)".to_string());
-                    let doc = format!(
+                    (var.data_type.to_string(), CompletionItemKind::FUNCTION, format!(
                         "Resolved function `{visible}`\n\nCanonical: `{canonical}`\n\nParameters: {}\nReturn: {}",
                         parameters
                             .iter()
-                            .map(CalibreLanguageServer::format_type_for_completion)
+                            .map(|x| x.to_string())
                             .collect::<Vec<_>>()
                             .join(", "),
-                        CalibreLanguageServer::format_type_for_completion(return_type)
-                    );
-                    (signature, CompletionItemKind::FUNCTION, doc)
+                        return_type
+                    ))
                 }
                 ParserInnerType::NativeFunction(return_type) => {
-                    let signature =
-                        CalibreLanguageServer::format_function_signature(&var.data_type)
-                            .unwrap_or_else(|| "native fn(...)".to_string());
-                    let doc = format!(
-                        "Resolved native function `{visible}`\n\nCanonical: `{canonical}`\n\nReturn: {}",
-                        CalibreLanguageServer::format_type_for_completion(return_type)
-                    );
-                    (signature, CompletionItemKind::FUNCTION, doc)
+                    (var.data_type.to_string(), CompletionItemKind::FUNCTION, format!(
+                        "Resolved native function `{visible}`\n\nCanonical: `{canonical}`\n\nReturn: {return_type}",
+                    ))
                 }
                 _ => {
-                    let ty = CalibreLanguageServer::format_type_for_completion(&var.data_type);
-                    let doc = format!(
+                    let ty = var.data_type.to_string();
+                    (ty.clone(), CompletionItemKind::VARIABLE, format!(
                         "Resolved variable `{visible}`\n\nCanonical: `{canonical}`\n\nType: {ty}"
-                    );
-                    (ty, CompletionItemKind::VARIABLE, doc)
+                    ))
                 }
             }
         } else if env.typing.objects.contains_key(canonical) {
             let (detail, kind) = if let Some(object) = env.typing.objects.get(canonical) {
-                match &object.object_type {
-                    MiddleTypeDefType::Struct(fields) => (
-                        format!("struct ({} fields)", fields.len()),
-                        CompletionItemKind::STRUCT,
-                    ),
-                    MiddleTypeDefType::Enum { variants, .. } => (
-                        format!("enum ({} variants)", variants.len()),
-                        CompletionItemKind::ENUM,
-                    ),
-                    MiddleTypeDefType::NewType(inner) => (
-                        format!(
-                            "type {}",
-                            CalibreLanguageServer::format_type_for_completion(inner)
-                        ),
-                        CompletionItemKind::TYPE_PARAMETER,
-                    ),
-                    MiddleTypeDefType::Trait => {
-                        ("trait".to_string(), CompletionItemKind::INTERFACE)
-                    }
-                }
+                (object.object_type.to_string(), match &object.object_type {
+                    MiddleTypeDefType::Struct(_) => 
+                        CompletionItemKind::STRUCT
+                    ,
+                  MiddleTypeDefType::Enum { .. } => 
+                        CompletionItemKind::ENUM
+                    ,
+                    MiddleTypeDefType::NewType(_) => 
+                        CompletionItemKind::TYPE_PARAMETER
+                    ,
+                    MiddleTypeDefType::Trait => 
+                        CompletionItemKind::INTERFACE
+                    ,
+                })
             } else {
                 ("semantic type".to_string(), CompletionItemKind::STRUCT)
             };
@@ -655,12 +615,12 @@ impl CalibreLanguageServer {
                     label: field_name.clone(),
                     detail: Some(format!(
                         "field: {}",
-                        Self::format_type_for_completion(field_ty)
+                        field_ty
                     )),
                     kind: Some(CompletionItemKind::FIELD),
                     documentation: Some(Documentation::String(format!(
                         "Field on `{}`",
-                        Self::format_type_for_completion(&base_ty)
+                        base_ty
                     ))),
                     sort_text: Some(format!("1_{}", field_name)),
                     ..CompletionItem::default()
@@ -673,19 +633,21 @@ impl CalibreLanguageServer {
                 if !prefix.is_empty() && !member_name.starts_with(prefix) {
                     continue;
                 }
+
                 let detail = env
                     .symbols
                     .variables
                     .get(&canonical_member.symbol_name)
-                    .and_then(|v| Self::format_function_signature(&v.data_type))
+                    .and_then(|v| if v.data_type.is_callable() {Some(v.data_type.to_string())} else {None})
                     .unwrap_or_else(|| "method".to_string());
+
                 out.entry(member_name.clone()).or_insert(CompletionItem {
                     label: member_name.clone(),
                     detail: Some(detail),
                     kind: Some(CompletionItemKind::METHOD),
                     documentation: Some(Documentation::String(format!(
                         "Method from impl/trait on `{}`\n\nCanonical: `{}`",
-                        Self::format_type_for_completion(&base_ty),
+                        base_ty.to_string(),
                         canonical_member.symbol_name
                     ))),
                     sort_text: Some(format!("1_{}", member_name)),

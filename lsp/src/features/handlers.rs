@@ -68,7 +68,7 @@ impl LanguageServer for CalibreLanguageServer {
         let text = params.text_document.text;
         let version = params.text_document.version;
 
-        self.set_document_text(uri.clone(), version, text);
+        self.insert_document_state(uri.clone(), version, text);
         self.enqueue_diagnostics(&uri);
         ControlFlow::Continue(())
     }
@@ -87,7 +87,7 @@ impl LanguageServer for CalibreLanguageServer {
         let uri = params.text_document.uri;
         if let Some(text) = params.text {
             let version = self.documents.get(&uri).map(|doc| doc.version).unwrap_or(0);
-            self.set_document_text(uri.clone(), version, text);
+            self.insert_document_state(uri.clone(), version, text);
         }
         self.enqueue_diagnostics(&uri);
         ControlFlow::Continue(())

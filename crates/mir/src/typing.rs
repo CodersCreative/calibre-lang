@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::environment::MiddleEnvironment;
 use calibre_parser::{
     Location,
@@ -263,6 +265,12 @@ pub enum MiddleTypeDefType {
     Struct(ObjectMap<(ParserDataType, Option<Box<Node>>)>),
     NewType(ParserDataType),
     Trait,
+}
+
+impl Display for MiddleTypeDefType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl MiddleTypeDefType {

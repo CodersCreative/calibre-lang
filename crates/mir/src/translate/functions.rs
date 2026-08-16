@@ -841,10 +841,10 @@ impl MiddleEnvironment {
             span,
         };
 
+        // TODO revisit this
         for (p_name, _, _) in params.iter() {
             let full = p_name.text.clone();
-            if let Some(idx) = full.rfind(':') {
-                let short = full[idx + 1..].to_string();
+            if let Some(short) = ParserText::get_temp_name_suffix(&full) {
                 let err = self
                     .context
                     .err_at_current(MiddleErr::Scope(new_scope.to_string()));

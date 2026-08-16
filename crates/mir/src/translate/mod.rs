@@ -1505,6 +1505,7 @@ impl MiddleEnvironment {
                     resolved_type.as_ref().map(|t| t.key()),
                     Some(ParserInnerType::Option(_))
                 );
+
                 let enum_arm = |variant: &str, name: Option<PotentialDollarIdentifier>, body| {
                     (
                         MatchArmType::Enum {
@@ -1518,6 +1519,7 @@ impl MiddleEnvironment {
                         Box::new(body),
                     )
                 };
+                
                 let return_call = |name: &str, args: Vec<CallArg>| {
                     Node::new(
                         Span::default(),
@@ -2486,26 +2488,13 @@ impl MiddleEnvironment {
                             Box::new(MiddleErr::Object(identifier.to_string())),
                         ));
                     };
+
                 let raw_variant = value.to_string();
-                // Try to find the object by the resolved identifier first, then by the base name
-                let base_name = identifier
-                    .text
-                    .split(':')
-                    .last()
-                    .unwrap_or(&identifier.text);
                 let obj = self
                     .typing
                     .objects
-                    .get(&identifier.text)
-                    .or_else(|| self.typing.objects.get(base_name))
-                    .or_else(|| {
-                        // Try to find any object whose base name matches (handles different scope IDs)
-                        self.typing
-                            .objects
-                            .iter()
-                            .find(|(key, _)| key.split(':').last().unwrap_or(key) == base_name)
-                            .map(|(_, obj)| obj)
-                    });
+                    .get(&identifier.text);
+
                 let value = if let Some(obj) = obj
                     && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
                 {

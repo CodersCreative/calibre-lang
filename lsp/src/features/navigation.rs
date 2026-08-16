@@ -1,3 +1,4 @@
+use calibre_mir::ast::MiddleNodeType;
 use super::*;
 
 impl CalibreLanguageServer {
@@ -19,90 +20,91 @@ impl CalibreLanguageServer {
 
             let span_size = (range.end.line.saturating_sub(range.start.line)) * 10_000
                 + range.end.character.saturating_sub(range.start.character);
+
             let new_scope = match &node.node_type {
-                calibre_mir::ast::MiddleNodeType::FunctionDeclaration { scope_id, .. } => {
+                MiddleNodeType::FunctionDeclaration { scope_id, .. } => {
                     Some(*scope_id)
                 }
-                calibre_mir::ast::MiddleNodeType::ScopeDeclaration { scope_id, .. } => {
+                MiddleNodeType::ScopeDeclaration { scope_id, .. } => {
                     Some(*scope_id)
                 }
-                calibre_mir::ast::MiddleNodeType::LoopDeclaration { scope_id, .. } => {
+                MiddleNodeType::LoopDeclaration { scope_id, .. } => {
                     Some(*scope_id)
                 }
                 _ => None,
             };
-            if let Some(scope_id) = new_scope {
-                if span_size < *smallest_span {
+
+            if let Some(scope_id) = new_scope && span_size < *smallest_span {
                     *smallest_span = span_size;
                     *current_scope = scope_id;
-                }
+                
             }
 
             match &node.node_type {
-                calibre_mir::ast::MiddleNodeType::RefStatement { value, .. }
-                | calibre_mir::ast::MiddleNodeType::DerefStatement { value, .. }
-                | calibre_mir::ast::MiddleNodeType::VariableDeclaration { value, .. }
-                | calibre_mir::ast::MiddleNodeType::EnumExpression {
+                MiddleNodeType::RefStatement { value, .. }
+                | MiddleNodeType::DerefStatement { value, .. }
+                | MiddleNodeType::VariableDeclaration { value, .. }
+                | MiddleNodeType::EnumExpression {
                     data: Some(value), ..
                 }
-                | calibre_mir::ast::MiddleNodeType::DebugExpression { value, .. }
-                | calibre_mir::ast::MiddleNodeType::NegExpression { value, .. }
-                | calibre_mir::ast::MiddleNodeType::AsExpression { value, .. }
-                | calibre_mir::ast::MiddleNodeType::Return {
+                | MiddleNodeType::DebugExpression { value, .. }
+                | MiddleNodeType::NegExpression { value, .. }
+                | MiddleNodeType::AsExpression { value, .. }
+                | MiddleNodeType::Return {
                     value: Some(value), ..
                 } => {
                     traverse(value, pos, current_scope, smallest_span);
                 }
-                calibre_mir::ast::MiddleNodeType::ScopeDeclaration { body, .. } => {
+                MiddleNodeType::ScopeDeclaration { body, .. } => {
                     for stmt in body {
                         traverse(stmt, pos, current_scope, smallest_span);
                     }
                 }
-                calibre_mir::ast::MiddleNodeType::FunctionDeclaration { body, .. } => {
+                MiddleNodeType::FunctionDeclaration { body, .. } => {
                     traverse(body, pos, current_scope, smallest_span);
                 }
-                calibre_mir::ast::MiddleNodeType::AssignmentExpression { identifier, value } => {
+                MiddleNodeType::AssignmentExpression { identifier, value } => {
                     traverse(identifier, pos, current_scope, smallest_span);
                     traverse(value, pos, current_scope, smallest_span);
                 }
-                calibre_mir::ast::MiddleNodeType::RangeDeclaration { from, to, .. } => {
+                MiddleNodeType::RangeDeclaration { from, to, .. } => {
                     traverse(from, pos, current_scope, smallest_span);
                     traverse(to, pos, current_scope, smallest_span);
                 }
-                calibre_mir::ast::MiddleNodeType::LoopDeclaration { state, body, .. } => {
+                MiddleNodeType::LoopDeclaration { state, body, .. } => {
                     if let Some(state) = state {
                         traverse(state, pos, current_scope, smallest_span);
                     }
                     traverse(body, pos, current_scope, smallest_span);
                 }
-                calibre_mir::ast::MiddleNodeType::ListLiteral(_, body) => {
+                MiddleNodeType::ListLiteral(_, body) => {
                     for item in body {
                         traverse(item, pos, current_scope, smallest_span);
                     }
                 }
-                calibre_mir::ast::MiddleNodeType::MemberExpression { path } => {
+                MiddleNodeType::MemberExpression { path } => {
                     for (node, _) in path {
                         traverse(node, pos, current_scope, smallest_span);
                     }
                 }
-                calibre_mir::ast::MiddleNodeType::CallExpression { caller, args } => {
+                MiddleNodeType::CallExpression { caller, args } => {
                     traverse(caller, pos, current_scope, smallest_span);
                     for arg in args {
                         traverse(arg, pos, current_scope, smallest_span);
                     }
                 }
-                calibre_mir::ast::MiddleNodeType::BinaryExpression { left, right, .. }
-                | calibre_mir::ast::MiddleNodeType::ComparisonExpression { left, right, .. }
-                | calibre_mir::ast::MiddleNodeType::BooleanExpression { left, right, .. } => {
+                MiddleNodeType::BinaryExpression { left, right, .. }
+                | MiddleNodeType::ComparisonExpression { left, right, .. }
+                | MiddleNodeType::BooleanExpression { left, right, .. } => {
                     traverse(left, pos, current_scope, smallest_span);
                     traverse(right, pos, current_scope, smallest_span);
                 }
-                calibre_mir::ast::MiddleNodeType::AggregateExpression { value, .. } => {
+                MiddleNodeType::AggregateExpression { value, .. } => {
                     for (_, node) in &value.0 {
                         traverse(node, pos, current_scope, smallest_span);
                     }
                 }
-                calibre_mir::ast::MiddleNodeType::Conditional {
+                MiddleNodeType::Conditional {
                     comparison,
                     then,
                     otherwise,
@@ -172,13 +174,7 @@ impl CalibreLanguageServer {
 
             let resolved = env
                 .resolve_str(&position_scope, &word)
-                .or_else(|| env.resolve_str(&scope, &word))
-                .or_else(|| {
-                    env.scoping
-                        .scopes
-                        .values()
-                        .find_map(|scope_ref| scope_ref.mappings.get(&word).cloned())
-                });
+                .or_else(|| env.resolve_str(&scope, &word));
 
             if let Some(resolved) = resolved {
                 if let Some(var) = env.symbols.variables.get(&resolved)
@@ -207,6 +203,7 @@ impl CalibreLanguageServer {
             .get(uri)
             .and_then(|contents| Self::find_lexical_definition_range(contents, &word))
             .map(|range| GotoDefinitionResponse::Scalar(Location::new(uri.clone(), range)));
+
         if primary.is_some() {
             return primary;
         }
@@ -215,6 +212,7 @@ impl CalibreLanguageServer {
             if doc_uri == uri {
                 continue;
             }
+
             if let Some(range) = Self::find_lexical_definition_range(contents, &word) {
                 return Some(GotoDefinitionResponse::Scalar(Location::new(
                     doc_uri.clone(),
@@ -232,29 +230,29 @@ impl CalibreLanguageServer {
             if start >= bytes.len() {
                 return None;
             }
+            
             let mut i = start;
             while i < bytes.len() && (bytes[i] == b' ' || bytes[i] == b'\t') {
                 i += 1;
             }
+            
             let begin = i;
             while i < bytes.len()
                 && ((bytes[i] as char).is_ascii_alphanumeric() || bytes[i] == b'_')
             {
                 i += 1;
             }
+
             if begin == i { None } else { Some((begin, i)) }
         }
 
-        let starters = [
-            "fn ", "let ", "mut ", "const ", "struct ", "enum ", "trait ", "type ",
-        ];
         for (line_idx, line) in text.lines().enumerate() {
             let trimmed = line.trim_start();
             if trimmed.starts_with("//") {
                 continue;
             }
 
-            for starter in starters {
+            for starter in KEYWORDS {
                 if let Some(offset) = line.find(starter)
                     && let Some((start, end)) = identifier_at(line, offset + starter.len())
                     && &line[start..end] == symbol
@@ -282,10 +280,12 @@ impl CalibreLanguageServer {
     pub(super) fn byte_offset_to_position(text: &str, target_offset: usize) -> Position {
         let mut line = 0u32;
         let mut character = 0u32;
+
         for (idx, ch) in text.char_indices() {
             if idx >= target_offset {
                 break;
             }
+
             if ch == '\n' {
                 line = line.saturating_add(1);
                 character = 0;
@@ -293,6 +293,7 @@ impl CalibreLanguageServer {
                 character = character.saturating_add(1);
             }
         }
+
         Position { line, character }
     }
 
@@ -303,6 +304,7 @@ impl CalibreLanguageServer {
 
         let mut ranges = Vec::new();
         let mut search_from = 0usize;
+
         while let Some(rel_idx) = text[search_from..].find(word) {
             let start = search_from + rel_idx;
             let end = start + word.len();
@@ -312,6 +314,7 @@ impl CalibreLanguageServer {
             } else {
                 !Self::is_ident_byte(text.as_bytes()[start - 1])
             };
+
             let next_ok = if end >= text.len() {
                 true
             } else {
@@ -327,6 +330,7 @@ impl CalibreLanguageServer {
 
             search_from = start.saturating_add(1);
         }
+
         ranges
     }
 
@@ -337,20 +341,15 @@ impl CalibreLanguageServer {
     ) -> Option<String> {
         let word = Self::word_at_position(text, position)?;
         let path = Self::path_from_url(uri)?;
+
         let mut parser = Parser::default();
         parser.set_source_path(Some(path.clone()));
         let ast = parser.produce_ast(text);
         let (env, scope, middle_ast) = MiddleEnvironment::new_and_evaluate(ast, path, false);
-        let position_scope = Self::find_scope_at_with(&middle_ast, scope, position);
 
+        let position_scope = Self::find_scope_at_with(&middle_ast, scope, position);
         env.resolve_str(&position_scope, &word)
             .or_else(|| env.resolve_str(&scope, &word))
-            .or_else(|| {
-                env.scoping
-                    .scopes
-                    .values()
-                    .find_map(|scope_ref| scope_ref.mappings.get(&word).cloned())
-            })
     }
 
     pub(super) fn semantic_references_in_document(
@@ -374,6 +373,7 @@ impl CalibreLanguageServer {
             if mapped_canonical != canonical {
                 continue;
             }
+
             for range in Self::find_word_occurrences(text, visible_name) {
                 let scope_at_occurrence = Self::find_scope_at_with(&middle_ast, scope, range.start);
                 if env
@@ -392,6 +392,7 @@ impl CalibreLanguageServer {
     pub(super) fn dedupe_locations(locations: Vec<Location>) -> Vec<Location> {
         let mut seen = HashSet::new();
         let mut out = Vec::new();
+
         for loc in locations {
             let key = format!(
                 "{}:{}:{}:{}:{}",
@@ -401,10 +402,12 @@ impl CalibreLanguageServer {
                 loc.range.end.line,
                 loc.range.end.character
             );
+
             if seen.insert(key) {
                 out.push(loc);
             }
         }
+
         out
     }
 
@@ -412,9 +415,11 @@ impl CalibreLanguageServer {
         edits: HashMap<Url, Vec<TextEdit>>,
     ) -> HashMap<Url, Vec<TextEdit>> {
         let mut deduped: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+
         for (uri, file_edits) in edits {
             let mut seen = HashSet::new();
             let mut out = Vec::new();
+
             for edit in file_edits {
                 let key = format!(
                     "{}:{}:{}:{}",
@@ -423,14 +428,17 @@ impl CalibreLanguageServer {
                     edit.range.end.line,
                     edit.range.end.character
                 );
+
                 if seen.insert(key) {
                     out.push(edit);
                 }
             }
+
             if !out.is_empty() {
                 deduped.insert(uri, out);
             }
         }
+
         deduped
     }
 }

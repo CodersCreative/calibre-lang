@@ -4,10 +4,8 @@ use calibre_mir::{
     tags::context::PackageMetadata, testing::Testing,
 };
 use calibre_parser::{
-    Parser, ParserError,
-    ast::{
-        idents::PotentialDollarIdentifier,
-        nodes::{Node, NodeType},
+    Parser, ParserError, ast::{
+        idents::{ParserText, PotentialDollarIdentifier}, nodes::{Node, NodeType},
     },
 };
 use calibre_std::{get_globals_path, get_stdlib_path};
@@ -700,23 +698,15 @@ fn resolve_binding_name(vm: &VM, short_name: &str) -> String {
         .mappings
         .iter()
         .filter_map(|full| {
-            full.split_once(':')
-                .map(|(_, short)| (full.as_str(), short))
-        })
-        .filter_map(|(full, short)| {
-            if short == short_name {
-                Some(full)
-            } else {
+            if ParserText::temp_name_suffix_matches(full, &short_name) {
+                Some(full.as_str())
+            }else{
                 None
             }
         })
         .collect();
 
-    if let Some(scope_zero) = candidates.iter().find(|name| name.starts_with("var-0-")) {
-        return (*scope_zero).to_string();
-    }
-
-    if candidates.len() == 1 {
+    if candidates.len() > 1 {
         return candidates[0].to_string();
     }
 
