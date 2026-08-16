@@ -58,7 +58,7 @@ fn main() {
                 eprintln!("failed to lock stdin");
                 return;
             };
-            
+
             let Ok(stdout_lock) = async_lsp::stdio::PipeStdout::lock() else {
                 eprintln!("failed to lock stdout");
                 return;
@@ -73,7 +73,7 @@ fn main() {
                 eprintln!("failed to create async stdout");
                 return;
             };
-            
+
             (stdin, stdout)
         };
 

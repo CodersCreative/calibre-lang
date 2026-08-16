@@ -287,7 +287,10 @@ impl Display for MiddleTypeDefType {
                         write!(f, " : {}", dt)?;
                     }
 
-                    if let Some(idx) = default_variant && i == *idx && default_value.is_some() {
+                    if let Some(idx) = default_variant
+                        && i == *idx
+                        && default_value.is_some()
+                    {
                         write!(f, " = {:?}", default_value)?;
                     }
                     writeln!(f, ",")?;
@@ -295,14 +298,17 @@ impl Display for MiddleTypeDefType {
                 write!(f, "}}")
             }
             MiddleTypeDefType::Struct(fields) => {
-                let is_tuple = fields.0.iter().all(|(name, _)| {
-                    name.chars().all(|c| c.is_ascii_digit())
-                });
+                let is_tuple = fields
+                    .0
+                    .iter()
+                    .all(|(name, _)| name.chars().all(|c| c.is_ascii_digit()));
 
                 if fields.0.is_empty() {
                     write!(f, "struct {{}}")
                 } else if is_tuple {
-                    let types: Vec<String> = fields.0.iter()
+                    let types: Vec<String> = fields
+                        .0
+                        .iter()
                         .map(|(_, (data_type, default_val))| {
                             if let Some(val) = default_val {
                                 format!("{} = {:?}", data_type, val)

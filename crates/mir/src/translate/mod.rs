@@ -1519,7 +1519,7 @@ impl MiddleEnvironment {
                         Box::new(body),
                     )
                 };
-                
+
                 let return_call = |name: &str, args: Vec<CallArg>| {
                     Node::new(
                         Span::default(),
@@ -2490,10 +2490,7 @@ impl MiddleEnvironment {
                     };
 
                 let raw_variant = value.to_string();
-                let obj = self
-                    .typing
-                    .objects
-                    .get(&identifier.text);
+                let obj = self.typing.objects.get(&identifier.text);
 
                 let value = if let Some(obj) = obj
                     && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type

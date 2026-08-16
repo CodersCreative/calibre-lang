@@ -5,7 +5,8 @@ pub(crate) const CLEANUP_MS: u64 = 150;
 
 pub(crate) const KEYWORDS: &[&str] = &[
     "fn", "let", "mut", "const", "struct", "enum", "trait", "impl", "if", "else", "match", "for",
-    "while", "in", "return", "break", "continue", "try", "as", "extern", "type", "range", "test", "move", "spawn", "defer", "import", "is"
+    "while", "in", "return", "break", "continue", "try", "as", "extern", "type", "range", "test",
+    "move", "spawn", "defer", "import", "is",
 ];
 
 pub(crate) fn keyword_doc(keyword: &str) -> &'static str {

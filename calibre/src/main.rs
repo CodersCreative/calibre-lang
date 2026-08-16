@@ -1,7 +1,7 @@
 use crate::config::Config;
 use calibre::{CalibreEngine, CalibreError, CompileMode};
 use calibre_diagnostics;
-use calibre_lir::environment::{LirEnvironment};
+use calibre_lir::environment::LirEnvironment;
 use calibre_mir::{
     environment::MiddleEnvironment,
     errors::MiddleErr,

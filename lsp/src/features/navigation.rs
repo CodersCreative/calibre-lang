@@ -1,5 +1,5 @@
-use calibre_mir::ast::MiddleNodeType;
 use super::*;
+use calibre_mir::ast::MiddleNodeType;
 
 impl CalibreLanguageServer {
     pub(super) fn find_scope_at_with(
@@ -22,22 +22,17 @@ impl CalibreLanguageServer {
                 + range.end.character.saturating_sub(range.start.character);
 
             let new_scope = match &node.node_type {
-                MiddleNodeType::FunctionDeclaration { scope_id, .. } => {
-                    Some(*scope_id)
-                }
-                MiddleNodeType::ScopeDeclaration { scope_id, .. } => {
-                    Some(*scope_id)
-                }
-                MiddleNodeType::LoopDeclaration { scope_id, .. } => {
-                    Some(*scope_id)
-                }
+                MiddleNodeType::FunctionDeclaration { scope_id, .. } => Some(*scope_id),
+                MiddleNodeType::ScopeDeclaration { scope_id, .. } => Some(*scope_id),
+                MiddleNodeType::LoopDeclaration { scope_id, .. } => Some(*scope_id),
                 _ => None,
             };
 
-            if let Some(scope_id) = new_scope && span_size < *smallest_span {
-                    *smallest_span = span_size;
-                    *current_scope = scope_id;
-                
+            if let Some(scope_id) = new_scope
+                && span_size < *smallest_span
+            {
+                *smallest_span = span_size;
+                *current_scope = scope_id;
             }
 
             match &node.node_type {
@@ -230,12 +225,12 @@ impl CalibreLanguageServer {
             if start >= bytes.len() {
                 return None;
             }
-            
+
             let mut i = start;
             while i < bytes.len() && (bytes[i] == b' ' || bytes[i] == b'\t') {
                 i += 1;
             }
-            
+
             let begin = i;
             while i < bytes.len()
                 && ((bytes[i] as char).is_ascii_alphanumeric() || bytes[i] == b'_')

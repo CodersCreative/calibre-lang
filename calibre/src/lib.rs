@@ -4,8 +4,10 @@ use calibre_mir::{
     tags::context::PackageMetadata, testing::Testing,
 };
 use calibre_parser::{
-    Parser, ParserError, ast::{
-        idents::{ParserText, PotentialDollarIdentifier}, nodes::{Node, NodeType},
+    Parser, ParserError,
+    ast::{
+        idents::{ParserText, PotentialDollarIdentifier},
+        nodes::{Node, NodeType},
     },
 };
 use calibre_std::{get_globals_path, get_stdlib_path};
@@ -700,7 +702,7 @@ fn resolve_binding_name(vm: &VM, short_name: &str) -> String {
         .filter_map(|full| {
             if ParserText::temp_name_suffix_matches(full, &short_name) {
                 Some(full.as_str())
-            }else{
+            } else {
                 None
             }
         })
