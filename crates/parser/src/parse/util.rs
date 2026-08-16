@@ -494,7 +494,6 @@ pub(super) fn is_keyword(ident: &str) -> bool {
             | "extern"
             | "move"
             | "test"
-            | "bench"
     )
 }
 
