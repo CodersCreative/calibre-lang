@@ -38,7 +38,7 @@ impl MiddleEnvironment {
         let short = function_name.rsplit(".").next().unwrap_or(function_name);
         let mut found: Option<RefMutability> = None;
         for (name, var) in &self.symbols.variables {
-            if !name.ends_with(&format!(".{short}")) {
+            if name != function_name && name.rsplit(".").next().unwrap_or(name) != short {
                 continue;
             }
             if let Some(m) = from_var(var) {
@@ -414,16 +414,15 @@ impl MiddleEnvironment {
         let family = text.rsplit_once(".").map(|(lhs, _)| lhs).unwrap_or(text);
 
         for imp in self.typing.impls.values() {
-            if let Some(mapped) = imp.members.get(member) {
-                let mapped_family = mapped
+            if let Some(mapped) = imp.members.get(member)
+                && mapped
                     .symbol_name
                     .rsplit_once(".")
                     .map(|(lhs, _)| lhs)
-                    .unwrap_or(mapped.symbol_name.as_str());
-
-                if mapped_family == family {
-                    return Some(mapped.symbol_name.clone());
-                }
+                    .unwrap_or(mapped.symbol_name.as_str())
+                    == family
+            {
+                return Some(mapped.symbol_name.clone());
             }
         }
         None
@@ -440,16 +439,7 @@ impl MiddleEnvironment {
         let text = caller_name.text.as_str();
         let family = text.rsplit_once(".").map(|(lhs, _)| lhs).unwrap_or(text);
 
-        let needle = format!("{family}.{member}");
-        let mut found = None;
-        for key in self.symbols.variables.keys() {
-            if key.ends_with(&needle) {
-                found = Some(key.clone());
-                break;
-            }
-        }
-
-        found.or(Some(needle))
+        Some(format!("{family}.{member}"))
     }
 
     fn member_base_type(&mut self, scope: &u64, base: &MiddleNode) -> Option<ParserDataType> {

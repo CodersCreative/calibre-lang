@@ -7,7 +7,8 @@ target/
 **/*.old
 /src/test*
 **.svg
-**/test.txt
+**test.txt
+
 # Node artifacts
 **/build/
 **/prebuilds/

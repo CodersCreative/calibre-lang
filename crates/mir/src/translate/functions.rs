@@ -3,7 +3,6 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::MiddleScope,
-    symbols::FunctionParamDefault,
     tags::TagInfo,
     traversal::NodeVisitor,
 };
@@ -114,32 +113,12 @@ impl MiddleEnvironment {
             .map(|x| x.to_string());
 
         let defaults_key = resolved_name.as_deref().unwrap_or(raw_name.as_str());
-        let mut defaults = self
+        let defaults = self
             .symbols
             .function_param_defaults
             .get(defaults_key)
             .or_else(|| self.symbols.function_param_defaults.get(raw_name.as_str()))
-            .cloned();
-
-        if defaults.is_none() {
-            let mut matched: Option<Vec<FunctionParamDefault>> = None;
-            for (key, value) in &self.symbols.function_param_defaults {
-                let suffix_match = key == raw_name.as_str()
-                    || key.ends_with(&format!(".{raw_name}"))
-                    || key.ends_with(&format!(":{raw_name}"));
-                if !suffix_match {
-                    continue;
-                }
-                if matched.is_some() {
-                    matched = None;
-                    break;
-                }
-                matched = Some(value.clone());
-            }
-            defaults = matched;
-        }
-
-        let defaults = defaults?;
+            .cloned()?;
 
         if !defaults
             .iter()
@@ -183,11 +162,8 @@ impl MiddleEnvironment {
             slots[idx] = Some(node);
         }
 
-        let find_named_index = |name: &str| -> Option<usize> {
-            defaults
-                .iter()
-                .position(|d| ParserText::temp_name_suffix_matches(&d.name, &name))
-        };
+        let find_named_index =
+            |name: &str| -> Option<usize> { defaults.iter().position(|d| d.name == name) };
 
         let mut next_pos = 0usize;
         for arg in args {
@@ -968,7 +944,6 @@ impl MiddleEnvironment {
                     }
                 });
 
-                // TODO Cleanup this shit
                 if let Some(first_ty) = first_ty {
                     let target_ty = first_ty.unwrap_all_refs();
                     let caller_member_name = caller_ident
@@ -978,7 +953,8 @@ impl MiddleEnvironment {
                         .unwrap_or_else(|| caller_ident.to_string());
                     let mapped_from_param =
                         self.symbols.variables.iter().find_map(|(name, var)| {
-                            if !name.ends_with(&format!(".{}", caller_member_name)) {
+                            let suffix = name.rsplit_once(".").map(|(_, member)| member)?;
+                            if suffix != caller_member_name {
                                 return None;
                             }
                             let ParserInnerType::Function { parameters, .. } =

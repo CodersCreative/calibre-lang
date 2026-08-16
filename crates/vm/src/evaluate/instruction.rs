@@ -138,7 +138,6 @@ impl VM {
         }
 
         if let RuntimeValue::Ref(name) = raw_receiver
-            && (!name.contains(':') || name.contains("->"))
             && let Some(ty) = self.concrete_runtime_type_name(&resolved_receiver)
             && ParserText::temp_name_suffix_matches(&ty, name)
         {
@@ -759,7 +758,6 @@ impl VM {
                 }
             }
             VMInstruction::SetLocalName { name, src } => {
-                let full_name = self.local_string(block, *name)?;
                 let interned = self.intern_local_string(block, *name)?;
                 let frame = self.current_frame_mut();
                 frame.local_map.insert(interned, *src);

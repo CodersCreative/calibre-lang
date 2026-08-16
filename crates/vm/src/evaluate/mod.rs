@@ -521,35 +521,6 @@ impl VM {
             return Some(found);
         }
 
-        let owner_tail =
-            ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
-        let owner_base = owner_tail
-            .split_once(":<")
-            .map(|(base, _)| base)
-            .unwrap_or(&owner_tail);
-        let member_name = short_member.unwrap_or(member);
-        let suffix = format!("{}_{}", owner_base.to_ascii_lowercase(), member_name);
-        // TODO Replace
-        // if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&suffix) {
-        //     return Some(resolved);
-        // }
-        let mut matched: Option<String> = None;
-        for name in self.variables.keys() {
-            let tail = ParserText::get_temp_name_suffix(&name).unwrap_or_else(|| name.to_string());
-            if tail != suffix && !name.ends_with(&format!(".{suffix}")) {
-                continue;
-            }
-            if matched.is_some() {
-                matched = None;
-                break;
-            }
-            matched = Some(name.to_string());
-        }
-        if let Some(name) = matched {
-            if let Some((resolved, _)) = self.resolve_runtime_value(&name) {
-                return Some(resolved);
-            }
-        }
         if !ParserText::is_temp_name(&owner) {
             let std_owner = format!("std::{owner}");
             let candidates =
@@ -559,17 +530,6 @@ impl VM {
                     return Some(resolved);
                 }
             }
-            let std_owner_tail = ParserText::get_temp_name_suffix(&std_owner)
-                .unwrap_or_else(|| std_owner.to_string());
-            let std_owner_base = std_owner_tail
-                .split_once(":<")
-                .map(|(base, _)| base)
-                .unwrap_or(&std_owner_tail);
-            let std_suffix = format!("{}_{}", std_owner_base.to_ascii_lowercase(), member_name);
-            // TODO Replace
-            // if let Some((resolved, _)) = self.resolve_suffix_global_runtime_value(&std_suffix) {
-            //     return Some(resolved);
-            // }
         }
         None
     }

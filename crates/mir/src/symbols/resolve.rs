@@ -165,14 +165,40 @@ impl MiddleEnvironment {
     }
 
     pub fn resolve_str(&self, scope: &u64, iden: &str) -> Option<String> {
-        if self.symbols.variables.contains_key(iden) || self.typing.objects.contains_key(iden) {
+        if self.symbols.variables.contains_key(iden)
+            || self.typing.objects.contains_key(iden)
+            || self.typing.trait_defs.contains_key(iden)
+        {
             return Some(iden.to_string());
         }
 
         let scope_ref = self.scoping.scopes.get(scope)?;
-        match scope_ref.mappings.get(iden).cloned() {
-            Some(x) => return Some(x),
-            _ => scope_ref.parent.and_then(|x| self.resolve_str(&x, iden)),
+        match (scope_ref.mappings.get(iden).cloned(), scope_ref.parent) {
+            (Some(x), _) => Some(x),
+            (_, Some(x)) => self.resolve_str(&x, iden),
+            _ => {
+                // TODO Remove this, its a bit of a worst case scenario and costly
+
+                for key in self.typing.trait_defs.keys() {
+                    if key == iden || ParserText::temp_name_suffix_matches(key, &iden) {
+                        return Some(key.clone());
+                    }
+                }
+
+                for key in self.typing.objects.keys() {
+                    if key == iden || ParserText::temp_name_suffix_matches(key, &iden) {
+                        return Some(key.clone());
+                    }
+                }
+
+                for key in self.symbols.variables.keys() {
+                    if key == iden || ParserText::temp_name_suffix_matches(key, &iden) {
+                        return Some(key.clone());
+                    }
+                }
+
+                None
+            }
         }
     }
 
