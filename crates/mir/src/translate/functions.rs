@@ -356,17 +356,8 @@ impl MiddleEnvironment {
         )
     }
 
-    // TODO Cleanup whatever uses this
     pub(crate) fn is_generator_return_type(return_type: &ParserDataType) -> Option<ParserDataType> {
-        let ty_txt = return_type.data_type.to_string();
-        if ty_txt == "gen" || ty_txt.starts_with("gen->") || ty_txt.contains(":gen->") {
-            return Some(ParserDataType::new(
-                return_type.span,
-                ParserInnerType::Auto(None),
-            ));
-        }
-
-        match &return_type.data_type {
+        match &return_type.clone().unwrap_all_refs().data_type {
             ParserInnerType::StructWithGenerics {
                 identifier,
                 generic_types,

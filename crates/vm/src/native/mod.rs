@@ -132,7 +132,7 @@ impl PartialOrd for dyn NativeFunction {
 }
 
 impl VM {
-    // TODO This needs to be redone
+    // TODO This entire system needs to be redone to remove the string handling
     pub(crate) fn build_mapping_index(
         mappings: &[String],
         prefer_nonzero_scope: bool,

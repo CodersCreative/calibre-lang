@@ -2,7 +2,7 @@ const width := 50;
 const steps := 50;
 
 const main := fn => {
-	const half_width := width / 2;
+	const half_width : int = width / 2;
 	let mut cells := [(x > half_width) ? 1 : 0 for x in 0..=width];
 	
 	for step in steps => {

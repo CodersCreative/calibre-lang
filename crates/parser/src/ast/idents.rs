@@ -297,8 +297,13 @@ impl ParserText {
             return true;
         }
 
-        Self::get_temp_name_suffix(&left).unwrap_or(left)
-            == Self::get_temp_name_suffix(&right).unwrap_or(right)
+        let (left, right) = (Self::get_temp_name_suffix(&left).unwrap_or(left),
+        Self::get_temp_name_suffix(&right).unwrap_or(right));
+        if left == right {
+            return true;
+        }
+
+        left.split_once(":<").and_then(|x| Some(x.0 == right.split_once(":<")?.0)).unwrap_or_default()
     }
 }
 

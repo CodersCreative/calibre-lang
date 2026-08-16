@@ -273,6 +273,12 @@ impl MiddleEnvironment {
 
             let inner = self.resolve_potential_new_type(scope, *inner.clone());
 
+            let target_name = if identifier.text == inner.impl_name() {
+                Some(identifier.text.clone())
+            }else{
+                None
+            };
+
             {
                 let scope_ref = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
                     MiddleErr::At(
@@ -287,10 +293,12 @@ impl MiddleEnvironment {
                 );
             }
 
+
+
             if !overloads.is_empty() {
                 for overload in overloads {
                     if let Some(processed) =
-                        self.process_overload(scope, overload, generic_params.clone(), None)?
+                        self.process_overload(scope, overload, generic_params.clone(), target_name.clone())?
                     {
                         self.symbols.overloads.push(processed);
                     }

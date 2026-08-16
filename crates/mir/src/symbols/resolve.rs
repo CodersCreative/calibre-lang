@@ -14,7 +14,7 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::str::FromStr;
+use std::{println, str::FromStr};
 
 impl MiddleEnvironment {
     pub fn resolve_member_fn_type(
@@ -209,7 +209,7 @@ impl MiddleEnvironment {
                 return Some(key.clone());
             }
         }
-
+        
         None
     }
 
