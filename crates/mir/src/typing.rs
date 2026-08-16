@@ -269,7 +269,68 @@ pub enum MiddleTypeDefType {
 
 impl Display for MiddleTypeDefType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            MiddleTypeDefType::Enum {
+                variants,
+                default_variant,
+                default_value,
+            } => {
+                writeln!(f, "enum {{")?;
+                for (i, (name, data_type)) in variants.iter().enumerate() {
+                    if let Some(idx) = default_variant {
+                        if i == *idx {
+                            writeln!(f, "\t@default")?;
+                        }
+                    }
+                    write!(f, "\t{}", name.text)?;
+                    if let Some(dt) = data_type {
+                        write!(f, " : {}", dt)?;
+                    }
+
+                    if let Some(idx) = default_variant && i == *idx && default_value.is_some() {
+                        write!(f, " = {:?}", default_value)?;
+                    }
+                    writeln!(f, ",")?;
+                }
+                write!(f, "}}")
+            }
+            MiddleTypeDefType::Struct(fields) => {
+                let is_tuple = fields.0.iter().all(|(name, _)| {
+                    name.chars().all(|c| c.is_ascii_digit())
+                });
+
+                if fields.0.is_empty() {
+                    write!(f, "struct {{}}")
+                } else if is_tuple {
+                    let types: Vec<String> = fields.0.iter()
+                        .map(|(_, (data_type, default_val))| {
+                            if let Some(val) = default_val {
+                                format!("{} = {:?}", data_type, val)
+                            } else {
+                                format!("{}", data_type)
+                            }
+                        })
+                        .collect();
+                    write!(f, "({})", types.join(", "))
+                } else {
+                    writeln!(f, "struct {{")?;
+                    for (name, (data_type, default_val)) in fields.0.iter() {
+                        write!(f, "\t{} : {}", name, data_type)?;
+                        if let Some(val) = default_val {
+                            write!(f, " = {:?}", val)?;
+                        }
+                        writeln!(f, ",")?;
+                    }
+                    write!(f, "}}")
+                }
+            }
+            MiddleTypeDefType::NewType(data_type) => {
+                write!(f, "type {}", data_type)
+            }
+            MiddleTypeDefType::Trait => {
+                write!(f, "trait")
+            }
+        }
     }
 }
 
