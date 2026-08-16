@@ -344,17 +344,23 @@ impl MiddleEnvironment {
                 }
             }
 
-            self.scoping
-                .scopes
-                .get_mut(scope)
-                .ok_or_else(|| {
+            {
+                let scope_ref = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
                     MiddleErr::At(
                         span,
                         Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
                     )
-                })?
-                .mappings
-                .insert(base_ident.text.clone(), base_ident.text.clone());
+                })?;
+
+                scope_ref
+                    .mappings
+                    .insert(base_ident.text.clone(), base_ident.text.clone());
+
+                scope_ref.type_mappings.insert(
+                    ParserInnerType::Struct(base_ident.text.clone()),
+                    ParserInnerType::Struct(base_ident.text.clone()),
+                );
+            }
 
             return Ok(MiddleNode {
                 node_type: MiddleNodeType::EmptyLine,
@@ -381,13 +387,16 @@ impl MiddleEnvironment {
                 _ => false,
             };
 
+        let default_ident = self.resolve_str(scope, "Default");
         self.typing.objects.insert(
             new_name.clone(),
             MiddleObject {
                 object_type: object.clone(),
                 variables: FxHashMap::default(),
-                traits: if has_default {
-                    vec!["Default".to_string()]
+                traits: if let Some(x) = default_ident
+                    && has_default
+                {
+                    vec![x]
                 } else {
                     Vec::new()
                 },
@@ -406,6 +415,10 @@ impl MiddleEnvironment {
             scope
                 .mappings
                 .insert(identifier.text.clone(), new_name.clone());
+            scope.type_mappings.insert(
+                ParserInnerType::Struct(identifier.text.clone()),
+                ParserInnerType::Struct(new_name.clone()),
+            );
 
             (
                 scope

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
@@ -2673,77 +2675,50 @@ impl MiddleEnvironment {
                         }
                     });
                 };
-                let mut imported_map: FxHashMap<String, String> = self
-                    .scoping
-                    .scopes
-                    .get(&new_scope)
-                    .ok_or_else(|| {
+
+                let (ident_map, type_map) = {
+                    let scope = self.scoping.scopes.get(&new_scope).ok_or_else(|| {
                         MiddleErr::At(
                             node.span,
                             Box::new(MiddleErr::Internal(format!("missing scope {new_scope}"))),
                         )
-                    })?
-                    .mappings
-                    .clone();
+                    })?;
 
-                let mut normalized_map = FxHashMap::default();
-                for (key, value) in &imported_map {
-                    let public = key
-                        .rsplit_once(':')
-                        .map(|(_, short)| short)
-                        .unwrap_or(key.as_str());
-                    normalized_map
-                        .entry(public.to_string())
-                        .or_insert_with(|| value.clone());
-                }
-                imported_map.extend(normalized_map);
-
-                let scope_marker = format!("-{}-", new_scope);
-                for object_name in self.typing.objects.keys() {
-                    if object_name.contains(&scope_marker)
-                        && let Some((_, short)) = object_name.split_once(':')
-                    {
-                        imported_map
-                            .entry(short.to_string())
-                            .or_insert_with(|| object_name.clone());
-                    }
-                }
+                    (scope.mappings.clone(), scope.type_mappings.clone())
+                };
 
                 if &values[0].text == "*" {
-                    for (key, value) in &imported_map {
-                        let key = key
-                            .rsplit_once(':')
-                            .map(|(_, short)| short)
-                            .unwrap_or(key.as_str());
-                        if key.starts_with("__") {
-                            continue;
+                    let scope = self.scoping.scopes.get_mut(scope).ok_or(MiddleErr::At(
+                        node.span,
+                        Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                    ))?;
+
+                    for (key, value) in ident_map {
+                        if !scope.mappings.contains_key(&key) {
+                            scope.mappings.insert(key, value);
                         }
+                    }
 
-                        let scope = self.scoping.scopes.get_mut(scope).ok_or(MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                        ))?;
-
-                        if !scope.mappings.contains_key(key) {
-                            scope.mappings.insert(key.to_string(), value.clone());
+                    for (key, value) in type_map {
+                        if !scope.type_mappings.contains_key(&key) {
+                            scope.type_mappings.insert(key, value);
                         }
                     }
                 } else {
+                    let scope = self.scoping.scopes.get_mut(scope).ok_or(MiddleErr::At(
+                        node.span,
+                        Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
+                    ))?;
+
                     for key in values {
-                        if let Some(value) = imported_map.get(&key.text).cloned() {
-                            self.scoping
-                                .scopes
-                                .get_mut(scope)
-                                .ok_or_else(|| {
-                                    MiddleErr::At(
-                                        node.span,
-                                        Box::new(MiddleErr::Internal(format!(
-                                            "missing scope {scope}"
-                                        ))),
-                                    )
-                                })?
-                                .mappings
-                                .insert(key.to_string(), value);
+                        if let Some(value) = ident_map.get(&key.text).cloned() {
+                            scope.mappings.insert(key.to_string(), value);
+                            continue;
+                        }
+
+                        let key_type = ParserInnerType::from_str(&key).ok().unwrap();
+                        if let Some(value) = type_map.get(&key_type).cloned() {
+                            scope.type_mappings.insert(key_type, value);
                         } else {
                             return Err(MiddleErr::At(
                                 key.span,
