@@ -8,12 +8,14 @@ use std::{env, error::Error, path::PathBuf, str::FromStr};
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(index(1))]
-    path: Option<String>,
+    input: Option<String>,
+    #[arg(long)]
+    stdin: bool,
     #[arg(short, long)]
     output: Option<String>,
     #[arg(short, long)]
     all: bool,
-    #[arg(short = 'r', long = "recursive")]
+    #[arg(short, long)]
     recursive: bool,
     #[arg(long, default_value_t = 200)]
     max_width: usize,
@@ -23,32 +25,48 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
     let cwd = env::current_dir()?;
-    let path = if let Some(p) = args.path {
-        PathBuf::from_str(&p)?
-    } else if args.recursive {
-        cwd.clone()
-    } else if args.all {
-        default_all_entry_path(&cwd)
-    } else {
-        PathBuf::from_str("./main.cal")?
-    };
+
     let mut formatter = Formatter {
         max_width: args.max_width,
         ..Default::default()
     };
 
-    let result = if args.recursive {
-        format_recursive(&mut formatter, &path)
-    } else if args.all {
-        format_all(&mut formatter, &path)
-    } else {
-        let output = if let Some(x) = args.output {
-            PathBuf::from_str(&x)?
+    let result = if args.stdin {
+        if let Some(x) = args.input {
+            match formatter.start_format(&x, None) {
+                Ok(x) => {
+                    print!("{x}");
+                    return Ok(());
+                }
+                Err(e) => Err(e),
+            }
         } else {
-            path.clone()
+            return Ok(());
+        }
+    } else {
+        let path = if let Some(x) = args.input {
+            PathBuf::from_str(&x)?
+        } else if args.recursive {
+            cwd.clone()
+        } else if args.all {
+            default_all_entry_path(&cwd)
+        } else {
+            PathBuf::from_str("./main.cal")?
         };
 
-        format_file(&mut formatter, &path, &output)
+        if args.recursive {
+            format_recursive(&mut formatter, &path)
+        } else if args.all {
+            format_all(&mut formatter, &path)
+        } else {
+            let output = if let Some(x) = args.output {
+                PathBuf::from_str(&x)?
+            } else {
+                path.clone()
+            };
+
+            format_file(&mut formatter, &path, &output)
+        }
     };
 
     if let Err(err) = result {
