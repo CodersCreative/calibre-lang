@@ -100,7 +100,6 @@ pub struct VMCaches {
     call: FxHashMap<String, Arc<VMFunction>>,
     callsite: FxHashMap<(usize, usize, u32), Arc<VMFunction>>,
     locals: FxHashMap<usize, Arc<FxHashMap<Arc<str>, Reg>>>,
-    globals_id: FxHashMap<String, usize>,
     local_str: FxHashMap<(u32, u16), Arc<str>>,
 }
 
@@ -110,7 +109,6 @@ impl Default for VMCaches {
             call: FxHashMap::default(),
             callsite: FxHashMap::default(),
             locals: FxHashMap::default(),
-            globals_id: FxHashMap::default(),
             local_str: FxHashMap::default(),
         }
     }

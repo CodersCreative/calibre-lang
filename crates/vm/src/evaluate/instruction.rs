@@ -30,11 +30,7 @@ impl VM {
         }
 
         for name in names {
-            if let Some(id) = self.global_id_cached(name.as_ref()) {
-                let _ = self.variables.set_by_id(id, value.clone());
-            } else {
-                self.variables.insert(name.as_ref(), value.clone());
-            }
+            self.variables.insert(name.as_ref(), value.clone());
         }
     }
 
@@ -165,7 +161,7 @@ impl VM {
                     .map(|(name, _)| name.clone());
 
                 if let Some(name) = local_name
-                    && let Some(id) = self.global_id_cached(name.as_ref())
+                    && let Some(id) = self.variables.id_of(name.as_ref())
                 {
                     RuntimeValue::VarRef(id)
                 } else {
@@ -675,9 +671,7 @@ impl VM {
                 let name = self.local_string(block, *name)?;
                 let value = match self.resolve_var_name(name) {
                     Some(VarName::Var(var)) => {
-                        if let Some(id) = self.global_id_cached(&var) {
-                            RuntimeValue::VarRef(id)
-                        } else if let Some(v) = self.variables.get(&var) {
+                        if let Some(v) = self.variables.get(&var) {
                             self.resolve_saveable_runtime_value_ref(v)
                         } else {
                             RuntimeValue::Null
@@ -724,7 +718,6 @@ impl VM {
                 let name = self.local_string(block, *name)?;
                 match self.resolve_var_name(name) {
                     Some(VarName::Var(var)) => {
-                        self.caches.globals_id.remove(var.as_str());
                         if let Some(val) = self.variables.remove(&var) {
                             self.drop_runtime_value(val);
                         }
@@ -738,26 +731,7 @@ impl VM {
             VMInstruction::StoreGlobal { name, src } => {
                 let name = self.local_string(block, *name)?;
                 let mut value = self.get_reg_value(*src).clone();
-
-                let is_local_style = ParserText::is_temp_name(&name);
-
-                if is_local_style {
-                    let interned = self.intern_name(name);
-                    let frame = self.current_frame_mut();
-                    frame.local_map.insert(interned, *src);
-                    let frame_idx = self.frames.len().saturating_sub(1);
-                    value = RuntimeValue::RegRef {
-                        frame: frame_idx,
-                        reg: *src,
-                    };
-                }
-
-                if let Some(id) = self.global_id_cached(name) {
-                    let _ = self.variables.set_by_id(id, value);
-                } else {
-                    let id = self.variables.insert_with_id(name, value);
-                    self.caches.globals_id.insert(name.to_string(), id);
-                }
+                let id = self.variables.insert_with_id(name, value);
             }
             VMInstruction::SetLocalName { name, src } => {
                 let interned = self.intern_local_string(block, *name)?;
@@ -768,31 +742,27 @@ impl VM {
                 let name = self.local_string(block, *name)?;
                 if let Some((frame, reg)) = self.find_local_reg_by_name(name) {
                     self.set_reg_value(*dst, RuntimeValue::RegRef { frame, reg });
-                } else if let Some(id) = self.global_id_cached(name) {
-                    if let Some(RuntimeValue::RegRef { frame, reg }) = self.variables.get_by_id(id)
-                    {
-                        self.set_reg_value(
-                            *dst,
-                            RuntimeValue::RegRef {
-                                frame: *frame,
-                                reg: *reg,
-                            },
-                        );
-                    } else if let Some(value) = self.variables.get_by_id(id)
-                        && value.should_pass_by_reg_ref()
-                        && let Some(reg) = self.find_local_reg_for_value(value)
-                    {
-                        self.set_reg_value(
-                            *dst,
-                            RuntimeValue::RegRef {
-                                frame: self.frames.len().saturating_sub(1),
-                                reg,
-                            },
-                        );
-                    } else {
-                        self.set_reg_value(*dst, RuntimeValue::VarRef(id));
-                    }
-                } else {
+                } else if let Some(RuntimeValue::RegRef { frame, reg }) = self.variables.get(name)
+                {
+                    self.set_reg_value(
+                        *dst,
+                        RuntimeValue::RegRef {
+                            frame: *frame,
+                            reg: *reg,
+                        },
+                    );
+                } else if let Some(value) = self.variables.get(name)
+                    && value.should_pass_by_reg_ref()
+                    && let Some(reg) = self.find_local_reg_for_value(value)
+                {
+                    self.set_reg_value(
+                        *dst,
+                        RuntimeValue::RegRef {
+                            frame: self.frames.len().saturating_sub(1),
+                            reg,
+                        },
+                    );
+                }  else {
                     self.set_reg_value(*dst, RuntimeValue::Ref(name.to_string()));
                 }
             }
@@ -2117,8 +2087,7 @@ impl VM {
                     RuntimeValue::VarRef(id) => RuntimeValue::VarRef(id),
                     RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef { frame, reg },
                     other => if let Some(name) = self.find_local_name_for_reg(*value) {
-                        if let Some(id) = self.global_id_cached(name.as_ref())
-                            && self.variables.get_by_id(id).is_some()
+                        if let Some(id) = self.variables.id_of(name.as_ref())
                         {
                             RuntimeValue::VarRef(id)
                         } else {
@@ -2198,144 +2167,6 @@ impl VM {
                         guard.set_value(value);
                     }
                     _ => return Err(RuntimeError::InvalidBytecode("invalid ref".to_string())),
-                }
-            }
-            VMInstruction::ListAppend {
-                target,
-                value,
-                right,
-            } => {
-                let value = self.get_reg_value(*value).clone();
-
-                if let Some(RuntimeValue::List(data)) = self.get_mut_reg_value(*target) {
-                    if *right {
-                        dumpster::sync::Gc::make_mut(data).0.insert(0, value);
-                    } else {
-                        dumpster::sync::Gc::make_mut(data).0.push(value);
-                    };
-                } else {
-                    let target_val = self.get_reg_value(*target).clone();
-
-                    match target_val {
-                        RuntimeValue::List(data) => {
-                            let mut data = data.clone();
-
-                            if *right {
-                                dumpster::sync::Gc::make_mut(&mut data).0.insert(0, value);
-                            } else {
-                                dumpster::sync::Gc::make_mut(&mut data).0.push(value);
-                            }
-
-                            self.set_reg_value(*target, RuntimeValue::List(data));
-                        }
-                        RuntimeValue::Ref(name) => {
-                            if let Some(RuntimeValue::List(data)) = self.variables.get_mut(&name) {
-                                if *right {
-                                    dumpster::sync::Gc::make_mut(data).0.insert(0, value);
-                                } else {
-                                    dumpster::sync::Gc::make_mut(data).0.push(value);
-                                }
-                            }
-                        }
-                        RuntimeValue::VarRef(id) => {
-                            if let Some(RuntimeValue::List(data)) = self.variables.get_mut_by_id(id)
-                            {
-                                if *right {
-                                    dumpster::sync::Gc::make_mut(data).0.insert(0, value);
-                                } else {
-                                    dumpster::sync::Gc::make_mut(data).0.push(value);
-                                }
-                            }
-                        }
-                        RuntimeValue::RegRef { frame, reg } => {
-                            if let Some(RuntimeValue::List(data)) =
-                                self.get_mut_reg_value_in_frame(frame, reg)
-                            {
-                                if *right {
-                                    dumpster::sync::Gc::make_mut(data).0.insert(0, value);
-                                } else {
-                                    dumpster::sync::Gc::make_mut(data).0.push(value);
-                                }
-                            }
-                        }
-                        _ => {
-                            return Err(RuntimeError::InvalidBytecode(
-                                "ListAppend on non-list".to_string(),
-                            ));
-                        }
-                    }
-                }
-            }
-            VMInstruction::StrConcat {
-                target,
-                value,
-                right,
-            } => {
-                let value = self.get_reg_value(*value).clone();
-                let target_val = self.get_reg_value(*target);
-                let target_val = self
-                    .resolve_value_for_op_ref(target_val)
-                    .unwrap_or_else(|_| target_val.clone());
-
-                match target_val {
-                    RuntimeValue::Str(data) => {
-                        let mut value = value.display(self);
-                        let mut data = data.lock().unwrap();
-                        if *right {
-                            value.push_str(data.as_str());
-                            *data = value;
-                        } else {
-                            data.push_str(&value);
-                        }
-                    }
-                    RuntimeValue::Null => {
-                        let s = value.display(self);
-                        self.set_reg_value(*target, RuntimeValue::Str(Arc::new(Mutex::new(s))));
-                    }
-                    RuntimeValue::Ref(name) => {
-                        if let Some(RuntimeValue::Str(data)) = self.variables.get(&name).cloned() {
-                        let mut value = value.display(self);
-                        let mut data = data.lock().unwrap();
-                        if *right {
-                            value.push_str(data.as_str());
-                            *data = value;
-                        } else {
-                            data.push_str(&value);
-                        }
-                        }
-                    }
-                    RuntimeValue::VarRef(id) => {
-                        if let Some(RuntimeValue::Str(data)) = self.variables.get_by_id(id).cloned()
-                        {
-                        let mut value = value.display(self);
-                        let mut data = data.lock().unwrap();
-                        if *right {
-                            value.push_str(data.as_str());
-                            *data = value;
-                        } else {
-                            data.push_str(&value);
-                        }
-                        }
-                    }
-                    RuntimeValue::RegRef { frame, reg } => {
-                        if let RuntimeValue::Str(data) =
-                            self.get_reg_value_in_frame(frame, reg).clone()
-                        {
-                        let mut value = value.display(self);
-                        let mut data = data.lock().unwrap();
-                        if *right {
-                            value.push_str(data.as_str());
-                            *data = value;
-                        } else {
-                            data.push_str(&value);
-                        }
-                        }
-                    }
-                    _ => {
-                        return Err(RuntimeError::InvalidBytecode(
-                            "StrConcat on non-string".to_string(),
-                        ));
-                    }
                 }
             }
             VMInstruction::Jump(target) => return Ok(TerminateValue::Jump(*target)),

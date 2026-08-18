@@ -210,16 +210,6 @@ impl VM {
     }
 
     #[inline]
-    pub(crate) fn global_id_cached(&mut self, name: &str) -> Option<usize> {
-        if let Some(id) = self.caches.globals_id.get(name).copied() {
-            return Some(id);
-        }
-        let id = self.variables.id_of(name)?;
-        self.caches.globals_id.insert(name.to_string(), id);
-        Some(id)
-    }
-
-    #[inline]
     fn checked_local_string_idx(&self, block: &VMBlock, idx: u16) -> Result<usize, RuntimeError> {
         let idx = idx as usize;
         if idx < block.local_strings.len() {

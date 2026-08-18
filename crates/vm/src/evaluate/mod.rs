@@ -870,10 +870,7 @@ impl VM {
             return Ok(());
         }
         let registry = Arc::clone(&self.registry);
-        for (name, global) in registry.globals.iter() {
-            if registry.functions.contains_key(name) {
-                continue;
-            }
+        for (_name, global) in registry.globals.iter() {
             self.run_global(global)?;
         }
         Ok(())
