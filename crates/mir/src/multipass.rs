@@ -73,6 +73,7 @@ fn classify_statement(node: &Node) -> StatementClass {
         NodeType::VariableDeclaration { var_type, .. } if *var_type == VarType::Constant => {
             StatementClass::Constant
         }
+        NodeType::ExternFunctionDeclaration { .. } => StatementClass::Constant,
         NodeType::Tag { node, tag, .. } => match tag.text.as_str() {
             "init" => StatementClass::Init,
             "fin" => StatementClass::Fin,
@@ -101,6 +102,10 @@ fn order_declarations_by_dependencies(types: &[Node], constants: &[Node]) -> Vec
     for (i, node) in all_declarations.iter().enumerate() {
         match &node.node_type {
             NodeType::TypeDeclaration { identifier, .. } => {
+                let name = identifier.to_string();
+                decl_names.insert(name, i);
+            }
+            NodeType::ExternFunctionDeclaration { identifier, .. } => {
                 let name = identifier.to_string();
                 decl_names.insert(name, i);
             }
@@ -371,6 +376,7 @@ impl MiddleEnvironment {
         if self.symbols.variables.contains_key(&new_name) {
             return;
         }
+
         self.symbols.variables.insert(
             new_name.clone(),
             MiddleVariable {

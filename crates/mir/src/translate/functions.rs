@@ -562,7 +562,13 @@ impl MiddleEnvironment {
                     .err_at_current(MiddleErr::Scope(identifier.to_string()))
             })?;
 
-        let new_name = ParserText::temp_name_with_suffix(ident.trim(), span).text;
+        let new_name = self
+            .scoping
+            .scope_or_err(scope)?
+            .mappings
+            .get(&ident.text)
+            .cloned()
+            .unwrap_or_else(|| ParserText::temp_name_with_suffix(ident.trim(), span).text);
 
         let mut params = Vec::new();
         for ty in parameters {
