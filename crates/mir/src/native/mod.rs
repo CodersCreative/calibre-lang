@@ -32,7 +32,6 @@ impl Scoping {
             path: path.clone(),
             mappings: FxHashMap::default(),
             type_mappings: FxHashMap::default(),
-            defined: Vec::new(),
             defers: Vec::new(),
         });
 
@@ -60,7 +59,6 @@ impl MiddleEnvironment {
             path: path.clone(),
             mappings: FxHashMap::default(),
             type_mappings: FxHashMap::default(),
-            defined: Vec::new(),
             defers: Vec::new(),
         });
 

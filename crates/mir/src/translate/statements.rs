@@ -182,11 +182,6 @@ impl MiddleEnvironment {
                     data_type.clone(),
                     VarType::Mutable,
                 )?;
-
-                self.scoping
-                    .scope_mut_or_err(&new_scope)?
-                    .defined
-                    .push(new_name.text.clone());
             }
 
             self.evaluate(&new_scope, value)

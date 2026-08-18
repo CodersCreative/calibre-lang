@@ -652,8 +652,6 @@ impl MiddleEnvironment {
                 VarType::Mutable,
             )?;
 
-            let scope_ref = self.scoping.scope_mut_or_err(&new_scope)?;
-            scope_ref.defined.push(new_name.clone());
             params.push((
                 ParserText::from(new_name),
                 data_type,
@@ -674,9 +672,6 @@ impl MiddleEnvironment {
                 caller_context_type.clone(),
                 VarType::Mutable,
             )?;
-
-            let scope_ref = self.scoping.scope_mut_or_err(&new_scope)?;
-            scope_ref.defined.push(caller_context_name.clone());
 
             params.push((
                 ParserText::from(caller_context_name),
@@ -1130,7 +1125,6 @@ impl MiddleEnvironment {
                     macros: FxHashMap::default(),
                     macro_args: FxHashMap::default(),
                     children: FxHashMap::default(),
-                    defined: Vec::new(),
                     namespace: "main".to_string(),
                     path: std::path::PathBuf::from("unknown.cal"),
                     defers: Vec::new(),

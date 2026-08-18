@@ -7,7 +7,6 @@ use crate::{
     variables::VariableStore,
 };
 use calibre_lir::ast::BlockId;
-use calibre_parser::ast::idents::ParserText;
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::OnceLock;
@@ -587,19 +586,8 @@ impl VM {
                     if !seen_refs.insert(pointer.clone()) {
                         return Err(RuntimeError::DanglingRef(format!("ref-cycle({})", pointer)));
                     }
-                    let local_style = ParserText::is_temp_name(pointer);
-                    let v = if local_style {
-                        if let Some(local) = resolve_local_ref(pointer) {
-                            local
-                        } else if let Some(v) = self.variables.get(pointer).cloned() {
-                            if matches!(&v, RuntimeValue::Ref(next) if next == pointer) {
-                                return Err(RuntimeError::DanglingRef(pointer.to_string()));
-                            }
-                            v
-                        } else {
-                            return Err(RuntimeError::DanglingRef(pointer.to_string()));
-                        }
-                    } else if let Some(v) = self.variables.get(pointer).cloned() {
+
+                    let v = if let Some(v) = self.variables.get(pointer).cloned() {
                         if matches!(&v, RuntimeValue::Ref(next) if next == pointer) {
                             if let Some(local) = resolve_local_ref(pointer) {
                                 local

@@ -870,26 +870,6 @@ impl MiddleEnvironment {
                         }
                     }
 
-                    let defined = self
-                        .scoping
-                        .scopes
-                        .get(scope)
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                            )
-                        })?
-                        .defined
-                        .clone();
-
-                    for value in defined {
-                        lst.push(MiddleNode::new(
-                            MiddleNodeType::Drop(value.into()),
-                            self.context.current_span(),
-                        ))
-                    }
-
                     let break_node = MiddleNode::new(
                         MiddleNodeType::Break {
                             label: label_text.or(raw_label_text).map(Into::into),
@@ -960,25 +940,6 @@ impl MiddleEnvironment {
                         lst.push(self.evaluate(scope, inject));
                     }
 
-                    let defined = self
-                        .scoping
-                        .scopes
-                        .get(scope)
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                            )
-                        })?
-                        .defined
-                        .clone();
-                    for value in defined {
-                        lst.push(MiddleNode::new(
-                            MiddleNodeType::Drop(value.into()),
-                            self.context.current_span(),
-                        ))
-                    }
-
                     let cont_node = MiddleNode::new(
                         MiddleNodeType::Continue {
                             label: label_text.or(raw_label_text).map(Into::into),
@@ -1010,19 +971,7 @@ impl MiddleEnvironment {
                     value: {
                         let mut lst = Vec::new();
 
-                        let mut in_return = Vec::new();
-
-                        let value = if let Some(x) = value {
-                            let x = self.evaluate(scope, *x);
-                            in_return = x
-                                .identifiers_used()
-                                .into_iter()
-                                .map(|x| x.to_string())
-                                .collect();
-                            Some(x)
-                        } else {
-                            None
-                        };
+                        let value = value.map(|x| self.evaluate(scope, *x));
 
                         let chain_defers = self.scoping.collect_defers_until(scope, None);
                         for x in chain_defers {
@@ -1031,27 +980,6 @@ impl MiddleEnvironment {
 
                         for x in self.symbols.func_defers.clone() {
                             lst.push(self.evaluate(scope, x));
-                        }
-
-                        for value in self
-                            .scoping
-                            .scopes
-                            .get(scope)
-                            .ok_or_else(|| {
-                                MiddleErr::At(
-                                    node.span,
-                                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                                )
-                            })?
-                            .defined
-                            .iter()
-                            .filter(|x| !in_return.contains(x))
-                            .cloned()
-                        {
-                            lst.push(MiddleNode::new(
-                                MiddleNodeType::Drop(value.into()),
-                                self.context.current_span(),
-                            ))
                         }
 
                         if lst.is_empty() {

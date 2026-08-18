@@ -129,7 +129,6 @@ impl Scoping {
                 children: FxHashMap::default(),
                 mappings: FxHashMap::default(),
                 type_mappings: FxHashMap::default(),
-                defined: Vec::new(),
                 defers: Vec::new(),
                 path,
             };
@@ -158,7 +157,6 @@ impl Scoping {
                 children: FxHashMap::default(),
                 mappings: FxHashMap::default(),
                 type_mappings: FxHashMap::default(),
-                defined: Vec::new(),
                 defers: Vec::new(),
                 path,
             };
@@ -342,7 +340,6 @@ fn empty_scope() -> &'static MiddleScope {
         children: FxHashMap::default(),
         namespace: "empty".to_string(),
         path: PathBuf::new(),
-        defined: Vec::new(),
         defers: Vec::new(),
     })
 }
@@ -366,7 +363,6 @@ pub struct MiddleScope {
     pub children: FxHashMap<String, u64>,
     pub namespace: String,
     pub path: PathBuf,
-    pub defined: Vec<String>,
     pub defers: Vec<Node>,
 }
 
