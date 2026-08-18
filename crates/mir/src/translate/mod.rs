@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use calibre_parser::{
-    IdentifiersUsed, Span,
+    Span,
     ast::{
         ObjectMap, ObjectType, Operator, RefMutability,
         comparison::{BooleanOperator, ComparisonOperator},

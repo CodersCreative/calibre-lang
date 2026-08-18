@@ -96,14 +96,7 @@ impl<'a> BlockLoweringCtx<'a> {
                     let name_idx = self.add_string(dest.to_string());
                     self.map.insert(dest.to_string(), target);
                     self.emit(
-                        VMInstruction::StoreGlobal {
-                            name: name_idx,
-                            src: target,
-                        },
-                        node.span,
-                    );
-                    self.emit(
-                        VMInstruction::SetLocalName {
+                        VMInstruction::StoreVar {
                             name: name_idx,
                             src: target,
                         },
@@ -111,7 +104,7 @@ impl<'a> BlockLoweringCtx<'a> {
                     );
                 } else {
                     let name = self.add_string(dest.to_string());
-                    self.emit(VMInstruction::StoreGlobal { name, src: reg }, node.span);
+                    self.emit(VMInstruction::StoreVar { name, src: reg }, node.span);
                 }
             }
             LirNodeType::Assign { dest, value } => match dest {
@@ -131,14 +124,7 @@ impl<'a> BlockLoweringCtx<'a> {
                         }
                         self.map.insert(dest.to_string(), target);
                         self.emit(
-                            VMInstruction::SetLocalName {
-                                name: name_idx,
-                                src: target,
-                            },
-                            node.span,
-                        );
-                        self.emit(
-                            VMInstruction::StoreGlobal {
+                            VMInstruction::StoreVar {
                                 name: name_idx,
                                 src: target,
                             },
@@ -146,7 +132,7 @@ impl<'a> BlockLoweringCtx<'a> {
                         );
                     } else {
                         self.emit(
-                            VMInstruction::StoreGlobal {
+                            VMInstruction::StoreVar {
                                 name: name_idx,
                                 src: reg,
                             },
@@ -298,7 +284,7 @@ impl<'a> BlockLoweringCtx<'a> {
                 if self.captures.contains(name.as_ref()) || !self.map.contains_key(name.as_ref()) {
                     let idx = self.add_string(name.to_string());
                     let dst = self.alloc_reg();
-                    self.emit(VMInstruction::MoveGlobal { dst, name: idx }, span);
+                    self.emit(VMInstruction::MoveVar { dst, name: idx }, span);
                     dst
                 } else {
                     self.map
@@ -309,7 +295,7 @@ impl<'a> BlockLoweringCtx<'a> {
             LirNodeType::Drop(name) => {
                 if self.captures.contains(name.as_ref()) || !self.map.contains_key(name.as_ref()) {
                     let idx = self.add_string(name.to_string());
-                    self.emit(VMInstruction::DropGlobal { name: idx }, span);
+                    self.emit(VMInstruction::DropVar { name: idx }, span);
                 } else {
                     self.map.insert(name.to_string(), self.null_reg);
                 }
@@ -323,7 +309,7 @@ impl<'a> BlockLoweringCtx<'a> {
                 } else {
                     let idx = self.add_string(name.to_string());
                     let dst = self.alloc_reg();
-                    self.emit(VMInstruction::LoadGlobal { dst, name: idx }, span);
+                    self.emit(VMInstruction::LoadVar { dst, name: idx }, span);
                     dst
                 }
             }
@@ -443,7 +429,7 @@ impl<'a> BlockLoweringCtx<'a> {
                 LirNodeType::Load(name) => {
                     let idx = self.add_string(name.to_string());
                     let dst = self.alloc_reg();
-                    self.emit(VMInstruction::LoadGlobalRef { dst, name: idx }, span);
+                    self.emit(VMInstruction::LoadVarRef { dst, name: idx }, span);
                     dst
                 }
                 other => {
@@ -456,7 +442,7 @@ impl<'a> BlockLoweringCtx<'a> {
             LirNodeType::RefLoad(name) => {
                 let idx = self.add_string(name.to_string());
                 let dst = self.alloc_reg();
-                self.emit(VMInstruction::LoadGlobalRef { dst, name: idx }, span);
+                self.emit(VMInstruction::LoadVarRef { dst, name: idx }, span);
                 dst
             }
             LirNodeType::As(value, data_type, failure_mode) => {

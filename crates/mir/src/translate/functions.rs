@@ -1206,9 +1206,11 @@ impl MiddleEnvironment {
 
                             let list_arg = if args.len() == 1 {
                                 let arg: Node = args.remove(0).into();
-                                let is_already_list = matches!(arg.node_type, NodeType::ListLiteral(_, _))
-                                    || self.resolve_type_from_node(scope, &arg)
-                                        .is_some_and(|dt| dt.is_list());
+                                let is_already_list =
+                                    matches!(arg.node_type, NodeType::ListLiteral(_, _))
+                                        || self
+                                            .resolve_type_from_node(scope, &arg)
+                                            .is_some_and(|dt| dt.is_list());
                                 if is_already_list {
                                     arg
                                 } else {

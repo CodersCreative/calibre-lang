@@ -86,23 +86,6 @@ impl VM {
             return RuntimeValue::VarRef(id);
         }
 
-        for (frame_idx, frame) in self.frames.iter().enumerate().rev() {
-            if let Some(reg) = frame.local_map.get(name).copied() {
-                return RuntimeValue::RegRef {
-                    frame: frame_idx,
-                    reg,
-                };
-            }
-            if let Some(base) = frame.local_map_base.as_ref() {
-                if let Some(reg) = base.get(name).copied() {
-                    return RuntimeValue::RegRef {
-                        frame: frame_idx,
-                        reg,
-                    };
-                }
-            }
-        }
-
         if let Some(id) = self.variables.id_of(name) {
             return RuntimeValue::VarRef(id);
         }

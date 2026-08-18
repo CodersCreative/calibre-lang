@@ -8,63 +8,6 @@ use crate::{
 use calibre_parser::ast::{idents::ParserText, nodes::AsFailureMode};
 
 impl VM {
-    pub fn sync_local_reg_value(&mut self, frame_idx: usize, reg: u16, value: RuntimeValue) {
-        let Some(frame) = self.frames.get(frame_idx) else {
-            return;
-        };
-
-        let mut names = Vec::new();
-
-        for (name, mapped) in frame.local_map.iter() {
-            if *mapped == reg {
-                names.push(name.clone());
-            }
-        }
-
-        if let Some(base) = frame.local_map_base.as_ref() {
-            for (name, mapped) in base.iter() {
-                if *mapped == reg {
-                    names.push(name.clone());
-                }
-            }
-        }
-
-        for name in names {
-            self.variables.insert(name.as_ref(), value.clone());
-        }
-    }
-
-    fn find_local_name_for_reg(&self, reg: u16) -> Option<Arc<str>> {
-        let frame = self.current_frame();
-
-        if let Some((name, _)) = frame.local_map.iter().find(|(_, mapped)| **mapped == reg) {
-            return Some(name.clone());
-        }
-
-        if let Some(base) = frame.local_map_base.as_ref()
-            && let Some((name, _)) = base.iter().find(|(_, mapped)| **mapped == reg)
-        {
-            return Some(name.clone());
-        }
-
-        None
-    }
-
-    fn find_local_reg_by_name(&self, name: &str) -> Option<(usize, u16)> {
-        for (frame_idx, frame) in self.frames.iter().enumerate().rev() {
-            if let Some(reg) = frame.local_map.get(name) {
-                return Some((frame_idx, *reg));
-            }
-
-            if let Some(base) = frame.local_map_base.as_ref()
-                && let Some(reg) = base.get(name)
-            {
-                return Some((frame_idx, *reg));
-            }
-        }
-
-        None
-    }
     #[inline]
     fn propagate_member_source_alias(&mut self, src: u16, dst: u16) {
         let source = self.current_frame().member_sources.get(&src).cloned();
@@ -101,7 +44,6 @@ impl VM {
                     &member_name,
                     &raw_receiver,
                     resolved_receiver,
-                    source_reg,
                 );
             }
             self.call_runtime_callable_at(callee, Vec::new(), block.id.0 as usize, ip)?
@@ -129,7 +71,6 @@ impl VM {
         member_name: &str,
         raw_receiver: &RuntimeValue,
         resolved_receiver: RuntimeValue,
-        src_reg: u16,
     ) -> RuntimeValue {
         if !self.callee_expects_receiver(&callee) {
             return callee;
@@ -142,8 +83,6 @@ impl VM {
             return callee;
         }
 
-        let frame_idx = self.frames.len().saturating_sub(1);
-
         if ParserText::is_temp_name(&member_name) {
             return callee.bind_if_callable(resolved_receiver);
         }
@@ -152,63 +91,10 @@ impl VM {
             RuntimeValue::Ref(_) | RuntimeValue::VarRef(_) | RuntimeValue::RegRef { .. } => {
                 raw_receiver.clone()
             }
-            value if value.should_pass_by_reg_ref() => {
-                let local_name = self
-                    .current_frame()
-                    .local_map
-                    .iter()
-                    .find(|(name, reg)| **reg == src_reg && name.as_ref().contains(':'))
-                    .map(|(name, _)| name.clone());
 
-                if let Some(name) = local_name
-                    && let Some(id) = self.variables.id_of(name.as_ref())
-                {
-                    RuntimeValue::VarRef(id)
-                } else {
-                    RuntimeValue::RegRef {
-                        frame: frame_idx,
-                        reg: src_reg,
-                    }
-                }
-            }
-            value => {
-                if let Some(reg) = self.find_local_reg_for_value(value) {
-                    RuntimeValue::RegRef {
-                        frame: frame_idx,
-                        reg,
-                    }
-                } else {
-                    resolved_receiver
-                }
-            }
+            _ => resolved_receiver,
         };
         callee.bind_if_callable(receiver)
-    }
-
-    fn find_local_reg_for_value(&self, value: &RuntimeValue) -> Option<u16> {
-        let frame = self.current_frame();
-        let matches_reg = |reg: u16| match (value, self.get_reg_value(reg)) {
-            (RuntimeValue::List(left), RuntimeValue::List(right)) => {
-                std::ptr::eq(left.as_ref(), right.as_ref())
-            }
-            (RuntimeValue::Aggregate(_, left), RuntimeValue::Aggregate(_, right)) => {
-                std::ptr::eq(left.as_ref(), right.as_ref())
-            }
-            (RuntimeValue::Str(left), RuntimeValue::Str(right)) => Arc::ptr_eq(left, right),
-            _ => false,
-        };
-
-        if let Some((_, reg)) = frame.local_map.iter().find(|(_, reg)| matches_reg(**reg)) {
-            return Some(*reg);
-        }
-
-        if let Some(base) = frame.local_map_base.as_ref()
-            && let Some((_, reg)) = base.iter().find(|(_, reg)| matches_reg(**reg))
-        {
-            return Some(*reg);
-        }
-
-        None
     }
 
     fn callee_expects_receiver(&mut self, callee: &RuntimeValue) -> bool {
@@ -272,22 +158,12 @@ impl VM {
     fn run_bound_method_call(
         &mut self,
         callee: RuntimeValue,
-        mut receiver: RuntimeValue,
+        receiver: RuntimeValue,
         args: &[u16],
         block: &VMBlock,
         ip: u32,
     ) -> Result<RuntimeValue, RuntimeError> {
         let _ = self.resolve_value_for_op_ref(&receiver)?;
-
-        if !receiver.is_ref_like()
-            && receiver.should_pass_by_reg_ref()
-            && let Some(reg) = self.find_local_reg_for_value(&receiver)
-        {
-            receiver = RuntimeValue::RegRef {
-                frame: self.frames.len().saturating_sub(1),
-                reg,
-            };
-        }
 
         let receiver_reg = if let RuntimeValue::RegRef { frame, reg } = &receiver {
             Some((*frame, *reg))
@@ -427,7 +303,6 @@ impl VM {
                             &member_name,
                             &raw_receiver,
                             resolved_receiver.clone(),
-                            source_reg,
                         ))
                     } else {
                         None
@@ -667,7 +542,7 @@ impl VM {
                     }
                 }
             }
-            VMInstruction::LoadGlobal { dst, name } => {
+            VMInstruction::LoadVar { dst, name } => {
                 let name = self.local_string(block, *name)?;
                 let value = match self.resolve_var_name(name) {
                     Some(VarName::Var(var)) => {
@@ -689,7 +564,7 @@ impl VM {
                 self.set_reg_value(*dst, value);
                 return Ok(TerminateValue::None);
             }
-            VMInstruction::MoveGlobal { dst, name } => {
+            VMInstruction::MoveVar { dst, name } => {
                 let name = self.local_string(block, *name)?;
                 let resolved = self.resolve_var_name(name);
                 let value = self
@@ -714,7 +589,7 @@ impl VM {
 
                 self.set_reg_value(*dst, value);
             }
-            VMInstruction::DropGlobal { name } => {
+            VMInstruction::DropVar { name } => {
                 let name = self.local_string(block, *name)?;
                 match self.resolve_var_name(name) {
                     Some(VarName::Var(var)) => {
@@ -728,37 +603,19 @@ impl VM {
                     None => {}
                 }
             }
-            VMInstruction::StoreGlobal { name, src } => {
+            VMInstruction::StoreVar { name, src } => {
                 let name = self.local_string(block, *name)?;
                 let value = self.get_reg_value(*src).clone();
                 let _ = self.variables.insert(name, value);
             }
-            VMInstruction::SetLocalName { name, src } => {
-                let interned = self.intern_local_string(block, *name)?;
-                let frame = self.current_frame_mut();
-                frame.local_map.insert(interned, *src);
-            }
-            VMInstruction::LoadGlobalRef { dst, name } => {
+            VMInstruction::LoadVarRef { dst, name } => {
                 let name = self.local_string(block, *name)?;
-                if let Some((frame, reg)) = self.find_local_reg_by_name(name) {
-                    self.set_reg_value(*dst, RuntimeValue::RegRef { frame, reg });
-                } else if let Some(RuntimeValue::RegRef { frame, reg }) = self.variables.get(name) {
+                if let Some(RuntimeValue::RegRef { frame, reg }) = self.variables.get(name) {
                     self.set_reg_value(
                         *dst,
                         RuntimeValue::RegRef {
                             frame: *frame,
                             reg: *reg,
-                        },
-                    );
-                } else if let Some(value) = self.variables.get(name)
-                    && value.should_pass_by_reg_ref()
-                    && let Some(reg) = self.find_local_reg_for_value(value)
-                {
-                    self.set_reg_value(
-                        *dst,
-                        RuntimeValue::RegRef {
-                            frame: self.frames.len().saturating_sub(1),
-                            reg,
                         },
                     );
                 } else {
@@ -1104,17 +961,6 @@ impl VM {
                 let (short_name, tuple_index) = Self::member_parts(name);
                 let mut resolved = self.resolve_value_for_op_ref(&raw_receiver)?;
                 if matches!(resolved, RuntimeValue::Null) {
-                    if let Some(owner) = self.find_local_name_for_reg(source_reg)
-                        && !ParserText::is_temp_name(&owner)
-                        && let Some(callee) =
-                            self.resolve_associated_member_value(owner.as_ref(), name, short_name)
-                    {
-                        self.set_reg_value(*dst, callee);
-                        self.current_frame_mut()
-                            .member_sources
-                            .insert(*dst, (source_reg, name.to_string()));
-                        return Ok(TerminateValue::None);
-                    }
                     if let RuntimeValue::Ref(owner) = &raw_receiver {
                         if let Some(callee) =
                             self.resolve_associated_member_value(owner, name, short_name)
@@ -1135,13 +981,7 @@ impl VM {
                     if let Some(callee) =
                         vm.resolve_associated_member_value(type_name, name, short_name)
                     {
-                        Ok(vm.bind_member_receiver_if_callable(
-                            callee,
-                            name,
-                            &raw_receiver,
-                            value,
-                            source_reg,
-                        ))
+                        Ok(vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, value))
                     } else {
                         Err(RuntimeError::MissingMember {
                             target: value,
@@ -1280,7 +1120,6 @@ impl VM {
                                         name,
                                         &raw_receiver,
                                         resolved_receiver,
-                                        source_reg,
                                     )
                                 }
                                 None => {
@@ -1311,7 +1150,6 @@ impl VM {
                                 name,
                                 &raw_receiver,
                                 RuntimeValue::Option(Some(inner.clone())),
-                                source_reg,
                             )
                         } else {
                             let mut inner_value =
@@ -1346,7 +1184,6 @@ impl VM {
                                             name,
                                             &inner_value,
                                             inner_value.clone(),
-                                            source_reg,
                                         )
                                     } else {
                                         return Err(RuntimeError::MissingMember {
@@ -1376,7 +1213,6 @@ impl VM {
                                 name,
                                 &raw_receiver,
                                 option,
-                                source_reg,
                             )
                         } else {
                             return Err(RuntimeError::MissingMember {
@@ -1400,7 +1236,6 @@ impl VM {
                                 name,
                                 &raw_receiver,
                                 result,
-                                source_reg,
                             )
                         } else {
                             return Err(RuntimeError::MissingMember {
@@ -1545,10 +1380,6 @@ impl VM {
                             let current =
                                 if let Some(value) = self.variables.get(&ref_name).cloned() {
                                     value
-                                } else if let Some((frame, reg)) =
-                                    self.find_local_reg_by_name(&ref_name)
-                                {
-                                    RuntimeValue::RegRef { frame, reg }
                                 } else {
                                     return Err(RuntimeError::DanglingRef(ref_name.clone()));
                                 };
@@ -1886,10 +1717,6 @@ impl VM {
                             let current =
                                 if let Some(value) = self.variables.get(&ref_name).cloned() {
                                     value
-                                } else if let Some((frame, reg)) =
-                                    self.find_local_reg_by_name(&ref_name)
-                                {
-                                    RuntimeValue::RegRef { frame, reg }
                                 } else {
                                     return Err(RuntimeError::DanglingRef(ref_name.clone()));
                                 };
@@ -2017,7 +1844,6 @@ impl VM {
                                         vm_frame.member_sources.insert(reg, source);
                                     }
 
-                                    self.sync_local_reg_value(frame, reg, RuntimeValue::List(list));
                                     self.propagate_member_source_reg(reg, frame)?;
                                 }
                                 RuntimeValue::HashMap(map) => {
@@ -2087,23 +1913,7 @@ impl VM {
                     RuntimeValue::Ref(name) => RuntimeValue::Ref(name),
                     RuntimeValue::VarRef(id) => RuntimeValue::VarRef(id),
                     RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef { frame, reg },
-                    other => if let Some(name) = self.find_local_name_for_reg(*value) {
-                        if let Some(id) = self.variables.id_of(name.as_ref()) {
-                            RuntimeValue::VarRef(id)
-                        } else {
-                            RuntimeValue::RegRef {
-                                frame: self.frames.len().saturating_sub(1),
-                                reg: *value,
-                            }
-                        }
-                    } else if other.should_pass_by_reg_ref()
-                        && let Some(reg) = self.find_local_reg_for_value(&other)
-                    {
-                        RuntimeValue::RegRef {
-                            frame: self.frames.len().saturating_sub(1),
-                            reg,
-                        }
-                    } else if let Some(id) = (0..self.variables.slot_len()).find(|id| {
+                    other => if let Some(id) = (0..self.variables.slot_len()).find(|id| {
                         matches!(
                             self.variables.get_by_id(*id),
                             Some(RuntimeValue::RegRef { frame, reg })

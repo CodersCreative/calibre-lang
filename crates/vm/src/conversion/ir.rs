@@ -130,11 +130,11 @@ impl VMFunction {
         for block in self.blocks.iter_mut() {
             for instruction in block.instructions.iter() {
                 match instruction {
-                    VMInstruction::StoreGlobal { name, .. }
-                    | VMInstruction::DropGlobal { name }
-                    | VMInstruction::LoadGlobal { name, .. }
-                    | VMInstruction::MoveGlobal { name, .. }
-                    | VMInstruction::LoadGlobalRef { name, .. } => {
+                    VMInstruction::StoreVar { name, .. }
+                    | VMInstruction::DropVar { name }
+                    | VMInstruction::LoadVar { name, .. }
+                    | VMInstruction::MoveVar { name, .. }
+                    | VMInstruction::LoadVarRef { name, .. } => {
                         if let Some(dest) = block.local_strings.get(*name as usize) {
                             if !declared.contains_key(dest) {
                                 declared.insert(
@@ -327,26 +327,22 @@ pub enum VMInstruction {
         dst: Reg,
         literal: u16,
     },
-    LoadGlobal {
+    LoadVar {
         dst: Reg,
         name: u16,
     },
-    MoveGlobal {
+    MoveVar {
         dst: Reg,
         name: u16,
     },
-    DropGlobal {
+    DropVar {
         name: u16,
     },
-    StoreGlobal {
-        name: u16,
-        src: Reg,
-    },
-    SetLocalName {
+    StoreVar {
         name: u16,
         src: Reg,
     },
-    LoadGlobalRef {
+    LoadVarRef {
         dst: Reg,
         name: u16,
     },
@@ -479,12 +475,11 @@ impl Display for VMInstruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             VMInstruction::LoadLiteral { dst, literal } => write!(f, "%r{dst} = LITERAL {literal}"),
-            VMInstruction::LoadGlobal { dst, name } => write!(f, "%r{dst} = LOAD {name}"),
-            VMInstruction::MoveGlobal { dst, name } => write!(f, "%r{dst} = MOVE {name}"),
-            VMInstruction::DropGlobal { name } => write!(f, "DROP {name}"),
-            VMInstruction::StoreGlobal { name, src } => write!(f, "STORE {name} <- %r{src}"),
-            VMInstruction::SetLocalName { name, src } => write!(f, "SET {name} <- %r{src}"),
-            VMInstruction::LoadGlobalRef { dst, name } => write!(f, "%r{dst} = REF {name}"),
+            VMInstruction::LoadVar { dst, name } => write!(f, "%r{dst} = LOAD {name}"),
+            VMInstruction::MoveVar { dst, name } => write!(f, "%r{dst} = MOVE {name}"),
+            VMInstruction::DropVar { name } => write!(f, "DROP {name}"),
+            VMInstruction::StoreVar { name, src } => write!(f, "STORE {name} <- %r{src}"),
+            VMInstruction::LoadVarRef { dst, name } => write!(f, "%r{dst} = REF {name}"),
             VMInstruction::LoadRegRef { dst, src } => write!(f, "%r{dst} = REF %r{src}"),
             VMInstruction::Copy { dst, src } => write!(f, "%r{dst} = %r{src}"),
             VMInstruction::As {

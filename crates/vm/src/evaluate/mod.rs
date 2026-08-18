@@ -172,7 +172,7 @@ impl VM {
                 }
                 _ => {
                     self.set_reg_value_in_frame(frame_idx, parent_reg, updated_parent.clone());
-                    self.sync_local_reg_value(frame_idx, parent_reg, updated_parent);
+
                     if let Some(source) = parent_source {
                         if let Some(frame) = self.frames.get_mut(frame_idx) {
                             frame.member_sources.insert(parent_reg, source);
@@ -948,10 +948,18 @@ impl VM {
 
         for (reg, arg_reg) in function.param_regs.iter().zip(args.iter().copied()) {
             let arg = self.call_arg_from_frame_reg(caller_frame, arg_reg);
-            self.set_reg_value(*reg, arg);
+            self.set_reg_value(*reg, arg.clone());
         }
 
-        let base = self.local_map_base_for(function);
+        for (name, reg) in function
+            .params
+            .iter()
+            .zip(function.param_regs.iter().copied())
+        {
+            let value = self.get_reg_value(reg).clone();
+            let _ = self.variables.insert(name, value);
+        }
+
         let param_names: std::collections::HashSet<&str> =
             function.params.iter().map(|x| x.as_str()).collect();
         let filtered_captures: Vec<(String, RuntimeValue)> = captures
@@ -963,9 +971,6 @@ impl VM {
             .collect();
 
         let prev_vars = self.install_captures(filtered_captures.as_slice());
-
-        let frame = self.current_frame_mut();
-        frame.local_map_base = Some(base);
 
         let mut block_id = function.entry;
         let entry =
@@ -1018,6 +1023,10 @@ impl VM {
         self.pop_frame();
         self.restore_captures(prev_vars);
 
+        for name in function.params.iter() {
+            self.variables.remove(name);
+        }
+
         Ok(result)
     }
 
@@ -1045,7 +1054,6 @@ impl VM {
             call_args.push(self.call_arg_from_frame_reg(caller_frame, *reg));
         }
 
-        let base = self.local_map_base_for(func);
         let start = self.current_frame().reg_start;
         let reg_count = func.reg_count as usize;
         let frame_end = start + reg_count;
@@ -1059,16 +1067,21 @@ impl VM {
         {
             let frame = self.current_frame_mut();
             frame.reg_count = reg_count;
-            frame.local_map_base = Some(base);
             frame.acc = RuntimeValue::Null;
             frame.func_ptr = func as *const VMFunction as usize;
         }
         for (reg, arg) in func.param_regs.iter().zip(call_args) {
             let idx = *reg as usize;
             if idx < reg_count {
-                self.reg_arena[start + idx] = arg;
+                self.reg_arena[start + idx] = arg.clone();
             }
         }
+
+        for (name, reg) in func.params.iter().zip(func.param_regs.iter().copied()) {
+            let value = self.get_reg_value(reg).clone();
+            let _ = self.variables.insert(name, value);
+        }
+
         Some(TerminateValue::Jump(func.entry))
     }
 
@@ -1092,9 +1105,18 @@ impl VM {
                 Some(function.name.clone()),
             );
             for (reg, arg) in function.param_regs.iter().zip(args) {
-                self.set_reg_value(*reg, arg);
+                self.set_reg_value(*reg, arg.clone());
             }
-            let base = self.local_map_base_for(function);
+
+            for (name, reg) in function
+                .params
+                .iter()
+                .zip(function.param_regs.iter().copied())
+            {
+                let value = self.get_reg_value(reg).clone();
+                let _ = self.variables.insert(name, value);
+            }
+
             let param_names: std::collections::HashSet<&str> =
                 function.params.iter().map(|x| x.as_str()).collect();
             let filtered_captures: Vec<(String, RuntimeValue)> = captures
@@ -1104,8 +1126,7 @@ impl VM {
                 })
                 .cloned()
                 .collect();
-            let frame = self.current_frame_mut();
-            frame.local_map_base = Some(base);
+
             state.block = Some(function.entry);
             state.ip = 0;
             state.prev_block = None;
@@ -1178,6 +1199,10 @@ impl VM {
         self.pop_frame();
         self.restore_captures(prev_vars);
 
+        for name in function.params.iter() {
+            self.variables.remove(name);
+        }
+
         Ok(Some(result))
     }
 
@@ -1200,22 +1225,6 @@ impl VM {
             let reg = selected.unwrap_or_else(|| phi.sources.first().map(|x| x.1).unwrap_or(0));
             let value = self.get_reg_value(reg).clone();
             self.set_reg_value(phi.dest, value);
-            if let Some(name) = phi.name.as_ref() {
-                let interned = self.intern_name(name);
-                let frame = self.current_frame_mut();
-                if let Some(mapped) = frame.local_map.get_mut(&interned) {
-                    *mapped = phi.dest;
-                }
-            } else {
-                let frame = self.current_frame_mut();
-                for (name, mapped) in frame.local_map.iter_mut() {
-                    let key = name.as_ref();
-                    if !ParserText::is_temp_name(&key) || *mapped != reg {
-                        continue;
-                    }
-                    *mapped = phi.dest;
-                }
-            }
         }
         Ok(())
     }

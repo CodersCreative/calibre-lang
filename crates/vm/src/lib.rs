@@ -39,8 +39,6 @@ pub(crate) use vm_lookup::VarName;
 pub struct VMFrame {
     pub reg_start: usize,
     pub reg_count: usize,
-    pub local_map_base: Option<Arc<FxHashMap<Arc<str>, Reg>>>,
-    pub local_map: FxHashMap<Arc<str>, Reg>,
     pub member_sources: FxHashMap<Reg, (Reg, String)>,
     pub func_ptr: usize,
     pub func_name: Option<String>,
@@ -60,8 +58,6 @@ impl Default for VMFrame {
         Self {
             reg_start: 0,
             reg_count: 0,
-            local_map_base: None,
-            local_map: FxHashMap::default(),
             member_sources: FxHashMap::default(),
             func_ptr: 0,
             func_name: None,
@@ -82,7 +78,6 @@ pub struct VM {
     source_file_override: Option<Arc<String>>,
     reg_arena: Vec<RuntimeValue>,
     reg_top: usize,
-    name_arena: FxHashMap<Arc<str>, Arc<str>>,
     pub frames: Vec<VMFrame>,
     frame_pool: Vec<VMFrame>,
     caches: VMCaches,
@@ -98,8 +93,6 @@ pub struct VM {
 pub struct VMCaches {
     call: FxHashMap<String, Arc<VMFunction>>,
     callsite: FxHashMap<(usize, usize, u32), Arc<VMFunction>>,
-    locals: FxHashMap<usize, Arc<FxHashMap<Arc<str>, Reg>>>,
-    local_str: FxHashMap<(u32, u16), Arc<str>>,
 }
 
 impl Default for VMCaches {
@@ -107,8 +100,6 @@ impl Default for VMCaches {
         Self {
             call: FxHashMap::default(),
             callsite: FxHashMap::default(),
-            locals: FxHashMap::default(),
-            local_str: FxHashMap::default(),
         }
     }
 }
@@ -224,7 +215,6 @@ impl VM {
             source_file_override: None,
             reg_arena: Vec::new(),
             reg_top: 0,
-            name_arena: FxHashMap::default(),
             frames: vec![VMFrame::default()],
             frame_pool: Vec::new(),
             caches: VMCaches {
@@ -367,8 +357,6 @@ impl VM {
         if let Some(mut frame) = self.frame_pool.pop() {
             frame.reg_start = start;
             frame.reg_count = reg_count;
-            frame.local_map_base = None;
-            frame.local_map.clear();
             frame.member_sources.clear();
             frame.func_ptr = func_ptr;
             frame.func_name = func_name;
@@ -378,8 +366,6 @@ impl VM {
             self.frames.push(VMFrame {
                 reg_start: start,
                 reg_count,
-                local_map_base: None,
-                local_map: FxHashMap::default(),
                 member_sources: FxHashMap::default(),
                 func_ptr,
                 func_name,
@@ -446,48 +432,6 @@ impl VM {
         self.current_frame_mut().member_sources.remove(&reg);
     }
 
-    pub(crate) fn intern_name(&mut self, name: &str) -> Arc<str> {
-        if let Some(existing) = self.name_arena.get(name) {
-            return existing.clone();
-        }
-        let arc: Arc<str> = Arc::from(name);
-        self.name_arena.insert(arc.clone(), arc.clone());
-        arc
-    }
-
-    pub(crate) fn intern_local_string(
-        &mut self,
-        block: &VMBlock,
-        idx: u16,
-    ) -> Result<Arc<str>, RuntimeError> {
-        let key = (block.id.0, idx);
-        if let Some(existing) = self.caches.local_str.get(&key) {
-            return Ok(existing.clone());
-        }
-        let name = self.local_string(block, idx)?;
-        let interned = self.intern_name(name);
-        self.caches.local_str.insert(key, interned.clone());
-        Ok(interned)
-    }
-
-    pub(crate) fn local_map_base_for(
-        &mut self,
-        func: &VMFunction,
-    ) -> Arc<FxHashMap<Arc<str>, Reg>> {
-        let key = func as *const VMFunction as usize;
-        if let Some(found) = self.caches.locals.get(&key) {
-            return found.clone();
-        }
-        let mut map: FxHashMap<Arc<str>, Reg> = FxHashMap::default();
-        for (name, reg) in func.params.iter().zip(func.param_regs.iter().copied()) {
-            let interned = self.intern_name(name);
-            map.insert(interned, reg);
-        }
-        let arc = Arc::new(map);
-        self.caches.locals.insert(key, arc.clone());
-        arc
-    }
-
     pub(crate) fn set_reg_value_in_frame(
         &mut self,
         frame_idx: usize,
@@ -550,26 +494,6 @@ impl VM {
         &self,
         value: &RuntimeValue,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let resolve_local_ref = |pointer: &str| -> Option<RuntimeValue> {
-            for (frame_idx, frame) in self.frames.iter().enumerate().rev() {
-                if let Some(reg) = frame.local_map.get(pointer) {
-                    let value = self.get_reg_value_in_frame(frame_idx, *reg).clone();
-                    if !matches!(&value, RuntimeValue::Ref(next) if next == pointer) {
-                        return Some(value);
-                    }
-                }
-                if let Some(base) = frame.local_map_base.as_ref()
-                    && let Some(reg) = base.get(pointer)
-                {
-                    let value = self.get_reg_value_in_frame(frame_idx, *reg).clone();
-                    if !matches!(&value, RuntimeValue::Ref(next) if next == pointer) {
-                        return Some(value);
-                    }
-                }
-            }
-            None
-        };
-
         let mut owned: Option<RuntimeValue> = None;
         let mut seen_refs: FxHashSet<String> = FxHashSet::default();
         let mut seen_var_refs: FxHashSet<usize> = FxHashSet::default();
@@ -589,16 +513,10 @@ impl VM {
 
                     let v = if let Some(v) = self.variables.get(pointer).cloned() {
                         if matches!(&v, RuntimeValue::Ref(next) if next == pointer) {
-                            if let Some(local) = resolve_local_ref(pointer) {
-                                local
-                            } else {
-                                return Err(RuntimeError::DanglingRef(pointer.to_string()));
-                            }
+                            return Err(RuntimeError::DanglingRef(pointer.to_string()));
                         } else {
                             v
                         }
-                    } else if let Some(v) = resolve_local_ref(pointer) {
-                        v
                     } else {
                         return Err(RuntimeError::DanglingRef(pointer.to_string()));
                     };
