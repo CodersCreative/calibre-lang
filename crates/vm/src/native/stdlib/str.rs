@@ -1,5 +1,5 @@
-use std::sync::{Arc, Mutex};
 use dumpster::sync::Gc;
+use std::sync::{Arc, Mutex};
 
 use crate::{
     VM,

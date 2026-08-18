@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use crate::{
     VM,
     error::RuntimeError,
@@ -7,6 +6,7 @@ use crate::{
 };
 use blake3::Hasher as Blake3;
 use sha2::{Digest, Sha256, Sha512};
+use std::sync::{Arc, Mutex};
 
 pub struct Sha256Fn;
 
@@ -74,7 +74,7 @@ impl NativeFunction for Blake3Fn {
         hasher.update(s.lock().unwrap().as_bytes());
         let out = hasher.finalize();
         Ok(RuntimeValue::Str(Arc::new(Mutex::new(
-            out.to_hex().to_string(),)
-        )))
+            out.to_hex().to_string(),
+        ))))
     }
 }

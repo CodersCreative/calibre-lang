@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use crate::{
     VM,
     error::RuntimeError,
@@ -6,6 +5,7 @@ use crate::{
     value::{GcVec, RuntimeValue},
 };
 use dumpster::sync::Gc;
+use std::sync::{Arc, Mutex};
 
 pub struct FsReadDir;
 
@@ -24,8 +24,8 @@ impl NativeFunction for FsReadDir {
                     match entry {
                         Ok(entry) => {
                             out.push(RuntimeValue::Str(Arc::new(Mutex::new(
-                                entry.path().display().to_string(),)
-                            )));
+                                entry.path().display().to_string(),
+                            ))));
                         }
                         Err(err) => {
                             return Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(

@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     VM,
     error::RuntimeError,
@@ -7,6 +5,8 @@ use crate::{
     value::{GcVec, HashKey, RuntimeValue},
 };
 use dumpster::sync::Gc;
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::sync::{Arc, Mutex};
 
 type RtHashMap = Arc<Mutex<FxHashMap<HashKey, RuntimeValue>>>;
 type RtHashSet = Arc<Mutex<FxHashSet<HashKey>>>;

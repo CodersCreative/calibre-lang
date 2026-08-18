@@ -25,24 +25,35 @@ impl Typing {
     pub fn find_impl_for_type(&self, ty: &ParserDataType) -> Option<&MiddleImpl> {
         if let Some(x) = self.impls.get(&ty.key()) {
             Some(x)
-        }else if let Some(x) = self.impls.get(&ty.clone().unwrap_all_refs().key()) {Some(x)}else{
+        } else if let Some(x) = self.impls.get(&ty.clone().unwrap_all_refs().key()) {
+            Some(x)
+        } else {
             None
         }
     }
 
     pub fn find_impl_for_type_mut(&mut self, ty: &ParserDataType) -> Option<&mut MiddleImpl> {
         self.impls.get_mut(&ty.key())
-        
     }
 
-    pub fn find_impl_member(&self, ty: &ParserDataType, member: &impl ToString) -> Option<&MiddleImplMember> {
+    pub fn find_impl_member(
+        &self,
+        ty: &ParserDataType,
+        member: &impl ToString,
+    ) -> Option<&MiddleImplMember> {
         let generic_params: Vec<String> = match &ty.data_type {
-            ParserInnerType::StructWithGenerics { generic_types , ..} => generic_types.iter().collect(),
+            ParserInnerType::StructWithGenerics { generic_types, .. } => {
+                generic_types.iter().collect()
+            }
             ParserInnerType::List(x) => vec![&**x],
             _ => Vec::new(),
-        }.into_iter().map(|x | x.impl_name()).collect();
+        }
+        .into_iter()
+        .map(|x| x.impl_name())
+        .collect();
 
-        self.find_impl_for_type(ty)?.get_member(member, &generic_params)
+        self.find_impl_for_type(ty)?
+            .get_member(member, &generic_params)
     }
 
     pub fn ensure_concrete_impl(
@@ -95,7 +106,10 @@ impl Typing {
                 Self::collect_trait_default_members(trait_defs, trait_name, &provided_members);
             for (member_name, _trait_member) in default_members {
                 let symbol_name = format!("{}.{}", trait_name, member_name);
-                imp.insert_member(&member_name, MiddleImplMember::new(symbol_name, Vec::new(), false));
+                imp.insert_member(
+                    &member_name,
+                    MiddleImplMember::new(symbol_name, Vec::new(), false),
+                );
                 provided_members.insert(member_name);
             }
         }
@@ -213,42 +227,61 @@ pub struct MiddleImpl {
 }
 
 impl MiddleImpl {
-    fn normalize_member_name(name : &impl ToString) -> String {
+    fn normalize_member_name(name: &impl ToString) -> String {
         let name = ParserText::get_temp_name_suffix(name).unwrap_or(name.to_string());
-        name.rsplit_once('.').map(|x| x.1.to_string()).unwrap_or(name)
+        name.rsplit_once('.')
+            .map(|x| x.1.to_string())
+            .unwrap_or(name)
     }
 
-    pub fn insert_member(&mut self, name: &impl ToString, member : MiddleImplMember) {
-        let entry = self.members
+    pub fn insert_member(&mut self, name: &impl ToString, member: MiddleImplMember) {
+        let entry = self
+            .members
             .entry(Self::normalize_member_name(name))
             .or_default();
 
-        if let Some(x) = entry.iter_mut().find(|x| x.generic_params == member.generic_params) {
+        if let Some(x) = entry
+            .iter_mut()
+            .find(|x| x.generic_params == member.generic_params)
+        {
             *x = member;
-        }else {
+        } else {
             entry.push(member);
         }
     }
 
-    pub fn insert_member_placeholder(&mut self, name: &impl ToString, symbol_name: String, generic_params : Vec<String>) {
-        let entry = self.members
+    pub fn insert_member_placeholder(
+        &mut self,
+        name: &impl ToString,
+        symbol_name: String,
+        generic_params: Vec<String>,
+    ) {
+        let entry = self
+            .members
             .entry(Self::normalize_member_name(name))
             .or_default();
 
-        if entry.iter_mut().find(|x| x.generic_params == generic_params).is_none() {
+        if entry
+            .iter_mut()
+            .find(|x| x.generic_params == generic_params)
+            .is_none()
+        {
             entry.push(MiddleImplMember::new(symbol_name, generic_params, false));
         }
     }
 
-
-    pub fn get_member(&self, name: &impl ToString, generic_params : &[String]) -> Option<&MiddleImplMember>{
+    pub fn get_member(
+        &self,
+        name: &impl ToString,
+        generic_params: &[String],
+    ) -> Option<&MiddleImplMember> {
         let members = self.members.get(&Self::normalize_member_name(name))?;
 
         if let Some(x) = members.iter().find(|x| x.generic_params == generic_params) {
             Some(x)
-        }else if let Some(x) = members.iter().find(|x| x.generic_params.is_empty()) {
+        } else if let Some(x) = members.iter().find(|x| x.generic_params.is_empty()) {
             Some(x)
-        }else{
+        } else {
             None
         }
     }
@@ -264,7 +297,6 @@ impl MiddleImpl {
 
         members
     }
-
 }
 
 #[derive(Debug, Clone, PartialEq)]

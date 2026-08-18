@@ -1,11 +1,11 @@
+use crate::{VM, error::RuntimeError, value::RuntimeValue};
 use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
+use dumpster::sync::Gc;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
 use std::sync::{Arc, Mutex};
-use crate::{VM, error::RuntimeError, value::RuntimeValue};
-use dumpster::sync::Gc;
 
 fn comparison_value_handle<T: PartialEq + PartialOrd>(
     op: &ComparisonOperator,
@@ -42,7 +42,9 @@ pub fn comparison(
             (RuntimeValue::Byte(a), RuntimeValue::Int(b)) => Some(*b >= 0 && *a == (*b as u8)),
             (RuntimeValue::Float(a), RuntimeValue::Float(b)) => Some(a == b),
             (RuntimeValue::Char(a), RuntimeValue::Char(b)) => Some(a == b),
-            (RuntimeValue::Str(a), RuntimeValue::Str(b)) => Some(a.lock().unwrap().as_str() == b.lock().unwrap().as_mut_str()),
+            (RuntimeValue::Str(a), RuntimeValue::Str(b)) => {
+                Some(a.lock().unwrap().as_str() == b.lock().unwrap().as_mut_str())
+            }
             (RuntimeValue::Enum(a_name, a_idx, _), RuntimeValue::Enum(b_name, b_idx, _)) => {
                 Some(a_name == b_name && a_idx == b_idx)
             }
@@ -223,9 +225,9 @@ pub fn comparison(
         (RuntimeValue::Char(x), RuntimeValue::Char(y), op) => {
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
         }
-        (RuntimeValue::Str(x), RuntimeValue::Str(y), op) => {
-            Ok(RuntimeValue::Bool(comparison_value_handle(op, x.lock().unwrap().as_str(), y.lock().unwrap().as_str())))
-        }
+        (RuntimeValue::Str(x), RuntimeValue::Str(y), op) => Ok(RuntimeValue::Bool(
+            comparison_value_handle(op, x.lock().unwrap().as_str(), y.lock().unwrap().as_str()),
+        )),
         (left, right, ComparisonOperator::Equal) => Ok(RuntimeValue::Bool(matches!(
             eq_value(&left, &right),
             Some(true)
@@ -458,7 +460,11 @@ impl RuntimeValue {
         }
     }
 
-    fn special_shr(self, vm: &mut VM, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
+    fn special_shr(
+        self,
+        vm: &mut VM,
+        rhs: Self,
+    ) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match rhs {
             Self::Aggregate(None, data) => {
                 let mut data = data.clone();
@@ -476,7 +482,11 @@ impl RuntimeValue {
         }
     }
 
-    fn special_shl(self, vm: &mut VM, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
+    fn special_shl(
+        self,
+        vm: &mut VM,
+        rhs: Self,
+    ) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match self {
             Self::Aggregate(None, data) => {
                 let mut data = data.clone();

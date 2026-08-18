@@ -276,7 +276,7 @@ impl MiddleEnvironment {
 
             let target_name = if identifier.text == inner.impl_name() {
                 Some(identifier.text.clone())
-            }else{
+            } else {
                 None
             };
 
@@ -294,13 +294,14 @@ impl MiddleEnvironment {
                 );
             }
 
-
-
             if !overloads.is_empty() {
                 for overload in overloads {
-                    if let Some(processed) =
-                        self.process_overload(scope, overload, generic_params.clone(), target_name.clone())?
-                    {
+                    if let Some(processed) = self.process_overload(
+                        scope,
+                        overload,
+                        generic_params.clone(),
+                        target_name.clone(),
+                    )? {
                         self.symbols.overloads.push(processed);
                     }
                 }

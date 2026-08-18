@@ -1,7 +1,12 @@
 use std::str::FromStr;
 
 use crate::{
-    ast::{MiddleNode, MiddleNodeType}, environment::MiddleEnvironment, errors::MiddleErr, typing::{MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType, Typing},
+    ast::{MiddleNode, MiddleNodeType},
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    typing::{
+        MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType, Typing,
+    },
 };
 use calibre_parser::{
     IdentifiersUsed, Span,
@@ -1790,13 +1795,16 @@ impl MiddleEnvironment {
                 let generic_params: Vec<String> = generics
                     .0
                     .iter()
-                    .map(|g| self.resolve_potential_dollar_ident(scope, &g.identifier).map(|x| x.text).unwrap_or(g.identifier.to_string()))
+                    .map(|g| {
+                        self.resolve_potential_dollar_ident(scope, &g.identifier)
+                            .map(|x| x.text)
+                            .unwrap_or(g.identifier.to_string())
+                    })
                     .collect();
 
-                let impl_key = self.typing.get_or_create_impl(
-                    resolved.clone(),
-                    self.context.current_location.clone(),
-                );
+                let impl_key = self
+                    .typing
+                    .get_or_create_impl(resolved.clone(), self.context.current_location.clone());
 
                 {
                     let impl_ref = self.typing.impls.get_mut(&impl_key).ok_or_else(|| {
@@ -1812,7 +1820,8 @@ impl MiddleEnvironment {
                             // TODO Unpack the dollar ident only without resolving
                             impl_ref.insert_member_placeholder(
                                 &identifier.to_string(),
-                                resolved_iden, generic_params.clone(),
+                                resolved_iden,
+                                generic_params.clone(),
                             );
                         }
                     }
@@ -1870,7 +1879,9 @@ impl MiddleEnvironment {
                                         };
 
                                     if let Some(param_type) = param_type {
-                                        resolved.data_type.matches(&param_type.data_type, &generic_params)
+                                        resolved
+                                            .data_type
+                                            .matches(&param_type.data_type, &generic_params)
                                     } else {
                                         false
                                     }
@@ -1932,7 +1943,10 @@ impl MiddleEnvironment {
                                 Box::new(MiddleErr::Internal(format!("missing impl {impl_key:?}"))),
                             )
                         })?
-                        .insert_member(&iden, MiddleImplMember::new(new_name, generic_params.clone(), dependant));
+                        .insert_member(
+                            &iden,
+                            MiddleImplMember::new(new_name, generic_params.clone(), dependant),
+                        );
 
                     statements.push(dec);
                 }
@@ -2144,10 +2158,9 @@ impl MiddleEnvironment {
                                         };
 
                                     if let Some(param_type) = param_type {
-                                        resolved_target.data_type.matches(
-                                            &param_type.data_type,
-                                            &generic_params,
-                                        )
+                                        resolved_target
+                                            .data_type
+                                            .matches(&param_type.data_type, &generic_params)
                                     } else {
                                         false
                                     }
@@ -2208,11 +2221,14 @@ impl MiddleEnvironment {
                         )
                     })?;
 
-                    impl_ref.insert_member(&iden, MiddleImplMember::new(new_name, generic_params.clone(), dependant));
+                    impl_ref.insert_member(
+                        &iden,
+                        MiddleImplMember::new(new_name, generic_params.clone(), dependant),
+                    );
                     if !impl_ref.traits.contains(&resolved_trait.text) {
                         impl_ref.traits.push(resolved_trait.text.clone());
                     }
-                    
+
                     if let Some(trait_def) = self.typing.trait_defs.get(&resolved_trait.text) {
                         for implied in &trait_def.implied_traits {
                             if !impl_ref.traits.contains(implied) {

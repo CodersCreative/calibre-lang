@@ -194,7 +194,10 @@ impl MiddleEnvironment {
             None
         };
 
-        let generic_params = generic_types.into_iter().map(|x| self.resolve_potential_new_type(scope, x).impl_name()).collect::<Vec<_>>();
+        let generic_params = generic_types
+            .into_iter()
+            .map(|x| self.resolve_potential_new_type(scope, x).impl_name())
+            .collect::<Vec<_>>();
 
         let mut resolved_caller = type_style_member.or_else(|| {
             if let NodeType::Identifier(member_ident) = &caller.node_type {
@@ -404,7 +407,12 @@ impl MiddleEnvironment {
         }
     }
 
-    fn resolve_member_from_chain_family(&self, base: &MiddleNode, member: &impl ToString, generic_params : &[String]) -> Option<String> {
+    fn resolve_member_from_chain_family(
+        &self,
+        base: &MiddleNode,
+        member: &impl ToString,
+        generic_params: &[String],
+    ) -> Option<String> {
         let MiddleNodeType::CallExpression { caller, .. } = &base.node_type else {
             return None;
         };
@@ -444,48 +452,6 @@ impl MiddleEnvironment {
         Some(format!("{family}.{member}"))
     }
 
-    fn member_base_type(&mut self, scope: &u64, base: &MiddleNode) -> Option<ParserDataType> {
-        match &base.node_type {
-            MiddleNodeType::Identifier(ident) => {
-                let resolved_ident = self.resolve_dollar_ident_only(
-                    scope,
-                    &PotentialDollarIdentifier::Identifier(ident.clone()),
-                );
-
-                if let Some(var) = resolved_ident
-                    .as_ref()
-                    .and_then(|resolved| self.symbols.variables.get(&resolved.text))
-                    .or_else(|| {
-                        self.resolve_str(scope, &ident.text)
-                            .and_then(|resolved| self.symbols.variables.get(&resolved))
-                    })
-                    .or_else(|| self.symbols.variables.get(&ident.text))
-                {
-                    return Some(var.data_type.clone().unwrap_all_refs());
-                }
-
-                let generic_ident = PotentialGenericTypeIdentifier::Identifier(
-                    PotentialDollarIdentifier::Identifier(ident.clone()),
-                );
-
-                if let Some(ty) = self.resolve_type_from_ident(scope, &generic_ident) {
-                    return Some(ty.unwrap_all_refs());
-                }
-            }
-            MiddleNodeType::CallExpression { caller, .. } => {
-                if let MiddleNodeType::Identifier(ident) = &caller.node_type
-                    && let Some(var) = self.symbols.variables.get(&ident.text)
-                    && let ParserInnerType::Function { return_type, .. } = &var.data_type.data_type
-                {
-                    return Some((*return_type.clone()).unwrap_all_refs());
-                }
-            }
-            _ => {}
-        }
-        self.resolve_type_from_node(scope, &base.clone().into())
-            .map(|x| x.unwrap_all_refs())
-    }
-
     fn resolve_impl_member(
         &mut self,
         scope: &u64,
@@ -493,8 +459,7 @@ impl MiddleEnvironment {
         member: &impl ToString,
     ) -> Option<String> {
         let resolved = self.resolve_data_type(scope, data_type.clone());
-        self
-            .typing
+        self.typing
             .find_impl_member(&resolved, member)
             .map(|x| x.symbol_name.clone())
     }
@@ -721,8 +686,7 @@ impl MiddleEnvironment {
 
                 let target_type = self
                     .resolve_type_from_node(scope, &receiver_expr.clone().into())
-                    .map(|x| x.unwrap_all_refs())
-                    .or_else(|| self.member_base_type(scope, &receiver_expr));
+                    .map(|x| x.unwrap_all_refs());
 
                 let receiver_txt = receiver_expr.to_string();
                 let mut args = args;
@@ -782,41 +746,46 @@ impl MiddleEnvironment {
                     list = vec![(overloaded, false)];
                     continue;
                 }
-            }
 
-            list.push((
-                match item.0.node_type {
-                    NodeType::Identifier(x) if i == 0 => {
-                        let first = list.first().cloned().ok_or_else(|| {
-                            MiddleErr::At(
-                                item.0.span,
-                                Box::new(MiddleErr::Internal(
-                                    "missing base for member expression".to_string(),
-                                )),
-                            )
-                        })?;
-                        let x = self
-                            .resolve_dollar_ident_potential_generic_only(scope, &x)
-                            .unwrap_or_else(|| Self::unresolved_ident_text(&x));
+                list.push((self.evaluate(scope, item.0), item.1));
+            } else {
+                list.push((
+                    match item.0.node_type {
+                        NodeType::Identifier(x) if i == 0 => {
+                            let first = list.first().cloned().ok_or_else(|| {
+                                MiddleErr::At(
+                                    item.0.span,
+                                    Box::new(MiddleErr::Internal(
+                                        "missing base for member expression".to_string(),
+                                    )),
+                                )
+                            })?;
+                            let x = self
+                                .resolve_dollar_ident_potential_generic_only(scope, &x)
+                                .unwrap_or_else(|| Self::unresolved_ident_text(&x));
 
-                        if let Some(ty) = self.member_base_type(scope, &first.0)
-                            && let Some(static_var) = self.resolve_impl_member(scope, &ty, &x.text)
-                        {
-                            self.evaluate_inner(
-                                scope,
-                                Node::identifier(self.context.current_span(), static_var),
-                            )?
-                        } else {
-                            MiddleNode {
-                                node_type: MiddleNodeType::Identifier(x),
-                                span,
+                            if let Some(ty) = self
+                                .resolve_type_from_node(scope, &first.0.clone().into())
+                                .map(|x| x.unwrap_all_refs())
+                                && let Some(static_var) =
+                                    self.resolve_impl_member(scope, &ty, &x.text)
+                            {
+                                self.evaluate_inner(
+                                    scope,
+                                    Node::identifier(self.context.current_span(), static_var),
+                                )?
+                            } else {
+                                MiddleNode {
+                                    node_type: MiddleNodeType::Identifier(x),
+                                    span,
+                                }
                             }
                         }
-                    }
-                    _ => self.evaluate(scope, item.0),
-                },
-                item.1,
-            ));
+                        _ => self.evaluate(scope, item.0),
+                    },
+                    item.1,
+                ));
+            }
         }
 
         Ok(MiddleNode {

@@ -47,7 +47,10 @@ impl ParserDataType {
 
     pub fn key(&self) -> ParserInnerType {
         match self.clone().unwrap_all_refs().data_type {
-            ParserInnerType::StructWithGenerics { identifier, generic_types : _} => ParserInnerType::Struct(identifier),
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types: _,
+            } => ParserInnerType::Struct(identifier),
             x => x,
         }
     }
@@ -744,7 +747,6 @@ impl Display for ParserInnerType {
         }
     }
 }
-
 
 // TODO Evaluate use of this
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

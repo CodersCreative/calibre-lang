@@ -1,6 +1,10 @@
 use calibre_parser::ast::idents::ParserText;
 use rustc_hash::FxHashMap;
-use std::{cmp::Ordering, fmt::Debug, sync::{Arc, Mutex}};
+use std::{
+    cmp::Ordering,
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
 
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
 

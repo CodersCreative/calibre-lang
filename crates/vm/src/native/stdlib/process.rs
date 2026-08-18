@@ -134,8 +134,14 @@ fn process_result(command: String, status: i64, stdout: String, stderr: String) 
             ),
             (String::from("status"), RuntimeValue::Int(status)),
             (String::from("success"), RuntimeValue::Bool(status == 0)),
-            (String::from("stdout"), RuntimeValue::Str(Arc::new(Mutex::new(stdout)))),
-            (String::from("stderr"), RuntimeValue::Str(Arc::new(Mutex::new(stderr)))),
+            (
+                String::from("stdout"),
+                RuntimeValue::Str(Arc::new(Mutex::new(stdout))),
+            ),
+            (
+                String::from("stderr"),
+                RuntimeValue::Str(Arc::new(Mutex::new(stderr))),
+            ),
         ]))),
     )
 }
@@ -229,7 +235,9 @@ impl NativeFunction for ProcessRawExec {
 
         let result = match execute_raw(options) {
             Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
-            Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(std::sync::Arc::new(std::sync::Mutex::new(err)))))),
+            Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(std::sync::Arc::new(
+                std::sync::Mutex::new(err),
+            ))))),
         };
 
         Ok(result)

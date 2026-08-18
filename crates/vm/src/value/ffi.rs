@@ -574,9 +574,9 @@ impl ExternFunction {
                             Ok(RuntimeValue::Str(Arc::new(Mutex::new(String::new()))))
                         } else {
                             let c_str = CStr::from_ptr(res);
-                            Ok(RuntimeValue::Str(Arc::new(
-                                Mutex::new(c_str.to_string_lossy().to_string()),
-                            )))
+                            Ok(RuntimeValue::Str(Arc::new(Mutex::new(
+                                c_str.to_string_lossy().to_string(),
+                            ))))
                         }
                     }
                     ParserInnerType::Ptr(_) => {

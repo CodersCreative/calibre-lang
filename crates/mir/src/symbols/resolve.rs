@@ -14,7 +14,7 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::{ str::FromStr};
+use std::str::FromStr;
 
 impl MiddleEnvironment {
     pub fn resolve_member_fn_type(
@@ -145,7 +145,11 @@ impl MiddleEnvironment {
         None
     }
 
-    pub fn resolve_member_fn_name(&self, ty: &ParserDataType, member: &impl ToString) -> Option<String> {
+    pub fn resolve_member_fn_name(
+        &self,
+        ty: &ParserDataType,
+        member: &impl ToString,
+    ) -> Option<String> {
         let symbol_name = self
             .typing
             .find_impl_member(ty, member)?
@@ -209,7 +213,7 @@ impl MiddleEnvironment {
                 return Some(key.clone());
             }
         }
-        
+
         None
     }
 

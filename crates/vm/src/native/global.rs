@@ -1,7 +1,8 @@
 use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
 use dumpster::sync::Gc;
 use std::{
-    io::{self, Write}, sync::{Arc, Mutex},
+    io::{self, Write},
+    sync::{Arc, Mutex},
 };
 
 pub struct ConsoleOutput();
@@ -120,9 +121,9 @@ fn with_first_arg(
 
 #[inline]
 fn missing_parameter_result() -> RuntimeValue {
-    RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Arc::new(Mutex::new(String::from(
-        "Add parameter",
-    )))))))
+    RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Arc::new(Mutex::new(
+        String::from("Add parameter"),
+    ))))))
 }
 
 impl NativeFunction for ConsoleOutput {
@@ -195,7 +196,9 @@ impl NativeFunction for Display {
     }
 
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        Ok(RuntimeValue::Str(Arc::new(Mutex::new(args[0].display(env)))))
+        Ok(RuntimeValue::Str(Arc::new(Mutex::new(
+            args[0].display(env),
+        ))))
     }
 }
 
@@ -327,9 +330,9 @@ impl NativeFunction for Trim {
     }
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         with_first_arg(env, args, false, |current| match current {
-            RuntimeValue::Str(s) => {
-                Ok(RuntimeValue::Str(Arc::new(Mutex::new(s.lock().unwrap().trim().to_string()))))
-            }
+            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
+                s.lock().unwrap().trim().to_string(),
+            )))),
             other => Err(RuntimeError::UnexpectedType(other)),
         })
     }
@@ -343,7 +346,9 @@ impl NativeFunction for TrimStart {
     }
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         with_first_arg(env, args, false, |current| match current {
-            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(s.lock().unwrap().trim_start().to_string())))),
+            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
+                s.lock().unwrap().trim_start().to_string(),
+            )))),
             other => Err(RuntimeError::UnexpectedType(other)),
         })
     }
@@ -357,7 +362,9 @@ impl NativeFunction for TrimEnd {
     }
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         with_first_arg(env, args, false, |current| match current {
-            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(s.lock().unwrap().trim_end().to_string())))),
+            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
+                s.lock().unwrap().trim_end().to_string(),
+            )))),
             other => Err(RuntimeError::UnexpectedType(other)),
         })
     }
@@ -371,7 +378,9 @@ impl NativeFunction for IsWhitespace {
     }
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         with_first_arg(env, args, false, |current| match current {
-            RuntimeValue::Str(s) => Ok(RuntimeValue::Bool(s.lock().unwrap().chars().all(|c| c.is_whitespace()))),
+            RuntimeValue::Str(s) => Ok(RuntimeValue::Bool(
+                s.lock().unwrap().chars().all(|c| c.is_whitespace()),
+            )),
             RuntimeValue::Char(c) => Ok(RuntimeValue::Bool(c.is_whitespace())),
             other => Err(RuntimeError::UnexpectedType(other)),
         })

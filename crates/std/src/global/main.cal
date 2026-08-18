@@ -47,7 +47,7 @@ const range := fn (start end : mut int, step : int = 1, inclusive : bool = false
 const fmt := fn (splits : list:<str>, inputs : list:<str>) -> str => {
 	let mut txt : str = "";
 	
-	for i in len(splits) => {
+	for i in 0..len(splits) => {
 		txt &= splits[i];
 		if i < len(inputs) => txt &= inputs[i];
 	};

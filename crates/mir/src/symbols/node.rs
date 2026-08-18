@@ -574,8 +574,7 @@ impl MiddleEnvironment {
                             };
                             let method_name = method_ident.to_string();
 
-                            let method_ty =
-                                self.resolve_member_fn_type(&current, &method_name);
+                            let method_ty = self.resolve_member_fn_type(&current, &method_name);
 
                             current = method_ty
                                 .and_then(|t| {

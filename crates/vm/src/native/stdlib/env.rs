@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use crate::{
     VM,
     error::RuntimeError,
@@ -6,6 +5,7 @@ use crate::{
     value::{GcVec, RuntimeValue},
 };
 use dumpster::sync::Gc;
+use std::sync::{Arc, Mutex};
 
 pub struct EnvGet;
 
@@ -67,7 +67,12 @@ impl NativeFunction for EnvSetVar {
         let name = expect_str_ref(&args[0])?;
         let value = expect_str_ref(&args[1])?;
 
-        unsafe { std::env::set_var(name.lock().unwrap().as_str(), value.lock().unwrap().as_str()) };
+        unsafe {
+            std::env::set_var(
+                name.lock().unwrap().as_str(),
+                value.lock().unwrap().as_str(),
+            )
+        };
 
         Ok(RuntimeValue::Null)
     }

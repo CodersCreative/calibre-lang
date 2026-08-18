@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use crate::{
     VM,
     error::RuntimeError,
@@ -6,6 +5,7 @@ use crate::{
 };
 use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
+use std::sync::{Arc, Mutex};
 
 impl RuntimeValue {
     pub fn convert(
@@ -154,7 +154,9 @@ impl RuntimeValue {
                 if t.data_type == ParserInnerType::Str =>
             {
                 Ok(RuntimeValue::List(Gc::new(GcVec(
-                    x.lock().unwrap().chars()
+                    x.lock()
+                        .unwrap()
+                        .chars()
                         .map(|x| RuntimeValue::Str(Arc::new(Mutex::new(x.to_string()))))
                         .collect::<Vec<RuntimeValue>>(),
                 ))))
@@ -163,7 +165,9 @@ impl RuntimeValue {
                 if t.data_type == ParserInnerType::Char =>
             {
                 Ok(RuntimeValue::List(Gc::new(GcVec(
-                    x.lock().unwrap().chars()
+                    x.lock()
+                        .unwrap()
+                        .chars()
                         .map(|x| RuntimeValue::Char(x))
                         .collect::<Vec<RuntimeValue>>(),
                 ))))

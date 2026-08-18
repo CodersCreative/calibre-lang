@@ -1,11 +1,11 @@
-use std::cmp::Ordering;
-use dumpster::sync::Gc;
 use crate::{
     VM,
     error::RuntimeError,
     native::NativeFunction,
     value::{GcVec, RuntimeValue},
 };
+use dumpster::sync::Gc;
+use std::cmp::Ordering;
 
 fn compare_callback_result(result: RuntimeValue) -> Result<Ordering, RuntimeError> {
     match result {

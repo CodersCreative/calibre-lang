@@ -222,7 +222,7 @@ impl Display for VMBlock {
                 txt.push_str(&format!("\n\t{} : {}", i, literal));
             }
         }
-        
+
         if !self.local_strings.is_empty() {
             txt.push_str("\nSTRINGS:");
             for (i, string) in self.local_strings.iter().enumerate() {

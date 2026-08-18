@@ -742,8 +742,7 @@ impl VM {
                 let name = self.local_string(block, *name)?;
                 if let Some((frame, reg)) = self.find_local_reg_by_name(name) {
                     self.set_reg_value(*dst, RuntimeValue::RegRef { frame, reg });
-                } else if let Some(RuntimeValue::RegRef { frame, reg }) = self.variables.get(name)
-                {
+                } else if let Some(RuntimeValue::RegRef { frame, reg }) = self.variables.get(name) {
                     self.set_reg_value(
                         *dst,
                         RuntimeValue::RegRef {
@@ -762,7 +761,7 @@ impl VM {
                             reg,
                         },
                     );
-                }  else {
+                } else {
                     self.set_reg_value(*dst, RuntimeValue::Ref(name.to_string()));
                 }
             }
@@ -1832,7 +1831,9 @@ impl VM {
                                 .map(RuntimeValue::Char)
                                 .unwrap_or_else(|| RuntimeValue::Null)
                         }
-                        RuntimeValue::UInt(index) => s.lock().unwrap()
+                        RuntimeValue::UInt(index) => s
+                            .lock()
+                            .unwrap()
                             .chars()
                             .nth(*index as usize)
                             .map(RuntimeValue::Char)
@@ -2087,8 +2088,7 @@ impl VM {
                     RuntimeValue::VarRef(id) => RuntimeValue::VarRef(id),
                     RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef { frame, reg },
                     other => if let Some(name) = self.find_local_name_for_reg(*value) {
-                        if let Some(id) = self.variables.id_of(name.as_ref())
-                        {
+                        if let Some(id) = self.variables.id_of(name.as_ref()) {
                             RuntimeValue::VarRef(id)
                         } else {
                             RuntimeValue::RegRef {
