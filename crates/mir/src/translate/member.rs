@@ -9,7 +9,7 @@ use calibre_parser::{
     Span,
     ast::{
         Operator, RefMutability,
-        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        idents::{ParserText, PotentialGenericTypeIdentifier},
         nodes::{CallArg, Node, NodeType},
         types::{ParserDataType, ParserInnerType, PotentialNewType},
     },

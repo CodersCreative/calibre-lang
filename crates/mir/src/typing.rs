@@ -1,5 +1,3 @@
-use std::{fmt::Display, mem};
-
 use crate::environment::MiddleEnvironment;
 use calibre_parser::{
     Location,
@@ -11,6 +9,7 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::fmt::Display;
 
 #[derive(Debug, Clone, Default)]
 pub struct Typing {

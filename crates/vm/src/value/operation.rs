@@ -462,7 +462,7 @@ impl RuntimeValue {
 
     fn special_shr(
         self,
-        vm: &mut VM,
+        _vm: &mut VM,
         rhs: Self,
     ) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match rhs {
@@ -484,7 +484,7 @@ impl RuntimeValue {
 
     fn special_shl(
         self,
-        vm: &mut VM,
+        _vm: &mut VM,
         rhs: Self,
     ) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match self {

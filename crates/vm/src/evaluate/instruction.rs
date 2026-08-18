@@ -730,8 +730,8 @@ impl VM {
             }
             VMInstruction::StoreGlobal { name, src } => {
                 let name = self.local_string(block, *name)?;
-                let mut value = self.get_reg_value(*src).clone();
-                let id = self.variables.insert_with_id(name, value);
+                let value = self.get_reg_value(*src).clone();
+                let _ = self.variables.insert(name, value);
             }
             VMInstruction::SetLocalName { name, src } => {
                 let interned = self.intern_local_string(block, *name)?;

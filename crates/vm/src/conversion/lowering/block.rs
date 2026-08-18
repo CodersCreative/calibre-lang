@@ -1,5 +1,4 @@
 use super::*;
-use calibre_parser::ast::binary::BinaryOperator;
 
 impl<'a> BlockLoweringCtx<'a> {
     pub(super) fn alloc_reg(&mut self) -> Reg {
