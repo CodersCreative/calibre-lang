@@ -96,6 +96,13 @@ impl<'a> BlockLoweringCtx<'a> {
                     let name_idx = self.add_string(dest.to_string());
                     self.map.insert(dest.to_string(), target);
                     self.emit(
+                        VMInstruction::StoreGlobal {
+                            name: name_idx,
+                            src: target,
+                        },
+                        node.span,
+                    );
+                    self.emit(
                         VMInstruction::SetLocalName {
                             name: name_idx,
                             src: target,
