@@ -344,7 +344,7 @@ const main := fn => {
 		print("current_context.path => " & current_context.path);
 
 		// File IO (read current showcase data module)
-		let file := File.open_read(current_context.module_name.replace("main.cal", "data.cal"));
+		let file := File.open_read(current_context.path.replace("main.cal", "data.cal"));
 		let text := file.read_all(200);
 		print("file prefix => " & text);
 	};

@@ -6,7 +6,7 @@ import Args from std::env;
 @current_context const main := fn => {
 	let input_path := match Args.first() {
 		.Some : p => p,
-		.None => current_context.module_name.replace("parser.cal", "test.json")
+		.None => current_context.path.replace("parser.cal", "test.json")
 	};
 	
 	let mut file := try File.open_read(input_path) : e => {

@@ -1141,9 +1141,9 @@ impl MiddleEnvironment {
             };
 
             let module_name = if !scope_ref.path.as_os_str().is_empty() {
-                scope_ref.path.to_string_lossy().to_string()
+                scope_ref.namespace.to_string()
             } else {
-                "unknown.cal".to_string()
+                "unknown".to_string()
             };
 
             let caller_context_arg = Node::new(
@@ -1155,7 +1155,7 @@ impl MiddleEnvironment {
                         ("module_name".to_string(), value(module_name)),
                         (
                             "path".to_string(),
-                            value(scope_ref.path.to_string_lossy().to_string()),
+                            value(scope_ref.path.canonicalize().unwrap_or_default().to_string_lossy().to_string()),
                         ),
                         (
                             "line".to_string(),

@@ -17,7 +17,7 @@ use dumpster::sync::Gc;
 use dumpster::{TraceWith, Visitor};
 use libffi::middle::{Arg, Cif, CodePtr, Type};
 use libloading::Library;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::os::raw::c_void;
@@ -268,7 +268,7 @@ pub enum RuntimeValue {
     Mutex(Arc<MutexInner>),
     MutexGuard(Arc<MutexGuardInner>),
     HashMap(Arc<Mutex<FxHashMap<HashKey, RuntimeValue>>>),
-    HashSet(Arc<Mutex<rustc_hash::FxHashSet<HashKey>>>),
+    HashSet(Arc<Mutex<FxHashSet<HashKey>>>),
     TcpStream(Arc<Mutex<TcpStream>>),
     TcpListener(Arc<TcpListener>),
     NativeFunction(Arc<dyn NativeFunction>),

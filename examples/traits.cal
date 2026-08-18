@@ -48,7 +48,7 @@ const show := fn (label : str, p : dyn:<Human>) => {
 	let parts := "a,b,c".split(",");
 	print(parts[1]);
 	print("calibre".starts_with("cal"));
-	let file := try File.open_read(current_context.module_name.replace("traits.cal", "destructure.cal")) => panic();
+	let file := try File.open_read(current_context.path.replace("traits.cal", "destructure.cal")) => panic();
 	print(file.read_all(10000));
 	
 	let ty := Ty { };

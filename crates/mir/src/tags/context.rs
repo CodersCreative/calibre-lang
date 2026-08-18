@@ -163,11 +163,11 @@ impl MiddleEnvironment {
                             ("function_name".to_string(), value(function_name)),
                             (
                                 "module_name".to_string(),
-                                value(scope_ref.path_or_fallback()),
+                                value(scope_ref.namespace),
                             ),
                             (
                                 "path".to_string(),
-                                value(scope_ref.path.to_string_lossy().to_string()),
+                                value(scope_ref.path.canonicalize().unwrap_or_default().to_string_lossy().to_string()),
                             ),
                             (
                                 "line".to_string(),

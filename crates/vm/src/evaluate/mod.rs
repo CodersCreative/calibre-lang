@@ -1117,7 +1117,7 @@ impl VM {
                 let _ = self.variables.insert(name, value);
             }
 
-            let param_names: std::collections::HashSet<&str> =
+            let param_names: FxHashSet<&str> =
                 function.params.iter().map(|x| x.as_str()).collect();
             let filtered_captures: Vec<(String, RuntimeValue)> = captures
                 .iter()

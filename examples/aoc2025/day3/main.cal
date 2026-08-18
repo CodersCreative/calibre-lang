@@ -2,8 +2,8 @@ import File from std::fs;
 import Channel from std::async;
 
 @current_context const main := fn => {
-	let file : File = try File.open_read(current_context.module_name.replace("main.cal", "input.txt")) : e => {
-		try File.open_read(current_context.module_name.replace("main.cal", "custom_input.txt")) => {
+	let file : File = try File.open_read(current_context.path.replace("main.cal", "input.txt")) : e => {
+		try File.open_read(current_context.path.replace("main.cal", "custom_input.txt")) => {
 			print(e);
 			return;
 		};
