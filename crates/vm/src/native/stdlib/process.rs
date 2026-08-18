@@ -1,6 +1,6 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
@@ -31,7 +31,7 @@ fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<String>, RuntimeErro
     for value in values.0.iter().cloned() {
         let value = env.resolve_value_for_op_ref(&value)?;
         match value {
-            RuntimeValue::Str(v) => out.push(v.to_string()),
+            RuntimeValue::Str(v) => out.push(v.lock().unwrap().clone()),
             other => return Err(RuntimeError::UnexpectedType(other)),
         }
     }
@@ -60,7 +60,7 @@ fn required_str_field(env: &VM, map: &Gc<GcMap>, key: &str) -> Result<String, Ru
         return Err(RuntimeError::InvalidFunctionCall);
     };
     match value {
-        RuntimeValue::Str(v) => Ok(v.to_string()),
+        RuntimeValue::Str(v) => Ok(v.lock().unwrap().clone()),
         other => Err(RuntimeError::UnexpectedType(other)),
     }
 }
@@ -69,10 +69,10 @@ fn parse_optional_string(value: RuntimeValue) -> Result<Option<String>, RuntimeE
     match value {
         RuntimeValue::Option(None) => Ok(None),
         RuntimeValue::Option(Some(v)) => match v.as_ref() {
-            RuntimeValue::Str(v) => Ok(Some(v.to_string())),
+            RuntimeValue::Str(v) => Ok(Some(v.lock().unwrap().clone())),
             other => Err(RuntimeError::UnexpectedType(other.clone())),
         },
-        RuntimeValue::Str(v) => Ok(Some(v.to_string())),
+        RuntimeValue::Str(v) => Ok(Some(v.lock().unwrap().clone())),
         other => Err(RuntimeError::UnexpectedType(other)),
     }
 }
@@ -130,12 +130,12 @@ fn process_result(command: String, status: i64, stdout: String, stderr: String) 
         Gc::new(GcMap(ObjectMap::from(vec![
             (
                 String::from("command"),
-                RuntimeValue::Str(Arc::new(command)),
+                RuntimeValue::Str(Arc::new(Mutex::new(command))),
             ),
             (String::from("status"), RuntimeValue::Int(status)),
             (String::from("success"), RuntimeValue::Bool(status == 0)),
-            (String::from("stdout"), RuntimeValue::Str(Arc::new(stdout))),
-            (String::from("stderr"), RuntimeValue::Str(Arc::new(stderr))),
+            (String::from("stdout"), RuntimeValue::Str(Arc::new(Mutex::new(stdout)))),
+            (String::from("stderr"), RuntimeValue::Str(Arc::new(Mutex::new(stderr)))),
         ]))),
     )
 }
@@ -229,7 +229,7 @@ impl NativeFunction for ProcessRawExec {
 
         let result = match execute_raw(options) {
             Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
-            Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Arc::new(err))))),
+            Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(std::sync::Arc::new(std::sync::Mutex::new(err)))))),
         };
 
         Ok(result)

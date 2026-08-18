@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex};
 use crate::{
     VM,
     error::RuntimeError,
@@ -24,9 +25,9 @@ impl NativeFunction for Sha256Fn {
             return Err(RuntimeError::UnexpectedType(input));
         };
         let mut hasher = Sha256::new();
-        hasher.update(s.as_bytes());
+        hasher.update(s.lock().unwrap().as_bytes());
         let out = hasher.finalize();
-        Ok(RuntimeValue::Str(std::sync::Arc::new(hex::encode(out))))
+        Ok(RuntimeValue::Str(Arc::new(Mutex::new(hex::encode(out)))))
     }
 }
 
@@ -47,9 +48,9 @@ impl NativeFunction for Sha512Fn {
             return Err(RuntimeError::UnexpectedType(input));
         };
         let mut hasher = Sha512::new();
-        hasher.update(s.as_bytes());
+        hasher.update(s.lock().unwrap().as_bytes());
         let out = hasher.finalize();
-        Ok(RuntimeValue::Str(std::sync::Arc::new(hex::encode(out))))
+        Ok(RuntimeValue::Str(Arc::new(Mutex::new(hex::encode(out)))))
     }
 }
 
@@ -70,10 +71,10 @@ impl NativeFunction for Blake3Fn {
             return Err(RuntimeError::UnexpectedType(input));
         };
         let mut hasher = Blake3::new();
-        hasher.update(s.as_bytes());
+        hasher.update(s.lock().unwrap().as_bytes());
         let out = hasher.finalize();
-        Ok(RuntimeValue::Str(std::sync::Arc::new(
-            out.to_hex().to_string(),
+        Ok(RuntimeValue::Str(Arc::new(Mutex::new(
+            out.to_hex().to_string(),)
         )))
     }
 }

@@ -1,3 +1,5 @@
+use std::sync::Mutex;
+
 use super::*;
 use crate::{
     native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
@@ -840,7 +842,7 @@ impl VM {
                     AsFailureMode::Result => match conversion {
                         Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
                         Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
-                            Arc::new(err.to_string()),
+                            Arc::new(Mutex::new(err.to_string())),
                         )))),
                     },
                 };
@@ -965,7 +967,7 @@ impl VM {
                         RuntimeValue::Char(v) => Ok(v as i64),
                         RuntimeValue::List(v) => Ok(v.as_ref().0.len() as i64),
                         RuntimeValue::Aggregate(_, v) => Ok(v.as_ref().0.0.len() as i64),
-                        RuntimeValue::Str(v) => Ok(v.len() as i64),
+                        RuntimeValue::Str(v) => Ok(v.lock().unwrap().len() as i64),
                         RuntimeValue::Range(from, to) => Ok((to - from).max(0)),
                         other => Err(RuntimeError::UnexpectedType(other)),
                     }
@@ -1034,10 +1036,10 @@ impl VM {
                             *dst,
                             RuntimeValue::Generator {
                                 type_name: Arc::new(type_name),
-                                state: Arc::new(std::sync::Mutex::new(GeneratorState {
+                                state: Arc::new(Mutex::new(GeneratorState {
                                     vm: gen_vm,
                                     function_name: name,
-                                    captures: std::sync::Arc::new(resolved_caps),
+                                    captures: Arc::new(resolved_caps),
                                     task_state: crate::TaskState::default(),
                                     index: 0,
                                     completed: false,
@@ -1108,7 +1110,7 @@ impl VM {
                             .collect();
                         RuntimeValue::Function {
                             name,
-                            captures: std::sync::Arc::new(resolved_caps),
+                            captures: Arc::new(resolved_caps),
                         }
                     }
                     other => other,
@@ -1254,12 +1256,12 @@ impl VM {
                         {
                             callee.bind_if_callable(value.as_ref().clone())
                         } else if member_short == "type" {
-                            RuntimeValue::Str(type_name)
+                            RuntimeValue::Str(Arc::new(Mutex::new(type_name.to_string())))
                         } else if member_short == "traits" {
                             RuntimeValue::List(Gc::new(GcVec(
                                 constraints
                                     .iter()
-                                    .map(|x| RuntimeValue::Str(Arc::new(x.clone())))
+                                    .map(|x| RuntimeValue::Str(Arc::new(Mutex::new(x.clone()))))
                                     .collect(),
                             )))
                         } else {
@@ -1786,8 +1788,8 @@ impl VM {
                     }
                 };
 
-                let index_map = |map: &std::sync::Arc<
-                    std::sync::Mutex<rustc_hash::FxHashMap<crate::value::HashKey, RuntimeValue>>,
+                let index_map = |map: &Arc<
+                    Mutex<rustc_hash::FxHashMap<crate::value::HashKey, RuntimeValue>>,
                 >|
                  -> Result<RuntimeValue, RuntimeError> {
                     let key = crate::value::HashKey::try_from(index_val.clone())?;
@@ -1850,26 +1852,26 @@ impl VM {
                     RuntimeValue::Str(s) => match &index_val {
                         RuntimeValue::Int(index) => {
                             let resolved = if *index < 0 {
-                                let len = s.chars().count();
+                                let len = s.lock().unwrap().chars().count();
                                 Self::resolve_index(len, *index)
                             } else {
                                 Some(*index as usize)
                             };
                             resolved
-                                .and_then(|i| s.chars().nth(i))
+                                .and_then(|i| s.lock().unwrap().chars().nth(i))
                                 .map(RuntimeValue::Char)
                                 .unwrap_or_else(|| RuntimeValue::Null)
                         }
-                        RuntimeValue::UInt(index) => s
+                        RuntimeValue::UInt(index) => s.lock().unwrap()
                             .chars()
                             .nth(*index as usize)
                             .map(RuntimeValue::Char)
                             .unwrap_or_else(|| RuntimeValue::Null),
                         RuntimeValue::Range(start, end) => {
-                            let v = s.chars().collect::<Vec<char>>();
+                            let v = s.lock().unwrap().chars().collect::<Vec<char>>();
                             let (s, e) = Self::resolve_slice_range(v.len(), *start, *end);
                             let slice: String = v[s..e].iter().collect();
-                            RuntimeValue::Str(Arc::new(slice))
+                            RuntimeValue::Str(Arc::new(Mutex::new(slice)))
                         }
                         _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
                     },
@@ -2279,33 +2281,33 @@ impl VM {
                     RuntimeValue::Str(data) => {
                         let s = if *right {
                             let mut s = value.display(self);
-                            s.push_str(data.as_str());
+                            s.push_str(data.lock().unwrap().as_str());
                             s
                         } else {
-                            let mut s = data.as_str().to_string();
+                            let mut s = data.lock().unwrap().as_str().to_string();
                             s.push_str(&value.display(self));
                             s
                         };
 
-                        self.set_reg_value(*target, RuntimeValue::Str(Arc::new(s)));
+                        self.set_reg_value(*target, RuntimeValue::Str(Arc::new(Mutex::new(s))));
                     }
                     RuntimeValue::Null => {
                         let s = value.display(self);
-                        self.set_reg_value(*target, RuntimeValue::Str(Arc::new(s)));
+                        self.set_reg_value(*target, RuntimeValue::Str(Arc::new(Mutex::new(s))));
                     }
                     RuntimeValue::Ref(name) => {
                         if let Some(RuntimeValue::Str(data)) = self.variables.get(&name).cloned() {
                             let s = if *right {
                                 let mut s = value.display(self);
-                                s.push_str(data.as_str());
+                                s.push_str(data.lock().unwrap().as_str());
                                 s
                             } else {
-                                let mut s = data.as_str().to_string();
+                                let mut s = data.lock().unwrap().as_str().to_string();
                                 s.push_str(&value.display(self));
                                 s
                             };
 
-                            self.variables.insert(&name, RuntimeValue::Str(Arc::new(s)));
+                            self.variables.insert(&name, RuntimeValue::Str(Arc::new(Mutex::new(s))));
                         }
                     }
                     RuntimeValue::VarRef(id) => {
@@ -2313,15 +2315,15 @@ impl VM {
                         {
                             let s = if *right {
                                 let mut s = value.display(self);
-                                s.push_str(data.as_str());
+                                s.push_str(data.lock().unwrap().as_str());
                                 s
                             } else {
-                                let mut s = data.as_str().to_string();
+                                let mut s = data.lock().unwrap().as_str().to_string();
                                 s.push_str(&value.display(self));
                                 s
                             };
 
-                            let _ = self.variables.set_by_id(id, RuntimeValue::Str(Arc::new(s)));
+                            let _ = self.variables.set_by_id(id, RuntimeValue::Str(Arc::new(Mutex::new(s))));
                         }
                     }
                     RuntimeValue::RegRef { frame, reg } => {
@@ -2330,15 +2332,15 @@ impl VM {
                         {
                             let s = if *right {
                                 let mut s = value.display(self);
-                                s.push_str(data.as_str());
+                                s.push_str(data.lock().unwrap().as_str());
                                 s
                             } else {
-                                let mut s = data.as_str().to_string();
+                                let mut s = data.lock().unwrap().as_str().to_string();
                                 s.push_str(&value.display(self));
                                 s
                             };
 
-                            self.set_reg_value_in_frame(frame, reg, RuntimeValue::Str(Arc::new(s)));
+                            self.set_reg_value_in_frame(frame, reg, RuntimeValue::Str(Arc::new(Mutex::new(s))));
                         }
                     }
                     _ => {

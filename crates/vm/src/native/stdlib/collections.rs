@@ -1,7 +1,5 @@
 use std::sync::{Arc, Mutex};
-
 use rustc_hash::{FxHashMap, FxHashSet};
-
 use crate::{
     VM,
     error::RuntimeError,

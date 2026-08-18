@@ -1,6 +1,6 @@
 use calibre_parser::ast::idents::ParserText;
 use rustc_hash::FxHashMap;
-use std::{cmp::Ordering, fmt::Debug, sync::Arc};
+use std::{cmp::Ordering, fmt::Debug, sync::{Arc, Mutex}};
 
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
 
@@ -38,7 +38,7 @@ pub(crate) fn pop_or_null(args: &mut Vec<RuntimeValue>) -> RuntimeValue {
 }
 
 #[inline]
-pub(crate) fn expect_str_ref(value: &RuntimeValue) -> Result<&Arc<String>, RuntimeError> {
+pub(crate) fn expect_str_ref(value: &RuntimeValue) -> Result<&Arc<Mutex<String>>, RuntimeError> {
     if let RuntimeValue::Str(s) = value {
         Ok(s)
     } else {
@@ -50,13 +50,13 @@ pub(crate) fn expect_str_ref(value: &RuntimeValue) -> Result<&Arc<String>, Runti
 pub(crate) fn expect_str_arg_or_empty(
     args: &[RuntimeValue],
     index: usize,
-) -> Result<&Arc<String>, RuntimeError> {
+) -> Result<&Arc<Mutex<String>>, RuntimeError> {
     if let Some(value) = args.get(index) {
         return expect_str_ref(value);
     }
 
-    static EMPTY: std::sync::OnceLock<Arc<String>> = std::sync::OnceLock::new();
-    Ok(EMPTY.get_or_init(|| Arc::new(String::new())))
+    static EMPTY: std::sync::OnceLock<Arc<Mutex<String>>> = std::sync::OnceLock::new();
+    Ok(EMPTY.get_or_init(|| Arc::new(Mutex::new(String::new()))))
 }
 
 #[inline]
@@ -68,9 +68,9 @@ fn expect_char_arg(args: &[RuntimeValue], index: usize) -> Result<char, RuntimeE
 }
 
 #[inline]
-pub(crate) fn expect_str_owned(value: RuntimeValue) -> Result<Arc<String>, RuntimeError> {
+pub(crate) fn expect_str_owned(value: RuntimeValue) -> Result<String, RuntimeError> {
     if let RuntimeValue::Str(s) = value {
-        Ok(s)
+        Ok(s.lock().unwrap().clone())
     } else {
         Err(RuntimeError::UnexpectedType(value))
     }

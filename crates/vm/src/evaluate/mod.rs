@@ -301,7 +301,7 @@ impl VM {
                     };
                     refreshed_caps.push((cap_name.clone(), value));
                 }
-                let refreshed = std::sync::Arc::new(refreshed_caps);
+                let refreshed = Arc::new(refreshed_caps);
                 self.run_function(func.as_ref(), args, refreshed)
             }
             RuntimeValue::NativeFunction(func) => func.run(self, args),
@@ -418,7 +418,7 @@ impl VM {
             self.invoke_callable_value(callable, vec![receiver], u32::MAX.saturating_sub(1))?;
 
         match output {
-            RuntimeValue::Str(s) => Some(s.to_string()),
+            RuntimeValue::Str(s) => Some(s.lock().unwrap().to_string()),
             other => Some(other.display(self)),
         }
     }
@@ -921,7 +921,7 @@ impl VM {
         &mut self,
         function: &VMFunction,
         args: I,
-        captures: std::sync::Arc<Vec<(String, RuntimeValue)>>,
+        captures: Arc<Vec<(String, RuntimeValue)>>,
     ) -> Result<RuntimeValue, RuntimeError>
     where
         I: IntoIterator<Item = RuntimeValue>,
@@ -938,7 +938,7 @@ impl VM {
         &mut self,
         function: &VMFunction,
         args: &[u16],
-        captures: std::sync::Arc<Vec<(String, RuntimeValue)>>,
+        captures: Arc<Vec<(String, RuntimeValue)>>,
     ) -> Result<RuntimeValue, RuntimeError> {
         let caller_frame = self.frames.len().saturating_sub(1);
 
@@ -1079,7 +1079,7 @@ impl VM {
         &mut self,
         function: &VMFunction,
         args: I,
-        captures: std::sync::Arc<Vec<(String, RuntimeValue)>>,
+        captures: Arc<Vec<(String, RuntimeValue)>>,
         budget: usize,
         state: &mut crate::TaskState,
     ) -> Result<Option<RuntimeValue>, RuntimeError>

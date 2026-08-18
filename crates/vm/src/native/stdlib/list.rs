@@ -1,7 +1,5 @@
 use std::cmp::Ordering;
-
 use dumpster::sync::Gc;
-
 use crate::{
     VM,
     error::RuntimeError,

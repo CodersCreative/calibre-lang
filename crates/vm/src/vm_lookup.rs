@@ -166,12 +166,12 @@ impl VM {
         if !seen.insert(name.clone()) {
             return RuntimeValue::Function {
                 name: name.clone().into(),
-                captures: std::sync::Arc::new(Vec::new()),
+                captures: Arc::new(Vec::new()),
             };
         }
         RuntimeValue::Function {
             name: name.clone().into(),
-            captures: std::sync::Arc::new(self.capture_values(&func.captures, seen)),
+            captures: Arc::new(self.capture_values(&func.captures, seen)),
         }
     }
 

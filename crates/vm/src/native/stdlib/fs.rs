@@ -1,5 +1,4 @@
-use std::sync::Arc;
-
+use std::sync::{Arc, Mutex};
 use crate::{
     VM,
     error::RuntimeError,
@@ -18,19 +17,19 @@ impl NativeFunction for FsReadDir {
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let path = expect_str_ref(first_arg(&args)?)?;
 
-        match std::fs::read_dir(path.as_str()) {
+        match std::fs::read_dir(path.lock().unwrap().as_str()) {
             Ok(entries) => {
                 let mut out = Vec::new();
                 for entry in entries {
                     match entry {
                         Ok(entry) => {
-                            out.push(RuntimeValue::Str(Arc::new(
-                                entry.path().display().to_string(),
+                            out.push(RuntimeValue::Str(Arc::new(Mutex::new(
+                                entry.path().display().to_string(),)
                             )));
                         }
                         Err(err) => {
                             return Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
-                                Arc::new(err.to_string()),
+                                Arc::new(Mutex::new(err.to_string())),
                             )))));
                         }
                     }
@@ -41,7 +40,7 @@ impl NativeFunction for FsReadDir {
                 )))))
             }
             Err(err) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
-                Arc::new(err.to_string()),
+                Arc::new(Mutex::new(err.to_string())),
             ))))),
         }
     }

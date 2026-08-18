@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex};
 use crate::{
     VM,
     error::RuntimeError,
@@ -5,7 +6,6 @@ use crate::{
 };
 use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
-use std::sync::Arc;
 
 impl RuntimeValue {
     pub fn convert(
@@ -58,7 +58,7 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Char((x as u8) as char))
             }
             (RuntimeValue::UInt(x), ParserInnerType::Str) => {
-                Ok(RuntimeValue::Str(Arc::new(x.to_string())))
+                Ok(RuntimeValue::Str(Arc::new(Mutex::new(x.to_string()))))
             }
 
             (RuntimeValue::Int(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x)),
@@ -70,7 +70,7 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Char((x as u8) as char))
             }
             (RuntimeValue::Int(x), ParserInnerType::Str) => {
-                Ok(RuntimeValue::Str(Arc::new(x.to_string())))
+                Ok(RuntimeValue::Str(Arc::new(Mutex::new(x.to_string()))))
             }
             (RuntimeValue::Float(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x)),
             (RuntimeValue::Float(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
@@ -81,7 +81,7 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Char((x as u8) as char))
             }
             (RuntimeValue::Float(x), ParserInnerType::Str) => {
-                Ok(RuntimeValue::Str(Arc::new(x.to_string())))
+                Ok(RuntimeValue::Str(Arc::new(Mutex::new(x.to_string()))))
             }
             (RuntimeValue::Range(from, to), ParserInnerType::Range) => {
                 Ok(RuntimeValue::Range(from, to))
@@ -107,7 +107,7 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Float(if x { 1.0 } else { 0.0 }))
             }
             (RuntimeValue::Bool(x), ParserInnerType::Str) => {
-                Ok(RuntimeValue::Str(Arc::new(x.to_string())))
+                Ok(RuntimeValue::Str(Arc::new(Mutex::new(x.to_string()))))
             }
             (RuntimeValue::Char(x), ParserInnerType::Char) => Ok(RuntimeValue::Char(x)),
             (RuntimeValue::Char(x), ParserInnerType::Bool) => {
@@ -120,20 +120,20 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Float((x as u8) as f64))
             }
             (RuntimeValue::Char(x), ParserInnerType::Str) => {
-                Ok(RuntimeValue::Str(Arc::new(x.to_string())))
+                Ok(RuntimeValue::Str(Arc::new(Mutex::new(x.to_string()))))
             }
             (RuntimeValue::Str(x), ParserInnerType::Str) => Ok(RuntimeValue::Str(x)),
             (RuntimeValue::Str(x), ParserInnerType::Float) => {
-                Ok(RuntimeValue::Float(x.as_str().trim().parse()?))
+                Ok(RuntimeValue::Float(x.lock().unwrap().trim().parse()?))
             }
             (RuntimeValue::Str(x), ParserInnerType::UInt) => {
-                Ok(RuntimeValue::UInt(x.as_str().trim().parse()?))
+                Ok(RuntimeValue::UInt(x.lock().unwrap().trim().parse()?))
             }
             (RuntimeValue::Str(x), ParserInnerType::Byte) => {
-                Ok(RuntimeValue::Byte(x.as_str().trim().parse()?))
+                Ok(RuntimeValue::Byte(x.lock().unwrap().trim().parse()?))
             }
             (RuntimeValue::Str(x), ParserInnerType::Int) => {
-                Ok(RuntimeValue::Int(x.as_str().trim().parse()?))
+                Ok(RuntimeValue::Int(x.lock().unwrap().trim().parse()?))
             }
             (RuntimeValue::Byte(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x)),
             (RuntimeValue::Byte(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
@@ -142,10 +142,10 @@ impl RuntimeValue {
             (RuntimeValue::Byte(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x as f64)),
             (RuntimeValue::Byte(x), ParserInnerType::Char) => Ok(RuntimeValue::Char(x as char)),
             (RuntimeValue::Byte(x), ParserInnerType::Str) => {
-                Ok(RuntimeValue::Str(Arc::new(x.to_string())))
+                Ok(RuntimeValue::Str(Arc::new(Mutex::new(x.to_string()))))
             }
             (RuntimeValue::Str(x), ParserInnerType::Char) => {
-                let ch = x.as_str().chars().next().ok_or_else(|| {
+                let ch = x.lock().unwrap().chars().next().ok_or_else(|| {
                     RuntimeError::CantConvert(RuntimeValue::Str(x.clone()), ParserInnerType::Char)
                 })?;
                 Ok(RuntimeValue::Char(ch))
@@ -154,8 +154,8 @@ impl RuntimeValue {
                 if t.data_type == ParserInnerType::Str =>
             {
                 Ok(RuntimeValue::List(Gc::new(GcVec(
-                    x.chars()
-                        .map(|x| RuntimeValue::Str(Arc::new(x.to_string())))
+                    x.lock().unwrap().chars()
+                        .map(|x| RuntimeValue::Str(Arc::new(Mutex::new(x.to_string()))))
                         .collect::<Vec<RuntimeValue>>(),
                 ))))
             }
@@ -163,7 +163,7 @@ impl RuntimeValue {
                 if t.data_type == ParserInnerType::Char =>
             {
                 Ok(RuntimeValue::List(Gc::new(GcVec(
-                    x.chars()
+                    x.lock().unwrap().chars()
                         .map(|x| RuntimeValue::Char(x))
                         .collect::<Vec<RuntimeValue>>(),
                 ))))

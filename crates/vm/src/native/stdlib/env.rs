@@ -1,5 +1,4 @@
-use std::sync::Arc;
-
+use std::sync::{Arc, Mutex};
 use crate::{
     VM,
     error::RuntimeError,
@@ -28,7 +27,7 @@ impl NativeFunction for EnvGet {
         };
 
         Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
-            Arc::new(value.clone()),
+            Arc::new(Mutex::new(value.clone())),
         )))))
     }
 }
@@ -43,9 +42,9 @@ impl NativeFunction for EnvVar {
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let name = expect_str_ref(first_arg(&args)?)?;
 
-        match std::env::var(name.as_str()) {
+        match std::env::var(name.lock().unwrap().as_str()) {
             Ok(value) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
-                Arc::new(value),
+                Arc::new(Mutex::new(value)),
             ))))),
             Err(std::env::VarError::NotPresent) => Ok(RuntimeValue::Option(None)),
             Err(err) => Err(RuntimeError::Io(err.to_string())),
@@ -68,7 +67,7 @@ impl NativeFunction for EnvSetVar {
         let name = expect_str_ref(&args[0])?;
         let value = expect_str_ref(&args[1])?;
 
-        unsafe { std::env::set_var(name.as_str(), value.as_str()) };
+        unsafe { std::env::set_var(name.lock().unwrap().as_str(), value.lock().unwrap().as_str()) };
 
         Ok(RuntimeValue::Null)
     }
@@ -84,7 +83,7 @@ impl NativeFunction for EnvRemoveVar {
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let name = expect_str_ref(first_arg(&args)?)?;
 
-        unsafe { std::env::remove_var(name.as_str()) };
+        unsafe { std::env::remove_var(name.lock().unwrap().as_str()) };
 
         Ok(RuntimeValue::Null)
     }
@@ -99,7 +98,7 @@ impl NativeFunction for EnvVars {
 
     fn run(&self, _env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let vars = std::env::vars()
-            .map(|(k, v)| RuntimeValue::Str(Arc::new(format!("{k}={v}"))))
+            .map(|(k, v)| RuntimeValue::Str(Arc::new(Mutex::new(format!("{k}={v}")))))
             .collect();
 
         Ok(RuntimeValue::List(Gc::new(GcVec(vars))))

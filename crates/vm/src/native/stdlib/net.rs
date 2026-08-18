@@ -111,7 +111,7 @@ impl NativeFunction for HttpRequest {
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let (method, url, body) = parse_http_args(args)?;
         let text = send_http_request(&method, &url, &body)?;
-        Ok(RuntimeValue::Str(std::sync::Arc::new(text)))
+        Ok(RuntimeValue::Str(Arc::new(Mutex::new(text))))
     }
 }
 
@@ -126,10 +126,10 @@ impl NativeFunction for HttpRequestTry {
         let (method, url, body) = parse_http_args(args)?;
         match send_http_request(&method, &url, &body) {
             Ok(text) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Str(
-                std::sync::Arc::new(text),
+                Arc::new(Mutex::new(text)),
             ))))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
-                std::sync::Arc::new(e.to_string()),
+                Arc::new(Mutex::new(e.to_string())),
             ))))),
         }
     }
@@ -280,14 +280,14 @@ impl NativeFunction for TcpRead {
             Ok(n) => {
                 buf.truncate(n);
                 let out = String::from_utf8_lossy(&buf).to_string();
-                Ok(RuntimeValue::Str(std::sync::Arc::new(out)))
+                Ok(RuntimeValue::Str(Arc::new(Mutex::new(out))))
             }
             Err(e)
                 if e.kind() == std::io::ErrorKind::WouldBlock
                     || e.kind() == std::io::ErrorKind::TimedOut
                     || e.kind() == std::io::ErrorKind::ConnectionReset =>
             {
-                Ok(RuntimeValue::Str(std::sync::Arc::new(String::new())))
+                Ok(RuntimeValue::Str(Arc::new(Mutex::new(String::new()))))
             }
             Err(e) => Err(RuntimeError::Io(e.to_string())),
         }

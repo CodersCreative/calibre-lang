@@ -224,7 +224,7 @@ fn run_task_slice(task: &mut Task, quantum: usize) -> Option<TaskStatus> {
             };
 
             let mut state = task.vm.take_task_state();
-            let resolved_captures = std::sync::Arc::new(
+            let resolved_captures = Arc::new(
                 captures
                     .as_ref()
                     .iter()

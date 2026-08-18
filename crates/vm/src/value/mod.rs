@@ -52,7 +52,7 @@ pub enum HashKey {
     UInt(u64),
     Bool(bool),
     Char(char),
-    Str(Arc<String>),
+    Str(String),
 }
 
 impl TryFrom<RuntimeValue> for HashKey {
@@ -64,7 +64,7 @@ impl TryFrom<RuntimeValue> for HashKey {
             RuntimeValue::Byte(x) => Ok(Self::UInt(x as u64)),
             RuntimeValue::Bool(x) => Ok(Self::Bool(x)),
             RuntimeValue::Char(x) => Ok(Self::Char(x)),
-            RuntimeValue::Str(x) => Ok(Self::Str(x)),
+            RuntimeValue::Str(x) => Ok(Self::Str(x.lock().unwrap().clone())),
             other => Err(RuntimeError::UnexpectedType(other)),
         }
     }
@@ -77,7 +77,7 @@ impl From<HashKey> for RuntimeValue {
             HashKey::UInt(x) => RuntimeValue::UInt(x),
             HashKey::Bool(x) => RuntimeValue::Bool(x),
             HashKey::Char(x) => RuntimeValue::Char(x),
-            HashKey::Str(x) => RuntimeValue::Str(x),
+            HashKey::Str(x) => RuntimeValue::Str(Arc::new(Mutex::new(x))),
         }
     }
 }
@@ -250,8 +250,7 @@ pub enum RuntimeValue {
     Ptr(u64),
     Range(i64, i64),
     Bool(bool),
-    // TODO Convert Str to Mutex to reduce copies
-    Str(Arc<String>),
+    Str(Arc<Mutex<String>>),
     Char(char),
     Aggregate(Option<String>, Gc<GcMap>),
     Enum(String, usize, Option<Gc<RuntimeValue>>),
@@ -276,7 +275,7 @@ pub enum RuntimeValue {
     ExternFunction(Arc<ExternFunction>),
     Function {
         name: Arc<String>,
-        captures: std::sync::Arc<Vec<(String, RuntimeValue)>>,
+        captures: Arc<Vec<(String, RuntimeValue)>>,
     },
     Generator {
         type_name: Arc<String>,
@@ -642,11 +641,11 @@ impl From<VMLiteral> for RuntimeValue {
             VMLiteral::Byte(x) => Self::Byte(x),
             VMLiteral::Float(x) => Self::Float(x),
             VMLiteral::Char(x) => Self::Char(x),
-            VMLiteral::String(x) => Self::Str(x.into()),
+            VMLiteral::String(x) => Self::Str(Arc::new(Mutex::new(x))),
             VMLiteral::Null => Self::Null,
             VMLiteral::Closure { label, captures: _ } => Self::Function {
                 name: label.into(),
-                captures: std::sync::Arc::new(Vec::new()),
+                captures: Arc::new(Vec::new()),
             },
             VMLiteral::ExternFunction { .. } => Self::Null,
         }

@@ -221,7 +221,7 @@ impl Display for RuntimeValue {
             Self::HashSet(_) => write!(f, "HashSet"),
             Self::TcpStream(_) => write!(f, "TcpStream"),
             Self::TcpListener(_) => write!(f, "TcpListener"),
-            Self::Str(x) => write!(f, "{}", x),
+            Self::Str(x) => write!(f, "{}", x.lock().unwrap()),
             Self::Char(x) => write!(f, "{}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
             Self::Generator { type_name: x, .. } => write!(

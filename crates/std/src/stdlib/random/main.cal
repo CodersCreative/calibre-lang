@@ -18,7 +18,7 @@ const bool := fn -> bool => return (c_rand() & 1) = 1;
 
 const ratio := fn -> float => return (try c_rand() as float => 0f) / (try RAND_MAX as float => 1f);
 
-const range := fn (min : int, max : int, inclusive : bool) -> int => {
+const range := fn (min : int, max : int, inclusive : bool = false) -> int => {
 	if inclusive => max += 1;
 	if max <= min => return min else => {
 		let span := max - min;

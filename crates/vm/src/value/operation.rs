@@ -3,7 +3,7 @@ use calibre_parser::ast::{
     comparison::{BooleanOperator, ComparisonOperator},
 };
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
-
+use std::sync::{Arc, Mutex};
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
 use dumpster::sync::Gc;
 
@@ -42,7 +42,7 @@ pub fn comparison(
             (RuntimeValue::Byte(a), RuntimeValue::Int(b)) => Some(*b >= 0 && *a == (*b as u8)),
             (RuntimeValue::Float(a), RuntimeValue::Float(b)) => Some(a == b),
             (RuntimeValue::Char(a), RuntimeValue::Char(b)) => Some(a == b),
-            (RuntimeValue::Str(a), RuntimeValue::Str(b)) => Some(a == b),
+            (RuntimeValue::Str(a), RuntimeValue::Str(b)) => Some(a.lock().unwrap().as_str() == b.lock().unwrap().as_mut_str()),
             (RuntimeValue::Enum(a_name, a_idx, _), RuntimeValue::Enum(b_name, b_idx, _)) => {
                 Some(a_name == b_name && a_idx == b_idx)
             }
@@ -224,7 +224,7 @@ pub fn comparison(
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
         }
         (RuntimeValue::Str(x), RuntimeValue::Str(y), op) => {
-            Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
+            Ok(RuntimeValue::Bool(comparison_value_handle(op, x.lock().unwrap().as_str(), y.lock().unwrap().as_str())))
         }
         (left, right, ComparisonOperator::Equal) => Ok(RuntimeValue::Bool(matches!(
             eq_value(&left, &right),
@@ -431,23 +431,23 @@ impl RuntimeValue {
             Self::Char(x) => {
                 let mut s = x.to_string();
                 s.push_str(&rhs.display(vm));
-                Ok(Self::Str(std::sync::Arc::new(s)))
+                Ok(Self::Str(Arc::new(Mutex::new(s))))
             }
             Self::Str(x) => {
-                let mut s = x.as_str().to_string();
+                let mut s = x.lock().unwrap().clone();
                 s.push_str(&rhs.display(vm));
-                Ok(Self::Str(std::sync::Arc::new(s)))
+                Ok(Self::Str(Arc::new(Mutex::new(s))))
             }
             lhs => match rhs {
                 Self::Char(x) => {
-                    let mut s = x.to_string();
-                    s.push_str(&lhs.display(vm));
-                    Ok(Self::Str(std::sync::Arc::new(s)))
+                    let mut s = lhs.display(vm);
+                    s.push(x);
+                    Ok(Self::Str(Arc::new(Mutex::new(s))))
                 }
                 Self::Str(x) => {
-                    let mut s = x.as_str().to_string();
-                    s.push_str(&lhs.display(vm));
-                    Ok(Self::Str(std::sync::Arc::new(s)))
+                    let mut s = lhs.display(vm);
+                    s.push_str(&x.lock().unwrap());
+                    Ok(Self::Str(Arc::new(Mutex::new(s))))
                 }
                 _ => Err((lhs, rhs)),
             },

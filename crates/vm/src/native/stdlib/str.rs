@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex};
 use dumpster::sync::Gc;
 
 use crate::{
@@ -41,16 +42,16 @@ impl NativeFunction for StrSplit {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let text = expect_str_arg_or_empty(&args, 0)?;
-        let delim = expect_str_arg_or_empty(&args, 1)?;
+        let text = expect_str_arg_or_empty(&args, 0)?.lock().unwrap();
+        let delim = expect_str_arg_or_empty(&args, 1)?.lock().unwrap();
 
         let parts = if delim.is_empty() {
             text.chars()
-                .map(|c| RuntimeValue::Str(std::sync::Arc::new(c.to_string())))
+                .map(|c| RuntimeValue::Str(Arc::new(Mutex::new(c.to_string()))))
                 .collect::<Vec<_>>()
         } else {
             text.split(delim.as_str())
-                .map(|s| RuntimeValue::Str(std::sync::Arc::new(s.to_string())))
+                .map(|s| RuntimeValue::Str(Arc::new(Mutex::new(s.to_string()))))
                 .collect::<Vec<_>>()
         };
 
@@ -66,8 +67,8 @@ impl NativeFunction for StrContains {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let text = expect_str_arg_or_empty(&args, 0)?;
-        let needle = expect_str_arg_or_empty(&args, 1)?;
+        let text = expect_str_arg_or_empty(&args, 0)?.lock().unwrap();
+        let needle = expect_str_arg_or_empty(&args, 1)?.lock().unwrap();
 
         Ok(RuntimeValue::Bool(text.as_str().contains(needle.as_str())))
     }
@@ -81,8 +82,8 @@ impl NativeFunction for StrStartsWith {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let text = expect_str_arg_or_empty(&args, 0)?;
-        let prefix = expect_str_arg_or_empty(&args, 1)?;
+        let text = expect_str_arg_or_empty(&args, 0)?.lock().unwrap();
+        let prefix = expect_str_arg_or_empty(&args, 1)?.lock().unwrap();
 
         Ok(RuntimeValue::Bool(
             text.as_str().starts_with(prefix.as_str()),
@@ -98,8 +99,8 @@ impl NativeFunction for StrEndsWith {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let text = expect_str_arg_or_empty(&args, 0)?;
-        let suffix = expect_str_arg_or_empty(&args, 1)?;
+        let text = expect_str_arg_or_empty(&args, 0)?.lock().unwrap();
+        let suffix = expect_str_arg_or_empty(&args, 1)?.lock().unwrap();
 
         Ok(RuntimeValue::Bool(text.as_str().ends_with(suffix.as_str())))
     }

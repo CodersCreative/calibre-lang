@@ -21,7 +21,7 @@ use std::{
 
 static NULL_RUNTIME_VALUE: RuntimeValue = RuntimeValue::Null;
 static EMPTY_FRAME: OnceLock<VMFrame> = OnceLock::new();
-static EMPTY_CAPTURES: OnceLock<std::sync::Arc<Vec<(String, RuntimeValue)>>> = OnceLock::new();
+static EMPTY_CAPTURES: OnceLock<Arc<Vec<(String, RuntimeValue)>>> = OnceLock::new();
 
 pub mod config;
 pub mod conversion;
