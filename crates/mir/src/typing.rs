@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, mem};
 
 use crate::environment::MiddleEnvironment;
 use calibre_parser::{
@@ -23,38 +23,26 @@ pub struct Typing {
 
 impl Typing {
     pub fn find_impl_for_type(&self, ty: &ParserDataType) -> Option<&MiddleImpl> {
-        let key = ty.key();
-        if let Some(imp) = self.impls.get(&key) {
-            return Some(imp);
+        if let Some(x) = self.impls.get(&ty.key()) {
+            Some(x)
+        }else if let Some(x) = self.impls.get(&ty.clone().unwrap_all_refs().key()) {Some(x)}else{
+            None
         }
-        let target = ty.key();
-        self.impls.values().find(|imp| {
-            imp.data_type
-                .data_type
-                .matches(&target, &imp.generic_params)
-        })
     }
 
     pub fn find_impl_for_type_mut(&mut self, ty: &ParserDataType) -> Option<&mut MiddleImpl> {
-        let key = ty.key();
-        if self.impls.contains_key(&key) {
-            return self.impls.get_mut(&key);
-        }
-        let target = ty.key();
-        let key = self
-            .impls
-            .iter()
-            .find(|(_, imp)| {
-                imp.data_type
-                    .data_type
-                    .matches(&target, &imp.generic_params)
-            })
-            .map(|(k, _)| k.clone())?;
-        self.impls.get_mut(&key)
+        self.impls.get_mut(&ty.key())
+        
     }
 
-    pub fn find_impl_member(&self, ty: &ParserDataType, member: &str) -> Option<&MiddleImplMember> {
-        self.find_impl_for_type(ty)?.members.get(member)
+    pub fn find_impl_member(&self, ty: &ParserDataType, member: &impl ToString) -> Option<&MiddleImplMember> {
+        let generic_params: Vec<String> = match &ty.data_type {
+            ParserInnerType::StructWithGenerics { generic_types , ..} => generic_types.iter().collect(),
+            ParserInnerType::List(x) => vec![&**x],
+            _ => Vec::new(),
+        }.into_iter().map(|x | x.impl_name()).collect();
+
+        self.find_impl_for_type(ty)?.get_member(member, &generic_params)
     }
 
     pub fn ensure_concrete_impl(
@@ -76,7 +64,6 @@ impl Typing {
             if template.data_type.key() != key {
                 let mut new_impl = MiddleImpl {
                     data_type: ty,
-                    generic_params: template.generic_params.clone(),
                     members: template.members.clone(),
                     traits: template.traits.clone(),
                     assoc_types: template.assoc_types.clone(),
@@ -88,7 +75,7 @@ impl Typing {
                 self.impls.insert(key.clone(), new_impl);
             }
         } else if !self.impls.contains_key(&key) {
-            self.get_or_create_impl(ty, Vec::new(), location);
+            self.get_or_create_impl(ty, location);
             if let Some(imp) = self.impls.get_mut(&key) {
                 Self::populate_trait_members(&self.trait_defs, imp);
             }
@@ -108,7 +95,7 @@ impl Typing {
                 Self::collect_trait_default_members(trait_defs, trait_name, &provided_members);
             for (member_name, _trait_member) in default_members {
                 let symbol_name = format!("{}.{}", trait_name, member_name);
-                imp.insert_member(member_name.clone(), symbol_name, false);
+                imp.insert_member(&member_name, MiddleImplMember::new(symbol_name, Vec::new(), false));
                 provided_members.insert(member_name);
             }
         }
@@ -154,10 +141,7 @@ impl Typing {
     }
 
     pub fn find_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
-        if let Some(obj) = self.objects.get(struct_name) {
-            return Some(obj);
-        }
-        None
+        self.objects.get(struct_name)
     }
 
     pub fn resolve_associated_type(
@@ -172,7 +156,6 @@ impl Typing {
     pub fn get_or_create_impl(
         &mut self,
         ty: ParserDataType,
-        generic_params: Vec<String>,
         location: Option<Location>,
     ) -> ParserInnerType {
         let key = ty.key();
@@ -184,7 +167,6 @@ impl Typing {
             key.clone(),
             MiddleImpl {
                 data_type: ty,
-                generic_params,
                 members: FxHashMap::default(),
                 traits: Vec::new(),
                 assoc_types: FxHashMap::default(),
@@ -207,13 +189,15 @@ pub struct MiddleObject {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleImplMember {
     pub symbol_name: String,
+    pub generic_params: Vec<String>,
     pub dependant: bool,
 }
 
 impl MiddleImplMember {
-    pub fn new(symbol_name: String, dependant: bool) -> Self {
+    pub fn new(symbol_name: String, generic_params: Vec<String>, dependant: bool) -> Self {
         Self {
             symbol_name,
+            generic_params,
             dependant,
         }
     }
@@ -222,24 +206,65 @@ impl MiddleImplMember {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleImpl {
     pub data_type: ParserDataType,
-    pub generic_params: Vec<String>,
-    pub members: FxHashMap<String, MiddleImplMember>,
+    members: FxHashMap<String, Vec<MiddleImplMember>>,
     pub traits: Vec<String>,
     pub assoc_types: FxHashMap<String, ParserDataType>,
     pub location: Option<Location>,
 }
 
 impl MiddleImpl {
-    pub fn insert_member(&mut self, name: String, symbol_name: String, dependant: bool) {
-        self.members
-            .insert(name, MiddleImplMember::new(symbol_name, dependant));
+    fn normalize_member_name(name : &impl ToString) -> String {
+        let name = ParserText::get_temp_name_suffix(name).unwrap_or(name.to_string());
+        name.rsplit_once('.').map(|x| x.1.to_string()).unwrap_or(name)
     }
 
-    pub fn register_member_placeholder(&mut self, name: &str, symbol_name: String) {
-        self.members
-            .entry(name.to_string())
-            .or_insert_with(|| MiddleImplMember::new(symbol_name, false));
+    pub fn insert_member(&mut self, name: &impl ToString, member : MiddleImplMember) {
+        let entry = self.members
+            .entry(Self::normalize_member_name(name))
+            .or_default();
+
+        if let Some(x) = entry.iter_mut().find(|x| x.generic_params == member.generic_params) {
+            *x = member;
+        }else {
+            entry.push(member);
+        }
     }
+
+    pub fn insert_member_placeholder(&mut self, name: &impl ToString, symbol_name: String, generic_params : Vec<String>) {
+        let entry = self.members
+            .entry(Self::normalize_member_name(name))
+            .or_default();
+
+        if entry.iter_mut().find(|x| x.generic_params == generic_params).is_none() {
+            entry.push(MiddleImplMember::new(symbol_name, generic_params, false));
+        }
+    }
+
+
+    pub fn get_member(&self, name: &impl ToString, generic_params : &[String]) -> Option<&MiddleImplMember>{
+        let members = self.members.get(&Self::normalize_member_name(name))?;
+
+        if let Some(x) = members.iter().find(|x| x.generic_params == generic_params) {
+            Some(x)
+        }else if let Some(x) = members.iter().find(|x| x.generic_params.is_empty()) {
+            Some(x)
+        }else{
+            None
+        }
+    }
+
+    pub fn get_all_members(&self) -> Vec<(&String, &MiddleImplMember)> {
+        let mut members = Vec::new();
+
+        for (name, member) in &self.members {
+            for value in member {
+                members.push((name, value));
+            }
+        }
+
+        members
+    }
+
 }
 
 #[derive(Debug, Clone, PartialEq)]

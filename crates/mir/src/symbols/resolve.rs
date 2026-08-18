@@ -14,13 +14,13 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::{println, str::FromStr};
+use std::{ str::FromStr};
 
 impl MiddleEnvironment {
     pub fn resolve_member_fn_type(
         &self,
         ty: &ParserDataType,
-        member: &str,
+        member: &impl ToString,
     ) -> Option<ParserDataType> {
         self.resolve_member_fn_name(ty, member)
             .and_then(|name| self.symbols.variables.get(&name))
@@ -133,7 +133,7 @@ impl MiddleEnvironment {
         }
 
         if let Some(imp) = self.typing.find_impl_for_type(&resolved)
-            && let Some(mapped_member) = imp.members.get(member)
+            && let Some(mapped_member) = imp.get_member(&member, &[])
         {
             return self
                 .symbols
@@ -145,7 +145,7 @@ impl MiddleEnvironment {
         None
     }
 
-    pub fn resolve_member_fn_name(&self, ty: &ParserDataType, member: &str) -> Option<String> {
+    pub fn resolve_member_fn_name(&self, ty: &ParserDataType, member: &impl ToString) -> Option<String> {
         let symbol_name = self
             .typing
             .find_impl_member(ty, member)?

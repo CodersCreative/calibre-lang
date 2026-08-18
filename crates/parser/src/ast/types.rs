@@ -46,7 +46,10 @@ impl ParserDataType {
     }
 
     pub fn key(&self) -> ParserInnerType {
-        self.clone().unwrap_all_refs().data_type
+        match self.clone().unwrap_all_refs().data_type {
+            ParserInnerType::StructWithGenerics { identifier, generic_types : _} => ParserInnerType::Struct(identifier),
+            x => x,
+        }
     }
 
     pub fn member_base_name_candidates(&self) -> Vec<String> {
@@ -742,6 +745,8 @@ impl Display for ParserInnerType {
     }
 }
 
+
+// TODO Evaluate use of this
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct GenericTypes(pub Vec<GenericType>);
 

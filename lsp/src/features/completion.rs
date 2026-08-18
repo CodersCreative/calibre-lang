@@ -109,7 +109,7 @@ impl CalibreLanguageServer {
                 continue;
             }
 
-            if let Some(method_ty) = env.resolve_member_fn_type(&current, member) {
+            if let Some(method_ty) = env.resolve_member_fn_type(&current, &member) {
                 current = match method_ty.data_type {
                     ParserInnerType::Function { return_type, .. } => *return_type,
                     ParserInnerType::NativeFunction(return_type) => *return_type,
@@ -619,7 +619,7 @@ impl CalibreLanguageServer {
         }
 
         if let Some(imp) = env.typing.find_impl_for_type(&base_ty) {
-            for (member_name, canonical_member) in &imp.members {
+            for (member_name, canonical_member) in imp.get_all_members() {
                 if !prefix.is_empty() && !member_name.starts_with(prefix) {
                     continue;
                 }

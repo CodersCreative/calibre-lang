@@ -964,6 +964,7 @@ impl MiddleEnvironment {
                                 None
                             }
                         });
+
                     if let Some(mapped_name) = self
                         .resolve_member_fn_name(&target_ty, &caller_member_name)
                         .or(mapped_from_param)

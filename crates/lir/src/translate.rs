@@ -105,12 +105,12 @@ impl<'a> LirEnvironment<'a> {
         let mut methods: FxHashMap<String, String> = FxHashMap::default();
         if let Some(trait_def) = trait_def {
             for member in trait_def.members.keys() {
-                if let Some(mapped) = imp.members.get(member) {
+                if let Some(mapped) = imp.get_member(member, &[]) {
                     methods.insert(member.clone(), mapped.symbol_name.clone());
                 }
             }
         } else {
-            for (member, mapped) in &imp.members {
+            for (member, mapped) in imp.get_all_members() {
                 methods.insert(member.clone(), mapped.symbol_name.clone());
             }
         }

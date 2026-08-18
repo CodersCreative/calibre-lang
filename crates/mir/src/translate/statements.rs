@@ -54,6 +54,7 @@ impl MiddleEnvironment {
                     _ => None,
                 }
             });
+
             if let Some(first_ty) = first_ty
                 && let Some(mapped_name) = self
                     .resolve_member_fn_name(&first_ty.unwrap_all_refs(), &callee_ident.to_string())

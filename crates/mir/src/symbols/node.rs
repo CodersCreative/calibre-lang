@@ -403,7 +403,7 @@ impl MiddleEnvironment {
 
                         if let Some(base_ty) = base_ty
                             && let Some(method_ty) =
-                                self.resolve_member_fn_type(&base_ty, member_name.as_str())
+                                self.resolve_member_fn_type(&base_ty, &member_name)
                         {
                             match method_ty.data_type {
                                 ParserInnerType::Function { return_type, .. } => {
@@ -558,7 +558,7 @@ impl MiddleEnvironment {
                             }
 
                             if let Some(method_ty) =
-                                self.resolve_member_fn_type(&current, member_name.as_str())
+                                self.resolve_member_fn_type(&current, &member_name)
                             {
                                 current = method_ty;
                             } else {
@@ -575,7 +575,7 @@ impl MiddleEnvironment {
                             let method_name = method_ident.to_string();
 
                             let method_ty =
-                                self.resolve_member_fn_type(&current, method_name.as_str());
+                                self.resolve_member_fn_type(&current, &method_name);
 
                             current = method_ty
                                 .and_then(|t| {

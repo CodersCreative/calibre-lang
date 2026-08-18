@@ -153,7 +153,7 @@ impl MiddleEnvironment {
         scope: &u64,
         list: &[(MiddleNode, bool)],
         caller: Box<Node>,
-        _generic_types: Vec<PotentialNewType>,
+        generic_types: Vec<PotentialNewType>,
         args: Vec<CallArg>,
         reverse_args: Vec<Node>,
         receiver_is_value: bool,
@@ -194,6 +194,8 @@ impl MiddleEnvironment {
             None
         };
 
+        let generic_params = generic_types.into_iter().map(|x| self.resolve_potential_new_type(scope, x).impl_name()).collect::<Vec<_>>();
+
         let mut resolved_caller = type_style_member.or_else(|| {
             if let NodeType::Identifier(member_ident) = &caller.node_type {
                 let name = member_ident.to_string();
@@ -207,7 +209,7 @@ impl MiddleEnvironment {
                     })
                     .or_else(|| {
                         list.last().and_then(|(base, _)| {
-                            self.resolve_member_from_chain_family(base, &name)
+                            self.resolve_member_from_chain_family(base, &name, &generic_params)
                         })
                     })
                     .or_else(|| {
@@ -402,7 +404,7 @@ impl MiddleEnvironment {
         }
     }
 
-    fn resolve_member_from_chain_family(&self, base: &MiddleNode, member: &str) -> Option<String> {
+    fn resolve_member_from_chain_family(&self, base: &MiddleNode, member: &impl ToString, generic_params : &[String]) -> Option<String> {
         let MiddleNodeType::CallExpression { caller, .. } = &base.node_type else {
             return None;
         };
@@ -414,7 +416,7 @@ impl MiddleEnvironment {
         let family = text.rsplit_once(".").map(|(lhs, _)| lhs).unwrap_or(text);
 
         for imp in self.typing.impls.values() {
-            if let Some(mapped) = imp.members.get(member)
+            if let Some(mapped) = imp.get_member(member, generic_params)
                 && mapped
                     .symbol_name
                     .rsplit_once(".")
@@ -488,25 +490,13 @@ impl MiddleEnvironment {
         &mut self,
         scope: &u64,
         data_type: &ParserDataType,
-        member: &str,
+        member: &impl ToString,
     ) -> Option<String> {
         let resolved = self.resolve_data_type(scope, data_type.clone());
-
-        if let Some(symbol_name) = self
+        self
             .typing
             .find_impl_member(&resolved, member)
             .map(|x| x.symbol_name.clone())
-        {
-            Some(symbol_name)
-        } else if let Some(symbol_name) = self
-            .typing
-            .find_impl_member(&resolved.unwrap_all_refs(), member)
-            .map(|x| x.symbol_name.clone())
-        {
-            Some(symbol_name)
-        } else {
-            None
-        }
     }
 
     fn resolve_type_from_ident(
