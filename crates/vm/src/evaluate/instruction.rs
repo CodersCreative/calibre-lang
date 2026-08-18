@@ -2279,17 +2279,14 @@ impl VM {
 
                 match target_val {
                     RuntimeValue::Str(data) => {
-                        let s = if *right {
-                            let mut s = value.display(self);
-                            s.push_str(data.lock().unwrap().as_str());
-                            s
+                        let mut value = value.display(self);
+                        let mut data = data.lock().unwrap();
+                        if *right {
+                            value.push_str(data.as_str());
+                            *data = value;
                         } else {
-                            let mut s = data.lock().unwrap().as_str().to_string();
-                            s.push_str(&value.display(self));
-                            s
-                        };
-
-                        self.set_reg_value(*target, RuntimeValue::Str(Arc::new(Mutex::new(s))));
+                            data.push_str(&value);
+                        }
                     }
                     RuntimeValue::Null => {
                         let s = value.display(self);
@@ -2297,50 +2294,41 @@ impl VM {
                     }
                     RuntimeValue::Ref(name) => {
                         if let Some(RuntimeValue::Str(data)) = self.variables.get(&name).cloned() {
-                            let s = if *right {
-                                let mut s = value.display(self);
-                                s.push_str(data.lock().unwrap().as_str());
-                                s
-                            } else {
-                                let mut s = data.lock().unwrap().as_str().to_string();
-                                s.push_str(&value.display(self));
-                                s
-                            };
-
-                            self.variables.insert(&name, RuntimeValue::Str(Arc::new(Mutex::new(s))));
+                        let mut value = value.display(self);
+                        let mut data = data.lock().unwrap();
+                        if *right {
+                            value.push_str(data.as_str());
+                            *data = value;
+                        } else {
+                            data.push_str(&value);
+                        }
                         }
                     }
                     RuntimeValue::VarRef(id) => {
                         if let Some(RuntimeValue::Str(data)) = self.variables.get_by_id(id).cloned()
                         {
-                            let s = if *right {
-                                let mut s = value.display(self);
-                                s.push_str(data.lock().unwrap().as_str());
-                                s
-                            } else {
-                                let mut s = data.lock().unwrap().as_str().to_string();
-                                s.push_str(&value.display(self));
-                                s
-                            };
-
-                            let _ = self.variables.set_by_id(id, RuntimeValue::Str(Arc::new(Mutex::new(s))));
+                        let mut value = value.display(self);
+                        let mut data = data.lock().unwrap();
+                        if *right {
+                            value.push_str(data.as_str());
+                            *data = value;
+                        } else {
+                            data.push_str(&value);
+                        }
                         }
                     }
                     RuntimeValue::RegRef { frame, reg } => {
                         if let RuntimeValue::Str(data) =
                             self.get_reg_value_in_frame(frame, reg).clone()
                         {
-                            let s = if *right {
-                                let mut s = value.display(self);
-                                s.push_str(data.lock().unwrap().as_str());
-                                s
-                            } else {
-                                let mut s = data.lock().unwrap().as_str().to_string();
-                                s.push_str(&value.display(self));
-                                s
-                            };
-
-                            self.set_reg_value_in_frame(frame, reg, RuntimeValue::Str(Arc::new(Mutex::new(s))));
+                        let mut value = value.display(self);
+                        let mut data = data.lock().unwrap();
+                        if *right {
+                            value.push_str(data.as_str());
+                            *data = value;
+                        } else {
+                            data.push_str(&value);
+                        }
                         }
                     }
                     _ => {

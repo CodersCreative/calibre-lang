@@ -326,11 +326,11 @@ pub fn binary(
             Ok(x) => Ok(x),
             Err((l, r)) => l & r,
         },
-        BinaryOperator::Shl => match left.special_shl(right) {
+        BinaryOperator::Shl => match left.special_shl(vm, right) {
             Ok(x) => Ok(x),
             Err((l, r)) => l << r,
         },
-        BinaryOperator::Shr => match left.special_shr(right) {
+        BinaryOperator::Shr => match left.special_shr(vm, right) {
             Ok(x) => Ok(x),
             Err((l, r)) => l >> r,
         },
@@ -434,9 +434,9 @@ impl RuntimeValue {
                 Ok(Self::Str(Arc::new(Mutex::new(s))))
             }
             Self::Str(x) => {
-                let mut s = x.lock().unwrap().clone();
-                s.push_str(&rhs.display(vm));
-                Ok(Self::Str(Arc::new(Mutex::new(s))))
+                let value = rhs.display(vm);
+                x.lock().unwrap().push_str(&value);
+                Ok(Self::Str(x))
             }
             lhs => match rhs {
                 Self::Char(x) => {
@@ -445,16 +445,20 @@ impl RuntimeValue {
                     Ok(Self::Str(Arc::new(Mutex::new(s))))
                 }
                 Self::Str(x) => {
-                    let mut s = lhs.display(vm);
-                    s.push_str(&x.lock().unwrap());
-                    Ok(Self::Str(Arc::new(Mutex::new(s))))
+                    let mut value = lhs.display(vm);
+                    {
+                        let mut data = x.lock().unwrap();
+                        value.push_str(data.as_str());
+                        *data = value;
+                    }
+                    Ok(Self::Str(x))
                 }
                 _ => Err((lhs, rhs)),
             },
         }
     }
 
-    fn special_shr(self, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
+    fn special_shr(self, vm: &mut VM, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match rhs {
             Self::Aggregate(None, data) => {
                 let mut data = data.clone();
@@ -472,7 +476,7 @@ impl RuntimeValue {
         }
     }
 
-    fn special_shl(self, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
+    fn special_shl(self, vm: &mut VM, rhs: Self) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match self {
             Self::Aggregate(None, data) => {
                 let mut data = data.clone();
