@@ -90,12 +90,157 @@ impl ParserDataType {
                 ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Str))),
             ),
             (
-                "fs.read_dir",
+                "fs.dir_create",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Null)),
+                },
+            ),
+            (
+                "fs.dir_create_all",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Null)),
+                },
+            ),
+            (
+                "fs.dir_remove",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Null)),
+                },
+            ),
+            (
+                "fs.dir_remove_all",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Null)),
+                },
+            ),
+            ("fs.path_new", ParserInnerType::Dynamic),
+            ("fs.path_as_str", ParserInnerType::Str),
+            ("fs.path_exists", ParserInnerType::Bool),
+            ("fs.path_is_file", ParserInnerType::Bool),
+            ("fs.path_is_dir", ParserInnerType::Bool),
+            (
+                "fs.path_canonicalize",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Dynamic)),
+                },
+            ),
+            (
+                "fs.path_parent",
+                ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Dynamic))),
+            ),
+            (
+                "fs.path_file_name",
+                ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),
+            ),
+            (
+                "fs.path_extension",
+                ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),
+            ),
+            (
+                "fs.path_stem",
+                ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),
+            ),
+            ("fs.path_join", ParserInnerType::Null),
+            ("fs.path_with_extension", ParserInnerType::Dynamic),
+            ("fs.path_with_file_name", ParserInnerType::Dynamic),
+            (
+                "fs.path_read_dir",
                 ParserInnerType::Result {
                     err: Box::new(Self::native_type(ParserInnerType::Str)),
                     ok: Box::new(Self::native_type(ParserInnerType::List(Box::new(
-                        Self::native_type(ParserInnerType::Str),
+                        Self::native_type(ParserInnerType::Dynamic),
                     )))),
+                },
+            ),
+            ("fs.direntry_path", ParserInnerType::Dynamic),
+            ("fs.direntry_file_name", ParserInnerType::Str),
+            (
+                "fs.direntry_file_type",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Dynamic)),
+                },
+            ),
+            (
+                "fs.direntry_metadata",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Dynamic)),
+                },
+            ),
+            ("fs.filetype_is_file", ParserInnerType::Bool),
+            ("fs.filetype_is_dir", ParserInnerType::Bool),
+            ("fs.filetype_is_symlink", ParserInnerType::Bool),
+            ("fs.metadata_is_file", ParserInnerType::Bool),
+            ("fs.metadata_is_dir", ParserInnerType::Bool),
+            ("fs.metadata_len", ParserInnerType::UInt),
+            (
+                "fs.metadata_modified",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::UInt)),
+                },
+            ),
+            (
+                "fs.metadata_created",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::UInt)),
+                },
+            ),
+            (
+                "fs.metadata_accessed",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::UInt)),
+                },
+            ),
+            ("fs.metadata_is_readonly", ParserInnerType::Bool),
+            (
+                "fs.file_open",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Dynamic)),
+                },
+            ),
+            (
+                "fs.file_close",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Null)),
+                },
+            ),
+            (
+                "fs.file_write",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Null)),
+                },
+            ),
+            (
+                "fs.file_write_line",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Null)),
+                },
+            ),
+            (
+                "fs.file_read_all",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Str)),
+                },
+            ),
+            (
+                "fs.file_flush",
+                ParserInnerType::Result {
+                    err: Box::new(Self::native_type(ParserInnerType::Str)),
+                    ok: Box::new(Self::native_type(ParserInnerType::Null)),
                 },
             ),
             ("discriminant", ParserInnerType::Int),

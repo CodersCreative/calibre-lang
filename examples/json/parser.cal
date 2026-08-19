@@ -4,17 +4,17 @@ import File from std::fs;
 import Args from std::env;
 
 @current_context const main := fn => {
-	let input_path := match Args.first() {
+	let input_path := Path.new(match Args.first() {
 		.Some : p => p,
 		.None => current_context.path.replace("parser.cal", "test.json")
-	};
+	});
 	
 	let mut file := try File.open_read(input_path) : e => {
 		print(e);
 		return;
 	};
 	
-	let text : str = try file.read_all(100000) => panic("Failed to read file.");
+	let text : str = try file.read_all() => panic("Failed to read file.");
 	let mut tokenizer := Tokenizer.new();
 	let tokens : list:<Token> = try tokenizer.tokenize(text) : e => panic(e);
 	print(tokens);

@@ -205,7 +205,50 @@ impl MiddleEnvironment {
             true,
         );
         add("random", &[], false);
-        add("fs", &["read_dir"], false);
+        add(
+            "fs",
+            &[
+                "dir_create",
+                "dir_create_all",
+                "dir_remove",
+                "dir_remove_all",
+                "path_new",
+                "path_as_str",
+                "path_exists",
+                "path_is_file",
+                "path_is_dir",
+                "path_canonicalize",
+                "path_parent",
+                "path_file_name",
+                "path_extension",
+                "path_stem",
+                "path_join",
+                "path_with_extension",
+                "path_with_file_name",
+                "path_read_dir",
+                "direntry_path",
+                "direntry_file_name",
+                "direntry_file_type",
+                "direntry_metadata",
+                "filetype_is_file",
+                "filetype_is_dir",
+                "filetype_is_symlink",
+                "metadata_is_file",
+                "metadata_is_dir",
+                "metadata_len",
+                "metadata_modified",
+                "metadata_created",
+                "metadata_accessed",
+                "metadata_is_readonly",
+                "file_open",
+                "file_close",
+                "file_write",
+                "file_write_line",
+                "file_read_all",
+                "file_flush",
+            ],
+            false,
+        );
         add("math", &[], true);
         add("list", &["sort_by", "binary_search_by", "raw_remove"], true);
         add(

@@ -94,17 +94,17 @@ impl BrainFuck {
 };
 
 @current_context const main := fn => {
-	let input_path := match Args.first() {
+	let input_path := Path.new(match Args.first() {
 		.Some : p => emit p,
 		.None => emit current_context.path.replace("interpreter.cal", "helloworld.bf")
-	};
+	});
 	
 	let mut file := try File.open_read(input_path) : e => {
 		print(e);
 		return;
 	};
 	
-	let text : str = try file.read_all(100000) => panic("Failed to read file.");
+	let text : str = try file.read_all() => panic("Failed to read file.");
 	let text : str = text.replace("\n", "").replace("\r", "").replace(" ", "").replace("\t", "");
 	
 	let mut interpreter := BrainFuck.new();

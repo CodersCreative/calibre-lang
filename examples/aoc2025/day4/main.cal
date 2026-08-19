@@ -3,14 +3,14 @@ import File from std::fs;
 const CELL_KEY := 1000000;
 
 @current_context const main := fn => {
-	let file : File = try File.open_read(current_context.path.replace("main.cal", "input.txt")) : e => {
-		try File.open_read(current_context.path.replace("main.cal", "custom_input.txt")) => {
+	let file : File = try File.open_read(Path.new(current_context.path.replace("main.cal", "input.txt"))) : e => {
+		try File.open_read(Path.new(current_context.path.replace("main.cal", "custom_input.txt"))) => {
 			print(e);
 			return;
 		};
 	};
 	
-	let lines : list:<str> = try file.read_lines(100000) => panic("Failed to read file.");
+	let lines : list:<str> = try file.read_lines() => panic("Failed to read file.");
 	let part1 : int = solve_part1(lines);
 	let part2 : int = solve_part2(lines);
 	

@@ -1,24 +1,6 @@
 import File from std::fs;
 import Channel from std::async;
 
-@current_context const main := fn => {
-	let file : File = try File.open_read(current_context.path.replace("main.cal", "input.txt")) : e => {
-		try File.open_read(current_context.path.replace("main.cal", "custom_input.txt")) => {
-			print(e);
-			return;
-		};
-	};
-	
-	let lines : list:<str> = try file.read_lines(100000) => panic("Failed to read file.");
-	
-	let worker_count := 12;
-	let part1 : int = solve_part1(lines, worker_count);
-	let part2 : int = solve_part2(lines, worker_count);
-	
-	print("Part 1 - The total output joltage is: " & part1);
-	print("Part 2 - The total output joltage is: " & part2);
-};
-
 const solve_part1 := fn (banks : list:<str>, worker_count : int) -> int => {
 	let mut out := Channel:<int>.new();
 	spawn@ for i in 0..worker_count => worker_part1(banks, i, worker_count, out);
@@ -26,7 +8,8 @@ const solve_part1 := fn (banks : list:<str>, worker_count : int) -> int => {
 	let mut sum := 0;
 	
 	for _ in 0..worker_count => {
-		let part := match out.get() {
+		let part : int? = out.get();
+		let part : int = match part {
 			.Some : v => emit v,
 			.None => emit 0
 		};
@@ -43,7 +26,8 @@ const solve_part2 := fn (banks : list:<str>, worker_count : int) -> int => {
 	let mut sum := 0;
 	
 	for _ in 0..worker_count => {
-		let part := match out.get() {
+		let part : int? = out.get();
+		let part : int = match part {
 			.Some : v => emit v,
 			.None => emit 0
 		};
@@ -129,4 +113,22 @@ const max_joltage_for_count_part2 := fn (bank : str, count : int) -> int => {
 	};
 	
 	return out as! int;
+};
+
+@current_context const main := fn => {
+	let file : File = try File.open_read(Path.new(current_context.path.replace("main.cal", "input.txt"))) : e => {
+		try File.open_read(Path.new(current_context.path.replace("main.cal", "custom_input.txt"))) => {
+			print(e);
+			return;
+		};
+	};
+	
+	let lines : list:<str> = try file.read_lines() => panic("Failed to read file.");
+	
+	let worker_count := 12;
+	let part1 : int = solve_part1(lines, worker_count);
+	let part2 : int = solve_part2(lines, worker_count);
+	
+	print("Part 1 - The total output joltage is: " & part1);
+	print("Part 2 - The total output joltage is: " & part2);
 };

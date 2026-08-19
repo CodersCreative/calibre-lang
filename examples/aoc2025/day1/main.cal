@@ -1,4 +1,4 @@
-import File from std::fs;
+import (Path, File) from std::fs;
 
 const parse_direction := fn (line : str) -> char => {
 	let chars := trim(line) as! list:<char>;
@@ -55,14 +55,14 @@ const count_zeros_part2 := fn (lines : list:<str>) -> int => {
 };
 
 @current_context const main := fn => {
-	let file : File = try File.open_read(current_context.path.replace("main.cal", "input.txt")) : e => {
-		try File.open_read(current_context.path.replace("main.cal", "custom_input.txt")) => {
+	let file : File = try File.open_read(Path.new(current_context.path.replace("main.cal", "input.txt"))) : e => {
+		try File.open_read(Path.new(current_context.path.replace("main.cal", "custom_input.txt"))) => {
 			print(e);
 			return;
 		};
 	};
 	
-	let lines := try file.read_lines(100000) => panic("Failed to read file.");
+	let lines := try file.read_lines() => panic("Failed to read file.");
 	
 	let part1, part2 := count_zeros_part1(lines), count_zeros_part2(lines);
 	

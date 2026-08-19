@@ -1,133 +1,251 @@
-extern "c" const c_fopen := fn(str, str) -> ptr:<@u8> from "libc" as "fopen";
-extern "c" const c_fclose := fn(ptr:<@u8>) -> @int from "libc" as "fclose";
-extern "c" const c_fflush := fn(ptr:<@u8>) -> @int from "libc" as "fflush";
-extern "c" const c_fgets := fn(ptr:<@u8>, @int, ptr:<@u8>) -> str from "libc" as "fgets";
-extern "c" const c_fwrite := fn(str, @usize, @usize, ptr:<@u8>) -> @usize from "libc" as "fwrite";
-extern "c" const c_strlen := fn(str) -> @usize from "libc" as "strlen";
-extern "c" const c_malloc := fn(@usize) -> ptr:<@u8> from "libc" as "malloc";
-extern "c" const c_free := fn(ptr:<@u8>) from "libc" as "free";
-extern "c" const c_access := fn(str, @int) -> @int from "libc" as "access";
-extern "c" const c_remove := fn(str) -> @int from "libc" as "remove";
-extern "c" const c_mkdir := fn(str, @int) -> @int from "libc" as "mkdir";
-extern "c" const c_rmdir := fn(str) -> @int from "libc" as "rmdir";
+type Path := struct { inner : host };
+type File := struct { inner : host };
+type DirEntry := struct { inner : host };
+type FileType := struct { inner : host };
+type Metadata := struct { inner : host };
+type Dir := struct { path : Path };
 
-type File := struct { handle : ptr:<byte> };
-type Dir := struct { path : str };
+impl Path {
+	const new := fn (path : str) -> Path => return Path { inner : path_new(path)};
 
-impl File {
-	const is_null_handle := fn (handle : ptr:<byte>) -> bool => return (try handle as int => 0) = 0;
+	const as_str := fn (self : &Path) -> str => return path_as_str(self.inner);
 
-	const open := fn (path : str, mode : str) -> str!File => {
-		let handle : ptr:<byte> = c_fopen(path, mode);
-		if File.is_null_handle(handle) => return err("failed to open file: " & path & " (mode=" & mode & ")");
-		return ok(File { handle });
+	const exists := fn (self : &Path) -> bool => return path_exists(self.inner);
+
+	const is_file := fn (self : &Path) -> bool => return path_is_file(self.inner);
+
+	const is_dir := fn (self : &Path) -> bool => return path_is_dir(self.inner);
+
+	const canonicalize := fn (self : &Path) -> str!Path => {
+		match path_canonicalize(self.inner) {
+			.Ok : p => return ok(Path { inner : p }),
+			.Err : e => return err(e),
+		}
 	};
 
-	const open_read := fn (path : str) -> str!File => return File.open(path, "r");
+	const parent := fn (self : &Path) -> Path? => {
+		let p := path_parent(self.inner);
+		if p = null => return none else => return some(Path { inner : p });
+	};
 
-	const open_write := fn (path : str) -> str!File => return File.open(path, "w");
+	const file_name := fn (self : &Path) -> str? => {
+		let name := path_file_name(self.inner);
+		if name = null => return none else => return some(name);
+	};
 
-	const open_append := fn (path : str) -> str!File => return File.open(path, "a");
+	const extension := fn (self : &Path) -> str? => {
+		let ext := path_extension(self.inner);
+		if ext = null => return none else => return some(ext);
+	};
+
+	const stem := fn (self : &Path) -> str? => {
+		let s := path_stem(self.inner);
+		if s = null => return none else => return some(s);
+	};
+
+	const join := fn (self : &Path, other : str) -> null => path_join(self.inner, other);
+
+	const with_extension := fn (self : &Path, extension : str) -> Path => return Path { inner : path_with_extension(self.inner, extension) };
+
+	const with_file_name := fn (self : &Path, file_name : str) -> Path => return Path { inner : path_with_file_name(self.inner, file_name) };
+
+	const read_dir := fn (self : &Path) -> str!list:<DirEntry> => {
+		match path_read_dir(self.inner) {
+			.Ok : entries => {
+				let entries : list:<host> = entries;
+				return ok(list:<DirEntry>[DirEntry { inner : entries[i]} for i in 0..len(entries)])
+			},
+			.Err : e => return err(e),
+		}
+	};
+}
+
+impl File {
+	const open := fn (path : Path, mode : str) -> str!File => {
+		match file_open(path.inner, mode) {
+			.Ok : f => return ok(File { inner : f }),
+			.Err : e => return err(e),
+		}
+	};
+
+	const open_read := fn (path : Path) -> str!File => return File.open(path, "r");
+
+	const open_write := fn (path : Path) -> str!File => return File.open(path, "w");
+
+	const open_append := fn (path : Path) -> str!File => return File.open(path, "a");
 
 	const close := fn (self : &File) -> str!null => {
-		if File.is_null_handle(self.handle) => return err("close on null file handle");
-		if c_fclose(self.handle) != 0 => return err("fclose failed");
-		return ok(null);
+		match file_close(self.inner) {
+			.Ok : _ => return ok(null),
+			.Err : e => return err(e),
+		}
 	};
 
 	const flush := fn (self : &File) -> str!null => {
-		if File.is_null_handle(self.handle) => return err("flush on null file handle");
-		if c_fflush(self.handle) != 0 => return err("fflush failed");
-		return ok(null);
+		match file_flush(self.inner) {
+			.Ok : _ => return ok(null),
+			.Err : e => return err(e),
+		}
 	};
 
 	const write := fn (self : &File, content : dyn) -> str!null => {
-		if File.is_null_handle(self.handle) => return err("write on null file handle");
-		let txt := "" & content;
-		let len : int = c_strlen(txt);
-		let written : int = c_fwrite(txt, 1, len, self.handle);
-		if written != len => return err("short write");
-		return ok(null);
+		match file_write(self.inner, "" & content) {
+			.Ok : _ => return ok(null),
+			.Err : e => return err(e),
+		}
 	};
 
-	const write_line := fn (self : &File, content : dyn) -> str!null => return self.write(("" & content) & "\n");
-
-	const read_line := fn (self : &File, max : int = 4096) -> str!str => {
-		if File.is_null_handle(self.handle) => return err("read_line on null file handle");
-		let size := if max <= 0 => emit 1 else => emit max + 1;
-		let buf : ptr:<byte> = c_malloc(size);
-		if (try buf as int => 0) = 0 => return err("malloc failed while reading file");
-		let line : str = c_fgets(buf, size, self.handle);
-		c_free(buf);
-		if len(line) = 0 => return err("eof") else => return ok(line);
+	const write_line := fn (self : &File, content : dyn) -> str!null => {
+		match file_write_line(self.inner, "" & content) {
+			.Ok : _ => return ok(null),
+			.Err : e => return err(e),
+		}
 	};
 
-	const read_lines := fn (self : &File, max : int = 4096) -> str!list:<str> => {
-		let mut out := list:<str>[];
-		
-		for => 
-			match self.read_line(max) {
-				.Ok : line => out <<= line,
-				.Err : e => {
-					if e = "eof" => break;
-					
-					return err(e);
-				}
-			};
-		
-		return ok(out);
+	const read_lines := fn (self : &File) -> str!list:<str> => {
+		match self.read_all() {
+			.Ok : content => return ok(content.split("\n")),
+			.Err : e => {
+				if e = "eof" => break;
+				return err(e);
+			}
+		};
 	};
 
-	const read_all := fn (self : &File, max : int = 4096) -> str!str => {
-		let mut out := "";
-		
-		for => 
-			match self.read_line(max) {
-				.Ok : line => out &= line,
-				.Err : e => {
-					if e = "eof" => break;
-					
-					return err(e);
-				}
-			};
-		
-		return ok(out);
+	const read_all := fn (self : &File) -> str!str => {
+		match file_read_all(self.inner) {
+			.Ok : content => return ok(content),
+			.Err : e => return err(e),
+		}
 	};
 
-	const read_to_string := fn (path : str, max : int = 65536) -> str!str => {
+	const read_to_string := fn (path : str) -> str!str => {
 		let file := try File.open_read(path) => return err("failed to read: " & path);
-		let txt := file.read_all(max);
+		let txt := file.read_all();
 		let _ := file.close();
 		return txt;
 	};
 
-	const read_lines_path := fn (path : str, max : int = 4096) -> str!list:<str> => {
+	const read_to_lines := fn (path : str) -> str!list:<str> => {
 		let file := try File.open_read(path) => return err("failed to read lines: " & path);
-		let lines := file.read_lines(max);
+		let lines := file.read_lines();
 		let _ := file.close();
 		return lines;
 	};
+}
 
-	const exists := fn (path : str) -> bool => return c_access(path, 0) = 0;
+impl DirEntry {
+	const path := fn (self : &DirEntry) -> Path => return Path { inner : direntry_path(self.inner) };
 
-	const remove := fn (path : str) -> bool => return c_remove(path) = 0;
-};
+	const file_name := fn (self : &DirEntry) -> str => return direntry_file_name(self.inner);
+
+	const file_type := fn (self : &DirEntry) -> str!FileType => {
+		match direntry_file_type(self.inner) {
+			.Ok : ft => return ok(FileType { inner : ft }),
+			.Err : e => return err(e),
+		}
+	};
+
+	const metadata := fn (self : &DirEntry) -> str!Metadata => {
+		match direntry_metadata(self.inner) {
+			.Ok : meta => return ok(Metadata { inner : meta }),
+			.Err : e => return err(e),
+		}
+	};
+}
+
+impl FileType {
+	const is_file := fn (self : &FileType) -> bool => return filetype_is_file(self.inner);
+
+	const is_dir := fn (self : &FileType) -> bool => return filetype_is_dir(self.inner);
+
+	const is_symlink := fn (self : &FileType) -> bool => return filetype_is_symlink(self.inner);
+}
+
+impl Metadata {
+	const is_file := fn (self : &Metadata) -> bool => return metadata_is_file(self.inner);
+
+	const is_dir := fn (self : &Metadata) -> bool => return metadata_is_dir(self.inner);
+
+	const len := fn (self : &Metadata) -> int => return metadata_len(self.inner);
+
+	// TODO Make a DateTime struct
+	const modified := fn (self : &Metadata) -> str!int => {
+		match metadata_modified(self.inner) {
+			.Ok : time => return ok(time),
+			.Err : e => return err(e),
+		}
+	};
+
+	const created := fn (self : &Metadata) -> str!int => {
+		match metadata_created(self.inner) {
+			.Ok : time => return ok(time),
+			.Err : e => return err(e),
+		}
+	};
+
+	const accessed := fn (self : &Metadata) -> str!int => {
+		match metadata_accessed(self.inner) {
+			.Ok : time => return ok(time),
+			.Err : e => return err(e),
+		}
+	};
+
+	const is_readonly := fn (self : &Metadata) -> bool => return metadata_is_readonly(self.inner);
+}
 
 impl Dir {
-	const new := fn (path : str) -> Dir => return Dir { path };
+	const new := fn (path : str) -> Dir => return Dir { path : Path.new(path) };
 
-	const exists := fn (self : &Dir) -> bool => return c_access(self.path, 0) = 0;
+	const new_path := fn (path : Path) -> Dir => return Dir { path };
+
+	const exists := fn (self : &Dir) -> bool => return self.path.exists();
 
 	const create := fn (self : &Dir) -> str!null => {
-		if c_mkdir(self.path, 493) = 0 => return ok(null);
-		if self.exists() => return ok(null) else => return err("failed to create directory: " & self.path);
+		match dir_create(self.path.as_str()) {
+			.Ok : _ => return ok(null),
+			.Err : e => {
+				if self.exists() => return ok(null) else => return err("failed to create directory: " & e);
+			}
+		}
+	};
+
+	const create_all := fn (self : &Dir) -> str!null => {
+		match dir_create_all(self.path.as_str()) {
+			.Ok : _ => return ok(null),
+			.Err : e => return err("failed to create directory: " & e),
+		}
 	};
 
 	const remove := fn (self : &Dir) -> str!null => {
-		if c_rmdir(self.path) = 0 => return ok(null) else => return err("failed to remove directory: " & self.path);
+		match dir_remove(self.path.as_str()) {
+			.Ok : _ => return ok(null),
+			.Err : e => return err("failed to remove directory: " & e),
+		}
 	};
 
-	const ensure := fn (self : &Dir) -> str!null => if self.exists() => return ok(null) else => return self.create();
+	const remove_all := fn (self : &Dir) -> str!null => {
+		match dir_remove_all(self.path.as_str()) {
+			.Ok : _ => return ok(null),
+			.Err : e => return err("failed to remove directory: " & e),
+		}
+	};
 
-	const scan := fn (self : &Dir) -> str!list:<str> => return read_dir(self.path);
-};
+	const ensure := fn (self : &Dir) -> str!null => if self.exists() => return ok(null) else => return self.create_all();
+
+	const scan := fn (self : &Dir) -> str!list:<DirEntry> => return self.path.read_dir();
+
+	const scan_paths := fn (self : &Dir) -> str!list:<Path> => {
+		let entries := try self.scan();
+		let mut out := list:<Path>[];
+		for entry in entries => out <<= entry.path();
+		return ok(out);
+	};
+
+	const scan_names := fn (self : &Dir) -> str!list:<str> => {
+		let entries := try self.scan();
+		let mut out := list:<str>[];
+		for entry in entries => out <<= entry.file_name();
+		return ok(out);
+	};
+}
