@@ -452,6 +452,7 @@ impl RuntimeValue {
     pub fn natives() -> FxHashMap<String, Self> {
         let lst: Vec<(&str, Arc<dyn NativeFunction>)> = vec![
             ("console_output", Arc::new(native::global::ConsoleOutput())),
+            ("console_input", Arc::new(native::global::ConsoleInput())),
             ("ok", Arc::new(native::global::OkFn())),
             ("err", Arc::new(native::global::ErrFn())),
             ("some", Arc::new(native::global::SomeFn())),

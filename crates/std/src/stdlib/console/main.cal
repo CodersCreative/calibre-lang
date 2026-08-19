@@ -1,8 +1,3 @@
-extern "c" const c_fdopen := fn(@int, str) -> ptr:<@u8> from "libc" as "fdopen";
-extern "c" const c_fgets := fn(ptr:<@u8>, @int, ptr:<@u8>) -> str from "libc" as "fgets";
-extern "c" const c_malloc := fn(@usize) -> ptr:<@u8> from "libc" as "malloc";
-extern "c" const c_free := fn(ptr:<@u8>) from "libc" as "free";
-
 const out := fn (msg : list:<dyn>) => {
 	let mut txt := "";
 	for m in msg => txt &= m;
@@ -24,10 +19,5 @@ const clear := fn => {
 
 const input := fn (prompt : dyn) -> str => {
 	out(prompt);
-	let handle : ptr:<byte> = c_fdopen(0, "r");
-	let size := 4096;
-	let buf : ptr:<byte> = c_malloc(try size as uint => 0u);
-	let line : str = c_fgets(buf, size, handle);
-	c_free(buf);
-	return trim(line);
+	return console_input();
 };

@@ -36,6 +36,7 @@ impl ParserDataType {
     pub fn natives() -> FxHashMap<String, ParserDataType> {
         let lst = [
             ("console_output", ParserInnerType::Null),
+            ("console_input", ParserInnerType::Str),
             (
                 "ok",
                 ParserInnerType::Result {

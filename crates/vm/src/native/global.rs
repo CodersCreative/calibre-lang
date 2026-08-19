@@ -1,7 +1,7 @@
 use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
 use dumpster::sync::Gc;
 use std::{
-    io::{self, Write},
+    io::{self, BufRead, Write},
     sync::{Arc, Mutex},
 };
 
@@ -158,6 +158,28 @@ impl NativeFunction for ConsoleOutput {
         }
 
         Ok(RuntimeValue::Null)
+    }
+}
+
+pub struct ConsoleInput();
+
+impl NativeFunction for ConsoleInput {
+    fn name(&self) -> String {
+        String::from("console_input")
+    }
+
+    fn run(&self, _env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let stdin = io::stdin();
+        let mut handle = stdin.lock();
+        let mut line = String::new();
+
+        match handle.read_line(&mut line) {
+            Ok(0) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(String::new())))),
+            Ok(_) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
+                line.trim().to_string(),
+            )))),
+            Err(e) => Err(RuntimeError::Io(e.to_string())),
+        }
     }
 }
 

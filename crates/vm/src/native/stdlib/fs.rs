@@ -142,7 +142,9 @@ impl NativeFunction for FsPathCanonicalize {
             .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
             .canonicalize()
         {
-            Ok(canonical) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(Arc::new(Mutex::new(canonical))))))),
+            Ok(canonical) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
+                Arc::new(Mutex::new(canonical)),
+            ))))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
             ))))),
@@ -449,7 +451,9 @@ impl NativeFunction for FsDirEntryFileType {
             .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
             .file_type()
         {
-            Ok(ft) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(Arc::new(Mutex::new(ft))))))),
+            Ok(ft) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
+                Arc::new(Mutex::new(ft)),
+            ))))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
             ))))),
@@ -477,7 +481,9 @@ impl NativeFunction for FsDirEntryMetadata {
             .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
             .metadata()
         {
-            Ok(meta) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(Arc::new(Mutex::new(meta))))))),
+            Ok(meta) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
+                Arc::new(Mutex::new(meta)),
+            ))))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
             ))))),
@@ -651,7 +657,9 @@ impl NativeFunction for FsMetadataModified {
                 let duration: std::time::Duration = time
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
-                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(duration.as_secs())))))
+                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
+                    duration.as_secs(),
+                )))))
             }
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
@@ -684,7 +692,9 @@ impl NativeFunction for FsMetadataCreated {
                 let duration: std::time::Duration = time
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
-                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(duration.as_secs())))))
+                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
+                    duration.as_secs(),
+                )))))
             }
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
@@ -717,7 +727,9 @@ impl NativeFunction for FsMetadataAccessed {
                 let duration: std::time::Duration = time
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
-                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(duration.as_secs())))))
+                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
+                    duration.as_secs(),
+                )))))
             }
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
@@ -790,7 +802,9 @@ impl NativeFunction for FsFileOpen {
                 .downcast_ref::<PathBuf>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?,
         ) {
-            Ok(file) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(Arc::new(Mutex::new(file))))))),
+            Ok(file) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
+                Arc::new(Mutex::new(file)),
+            ))))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
             ))))),

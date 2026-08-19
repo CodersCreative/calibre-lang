@@ -97,6 +97,7 @@ impl MiddleEnvironment {
     pub fn setup_global(&mut self, scope: &u64) {
         let funcs = [
             "console_output",
+            "console_input",
             "ok",
             "err",
             "some",
