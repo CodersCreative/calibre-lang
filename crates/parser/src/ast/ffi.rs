@@ -1,6 +1,6 @@
 use crate::{
     Span,
-    ast::types::{ParserDataType, ParserInnerType, PotentialNewType},
+    ast::types::{ParserDataType, ParserInnerType},
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, ops::Deref, str::FromStr};
@@ -156,42 +156,5 @@ impl FromStr for ParserFfiInnerType {
             "uchar" => Self::UChar,
             _ => return Err(()),
         })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum PotentialNewTypeFfiType {
-    DataType(PotentialNewType),
-    Ffi(ParserFfiDataType),
-}
-
-impl PotentialNewTypeFfiType {
-    pub fn is_auto(&self) -> bool {
-        match self {
-            Self::DataType(x) => x.is_auto(),
-            _ => false,
-        }
-    }
-
-    pub fn span(&self) -> &Span {
-        match self {
-            Self::Ffi(x) => &x.span,
-            Self::DataType(x) => x.span(),
-        }
-    }
-}
-
-impl Display for PotentialNewTypeFfiType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::DataType(x) => write!(f, "{}", x),
-            Self::Ffi(x) => write!(f, "@{}", x),
-        }
-    }
-}
-
-impl From<ParserDataType> for PotentialNewTypeFfiType {
-    fn from(value: ParserDataType) -> Self {
-        Self::DataType(value.into())
     }
 }

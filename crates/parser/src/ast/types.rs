@@ -4,7 +4,7 @@ use crate::{
         RefMutability,
         ffi::ParserFfiInnerType,
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{CallArg, Node, NodeType, Overload, TypeDefType},
+        nodes::{CallArg, Node, NodeType},
     },
 };
 use rustc_hash::FxHashMap;
@@ -545,107 +545,6 @@ impl ParserInnerType {
             }
             (x, y) => x == y,
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum PotentialNewType {
-    NewType {
-        identifier: PotentialDollarIdentifier,
-        type_def: TypeDefType,
-        overloads: Vec<Overload>,
-    },
-    DataType(ParserDataType),
-}
-
-impl PotentialNewType {
-    pub fn unwrap_or_auto(self) -> ParserDataType {
-        match self {
-            PotentialNewType::DataType(data_type) => data_type,
-            _ => ParserDataType::new(*self.span(), ParserInnerType::Auto(None)),
-        }
-    }
-
-    pub fn auto(sp: Span) -> Self {
-        ParserDataType::new(sp, ParserInnerType::Auto(None)).into()
-    }
-
-    pub fn null(sp: Span) -> Self {
-        ParserDataType::new(sp, ParserInnerType::Null).into()
-    }
-
-    pub fn is_auto(&self) -> bool {
-        match self {
-            Self::DataType(x) => x.is_auto(),
-            _ => false,
-        }
-    }
-
-    pub fn is_result(&self) -> bool {
-        match self {
-            Self::DataType(x) => x.is_result(),
-            _ => false,
-        }
-    }
-
-    pub fn is_bool(&self) -> bool {
-        match self {
-            Self::DataType(x) => x.is_bool(),
-            _ => false,
-        }
-    }
-
-    pub fn is_null(&self) -> bool {
-        match self {
-            Self::DataType(x) => x.is_null(),
-            _ => false,
-        }
-    }
-
-    pub fn substitute(&self, subst: &FxHashMap<String, ParserDataType>) -> PotentialNewType {
-        match self {
-            PotentialNewType::DataType(dt) => PotentialNewType::DataType(dt.substitute(subst)),
-            _ => self.clone(),
-        }
-    }
-}
-
-impl IdentifiersUsed for PotentialNewType {
-    fn identifiers_used(&self) -> Vec<&String> {
-        let mut names = Vec::new();
-        match self {
-            PotentialNewType::NewType { type_def, .. } => {
-                names.extend(type_def.identifiers_used());
-            }
-            PotentialNewType::DataType(data_type) => {
-                names.extend(data_type.identifiers_used());
-            }
-        }
-        names
-    }
-}
-
-impl Display for PotentialNewType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::DataType(x) => write!(f, "{}", x),
-            Self::NewType { identifier, .. } => write!(f, "type {}", identifier),
-        }
-    }
-}
-
-impl PotentialNewType {
-    pub fn span(&self) -> &Span {
-        match self {
-            Self::NewType { identifier, .. } => identifier.span(),
-            Self::DataType(x) => &x.span,
-        }
-    }
-}
-
-impl From<ParserDataType> for PotentialNewType {
-    fn from(value: ParserDataType) -> Self {
-        Self::DataType(value)
     }
 }
 

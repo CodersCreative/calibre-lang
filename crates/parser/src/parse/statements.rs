@@ -8,7 +8,7 @@ use crate::ast::matching::{SelectArm, SelectArmKind};
 use crate::ast::nodes::{
     DestructurePattern, NamedScope, Node, NodeType, Overload, TypeDefType, VarType,
 };
-use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType};
+use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{
     ensure_scope_node, labelled_scope_parser, lex, scope_body_or_single, scope_node_parser, span,
     struct_destructure_fields_parser,
@@ -38,7 +38,7 @@ pub struct StatementParsers<'a> {
     pub named_ident: StrParser<'a, PotentialDollarIdentifier>,
     pub generic_params: StrParser<'a, GenericTypes>,
     pub string_text: StrParser<'a, String>,
-    pub type_name: StrParser<'a, PotentialNewType>,
+    pub type_name: StrParser<'a, ParserDataType>,
     pub statement: StrParser<'a, Node>,
     pub expr: StrParser<'a, Node>,
 }
@@ -299,17 +299,17 @@ pub fn build_statement_parser<'a>(
                         default_value,
                     }
                 }),
-            type_name.clone().try_map(|typ, sp| match typ {
-                PotentialNewType::DataType(x)
-                    if x.data_type == ParserInnerType::Dynamic
-                        || x.data_type == ParserInnerType::Auto(None) =>
+            type_name.clone().try_map(|typ, sp| {
+                if typ.data_type == ParserInnerType::Dynamic
+                    || typ.data_type == ParserInnerType::Auto(None)
                 {
                     Err(Rich::custom(
                         sp,
                         "cannot overload `auto` or `dyn`; specify a concrete type",
                     ))
+                } else {
+                    Ok(TypeDefType::NewType(Box::new(typ)))
                 }
-                _ => Ok(TypeDefType::NewType(Box::new(typ))),
             }),
         )))
         .then(
@@ -350,12 +350,7 @@ pub fn build_statement_parser<'a>(
                     identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
                     generic_types: generics
                         .into_iter()
-                        .map(|(n, nsp)| {
-                            PotentialNewType::DataType(ParserDataType::new(
-                                nsp,
-                                ParserInnerType::Struct(n),
-                            ))
-                        })
+                        .map(|(n, nsp)| ParserDataType::new(nsp, ParserInnerType::Struct(n)))
                         .collect(),
                 }
             } else {
@@ -390,7 +385,7 @@ pub fn build_statement_parser<'a>(
             .map(|(((n, sp), ty), value)| TraitMember {
                 kind: TraitMemberKind::Const,
                 identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
-                data_type: ty.unwrap_or_else(|| PotentialNewType::auto(sp)),
+                data_type: ty.unwrap_or_else(|| ParserDataType::auto(sp)),
                 value: value.map(Box::new),
             }),
         lex(pad.clone(), just("type"))
@@ -398,7 +393,7 @@ pub fn build_statement_parser<'a>(
             .map(|(n, sp)| TraitMember {
                 kind: TraitMemberKind::Type,
                 identifier: PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
-                data_type: PotentialNewType::auto(sp),
+                data_type: ParserDataType::auto(sp),
                 value: None,
             }),
     ));
@@ -433,7 +428,7 @@ pub fn build_statement_parser<'a>(
         .ignore_then(generic_params.clone())
         .then(type_name.clone())
         .then(
-            lex(pad.clone(), text::keyword("for"))
+            lex(pad.clone(), just("for"))
                 .ignore_then(type_name.clone())
                 .or_not(),
         )
@@ -452,39 +447,28 @@ pub fn build_statement_parser<'a>(
         .try_map({
             let ls = line_starts.clone();
             move |(((generics, trait_ident), maybe_target), vars), parser_sp| {
-                if let Some(target) = maybe_target {
-                    let trait_ident = match trait_ident {
-                        PotentialNewType::DataType(dt) => match dt.data_type {
-                            ParserInnerType::Struct(name) => {
-                                PotentialGenericTypeIdentifier::Identifier(
-                                    PotentialDollarIdentifier::Identifier(ParserText::new(
-                                        dt.span, name,
-                                    )),
-                                )
-                            }
-                            ParserInnerType::StructWithGenerics {
-                                identifier,
-                                generic_types,
-                            } => PotentialGenericTypeIdentifier::Generic {
-                                identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
-                                    dt.span, identifier,
+                if let Some(dt) = maybe_target {
+                    let trait_ident = match dt.data_type.clone() {
+                        ParserInnerType::Struct(name) => {
+                            PotentialGenericTypeIdentifier::Identifier(
+                                PotentialDollarIdentifier::Identifier(ParserText::new(
+                                    dt.span, name,
                                 )),
-                                generic_types: generic_types
-                                    .into_iter()
-                                    .map(PotentialNewType::DataType)
-                                    .collect(),
-                            },
-                            _ => {
-                                return Err(Rich::custom(
-                                    parser_sp,
-                                    "expected trait name after `impl`, found non-trait type",
-                                ));
-                            }
+                            )
+                        }
+                        ParserInnerType::StructWithGenerics {
+                            identifier,
+                            generic_types,
+                        } => PotentialGenericTypeIdentifier::Generic {
+                            identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
+                                dt.span, identifier,
+                            )),
+                            generic_types,
                         },
                         _ => {
                             return Err(Rich::custom(
                                 parser_sp,
-                                "expected trait name after `impl`",
+                                "expected trait name after `impl`, found non-trait type",
                             ));
                         }
                     };
@@ -493,17 +477,17 @@ pub fn build_statement_parser<'a>(
                         NodeType::ImplTraitDeclaration {
                             generics,
                             trait_ident,
-                            target,
+                            target: dt,
                             variables: vars,
                         },
                     ))
                 } else {
                     let target = trait_ident;
 
-                    let sp = if target.span() == &Span::default() {
+                    let sp = if target.span == Span::default() {
                         span(ls.as_ref(), parser_sp.into_range())
                     } else {
-                        *target.span()
+                        target.span
                     };
 
                     Ok(Node::new(
@@ -625,11 +609,6 @@ pub fn build_statement_parser<'a>(
     )
     .try_map(
         |(((((vt, m), name), ty), op), (first_value, rest_values)), sp| {
-            let vt: VarType = vt;
-            let m: Option<&str> = m;
-            let ty: Option<PotentialNewType> = ty;
-            let op: DeclAssignOp = op;
-
             match (ty.is_some(), op) {
                 (true, DeclAssignOp::Infer) => {
                     return Err(Rich::custom(
@@ -718,7 +697,7 @@ pub fn build_statement_parser<'a>(
                     var_type,
                     identifier: name,
                     value: Box::new(value),
-                    data_type: ty.unwrap_or_else(|| PotentialNewType::auto(value_span)),
+                    data_type: ty.unwrap_or_else(|| ParserDataType::auto(value_span)),
                 },
             ))
         },
@@ -827,7 +806,7 @@ pub fn build_statement_parser<'a>(
                         .ignore_then(lex(pad.clone(), just(':')))
                         .ignore_then(type_name.clone())
                         .map(|data_type| {
-                            Node::new(*data_type.span(), NodeType::DataType { data_type })
+                            Node::new(data_type.span, NodeType::DataType { data_type })
                         })
                         .or(expr.clone()),
                 )
@@ -1012,10 +991,7 @@ pub fn build_statement_parser<'a>(
                 let parsed = ParserFfiInnerType::from_str(&name).unwrap_or(ParserFfiInnerType::Int);
                 ParserDataType::new(sp, ParserInnerType::FfiType(parsed))
             })
-            .or(type_name.clone().try_map(|x, sp| match x {
-                PotentialNewType::DataType(dt) => Ok(dt),
-                _ => Err(Rich::custom(sp, "expected FFI data type")),
-            }))
+            .or(type_name.clone())
             .boxed();
 
         lex(pad.clone(), just("ptr"))

@@ -14,7 +14,7 @@ use calibre_parser::{
         Operator,
         idents::ParserText,
         nodes::{FunctionHeader, Node, NodeType, Overload, VarType},
-        types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType},
+        types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
 use rustc_hash::FxHashMap;
@@ -44,15 +44,14 @@ impl MiddleEnvironment {
 
         let operator = Operator::from_str(&overload.operator.text).map_err(MiddleErr::Overload)?;
 
-        let return_type =
-            self.resolve_potential_new_type(scope, overload.header.return_type.clone());
+        let return_type = self.resolve_data_type(scope, overload.header.return_type.clone());
 
         let mut params = Vec::new();
         let mut contains_target = false;
 
         for param in overload.header.parameters.iter() {
             let ty = match param.1.clone() {
-                Some(x) if param.2.is_none() => self.resolve_potential_new_type(scope, x),
+                Some(x) if param.2.is_none() => self.resolve_data_type(scope, x),
                 _ => {
                     return Err(MiddleErr::Overload(String::from(
                         "Type needs to be explicit when doing overloads and default types arent allowed",
@@ -217,7 +216,7 @@ impl MiddleEnvironment {
             NodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier: ParserText::from(specialized_name.clone()).into(),
-                data_type: PotentialNewType::auto(self.context.current_span()),
+                data_type: ParserDataType::auto(self.context.current_span()),
                 value: Box::new(Node::new(
                     self.context.current_span(),
                     NodeType::FunctionDeclaration {

@@ -6,7 +6,7 @@ use calibre_parser::{
         binary::BinaryOperator,
         idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{DestructurePattern, Node, NodeType, VarType},
-        types::PotentialNewType,
+        types::ParserDataType,
     },
 };
 use environment::*;
@@ -59,7 +59,7 @@ impl MiddleEnvironment {
                     NodeType::VariableDeclaration {
                         var_type: *var_type,
                         identifier: name.clone(),
-                        data_type: PotentialNewType::auto(span),
+                        data_type: ParserDataType::auto(span),
                         value: Box::new(member),
                     },
                 ));

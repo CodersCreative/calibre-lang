@@ -1,16 +1,13 @@
 use crate::{
     environment::MiddleEnvironment,
-    errors::MiddleErr,
-    symbols::MiddleOverload,
-    typing::{MiddleObject, MiddleTrait, MiddleTypeDefType},
+    typing::{MiddleTrait, MiddleTypeDefType},
 };
 use calibre_parser::{
     Span,
     ast::{
-        Operator,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::NodeType,
-        types::{ParserDataType, ParserInnerType, PotentialNewType},
+        types::{ParserDataType, ParserInnerType},
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -268,7 +265,7 @@ impl MiddleEnvironment {
 
                 let mut gens: Vec<ParserDataType> = Vec::new();
                 for g in generic_types.iter() {
-                    gens.push(self.resolve_potential_new_type(scope, g.clone()));
+                    gens.push(self.resolve_data_type(scope, g.clone()));
                 }
 
                 Some(ParserDataType {
@@ -357,111 +354,6 @@ impl MiddleEnvironment {
         data_type: ParserDataType,
     ) -> ParserDataType {
         self.resolve_data_type(scope, data_type).resolve_ffi()
-    }
-
-    pub fn resolve_potential_new_type(
-        &mut self,
-        scope: &u64,
-        data_type: PotentialNewType,
-    ) -> ParserDataType {
-        let data_type_span = *data_type.span();
-        match data_type {
-            PotentialNewType::DataType(x) => self.resolve_data_type(scope, x),
-            PotentialNewType::NewType {
-                identifier,
-                type_def,
-                overloads,
-            } => {
-                let identifier = self
-                    .resolve_dollar_ident_only(scope, &identifier)
-                    .unwrap_or_else(|| ParserText::from(identifier.to_string()).into());
-                let new_name =
-                    ParserText::temp_name_with_suffix(identifier.text.trim(), identifier.span).text;
-                let type_def = MiddleTypeDefType::from_type_def_type(self, scope, type_def);
-                self.typing.objects.insert(
-                    new_name.clone(),
-                    MiddleObject {
-                        object_type: type_def.clone(),
-                        variables: FxHashMap::default(),
-                        traits: Vec::new(),
-                        location: self.context.current_location.clone(),
-                    },
-                );
-
-                if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
-                    scope_ref.mappings.insert(identifier.text, new_name.clone());
-                }
-
-                let previous_self = self
-                    .scoping
-                    .scopes
-                    .get_mut(scope)
-                    .map(|scope_ref| {
-                        scope_ref
-                            .mappings
-                            .insert(String::from("Self"), new_name.clone())
-                    })
-                    .flatten();
-
-                for overload in overloads {
-                    let overload = MiddleOverload {
-                        operator: match Operator::from_str(&overload.operator.text) {
-                            Ok(op) => op,
-                            Err(err) => {
-                                self.context.errors.push(MiddleErr::Overload(err));
-                                continue;
-                            }
-                        },
-                        return_type: self
-                            .resolve_potential_new_type(scope, overload.header.return_type.clone()),
-                        parameters: {
-                            let mut params = Vec::new();
-                            let mut contains = false;
-
-                            for param in overload.header.parameters.iter() {
-                                let Some(ty) = (if let Some(x) = param.1.clone() {
-                                    Some(self.resolve_potential_new_type(scope, x))
-                                } else if let Some(node) = &param.2 {
-                                    self.resolve_type_from_node(scope, node)
-                                } else {
-                                    None
-                                }) else {
-                                    continue;
-                                };
-
-                                if let ParserInnerType::Struct(x) =
-                                    ty.data_type.clone().unwrap_all_refs()
-                                {
-                                    if x == &new_name {
-                                        contains = true;
-                                    }
-                                }
-
-                                params.push(ty);
-                            }
-
-                            if !contains {
-                                continue;
-                            }
-
-                            params
-                        },
-                        func: overload.into(),
-                        generic_params: Vec::new(),
-                    };
-
-                    self.symbols.overloads.push(overload);
-                }
-
-                if let Some(prev) = previous_self
-                    && let Some(scope_ref) = self.scoping.scopes.get_mut(scope)
-                {
-                    scope_ref.mappings.insert(String::from("Self"), prev);
-                }
-
-                ParserDataType::new(data_type_span, ParserInnerType::Struct(new_name))
-            }
-        }
     }
 
     pub fn resolve_type_from_type_mappings(
@@ -621,7 +513,7 @@ impl MiddleEnvironment {
                         unimplemented!()
                     };
 
-                    self.resolve_potential_new_type(scope, data_type.clone())
+                    self.resolve_data_type(scope, data_type.clone())
                 } else {
                     data_type
                 }

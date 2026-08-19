@@ -12,7 +12,7 @@ use crate::{
             AsFailureMode, CallArg, DestructurePattern, EmitType, IfComparisonType, LoopType, Node,
             NodeType, Overload, PipeSegment, TypeDefType, VarType,
         },
-        types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType},
+        types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
 use rustc_hash::FxHashMap;
@@ -593,11 +593,7 @@ impl Formatter {
                 target,
                 variables,
             } => {
-                let mut txt = format!(
-                    "impl{} {} {{",
-                    self.fmt_generic_types(generics),
-                    self.fmt_potential_new_type(target)
-                );
+                let mut txt = format!("impl{} {} {{", self.fmt_generic_types(generics), target);
 
                 if !variables.is_empty() {
                     for var in variables {
@@ -627,7 +623,7 @@ impl Formatter {
                     "impl{} {} for {} {{",
                     self.fmt_generic_types(generics),
                     trait_ident,
-                    self.fmt_potential_new_type(target)
+                    target
                 );
 
                 if !variables.is_empty() {
@@ -676,20 +672,12 @@ impl Formatter {
 
                         match member.kind {
                             TraitMemberKind::Type => {
-                                if let PotentialNewType::DataType(dt) = &member.data_type {
-                                    if !dt.data_type.is_auto() {
-                                        line.push_str(&format!(" = {}", member.data_type));
-                                    }
-                                } else {
+                                if !member.data_type.is_auto() {
                                     line.push_str(&format!(" = {}", member.data_type));
                                 }
                             }
                             TraitMemberKind::Const => {
-                                if let PotentialNewType::DataType(dt) = &member.data_type {
-                                    if !dt.data_type.is_auto() {
-                                        line.push_str(&format!(" : {}", member.data_type));
-                                    }
-                                } else {
+                                if !member.data_type.is_auto() {
                                     line.push_str(&format!(" : {}", member.data_type));
                                 }
 
@@ -769,7 +757,7 @@ impl Formatter {
                 let mut txt = format!("{} {}", var_type, identifier);
 
                 if !data_type.is_auto() {
-                    txt.push_str(&format!(" : {}", self.fmt_potential_new_type(&data_type)));
+                    txt.push_str(&format!(" : {}", data_type));
                 }
 
                 let rhs = self.fmt_value_preserving_bare_tuple(value);
@@ -796,7 +784,7 @@ impl Formatter {
                         AsFailureMode::Option => "?",
                         AsFailureMode::Result => "",
                     },
-                    self.fmt_potential_new_type(data_type)
+                    data_type
                 )
             }
             NodeType::IsExpression { value, data_type } => {
@@ -920,7 +908,7 @@ impl Formatter {
                 let mut txt = if !data_type.is_auto() {
                     format!(
                         "list:<{}>[{} {}for {}",
-                        self.fmt_potential_new_type(data_type),
+                        data_type,
                         self.format(map),
                         if *spawned { "spawn " } else { "" },
                         self.fmt_loop_type(loop_type)
@@ -967,10 +955,7 @@ impl Formatter {
                 }
                 txt.push(')');
                 if let Some(data_type) = data_type {
-                    txt.push_str(&format!(
-                        " -> gen:<{}>",
-                        self.fmt_potential_new_type(data_type)
-                    ));
+                    txt.push_str(&format!(" -> gen:<{}>", data_type));
                 }
                 txt
             }
@@ -1029,8 +1014,7 @@ impl Formatter {
                                 expanded_chunk.push_str(&id.0.to_string());
                             }
                             if let Some(x) = &id.1 {
-                                expanded_chunk
-                                    .push_str(&format!(": {}", self.fmt_potential_new_type(x)));
+                                expanded_chunk.push_str(&format!(": {}", x));
                             }
                             if let Some(x) = &id.2 {
                                 expanded_chunk.push_str(&format!(
@@ -1045,7 +1029,7 @@ impl Formatter {
 
                         if let Some(last) = params.last() {
                             if let Some(x) = &last.1 {
-                                chunk.push_str(&format!(": {}", self.fmt_potential_new_type(x)));
+                                chunk.push_str(&format!(": {}", x));
                             }
 
                             if let Some(x) = &last.2 {
@@ -1085,10 +1069,7 @@ impl Formatter {
                 }
 
                 if !header.return_type.is_null() {
-                    txt.push_str(&format!(
-                        " -> {}",
-                        self.fmt_potential_new_type(&header.return_type)
-                    ));
+                    txt.push_str(&format!(" -> {}", header.return_type));
                 }
 
                 txt.push_str(&format!(" {}", self.format(body)));
@@ -1229,7 +1210,7 @@ impl Formatter {
                 }
 
                 if let Some(x) = &header.parameters[0].1 {
-                    txt.push_str(&format!(" {}", self.fmt_potential_new_type(x)));
+                    txt.push_str(&format!(" {}", x));
                 }
 
                 if let Some(x) = &header.parameters[0].2 {
@@ -1237,10 +1218,7 @@ impl Formatter {
                 }
 
                 if !header.return_type.is_null() {
-                    txt.push_str(&format!(
-                        " -> {}",
-                        self.fmt_potential_new_type(&header.return_type)
-                    ));
+                    txt.push_str(&format!(" -> {}", header.return_type));
                 }
 
                 txt.push_str(&format!(" {}", self.fmt_match_body(body)));
@@ -1294,7 +1272,7 @@ impl Formatter {
             }
             NodeType::ListLiteral(data_type, values) => {
                 let prefix = if !data_type.is_auto() {
-                    format!("list:<{}>[", self.fmt_potential_new_type(&data_type))
+                    format!("list:<{}>[", data_type)
                 } else {
                     "[".to_string()
                 };
@@ -1339,14 +1317,14 @@ impl Formatter {
                 count,
             } => {
                 let prefix = if !data_type.is_auto() {
-                    format!("list:<{}>[", self.fmt_potential_new_type(&data_type))
+                    format!("list:<{}>[", data_type)
                 } else {
                     "[".to_string()
                 };
                 format!("{}{}; {}]", prefix, self.format(value), self.format(count))
             }
             NodeType::DataType { data_type } => {
-                format!("type : {}", self.fmt_potential_new_type(data_type))
+                format!("type : {}", data_type)
             }
             NodeType::ScopeAlias {
                 identifier,
@@ -1736,7 +1714,7 @@ impl Formatter {
                         if let Some(last) = params.last()
                             && let Some(x) = &last.1
                         {
-                            txt.push_str(&format!(": {}", self.fmt_potential_new_type(x)));
+                            txt.push_str(&format!(": {}", x));
                         }
 
                         txt.push_str(", ");
@@ -1750,7 +1728,7 @@ impl Formatter {
                     } else {
                         txt.push_str(&format!(
                             "-> {} {}",
-                            self.fmt_potential_new_type(&func.header.return_type),
+                            func.header.return_type,
                             self.format(&func.body)
                         ));
                     }
@@ -1866,7 +1844,7 @@ impl Formatter {
                 let has_comments = entries.iter().any(
                     |(_, _, leading, trailing): &(
                         PotentialDollarIdentifier,
-                        Option<PotentialNewType>,
+                        Option<ParserDataType>,
                         Option<String>,
                         Option<String>,
                     )| leading.is_some() || trailing.is_some(),
@@ -1876,11 +1854,7 @@ impl Formatter {
                 if has_comments {
                     for (name, data, _, _) in &entries {
                         if let Some(x) = data {
-                            single.push_str(&format!(
-                                "{} : {}, ",
-                                name,
-                                self.fmt_potential_new_type(x)
-                            ));
+                            single.push_str(&format!("{} : {}, ", name, x));
                         } else {
                             single.push_str(&format!("{}, ", name));
                         }
@@ -1890,8 +1864,7 @@ impl Formatter {
                     let mut default_idx = entries.len() + 1;
 
                     for (i, (name, data, _, _)) in entries.iter().enumerate() {
-                        let data_txt: Option<String> =
-                            data.as_ref().map(|x| self.fmt_potential_new_type(x));
+                        let data_txt: Option<String> = data.as_ref().map(|x| x.to_string());
                         if let Some((names, last_data)) = groups.last_mut()
                             && *last_data == data_txt
                             && i != default_variant
@@ -1932,7 +1905,7 @@ impl Formatter {
                 if has_comments {
                     for (name, data, leading, trailing) in &entries {
                         let base = if let Some(x) = data {
-                            format!("{} : {}", name, self.fmt_potential_new_type(x))
+                            format!("{} : {}", name, x)
                         } else {
                             name.to_string()
                         };
@@ -1948,8 +1921,7 @@ impl Formatter {
                     let mut default_idx = entries.len() + 1;
 
                     for (i, (name, data, _, _)) in entries.iter().enumerate() {
-                        let data_txt: Option<String> =
-                            data.as_ref().map(|x| self.fmt_potential_new_type(x));
+                        let data_txt: Option<String> = data.as_ref().map(|x| x.to_string());
                         if let Some((names, last_data)) = groups.last_mut()
                             && *last_data == data_txt
                             && i != default_variant
@@ -1991,14 +1963,14 @@ impl Formatter {
                     txt.push_str(&self.wrap_if_wide(single, &multi));
                 }
             }
-            TypeDefType::NewType(x) => txt.push_str(&self.fmt_potential_new_type(&x)),
+            TypeDefType::NewType(x) => txt.push_str(&x.to_string()),
             TypeDefType::Struct { fields } => match fields {
                 ObjectType::Map(x) => {
                     let mut fields_vec = Vec::new();
                     for (key, (value, default_value)) in x {
-                        let leading = self.get_potential_comment(value.span());
-                        let trailing = self.get_trailing_comment(value.span());
-                        let type_txt = self.fmt_potential_new_type(value);
+                        let leading = self.get_potential_comment(&value.span);
+                        let trailing = self.get_trailing_comment(&value.span);
+                        let type_txt = value.to_string();
                         let field_txt = if let Some(default) = default_value {
                             format!("{} : {} = {}", key, type_txt, self.format(default))
                         } else {
@@ -2038,7 +2010,7 @@ impl Formatter {
                 ObjectType::Tuple(x) => {
                     let mut types = Vec::new();
                     for (value, default_value) in x {
-                        let type_txt = self.fmt_potential_new_type(value);
+                        let type_txt = value.to_string();
                         let field_txt = if let Some(default) = default_value {
                             format!("{} = {}", type_txt, self.format(default))
                         } else {
@@ -2051,24 +2023,6 @@ impl Formatter {
             },
         }
         txt
-    }
-
-    fn fmt_potential_new_type(&mut self, data_type: &PotentialNewType) -> String {
-        match data_type {
-            PotentialNewType::DataType(x) => x.to_string(),
-            PotentialNewType::NewType {
-                identifier,
-                type_def,
-                overloads,
-            } => {
-                format!(
-                    "type {} := {}{}",
-                    identifier,
-                    self.fmt_type_def_type(type_def),
-                    self.fmt_overloads(overloads)
-                )
-            }
-        }
     }
 
     fn fmt_struct_literal(&mut self, object_type: &ObjectType<Node>) -> String {

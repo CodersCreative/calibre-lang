@@ -2,7 +2,7 @@ use super::{LegacySpanMapExt, setup::StrParser};
 use crate::Span;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::{DestructurePattern, FunctionHeader, Node, NodeType, VarType};
-use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType};
+use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{
     ensure_scope_node, labelled_scope_parser, lex, scope_node_parser, span,
     struct_destructure_fields_parser,
@@ -15,13 +15,13 @@ enum FnParamGroup {
     Plain(
         Vec<(
             PotentialDollarIdentifier,
-            Option<PotentialNewType>,
+            Option<ParserDataType>,
             Option<Box<Node>>,
         )>,
     ),
     Destructure {
         pattern: DestructurePattern,
-        data_type: Option<PotentialNewType>,
+        data_type: Option<ParserDataType>,
         default: Option<Box<Node>>,
         span: Span,
     },
@@ -37,7 +37,7 @@ pub struct FunctionParsers<'a> {
     pub raw_ident: StrParser<'a, (String, Span)>,
     pub ident: StrParser<'a, (String, Span)>,
     pub generic_params: StrParser<'a, GenericTypes>,
-    pub type_name: StrParser<'a, PotentialNewType>,
+    pub type_name: StrParser<'a, ParserDataType>,
     pub expr: StrParser<'a, Node>,
     pub statement: StrParser<'a, Node>,
 }
@@ -150,10 +150,8 @@ pub fn build_function_parsers<'a>(
             } else {
                 name
             };
-            PotentialNewType::DataType(ParserDataType::new(
-                sp,
-                ParserInnerType::DynamicTraits(vec![trait_text]),
-            ))
+
+            ParserDataType::new(sp, ParserInnerType::DynamicTraits(vec![trait_text]))
         })
         .boxed();
 
@@ -280,7 +278,7 @@ pub fn build_function_parsers<'a>(
                     header: FunctionHeader {
                         generics,
                         parameters,
-                        return_type: ret.unwrap_or_else(|| PotentialNewType::null(body.span)),
+                        return_type: ret.unwrap_or_else(|| ParserDataType::null(body.span)),
                         param_destructures,
                     },
                     body: Box::new(body),

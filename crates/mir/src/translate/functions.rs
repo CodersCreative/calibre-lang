@@ -13,7 +13,7 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{CallArg, FunctionHeader, IfComparisonType, LoopType, Node, NodeType, VarType},
-        types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType},
+        types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
 use rustc_hash::FxHashMap;
@@ -399,21 +399,21 @@ impl MiddleEnvironment {
                     span,
                     next_name.clone(),
                 )),
-                data_type: PotentialNewType::DataType(Self::function_data_type(
+                data_type: Self::function_data_type(
                     span,
                     vec![],
                     ParserDataType::new(span, ParserInnerType::Option(Box::new(elem_type.clone()))),
-                )),
+                ),
                 value: Box::new(Node::new(
                     span,
                     NodeType::FunctionDeclaration {
                         header: FunctionHeader {
                             generics: GenericTypes::default(),
                             parameters: vec![],
-                            return_type: PotentialNewType::DataType(ParserDataType::new(
+                            return_type: ParserDataType::new(
                                 span,
                                 ParserInnerType::Option(Box::new(elem_type.clone())),
-                            )),
+                            ),
                             param_destructures: Vec::new(),
                         },
                         body: Box::new(next_body),
@@ -430,7 +430,7 @@ impl MiddleEnvironment {
                         span,
                         String::from("gen"),
                     )),
-                    generic_types: vec![PotentialNewType::DataType(elem_type)],
+                    generic_types: vec![elem_type],
                 },
                 value: ObjectType::Map(vec![
                     (String::from("data"), Node::identifier(span, &next_name)),
@@ -636,7 +636,7 @@ impl MiddleEnvironment {
             let new_name = ParserText::temp_name_with_suffix(og_name.text.trim(), span).text;
 
             let data_type = if let Some(x) = param.1 {
-                self.resolve_potential_new_type(scope, x)
+                self.resolve_data_type(scope, x)
             } else if let Some(node) = &param.2 {
                 self.resolve_type_from_node(scope, node)
                     .ok_or(MiddleErr::InferImpossible)?
@@ -680,7 +680,7 @@ impl MiddleEnvironment {
             ));
         }
 
-        let return_type = self.resolve_potential_new_type(&new_scope, header.return_type);
+        let return_type = self.resolve_data_type(&new_scope, header.return_type);
 
         body = body.rewrite_main_emits_to_returns();
 
@@ -857,7 +857,7 @@ impl MiddleEnvironment {
         scope: &u64,
         span: Span,
         mut caller: Node,
-        generic_types: Vec<PotentialNewType>,
+        generic_types: Vec<ParserDataType>,
         mut args: Vec<CallArg>,
         mut reverse_args: Vec<Node>,
     ) -> Result<MiddleNode, MiddleErr> {
@@ -986,7 +986,7 @@ impl MiddleEnvironment {
                 {
                     let explicit_args: Vec<ParserDataType> = generic_types
                         .iter()
-                        .map(|g| self.resolve_potential_new_type(scope, g.clone()))
+                        .map(|g| self.resolve_data_type(scope, g.clone()))
                         .collect();
 
                     let concrete_args: Option<Vec<ParserDataType>> = if !explicit_args.is_empty() {
@@ -1004,7 +1004,7 @@ impl MiddleEnvironment {
                             .parameters
                             .iter()
                             .filter_map(|(_, p, n)| match (p, n) {
-                                (Some(PotentialNewType::DataType(dt)), _) => Some(dt.clone()),
+                                (Some(dt), _) => Some(dt.clone()),
                                 (_, Some(node)) => self.resolve_type_from_node(scope, node),
                                 _ => None,
                             })
@@ -1230,12 +1230,9 @@ impl MiddleEnvironment {
                                                 .map(|p| p.unwrap_all_refs().data_type)
                                             {
                                                 Some(ParserInnerType::List(x)) => (*x).into(),
-                                                _ => {
-                                                    PotentialNewType::DataType(ParserDataType::new(
-                                                        self.context.current_span(),
-                                                        ParserInnerType::Auto(None),
-                                                    ))
-                                                }
+                                                _ => ParserDataType::auto(
+                                                    self.context.current_span(),
+                                                ),
                                             },
                                             vec![arg],
                                         ),
@@ -1251,10 +1248,7 @@ impl MiddleEnvironment {
                                             .map(|p| p.unwrap_all_refs().data_type)
                                         {
                                             Some(ParserInnerType::List(x)) => (*x).into(),
-                                            _ => PotentialNewType::DataType(ParserDataType::new(
-                                                self.context.current_span(),
-                                                ParserInnerType::Auto(None),
-                                            )),
+                                            _ => ParserDataType::auto(self.context.current_span()),
                                         },
                                         args.into_iter().map(|x| x.into()).collect(),
                                     ),

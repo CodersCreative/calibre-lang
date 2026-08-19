@@ -11,7 +11,7 @@ use calibre_parser::{
         Operator, RefMutability,
         idents::{ParserText, PotentialGenericTypeIdentifier},
         nodes::{CallArg, Node, NodeType},
-        types::{ParserDataType, ParserInnerType, PotentialNewType},
+        types::{ParserDataType, ParserInnerType},
     },
 };
 use std::str::FromStr;
@@ -153,7 +153,7 @@ impl MiddleEnvironment {
         scope: &u64,
         list: &[(MiddleNode, bool)],
         caller: Box<Node>,
-        generic_types: Vec<PotentialNewType>,
+        generic_types: Vec<ParserDataType>,
         args: Vec<CallArg>,
         reverse_args: Vec<Node>,
         receiver_is_value: bool,
@@ -196,7 +196,7 @@ impl MiddleEnvironment {
 
         let generic_params = generic_types
             .into_iter()
-            .map(|x| self.resolve_potential_new_type(scope, x).impl_name())
+            .map(|x| self.resolve_data_type(scope, x).impl_name())
             .collect::<Vec<_>>();
 
         let mut resolved_caller = type_style_member.or_else(|| {

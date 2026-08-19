@@ -4,9 +4,7 @@ use crate::ast::RefMutability;
 use crate::ast::ffi::ParserFfiInnerType;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::{Node, NodeType};
-use crate::ast::types::{
-    GenericType, GenericTypes, ParserDataType, ParserInnerType, PotentialNewType,
-};
+use crate::ast::types::{GenericType, GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{is_keyword, lex, span, unescape_char_literal, unescape_string};
 use chumsky::error::Rich;
 use chumsky::prelude::*;
@@ -35,7 +33,7 @@ pub struct ParserPrelude<'a> {
     pub int_lit: StrParser<'a, Node>,
     pub float_lit: StrParser<'a, Node>,
     pub null_lit: StrParser<'a, Node>,
-    pub type_name: StrParser<'a, PotentialNewType>,
+    pub type_name: StrParser<'a, ParserDataType>,
 }
 
 pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'a> {
@@ -294,275 +292,242 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
         })
         .boxed();
 
-    let type_name = recursive(|ty| {
-        let type_path = raw_ident
-            .clone()
-            .then(
-                lex(pad.clone(), just("::"))
-                    .ignore_then(raw_ident.clone())
-                    .repeated()
-                    .collect::<Vec<_>>(),
-            )
-            .map(|((first, sp), rest)| {
-                if rest.is_empty() {
-                    (first, sp)
-                } else {
-                    let mut text = first;
-                    for (segment, _) in rest {
-                        text.push_str("::");
-                        text.push_str(&segment);
-                    }
-                    (text, sp)
-                }
-            })
-            .boxed();
-
-        let struct_with_generics = type_path
-            .clone()
-            .then(
-                lex(pad.clone(), just(":<"))
-                    .ignore_then(
-                        ty.clone()
-                            .separated_by(comma.clone())
-                            .allow_trailing()
-                            .collect::<Vec<_>>()
-                            .or_not()
-                            .map(|items| items.unwrap_or_default()),
+    let type_name: Boxed<'_, '_, &str, ParserDataType, extra::Full<Rich<'_, char>, (), ()>> =
+        recursive(
+            |ty: Recursive<
+                dyn Parser<'_, &str, ParserDataType, extra::Full<Rich<'_, char>, (), ()>>,
+            >| {
+                let type_path = raw_ident
+                    .clone()
+                    .then(
+                        lex(pad.clone(), just("::"))
+                            .ignore_then(raw_ident.clone())
+                            .repeated()
+                            .collect::<Vec<_>>(),
                     )
-                    .then_ignore(lex(pad.clone(), just('>')))
-                    .or_not(),
-            )
-            .map(|((name, sp), generic_types)| {
-                if let Some(generic_types) = generic_types {
-                    if name == "dyn" {
-                        let traits = generic_types
-                            .into_iter()
-                            .filter_map(|ty| {
-                                let text = match ty {
-                                    PotentialNewType::DataType(data_type) => data_type.to_string(),
-                                    _ => String::new(),
-                                };
-                                let text = text.trim().to_string();
-                                (!text.is_empty()).then_some(text)
-                            })
-                            .collect::<Vec<_>>();
-                        PotentialNewType::DataType(ParserDataType::new(
-                            sp,
-                            ParserInnerType::DynamicTraits(traits),
-                        ))
-                    } else {
-                        PotentialNewType::DataType(ParserDataType::new(
-                            sp,
-                            ParserInnerType::StructWithGenerics {
-                                identifier: name,
-                                generic_types: generic_types
-                                    .into_iter()
-                                    .map(|x| x.unwrap_or_auto())
-                                    .collect(),
-                            },
-                        ))
-                    }
-                } else {
-                    PotentialNewType::DataType(ParserDataType::new(
-                        sp,
-                        match name.as_str() {
-                            "int" => ParserInnerType::Int,
-                            "uint" => ParserInnerType::UInt,
-                            "byte" => ParserInnerType::Byte,
-                            "float" => ParserInnerType::Float,
-                            "bool" => ParserInnerType::Bool,
-                            "str" => ParserInnerType::Str,
-                            "char" => ParserInnerType::Char,
-                            "dyn" => ParserInnerType::Dynamic,
-                            "null" => ParserInnerType::Null,
-                            "auto" => ParserInnerType::Auto(None),
-                            _ => ParserInnerType::Struct(name),
-                        },
-                    ))
-                }
-            })
-            .boxed();
+                    .map(|((first, sp), rest)| {
+                        if rest.is_empty() {
+                            (first, sp)
+                        } else {
+                            let mut text = first;
+                            for (segment, _) in rest {
+                                text.push_str("::");
+                                text.push_str(&segment);
+                            }
+                            (text, sp)
+                        }
+                    })
+                    .boxed();
 
-        let base = choice((
-            lex(pad.clone(), just('<'))
-                .ignore_then(
-                    ty.clone()
-                        .separated_by(comma.clone())
-                        .allow_trailing()
-                        .collect::<Vec<_>>()
-                        .or_not()
-                        .map(|items| items.unwrap_or_default()),
-                )
-                .then_ignore(lex(pad.clone(), just('>')))
-                .map_with_span({
-                    let ls = line_starts.clone();
-                    move |types, r| {
-                        PotentialNewType::DataType(ParserDataType::new(
-                            span(ls.as_ref(), r),
-                            ParserInnerType::Tuple(
-                                types.into_iter().map(|x| x.unwrap_or_auto()).collect(),
-                            ),
-                        ))
-                    }
-                }),
-            lex(pad.clone(), just('@'))
-                .ignore_then(raw_ident.clone())
-                .map(|(name, sp)| {
-                    let ffi =
-                        ParserFfiInnerType::from_str(&name).unwrap_or(ParserFfiInnerType::Int);
-                    PotentialNewType::DataType(ParserDataType::new(
-                        sp,
-                        ParserInnerType::FfiType(ffi),
-                    ))
-                }),
-            lex(pad.clone(), just("list"))
-                .ignore_then(lex(pad.clone(), just(":<")))
-                .ignore_then(ty.clone())
-                .then_ignore(lex(pad.clone(), just('>')))
-                .map_with_span({
-                    let ls = line_starts.clone();
-                    move |inner, r| {
-                        PotentialNewType::DataType(ParserDataType::new(
-                            span(ls.as_ref(), r),
-                            ParserInnerType::List(Box::new(inner.unwrap_or_auto())),
-                        ))
-                    }
-                }),
-            lex(pad.clone(), just("ptr"))
-                .ignore_then(lex(pad.clone(), just(":<")))
-                .ignore_then(ty.clone())
-                .then_ignore(lex(pad.clone(), just('>')))
-                .map_with_span({
-                    let ls = line_starts.clone();
-                    move |inner, r| {
-                        PotentialNewType::DataType(ParserDataType::new(
-                            span(ls.as_ref(), r),
-                            ParserInnerType::Ptr(Box::new(inner.unwrap_or_auto())),
-                        ))
-                    }
-                }),
-            lex(pad.clone(), just("fn"))
-                .ignore_then(lex(pad.clone(), just('(')))
-                .ignore_then(
-                    ty.clone()
-                        .separated_by(comma.clone())
-                        .allow_trailing()
-                        .collect::<Vec<_>>()
-                        .or_not()
-                        .map(|items| items.unwrap_or_default()),
-                )
-                .then_ignore(lex(pad.clone(), just(')')))
-                .then(arrow.clone().ignore_then(ty.clone()).or_not())
-                .map_with_span({
-                    let ls = line_starts.clone();
-                    move |(params, ret), r| {
-                        let sp = span(ls.as_ref(), r);
-                        let return_type = ret
-                            .unwrap_or_else(|| PotentialNewType::auto(sp))
-                            .unwrap_or_auto();
-                        PotentialNewType::DataType(ParserDataType::new(
-                            sp,
-                            ParserInnerType::Function {
-                                return_type: Box::new(return_type),
-                                parameters: params
+                let struct_with_generics = type_path
+                    .clone()
+                    .then(
+                        lex(pad.clone(), just(":<"))
+                            .ignore_then(
+                                ty.clone()
+                                    .separated_by(comma.clone())
+                                    .allow_trailing()
+                                    .collect::<Vec<_>>()
+                                    .or_not()
+                                    .map(|items| items.unwrap_or_default()),
+                            )
+                            .then_ignore(lex(pad.clone(), just('>')))
+                            .or_not(),
+                    )
+                    .map(|((name, sp), generic_types)| {
+                        if let Some(generic_types) = generic_types {
+                            if name == "dyn" {
+                                let traits = generic_types
                                     .into_iter()
-                                    .map(|x| x.unwrap_or_auto())
-                                    .collect(),
-                            },
-                        ))
-                    }
-                }),
-            struct_with_generics,
-            lex(pad.clone(), just('$'))
-                .ignore_then(raw_ident.clone())
-                .map(|(name, sp)| {
-                    PotentialNewType::DataType(ParserDataType::new(
-                        sp,
-                        ParserInnerType::DollarIdentifier(name),
-                    ))
-                }),
-        ));
+                                    .filter_map(|ty| {
+                                        let text = ty.to_string().trim().to_string();
+                                        (!text.is_empty()).then_some(text)
+                                    })
+                                    .collect::<Vec<_>>();
+                                ParserDataType::new(sp, ParserInnerType::DynamicTraits(traits))
+                            } else {
+                                ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::StructWithGenerics {
+                                        identifier: name,
+                                        generic_types,
+                                    },
+                                )
+                            }
+                        } else {
+                            ParserDataType::new(
+                                sp,
+                                match name.as_str() {
+                                    "int" => ParserInnerType::Int,
+                                    "uint" => ParserInnerType::UInt,
+                                    "byte" => ParserInnerType::Byte,
+                                    "float" => ParserInnerType::Float,
+                                    "bool" => ParserInnerType::Bool,
+                                    "str" => ParserInnerType::Str,
+                                    "char" => ParserInnerType::Char,
+                                    "dyn" => ParserInnerType::Dynamic,
+                                    "null" => ParserInnerType::Null,
+                                    "auto" => ParserInnerType::Auto(None),
+                                    _ => ParserInnerType::Struct(name),
+                                },
+                            )
+                        }
+                    })
+                    .boxed();
 
-        choice((
-            lex(pad.clone(), just("mut"))
-                .ignore_then(ty.clone())
-                .map_with_span({
-                    let ls = line_starts.clone();
-                    move |inner, r| {
-                        PotentialNewType::DataType(ParserDataType::new(
-                            span(ls.as_ref(), r),
-                            ParserInnerType::Ref(
-                                Box::new(inner.unwrap_or_auto()),
-                                RefMutability::MutValue,
-                            ),
-                        ))
-                    }
-                }),
-            lex(pad.clone(), just("&mut"))
-                .ignore_then(ty.clone())
-                .map_with_span({
-                    let ls = line_starts.clone();
-                    move |inner, r| {
-                        PotentialNewType::DataType(ParserDataType::new(
-                            span(ls.as_ref(), r),
-                            ParserInnerType::Ref(
-                                Box::new(inner.unwrap_or_auto()),
-                                RefMutability::MutRef,
-                            ),
-                        ))
-                    }
-                }),
-            lex(pad.clone(), just('&'))
-                .ignore_then(ty.clone())
-                .map_with_span({
-                    let ls = line_starts.clone();
-                    move |inner, r| {
-                        PotentialNewType::DataType(ParserDataType::new(
-                            span(ls.as_ref(), r),
-                            ParserInnerType::Ref(
-                                Box::new(inner.unwrap_or_auto()),
-                                RefMutability::Ref,
-                            ),
-                        ))
-                    }
-                }),
-            base,
-        ))
-        .then(lex(pad.clone(), just('!')).ignore_then(ty.clone()).or_not())
-        .map(|(left, right)| {
-            if let Some(right) = right {
-                let err = left.unwrap_or_auto();
-                let ok = right.unwrap_or_auto();
-                PotentialNewType::DataType(ParserDataType::new(
-                    Span::new_from_spans(err.span, ok.span),
-                    ParserInnerType::Result {
-                        ok: Box::new(ok),
-                        err: Box::new(err),
-                    },
+                let base = choice((
+                    lex(pad.clone(), just('<'))
+                        .ignore_then(
+                            ty.clone()
+                                .separated_by(comma.clone())
+                                .allow_trailing()
+                                .collect::<Vec<_>>()
+                                .or_not()
+                                .map(|items: Option<Vec<ParserDataType>>| {
+                                    items.unwrap_or_default()
+                                }),
+                        )
+                        .then_ignore(lex(pad.clone(), just('>')))
+                        .map_with_span({
+                            let ls = line_starts.clone();
+                            move |types, r| {
+                                ParserDataType::new(
+                                    span(ls.as_ref(), r),
+                                    ParserInnerType::Tuple(types),
+                                )
+                            }
+                        }),
+                    lex(pad.clone(), just('@'))
+                        .ignore_then(raw_ident.clone())
+                        .map(|(name, sp)| {
+                            let ffi = ParserFfiInnerType::from_str(&name)
+                                .unwrap_or(ParserFfiInnerType::Int);
+                            ParserDataType::new(sp, ParserInnerType::FfiType(ffi))
+                        }),
+                    lex(pad.clone(), just("list"))
+                        .ignore_then(lex(pad.clone(), just(":<")))
+                        .ignore_then(ty.clone())
+                        .then_ignore(lex(pad.clone(), just('>')))
+                        .map_with_span({
+                            let ls = line_starts.clone();
+                            move |inner, r| {
+                                let sp = span(ls.as_ref(), r);
+                                ParserDataType::new(sp, ParserInnerType::List(Box::new(inner)))
+                            }
+                        }),
+                    lex(pad.clone(), just("ptr"))
+                        .ignore_then(lex(pad.clone(), just(":<")))
+                        .ignore_then(ty.clone())
+                        .then_ignore(lex(pad.clone(), just('>')))
+                        .map_with_span({
+                            let ls = line_starts.clone();
+                            move |inner, r| {
+                                let sp = span(ls.as_ref(), r);
+                                ParserDataType::new(sp, ParserInnerType::Ptr(Box::new(inner)))
+                            }
+                        }),
+                    lex(pad.clone(), just("fn"))
+                        .ignore_then(lex(pad.clone(), just('(')))
+                        .ignore_then(
+                            ty.clone()
+                                .separated_by(comma.clone())
+                                .allow_trailing()
+                                .collect::<Vec<_>>()
+                                .or_not()
+                                .map(|items: Option<Vec<ParserDataType>>| {
+                                    items.unwrap_or_default()
+                                }),
+                        )
+                        .then_ignore(lex(pad.clone(), just(')')))
+                        .then(arrow.clone().ignore_then(ty.clone()).or_not())
+                        .map_with_span({
+                            let ls = line_starts.clone();
+                            move |(parameters, ret), r| {
+                                let sp = span(ls.as_ref(), r);
+                                ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Function {
+                                        return_type: Box::new(
+                                            ret.unwrap_or(ParserDataType::auto(sp)),
+                                        ),
+                                        parameters,
+                                    },
+                                )
+                            }
+                        }),
+                    struct_with_generics,
+                    lex(pad.clone(), just('$'))
+                        .ignore_then(raw_ident.clone())
+                        .map(|(name, sp)| {
+                            ParserDataType::new(sp, ParserInnerType::DollarIdentifier(name))
+                        }),
+                ));
+
+                choice((
+                    lex(pad.clone(), just("mut"))
+                        .ignore_then(ty.clone())
+                        .map_with_span({
+                            let ls = line_starts.clone();
+                            move |inner, r| {
+                                let sp = span(ls.as_ref(), r);
+                                ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Ref(Box::new(inner), RefMutability::MutValue),
+                                )
+                            }
+                        }),
+                    lex(pad.clone(), just("&mut"))
+                        .ignore_then(ty.clone())
+                        .map_with_span({
+                            let ls = line_starts.clone();
+                            move |inner, r| {
+                                let sp = span(ls.as_ref(), r);
+                                ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Ref(Box::new(inner), RefMutability::MutRef),
+                                )
+                            }
+                        }),
+                    lex(pad.clone(), just('&'))
+                        .ignore_then(ty.clone())
+                        .map_with_span({
+                            let ls = line_starts.clone();
+                            move |inner, r| {
+                                let sp = span(ls.as_ref(), r);
+                                ParserDataType::new(
+                                    sp,
+                                    ParserInnerType::Ref(Box::new(inner), RefMutability::Ref),
+                                )
+                            }
+                        }),
+                    base,
                 ))
-            } else {
-                left
-            }
-        })
-        .then(lex(pad.clone(), just('?')).or_not())
-        .map(|(inner, option)| {
-            if option.is_some() {
-                match inner {
-                    PotentialNewType::DataType(data_type) => {
-                        PotentialNewType::DataType(ParserDataType::new(
-                            data_type.span,
-                            ParserInnerType::Option(Box::new(data_type)),
-                        ))
+                .then(lex(pad.clone(), just('!')).ignore_then(ty.clone()).or_not())
+                .map(|(left, right)| {
+                    if let Some(right) = right {
+                        ParserDataType::new(
+                            Span::new_from_spans(left.span, right.span),
+                            ParserInnerType::Result {
+                                ok: Box::new(right),
+                                err: Box::new(left),
+                            },
+                        )
+                    } else {
+                        left
                     }
-                    _ => inner,
-                }
-            } else {
-                inner
-            }
-        })
-        .boxed()
-    })
-    .boxed();
+                })
+                .then(lex(pad.clone(), just('?')).or_not())
+                .map(|(inner, option)| {
+                    if option.is_some() {
+                        ParserDataType::new(inner.span, ParserInnerType::Option(Box::new(inner)))
+                    } else {
+                        inner
+                    }
+                })
+                .boxed()
+            },
+        )
+        .boxed();
 
     ParserPrelude {
         pad,

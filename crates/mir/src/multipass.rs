@@ -4,7 +4,7 @@ use calibre_parser::{
     ast::{
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{Node, NodeType, VarType},
-        types::{ParserDataType, ParserInnerType, PotentialNewType},
+        types::{ParserDataType, ParserInnerType},
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -325,7 +325,7 @@ impl MiddleEnvironment {
         var_type: VarType,
         identifier: &PotentialDollarIdentifier,
         value: &Node,
-        data_type: &PotentialNewType,
+        data_type: &ParserDataType,
     ) {
         let Some(identifier) = self.resolve_dollar_ident_only(scope, identifier) else {
             return;
@@ -341,7 +341,7 @@ impl MiddleEnvironment {
             self.resolve_type_from_node(scope, value)
                 .unwrap_or_else(|| ParserDataType::new(span, ParserInnerType::Auto(None)))
         } else {
-            self.resolve_potential_new_type(scope, data_type.clone())
+            self.resolve_data_type(scope, data_type.clone())
         };
 
         self.symbols.variables.insert(

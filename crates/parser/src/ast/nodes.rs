@@ -8,7 +8,7 @@ use crate::{
         generics::TraitMember,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::{MatchArmType, SelectArm, TryCatch},
-        types::{GenericTypes, ParserDataType, PotentialNewType},
+        types::{GenericTypes, ParserDataType},
     },
 };
 use rustc_hash::FxHashMap;
@@ -72,14 +72,14 @@ impl Display for VarType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeDefType {
     Enum {
-        variants: Vec<(PotentialDollarIdentifier, Option<PotentialNewType>)>,
+        variants: Vec<(PotentialDollarIdentifier, Option<ParserDataType>)>,
         default_variant: Option<usize>,
         default_value: Option<Box<Node>>,
     },
     Struct {
-        fields: ObjectType<(PotentialNewType, Option<Node>)>,
+        fields: ObjectType<(ParserDataType, Option<Node>)>,
     },
-    NewType(Box<PotentialNewType>),
+    NewType(Box<ParserDataType>),
 }
 
 impl TypeDefType {
@@ -270,7 +270,7 @@ impl Node {
     pub fn call_with_generics(
         span: Span,
         caller: Node,
-        generic_types: Vec<PotentialNewType>,
+        generic_types: Vec<ParserDataType>,
         args: Vec<CallArg>,
     ) -> Self {
         Self::new(
@@ -288,7 +288,7 @@ impl Node {
     pub fn call_full(
         span: Span,
         caller: Node,
-        generic_types: Vec<PotentialNewType>,
+        generic_types: Vec<ParserDataType>,
         args: Vec<CallArg>,
         reverse_args: Vec<Node>,
         string_fn: Option<ParserText>,
@@ -461,10 +461,10 @@ pub struct FunctionHeader {
     pub generics: GenericTypes,
     pub parameters: Vec<(
         PotentialDollarIdentifier,
-        Option<PotentialNewType>,
+        Option<ParserDataType>,
         Option<Box<Node>>,
     )>,
-    pub return_type: PotentialNewType,
+    pub return_type: ParserDataType,
     pub param_destructures: Vec<(usize, DestructurePattern)>,
 }
 
@@ -527,7 +527,7 @@ pub enum NodeType {
     },
     Identifier(PotentialGenericTypeIdentifier),
     DataType {
-        data_type: PotentialNewType,
+        data_type: ParserDataType,
     },
     DerefStatement {
         value: Box<Node>,
@@ -547,17 +547,17 @@ pub enum NodeType {
         var_type: VarType,
         identifier: PotentialDollarIdentifier,
         value: Box<Node>,
-        data_type: PotentialNewType,
+        data_type: ParserDataType,
     },
     ImplDeclaration {
         generics: GenericTypes,
-        target: PotentialNewType,
+        target: ParserDataType,
         variables: Vec<Node>,
     },
     ImplTraitDeclaration {
         generics: GenericTypes,
         trait_ident: PotentialGenericTypeIdentifier,
-        target: PotentialNewType,
+        target: ParserDataType,
         variables: Vec<Node>,
     },
     TraitDeclaration {
@@ -634,7 +634,7 @@ pub enum NodeType {
     },
     AsExpression {
         value: Box<Node>,
-        data_type: PotentialNewType,
+        data_type: ParserDataType,
         failure_mode: AsFailureMode,
     },
     IsExpression {
@@ -651,7 +651,7 @@ pub enum NodeType {
         inclusive: bool,
     },
     IterExpression {
-        data_type: PotentialNewType,
+        data_type: ParserDataType,
         map: Box<Node>,
         spawned: bool,
         loop_type: Box<LoopType>,
@@ -660,7 +660,7 @@ pub enum NodeType {
     },
     InlineGenerator {
         map: Box<Node>,
-        data_type: Option<PotentialNewType>,
+        data_type: Option<ParserDataType>,
         loop_type: Box<LoopType>,
         conditionals: Vec<Node>,
         until: Option<Box<Node>>,
@@ -687,9 +687,9 @@ pub enum NodeType {
         condition: Box<Node>,
     },
     StringLiteral(ParserText),
-    ListLiteral(PotentialNewType, Vec<Node>),
+    ListLiteral(ParserDataType, Vec<Node>),
     ListRepeatLiteral {
-        data_type: PotentialNewType,
+        data_type: ParserDataType,
         value: Box<Node>,
         count: Box<Node>,
     },
@@ -706,7 +706,7 @@ pub enum NodeType {
     CallExpression {
         string_fn: Option<ParserText>,
         caller: Box<Node>,
-        generic_types: Vec<PotentialNewType>,
+        generic_types: Vec<ParserDataType>,
         args: Vec<CallArg>,
         reverse_args: Vec<Node>,
     },

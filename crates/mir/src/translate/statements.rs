@@ -11,7 +11,7 @@ use calibre_parser::{
     ast::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{AsFailureMode, Node, NodeType, Overload, TypeDefType, VarType},
-        types::{ParserDataType, ParserInnerType, PotentialNewType},
+        types::{ParserDataType, ParserInnerType},
     },
 };
 use rustc_hash::FxHashMap;
@@ -24,7 +24,7 @@ impl MiddleEnvironment {
         var_type: VarType,
         identifier: PotentialDollarIdentifier,
         mut value: Node,
-        data_type: PotentialNewType,
+        data_type: ParserDataType,
     ) -> Result<MiddleNode, MiddleErr> {
         let identifier = self
             .resolve_dollar_ident_only(scope, &identifier)
@@ -122,10 +122,10 @@ impl MiddleEnvironment {
                     implicit_none: default.is_none()
                         && matches!(
                             declared_ty,
-                            Some(PotentialNewType::DataType(ParserDataType {
+                            Some(ParserDataType {
                                 data_type: ParserInnerType::Option(_),
                                 ..
-                            }))
+                            })
                         ),
                 })
                 .collect();
@@ -142,7 +142,7 @@ impl MiddleEnvironment {
             let err = self.context.err_at_current(MiddleErr::InferImpossible);
             self.resolve_type_from_node(scope, &value).ok_or(err)?
         } else {
-            self.resolve_potential_new_type(scope, data_type)
+            self.resolve_data_type(scope, data_type)
         };
 
         let mut value = if let Some((header, _)) = function_decl {
@@ -167,7 +167,7 @@ impl MiddleEnvironment {
                 let new_name = ParserText::temp_name_with_suffix(og_name.trim(), span);
 
                 let data_type = if let Some(x) = param.1.clone() {
-                    self.resolve_potential_new_type(scope, x)
+                    self.resolve_data_type(scope, x)
                 } else if let Some(node) = &param.2 {
                     self.resolve_type_from_node(scope, node)
                         .ok_or(MiddleErr::InferImpossible)?
@@ -253,10 +253,10 @@ impl MiddleEnvironment {
                 PotentialGenericTypeIdentifier::Generic { generic_types, .. } => generic_types
                     .iter()
                     .filter_map(|t| match t {
-                        PotentialNewType::DataType(ParserDataType {
+                        ParserDataType {
                             data_type: ParserInnerType::Struct(s),
                             ..
-                        }) => Some(s.clone()),
+                        } => Some(s.clone()),
                         _ => None,
                     })
                     .collect(),
@@ -267,7 +267,7 @@ impl MiddleEnvironment {
                 .resolve_dollar_ident_potential_generic_only(scope, &identifier)
                 .unwrap_or_else(|| ParserText::from(identifier.to_string()));
 
-            let inner = self.resolve_potential_new_type(scope, *inner.clone());
+            let inner = self.resolve_data_type(scope, *inner.clone());
 
             let target_name = if identifier.text == inner.impl_name() {
                 Some(identifier.text.clone())
@@ -321,10 +321,10 @@ impl MiddleEnvironment {
             let template_params: Vec<String> = generic_types
                 .iter()
                 .filter_map(|t| match t {
-                    PotentialNewType::DataType(ParserDataType {
+                    ParserDataType {
                         data_type: ParserInnerType::Struct(s),
                         ..
-                    }) => Some(s.clone()),
+                    } => Some(s.clone()),
                     _ => None,
                 })
                 .collect();

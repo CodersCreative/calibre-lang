@@ -5,7 +5,7 @@ use crate::ast::matching::{MatchArmType, TryCatch};
 use crate::ast::nodes::{
     AsFailureMode, CallArg, IfComparisonType, LoopType, Node, NodeType, PipeSegment,
 };
-use crate::ast::types::{ParserDataType, ParserInnerType, PotentialNewType};
+use crate::ast::types::{ParserDataType, ParserInnerType};
 use crate::parse::util::{
     ensure_scope_node, lex, member_node_from_head_and_tail, normalize_scope_member_chain,
     parse_embedded_expr, parse_splits, span, span_from_nodes_or, unescape_string,
@@ -32,7 +32,7 @@ pub struct TailExpressionParsers<'a> {
     pub ident: StrParser<'a, (String, Span)>,
     pub int_lit: StrParser<'a, Node>,
     pub named_ident: StrParser<'a, PotentialDollarIdentifier>,
-    pub type_name: StrParser<'a, PotentialNewType>,
+    pub type_name: StrParser<'a, ParserDataType>,
     pub expr: StrParser<'a, Node>,
     pub statement: StrParser<'a, Node>,
     pub atom: StrParser<'a, Node>,
@@ -96,10 +96,7 @@ pub fn build_tail_expression_parser<'a>(
 
             let mut call_args = vec![CallArg::Value(Node::new(
                 sp,
-                NodeType::ListLiteral(
-                    PotentialNewType::DataType(ParserDataType::new(sp, ParserInnerType::Str)),
-                    text_nodes,
-                ),
+                NodeType::ListLiteral(ParserDataType::new(sp, ParserInnerType::Str), text_nodes),
             ))];
 
             for arg in args {
@@ -314,12 +311,7 @@ pub fn build_tail_expression_parser<'a>(
         .then_ignore(lex(pad.clone(), just('>')))
         .or_not()
         .map(|x| {
-            x.unwrap_or_else(|| {
-                PotentialNewType::DataType(ParserDataType::new(
-                    Span::default(),
-                    ParserInnerType::Auto(None),
-                ))
-            })
+            x.unwrap_or_else(|| ParserDataType::new(Span::default(), ParserInnerType::Auto(None)))
         })
         .boxed();
 
@@ -662,11 +654,7 @@ pub fn build_tail_expression_parser<'a>(
                 .collect::<Vec<_>>(),
         )
         .map(|(head, checks)| {
-            checks.into_iter().fold(head, |value, target| {
-                let data_type = match target {
-                    PotentialNewType::DataType(dt) => dt,
-                    _ => ParserDataType::new(Span::default(), ParserInnerType::Auto(None)),
-                };
+            checks.into_iter().fold(head, |value, data_type| {
                 Node::new(
                     value.span,
                     NodeType::IsExpression {
@@ -807,15 +795,15 @@ pub fn build_tail_expression_parser<'a>(
         .try_map(
             |((((map_expr, loop_type), conditionals), until), explicit_return), sp| {
                 let data_type = match explicit_return {
-                    Some(PotentialNewType::DataType(ParserDataType {
+                    Some(ParserDataType {
                         data_type:
                             ParserInnerType::StructWithGenerics {
                                 identifier,
                                 generic_types,
                             },
                         ..
-                    })) if identifier == "gen" && generic_types.len() == 1 => {
-                        Some(PotentialNewType::DataType(generic_types[0].clone()))
+                    }) if identifier == "gen" && generic_types.len() == 1 => {
+                        Some(generic_types[0].clone())
                     }
                     Some(_) => {
                         return Err(Rich::custom(

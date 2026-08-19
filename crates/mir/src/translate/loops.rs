@@ -13,7 +13,7 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier},
         matching::MatchArmType,
         nodes::{CallArg, IfComparisonType, LoopType, Node, NodeType, VarType},
-        types::{ParserDataType, ParserInnerType, PotentialNewType},
+        types::{ParserDataType, ParserInnerType},
     },
 };
 
@@ -126,7 +126,7 @@ impl MiddleEnvironment {
                 var_type: VarType::Mutable,
                 identifier: result_ident.clone().into(),
                 value: else_body.clone(),
-                data_type: PotentialNewType::auto(self.context.current_span()),
+                data_type: ParserDataType::auto(self.context.current_span()),
             },
         );
 
@@ -136,10 +136,7 @@ impl MiddleEnvironment {
                 var_type: VarType::Mutable,
                 identifier: broke_ident.clone().into(),
                 value: Box::new(Node::int(self.context.current_span(), 0)),
-                data_type: PotentialNewType::DataType(ParserDataType::new(
-                    self.context.current_span(),
-                    ParserInnerType::Int,
-                )),
+                data_type: ParserDataType::new(self.context.current_span(), ParserInnerType::Int),
             },
         );
         let stmts = vec![
@@ -166,7 +163,7 @@ impl MiddleEnvironment {
     pub fn evaluate_iter_expression(
         &mut self,
         scope: &u64,
-        data_type: PotentialNewType,
+        data_type: ParserDataType,
         map: Box<Node>,
         spawned: bool,
         loop_type: Box<LoopType>,
@@ -175,9 +172,9 @@ impl MiddleEnvironment {
     ) -> Result<MiddleNode, MiddleErr> {
         let resolved_data_type = if data_type.is_auto() {
             self.resolve_type_from_node(scope, &map)
-                .unwrap_or(self.resolve_potential_new_type(scope, data_type.clone()))
+                .unwrap_or(self.resolve_data_type(scope, data_type.clone()))
         } else {
-            self.resolve_potential_new_type(scope, data_type.clone())
+            self.resolve_data_type(scope, data_type.clone())
         };
 
         if spawned {
@@ -242,10 +239,7 @@ impl MiddleEnvironment {
                 NodeType::VariableDeclaration {
                     var_type: VarType::Immutable,
                     identifier: value_ident.clone(),
-                    data_type: PotentialNewType::DataType(ParserDataType::new(
-                        self.context.current_span(),
-                        ParserInnerType::Auto(None),
-                    )),
+                    data_type: ParserDataType::auto(self.context.current_span()),
                     value: Box::new(*map),
                 },
             ));
@@ -356,10 +350,7 @@ impl MiddleEnvironment {
                     NodeType::VariableDeclaration {
                         var_type: VarType::Mutable,
                         identifier: chan_ident.clone(),
-                        data_type: PotentialNewType::DataType(ParserDataType::new(
-                            self.context.current_span(),
-                            ParserInnerType::Auto(None),
-                        )),
+                        data_type: ParserDataType::auto(self.context.current_span()),
                         value: Box::new(Node::call_with_generics(
                             self.context.current_span(),
                             Node::member(
@@ -377,10 +368,7 @@ impl MiddleEnvironment {
                     NodeType::VariableDeclaration {
                         var_type: VarType::Mutable,
                         identifier: wg_ident.clone(),
-                        data_type: PotentialNewType::DataType(ParserDataType::new(
-                            self.context.current_span(),
-                            ParserInnerType::Auto(None),
-                        )),
+                        data_type: ParserDataType::auto(self.context.current_span()),
                         value: Box::new(Node::call(
                             self.context.current_span(),
                             Node::member(
@@ -397,10 +385,7 @@ impl MiddleEnvironment {
                     NodeType::VariableDeclaration {
                         var_type: VarType::Mutable,
                         identifier: start_ident.clone(),
-                        data_type: PotentialNewType::DataType(ParserDataType::new(
-                            self.context.current_span(),
-                            ParserInnerType::Auto(None),
-                        )),
+                        data_type: ParserDataType::auto(self.context.current_span()),
                         value: Box::new(Node::call(
                             self.context.current_span(),
                             Node::member(
@@ -683,10 +668,7 @@ impl MiddleEnvironment {
                 NodeType::VariableDeclaration {
                     var_type: VarType::Immutable,
                     identifier: map_tmp_ident.clone(),
-                    data_type: PotentialNewType::DataType(ParserDataType::new(
-                        self.context.current_span(),
-                        ParserInnerType::Auto(None),
-                    )),
+                    data_type: ParserDataType::auto(self.context.current_span()),
                     value: map,
                 },
             );
@@ -1231,10 +1213,7 @@ impl MiddleEnvironment {
                     NodeType::VariableDeclaration {
                         identifier: name,
                         var_type: VarType::Mutable,
-                        data_type: PotentialNewType::DataType(ParserDataType::new(
-                            self.context.current_span(),
-                            ParserInnerType::Auto(None),
-                        )),
+                        data_type: ParserDataType::auto(self.context.current_span()),
                         value: Box::new(loop_item_value),
                     },
                 );

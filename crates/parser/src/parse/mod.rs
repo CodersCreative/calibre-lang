@@ -4,7 +4,7 @@ use crate::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{CallArg, EmitType, Node, NodeType},
-        types::{ParserDataType, ParserInnerType, PotentialNewType},
+        types::{ParserDataType, ParserInnerType},
     },
 };
 use chumsky::error::Rich;
@@ -239,10 +239,7 @@ pub fn parse_program_with_source(
                     .or_not()
                     .map(|x| {
                         x.unwrap_or_else(|| {
-                            PotentialNewType::DataType(ParserDataType::new(
-                                Span::default(),
-                                ParserInnerType::Auto(None),
-                            ))
+                            ParserDataType::new(Span::default(), ParserInnerType::Auto(None))
                         })
                     })
                     .then(lex(pad.clone(), just('[')))

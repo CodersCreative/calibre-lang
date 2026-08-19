@@ -4,7 +4,7 @@ use calibre_parser::ast::idents::{
     ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
 };
 use calibre_parser::ast::nodes::{FunctionHeader, Node, NodeType, VarType};
-use calibre_parser::ast::types::{GenericTypes, ParserDataType, ParserInnerType, PotentialNewType};
+use calibre_parser::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use calibre_parser::{
     Span,
     ast::{ObjectMap, ObjectType},
@@ -34,21 +34,18 @@ impl MiddleEnvironment {
                                 identifier: PotentialDollarIdentifier::Identifier(
                                     ParserText::from("default".to_string()),
                                 ),
-                                data_type: PotentialNewType::auto(span),
+                                data_type: ParserDataType::auto(span),
                                 value: Box::new(Node::new(
                                     span,
                                     NodeType::FunctionDeclaration {
                                         header: FunctionHeader {
                                             generics: GenericTypes::default(),
                                             parameters: Vec::new(),
-                                            return_type: PotentialNewType::DataType(
-                                                ParserDataType::new(
-                                                    span,
-                                                    ParserInnerType::Struct(
-                                                        identifier.text.clone(),
-                                                    ),
-                                                ),
+                                            return_type: ParserDataType::object(
+                                                span,
+                                                &identifier.text,
                                             ),
+
                                             param_destructures: Vec::new(),
                                         },
                                         body: Box::new(Node::new_temp_scope(vec![Node::ret(
@@ -112,20 +109,14 @@ impl MiddleEnvironment {
                         identifier: PotentialDollarIdentifier::Identifier(ParserText::from(
                             "default".to_string(),
                         )),
-                        data_type: PotentialNewType::DataType(ParserDataType::new(
-                            span,
-                            ParserInnerType::Auto(None),
-                        )),
+                        data_type: ParserDataType::auto(span),
                         value: Box::new(Node::new(
                             span,
                             NodeType::FunctionDeclaration {
                                 header: FunctionHeader {
                                     generics: GenericTypes::default(),
                                     parameters: Vec::new(),
-                                    return_type: PotentialNewType::DataType(ParserDataType::new(
-                                        span,
-                                        ParserInnerType::Struct(identifier.text.clone()),
-                                    )),
+                                    return_type: ParserDataType::object(span, &identifier.text),
                                     param_destructures: Vec::new(),
                                 },
                                 body: Box::new(Node::new_temp_scope(vec![Node::ret(Node::new(
@@ -157,10 +148,7 @@ impl MiddleEnvironment {
                 NodeType::ImplTraitDeclaration {
                     generics: GenericTypes::default(),
                     trait_ident: PotentialGenericTypeIdentifier::new(Span::default(), "Default"),
-                    target: PotentialNewType::DataType(ParserDataType::new(
-                        span,
-                        ParserInnerType::Struct(identifier.text),
-                    )),
+                    target: ParserDataType::object(span, &identifier.text),
                     variables: vec![default_fn],
                 },
             ),

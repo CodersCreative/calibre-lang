@@ -2,7 +2,7 @@ use crate::{
     COUNTER, ParserError, Span,
     ast::{
         nodes::{Node, NodeType},
-        types::PotentialNewType,
+        types::ParserDataType,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ pub enum PotentialGenericTypeIdentifier {
     Identifier(PotentialDollarIdentifier),
     Generic {
         identifier: PotentialDollarIdentifier,
-        generic_types: Vec<PotentialNewType>,
+        generic_types: Vec<ParserDataType>,
     },
 }
 

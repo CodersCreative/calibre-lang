@@ -5,7 +5,7 @@ use calibre_parser::ast::{
     ObjectType,
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::{Node, NodeType, VarType},
-    types::{ParserDataType, ParserInnerType, PotentialNewType},
+    types::{ParserDataType, ParserInnerType},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -82,10 +82,7 @@ impl MiddleEnvironment {
             NodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::new(sp, "package"),
-                data_type: PotentialNewType::DataType(ParserDataType::new(
-                    sp,
-                    ParserInnerType::Struct(String::from("Package")),
-                )),
+                data_type: ParserDataType::object(sp, "Package"),
                 value: Box::new(Node::new(
                     sp,
                     NodeType::StructLiteral {
@@ -151,10 +148,7 @@ impl MiddleEnvironment {
             NodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::new(sp, "current_context"),
-                data_type: PotentialNewType::DataType(ParserDataType::new(
-                    sp,
-                    ParserInnerType::Struct(String::from("ExecContext")),
-                )),
+                data_type: ParserDataType::object(sp, "ExecContext"),
                 value: Box::new(Node::new(
                     sp,
                     NodeType::StructLiteral {

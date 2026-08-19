@@ -5,7 +5,7 @@ use crate::ast::matching::{
     MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem,
 };
 use crate::ast::nodes::{DestructurePattern, FunctionHeader, Node, NodeType, VarType};
-use crate::ast::types::{GenericTypes, PotentialNewType};
+use crate::ast::types::{GenericTypes, ParserDataType};
 use crate::parse::util::{lex, span, struct_destructure_fields_parser};
 use chumsky::prelude::*;
 use std::sync::Arc;
@@ -18,7 +18,7 @@ pub struct MatchParsers<'a> {
     pub ident: StrParser<'a, (String, Span)>,
     pub generic_params: StrParser<'a, GenericTypes>,
     pub string_lit: StrParser<'a, Node>,
-    pub type_name: StrParser<'a, PotentialNewType>,
+    pub type_name: StrParser<'a, ParserDataType>,
     pub expr: StrParser<'a, Node>,
     pub scope_block: StrParser<'a, Node>,
 }
@@ -60,10 +60,6 @@ pub fn build_match_parsers<'a>(
 
     let match_is_type = lex(pad.clone(), just("is"))
         .ignore_then(type_name.clone())
-        .try_map(|ty, sp| match ty {
-            PotentialNewType::DataType(dt) => Ok(dt),
-            _ => Err(Rich::custom(sp, "expected concrete type in match pattern")),
-        })
         .boxed();
 
     let match_in_pattern = lex(pad.clone(), just("in"))
@@ -550,7 +546,7 @@ pub fn build_match_parsers<'a>(
                     })
                     .collect()
             } else {
-                let shared_enum_payload = values.iter().rev().find_map(|v| match v {
+                let shared_enum_payload = values.iter().rev().find_map(|v| match &v {
                     MatchArmType::Enum {
                         var_type,
                         name,
@@ -659,7 +655,7 @@ pub fn build_match_parsers<'a>(
                         param_ty,
                         default.map(Box::new),
                     )],
-                    return_type: return_ty.unwrap_or_else(|| PotentialNewType::null(sp)),
+                    return_type: return_ty.unwrap_or_else(|| ParserDataType::null(sp)),
                     param_destructures: Vec::new(),
                 };
 

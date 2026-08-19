@@ -5,7 +5,7 @@ use calibre_parser::{
         Operator,
         idents::PotentialGenericTypeIdentifier,
         nodes::{AsFailureMode, EmitType, Node, NodeType},
-        types::{ParserDataType, ParserInnerType, PotentialNewType},
+        types::{ParserDataType, ParserInnerType},
     },
 };
 
@@ -62,7 +62,7 @@ impl MiddleEnvironment {
             )),
             NodeType::InlineGenerator { map, data_type, .. } => {
                 let elem = match data_type {
-                    Some(PotentialNewType::DataType(dt)) => dt.clone(),
+                    Some(dt) => dt.clone(),
                     _ => self
                         .resolve_type_from_node(scope, map)
                         .unwrap_or(ParserDataType::new(node.span, ParserInnerType::Auto(None))),
@@ -173,7 +173,7 @@ impl MiddleEnvironment {
                         let base = self.resolve_dollar_ident_only(scope, base)?;
                         let concrete: Vec<ParserDataType> = generic_types
                             .iter()
-                            .map(|g| self.resolve_potential_new_type(scope, g.clone()))
+                            .map(|g| self.resolve_data_type(scope, g.clone()))
                             .collect();
 
                         if let Some((tpl_params, _, _)) =
@@ -203,14 +203,14 @@ impl MiddleEnvironment {
             | NodeType::FnMatchDeclaration { header, .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Function {
                     return_type: Box::new(
-                        self.resolve_potential_new_type(scope, header.return_type.clone()),
+                        self.resolve_data_type(scope, header.return_type.clone()),
                     ),
                     parameters: {
                         let mut params = Vec::new();
 
                         for param in header.parameters.clone() {
                             let data_type = if let Some(x) = param.1 {
-                                self.resolve_potential_new_type(scope, x)
+                                self.resolve_data_type(scope, x)
                             } else if let Some(node) = &param.2 {
                                 self.resolve_type_from_node(scope, node)?
                             } else {
@@ -275,7 +275,7 @@ impl MiddleEnvironment {
             } => {
                 let list_type = ParserDataType {
                     data_type: ParserInnerType::List(Box::new(
-                        self.resolve_potential_new_type(scope, data_type.clone()),
+                        self.resolve_data_type(scope, data_type.clone()),
                     )),
                     span: node.span,
                 };
@@ -294,7 +294,7 @@ impl MiddleEnvironment {
             NodeType::ListLiteral(data_type, _) | NodeType::ListRepeatLiteral { data_type, .. } => {
                 Some(ParserDataType {
                     data_type: ParserInnerType::List(Box::new(
-                        self.resolve_potential_new_type(scope, data_type.clone()),
+                        self.resolve_data_type(scope, data_type.clone()),
                     )),
                     span: node.span,
                 })
@@ -307,7 +307,7 @@ impl MiddleEnvironment {
                 data_type,
                 failure_mode,
             } => {
-                let ok = self.resolve_potential_new_type(scope, data_type.clone());
+                let ok = self.resolve_data_type(scope, data_type.clone());
                 match failure_mode {
                     AsFailureMode::Panic => Some(ok),
                     AsFailureMode::Option => Some(ParserDataType {

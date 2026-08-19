@@ -416,7 +416,7 @@ impl MiddleTypeDefType {
                             env.resolve_dollar_ident_only(scope, &k)
                                 .unwrap_or_else(|| ParserText::from(k.to_string()).into()),
                             if let Some(v) = v {
-                                Some(env.resolve_potential_new_type(scope, v))
+                                Some(env.resolve_data_type(scope, v))
                             } else {
                                 None
                             },
@@ -433,13 +433,13 @@ impl MiddleTypeDefType {
                 match fields {
                     ObjectType::Map(field_map) => {
                         for (k, (t, v)) in field_map {
-                            let resolved_type = env.resolve_potential_new_type(scope, t);
+                            let resolved_type = env.resolve_data_type(scope, t);
                             map.push((k, (resolved_type, v.map(Box::new))));
                         }
                     }
                     ObjectType::Tuple(types) => {
                         for (t, v) in types {
-                            let resolved_type = env.resolve_potential_new_type(scope, t);
+                            let resolved_type = env.resolve_data_type(scope, t);
                             map.push((format!("{}", map.len()), (resolved_type, v.map(Box::new))));
                         }
                     }
@@ -447,9 +447,7 @@ impl MiddleTypeDefType {
 
                 ObjectMap(map)
             }),
-            TypeDefType::NewType(x) => {
-                MiddleTypeDefType::NewType(env.resolve_potential_new_type(scope, *x))
-            }
+            TypeDefType::NewType(x) => MiddleTypeDefType::NewType(env.resolve_data_type(scope, *x)),
         }
     }
 }

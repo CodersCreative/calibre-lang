@@ -105,6 +105,7 @@ const main := fn => {
   match animal {
     is Wolf => {
       let animal : Wold = animal as! Wolf;
+      print(animal);
       print(animal.Description())
     }
     _ => print("Not Wolf");

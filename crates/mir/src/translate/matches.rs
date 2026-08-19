@@ -13,7 +13,7 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::{MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem},
         nodes::{CallArg, IfComparisonType, Node, NodeType, VarType},
-        types::{ParserDataType, ParserInnerType, PotentialNewType},
+        types::{ParserDataType, ParserInnerType},
     },
 };
 
@@ -224,7 +224,7 @@ impl MiddleEnvironment {
                 var_type,
                 identifier,
                 value: Box::new(value),
-                data_type: PotentialNewType::DataType(data_type),
+                data_type,
             },
         )
     }
@@ -760,12 +760,8 @@ impl MiddleEnvironment {
                     NodeType::VariableDeclaration {
                         var_type: VarType::Mutable,
                         identifier: ParserText::from(tmp_name.clone()).into(),
-                        data_type: PotentialNewType::DataType(resolved.unwrap_or_else(|| {
-                            ParserDataType::new(
-                                self.context.current_span(),
-                                ParserInnerType::Auto(None),
-                            )
-                        })),
+                        data_type: resolved
+                            .unwrap_or_else(|| ParserDataType::auto(self.context.current_span())),
                         value,
                     },
                 )),
@@ -1143,11 +1139,8 @@ impl MiddleEnvironment {
                                                                     var_type: *var_type,
                                                                     identifier: name.clone(),
                                                                     value: Box::new(pcur.clone()),
-                                                                    data_type: PotentialNewType::DataType(
-                                                                        ParserDataType::new(
-                                                                            self.context.current_span(),
-                                                                            ParserInnerType::Auto(None),
-                                                                        ),
+                                                                    data_type: ParserDataType::auto(
+                                                                        self.context.current_span(),
                                                                     ),
                                                                 },
                                                             ));
@@ -1222,16 +1215,16 @@ impl MiddleEnvironment {
                                                                     self.context.current_span(),
                                                                     NodeType::VariableDeclaration {
                                                                         var_type: *var_type,
-                                                                        identifier: bind_name.clone(),
+                                                                        identifier: bind_name
+                                                                            .clone(),
                                                                         value: Box::new(
                                                                             nested_payload.clone(),
                                                                         ),
-                                                                        data_type: PotentialNewType::DataType(
-                                                                            ParserDataType::new(
-                                                                                self.context.current_span(),
-                                                                                ParserInnerType::Auto(None),
+                                                                        data_type:
+                                                                            ParserDataType::auto(
+                                                                                self.context
+                                                                                    .current_span(),
                                                                             ),
-                                                                        ),
                                                                     },
                                                                 ));
                                                                 if let Some(pattern) = destructure {
@@ -1294,11 +1287,8 @@ impl MiddleEnvironment {
                                                                     var_type: *var_type,
                                                                     identifier: name.clone(),
                                                                     value: Box::new(cur.clone()),
-                                                                    data_type: PotentialNewType::DataType(
-                                                                        ParserDataType::new(
-                                                                            self.context.current_span(),
-                                                                            ParserInnerType::Auto(None),
-                                                                        ),
+                                                                    data_type: ParserDataType::auto(
+                                                                        self.context.current_span(),
                                                                     ),
                                                                 },
                                                             ));
@@ -1326,11 +1316,8 @@ impl MiddleEnvironment {
                                                 var_type: var_type.clone(),
                                                 identifier: bind_name.clone(),
                                                 value: Box::new(payload_value.clone()),
-                                                data_type: PotentialNewType::DataType(
-                                                    ParserDataType::new(
-                                                        self.context.current_span(),
-                                                        ParserInnerType::Auto(None),
-                                                    ),
+                                                data_type: ParserDataType::auto(
+                                                    self.context.current_span(),
                                                 ),
                                             },
                                         ));
@@ -1742,10 +1729,9 @@ impl MiddleEnvironment {
                                             value.clone(),
                                             "next",
                                         )),
-                                        data_type: PotentialNewType::DataType(ParserDataType::new(
+                                        data_type: ParserDataType::auto(
                                             self.context.current_span(),
-                                            ParserInnerType::Auto(None),
-                                        )),
+                                        ),
                                     },
                                 ));
 
@@ -1805,11 +1791,8 @@ impl MiddleEnvironment {
                                             var_type,
                                             identifier: name,
                                             value: Box::new(value.clone()),
-                                            data_type: PotentialNewType::DataType(
-                                                ParserDataType::new(
-                                                    self.context.current_span(),
-                                                    ParserInnerType::Auto(None),
-                                                ),
+                                            data_type: ParserDataType::auto(
+                                                self.context.current_span(),
                                             ),
                                         },
                                     ),
@@ -2034,10 +2017,7 @@ impl MiddleEnvironment {
                                             "next",
                                         ))
                                     },
-                                    data_type: PotentialNewType::DataType(ParserDataType::new(
-                                        self.context.current_span(),
-                                        ParserInnerType::Auto(None),
-                                    )),
+                                    data_type: ParserDataType::auto(self.context.current_span()),
                                 },
                             ));
 

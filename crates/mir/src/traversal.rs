@@ -1,7 +1,6 @@
 use calibre_parser::ast::{
     ObjectType,
     nodes::{CallArg, IfComparisonType, LoopType, Node, NodeType, PipeSegment},
-    types::PotentialNewType,
 };
 
 pub trait NodeVisitor {
@@ -154,7 +153,7 @@ pub trait NodeVisitor {
             } => NodeType::VariableDeclaration {
                 var_type,
                 identifier,
-                data_type: self.visit_potential_new_type(data_type),
+                data_type: data_type,
                 value: Box::new(self.visit(*value)),
             },
             NodeType::TypeDeclaration {
@@ -429,10 +428,6 @@ pub trait NodeVisitor {
                 arguments: arguments.into_iter().map(|n| self.visit(n)).collect(),
             },
         }
-    }
-
-    fn visit_potential_new_type(&mut self, data_type: PotentialNewType) -> PotentialNewType {
-        data_type
     }
 
     fn visit_loop_type(&mut self, loop_type: LoopType) -> LoopType {

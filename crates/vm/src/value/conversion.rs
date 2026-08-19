@@ -3,8 +3,11 @@ use crate::{
     error::RuntimeError,
     value::{GcVec, RuntimeValue},
 };
-use calibre_parser::ast::idents::ParserText;
 use calibre_parser::ast::types::ParserInnerType;
+use calibre_parser::{
+    Span,
+    ast::{idents::ParserText, types::ParserDataType},
+};
 use dumpster::sync::Gc;
 use std::sync::{Arc, Mutex};
 
@@ -17,21 +20,19 @@ impl RuntimeValue {
         if let RuntimeValue::DynObject {
             type_name, value, ..
         } = &self
+            && ParserText::temp_name_suffix_matches(
+                type_name,
+                &ParserDataType::new(Span::default(), data_type.clone()).impl_name(),
+            )
         {
-            match data_type {
-                ParserInnerType::Struct(target_type) => {
-                    if ParserText::temp_name_suffix_matches(type_name, target_type) {
-                        let resolved = env.resolve_operand_value(value.as_ref().clone())?;
-                        return Ok(resolved);
-                    }
-                }
-                _ => {}
-            }
+            let resolved = env.resolve_operand_value(value.as_ref().clone())?;
+            return Ok(resolved);
         }
 
         if matches!(data_type, ParserInnerType::Dynamic) {
             return Ok(self);
         }
+
         if let ParserInnerType::DynamicTraits(traits) = data_type {
             return env.wrap_dyn_object(self, traits.clone());
         }
@@ -41,11 +42,13 @@ impl RuntimeValue {
         {
             return value.convert(env, data_type);
         }
-        if let RuntimeValue::VarRef(id) = &self {
-            if let Some(value) = env.variables.get_by_id(*id).cloned() {
-                return value.convert(env, data_type);
-            }
+
+        if let RuntimeValue::VarRef(id) = &self
+            && let Some(value) = env.variables.get_by_id(*id).cloned()
+        {
+            return value.convert(env, data_type);
         }
+
         if let RuntimeValue::RegRef { frame, reg } = &self {
             let value = env.get_reg_value_in_frame(*frame, *reg).clone();
             return value.convert(env, data_type);
