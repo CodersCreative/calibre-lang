@@ -174,6 +174,7 @@ impl MiddleEnvironment {
 
         add("traits", &[], true);
         add("thread", &[], true);
+        add("libc", &["get_c_errno", "get_c_errno_description", "set_c_errno"], true);
         add("console", &[], false);
         add(
             "async",

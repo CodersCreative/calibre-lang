@@ -11,6 +11,7 @@ pub mod net;
 pub mod process;
 pub mod regex;
 pub mod str;
+pub mod libc;
 
 impl VM {
     pub fn setup_stdlib(&mut self) {

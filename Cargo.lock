@@ -420,6 +420,7 @@ dependencies = [
  "calibre-lir",
  "calibre-parser",
  "dumpster",
+ "errno",
  "fastrand",
  "hex",
  "libffi",
