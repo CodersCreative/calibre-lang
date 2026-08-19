@@ -448,7 +448,7 @@ pub fn build_statement_parser<'a>(
             let ls = line_starts.clone();
             move |(((generics, trait_ident), maybe_target), vars), parser_sp| {
                 if let Some(dt) = maybe_target {
-                    let trait_ident = match dt.data_type.clone() {
+                    let trait_ident = match trait_ident.data_type.clone() {
                         ParserInnerType::Struct(name) => {
                             PotentialGenericTypeIdentifier::Identifier(
                                 PotentialDollarIdentifier::Identifier(ParserText::new(
