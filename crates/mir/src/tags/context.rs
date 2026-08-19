@@ -5,7 +5,7 @@ use calibre_parser::ast::{
     ObjectType,
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::{Node, NodeType, VarType},
-    types::{ParserDataType, ParserInnerType},
+    types::ParserDataType,
 };
 
 #[derive(Debug, Clone, Default)]

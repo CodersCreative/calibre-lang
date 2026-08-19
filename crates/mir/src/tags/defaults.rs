@@ -4,7 +4,7 @@ use calibre_parser::ast::idents::{
     ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
 };
 use calibre_parser::ast::nodes::{FunctionHeader, Node, NodeType, VarType};
-use calibre_parser::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
+use calibre_parser::ast::types::{GenericTypes, ParserDataType};
 use calibre_parser::{
     Span,
     ast::{ObjectMap, ObjectType},
@@ -26,7 +26,6 @@ impl MiddleEnvironment {
             } => {
                 if let Some(i) = default_variant {
                     if let Some((default_variant_name, _)) = variants.get(*i) {
-                        // Use the full mangled identifier for the return type to ensure it resolves correctly
                         Node::new(
                             span,
                             NodeType::VariableDeclaration {

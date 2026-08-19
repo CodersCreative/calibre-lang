@@ -334,28 +334,51 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                             .then_ignore(lex(pad.clone(), just('>')))
                             .or_not(),
                     )
-                    .map(|((name, sp), generic_types)| {
-                        if let Some(generic_types) = generic_types {
-                            if name == "dyn" {
-                                let traits = generic_types
-                                    .into_iter()
-                                    .filter_map(|ty| {
-                                        let text = ty.to_string().trim().to_string();
-                                        (!text.is_empty()).then_some(text)
-                                    })
-                                    .collect::<Vec<_>>();
-                                ParserDataType::new(sp, ParserInnerType::DynamicTraits(traits))
-                            } else {
-                                ParserDataType::new(
-                                    sp,
-                                    ParserInnerType::StructWithGenerics {
-                                        identifier: name,
-                                        generic_types,
-                                    },
-                                )
+                    .try_map(|((name, sp), generic_types), parser_sp| {
+                        if let Some(mut generic_types) = generic_types {
+                            match name.as_str() {
+                                "dyn" => {
+                                    let traits = generic_types
+                                        .into_iter()
+                                        .filter_map(|ty| {
+                                            let text = ty.to_string().trim().to_string();
+                                            (!text.is_empty()).then_some(text)
+                                        })
+                                        .collect::<Vec<_>>();
+                                    Ok(ParserDataType::new(sp, ParserInnerType::DynamicTraits(traits)))
+                                },
+                                "list" => {
+                                    if generic_types.len() == 1 {
+                                        Ok(ParserDataType::new(sp, ParserInnerType::List(Box::new(generic_types.pop().unwrap()))))}
+                                    else {
+                                        Err(Rich::custom(
+                                            parser_sp,
+                                            "expected exactly one type parameter with a 'list' type",
+                                        ))
+                                    }
+                                },
+                                "ptr" => {
+                                    if generic_types.len() == 1 {
+                                        Ok(ParserDataType::new(sp, ParserInnerType::Ptr(Box::new(generic_types.pop().unwrap()))))}
+                                    else {
+                                        Err(Rich::custom(
+                                            parser_sp,
+                                            "expected exactly one type parameter with a 'ptr' type",
+                                        ))
+                                    }
+                                },
+                                _ => {
+                                    Ok(ParserDataType::new(
+                                        sp,
+                                        ParserInnerType::StructWithGenerics {
+                                            identifier: name,
+                                            generic_types,
+                                        },
+                                    ))
+                                }
                             }
                         } else {
-                            ParserDataType::new(
+                            Ok(ParserDataType::new(
                                 sp,
                                 match name.as_str() {
                                     "int" => ParserInnerType::Int,
@@ -370,7 +393,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                                     "auto" => ParserInnerType::Auto(None),
                                     _ => ParserInnerType::Struct(name),
                                 },
-                            )
+                            ))
                         }
                     })
                     .boxed();
@@ -403,28 +426,6 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                             let ffi = ParserFfiInnerType::from_str(&name)
                                 .unwrap_or(ParserFfiInnerType::Int);
                             ParserDataType::new(sp, ParserInnerType::FfiType(ffi))
-                        }),
-                    lex(pad.clone(), just("list"))
-                        .ignore_then(lex(pad.clone(), just(":<")))
-                        .ignore_then(ty.clone())
-                        .then_ignore(lex(pad.clone(), just('>')))
-                        .map_with_span({
-                            let ls = line_starts.clone();
-                            move |inner, r| {
-                                let sp = span(ls.as_ref(), r);
-                                ParserDataType::new(sp, ParserInnerType::List(Box::new(inner)))
-                            }
-                        }),
-                    lex(pad.clone(), just("ptr"))
-                        .ignore_then(lex(pad.clone(), just(":<")))
-                        .ignore_then(ty.clone())
-                        .then_ignore(lex(pad.clone(), just('>')))
-                        .map_with_span({
-                            let ls = line_starts.clone();
-                            move |inner, r| {
-                                let sp = span(ls.as_ref(), r);
-                                ParserDataType::new(sp, ParserInnerType::Ptr(Box::new(inner)))
-                            }
                         }),
                     lex(pad.clone(), just("fn"))
                         .ignore_then(lex(pad.clone(), just('(')))
