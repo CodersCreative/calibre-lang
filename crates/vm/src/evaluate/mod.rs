@@ -442,8 +442,7 @@ impl VM {
             RuntimeValue::Mutex(_) | RuntimeValue::MutexGuard(_) => Some("Mutex".to_string()),
             RuntimeValue::HashMap(_) => Some("HashMap".to_string()),
             RuntimeValue::HashSet(_) => Some("HashSet".to_string()),
-            RuntimeValue::TcpStream(_) => Some("TcpStream".to_string()),
-            RuntimeValue::TcpListener(_) => Some("TcpListener".to_string()),
+            RuntimeValue::Host(_) => Some("host".to_string()),
             RuntimeValue::Generator { type_name, .. } => Some(type_name.to_string()),
             RuntimeValue::DynObject { type_name, .. } => Some(type_name.to_string()),
             _ => None,
@@ -732,6 +731,7 @@ impl VM {
             ParserInnerType::Float => matches!(value, RuntimeValue::Float(_)),
             ParserInnerType::Int => matches!(value, RuntimeValue::Int(_)),
             ParserInnerType::UInt => matches!(value, RuntimeValue::UInt(_)),
+            ParserInnerType::Host => matches!(value, RuntimeValue::Host(_)),
             ParserInnerType::Byte => matches!(value, RuntimeValue::Byte(_)),
             ParserInnerType::Null => matches!(value, RuntimeValue::Null),
             ParserInnerType::Bool => matches!(value, RuntimeValue::Bool(_)),
@@ -1117,8 +1117,7 @@ impl VM {
                 let _ = self.variables.insert(name, value);
             }
 
-            let param_names: FxHashSet<&str> =
-                function.params.iter().map(|x| x.as_str()).collect();
+            let param_names: FxHashSet<&str> = function.params.iter().map(|x| x.as_str()).collect();
             let filtered_captures: Vec<(String, RuntimeValue)> = captures
                 .iter()
                 .filter(|(name, _)| {

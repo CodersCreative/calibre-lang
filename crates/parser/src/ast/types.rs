@@ -188,6 +188,7 @@ pub enum ParserInnerType {
     Bool,
     Str,
     Char,
+    Host,
     Dynamic,
     DynamicTraits(Vec<String>),
     Tuple(Vec<ParserDataType>),
@@ -323,6 +324,8 @@ impl FromStr for ParserInnerType {
             "str" => Self::Str,
             "char" => Self::Char,
             "dyn" => Self::Dynamic,
+            "list" => Self::List(Box::new(ParserDataType::auto(Span::default()))),
+            "host" => Self::Host,
             "null" => Self::Null,
             "auto" => Self::Auto(None),
             _ => Self::Struct(s.to_string()),
@@ -660,6 +663,7 @@ impl Display for ParserInnerType {
             Self::UInt => write!(f, "uint"),
             Self::Byte => write!(f, "byte"),
             Self::Null => write!(f, "null"),
+            Self::Host => write!(f, "host"),
             Self::Dynamic => write!(f, "dyn"),
             Self::DynamicTraits(traits) => {
                 if traits.is_empty() {

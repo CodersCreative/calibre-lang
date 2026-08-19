@@ -6,7 +6,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{VM, error::RuntimeError, value::RuntimeValue};
+use crate::{
+    VM,
+    error::RuntimeError,
+    value::{Host, RuntimeValue},
+};
 
 pub mod global;
 pub mod stdlib;
@@ -47,6 +51,15 @@ pub(crate) fn expect_str_ref(value: &RuntimeValue) -> Result<&Arc<Mutex<String>>
         Ok(s)
     } else {
         Err(RuntimeError::UnexpectedType(value.clone()))
+    }
+}
+
+#[inline]
+pub(crate) fn expect_host(value: RuntimeValue) -> Result<Host, RuntimeError> {
+    if let RuntimeValue::Host(v) = value {
+        Ok(v)
+    } else {
+        Err(RuntimeError::UnexpectedType(value))
     }
 }
 

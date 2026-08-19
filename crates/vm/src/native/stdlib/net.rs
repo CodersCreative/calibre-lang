@@ -1,15 +1,14 @@
+use crate::{
+    VM,
+    error::RuntimeError,
+    native::{NativeFunction, expect_host, expect_int, expect_str_owned, pop_or_null},
+    value::RuntimeValue,
+};
+use dumpster::sync::Gc;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex, OnceLock};
-
-use crate::{
-    VM,
-    error::RuntimeError,
-    native::{NativeFunction, expect_int, expect_str_owned, pop_or_null},
-    value::RuntimeValue,
-};
-use dumpster::sync::Gc;
 
 fn port_redirects() -> &'static Mutex<HashMap<String, i64>> {
     static REDIRECTS: OnceLock<Mutex<HashMap<String, i64>>> = OnceLock::new();
@@ -18,24 +17,6 @@ fn port_redirects() -> &'static Mutex<HashMap<String, i64>> {
 
 fn key_for(host: &str, port: i64) -> String {
     format!("{host}:{port}")
-}
-
-#[inline]
-fn expect_stream(value: RuntimeValue) -> Result<Arc<Mutex<TcpStream>>, RuntimeError> {
-    if let RuntimeValue::TcpStream(v) = value {
-        Ok(v)
-    } else {
-        Err(RuntimeError::UnexpectedType(value))
-    }
-}
-
-#[inline]
-fn expect_listener(value: RuntimeValue) -> Result<Arc<TcpListener>, RuntimeError> {
-    if let RuntimeValue::TcpListener(v) = value {
-        Ok(v)
-    } else {
-        Err(RuntimeError::UnexpectedType(value))
-    }
 }
 
 pub struct HttpRequest;
@@ -164,7 +145,7 @@ impl NativeFunction for TcpConnect {
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
         let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(3)));
         let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(3)));
-        Ok(RuntimeValue::TcpStream(Arc::new(Mutex::new(stream))))
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(stream))))
     }
 }
 
@@ -232,7 +213,7 @@ impl NativeFunction for TcpListen {
                 redirects.remove(&key);
             }
         }
-        Ok(RuntimeValue::TcpListener(Arc::new(listener)))
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(listener))))
     }
 }
 
@@ -248,13 +229,18 @@ impl NativeFunction for TcpAccept {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let listener = expect_listener(pop_or_null(&mut args))?;
+        let listener = expect_host(pop_or_null(&mut args))?;
+
         let (stream, _) = listener
+            .lock()
+            .unwrap()
+            .downcast_mut::<TcpListener>()
+            .unwrap()
             .accept()
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
         let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(3)));
         let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(3)));
-        Ok(RuntimeValue::TcpStream(Arc::new(Mutex::new(stream))))
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(stream))))
     }
 }
 
@@ -271,12 +257,12 @@ impl NativeFunction for TcpRead {
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
         let len = expect_int(pop_or_null(&mut args))?;
-        let stream = expect_stream(pop_or_null(&mut args))?;
+        let stream = expect_host(pop_or_null(&mut args))?;
         let mut buf = vec![0u8; len.max(0) as usize];
         let mut guard = stream
             .lock()
             .map_err(|_| RuntimeError::Io("lock".to_string()))?;
-        match guard.read(&mut buf) {
+        match guard.downcast_mut::<TcpStream>().unwrap().read(&mut buf) {
             Ok(n) => {
                 buf.truncate(n);
                 let out = String::from_utf8_lossy(&buf).to_string();
@@ -307,11 +293,13 @@ impl NativeFunction for TcpWrite {
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
         let data = expect_str_owned(pop_or_null(&mut args))?;
-        let stream = expect_stream(pop_or_null(&mut args))?;
+        let stream = expect_host(pop_or_null(&mut args))?;
         let mut guard = stream
             .lock()
             .map_err(|_| RuntimeError::Io("lock".to_string()))?;
         let n = guard
+            .downcast_mut::<TcpStream>()
+            .unwrap()
             .write(data.as_bytes())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
         Ok(RuntimeValue::Int(n as i64))

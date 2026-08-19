@@ -69,8 +69,7 @@ impl RuntimeValue {
                     String::from("HashSet")
                 }
             }
-            Self::TcpStream(_) => String::from("TcpStream"),
-            Self::TcpListener(_) => String::from("TcpListener"),
+            Self::Host(_) => String::from("Host"),
             Self::List(x) => {
                 let iter = x.0.iter().map(|item| item.display(vm));
                 print_list_from_iter(iter, '[', ']')
@@ -219,8 +218,7 @@ impl Display for RuntimeValue {
             Self::MutexGuard(_) => write!(f, "MutexGuard"),
             Self::HashMap(_) => write!(f, "HashMap"),
             Self::HashSet(_) => write!(f, "HashSet"),
-            Self::TcpStream(_) => write!(f, "TcpStream"),
-            Self::TcpListener(_) => write!(f, "TcpListener"),
+            Self::Host(_) => write!(f, "Host"),
             Self::Str(x) => write!(f, "{}", x.lock().unwrap()),
             Self::Char(x) => write!(f, "{}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),

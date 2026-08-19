@@ -18,14 +18,16 @@ use dumpster::{TraceWith, Visitor};
 use libffi::middle::{Arg, Cif, CodePtr, Type};
 use libloading::Library;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::os::raw::c_void;
+use std::{
+    any::Any,
+    ffi::{CStr, CString},
+};
 use std::{
     cell::UnsafeCell,
     collections::VecDeque,
     fmt::{Debug, Display, Write},
-    net::{TcpListener, TcpStream},
     sync::{
         Arc, Condvar, Mutex,
         atomic::{AtomicBool, AtomicIsize, Ordering},
@@ -239,6 +241,9 @@ unsafe impl<V: Visitor> TraceWith<V> for GcMap {
     }
 }
 
+pub type HostInner = dyn Any + Send;
+pub type Host = Arc<Mutex<HostInner>>;
+
 #[derive(Debug, Clone, Default)]
 pub enum RuntimeValue {
     #[default]
@@ -269,8 +274,6 @@ pub enum RuntimeValue {
     MutexGuard(Arc<MutexGuardInner>),
     HashMap(Arc<Mutex<FxHashMap<HashKey, RuntimeValue>>>),
     HashSet(Arc<Mutex<FxHashSet<HashKey>>>),
-    TcpStream(Arc<Mutex<TcpStream>>),
-    TcpListener(Arc<TcpListener>),
     NativeFunction(Arc<dyn NativeFunction>),
     ExternFunction(Arc<ExternFunction>),
     Function {
@@ -292,6 +295,7 @@ pub enum RuntimeValue {
         receiver: Gc<RuntimeValue>,
     },
     GeneratorSuspend(Box<RuntimeValue>),
+    Host(Host),
 }
 
 unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
@@ -326,8 +330,7 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
                 Ok(())
             }
             RuntimeValue::HashSet(_) => Ok(()),
-            RuntimeValue::TcpStream(_) => Ok(()),
-            RuntimeValue::TcpListener(_) => Ok(()),
+            RuntimeValue::Host(_) => Ok(()),
             RuntimeValue::Function { captures, .. } => {
                 for (_, value) in captures.as_ref().iter() {
                     value.accept(visitor)?;
@@ -462,9 +465,6 @@ impl RuntimeValue {
             ("str.ends_with", Arc::new(stdlib::str::StrEndsWith())),
             ("str.char_lowercase", Arc::new(stdlib::str::CharLowercase)),
             ("str.char_uppercase", Arc::new(stdlib::str::CharUppercase)),
-            ("libc.get_c_errno", Arc::new(stdlib::libc::GetCErrNo)),
-            ("libc.get_c_errno_description", Arc::new(stdlib::libc::GetCErrNoDescription)),
-            ("libc.set_c_errno", Arc::new(stdlib::libc::SetCErrNo)),
             ("env.get", Arc::new(stdlib::env::EnvGet)),
             ("env.var", Arc::new(stdlib::env::EnvVar)),
             ("env.set_var", Arc::new(stdlib::env::EnvSetVar)),
