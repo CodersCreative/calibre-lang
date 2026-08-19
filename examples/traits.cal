@@ -1,17 +1,17 @@
 import File from std::fs;
 
 trait Person {
-	const name : fn (&Self) -> str;
+	const get_name : fn (&Self) -> str;
 
 	const greeting := fn (self : &Self) -> str => {
-		return "Hello " & self.name();
+		return "Hello " & self.get_name();
 	};
 };
 
 type User := struct { name : str };
 
 impl Person for User {
-	const name := fn (self : &User) -> str => return self.name;
+	const get_name := fn (self : &User) -> str => return self.name;
 };
 
 trait Human {

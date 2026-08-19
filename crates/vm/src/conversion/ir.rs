@@ -61,7 +61,7 @@ impl From<LirRegistry> for VMRegistry {
         Self {
             functions,
             globals,
-            dyn_vtables: value.dyn_vtables,
+            dyn_vtables: value.dyn_vtables.clone(),
             scope_to_file: value.scope_to_file,
         }
     }

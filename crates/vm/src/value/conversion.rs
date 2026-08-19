@@ -3,6 +3,7 @@ use crate::{
     error::RuntimeError,
     value::{GcVec, RuntimeValue},
 };
+use calibre_parser::ast::idents::ParserText;
 use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
 use std::sync::{Arc, Mutex};
@@ -13,6 +14,21 @@ impl RuntimeValue {
         env: &mut VM,
         data_type: &ParserInnerType,
     ) -> Result<RuntimeValue, RuntimeError> {
+        if let RuntimeValue::DynObject {
+            type_name, value, ..
+        } = &self
+        {
+            match data_type {
+                ParserInnerType::Struct(target_type) => {
+                    if ParserText::temp_name_suffix_matches(type_name, target_type) {
+                        let resolved = env.resolve_operand_value(value.as_ref().clone())?;
+                        return Ok(resolved);
+                    }
+                }
+                _ => {}
+            }
+        }
+
         if matches!(data_type, ParserInnerType::Dynamic) {
             return Ok(self);
         }

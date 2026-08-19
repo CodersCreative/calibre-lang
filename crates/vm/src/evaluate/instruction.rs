@@ -59,7 +59,7 @@ impl VM {
 
     #[inline]
     fn member_parts(name: &str) -> (Option<&str>, Option<usize>) {
-        let short_name = name.rsplit_once("::").map(|(_, short)| short);
+        let short_name = name.rsplit_once(".").map(|(_, short)| short);
         let tuple_index = name.parse::<usize>().ok();
         (short_name, tuple_index)
     }
@@ -331,7 +331,7 @@ impl VM {
         };
 
         let func = if let RuntimeValue::Function { name, .. } = &func
-            && let Some((owner, member)) = name.rsplit_once("::")
+            && let Some((owner, member)) = name.rsplit_once(".")
             && let Some(first) = args.first()
             && let Ok(receiver) = self.resolve_value_for_op_ref(self.get_reg_value(*first))
             && let Some(receiver_type) = self.concrete_runtime_type_name(&receiver)
@@ -841,7 +841,7 @@ impl VM {
                     && Self::is_gen_type_name(&type_name)
                 {
                     let next_fn = entries.iter().find_map(|(field, value)| {
-                        let short = field.rsplit("::").next().unwrap_or(field.as_str());
+                        let short = field.rsplit(".").next().unwrap_or(field.as_str());
                         (short == "data").then(|| value.clone())
                     });
                     if let Some(RuntimeValue::Function { name, captures }) = next_fn {
@@ -1050,17 +1050,10 @@ impl VM {
                         if let Some(callee_name) =
                             vtable.get(member_short).or_else(|| vtable.get(name))
                         {
-                            let mapped = callee_name.rsplit_once("::").and_then(|(owner, _)| {
-                                if ParserText::temp_name_suffix_matches(&owner, &type_name) {
-                                    Some(callee_name.as_str())
-                                } else {
-                                    None
-                                }
-                            });
                             let Some(callee) = self.resolve_dyn_method_callable(
                                 type_name.as_str(),
                                 member_short,
-                                mapped,
+                                Some(callee_name.as_str()),
                             ) else {
                                 return Err(RuntimeError::FunctionNotFound(callee_name.clone()));
                             };

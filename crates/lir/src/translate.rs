@@ -101,12 +101,18 @@ impl<'a> LirEnvironment<'a> {
     fn collect_trait_methods(
         imp: &MiddleImpl,
         trait_def: Option<&MiddleTrait>,
+        trait_name: &str,
     ) -> FxHashMap<String, String> {
         let mut methods: FxHashMap<String, String> = FxHashMap::default();
         if let Some(trait_def) = trait_def {
             for member in trait_def.members.keys() {
                 if let Some(mapped) = imp.get_member(member, &[]) {
                     methods.insert(member.clone(), mapped.symbol_name.clone());
+                } else if let Some(trait_member) = trait_def.members.get(member)
+                    && trait_member.default.is_some()
+                {
+                    let symbol_name = format!("{}.{}", trait_name, member);
+                    methods.insert(member.clone(), symbol_name);
                 }
             }
         } else {
@@ -125,11 +131,14 @@ impl<'a> LirEnvironment<'a> {
 
         for imp in env.typing.impls.values() {
             let concrete = imp.data_type.clone().unwrap_all_refs().to_string();
-            let trait_map = out.entry(concrete).or_default();
+            let trait_map = out.entry(concrete.clone()).or_default();
 
             for trait_name in &imp.traits {
-                let methods =
-                    Self::collect_trait_methods(imp, env.typing.trait_defs.get(trait_name));
+                let methods = Self::collect_trait_methods(
+                    imp,
+                    env.typing.trait_defs.get(trait_name),
+                    trait_name,
+                );
                 if !methods.is_empty() {
                     trait_map.insert(trait_name.clone(), methods);
                 }
