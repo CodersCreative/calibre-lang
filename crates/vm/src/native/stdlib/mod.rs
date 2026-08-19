@@ -6,12 +6,12 @@ pub mod crypto;
 pub mod env;
 pub mod fs;
 pub mod generator;
+pub mod libc;
 pub mod list;
 pub mod net;
 pub mod process;
 pub mod regex;
 pub mod str;
-pub mod libc;
 
 impl VM {
     pub fn setup_stdlib(&mut self) {

@@ -605,7 +605,13 @@ impl VM {
             }
             VMInstruction::StoreVar { name, src } => {
                 let name = self.local_string(block, *name)?;
-                let _ = self.variables.insert(name, RuntimeValue::RegRef { frame: self.frames.len().saturating_sub(1), reg: *src });
+                let _ = self.variables.insert(
+                    name,
+                    RuntimeValue::RegRef {
+                        frame: self.frames.len().saturating_sub(1),
+                        reg: *src,
+                    },
+                );
             }
             VMInstruction::LoadVarRef { dst, name } => {
                 let name = self.local_string(block, *name)?;

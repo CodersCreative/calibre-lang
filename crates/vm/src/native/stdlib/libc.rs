@@ -1,8 +1,11 @@
 extern crate errno;
-use errno::{Errno, errno, set_errno};
 use crate::{
-    VM, error::RuntimeError, native::{NativeFunction, expect_int, pop_or_null}, value::{ RuntimeValue},
+    VM,
+    error::RuntimeError,
+    native::{NativeFunction, expect_int, pop_or_null},
+    value::RuntimeValue,
 };
+use errno::{Errno, errno, set_errno};
 use std::sync::{Arc, Mutex};
 
 pub struct GetCErrNo;
@@ -38,7 +41,11 @@ impl NativeFunction for SetCErrNo {
         String::from("libc.set_c_errno")
     }
 
-    fn run(&self, _env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(
+        &self,
+        _env: &mut VM,
+        mut args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let code = expect_int(pop_or_null(&mut args))?;
         set_errno(Errno(code as i32));
         Ok(RuntimeValue::Null)

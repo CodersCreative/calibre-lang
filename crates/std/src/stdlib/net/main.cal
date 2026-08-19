@@ -1,7 +1,7 @@
 import * from std::str;
 
-type TcpStream := struct { inner : dyn };
-type TcpListener := struct { inner : dyn };
+type TcpStream := struct { inner : host };
+type TcpListener := struct { inner : host };
 
 type HttpResponse := struct { status : int, headers : list:<str>, body : str };
 type HttpClient := struct { host : str, port : int, headers : list:<str>, scheme : str };

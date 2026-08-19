@@ -1155,7 +1155,14 @@ impl MiddleEnvironment {
                         ("module_name".to_string(), value(module_name)),
                         (
                             "path".to_string(),
-                            value(scope_ref.path.canonicalize().unwrap_or_default().to_string_lossy().to_string()),
+                            value(
+                                scope_ref
+                                    .path
+                                    .canonicalize()
+                                    .unwrap_or_default()
+                                    .to_string_lossy()
+                                    .to_string(),
+                            ),
                         ),
                         (
                             "line".to_string(),
