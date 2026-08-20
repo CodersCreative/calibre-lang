@@ -100,7 +100,7 @@ impl MiddleEnvironment {
             .filter(|x| !x.0.contains("."))
             .collect();
 
-        let mut vars: Vec<(String, ParserDataType)> =
+        let mut vars: Vec<(&String, &ParserDataType)> =
             ParserDataType::constants().into_iter().collect();
         vars.append(&mut funcs);
 
@@ -110,7 +110,7 @@ impl MiddleEnvironment {
             let _ = self.symbols.variables.insert(
                 name.clone(),
                 MiddleVariable {
-                    data_type: var.1,
+                    data_type: var.1.clone(),
                     var_type: VarType::Constant,
                     location: None,
                 },
@@ -121,7 +121,7 @@ impl MiddleEnvironment {
                 .insert(var.0.clone(), name.clone());
 
             if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
-                scope_ref.mappings.insert(var.0, name);
+                scope_ref.mappings.insert(var.0.clone(), name);
             }
         }
 
@@ -184,7 +184,7 @@ impl MiddleEnvironment {
             .scoping
             .new_scope(Some(*parent), scope_path.clone(), Some(name));
 
-        let funcs: Vec<(String, ParserDataType)> = ParserDataType::natives()
+        let funcs: Vec<(&String, &ParserDataType)> = ParserDataType::natives()
             .into_iter()
             .filter(|x| x.0.contains(&format!("{}.", name)))
             .collect();
