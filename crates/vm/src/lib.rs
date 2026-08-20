@@ -9,7 +9,6 @@ use crate::{
 use calibre_lir::ast::BlockId;
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::sync::OnceLock;
 use std::{
     fmt::Debug,
     sync::{
@@ -17,6 +16,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
+use std::{fmt::Display, sync::OnceLock};
 
 static NULL_RUNTIME_VALUE: RuntimeValue = RuntimeValue::Null;
 static EMPTY_FRAME: OnceLock<VMFrame> = OnceLock::new();
@@ -589,7 +589,7 @@ impl VM {
         seen: &mut FxHashSet<String>,
         seen_regs: &mut FxHashSet<usize>,
     ) {
-        self.call_drop_trait_method(value);
+        let _ = self.call_trait_for_type(value, "drop", Vec::new(), Some(0));
 
         match value {
             RuntimeValue::Ref(name) => {
@@ -623,11 +623,7 @@ impl VM {
                     self.drop_runtime_value_inner_ref(item, seen, seen_regs);
                 }
             }
-            RuntimeValue::Aggregate(type_name, data) => {
-                if let Some(name) = type_name {
-                    self.call_drop_trait_for_type(name, value);
-                }
-
+            RuntimeValue::Aggregate(_, data) => {
                 for (_, value) in data.as_ref().0.0.iter() {
                     self.drop_runtime_value_inner_ref(value, seen, seen_regs);
                 }
@@ -649,8 +645,7 @@ impl VM {
             RuntimeValue::Result(Err(x)) => {
                 self.drop_runtime_value_inner_ref(x.as_ref(), seen, seen_regs);
             }
-            RuntimeValue::Enum(type_name, _, payload) => {
-                self.call_drop_trait_for_type(type_name, value);
+            RuntimeValue::Enum(_, _, payload) => {
                 if let Some(val) = payload {
                     self.drop_runtime_value_inner_ref(val.as_ref(), seen, seen_regs);
                 }
@@ -667,31 +662,37 @@ impl VM {
         }
     }
 
-    fn call_drop_trait_method(&mut self, value: &RuntimeValue) {
+    // TODO Make an impl_name function for RuntimeValue
+    pub fn call_trait_for_type(
+        &mut self,
+        value: &RuntimeValue,
+        method: impl Display,
+        mut args: Vec<RuntimeValue>,
+        value_pos: Option<usize>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let type_name = match value {
-            RuntimeValue::Aggregate(type_name, _) => type_name.as_deref(),
-            RuntimeValue::Enum(type_name, _, _) => Some(type_name.as_str()),
-            _ => None,
+            RuntimeValue::Aggregate(Some(x), _) | RuntimeValue::Enum(x, _, _) => x.as_str(),
+            _ => return Ok(RuntimeValue::Null),
         };
 
-        if let Some(type_name) = type_name {
-            self.call_drop_trait_for_type(type_name, value);
-        }
-    }
-
-    fn call_drop_trait_for_type(&mut self, type_name: &str, value: &RuntimeValue) {
-        let drop_method_name = format!("{}.drop", type_name);
+        let drop_method_name = format!("{type_name}.{method}",);
 
         if let Some(_drop_func) = self.registry.functions.get(&drop_method_name) {
-            let _ = self.call_runtime_callable_at(
+            if let Some(x) = value_pos {
+                args.insert(x, value.clone());
+            }
+
+            self.call_runtime_callable_at(
                 RuntimeValue::Function {
                     name: Arc::new(drop_method_name.clone()),
                     captures: Arc::new(Vec::new()),
                 },
-                vec![value.clone()],
+                args,
                 0,
                 0,
-            );
+            )
+        } else {
+            Err(RuntimeError::InvalidFunctionCall)
         }
     }
 }

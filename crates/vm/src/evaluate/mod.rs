@@ -365,61 +365,6 @@ impl VM {
         }
     }
 
-    #[inline]
-    fn invoke_callable_value(
-        &mut self,
-        callable: RuntimeValue,
-        args: Vec<RuntimeValue>,
-        callsite_tag: u32,
-    ) -> Option<RuntimeValue> {
-        self.call_runtime_callable_at(callable, args, usize::MAX, callsite_tag)
-            .ok()
-    }
-
-    pub fn resolve_display_override(
-        &mut self,
-        value: &RuntimeValue,
-    ) -> Option<(RuntimeValue, RuntimeValue)> {
-        let resolved = self.resolve_value_for_op_ref(value).ok()?;
-        match resolved {
-            RuntimeValue::DynObject {
-                type_name,
-                value,
-                vtable,
-                ..
-            } => {
-                let mapped = vtable.get("display").map(|x| x.as_str());
-                let callable = self.resolve_dyn_method_callable(&type_name, "display", mapped)?;
-                Some((callable, value.as_ref().clone()))
-            }
-            RuntimeValue::Aggregate(Some(ref type_name), _)
-            | RuntimeValue::Enum(ref type_name, _, _) => {
-                let callable = self.resolve_dyn_method_callable(type_name, "display", None)?;
-                Some((callable, resolved))
-            }
-            RuntimeValue::Generator { ref type_name, .. } => {
-                let callable =
-                    self.resolve_dyn_method_callable(type_name.as_str(), "display", None)?;
-                Some((callable, resolved))
-            }
-            _ => None,
-        }
-    }
-
-    pub fn invoke_display_override(
-        &mut self,
-        callable: RuntimeValue,
-        receiver: RuntimeValue,
-    ) -> Option<String> {
-        let output =
-            self.invoke_callable_value(callable, vec![receiver], u32::MAX.saturating_sub(1))?;
-
-        match output {
-            RuntimeValue::Str(s) => Some(s.lock().unwrap().to_string()),
-            other => Some(other.display(self)),
-        }
-    }
-
     fn concrete_runtime_type_name(&self, value: &RuntimeValue) -> Option<String> {
         match value {
             RuntimeValue::Int(_) => Some("int".to_string()),

@@ -106,10 +106,10 @@ impl NativeFunction for Repr {
         String::from("repr")
     }
 
-    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        Ok(RuntimeValue::Str(Arc::new(Mutex::new(args[0].to_string()))))
+        Ok(RuntimeValue::Str(Arc::new(Mutex::new(args[0].repr(env)))))
     }
 }
 
