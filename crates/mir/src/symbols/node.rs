@@ -1,12 +1,9 @@
 use crate::environment::MiddleEnvironment;
-use calibre_parser::{
-    Span,
-    ast::{
-        Operator,
-        idents::PotentialGenericTypeIdentifier,
-        nodes::{AsFailureMode, EmitType, Node, NodeType},
-        types::{ParserDataType, ParserInnerType},
-    },
+use calibre_parser::ast::{
+    Operator,
+    idents::PotentialGenericTypeIdentifier,
+    nodes::{AsFailureMode, EmitType, Node, NodeType},
+    types::{ParserDataType, ParserInnerType},
 };
 
 impl MiddleEnvironment {
@@ -485,9 +482,7 @@ impl MiddleEnvironment {
 
                 let caller_type = caller_type?;
 
-                caller_type
-                    .data_type
-                    .apply_callable(args.len(), 0, node.span)
+                caller_type.data_type.apply_callable()
             }
             NodeType::Identifier(x) => {
                 if let Some(iden) = self.resolve_potential_generic_ident(scope, x)
@@ -564,27 +559,22 @@ impl MiddleEnvironment {
                                     ParserDataType::new(node.span, ParserInnerType::Auto(None));
                             }
                         }
-                        NodeType::CallExpression { caller, args, .. } => {
+                        NodeType::CallExpression { caller, .. } => {
                             let NodeType::Identifier(method_ident) = &caller.node_type else {
                                 current =
                                     ParserDataType::new(node.span, ParserInnerType::Auto(None));
                                 continue;
                             };
-                            let method_name = method_ident.to_string();
 
+                            let method_name = self
+                                .resolve_dollar_ident_potential_generic_only(scope, method_ident)
+                                .map(|x| x.to_string())
+                                .unwrap_or(method_ident.to_string());
                             let method_ty = self.resolve_member_fn_type(&current, &method_name);
 
                             current = method_ty
-                                .and_then(|t| {
-                                    t.unwrap_all_refs().data_type.apply_callable(
-                                        args.len(),
-                                        1,
-                                        node.span,
-                                    )
-                                })
-                                .unwrap_or_else(|| {
-                                    ParserDataType::new(node.span, ParserInnerType::Auto(None))
-                                });
+                                .and_then(|x| x.apply_callable())
+                                .unwrap_or(ParserDataType::auto(node.span));
                         }
                         _ => {
                             current = ParserDataType::new(node.span, ParserInnerType::Auto(None));
@@ -598,35 +588,6 @@ impl MiddleEnvironment {
                 let mut iter = path.iter();
                 let first = iter.next()?;
                 let mut current = self.resolve_type_from_node(scope, first.get_node())?;
-
-                let apply_callable =
-                    |callable: ParserDataType, applied_args: usize, span: Span| match callable
-                        .unwrap_all_refs()
-                        .data_type
-                    {
-                        // TODO Fully remove currying
-                        ParserInnerType::Function {
-                            return_type,
-                            parameters,
-                        } => {
-                            if parameters.len() > applied_args {
-                                ParserDataType::new(
-                                    span,
-                                    ParserInnerType::Function {
-                                        return_type,
-                                        parameters: parameters
-                                            .into_iter()
-                                            .skip(applied_args)
-                                            .collect(),
-                                    },
-                                )
-                            } else {
-                                *return_type
-                            }
-                        }
-                        ParserInnerType::NativeFunction { return_type, .. } => *return_type,
-                        _ => ParserDataType::new(span, ParserInnerType::Auto(None)),
-                    };
 
                 let mut idx = 1usize;
                 while idx < path.len() {
@@ -647,28 +608,18 @@ impl MiddleEnvironment {
                         });
 
                         if next_callable {
-                            current = apply_callable(
-                                next_ty.unwrap_or(ParserDataType::new(
-                                    node.span,
-                                    ParserInnerType::Auto(None),
-                                )),
-                                2,
-                                node.span,
-                            );
+                            current = next_ty
+                                .and_then(|x| x.apply_callable())
+                                .unwrap_or(ParserDataType::auto(node.span));
                             idx += 2;
                             continue;
                         }
                     }
 
                     current = if point_callable {
-                        apply_callable(
-                            point_ty.unwrap_or(ParserDataType::new(
-                                node.span,
-                                ParserInnerType::Auto(None),
-                            )),
-                            1,
-                            node.span,
-                        )
+                        point_ty
+                            .and_then(|x| x.apply_callable())
+                            .unwrap_or(ParserDataType::auto(node.span))
                     } else {
                         point_ty
                             .unwrap_or(ParserDataType::new(node.span, ParserInnerType::Auto(None)))

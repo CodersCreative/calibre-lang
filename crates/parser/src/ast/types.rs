@@ -464,28 +464,10 @@ impl ParserInnerType {
     }
 
     #[inline]
-    pub fn apply_callable(
-        self,
-        args_len: usize,
-        implicit_params: usize,
-        span: Span,
-    ) -> Option<ParserDataType> {
+    pub fn apply_callable(&self) -> Option<ParserDataType> {
         match self {
-            ParserInnerType::Function {
-                return_type,
-                parameters,
-            } if parameters.len() > args_len + implicit_params => Some(ParserDataType {
-                data_type: ParserInnerType::Function {
-                    return_type,
-                    parameters: parameters
-                        .into_iter()
-                        .skip(args_len + implicit_params)
-                        .collect(),
-                },
-                span,
-            }),
-            ParserInnerType::Function { return_type, .. } => Some(*return_type),
-            ParserInnerType::NativeFunction { return_type, .. } => Some(*return_type),
+            ParserInnerType::Function { return_type, .. }
+            | ParserInnerType::NativeFunction { return_type, .. } => Some(*return_type.clone()),
             _ => None,
         }
     }

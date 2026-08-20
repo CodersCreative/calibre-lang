@@ -112,7 +112,7 @@ impl CalibreLanguageServer {
             if let Some(method_ty) = env.resolve_member_fn_type(&current, &member) {
                 current = match method_ty.data_type {
                     ParserInnerType::Function { return_type, .. }
-                    | ParserInnerType::Function { return_type, .. } => *return_type,
+                    | ParserInnerType::NativeFunction { return_type, .. } => *return_type,
                     _ => method_ty,
                 };
                 continue;

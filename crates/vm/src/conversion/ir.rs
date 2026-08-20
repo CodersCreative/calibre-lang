@@ -22,6 +22,8 @@ pub struct VMRegistry {
     pub functions: FxHashMap<String, Arc<VMFunction>>,
     #[serde(with = "crate::serialization::serde_fxhashmap")]
     pub globals: FxHashMap<String, VMGlobal>,
+    #[serde(with = "crate::serialization::serde_fxhashmap")]
+    pub natives: FxHashMap<String, String>,
     #[serde(default)]
     pub dyn_vtables: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>>,
     #[serde(default)]
@@ -61,7 +63,8 @@ impl From<LirRegistry> for VMRegistry {
         Self {
             functions,
             globals,
-            dyn_vtables: value.dyn_vtables.clone(),
+            natives: value.natives,
+            dyn_vtables: value.dyn_vtables,
             scope_to_file: value.scope_to_file,
         }
     }

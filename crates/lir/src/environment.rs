@@ -13,6 +13,7 @@ use crate::{
 pub struct LirRegistry {
     pub functions: FxHashMap<String, LirFunction>,
     pub globals: FxHashMap<String, LirGlobal>,
+    pub natives: FxHashMap<String, String>,
     pub dyn_vtables: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>>,
     pub scope_to_file: FxHashMap<u64, String>,
 }
@@ -121,6 +122,7 @@ impl<'a> LirEnvironment<'a> {
             registry: LirRegistry {
                 functions: FxHashMap::default(),
                 globals: FxHashMap::default(),
+                natives: env.symbols.native_mappings.clone(),
                 dyn_vtables: Self::build_dyn_vtables(env),
                 scope_to_file,
             },

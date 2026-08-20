@@ -234,7 +234,6 @@ impl VM {
 
         vm.preallocate_execution_buffers();
         if install_builtins {
-            vm.setup_global();
             vm.setup_stdlib();
         }
         vm

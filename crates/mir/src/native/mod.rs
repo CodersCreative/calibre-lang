@@ -95,31 +95,9 @@ impl MiddleEnvironment {
     }
 
     pub fn setup_global(&mut self, scope: &u64) {
-        let funcs = [
-            "console_output",
-            "console_input",
-            "ok",
-            "err",
-            "some",
-            "trim",
-            "repr",
-            "display",
-            "len",
-            "panic",
-            "assert",
-            "gen_suspend",
-            "tuple",
-            "discriminant",
-            "min_or_zero",
-            "http_request_raw",
-            "http_request_try",
-        ];
-
-        let map = ParserDataType::natives();
-
-        let mut funcs = funcs
-            .iter()
-            .filter_map(|x| map.get(*x).cloned().map(|t| (String::from(*x), t)))
+        let mut funcs = ParserDataType::natives()
+            .into_iter()
+            .filter(|x| !x.0.contains("."))
             .collect();
 
         let mut vars: Vec<(String, ParserDataType)> =
@@ -137,6 +115,10 @@ impl MiddleEnvironment {
                     location: None,
                 },
             );
+
+            self.symbols
+                .native_mappings
+                .insert(var.0.clone(), name.clone());
 
             if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
                 scope_ref.mappings.insert(var.0, name);
@@ -171,186 +153,66 @@ impl MiddleEnvironment {
             }
         }
 
-        let mut add = |name, funcs, load| self.setup_std_module(scope, name, funcs, load);
+        let mut add = |name, load| self.setup_std_module(scope, name, load);
 
-        add("traits", &[], true);
-        add("thread", &[], true);
-        add(
-            "libc",
-            &["get_c_errno", "get_c_errno_description", "set_c_errno"],
-            true,
-        );
-        add("console", &[], false);
-        add(
-            "async",
-            &[
-                "channel_new",
-                "channel_send",
-                "channel_get",
-                "channel_try_get",
-                "channel_try_send",
-                "channel_close",
-                "channel_closed",
-                "waitgroup_new",
-                "waitgroup_raw_add",
-                "waitgroup_raw_done",
-                "waitgroup_join",
-                "waitgroup_wait",
-                "waitgroup_count",
-                "mutex_new",
-                "mutex_get",
-                "mutex_set",
-                "mutex_with",
-                "mutex_write",
-            ],
-            true,
-        );
-        add("random", &[], false);
-        add(
-            "fs",
-            &[
-                "dir_create",
-                "dir_create_all",
-                "dir_remove",
-                "dir_remove_all",
-                "path_new",
-                "path_as_str",
-                "path_exists",
-                "path_is_file",
-                "path_is_dir",
-                "path_canonicalize",
-                "path_parent",
-                "path_file_name",
-                "path_extension",
-                "path_stem",
-                "path_join",
-                "path_with_extension",
-                "path_with_file_name",
-                "path_read_dir",
-                "direntry_path",
-                "direntry_file_name",
-                "direntry_file_type",
-                "direntry_metadata",
-                "filetype_is_file",
-                "filetype_is_dir",
-                "filetype_is_symlink",
-                "metadata_is_file",
-                "metadata_is_dir",
-                "metadata_len",
-                "metadata_modified",
-                "metadata_created",
-                "metadata_accessed",
-                "metadata_is_readonly",
-                "file_open",
-                "file_close",
-                "file_write",
-                "file_write_line",
-                "file_read_all",
-                "file_flush",
-            ],
-            false,
-        );
-        add("math", &[], true);
-        add("list", &["sort_by", "binary_search_by", "raw_remove"], true);
-        add(
-            "collections",
-            &[
-                "hashmap_new",
-                "hashmap_set",
-                "hashmap_get",
-                "hashmap_remove",
-                "hashmap_contains",
-                "hashmap_len",
-                "hashmap_keys",
-                "hashmap_values",
-                "hashmap_entries",
-                "hashmap_clear",
-                "hashset_new",
-                "hashset_add",
-                "hashset_remove",
-                "hashset_contains",
-                "hashset_len",
-                "hashset_values",
-                "hashset_clear",
-            ],
-            true,
-        );
-        add(
-            "str",
-            &[
-                "split",
-                "contains",
-                "starts_with",
-                "ends_with",
-                "char_lowercase",
-                "char_uppercase",
-            ],
-            true,
-        );
-        add(
-            "env",
-            &["get", "var", "set_var", "remove_var", "vars"],
-            true,
-        );
-        add("range", &[], true);
-        add("generators", &[], true);
-        add("crypto", &["sha256", "sha512", "blake3"], false);
-        add("regex", &["is_match", "find", "replace"], false);
-        add("process", &["raw_exec"], false);
-        add(
-            "net",
-            &[
-                "tcp_connect",
-                "tcp_listen",
-                "tcp_accept",
-                "tcp_read",
-                "tcp_write",
-                "tcp_close",
-                "http_request_raw",
-                "http_request_try",
-            ],
-            false,
-        );
-        add("option", &[], true);
-        add("result", &[], true);
-        add("json", &[], false);
+        add("traits", true);
+        add("thread", true);
+        add("libc", true);
+        add("console", false);
+        add("async", true);
+        add("random", false);
+        add("fs", false);
+        add("math", true);
+        add("list", true);
+        add("collections", true);
+        add("str", true);
+        add("env", true);
+        add("range", true);
+        add("generators", true);
+        add("crypto", false);
+        add("regex", false);
+        add("process", false);
+        add("net", false);
+        add("option", true);
+        add("result", true);
+        add("json", false);
     }
 
-    pub fn setup_std_module(
-        &mut self,
-        parent: &u64,
-        name: &str,
-        funcs: &[&'static str],
-        load_source: bool,
-    ) {
+    pub fn setup_std_module(&mut self, parent: &u64, name: &str, load_source: bool) {
         let scope_path = get_stdlib_module_path(name);
         let scope = self
             .scoping
             .new_scope(Some(*parent), scope_path.clone(), Some(name));
 
-        let map: FxHashMap<String, ParserDataType> = ParserDataType::natives();
-        let funcs: Vec<(String, ParserDataType)> = funcs
-            .iter()
-            .filter_map(|x| {
-                map.get(&format!("{}.{}", name, x))
-                    .cloned()
-                    .map(|ty| (String::from(*x), ty))
-            })
+        let funcs: Vec<(String, ParserDataType)> = ParserDataType::natives()
+            .into_iter()
+            .filter(|x| x.0.contains(&format!("{}.", name)))
             .collect();
 
-        for var in funcs.iter().cloned() {
-            let name = ParserText::temp_name_with_suffix(var.0.trim(), var.1.span).text;
+        for (original_name, var) in funcs {
+            let short_name = original_name
+                .split_once(".")
+                .map(|x| x.1)
+                .unwrap_or(&original_name)
+                .trim()
+                .to_string();
+            let name = ParserText::temp_name_with_suffix(&short_name, var.span).text;
+
             let _ = self.symbols.variables.insert(
                 name.clone(),
                 MiddleVariable {
-                    data_type: var.1.clone(),
+                    data_type: var.clone(),
                     var_type: VarType::Constant,
                     location: None,
                 },
             );
 
+            self.symbols
+                .native_mappings
+                .insert(original_name.clone(), name.clone());
+
             if let Some(scope_ref) = self.scoping.scopes.get_mut(&scope) {
-                scope_ref.mappings.insert(var.0.clone(), name);
+                scope_ref.mappings.insert(short_name, name);
             }
         }
 

@@ -17,6 +17,7 @@ pub mod resolve;
 #[derive(Debug, Clone, Default)]
 pub struct Symbols {
     pub variables: FxHashMap<String, MiddleVariable>,
+    pub native_mappings: FxHashMap<String, String>,
     pub resolved_variables: Vec<String>,
     pub overloads: Vec<MiddleOverload>,
     pub generic_fn_templates: FxHashMap<String, (Vec<String>, FunctionHeader, Node)>,

@@ -1,6 +1,5 @@
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
 use calibre_parser::ast::idents::ParserText;
-use rustc_hash::FxHashMap;
 use std::{cmp::Ordering, fmt::Debug};
 
 pub mod global;
@@ -64,74 +63,13 @@ impl PartialOrd for dyn NativeFunction {
 }
 
 impl VM {
-    // TODO This entire system needs to be redone to remove the string handling
-    pub(crate) fn build_mapping_index(
-        mappings: &[String],
-        prefer_nonzero_scope: bool,
-    ) -> FxHashMap<String, Option<String>> {
-        fn scope_id(name: &str) -> Option<u64> {
-            let mut parts = name.splitn(3, '-');
-            let _prefix = parts.next()?;
-            let scope = parts.next()?;
-            scope.parse::<u64>().ok()
-        }
-
-        let mut buckets: FxHashMap<String, Vec<String>> =
-            FxHashMap::with_capacity_and_hasher(mappings.len(), Default::default());
-        for full in mappings {
-            if let Some(short) = ParserText::get_temp_name_suffix(full) {
-                buckets
-                    .entry(short.to_string())
-                    .or_default()
-                    .push(full.clone());
-            }
-        }
-
-        let mut index: FxHashMap<String, Option<String>> =
-            FxHashMap::with_capacity_and_hasher(buckets.len(), Default::default());
-        for (short, mut matches) in buckets {
-            matches.sort();
-            let chosen = if prefer_nonzero_scope {
-                matches
-                    .iter()
-                    .find(|x| scope_id(x.as_str()).is_some_and(|id| id != 0))
-                    .cloned()
-            } else {
-                matches
-                    .iter()
-                    .find(|x| scope_id(x.as_str()) == Some(0))
-                    .cloned()
-            };
-            let chosen = chosen.or_else(|| {
-                if matches.len() == 1 {
-                    Some(matches[0].clone())
-                } else {
-                    None
-                }
-            });
-            index.insert(short, chosen);
-        }
-
-        index
-    }
-
-    pub(crate) fn mapped_name(
-        mapping_index: &FxHashMap<String, Option<String>>,
-        key: &str,
-    ) -> String {
-        mapping_index
-            .get(key)
-            .and_then(|x| x.clone())
-            .unwrap_or_else(|| key.to_string())
-    }
-
-    pub fn setup_global(&mut self) {
-        for (short_name, value) in RuntimeValue::constants().into_iter().chain(
-            RuntimeValue::natives()
-                .into_iter()
-                .filter(|(name, _)| !name.contains('.')),
-        ) {
-            let _ = self.variables.insert(short_name.as_str(), value);
+    pub fn setup_stdlib(&mut self) {
+        for (full_name, value) in RuntimeValue::constants()
+            .into_iter()
+            .chain(RuntimeValue::natives())
+        {
+            let name = self.registry.natives.get(&full_name).unwrap();
+            let _ = self.variables.insert(&name, value);
         }
     }
 }
