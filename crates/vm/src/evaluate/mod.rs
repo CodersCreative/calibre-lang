@@ -779,7 +779,7 @@ impl VM {
                 }
                 _ => false,
             },
-            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_) => matches!(
+            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction { .. } => matches!(
                 value,
                 RuntimeValue::Function { .. }
                     | RuntimeValue::NativeFunction(_)

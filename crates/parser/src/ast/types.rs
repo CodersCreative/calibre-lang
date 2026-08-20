@@ -213,7 +213,10 @@ pub enum ParserInnerType {
         generic_types: Vec<ParserDataType>,
     },
     FfiType(ParserFfiInnerType),
-    NativeFunction(Box<ParserDataType>),
+    NativeFunction {
+        return_type: Box<ParserDataType>,
+        parameters: Vec<ParserDataType>,
+    },
     Ptr(Box<ParserDataType>),
 }
 
@@ -351,7 +354,7 @@ impl ParserInnerType {
     pub fn is_callable(&self) -> bool {
         matches!(
             self.unwrap_all_refs(),
-            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
+            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction { .. }
         )
     }
 
@@ -482,7 +485,7 @@ impl ParserInnerType {
                 span,
             }),
             ParserInnerType::Function { return_type, .. } => Some(*return_type),
-            ParserInnerType::NativeFunction(ret) => Some(*ret),
+            ParserInnerType::NativeFunction { return_type, .. } => Some(*return_type),
             _ => None,
         }
     }
@@ -582,7 +585,6 @@ impl Display for ParserInnerType {
             }
             Self::Result { err, ok } => write!(f, "{}!{}", err, ok),
             Self::Option(x) => write!(f, "{}?", x),
-            Self::NativeFunction(x) => write!(f, "native -> {}", x),
             Self::Ptr(x) => write!(f, "ptr:<{}>", x),
             Self::Struct(x) => write!(f, "{}", x),
             Self::StructWithGenerics {
@@ -628,7 +630,11 @@ impl Display for ParserInnerType {
                         .join("::")
                 )
             }
-            Self::Function {
+            Self::NativeFunction {
+                return_type,
+                parameters,
+            }
+            | Self::Function {
                 return_type,
                 parameters,
             } => {

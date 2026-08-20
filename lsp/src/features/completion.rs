@@ -111,8 +111,8 @@ impl CalibreLanguageServer {
 
             if let Some(method_ty) = env.resolve_member_fn_type(&current, &member) {
                 current = match method_ty.data_type {
-                    ParserInnerType::Function { return_type, .. } => *return_type,
-                    ParserInnerType::NativeFunction(return_type) => *return_type,
+                    ParserInnerType::Function { return_type, .. }
+                    | ParserInnerType::Function { return_type, .. } => *return_type,
                     _ => method_ty,
                 };
                 continue;
@@ -271,7 +271,8 @@ impl CalibreLanguageServer {
         data_type: &ParserDataType,
     ) -> Option<SignatureInformation> {
         match &data_type.data_type {
-            ParserInnerType::Function { parameters, .. } => Some(SignatureInformation {
+            ParserInnerType::Function { parameters, .. }
+            | ParserInnerType::NativeFunction { parameters, .. } => Some(SignatureInformation {
                 label: data_type.to_string(),
                 documentation: Some(Documentation::String("A function".to_string())),
                 parameters: Some(
@@ -283,12 +284,6 @@ impl CalibreLanguageServer {
                         })
                         .collect::<Vec<_>>(),
                 ),
-                active_parameter: None,
-            }),
-            ParserInnerType::NativeFunction(_) => Some(SignatureInformation {
-                label: data_type.to_string(),
-                documentation: Some(Documentation::String("A native function".to_string())),
-                parameters: Some(Vec::new()),
                 active_parameter: None,
             }),
             _ => None,
@@ -500,6 +495,10 @@ impl CalibreLanguageServer {
                 ParserInnerType::Function {
                     parameters,
                     return_type,
+                }
+                | ParserInnerType::NativeFunction {
+                    return_type,
+                    parameters,
                 } => (
                     var.data_type.to_string(),
                     CompletionItemKind::FUNCTION,
@@ -511,13 +510,6 @@ impl CalibreLanguageServer {
                             .collect::<Vec<_>>()
                             .join(", "),
                         return_type
-                    ),
-                ),
-                ParserInnerType::NativeFunction(return_type) => (
-                    var.data_type.to_string(),
-                    CompletionItemKind::FUNCTION,
-                    format!(
-                        "Resolved native function `{visible}`\n\nCanonical: `{canonical}`\n\nReturn: {return_type}",
                     ),
                 ),
                 _ => {

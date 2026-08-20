@@ -2982,24 +2982,14 @@ impl MiddleEnvironment {
                             .symbols
                             .variables
                             .get(&resolved.text)
-                            .is_some_and(|var| {
-                                matches!(
-                                    var.data_type.data_type,
-                                    ParserInnerType::Function { .. }
-                                        | ParserInnerType::NativeFunction(_)
-                                )
-                            })
+                            .is_some_and(|var| var.data_type.is_callable())
                     {
                         return true;
                     }
                     let from_type = env
                         .resolve_type_from_node(scope, point.get_node())
                         .map(|x| x.unwrap_all_refs().data_type);
-                    if matches!(
-                        from_type,
-                        Some(ParserInnerType::Function { .. })
-                            | Some(ParserInnerType::NativeFunction(_))
-                    ) {
+                    if from_type.map(|x| x.is_callable()).unwrap_or_default() {
                         return true;
                     }
                     false

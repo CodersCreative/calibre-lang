@@ -154,10 +154,7 @@ impl MiddleEnvironment {
             .clone();
 
         self.symbols.variables.get(&symbol_name).and_then(|var| {
-            if matches!(
-                var.data_type.clone().unwrap_all_refs().data_type,
-                ParserInnerType::Function { .. } | ParserInnerType::NativeFunction(_)
-            ) {
+            if var.data_type.clone().unwrap_all_refs().is_callable() {
                 Some(symbol_name)
             } else {
                 None

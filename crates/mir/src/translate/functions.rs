@@ -102,7 +102,10 @@ impl MiddleEnvironment {
 
         if matches!(raw_name.as_str(), "some" | "ok" | "err")
             && self.symbols.variables.get(&raw_name).is_some_and(|var| {
-                matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
+                matches!(
+                    var.data_type.data_type,
+                    ParserInnerType::NativeFunction { .. }
+                )
             })
         {
             return None;
@@ -529,14 +532,20 @@ impl MiddleEnvironment {
         }
 
         let native = self.symbols.variables.get(&name).and_then(|var| {
-            matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
-                .then_some(name.clone())
+            matches!(
+                var.data_type.data_type,
+                ParserInnerType::NativeFunction { .. }
+            )
+            .then_some(name.clone())
         })?;
 
         let resolved = self.resolved_callable_name(scope, ident);
         if let Some(resolved_name) = resolved
             && let Some(var) = self.symbols.variables.get(&resolved_name)
-            && matches!(var.data_type.data_type, ParserInnerType::NativeFunction(_))
+            && matches!(
+                var.data_type.data_type,
+                ParserInnerType::NativeFunction { .. }
+            )
         {
             return None;
         }

@@ -406,11 +406,9 @@ impl MiddleEnvironment {
                                 self.resolve_member_fn_type(&base_ty, &member_name)
                         {
                             match method_ty.data_type {
-                                ParserInnerType::Function { return_type, .. } => {
+                                ParserInnerType::Function { return_type, .. }
+                                | ParserInnerType::NativeFunction { return_type, .. } => {
                                     return Some(*return_type);
-                                }
-                                ParserInnerType::NativeFunction(ret) => {
-                                    return Some(*ret);
                                 }
                                 _ => return Some(method_ty),
                             }
@@ -606,6 +604,7 @@ impl MiddleEnvironment {
                         .unwrap_all_refs()
                         .data_type
                     {
+                        // TODO Fully remove currying
                         ParserInnerType::Function {
                             return_type,
                             parameters,
@@ -625,7 +624,7 @@ impl MiddleEnvironment {
                                 *return_type
                             }
                         }
-                        ParserInnerType::NativeFunction(ret) => *ret,
+                        ParserInnerType::NativeFunction { return_type, .. } => *return_type,
                         _ => ParserDataType::new(span, ParserInnerType::Auto(None)),
                     };
 
