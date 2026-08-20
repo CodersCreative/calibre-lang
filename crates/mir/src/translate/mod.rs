@@ -35,15 +35,6 @@ pub mod scopes;
 pub mod statements;
 
 impl MiddleEnvironment {
-    #[inline]
-    fn text_matches(left: impl ToString, right: impl ToString) -> bool {
-        let (left, right) = (left.to_string(), right.to_string());
-
-        left == right
-            || left.ends_with(&format!(".{right}"))
-            || right.ends_with(&format!(".{left}"))
-    }
-
     fn waitgroup_static_call(span: Span, member: &str) -> Node {
         Node::call(
             span,

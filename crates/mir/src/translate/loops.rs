@@ -98,6 +98,7 @@ impl MiddleEnvironment {
         self.scoping.loop_stack.pop();
         out
     }
+
     fn finish_loop_with_else(
         &mut self,
         loop_node: MiddleNode,

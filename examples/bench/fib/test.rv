@@ -3,6 +3,6 @@ fn fib(n) do
 	else fib(n-1) + fib(n-2)
 end
 
-let n = 30
+let n = 28
 let result = fib(n)
 print(result)

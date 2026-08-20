@@ -242,6 +242,20 @@ impl ParserDataType {
         }
     }
 
+    pub fn function(
+        span: Span,
+        parameters: Vec<ParserDataType>,
+        return_type: ParserDataType,
+    ) -> ParserDataType {
+        ParserDataType::new(
+            span,
+            ParserInnerType::Function {
+                return_type: Box::new(return_type),
+                parameters,
+            },
+        )
+    }
+
     pub fn unwrap_all_refs(self) -> Self {
         Self {
             data_type: self.data_type.unwrap_all_refs().clone(),
@@ -255,6 +269,27 @@ impl ParserDataType {
 
     pub fn unwrap_one_result(&self) -> Option<&Self> {
         self.data_type.unwrap_one_result()
+    }
+
+    pub fn get_gen(self) -> Option<ParserDataType> {
+        let sp = self.span;
+        match self.unwrap_all_refs().data_type {
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types,
+            } if ParserText::temp_name_suffix_matches(&identifier, &"gen")
+                && generic_types.len() == 1 =>
+            {
+                Some(generic_types[0].clone())
+            }
+            ParserInnerType::Struct(identifier)
+            | ParserInnerType::StructWithGenerics { identifier, .. }
+                if ParserText::temp_name_suffix_matches(&identifier, &"gen") =>
+            {
+                Some(ParserDataType::new(sp, ParserInnerType::Auto(None)))
+            }
+            _ => None,
+        }
     }
 
     pub fn default_node(&self) -> Option<Node> {

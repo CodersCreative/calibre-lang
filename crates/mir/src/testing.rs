@@ -1,6 +1,5 @@
-use std::path::PathBuf;
-
 use crate::{environment::MiddleEnvironment, tags::TagInfo};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, Default)]
 pub struct Testing {

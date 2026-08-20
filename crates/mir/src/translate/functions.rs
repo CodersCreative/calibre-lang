@@ -294,7 +294,7 @@ impl MiddleEnvironment {
     fn same_call_arg_text(a: &CallArg, b: &CallArg) -> bool {
         let left: &Node = a.into();
         let right: &Node = b.into();
-        Self::text_matches(left, right)
+        ParserText::temp_name_suffix_matches(left, right)
     }
 
     #[inline]
@@ -345,33 +345,6 @@ impl MiddleEnvironment {
         }
     }
 
-    fn function_data_type(
-        span: Span,
-        parameters: Vec<ParserDataType>,
-        return_type: ParserDataType,
-    ) -> ParserDataType {
-        ParserDataType::new(
-            span,
-            ParserInnerType::Function {
-                return_type: Box::new(return_type),
-                parameters,
-            },
-        )
-    }
-
-    pub(crate) fn is_generator_return_type(return_type: &ParserDataType) -> Option<ParserDataType> {
-        match &return_type.clone().unwrap_all_refs().data_type {
-            ParserInnerType::StructWithGenerics {
-                identifier,
-                generic_types,
-            } if identifier == "gen" && generic_types.len() == 1 => Some(generic_types[0].clone()),
-            ParserInnerType::Struct(identifier) if identifier == "gen" => Some(
-                ParserDataType::new(return_type.span, ParserInnerType::Auto(None)),
-            ),
-            _ => None,
-        }
-    }
-
     fn rewrite_generator_returns(node: Node) -> Node {
         let mut rewriter = GeneratorReturnsRewriter;
         rewriter.visit(node)
@@ -402,7 +375,7 @@ impl MiddleEnvironment {
                     span,
                     next_name.clone(),
                 )),
-                data_type: Self::function_data_type(
+                data_type: ParserDataType::function(
                     span,
                     vec![],
                     ParserDataType::new(span, ParserInnerType::Option(Box::new(elem_type.clone()))),
@@ -586,7 +559,7 @@ impl MiddleEnvironment {
 
         let return_type = self.resolve_ffi_data_type(scope, return_type);
 
-        let fn_type = Self::function_data_type(
+        let fn_type = ParserDataType::function(
             self.context.current_span(),
             params.clone(),
             return_type.clone(),
@@ -730,7 +703,7 @@ impl MiddleEnvironment {
             };
         }
 
-        if let Some(elem_type) = Self::is_generator_return_type(&return_type) {
+        if let Some(elem_type) = return_type.clone().get_gen() {
             body = Self::wrap_generator_body(body, elem_type, span);
         }
 

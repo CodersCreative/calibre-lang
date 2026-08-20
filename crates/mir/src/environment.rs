@@ -399,6 +399,7 @@ impl MiddleEnvironment {
         Self::new_and_evaluate_with_package(node, path, None, no_std)
     }
 
+    // TODO Remove
     pub fn quick_resolve_potential_scope_member(
         &mut self,
         scope: &u64,

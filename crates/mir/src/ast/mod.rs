@@ -46,39 +46,6 @@ impl MiddleNode {
         }
     }
 
-    pub fn rewrite_main_emits_to_returns(self) -> Self {
-        match self.node_type {
-            MiddleNodeType::ScopeDeclaration {
-                body,
-                create_new_scope,
-                is_temp,
-                scope_id,
-            } => MiddleNode {
-                node_type: MiddleNodeType::ScopeDeclaration {
-                    body: body
-                        .into_iter()
-                        .map(|x| match x.node_type {
-                            MiddleNodeType::Emit { value } => MiddleNode {
-                                node_type: MiddleNodeType::Return { value: Some(value) },
-                                span: self.span,
-                            },
-                            _ => x,
-                        })
-                        .collect(),
-                    create_new_scope,
-                    is_temp,
-                    scope_id,
-                },
-                span: self.span,
-            },
-            MiddleNodeType::Emit { value } => MiddleNode {
-                node_type: MiddleNodeType::Return { value: Some(value) },
-                span: self.span,
-            },
-            _ => self,
-        }
-    }
-
     pub fn len(&self) -> usize {
         let mut count = 1;
         match &self.node_type {

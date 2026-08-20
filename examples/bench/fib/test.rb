@@ -3,6 +3,6 @@ def fib(n)
     return fib(n - 1) + fib(n - 2); 
 end
 
-n = 30;
+n = 28;
 result = fib n;
 puts result

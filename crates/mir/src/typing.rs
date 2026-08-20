@@ -31,10 +31,6 @@ impl Typing {
         }
     }
 
-    pub fn find_impl_for_type_mut(&mut self, ty: &ParserDataType) -> Option<&mut MiddleImpl> {
-        self.impls.get_mut(&ty.key())
-    }
-
     pub fn find_impl_member(
         &self,
         ty: &ParserDataType,
@@ -53,65 +49,6 @@ impl Typing {
 
         self.find_impl_for_type(ty)?
             .get_member(member, &generic_params)
-    }
-
-    pub fn ensure_concrete_impl(
-        &mut self,
-        ty: ParserDataType,
-        location: Option<Location>,
-    ) -> ParserInnerType {
-        let key = ty.key();
-        if self
-            .impls
-            .get(&key)
-            .is_some_and(|imp| !imp.members.is_empty())
-        {
-            return key;
-        }
-
-        let template = self.find_impl_for_type(&ty).cloned();
-        if let Some(template) = template {
-            if template.data_type.key() != key {
-                let mut new_impl = MiddleImpl {
-                    data_type: ty,
-                    members: template.members.clone(),
-                    traits: template.traits.clone(),
-                    assoc_types: template.assoc_types.clone(),
-                    location: location.or(template.location),
-                };
-
-                Self::populate_trait_members(&self.trait_defs, &mut new_impl);
-
-                self.impls.insert(key.clone(), new_impl);
-            }
-        } else if !self.impls.contains_key(&key) {
-            self.get_or_create_impl(ty, location);
-            if let Some(imp) = self.impls.get_mut(&key) {
-                Self::populate_trait_members(&self.trait_defs, imp);
-            }
-        }
-
-        key
-    }
-
-    fn populate_trait_members(trait_defs: &FxHashMap<String, MiddleTrait>, imp: &mut MiddleImpl) {
-        let mut provided_members = rustc_hash::FxHashSet::default();
-        for member_name in imp.members.keys() {
-            provided_members.insert(member_name.clone());
-        }
-
-        for trait_name in &imp.traits.clone() {
-            let default_members =
-                Self::collect_trait_default_members(trait_defs, trait_name, &provided_members);
-            for (member_name, _trait_member) in default_members {
-                let symbol_name = format!("{}.{}", trait_name, member_name);
-                imp.insert_member(
-                    &member_name,
-                    MiddleImplMember::new(symbol_name, Vec::new(), false),
-                );
-                provided_members.insert(member_name);
-            }
-        }
     }
 
     pub fn collect_trait_default_members(
