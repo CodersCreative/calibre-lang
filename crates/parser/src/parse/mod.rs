@@ -24,7 +24,7 @@ mod functions;
 mod matching;
 mod setup;
 mod statements;
-mod util;
+pub mod util;
 
 trait LegacySpanMapExt<'a, O>: Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Sized {
     fn map_with_span<U, F>(self, f: F) -> impl Parser<'a, &'a str, U, extra::Err<Rich<'a, char>>>

@@ -1248,7 +1248,7 @@ impl VM {
                     RuntimeValue::Channel(_) if member_short == "raw_send" => {
                         RuntimeValue::BoundMethod {
                             callee: Box::new(RuntimeValue::NativeFunction(Arc::new(
-                                crate::native::stdlib::r#async::ChannelSend(),
+                                crate::native::stdlib::r#async::ChannelSend,
                             ))),
                             receiver: Gc::new(raw_receiver.clone()),
                         }

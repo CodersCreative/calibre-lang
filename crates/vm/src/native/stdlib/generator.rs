@@ -1,7 +1,10 @@
 use crate::{
     TaskState, VM,
     error::RuntimeError,
-    native::{NativeFunction, pop_or_null},
+    native::{
+        NativeFunction,
+        utils::{expect_num_args, pop_or_null},
+    },
     value::RuntimeValue,
 };
 use dumpster::sync::Gc;
@@ -23,7 +26,9 @@ pub struct GeneratorResumeFn {
 }
 
 impl NativeFunction for GeneratorResumeFn {
-    fn run(&self, _env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[0])?;
+
         let mut state = self
             .state
             .lock()
@@ -68,7 +73,7 @@ impl NativeFunction for GeneratorResumeFn {
         String::from("gen_resume")
     }
 }
-pub struct GeneratorSuspendFn();
+pub struct GeneratorSuspendFn;
 
 impl NativeFunction for GeneratorSuspendFn {
     fn name(&self) -> String {
@@ -80,6 +85,8 @@ impl NativeFunction for GeneratorSuspendFn {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
         let value = pop_or_null(&mut args);
         Ok(RuntimeValue::GeneratorSuspend(Box::new(value)))
     }

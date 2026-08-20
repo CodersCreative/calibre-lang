@@ -32,11 +32,9 @@ calibre-std = {path="./crates/std"}
 calibre-fmt = {path = "./fmt"}
 
 # Other common packages
-rand = "0.10"
 fastrand = "2"
 rustc-hash = "2.1.1"
 codespan-reporting = "0.13.1"
 serde = {version = "1", features = ["derive"]}
 thiserror = "2"
 rustyline = "17"
-smallvec = "1.13.2"

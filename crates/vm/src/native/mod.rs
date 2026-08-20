@@ -1,21 +1,11 @@
+use crate::{VM, error::RuntimeError, value::RuntimeValue};
 use calibre_parser::ast::idents::ParserText;
 use rustc_hash::FxHashMap;
-use std::{
-    cmp::Ordering,
-    fmt::Debug,
-    sync::{Arc, Mutex},
-};
-
-use crate::{
-    VM,
-    error::RuntimeError,
-    value::{Host, RuntimeValue},
-};
+use std::{cmp::Ordering, fmt::Debug};
 
 pub mod global;
 pub mod stdlib;
-
-static NULL_ARG: RuntimeValue = RuntimeValue::Null;
+pub mod utils;
 
 pub trait NativeFunction: Send + Sync {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError>;
@@ -35,82 +25,6 @@ pub trait NativeFunction: Send + Sync {
     }
 }
 
-#[inline]
-pub(crate) fn first_arg(args: &[RuntimeValue]) -> Result<&RuntimeValue, RuntimeError> {
-    Ok(args.first().unwrap_or(&NULL_ARG))
-}
-
-#[inline]
-pub(crate) fn pop_or_null(args: &mut Vec<RuntimeValue>) -> RuntimeValue {
-    args.pop().unwrap_or(RuntimeValue::Null)
-}
-
-#[inline]
-pub(crate) fn expect_str_ref(value: &RuntimeValue) -> Result<&Arc<Mutex<String>>, RuntimeError> {
-    if let RuntimeValue::Str(s) = value {
-        Ok(s)
-    } else {
-        Err(RuntimeError::UnexpectedType(value.clone()))
-    }
-}
-
-#[inline]
-pub(crate) fn expect_host(value: RuntimeValue) -> Result<Host, RuntimeError> {
-    if let RuntimeValue::Host(v) = value {
-        Ok(v)
-    } else {
-        Err(RuntimeError::UnexpectedType(value))
-    }
-}
-
-#[inline]
-pub(crate) fn expect_str_arg_or_empty(
-    args: &[RuntimeValue],
-    index: usize,
-) -> Result<&Arc<Mutex<String>>, RuntimeError> {
-    if let Some(value) = args.get(index) {
-        return expect_str_ref(value);
-    }
-
-    static EMPTY: std::sync::OnceLock<Arc<Mutex<String>>> = std::sync::OnceLock::new();
-    Ok(EMPTY.get_or_init(|| Arc::new(Mutex::new(String::new()))))
-}
-
-#[inline]
-fn expect_char_arg(args: &[RuntimeValue], index: usize) -> Result<char, RuntimeError> {
-    match args.get(index) {
-        Some(value) => expect_char(value.clone()),
-        None => Ok('\0'),
-    }
-}
-
-#[inline]
-pub(crate) fn expect_str_owned(value: RuntimeValue) -> Result<String, RuntimeError> {
-    if let RuntimeValue::Str(s) = value {
-        Ok(s.lock().unwrap().clone())
-    } else {
-        Err(RuntimeError::UnexpectedType(value))
-    }
-}
-
-#[inline]
-pub(crate) fn expect_int(value: RuntimeValue) -> Result<i64, RuntimeError> {
-    if let RuntimeValue::Int(v) = value {
-        Ok(v)
-    } else {
-        Err(RuntimeError::UnexpectedType(value))
-    }
-}
-
-#[inline]
-pub(crate) fn expect_char(value: RuntimeValue) -> Result<char, RuntimeError> {
-    if let RuntimeValue::Char(v) = value {
-        Ok(v)
-    } else {
-        Err(RuntimeError::UnexpectedType(value))
-    }
-}
-
 impl Debug for dyn NativeFunction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.name())
@@ -126,6 +40,7 @@ impl PartialEq for dyn NativeFunction {
         true
     }
 }
+
 impl PartialOrd for dyn NativeFunction {
     fn gt(&self, _other: &Self) -> bool {
         false

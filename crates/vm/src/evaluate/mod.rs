@@ -5,7 +5,6 @@ use calibre_parser::ast::types::ParserInnerType;
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
-use smallvec::SmallVec;
 use std::sync::Arc;
 
 use crate::{
@@ -307,9 +306,7 @@ impl VM {
             RuntimeValue::NativeFunction(func) => func.run(self, args),
             RuntimeValue::ExternFunction(func) => func.call(self, args),
             RuntimeValue::Channel(_) => self.call_runtime_callable_at(
-                RuntimeValue::NativeFunction(Arc::new(
-                    crate::native::stdlib::r#async::ChannelSend(),
-                )),
+                RuntimeValue::NativeFunction(Arc::new(crate::native::stdlib::r#async::ChannelSend)),
                 {
                     let mut full_args = Vec::with_capacity(args.len() + 1);
                     full_args.push(callable);
@@ -355,7 +352,7 @@ impl VM {
                 if matches!(other, RuntimeValue::Channel(_)) {
                     self.call_runtime_callable_at(
                         RuntimeValue::NativeFunction(Arc::new(
-                            crate::native::stdlib::r#async::ChannelSend(),
+                            crate::native::stdlib::r#async::ChannelSend,
                         )),
                         args,
                         callsite_block,
@@ -1044,25 +1041,29 @@ impl VM {
         else {
             return None;
         };
+
         if *ret_reg != dst || args.len() != func.param_regs.len() {
             return None;
         }
 
         let caller_frame = self.frames.len().saturating_sub(1);
-        let mut call_args: SmallVec<[RuntimeValue; 8]> = SmallVec::with_capacity(args.len());
-        for reg in args {
-            call_args.push(self.call_arg_from_frame_reg(caller_frame, *reg));
-        }
+        let call_args = args
+            .into_iter()
+            .map(|reg| self.call_arg_from_frame_reg(caller_frame, *reg))
+            .collect::<Vec<_>>();
 
         let start = self.current_frame().reg_start;
         let reg_count = func.reg_count as usize;
         let frame_end = start + reg_count;
+
         if frame_end > self.reg_arena.len() {
             self.reg_arena.resize(frame_end, RuntimeValue::Null);
         }
+
         for slot in &mut self.reg_arena[start..frame_end] {
             *slot = RuntimeValue::Null;
         }
+
         self.reg_top = frame_end;
         {
             let frame = self.current_frame_mut();
@@ -1070,6 +1071,7 @@ impl VM {
             frame.acc = RuntimeValue::Null;
             frame.func_ptr = func as *const VMFunction as usize;
         }
+
         for (reg, arg) in func.param_regs.iter().zip(call_args) {
             let idx = *reg as usize;
             if idx < reg_count {

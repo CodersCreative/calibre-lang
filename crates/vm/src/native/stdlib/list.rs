@@ -7,8 +7,10 @@ use crate::{
 use dumpster::sync::Gc;
 use std::cmp::Ordering;
 
-fn compare_callback_result(result: RuntimeValue) -> Result<Ordering, RuntimeError> {
-    match result {
+// TODO limit num args in this file
+
+fn compare_callback_result(env: &VM, result: &RuntimeValue) -> Result<Ordering, RuntimeError> {
+    match env.resolve_value_for_op_ref(result)? {
         RuntimeValue::Int(v) => Ok(v.cmp(&0)),
         RuntimeValue::UInt(v) => Ok((v as i128).cmp(&0)),
         RuntimeValue::Float(v) => Ok(v.partial_cmp(&0.0).unwrap_or(Ordering::Equal)),
@@ -95,7 +97,7 @@ impl NativeFunction for ListSortBy {
                     usize::MAX,
                     u32::MAX.saturating_sub(2),
                 )
-                .and_then(compare_callback_result)
+                .and_then(|x| compare_callback_result(env, &x))
             {
                 Ok(ordering) => ordering,
                 Err(err) => {
@@ -138,7 +140,7 @@ impl NativeFunction for ListBinarySearchBy {
                     usize::MAX,
                     u32::MAX.saturating_sub(3),
                 )
-                .and_then(compare_callback_result)?;
+                .and_then(|x| compare_callback_result(env, &x))?;
             match ordering {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid - 1,

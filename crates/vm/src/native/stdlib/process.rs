@@ -1,16 +1,14 @@
-use std::io::Write;
-use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex};
-
-use calibre_parser::ast::ObjectMap;
-use dumpster::sync::Gc;
-
 use crate::{
     VM,
     error::RuntimeError,
     native::NativeFunction,
     value::{GcMap, RuntimeValue},
 };
+use calibre_parser::ast::ObjectMap;
+use dumpster::sync::Gc;
+use std::io::Write;
+use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 struct RawExecOptions {
@@ -83,23 +81,28 @@ fn parse_options(env: &VM, options: RuntimeValue) -> Result<RawExecOptions, Runt
     };
 
     let command = required_str_field(env, &map, "command")?;
+
     let args = match resolve_field(env, &map, "args")? {
         Some(value) => to_str_list(env, value)?,
         None => Vec::new(),
     };
+
     let cwd = match resolve_field(env, &map, "cwd")? {
         Some(value) => parse_optional_string(value)?,
         None => None,
     };
+
     let shell = match resolve_field(env, &map, "shell")? {
         Some(RuntimeValue::Bool(v)) => v,
         Some(other) => return Err(RuntimeError::UnexpectedType(other)),
         None => false,
     };
+
     let stdin = match resolve_field(env, &map, "stdin")? {
         Some(value) => parse_optional_string(value)?,
         None => None,
     };
+
     let check = match resolve_field(env, &map, "check")? {
         Some(RuntimeValue::Bool(v)) => v,
         Some(other) => return Err(RuntimeError::UnexpectedType(other)),
@@ -229,6 +232,7 @@ impl NativeFunction for ProcessRawExec {
                 break;
             }
         }
+
         let Some(options) = parsed else {
             return Err(RuntimeError::InvalidFunctionCall);
         };

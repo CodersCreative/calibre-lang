@@ -243,6 +243,8 @@ unsafe impl<V: Visitor> TraceWith<V> for GcMap {
 
 pub type HostInner = dyn Any + Send;
 pub type Host = Arc<Mutex<HostInner>>;
+pub type RuntimeHashMap = Arc<Mutex<FxHashMap<HashKey, RuntimeValue>>>;
+pub type RuntimeHashSet = Arc<Mutex<FxHashSet<HashKey>>>;
 
 #[derive(Debug, Clone, Default)]
 pub enum RuntimeValue {
@@ -272,8 +274,8 @@ pub enum RuntimeValue {
     WaitGroup(Arc<WaitGroupInner>),
     Mutex(Arc<MutexInner>),
     MutexGuard(Arc<MutexGuardInner>),
-    HashMap(Arc<Mutex<FxHashMap<HashKey, RuntimeValue>>>),
-    HashSet(Arc<Mutex<FxHashSet<HashKey>>>),
+    HashMap(RuntimeHashMap),
+    HashSet(RuntimeHashSet),
     NativeFunction(Arc<dyn NativeFunction>),
     ExternFunction(Arc<ExternFunction>),
     Function {
@@ -451,19 +453,19 @@ impl RuntimeValue {
 
     pub fn natives() -> FxHashMap<String, Self> {
         let lst: Vec<(&str, Arc<dyn NativeFunction>)> = vec![
-            ("console_output", Arc::new(native::global::ConsoleOutput())),
-            ("console_input", Arc::new(native::global::ConsoleInput())),
-            ("ok", Arc::new(native::global::OkFn())),
-            ("err", Arc::new(native::global::ErrFn())),
-            ("some", Arc::new(native::global::SomeFn())),
-            ("repr", Arc::new(native::global::Repr())),
-            ("display", Arc::new(native::global::Display())),
-            ("len", Arc::new(native::global::Len())),
-            ("trim", Arc::new(native::global::Trim())),
-            ("str.split", Arc::new(stdlib::str::StrSplit())),
-            ("str.contains", Arc::new(stdlib::str::StrContains())),
-            ("str.starts_with", Arc::new(stdlib::str::StrStartsWith())),
-            ("str.ends_with", Arc::new(stdlib::str::StrEndsWith())),
+            ("console_output", Arc::new(native::global::ConsoleOutput)),
+            ("console_input", Arc::new(native::global::ConsoleInput)),
+            ("ok", Arc::new(native::global::OkFn)),
+            ("err", Arc::new(native::global::ErrFn)),
+            ("some", Arc::new(native::global::SomeFn)),
+            ("repr", Arc::new(native::global::Repr)),
+            ("display", Arc::new(native::global::Display)),
+            ("len", Arc::new(native::global::Len)),
+            ("trim", Arc::new(native::global::Trim)),
+            ("str.split", Arc::new(stdlib::str::StrSplit)),
+            ("str.contains", Arc::new(stdlib::str::StrContains)),
+            ("str.starts_with", Arc::new(stdlib::str::StrStartsWith)),
+            ("str.ends_with", Arc::new(stdlib::str::StrEndsWith)),
             ("str.char_lowercase", Arc::new(stdlib::str::CharLowercase)),
             ("str.char_uppercase", Arc::new(stdlib::str::CharUppercase)),
             ("env.get", Arc::new(stdlib::env::EnvGet)),
@@ -548,36 +550,33 @@ impl RuntimeValue {
             ("fs.file_write_line", Arc::new(stdlib::fs::FsFileWriteLine)),
             ("fs.file_read_all", Arc::new(stdlib::fs::FsFileReadAll)),
             ("fs.file_flush", Arc::new(stdlib::fs::FsFileFlush)),
-            ("discriminant", Arc::new(native::global::DiscriminantFn())),
-            ("tuple", Arc::new(native::global::TupleFn())),
-            ("panic", Arc::new(native::global::PanicFn())),
-            ("assert", Arc::new(native::global::AssertFn())),
+            ("discriminant", Arc::new(native::global::DiscriminantFn)),
+            ("tuple", Arc::new(native::global::TupleFn)),
+            ("panic", Arc::new(native::global::PanicFn)),
+            ("assert", Arc::new(native::global::AssertFn)),
             (
                 "gen_suspend",
-                Arc::new(stdlib::generator::GeneratorSuspendFn()),
+                Arc::new(stdlib::generator::GeneratorSuspendFn),
             ),
-            ("min_or_zero", Arc::new(native::global::MinOrZero())),
-            ("async.channel_new", Arc::new(stdlib::r#async::ChannelNew())),
-            (
-                "async.channel_send",
-                Arc::new(stdlib::r#async::ChannelSend()),
-            ),
-            ("async.channel_get", Arc::new(stdlib::r#async::ChannelGet())),
+            ("min_or_zero", Arc::new(native::global::MinOrZero)),
+            ("async.channel_new", Arc::new(stdlib::r#async::ChannelNew)),
+            ("async.channel_send", Arc::new(stdlib::r#async::ChannelSend)),
+            ("async.channel_get", Arc::new(stdlib::r#async::ChannelGet)),
             (
                 "async.channel_try_get",
-                Arc::new(stdlib::r#async::ChannelTryGet()),
+                Arc::new(stdlib::r#async::ChannelTryGet),
             ),
             (
                 "async.channel_try_send",
-                Arc::new(stdlib::r#async::ChannelTrySend()),
+                Arc::new(stdlib::r#async::ChannelTrySend),
             ),
             (
                 "async.channel_close",
-                Arc::new(stdlib::r#async::ChannelClose()),
+                Arc::new(stdlib::r#async::ChannelClose),
             ),
             (
                 "async.channel_closed",
-                Arc::new(stdlib::r#async::ChannelClosed()),
+                Arc::new(stdlib::r#async::ChannelClosed),
             ),
             ("crypto.sha256", Arc::new(stdlib::crypto::Sha256Fn)),
             ("crypto.sha512", Arc::new(stdlib::crypto::Sha512Fn)),
@@ -678,33 +677,33 @@ impl RuntimeValue {
             ("http_request_try", Arc::new(stdlib::net::HttpRequestTry)),
             (
                 "async.waitgroup_new",
-                Arc::new(stdlib::r#async::WaitGroupNew()),
+                Arc::new(stdlib::r#async::WaitGroupNew),
             ),
             (
                 "async.waitgroup_raw_add",
-                Arc::new(stdlib::r#async::WaitGroupRawAdd()),
+                Arc::new(stdlib::r#async::WaitGroupRawAdd),
             ),
             (
                 "async.waitgroup_raw_done",
-                Arc::new(stdlib::r#async::WaitGroupRawDone()),
+                Arc::new(stdlib::r#async::WaitGroupRawDone),
             ),
             (
                 "async.waitgroup_join",
-                Arc::new(stdlib::r#async::WaitGroupJoin()),
+                Arc::new(stdlib::r#async::WaitGroupJoin),
             ),
             (
                 "async.waitgroup_wait",
-                Arc::new(stdlib::r#async::WaitGroupWait()),
+                Arc::new(stdlib::r#async::WaitGroupWait),
             ),
             (
                 "async.waitgroup_count",
-                Arc::new(stdlib::r#async::WaitGroupCount()),
+                Arc::new(stdlib::r#async::WaitGroupCount),
             ),
-            ("async.mutex_new", Arc::new(stdlib::r#async::MutexNew())),
-            ("async.mutex_get", Arc::new(stdlib::r#async::MutexGet())),
-            ("async.mutex_set", Arc::new(stdlib::r#async::MutexSet())),
-            ("async.mutex_with", Arc::new(stdlib::r#async::MutexWith())),
-            ("async.mutex_write", Arc::new(stdlib::r#async::MutexWrite())),
+            ("async.mutex_new", Arc::new(stdlib::r#async::MutexNew)),
+            ("async.mutex_get", Arc::new(stdlib::r#async::MutexGet)),
+            ("async.mutex_set", Arc::new(stdlib::r#async::MutexSet)),
+            ("async.mutex_with", Arc::new(stdlib::r#async::MutexWith)),
+            ("async.mutex_write", Arc::new(stdlib::r#async::MutexWrite)),
         ];
 
         lst.into_iter()

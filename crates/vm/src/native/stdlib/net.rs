@@ -1,7 +1,10 @@
 use crate::{
     VM,
     error::RuntimeError,
-    native::{NativeFunction, expect_host, expect_int, expect_str_owned, pop_or_null},
+    native::{
+        NativeFunction,
+        utils::{expect_num_args, pop_or_null, resolve_host, resolve_int, resolve_str},
+    },
     value::RuntimeValue,
 };
 use dumpster::sync::Gc;
@@ -21,17 +24,25 @@ fn key_for(host: &str, port: i64) -> String {
 
 pub struct HttpRequest;
 
-fn parse_http_args(args: Vec<RuntimeValue>) -> Result<(String, String, String), RuntimeError> {
-    if args.len() != 3 {
-        return Err(RuntimeError::InvalidFunctionCall);
-    }
-    let [a, b, c]: [RuntimeValue; 3] = args
-        .try_into()
-        .map_err(|_| RuntimeError::InvalidFunctionCall)?;
+fn parse_http_args(
+    env: &VM,
+    mut args: Vec<RuntimeValue>,
+) -> Result<(String, String, String), RuntimeError> {
+    expect_num_args(&args, &[3])?;
+
     let parts = [
-        expect_str_owned(a)?.to_string(),
-        expect_str_owned(b)?.to_string(),
-        expect_str_owned(c)?.to_string(),
+        resolve_str(env, &pop_or_null(&mut args))?
+            .lock()
+            .unwrap()
+            .to_string(),
+        resolve_str(env, &pop_or_null(&mut args))?
+            .lock()
+            .unwrap()
+            .to_string(),
+        resolve_str(env, &pop_or_null(&mut args))?
+            .lock()
+            .unwrap()
+            .to_string(),
     ];
 
     let looks_like_method = |s: &str| {
@@ -44,7 +55,7 @@ fn parse_http_args(args: Vec<RuntimeValue>) -> Result<(String, String, String), 
 
     let mut method_idx = None;
     let mut url_idx = None;
-    for (idx, part) in parts.iter().enumerate() {
+    for (idx, part) in parts.iter().enumerate().rev() {
         if method_idx.is_none() && looks_like_method(part) {
             method_idx = Some(idx);
         }
@@ -53,11 +64,11 @@ fn parse_http_args(args: Vec<RuntimeValue>) -> Result<(String, String, String), 
         }
     }
 
-    let method_idx = method_idx.unwrap_or(0);
-    let url_idx = url_idx.unwrap_or_else(|| if method_idx == 0 { 1 } else { 0 });
+    let method_idx = method_idx.unwrap_or(2);
+    let url_idx = url_idx.unwrap_or_else(|| if method_idx == 2 { 1 } else { 2 });
     let body_idx = (0..3)
         .find(|idx| *idx != method_idx && *idx != url_idx)
-        .unwrap_or(2);
+        .unwrap_or(0);
 
     let method = parts[method_idx].to_string();
     let url = parts[url_idx].to_string();
@@ -89,8 +100,8 @@ impl NativeFunction for HttpRequest {
         String::from("net.http_request_raw")
     }
 
-    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let (method, url, body) = parse_http_args(args)?;
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let (method, url, body) = parse_http_args(env, args)?;
         let text = send_http_request(&method, &url, &body)?;
         Ok(RuntimeValue::Str(Arc::new(Mutex::new(text))))
     }
@@ -103,8 +114,8 @@ impl NativeFunction for HttpRequestTry {
         String::from("net.http_request_try")
     }
 
-    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let (method, url, body) = parse_http_args(args)?;
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let (method, url, body) = parse_http_args(env, args)?;
         match send_http_request(&method, &url, &body) {
             Ok(text) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(text)),
@@ -123,13 +134,15 @@ impl NativeFunction for TcpConnect {
         String::from("net.tcp_connect")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let port = expect_int(pop_or_null(&mut args))?;
-        let host = expect_str_owned(pop_or_null(&mut args))?;
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[2])?;
+
+        let port = resolve_int(env, &pop_or_null(&mut args))?;
+        let host = resolve_str(env, &pop_or_null(&mut args))?
+            .lock()
+            .unwrap()
+            .to_string();
+
         let remapped_port = {
             let key = key_for(host.as_str(), port);
             port_redirects()
@@ -156,13 +169,15 @@ impl NativeFunction for TcpListen {
         String::from("net.tcp_listen")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let port = expect_int(pop_or_null(&mut args))?;
-        let host = expect_str_owned(pop_or_null(&mut args))?;
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[2])?;
+
+        let port = resolve_int(env, &pop_or_null(&mut args))?;
+        let host = resolve_str(env, &pop_or_null(&mut args))?
+            .lock()
+            .unwrap()
+            .to_string();
+
         let addr = format!("{}:{}", host, port);
         let socket_addr = addr
             .to_socket_addrs()
@@ -224,12 +239,10 @@ impl NativeFunction for TcpAccept {
         String::from("net.tcp_accept")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let listener = expect_host(pop_or_null(&mut args))?;
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        let listener = resolve_host(env, &pop_or_null(&mut args))?;
 
         let (stream, _) = listener
             .lock()
@@ -238,8 +251,10 @@ impl NativeFunction for TcpAccept {
             .unwrap()
             .accept()
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
+
         let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(3)));
         let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(3)));
+
         Ok(RuntimeValue::Host(Arc::new(Mutex::new(stream))))
     }
 }
@@ -251,13 +266,12 @@ impl NativeFunction for TcpRead {
         String::from("net.tcp_read")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let len = expect_int(pop_or_null(&mut args))?;
-        let stream = expect_host(pop_or_null(&mut args))?;
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[2])?;
+
+        let len = resolve_int(env, &pop_or_null(&mut args))?;
+        let stream = resolve_host(env, &pop_or_null(&mut args))?;
+
         let mut buf = vec![0u8; len.max(0) as usize];
         let mut guard = stream
             .lock()
@@ -287,21 +301,22 @@ impl NativeFunction for TcpWrite {
         String::from("net.tcp_write")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let data = expect_str_owned(pop_or_null(&mut args))?;
-        let stream = expect_host(pop_or_null(&mut args))?;
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[2])?;
+
+        let data = resolve_str(env, &pop_or_null(&mut args))?;
+        let stream = resolve_host(env, &pop_or_null(&mut args))?;
+
         let mut guard = stream
             .lock()
             .map_err(|_| RuntimeError::Io("lock".to_string()))?;
+
         let n = guard
             .downcast_mut::<TcpStream>()
             .unwrap()
-            .write(data.as_bytes())
+            .write(data.lock().unwrap().as_bytes())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
+
         Ok(RuntimeValue::Int(n as i64))
     }
 }
@@ -318,6 +333,8 @@ impl NativeFunction for TcpClose {
         _env: &mut VM,
         mut args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
         let _stream = pop_or_null(&mut args);
         Ok(RuntimeValue::Null)
     }

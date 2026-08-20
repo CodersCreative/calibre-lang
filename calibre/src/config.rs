@@ -1,6 +1,6 @@
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
@@ -10,11 +10,11 @@ pub struct Config {
     #[serde(default)]
     pub package: Package,
     #[serde(default)]
-    pub dependencies: Option<HashMap<String, Dependency>>,
+    pub dependencies: Option<FxHashMap<String, Dependency>>,
     #[serde(rename = "dev-dependencies", default)]
-    pub dev_dependencies: Option<HashMap<String, Dependency>>,
+    pub dev_dependencies: Option<FxHashMap<String, Dependency>>,
     #[serde(default)]
-    pub features: Option<HashMap<String, Vec<String>>>,
+    pub features: Option<FxHashMap<String, Vec<String>>>,
     #[serde(default)]
     pub examples: Option<ExamplesConfig>,
     #[serde(rename = "example", default)]
@@ -183,7 +183,7 @@ fn auto_example_name(path: &Path) -> String {
 }
 
 pub fn resolve_examples(ctx: &ProjectContext) -> Vec<ResolvedExample> {
-    let mut explicit = HashMap::<String, PathBuf>::new();
+    let mut explicit = FxHashMap::<String, PathBuf>::default();
     if let Some(list) = &ctx.config.example_list {
         for ex in list {
             explicit.insert(ex.name.clone(), ctx.root.join(&ex.path));
@@ -225,11 +225,11 @@ pub fn resolve_examples(ctx: &ProjectContext) -> Vec<ResolvedExample> {
         auto_paths = default_examples(&ctx.root);
     }
 
-    let mut dedupe = HashSet::new();
+    let mut dedupe = FxHashSet::default();
     auto_paths.retain(|p| dedupe.insert(p.clone()));
 
     let mut generated = Vec::<ResolvedExample>::new();
-    let mut counters = HashMap::<String, usize>::new();
+    let mut counters = FxHashMap::<String, usize>::default();
 
     for p in auto_paths {
         let mut base = auto_example_name(&p);
@@ -258,7 +258,7 @@ pub fn resolve_examples(ctx: &ProjectContext) -> Vec<ResolvedExample> {
         }
     }
 
-    let mut seen = HashSet::new();
+    let mut seen = FxHashSet::default();
     generated.retain(|e| seen.insert(e.path.clone()));
 
     for (name, path) in explicit {

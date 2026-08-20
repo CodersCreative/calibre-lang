@@ -132,6 +132,17 @@ impl MiddleEnvironment {
                                 )
                             })?;
                         return self.evaluate_inner(scope, val);
+                    } else if let PotentialGenericTypeIdentifier::Generic { identifier, .. } = &x {
+                        if let Some(base_resolved) =
+                            self.resolve_potential_dollar_ident(scope, identifier)
+                        {
+                            base_resolved
+                        } else {
+                            return Err(MiddleErr::At(
+                                node.span,
+                                Box::new(MiddleErr::Variable(x.to_string())),
+                            ));
+                        }
                     } else {
                         return Err(MiddleErr::At(
                             node.span,

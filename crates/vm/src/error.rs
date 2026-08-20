@@ -24,6 +24,7 @@ pub enum RuntimeError {
     StackUnderflow,
     FunctionNotFound(String),
     InvalidFunctionCall,
+    InvalidNativeFunctionCall(String),
     InvalidFunctionCallValue(RuntimeValue),
     Ffi(String),
     DanglingRef(String),
@@ -70,6 +71,9 @@ impl std::fmt::Display for RuntimeError {
             RuntimeError::InvalidFunctionCallValue(value) => {
                 write!(f, "Invalid function call: {value:?}")
             }
+            RuntimeError::InvalidNativeFunctionCall(value) => {
+                write!(f, "Invalid native function call: {value:?}")
+            }
             RuntimeError::Ffi(msg) => write!(f, "FFI error: {msg}"),
             RuntimeError::DanglingRef(name) => write!(f, "Dangling reference: {name}"),
             RuntimeError::InvalidBytecode(msg) => write!(f, "Invalid bytecode: {msg}"),
@@ -101,6 +105,7 @@ impl CalibreError for RuntimeError {
             Self::InvalidBytecode(_) => 415,
             Self::Io(_) => 416,
             Self::Panic(_) => 417,
+            Self::InvalidNativeFunctionCall(_) => 418,
         }
     }
 
@@ -138,6 +143,9 @@ impl CalibreError for RuntimeError {
                 "Check that you are calling a function value and passing the right arguments."
                     .to_string(),
             ),
+            Self::InvalidNativeFunctionCall(_) => {
+                Some("Check that you are passing the right arguments.".to_string())
+            }
             Self::InvalidFunctionCallValue(_) => Some(
                 "Ensure the callee is a function, native function, or bound method.".to_string(),
             ),

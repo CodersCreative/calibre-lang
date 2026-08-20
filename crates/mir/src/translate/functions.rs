@@ -1056,12 +1056,29 @@ impl MiddleEnvironment {
             }
         }
 
-        if let NodeType::Identifier(caller) = &caller.node_type {
-            if "tuple" == &caller.to_string() {
+        if let NodeType::Identifier(caller_ident) = &caller.node_type {
+            if "tuple" == &caller_ident.to_string() {
                 return Ok(self.aggregate_from_call_nodes(scope, span, None, args, reverse_args));
             }
 
-            if let Some(caller) = self.resolve_potential_generic_ident(scope, caller)
+            let base_ident = match caller_ident {
+                PotentialGenericTypeIdentifier::Identifier(id) => id.clone(),
+                PotentialGenericTypeIdentifier::Generic { identifier, .. } => identifier.clone(),
+            };
+
+            if let Some(resolved_base) = self.resolve_potential_dollar_ident(scope, &base_ident)
+                && self.typing.objects.contains_key(&resolved_base.text)
+            {
+                return Ok(self.aggregate_from_call_nodes(
+                    scope,
+                    span,
+                    Some(resolved_base),
+                    args,
+                    reverse_args,
+                ));
+            }
+
+            if let Some(caller) = self.resolve_potential_generic_ident(scope, caller_ident)
                 && self.typing.objects.contains_key(&caller.text)
             {
                 return Ok(self.aggregate_from_call_nodes(

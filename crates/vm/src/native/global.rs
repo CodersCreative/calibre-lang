@@ -1,167 +1,67 @@
-use crate::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
+use crate::{
+    VM,
+    error::RuntimeError,
+    native::{
+        NativeFunction,
+        utils::{expect_num_args, first_or_null, panic_message_arg, pop_or_null, resolve_int},
+    },
+    value::{GcMap, RuntimeValue},
+};
 use dumpster::sync::Gc;
 use std::{
     io::{self, BufRead, Write},
     sync::{Arc, Mutex},
 };
 
-pub struct ConsoleOutput();
-
-fn resolve_native_input(
-    env: &mut VM,
-    mut current: RuntimeValue,
-    include_reg_ref: bool,
-) -> Result<RuntimeValue, RuntimeError> {
-    for _ in 0..64 {
-        match current {
-            RuntimeValue::Ref(ref r) => {
-                current = env
-                    .variables
-                    .get(r)
-                    .cloned()
-                    .ok_or(RuntimeError::DanglingRef(r.clone()))?;
-            }
-            RuntimeValue::VarRef(id) => {
-                current = env
-                    .variables
-                    .get_by_id(id)
-                    .cloned()
-                    .ok_or(RuntimeError::DanglingRef(format!("#{}", id)))?;
-            }
-            RuntimeValue::RegRef { frame, reg } if include_reg_ref => {
-                current = env.get_reg_value_in_frame(frame, reg).clone();
-            }
-            _ => break,
-        }
-    }
-    Ok(current)
-}
-
-fn unescape_string(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    let mut chars = input.chars();
-    while let Some(ch) = chars.next() {
-        if ch != '\\' {
-            out.push(ch);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('t') => out.push('\t'),
-            Some('r') => out.push('\r'),
-            Some('\\') => out.push('\\'),
-            Some('"') => out.push('"'),
-            Some('\'') => out.push('\''),
-            Some(other) => {
-                out.push('\\');
-                out.push(other);
-            }
-            None => out.push('\\'),
-        }
-    }
-    out
-}
-
-fn panic_message_arg(value: &RuntimeValue) -> String {
-    match value {
-        RuntimeValue::Str(s) => s.lock().unwrap().clone(),
-        other => format!("{other:?}"),
-    }
-}
-
-#[inline]
-fn write_console(rendered: &str, is_stderr: bool) -> Result<(), RuntimeError> {
-    if is_stderr {
-        let stderr = io::stderr();
-        let mut handle = stderr.lock();
-        handle
-            .write_all(rendered.as_bytes())
-            .map_err(|e| RuntimeError::Io(e.to_string()))?;
-        handle
-            .flush()
-            .map_err(|e| RuntimeError::Io(e.to_string()))?;
-        return Ok(());
-    }
-
-    let stdout = io::stdout();
-    let mut handle = stdout.lock();
-    handle
-        .write_all(rendered.as_bytes())
-        .map_err(|e| RuntimeError::Io(e.to_string()))?;
-    handle
-        .flush()
-        .map_err(|e| RuntimeError::Io(e.to_string()))?;
-    Ok(())
-}
-
-#[inline]
-fn resolve_first_arg(
-    env: &mut VM,
-    args: Vec<RuntimeValue>,
-    include_reg_ref: bool,
-) -> Result<Option<RuntimeValue>, RuntimeError> {
-    args.into_iter()
-        .next()
-        .map(|value| resolve_native_input(env, value, include_reg_ref).map(Some))
-        .unwrap_or(Ok(None))
-}
-
-#[inline]
-fn with_first_arg(
-    env: &mut VM,
-    args: Vec<RuntimeValue>,
-    include_reg_ref: bool,
-    f: impl FnOnce(RuntimeValue) -> Result<RuntimeValue, RuntimeError>,
-) -> Result<RuntimeValue, RuntimeError> {
-    match resolve_first_arg(env, args, include_reg_ref)? {
-        Some(value) => f(value),
-        None => Ok(RuntimeValue::Null),
-    }
-}
-
-#[inline]
-fn missing_parameter_result() -> RuntimeValue {
-    RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Arc::new(Mutex::new(
-        String::from("Add parameter"),
-    ))))))
-}
+pub struct ConsoleOutput;
 
 impl NativeFunction for ConsoleOutput {
     fn name(&self) -> String {
         String::from("console_output")
     }
 
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let handle_type = match args.first() {
-            Some(RuntimeValue::Int(val)) => *val,
-            Some(other) => {
-                return Err(RuntimeError::UnexpectedType(other.clone()));
-            }
-            None => {
-                return Err(RuntimeError::InvalidFunctionCall);
-            }
-        };
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        let handle_type = resolve_int(env, &first_or_null(&mut args))?;
 
         let rendered = args
             .into_iter()
-            .skip(1)
             .map(|arg| match arg {
-                RuntimeValue::Str(value) => unescape_string(&value.lock().unwrap()),
+                RuntimeValue::Str(value) => {
+                    calibre_parser::parse::util::unescape_string(&value.lock().unwrap())
+                }
                 other => other.display(env),
             })
             .collect::<String>();
 
         if env.suppress_output {
             env.captured_output.push_str(&rendered);
+        } else if handle_type == 2 {
+            let stderr = io::stderr();
+            let mut handle = stderr.lock();
+
+            handle
+                .write_all(rendered.as_bytes())
+                .map_err(|e| RuntimeError::Io(e.to_string()))?;
+            handle
+                .flush()
+                .map_err(|e| RuntimeError::Io(e.to_string()))?;
         } else {
-            write_console(&rendered, handle_type == 2)?;
+            let stdout = io::stdout();
+            let mut handle = stdout.lock();
+
+            handle
+                .write_all(rendered.as_bytes())
+                .map_err(|e| RuntimeError::Io(e.to_string()))?;
+            handle
+                .flush()
+                .map_err(|e| RuntimeError::Io(e.to_string()))?;
         }
 
         Ok(RuntimeValue::Null)
     }
 }
 
-pub struct ConsoleInput();
+pub struct ConsoleInput;
 
 impl NativeFunction for ConsoleInput {
     fn name(&self) -> String {
@@ -183,22 +83,23 @@ impl NativeFunction for ConsoleInput {
     }
 }
 
-pub struct ErrFn();
+pub struct ErrFn;
 
 impl NativeFunction for ErrFn {
     fn name(&self) -> String {
         String::from("err")
     }
 
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        Ok(match resolve_first_arg(env, args, true)? {
-            Some(value) => RuntimeValue::Result(Err(Gc::new(value))),
-            None => missing_parameter_result(),
-        })
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        Ok(RuntimeValue::Result(Err(Gc::new(
+            env.resolve_value_for_op_ref(&pop_or_null(&mut args))?,
+        ))))
     }
 }
 
-pub struct Repr();
+pub struct Repr;
 
 impl NativeFunction for Repr {
     fn name(&self) -> String {
@@ -206,11 +107,13 @@ impl NativeFunction for Repr {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
         Ok(RuntimeValue::Str(Arc::new(Mutex::new(args[0].to_string()))))
     }
 }
 
-pub struct Display();
+pub struct Display;
 
 impl NativeFunction for Display {
     fn name(&self) -> String {
@@ -218,59 +121,58 @@ impl NativeFunction for Display {
     }
 
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
         Ok(RuntimeValue::Str(Arc::new(Mutex::new(
             args[0].display(env),
         ))))
     }
 }
 
-pub struct OkFn();
+pub struct OkFn;
 
 impl NativeFunction for OkFn {
     fn name(&self) -> String {
         String::from("ok")
     }
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        Ok(match resolve_first_arg(env, args, true)? {
-            Some(value) => RuntimeValue::Result(Ok(Gc::new(value))),
-            None => missing_parameter_result(),
-        })
+
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        Ok(RuntimeValue::Result(Ok(Gc::new(
+            env.resolve_value_for_op_ref(&pop_or_null(&mut args))?,
+        ))))
     }
 }
 
-pub struct TupleFn();
+pub struct TupleFn;
 
 impl NativeFunction for TupleFn {
     fn name(&self) -> String {
         String::from("tuple")
     }
+
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let mut resolved = Vec::with_capacity(args.len());
-        for arg in args {
-            resolved.push(resolve_native_input(_env, arg, true)?);
-        }
-        Ok(RuntimeValue::Aggregate(
-            None,
-            Gc::new(crate::value::GcMap(resolved.into())),
-        ))
+        Ok(RuntimeValue::Aggregate(None, Gc::new(GcMap(args.into()))))
     }
 }
 
-pub struct SomeFn();
+pub struct SomeFn;
 
 impl NativeFunction for SomeFn {
     fn name(&self) -> String {
         String::from("some")
     }
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        Ok(match resolve_first_arg(env, args, true)? {
-            Some(value) => RuntimeValue::Option(Some(Gc::new(value))),
-            None => RuntimeValue::Option(None),
-        })
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        Ok(RuntimeValue::Option(Some(Gc::new(
+            env.resolve_value_for_op_ref(&pop_or_null(&mut args))?,
+        ))))
     }
 }
 
-pub struct PanicFn();
+pub struct PanicFn;
 
 impl NativeFunction for PanicFn {
     fn name(&self) -> String {
@@ -282,19 +184,24 @@ impl NativeFunction for PanicFn {
     }
 }
 
-pub struct AssertFn();
+pub struct AssertFn;
 
 impl NativeFunction for AssertFn {
     fn name(&self) -> String {
         String::from("assert")
     }
 
-    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let condition = args.first().ok_or(RuntimeError::InvalidFunctionCall)?;
-        match condition {
-            RuntimeValue::Bool(true) => Ok(RuntimeValue::Null),
-            RuntimeValue::Bool(false) => {
-                let msg = args.get(1).map(panic_message_arg);
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1, 2])?;
+
+        match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
+            RuntimeValue::Option(Some(_))
+            | RuntimeValue::Result(Ok(_))
+            | RuntimeValue::Bool(true) => Ok(RuntimeValue::Null),
+            RuntimeValue::Option(None)
+            | RuntimeValue::Result(Err(_))
+            | RuntimeValue::Bool(false) => {
+                let msg = args.first().map(panic_message_arg);
                 Err(RuntimeError::Panic(msg))
             }
             other => Err(RuntimeError::UnexpectedType(other.clone())),
@@ -302,127 +209,145 @@ impl NativeFunction for AssertFn {
     }
 }
 
-pub struct Len();
+pub struct Len;
 
 impl NativeFunction for Len {
     fn name(&self) -> String {
         String::from("len")
     }
 
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        with_first_arg(env, args, true, |current| {
-            Ok(RuntimeValue::Int(match current {
-                RuntimeValue::List(data) => data.as_ref().0.len() as i64,
-                RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as i64,
-                RuntimeValue::Range(from, to) => (to - from).max(0),
-                RuntimeValue::Str(x) => x.lock().unwrap().len() as i64,
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        Ok(RuntimeValue::UInt(
+            match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
+                RuntimeValue::List(data) => data.as_ref().0.len() as u64,
+                RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as u64,
+                RuntimeValue::Range(from, to) => (to - from).max(0).abs() as u64,
+                RuntimeValue::Str(x) => x.lock().unwrap().len() as u64,
                 RuntimeValue::Null => 0,
-                RuntimeValue::HashMap(map) => map.lock().map(|m| m.len() as i64).unwrap_or(0),
-                RuntimeValue::HashSet(set) => set.lock().map(|s| s.len() as i64).unwrap_or(0),
-                RuntimeValue::Int(x) => x,
-                RuntimeValue::Float(x) => x as i64,
+                RuntimeValue::HashMap(map) => map.lock().map(|m| m.len() as u64).unwrap_or(0),
+                RuntimeValue::HashSet(set) => set.lock().map(|s| s.len() as u64).unwrap_or(0),
+                RuntimeValue::Int(x) => x as u64,
+                RuntimeValue::UInt(x) => x,
+                RuntimeValue::Float(x) => x as u64,
                 other => return Err(RuntimeError::UnexpectedType(other)),
-            }))
-        })
+            },
+        ))
     }
 }
 
-pub struct MinOrZero();
+pub struct MinOrZero;
 
 impl NativeFunction for MinOrZero {
     fn name(&self) -> String {
         String::from("min_or_zero")
     }
 
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        with_first_arg(env, args, true, |current| {
-            Ok(RuntimeValue::Int(match current {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        Ok(RuntimeValue::Int(
+            match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
                 RuntimeValue::Range(from, _) => from,
                 _ => 0,
-            }))
-        })
+            },
+        ))
     }
 }
 
-pub struct Trim();
+pub struct Trim;
 
 impl NativeFunction for Trim {
     fn name(&self) -> String {
         String::from("trim")
     }
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        with_first_arg(env, args, false, |current| match current {
+
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
                 s.lock().unwrap().trim().to_string(),
             )))),
             other => Err(RuntimeError::UnexpectedType(other)),
-        })
+        }
     }
 }
 
-pub struct TrimStart();
+pub struct TrimStart;
 
 impl NativeFunction for TrimStart {
     fn name(&self) -> String {
         String::from("trim_start")
     }
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        with_first_arg(env, args, false, |current| match current {
+
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
                 s.lock().unwrap().trim_start().to_string(),
             )))),
             other => Err(RuntimeError::UnexpectedType(other)),
-        })
+        }
     }
 }
 
-pub struct TrimEnd();
+pub struct TrimEnd;
 
 impl NativeFunction for TrimEnd {
     fn name(&self) -> String {
         String::from("trim_end")
     }
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        with_first_arg(env, args, false, |current| match current {
+
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
                 s.lock().unwrap().trim_end().to_string(),
             )))),
             other => Err(RuntimeError::UnexpectedType(other)),
-        })
+        }
     }
 }
 
-pub struct IsWhitespace();
+pub struct IsWhitespace;
 
 impl NativeFunction for IsWhitespace {
     fn name(&self) -> String {
         String::from("is_whitespace")
     }
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        with_first_arg(env, args, false, |current| match current {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Bool(
                 s.lock().unwrap().chars().all(|c| c.is_whitespace()),
             )),
             RuntimeValue::Char(c) => Ok(RuntimeValue::Bool(c.is_whitespace())),
             other => Err(RuntimeError::UnexpectedType(other)),
-        })
+        }
     }
 }
 
-pub struct DiscriminantFn();
+pub struct DiscriminantFn;
 
 impl NativeFunction for DiscriminantFn {
     fn name(&self) -> String {
         String::from("discriminant")
     }
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        with_first_arg(env, args, true, |current| {
-            Ok(RuntimeValue::Int(match current {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        Ok(RuntimeValue::Int(
+            match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
                 RuntimeValue::Enum(_, index, _) => index as i64,
                 RuntimeValue::Option(Some(_)) | RuntimeValue::Result(Ok(_)) => 0 as i64,
                 RuntimeValue::Option(None) | RuntimeValue::Result(Err(_)) => 1,
                 _ => 0,
-            }))
-        })
+            },
+        ))
     }
 }

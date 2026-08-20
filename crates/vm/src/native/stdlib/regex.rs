@@ -1,7 +1,10 @@
 use crate::{
     VM,
     error::RuntimeError,
-    native::{NativeFunction, pop_or_null},
+    native::{
+        NativeFunction,
+        utils::{expect_num_args, pop_or_null, resolve_str},
+    },
     value::RuntimeValue,
 };
 use regex::Regex;
@@ -14,21 +17,15 @@ impl NativeFunction for IsMatchFn {
         String::from("regex.is_match")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let text = pop_or_null(&mut args);
-        let pattern = pop_or_null(&mut args);
-        let RuntimeValue::Str(text) = text else {
-            return Err(RuntimeError::UnexpectedType(text));
-        };
-        let RuntimeValue::Str(pattern) = pattern else {
-            return Err(RuntimeError::UnexpectedType(pattern));
-        };
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[2])?;
+
+        let text = resolve_str(env, &pop_or_null(&mut args))?;
+        let pattern = resolve_str(env, &pop_or_null(&mut args))?;
+
         let re = Regex::new(pattern.lock().unwrap().as_str())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
+
         Ok(RuntimeValue::Bool(
             re.is_match(text.lock().unwrap().as_str()),
         ))
@@ -42,19 +39,12 @@ impl NativeFunction for FindFn {
         String::from("regex.find")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let text = pop_or_null(&mut args);
-        let pattern = pop_or_null(&mut args);
-        let RuntimeValue::Str(text) = text else {
-            return Err(RuntimeError::UnexpectedType(text));
-        };
-        let RuntimeValue::Str(pattern) = pattern else {
-            return Err(RuntimeError::UnexpectedType(pattern));
-        };
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[2])?;
+
+        let text = resolve_str(env, &pop_or_null(&mut args))?;
+        let pattern = resolve_str(env, &pop_or_null(&mut args))?;
+
         let re = Regex::new(pattern.lock().unwrap().as_str())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
         let found = re
@@ -71,23 +61,13 @@ impl NativeFunction for ReplaceFn {
         String::from("regex.replace")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let replacement = pop_or_null(&mut args);
-        let text = pop_or_null(&mut args);
-        let pattern = pop_or_null(&mut args);
-        let RuntimeValue::Str(replacement) = replacement else {
-            return Err(RuntimeError::UnexpectedType(replacement));
-        };
-        let RuntimeValue::Str(text) = text else {
-            return Err(RuntimeError::UnexpectedType(text));
-        };
-        let RuntimeValue::Str(pattern) = pattern else {
-            return Err(RuntimeError::UnexpectedType(pattern));
-        };
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[3])?;
+
+        let replacement = resolve_str(env, &pop_or_null(&mut args))?;
+        let text = resolve_str(env, &pop_or_null(&mut args))?;
+        let pattern = resolve_str(env, &pop_or_null(&mut args))?;
+
         let re = Regex::new(pattern.lock().unwrap().as_str())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
         let text = text.lock().unwrap();

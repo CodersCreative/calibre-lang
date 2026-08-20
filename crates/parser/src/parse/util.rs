@@ -525,7 +525,7 @@ pub(super) fn strip_block_comments_keep_layout(source: &str) -> String {
     String::from_utf8(out).unwrap_or_else(|_| source.to_string())
 }
 
-pub(super) fn unescape_string(input: &str) -> String {
+pub fn unescape_string(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let mut chars = input.chars().peekable();
     while let Some(c) = chars.next() {

@@ -1,7 +1,10 @@
 use crate::{
     VM,
     error::RuntimeError,
-    native::{NativeFunction, pop_or_null},
+    native::{
+        NativeFunction,
+        utils::{expect_num_args, pop_or_null, resolve_str},
+    },
     value::RuntimeValue,
 };
 use blake3::Hasher as Blake3;
@@ -15,15 +18,11 @@ impl NativeFunction for Sha256Fn {
         String::from("crypto.sha256")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let input = pop_or_null(&mut args);
-        let RuntimeValue::Str(s) = input else {
-            return Err(RuntimeError::UnexpectedType(input));
-        };
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        let s = resolve_str(env, &pop_or_null(&mut args))?;
+
         let mut hasher = Sha256::new();
         hasher.update(s.lock().unwrap().as_bytes());
         let out = hasher.finalize();
@@ -38,15 +37,11 @@ impl NativeFunction for Sha512Fn {
         String::from("crypto.sha512")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let input = pop_or_null(&mut args);
-        let RuntimeValue::Str(s) = input else {
-            return Err(RuntimeError::UnexpectedType(input));
-        };
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        let s = resolve_str(env, &pop_or_null(&mut args))?;
+
         let mut hasher = Sha512::new();
         hasher.update(s.lock().unwrap().as_bytes());
         let out = hasher.finalize();
@@ -61,15 +56,11 @@ impl NativeFunction for Blake3Fn {
         String::from("crypto.blake3")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let input = pop_or_null(&mut args);
-        let RuntimeValue::Str(s) = input else {
-            return Err(RuntimeError::UnexpectedType(input));
-        };
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        let s = resolve_str(env, &pop_or_null(&mut args))?;
+
         let mut hasher = Blake3::new();
         hasher.update(s.lock().unwrap().as_bytes());
         let out = hasher.finalize();
