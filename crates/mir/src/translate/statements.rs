@@ -318,6 +318,7 @@ impl MiddleEnvironment {
                 .ok_or_else(|| {
                     MiddleErr::At(span, Box::new(MiddleErr::Scope(base_ident.to_string())))
                 })?;
+
             let template_params: Vec<String> = generic_types
                 .iter()
                 .filter_map(|t| match t {

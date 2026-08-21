@@ -1675,7 +1675,6 @@ impl MiddleEnvironment {
                 variables,
             } => {
                 let resolved = self.resolve_data_type(scope, target).unwrap_all_refs();
-                let target_key = resolved.key().to_string();
                 let self_name = resolved.impl_name();
 
                 let mut prev_generics = Vec::new();
@@ -1711,7 +1710,7 @@ impl MiddleEnvironment {
 
                     for var in &variables {
                         if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type {
-                            let resolved_iden = format!("{}.{}", target_key, identifier);
+                            let resolved_iden = format!("{}.{}", self_name, identifier);
                             // TODO Unpack the dollar ident only without resolving
                             impl_ref.insert_member_placeholder(
                                 &identifier.to_string(),
@@ -1752,7 +1751,7 @@ impl MiddleEnvironment {
                             data_type,
                         } => {
                             let iden = identifier.to_string();
-                            let resolved_iden = format!("{}.{}", target_key, identifier);
+                            let resolved_iden = format!("{}.{}", self_name, identifier);
 
                             let dependant = match &value.node_type {
                                 NodeType::FunctionDeclaration { header, .. } => {
@@ -1902,7 +1901,6 @@ impl MiddleEnvironment {
                     })?;
 
                 let resolved_target = self.resolve_data_type(scope, target).unwrap_all_refs();
-                let target_key = resolved_target.key().to_string();
                 let self_name = resolved_target.impl_name();
 
                 let mut provided = FxHashSet::default();
@@ -2002,7 +2000,7 @@ impl MiddleEnvironment {
                     })?;
                     for var in &all_vars {
                         if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type {
-                            let resolved_iden = format!("{}.{}", target_key, identifier);
+                            let resolved_iden = format!("{}.{}", self_name, identifier);
                             impl_ref.insert_member_placeholder(
                                 &identifier.to_string(),
                                 resolved_iden,
@@ -2023,7 +2021,7 @@ impl MiddleEnvironment {
                             data_type,
                         } => {
                             let iden = identifier.to_string();
-                            let resolved_iden = format!("{}.{}", target_key, identifier);
+                            let resolved_iden = format!("{}.{}", self_name, identifier);
 
                             let dependant = match &value.node_type {
                                 NodeType::FunctionDeclaration { header, .. } => {

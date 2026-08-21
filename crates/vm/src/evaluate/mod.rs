@@ -305,17 +305,6 @@ impl VM {
             }
             RuntimeValue::NativeFunction(func) => func.run(self, args),
             RuntimeValue::ExternFunction(func) => func.call(self, args),
-            RuntimeValue::Channel(_) => self.call_runtime_callable_at(
-                RuntimeValue::NativeFunction(Arc::new(crate::native::stdlib::r#async::ChannelSend)),
-                {
-                    let mut full_args = Vec::with_capacity(args.len() + 1);
-                    full_args.push(callable);
-                    full_args.extend(args);
-                    full_args
-                },
-                callsite_block,
-                callsite_tag,
-            ),
             RuntimeValue::BoundMethod { callee, receiver } => {
                 let mut full_args = vec![receiver.as_ref().clone()];
                 full_args.extend(args);
@@ -348,20 +337,7 @@ impl VM {
                     callsite_tag.saturating_sub(1),
                 )
             }
-            other => {
-                if matches!(other, RuntimeValue::Channel(_)) {
-                    self.call_runtime_callable_at(
-                        RuntimeValue::NativeFunction(Arc::new(
-                            crate::native::stdlib::r#async::ChannelSend,
-                        )),
-                        args,
-                        callsite_block,
-                        callsite_tag,
-                    )
-                } else {
-                    Err(RuntimeError::InvalidFunctionCallValue(other))
-                }
-            }
+            other => Err(RuntimeError::InvalidFunctionCallValue(other)),
         }
     }
 

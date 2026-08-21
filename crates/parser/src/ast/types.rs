@@ -9,7 +9,7 @@ use crate::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, hash::Hash, ops::Deref, str::FromStr};
+use std::{fmt::Display, hash::Hash, ops::Deref, println, str::FromStr};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParserDataType {
@@ -92,8 +92,13 @@ impl ParserDataType {
     }
 
     pub fn impl_name(&self) -> String {
+        // TODO Figure whats formatting the identifier before this
         match self.key() {
-            ParserInnerType::StructWithGenerics { identifier, .. } => identifier,
+            ParserInnerType::StructWithGenerics { identifier, .. }
+            | ParserInnerType::Struct(identifier) => identifier
+                .split_once(":<")
+                .map(|x| x.0.to_string())
+                .unwrap_or(identifier),
             other => other.to_string(),
         }
     }

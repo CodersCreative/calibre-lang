@@ -506,14 +506,7 @@ impl MiddleEnvironment {
                 .map(|id| self.symbols.variables.contains_key(&id.text))
                 .unwrap_or(false);
 
-            let base_ident = match x {
-                PotentialGenericTypeIdentifier::Identifier(id) => id.clone(),
-                PotentialGenericTypeIdentifier::Generic { identifier, .. } => identifier.clone(),
-            };
-
-            let resolved_base = self.resolve_potential_dollar_ident(scope, &base_ident);
-
-            if let Some(Some(object)) = resolved_base
+            if let Some(Some(object)) = resolved_ident
                 .as_ref()
                 .map(|x| self.typing.objects.get(&x.text))
             {
@@ -544,14 +537,6 @@ impl MiddleEnvironment {
             }
 
             let base_type = self.resolve_type_from_ident(scope, x);
-
-            let base_type = base_type.or_else(|| {
-                if matches!(x, PotentialGenericTypeIdentifier::Generic { .. }) {
-                    self.resolve_type_from_ident(scope, &base_ident.into())
-                } else {
-                    None
-                }
-            });
 
             if let Some(ty) = base_type {
                 match &path[1].0.node_type {

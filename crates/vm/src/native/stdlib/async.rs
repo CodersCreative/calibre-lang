@@ -10,7 +10,7 @@ use crate::{
     },
     value::{ChannelInner, MutexInner, RuntimeValue, WaitGroupInner},
 };
-use std::sync::Arc;
+use std::{println, sync::Arc};
 
 pub struct ChannelNew;
 

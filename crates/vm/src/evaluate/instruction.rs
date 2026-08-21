@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::{println, sync::Mutex};
 
 use super::*;
 use crate::{
@@ -1244,14 +1244,6 @@ impl VM {
                     }
                     RuntimeValue::Ptr(id) if name == "next" || name == "0" => {
                         self.ptr_heap.get(&id).cloned().unwrap_or_default()
-                    }
-                    RuntimeValue::Channel(_) if member_short == "raw_send" => {
-                        RuntimeValue::BoundMethod {
-                            callee: Box::new(RuntimeValue::NativeFunction(Arc::new(
-                                crate::native::stdlib::r#async::ChannelSend,
-                            ))),
-                            receiver: Gc::new(raw_receiver.clone()),
-                        }
                     }
                     RuntimeValue::Char(value) => {
                         bind_assoc(self, "char", RuntimeValue::Char(value))?
