@@ -306,11 +306,32 @@ impl CalibreEngine {
 
         calibre_mir::inline::inline_small_calls(&mut mir, 20);
 
-        let init_functions = std::mem::take(&mut env.tagging.init_functions);
-        let fin_functions = std::mem::take(&mut env.tagging.fin_functions);
+        let entry_name = env
+            .resolve_str(&scope, &self.entry_name)
+            .map(|x| x.to_string())
+            .unwrap_or_else(|| self.entry_name.clone());
+
+        let mut init_functions = std::mem::take(&mut env.tagging.init_functions);
+
+        if !init_functions.iter().any(|x| x.1 == entry_name) {
+            init_functions.push((0, entry_name.clone()));
+        }
+
+        init_functions.sort_by(|a, b| b.0.cmp(&a.0));
+
+        let mut fin_functions = std::mem::take(&mut env.tagging.fin_functions);
+        fin_functions.sort_by(|a, b| b.0.cmp(&a.0));
+
         let testing = std::mem::take(&mut env.testing);
 
-        let lir = LirEnvironment::lower(&env, mir.clone());
+        let lir = LirEnvironment::lower(&env, mir.clone()).eliminate_dead_code(
+            init_functions
+                .clone()
+                .into_iter()
+                .map(|x| x.1)
+                .chain(fin_functions.clone().into_iter().map(|x| x.1))
+                .collect(),
+        );
 
         Ok(CalibreArtifacts {
             ast: Some(ast),
@@ -318,10 +339,7 @@ impl CalibreEngine {
             lir: Some(lir.clone()),
             mappings: env.symbols.variables.keys().cloned().collect(),
             registry: VMRegistry::from(lir),
-            entry_name: env
-                .resolve_str(&scope, &self.entry_name)
-                .map(|x| x.to_string())
-                .unwrap_or_else(|| self.entry_name.clone()),
+            entry_name,
             init_functions,
             fin_functions,
             testing,
@@ -344,8 +362,10 @@ impl CalibreEngine {
                 lir: None,
                 registry: cached.registry,
                 mappings: cached.mappings,
+                init_functions: cached
+                    .init_functions
+                    .unwrap_or_else(|| vec![(0, cached.entry_name.clone())]),
                 entry_name: cached.entry_name,
-                init_functions: cached.init_functions.unwrap_or_default(),
                 fin_functions: cached.fin_functions.unwrap_or_default(),
                 testing: cached.testing.unwrap_or_default(),
             });

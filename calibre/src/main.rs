@@ -133,16 +133,8 @@ async fn run_source(
         println!("{}", vm.registry.as_ref());
     };
 
-    let mut init_functions = artifacts.init_functions.clone();
-
-    if !init_functions.iter().any(|x| x.1 == entry_name) {
-        init_functions.push((0, entry_name.clone()));
-    }
-
-    init_functions.sort_by(|a, b| b.0.cmp(&a.0));
-
     let mut ran = false;
-    for (_, func_name) in init_functions {
+    for (_, func_name) in artifacts.init_functions {
         if let Some(init_func) = vm.registry.functions.get(&func_name).cloned() {
             if let Err(err) = vm.run(init_func.as_ref(), Vec::new()) {
                 calibre_diagnostics::emit_calibre_error(path, &contents, &err, None);
@@ -162,10 +154,7 @@ async fn run_source(
         return Err("runtime error".into());
     }
 
-    let mut fin_functions = artifacts.fin_functions.clone();
-    fin_functions.sort_by(|a, b| b.0.cmp(&a.0));
-
-    for (_, func_name) in fin_functions {
+    for (_, func_name) in artifacts.fin_functions {
         if let Some(fin_func) = vm.registry.functions.get(&func_name).cloned() {
             if let Err(err) = vm.run(fin_func.as_ref(), Vec::new()) {
                 calibre_diagnostics::emit_calibre_error(path, &contents, &err, None);
