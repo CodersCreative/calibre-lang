@@ -79,7 +79,6 @@ impl MiddleEnvironment {
         };
         match pattern {
             DestructurePattern::Tuple(bindings) => {
-                let has_tail = bindings.iter().any(|b| b.is_none());
                 let mut head = Vec::new();
                 let mut tail = Vec::new();
                 let mut in_tail = false;
@@ -89,6 +88,7 @@ impl MiddleEnvironment {
                         in_tail = true;
                         continue;
                     }
+
                     if in_tail {
                         tail.push(binding);
                     } else {
@@ -99,26 +99,16 @@ impl MiddleEnvironment {
                 let total_tail = tail.len() as i64;
                 for (idx, entry) in head.into_iter().enumerate() {
                     if let Some((var_type, name)) = entry {
-                        let member = if has_tail {
+                        push_binding(&mut out, var_type, name, {
                             let index_node = Node::int(span, idx);
                             Node::new(
                                 span,
-                                NodeType::MemberExpression {
-                                    path: vec![(tmp_member_base(), false), (index_node, true)],
+                                NodeType::IndexAccess {
+                                    base: Box::new(tmp_member_base()),
+                                    index: Box::new(index_node),
                                 },
                             )
-                        } else {
-                            Node::new(
-                                span,
-                                NodeType::MemberExpression {
-                                    path: vec![
-                                        (tmp_member_base(), false),
-                                        (Node::int(span, idx), true),
-                                    ],
-                                },
-                            )
-                        };
-                        push_binding(&mut out, var_type, name, member);
+                        });
                     }
                 }
 
@@ -143,28 +133,36 @@ impl MiddleEnvironment {
                                 operator: BinaryOperator::Sub,
                             },
                         );
-                        let member = Node::new(
-                            span,
-                            NodeType::MemberExpression {
-                                path: vec![(tmp_member_base(), false), (index_expr, true)],
-                            },
+
+                        push_binding(
+                            &mut out,
+                            var_type,
+                            name,
+                            Node::new(
+                                span,
+                                NodeType::IndexAccess {
+                                    base: Box::new(tmp_member_base()),
+                                    index: Box::new(index_expr),
+                                },
+                            ),
                         );
-                        push_binding(&mut out, var_type, name, member);
                     }
                 }
             }
             DestructurePattern::Struct(fields) => {
                 for (field, var_type, name) in fields {
-                    let member = Node::new(
-                        span,
-                        NodeType::MemberExpression {
-                            path: vec![
-                                (tmp_member_base(), false),
-                                (Node::identifier(span, field), false),
-                            ],
-                        },
+                    push_binding(
+                        &mut out,
+                        var_type,
+                        name,
+                        Node::new(
+                            span,
+                            NodeType::FieldAccess {
+                                base: Box::new(tmp_member_base()),
+                                field: PotentialDollarIdentifier::new(span, field),
+                            },
+                        ),
                     );
-                    push_binding(&mut out, var_type, name, member);
                 }
             }
         }

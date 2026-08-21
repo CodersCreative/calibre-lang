@@ -33,11 +33,9 @@ impl<'a> NodeVisitor for MutIterAliasDerefVisitor<'a> {
                 if let NodeType::Identifier(ref id) = value.node_type
                     && id.get_ident().to_string() == self.alias
                 {
-                    return NodeType::MemberExpression {
-                        path: vec![
-                            (Node::identifier(span, self.iter_id), false),
-                            (Node::identifier(span, self.idx_id), true),
-                        ],
+                    return NodeType::IndexAccess {
+                        base: Box::new(Node::identifier(span, self.iter_id)),
+                        index: Box::new(Node::identifier(span, self.idx_id)),
                     };
                 }
                 NodeType::DerefStatement {
@@ -1174,21 +1172,19 @@ impl MiddleEnvironment {
 
                 let indexed_value_node = Node::new(
                     span,
-                    NodeType::MemberExpression {
-                        path: vec![
-                            (iter_node.clone(), false),
-                            (Node::identifier(span, &idx_id), true),
-                        ],
+                    NodeType::IndexAccess {
+                        base: Box::new(iter_node.clone()),
+                        index: Box::new(Node::identifier(span, &idx_id)),
                     },
                 );
 
                 let next_value_node = Node::new(
                     self.context.current_span(),
-                    NodeType::MemberExpression {
-                        path: vec![
-                            (Node::identifier(span, &next_id), false),
-                            (Node::identifier(span, "next"), false),
-                        ],
+                    NodeType::FieldAccess {
+                        base: Box::new(Node::identifier(span, &next_id)),
+                        field: PotentialDollarIdentifier::Identifier(
+                            ParserText::from(String::from("next")).into(),
+                        ),
                     },
                 );
                 let loop_item_value = if is_count_loop {

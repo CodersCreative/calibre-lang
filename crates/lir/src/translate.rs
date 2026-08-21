@@ -321,71 +321,63 @@ impl<'a> LirEnvironment<'a> {
                             Some(LirNodeType::Deref(Box::new(ptr_load))),
                         )
                     }
-                    MiddleNodeType::MemberExpression { path } => {
-                        if path.is_empty() {
-                            (
-                                Some(LirLValue::Var(Box::<str>::from("<invalid>"))),
-                                Some(LirNodeType::null()),
-                            )
-                        } else {
-                            let mut base_path = path.clone();
-                            let (last_node, last_is_index) = base_path.pop().unwrap_or_else(|| {
-                                (
-                                    MiddleNode::new(MiddleNodeType::EmptyLine, ident_span),
-                                    false,
-                                )
-                            });
+                    MiddleNodeType::FieldAccess { base, field } => {
+                        let base_expr = self.lower_node(*base);
+                        let base_tmp = self.get_temp();
+                        self.add_instr(LirNode::new(
+                            ident_span,
+                            LirNodeType::Declare {
+                                dest: base_tmp.clone().into_boxed_str(),
+                                value: Box::new(base_expr),
+                            },
+                        ));
+                        let base_load = LirNodeType::Load(base_tmp.into_boxed_str());
 
-                            let base_expr = if base_path.is_empty() {
-                                self.lower_node(last_node.clone())
-                            } else {
-                                self.lower_member_path(base_path, true)
-                            };
+                        (
+                            Some(LirLValue::Ptr(Box::new(LirNodeType::Member(
+                                Box::new(base_load.clone()),
+                                field.text.clone().into_boxed_str(),
+                            )))),
+                            Some(LirNodeType::Member(
+                                Box::new(base_load),
+                                field.text.into_boxed_str(),
+                            )),
+                        )
+                    }
+                    MiddleNodeType::IndexAccess { base, index } => {
+                        let base_expr = self.lower_node(*base);
+                        let base_tmp = self.get_temp();
+                        self.add_instr(LirNode::new(
+                            ident_span,
+                            LirNodeType::Declare {
+                                dest: base_tmp.clone().into_boxed_str(),
+                                value: Box::new(base_expr),
+                            },
+                        ));
+                        let base_load = LirNodeType::Load(base_tmp.into_boxed_str());
 
-                            let base_tmp = self.get_temp();
-                            self.add_instr(LirNode::new(
-                                ident_span,
-                                LirNodeType::Declare {
-                                    dest: base_tmp.clone().into_boxed_str(),
-                                    value: Box::new(base_expr),
-                                },
-                            ));
-                            let base_load = LirNodeType::Load(base_tmp.into_boxed_str());
+                        let index_expr = self.lower_node(*index);
+                        let index_tmp = self.get_temp();
+                        self.add_instr(LirNode::new(
+                            ident_span,
+                            LirNodeType::Declare {
+                                dest: index_tmp.clone().into_boxed_str(),
+                                value: Box::new(index_expr),
+                            },
+                        ));
 
-                            if last_is_index {
-                                let index_expr = self.lower_node(last_node);
-                                let index_tmp = self.get_temp();
-                                self.add_instr(LirNode::new(
-                                    ident_span,
-                                    LirNodeType::Declare {
-                                        dest: index_tmp.clone().into_boxed_str(),
-                                        value: Box::new(index_expr),
-                                    },
-                                ));
+                        let index_load = LirNodeType::Load(index_tmp.into_boxed_str());
 
-                                let index_load = LirNodeType::Load(index_tmp.into_boxed_str());
-
-                                (
-                                    Some(LirLValue::Ptr(Box::new(LirNodeType::Index(
-                                        Box::new(base_load.clone()),
-                                        Box::new(index_load.clone()),
-                                    )))),
-                                    Some(LirNodeType::Index(
-                                        Box::new(base_load),
-                                        Box::new(index_load),
-                                    )),
-                                )
-                            } else {
-                                let field = last_node.member_field();
-                                (
-                                    Some(LirLValue::Ptr(Box::new(LirNodeType::Member(
-                                        Box::new(base_load.clone()),
-                                        field.clone(),
-                                    )))),
-                                    Some(LirNodeType::Member(Box::new(base_load), field)),
-                                )
-                            }
-                        }
+                        (
+                            Some(LirLValue::Ptr(Box::new(LirNodeType::Index(
+                                Box::new(base_load.clone()),
+                                Box::new(index_load.clone()),
+                            )))),
+                            Some(LirNodeType::Index(
+                                Box::new(base_load),
+                                Box::new(index_load),
+                            )),
+                        )
                     }
                     other => (
                         Some(self.lower_lvalue(MiddleNode::new(other, ident_span))),
@@ -766,7 +758,18 @@ impl<'a> LirEnvironment<'a> {
                 self.jump_to_loop_target_if_present(span, Self::loop_label(&label), false);
                 LirNodeType::null()
             }
-            MiddleNodeType::MemberExpression { path } => self.lower_member_path(path, false),
+            MiddleNodeType::FieldAccess { base, field } => LirNodeType::Member(
+                Box::new(self.lower_node(*base)),
+                field.text.into_boxed_str(),
+            ),
+            MiddleNodeType::ScopeAccess { base, field } => LirNodeType::Member(
+                Box::new(self.lower_node(*base)),
+                field.text.into_boxed_str(),
+            ),
+            MiddleNodeType::IndexAccess { base, index } => LirNodeType::Index(
+                Box::new(self.lower_node(*base)),
+                Box::new(self.lower_node(*index)),
+            ),
             MiddleNodeType::DerefStatement { value } => {
                 LirNodeType::Deref(Box::new(self.lower_node(*value)))
             }
@@ -948,8 +951,23 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::DerefStatement { value } => {
                 LirLValue::Ptr(Box::new(self.lower_node(*value)))
             }
-            MiddleNodeType::MemberExpression { path } => {
-                LirLValue::Ptr(Box::new(self.lower_member_lvalue(path)))
+            MiddleNodeType::FieldAccess { base, field } => {
+                LirLValue::Ptr(Box::new(LirNodeType::Member(
+                    Box::new(self.lower_node(*base)),
+                    field.text.into_boxed_str(),
+                )))
+            }
+            MiddleNodeType::ScopeAccess { base, field } => {
+                LirLValue::Ptr(Box::new(LirNodeType::Member(
+                    Box::new(self.lower_node(*base)),
+                    field.text.into_boxed_str(),
+                )))
+            }
+            MiddleNodeType::IndexAccess { base, index } => {
+                LirLValue::Ptr(Box::new(LirNodeType::Index(
+                    Box::new(self.lower_node(*base)),
+                    Box::new(self.lower_node(*index)),
+                )))
             }
             _ => LirLValue::Var(Box::<str>::from("<invalid>")),
         }

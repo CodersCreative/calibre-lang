@@ -12,7 +12,7 @@ use calibre_parser::{
     Span,
     ast::{
         Operator,
-        idents::ParserText,
+        idents::{ParserText, PotentialDollarIdentifier},
         nodes::{FunctionHeader, Node, NodeType, Overload, VarType},
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -405,60 +405,35 @@ impl MiddleEnvironment {
         scope: &u64,
         node: Node,
     ) -> Result<Node, MiddleErr> {
-        fn member_path_from_node(node: Node) -> Vec<(Node, bool)> {
-            match node.node_type {
-                NodeType::Identifier(_) => vec![(node, false)],
-                NodeType::MemberExpression { path } => path,
-                other => vec![(Node::new(node.span, other), false)],
-            }
-        }
-
         Ok(Node {
-            node_type: match node.node_type {
-                NodeType::ScopeMemberExpression { module, value } => {
-                    let module_path: Vec<String> = module.iter().map(|x| x.to_string()).collect();
+            node_type: match &node.node_type {
+                NodeType::ScopeAccess { base, field } => {
+                    if let NodeType::Identifier(module_name) = &base.node_type {
+                        let field_text = self
+                            .resolve_dollar_ident_only(scope, field)
+                            .map(|x| x.text)
+                            .unwrap_or(field.text().clone());
+                        let module_path =
+                            vec![module_name.get_ident().text().clone(), field_text.clone()];
 
-                    for prefix_len in (0..=module_path.len()).rev() {
-                        let prefix = module_path[..prefix_len].to_vec();
-                        let new_scope = self
-                            .get_scope_list(*scope, prefix.clone())
-                            .or_else(|_| self.import_scope_list(*scope, prefix).map(|x| x.0));
-                        if let Ok(new_scope) = new_scope {
-                            if prefix_len == module_path.len() {
-                                let resolved_value: MiddleNode = self.evaluate(&new_scope, *value);
+                        for prefix_len in (0..=module_path.len()).rev() {
+                            let prefix = module_path[..prefix_len].to_vec();
+                            let new_scope = self
+                                .get_scope_list(*scope, prefix.clone())
+                                .or_else(|_| self.import_scope_list(*scope, prefix).map(|x| x.0));
+
+                            if let Ok(new_scope) = new_scope
+                                && prefix_len == module_path.len()
+                            {
+                                let resolved_value: MiddleNode = self
+                                    .evaluate(&new_scope, Node::identifier(node.span, field_text));
                                 return Ok(resolved_value.into());
                             }
-
-                            let mut path = module_path[prefix_len..]
-                                .into_iter()
-                                .map(|segment| {
-                                    (
-                                        Node::new(
-                                            node.span,
-                                            NodeType::Identifier(
-                                                ParserText::from(segment.clone()).into(),
-                                            ),
-                                        ),
-                                        false,
-                                    )
-                                })
-                                .collect::<Vec<_>>();
-                            path.extend(member_path_from_node(*value));
-
-                            return Ok(self
-                                .evaluate(
-                                    &new_scope,
-                                    Node::new(node.span, NodeType::MemberExpression { path }),
-                                )
-                                .into());
                         }
                     }
-
-                    return Err(self.context.err_at_current(MiddleErr::Scope(
-                        module_path.last().cloned().unwrap_or_default(),
-                    )));
+                    node.node_type.clone()
                 }
-                _ => node.node_type,
+                _ => node.node_type.clone(),
             },
             span: node.span,
         })

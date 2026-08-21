@@ -45,26 +45,17 @@ impl CalibreLanguageServer {
                 | MiddleNodeType::DebugExpression { value, .. }
                 | MiddleNodeType::NegExpression { value, .. }
                 | MiddleNodeType::AsExpression { value, .. }
+                | MiddleNodeType::FunctionDeclaration { body: value, .. }
                 | MiddleNodeType::Return {
                     value: Some(value), ..
-                } => {
+                }
+                | MiddleNodeType::FieldAccess { base: value, .. } => {
                     traverse(value, pos, current_scope, smallest_span);
                 }
                 MiddleNodeType::ScopeDeclaration { body, .. } => {
                     for stmt in body {
                         traverse(stmt, pos, current_scope, smallest_span);
                     }
-                }
-                MiddleNodeType::FunctionDeclaration { body, .. } => {
-                    traverse(body, pos, current_scope, smallest_span);
-                }
-                MiddleNodeType::AssignmentExpression { identifier, value } => {
-                    traverse(identifier, pos, current_scope, smallest_span);
-                    traverse(value, pos, current_scope, smallest_span);
-                }
-                MiddleNodeType::RangeDeclaration { from, to, .. } => {
-                    traverse(from, pos, current_scope, smallest_span);
-                    traverse(to, pos, current_scope, smallest_span);
                 }
                 MiddleNodeType::LoopDeclaration { state, body, .. } => {
                     if let Some(state) = state {
@@ -77,18 +68,27 @@ impl CalibreLanguageServer {
                         traverse(item, pos, current_scope, smallest_span);
                     }
                 }
-                MiddleNodeType::MemberExpression { path } => {
-                    for (node, _) in path {
-                        traverse(node, pos, current_scope, smallest_span);
-                    }
-                }
+
                 MiddleNodeType::CallExpression { caller, args } => {
                     traverse(caller, pos, current_scope, smallest_span);
                     for arg in args {
                         traverse(arg, pos, current_scope, smallest_span);
                     }
                 }
-                MiddleNodeType::BinaryExpression { left, right, .. }
+                MiddleNodeType::AssignmentExpression {
+                    identifier: left,
+                    value: right,
+                }
+                | MiddleNodeType::RangeDeclaration {
+                    from: left,
+                    to: right,
+                    ..
+                }
+                | MiddleNodeType::IndexAccess {
+                    base: left,
+                    index: right,
+                }
+                | MiddleNodeType::BinaryExpression { left, right, .. }
                 | MiddleNodeType::ComparisonExpression { left, right, .. }
                 | MiddleNodeType::BooleanExpression { left, right, .. } => {
                     traverse(left, pos, current_scope, smallest_span);

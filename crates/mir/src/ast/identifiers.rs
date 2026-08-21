@@ -116,13 +116,13 @@ impl IdentifiersUsed for MiddleNode {
 
                 amt
             }
-            MiddleNodeType::MemberExpression { path } => match path.len() {
-                1 | 2 | 3 => path
-                    .first()
-                    .map(|x| x.0.identifiers_used())
-                    .unwrap_or_default(),
-                _ => Vec::new(),
-            },
+            MiddleNodeType::FieldAccess { base, .. } => base.identifiers_used(),
+            MiddleNodeType::ScopeAccess { base, .. } => base.identifiers_used(),
+            MiddleNodeType::IndexAccess { base, index } => {
+                let mut amt = base.identifiers_used();
+                amt.append(&mut index.identifiers_used());
+                amt
+            }
             MiddleNodeType::FunctionDeclaration {
                 parameters: _,
                 body,
@@ -187,6 +187,8 @@ impl MiddleNode {
                 mutability: _,
                 value,
             }
+            | MiddleNodeType::ScopeAccess { base: value, .. }
+            | MiddleNodeType::FieldAccess { base: value, .. }
             | MiddleNodeType::DerefStatement { value }
             | MiddleNodeType::NegExpression { value }
             | MiddleNodeType::Spawn { value }
@@ -238,6 +240,10 @@ impl MiddleNode {
                 identifier: left,
                 value: right,
             }
+            | MiddleNodeType::IndexAccess {
+                base: left,
+                index: right,
+            }
             | MiddleNodeType::RangeDeclaration {
                 from: left,
                 to: right,
@@ -279,22 +285,12 @@ impl MiddleNode {
 
                 amt
             }
-            MiddleNodeType::MemberExpression { path } => match path.len() {
-                1 | 2 | 3 => path
-                    .first()
-                    .map(|x| x.0.identifiers_declared())
-                    .unwrap_or_default(),
-                _ => Vec::new(),
-            },
             MiddleNodeType::FunctionDeclaration {
-                parameters,
-                body,
+                parameters: _,
+                body: _,
                 return_type: _,
                 ..
-            } => {
-                let _ = (parameters, body);
-                Vec::new()
-            }
+            } => Vec::new(),
             MiddleNodeType::ExternFunction { .. } => Vec::new(),
             MiddleNodeType::LoopDeclaration { body, .. } => body.identifiers_declared(),
             MiddleNodeType::Conditional {

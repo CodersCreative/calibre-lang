@@ -248,8 +248,11 @@ impl Node {
     pub fn member(span: Span, base: Self, member: impl ToString) -> Self {
         Self::new(
             span,
-            NodeType::MemberExpression {
-                path: vec![(base, false), (Self::identifier(span, member), false)],
+            NodeType::FieldAccess {
+                base: Box::new(base),
+                field: PotentialDollarIdentifier::Identifier(
+                    ParserText::from(member.to_string()).into(),
+                ),
             },
         )
     }
@@ -364,10 +367,15 @@ impl IdentifiersUsed for Node {
             NodeType::Identifier(text) => {
                 names.push(text.get_ident().text());
             }
-            NodeType::MemberExpression { path, .. } => {
-                if let Some((first, _)) = path.first() {
-                    names.extend(first.identifiers_used());
-                }
+            NodeType::FieldAccess { base, .. } => {
+                names.extend(base.identifiers_used());
+            }
+            NodeType::ScopeAccess { base, .. } => {
+                names.extend(base.identifiers_used());
+            }
+            NodeType::IndexAccess { base, index } => {
+                names.extend(base.identifiers_used());
+                names.extend(index.identifiers_used());
             }
             NodeType::CallExpression { args, .. } => {
                 for arg in args {
@@ -696,12 +704,17 @@ pub enum NodeType {
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(ParserText),
-    MemberExpression {
-        path: Vec<(Node, bool)>,
+    FieldAccess {
+        base: Box<Node>,
+        field: PotentialDollarIdentifier,
     },
-    ScopeMemberExpression {
-        module: Vec<PotentialDollarIdentifier>,
-        value: Box<Node>,
+    ScopeAccess {
+        base: Box<Node>,
+        field: PotentialDollarIdentifier,
+    },
+    IndexAccess {
+        base: Box<Node>,
+        index: Box<Node>,
     },
     CallExpression {
         string_fn: Option<ParserText>,

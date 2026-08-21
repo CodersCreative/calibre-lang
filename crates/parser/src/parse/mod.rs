@@ -16,7 +16,7 @@ use matching::{MatchParsers, build_match_parsers};
 use setup::build_parser_prelude;
 use statements::{StatementParsers, build_statement_parser};
 use std::sync::Arc;
-use util::{lex, member_node_from_head_and_tail, span, strip_block_comments_keep_layout};
+use util::{lex, span, strip_block_comments_keep_layout};
 
 mod diagnostics;
 mod expressions;
@@ -315,7 +315,30 @@ pub fn parse_program_with_source(
                             } else {
                                 Node::new(sp, NodeType::ListLiteral(_open_ty, values.1))
                             };
-                            member_node_from_head_and_tail(list, tails)
+
+                            tails.into_iter().fold(list, |current, (node, is_index)| {
+                                if is_index {
+                                    Node::new(
+                                        Span::new_from_spans(current.span, node.span),
+                                        NodeType::IndexAccess {
+                                            base: Box::new(current),
+                                            index: Box::new(node),
+                                        },
+                                    )
+                                } else {
+                                    if let NodeType::Identifier(ident) = node.node_type {
+                                        Node::new(
+                                            Span::new_from_spans(current.span, node.span),
+                                            NodeType::FieldAccess {
+                                                base: Box::new(current),
+                                                field: ident.into(),
+                                            },
+                                        )
+                                    } else {
+                                        current
+                                    }
+                                }
+                            })
                         }
                     }),
                 float_lit.clone(),
@@ -365,24 +388,30 @@ pub fn parse_program_with_source(
                             .collect::<Vec<_>>(),
                     )
                     .map(|(first, mut segments)| {
-                        let first_span = first.span;
                         let value_text = segments.pop().unwrap_or_else(|| first.clone());
                         let value_span = value_text.span;
-                        let mut module: Vec<PotentialDollarIdentifier> = vec![first.into()];
-                        module.extend(segments.into_iter().map(|segment| segment.into()));
 
-                        let value = Node::new(
-                            value_span,
-                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                value_text.into(),
-                            )),
-                        );
-                        let sp = Span::new_from_spans(first_span, value_span);
+                        let mut module: Vec<PotentialDollarIdentifier> = vec![first.clone().into()];
+                        module.extend(segments.clone().into_iter().map(|segment| segment.into()));
+
+                        let mut current = Node::identifier(first.span, &first);
+
+                        for segment in segments {
+                            current = Node::new(
+                                Span::new_from_spans(current.span, segment.span),
+                                NodeType::ScopeAccess {
+                                    base: Box::new(current),
+                                    field: segment.into(),
+                                },
+                            );
+                        }
+
+                        let sp = Span::new_from_spans(current.span, value_span);
                         Node::new(
                             sp,
-                            NodeType::ScopeMemberExpression {
-                                module,
-                                value: Box::new(value),
+                            NodeType::ScopeAccess {
+                                base: Box::new(current),
+                                field: value_text.into(),
                             },
                         )
                     }),

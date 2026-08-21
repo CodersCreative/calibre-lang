@@ -47,11 +47,9 @@ impl MiddleEnvironment {
     fn match_index_access(&self, base: Node, index: usize) -> Node {
         Node::new(
             self.context.current_span(),
-            NodeType::MemberExpression {
-                path: vec![
-                    (base, false),
-                    (Node::int(self.context.current_span(), index), true),
-                ],
+            NodeType::IndexAccess {
+                base: Box::new(base),
+                index: Box::new(Node::int(self.context.current_span(), index)),
             },
         )
     }

@@ -1,7 +1,7 @@
 use crate::environment::MiddleEnvironment;
 use calibre_parser::ast::{
     Operator,
-    idents::PotentialGenericTypeIdentifier,
+    idents::{ParsedIntLiteral, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::{AsFailureMode, EmitType, Node, NodeType},
     types::{ParserDataType, ParserInnerType},
 };
@@ -368,39 +368,23 @@ impl MiddleEnvironment {
                 ..
             } => {
                 // TODO handle generics
-                if let NodeType::MemberExpression { path } = &caller.node_type
-                    && path.len() >= 2
-                {
-                    let member_name = match path.last().map(|p| &p.0.node_type) {
-                        Some(NodeType::Identifier(id)) => id.to_string(),
-                        _ => String::new(),
-                    };
+                if let NodeType::FieldAccess { base, field } = &caller.node_type {
+                    let member_name = self
+                        .resolve_dollar_ident_only(scope, field)
+                        .map(|x| x.text)
+                        .unwrap_or(field.text().clone());
 
                     if !member_name.is_empty() {
-                        let receiver_path = path[..path.len() - 1].to_vec();
-                        let receiver_node = Node::new(
-                            node.span,
-                            NodeType::MemberExpression {
-                                path: receiver_path,
-                            },
-                        );
-                        let base_ty =
-                            self.resolve_type_from_node(scope, &receiver_node)
-                                .or_else(|| {
-                                    if let NodeType::MemberExpression { path } =
-                                        &receiver_node.node_type
-                                        && path.len() == 1
-                                        && let NodeType::Identifier(id) = &path[0].0.node_type
-                                    {
-                                        self.resolve_potential_generic_ident_to_data_type(scope, id)
-                                    } else {
-                                        None
-                                    }
-                                });
+                        let ty = self.resolve_type_from_node(scope, base).or_else(|| {
+                            if let NodeType::Identifier(id) = &base.node_type {
+                                self.resolve_potential_generic_ident_to_data_type(scope, id)
+                            } else {
+                                None
+                            }
+                        });
 
-                        if let Some(base_ty) = base_ty
-                            && let Some(method_ty) =
-                                self.resolve_member_fn_type(&base_ty, &member_name)
+                        if let Some(ty) = ty
+                            && let Some(method_ty) = self.resolve_member_fn_type(&ty, &member_name)
                         {
                             match method_ty.data_type {
                                 ParserInnerType::Function { return_type, .. }
@@ -437,10 +421,10 @@ impl MiddleEnvironment {
                         });
                     }
 
-                    if let Some(parsed_caller_pd) =
+                    if let Some(caller_ty) =
                         self.resolve_potential_generic_ident_to_data_type(scope, caller)
                     {
-                        match &parsed_caller_pd.data_type {
+                        match &caller_ty.data_type {
                             ParserInnerType::Struct(name) => {
                                 if self.typing.objects.contains_key(name) {
                                     return Some(ParserDataType {
@@ -466,15 +450,7 @@ impl MiddleEnvironment {
                             _ => {}
                         }
 
-                        let base_ident = match parsed_caller_pd.data_type {
-                            ParserInnerType::Struct(ref n) => n.clone(),
-                            ParserInnerType::StructWithGenerics { ref identifier, .. } => {
-                                identifier.clone()
-                            }
-                            _ => caller.to_string(),
-                        };
-
-                        if let Some(var) = self.symbols.variables.get(&base_ident) {
+                        if let Some(var) = self.symbols.variables.get(&caller_ty.impl_name()) {
                             caller_type = Some(var.data_type.clone());
                         }
                     }
@@ -493,96 +469,62 @@ impl MiddleEnvironment {
                     None
                 }
             }
-            NodeType::MemberExpression { path } => {
-                if path.is_empty() {
-                    return Some(ParserDataType::new(node.span, ParserInnerType::Auto(None)));
-                }
-
-                let mut current = self.resolve_type_from_node(scope, &path[0].0).or_else(|| {
-                    if let NodeType::Identifier(id) = &path[0].0.node_type {
+            NodeType::FieldAccess { base, .. } => {
+                let base_type = self.resolve_type_from_node(scope, base).or_else(|| {
+                    if let NodeType::Identifier(id) = &base.node_type {
                         self.resolve_potential_generic_ident_to_data_type(scope, id)
                     } else {
                         None
                     }
                 })?;
-                for (segment, is_index) in path.iter().skip(1) {
-                    current = self.resolve_data_type(scope, current).unwrap_all_refs();
 
-                    if *is_index {
-                        current = match current.data_type {
-                            ParserInnerType::List(inner)
-                            | ParserInnerType::Option(inner)
-                            | ParserInnerType::Ptr(inner) => *inner,
-                            ParserInnerType::Tuple(values) => match &segment.node_type {
-                                NodeType::IntLiteral(i) => i
-                                    .trim_end_matches('u')
-                                    .trim_end_matches('i')
-                                    .parse::<usize>()
-                                    .ok()
-                                    .and_then(|idx| values.get(idx).cloned())
-                                    .unwrap_or_else(|| {
-                                        ParserDataType::new(node.span, ParserInnerType::Auto(None))
-                                    }),
-                                _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
-                            },
-                            ParserInnerType::Result { ok, err } => {
-                                if ok.data_type == err.data_type {
-                                    *ok
-                                } else {
-                                    ParserDataType::new(node.span, ParserInnerType::Dynamic)
-                                }
-                            }
-                            _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
-                        };
-                        continue;
+                let resolved_type = self.resolve_data_type(scope, base_type).unwrap_all_refs();
+                Some(resolved_type)
+            }
+            NodeType::ScopeAccess { base, .. } => {
+                let base_type = self.resolve_type_from_node(scope, base).or_else(|| {
+                    if let NodeType::Identifier(id) = &base.node_type {
+                        self.resolve_potential_generic_ident_to_data_type(scope, id)
+                    } else {
+                        None
                     }
+                })?;
 
-                    match &segment.node_type {
-                        NodeType::Identifier(member_ident) => {
-                            let member_name = member_ident.to_string();
-                            if let Some(field_ty) = self.resolve_member_field_type(
-                                scope,
-                                &current,
-                                &member_name,
-                                node.span,
-                            ) {
-                                current = field_ty;
-                                continue;
-                            }
+                let resolved_type = self.resolve_data_type(scope, base_type).unwrap_all_refs();
+                Some(resolved_type)
+            }
+            NodeType::IndexAccess { base, index } => {
+                let base_type = self.resolve_type_from_node(scope, base).or_else(|| {
+                    if let NodeType::Identifier(id) = &base.node_type {
+                        self.resolve_potential_generic_ident_to_data_type(scope, id)
+                    } else {
+                        None
+                    }
+                })?;
 
-                            if let Some(method_ty) =
-                                self.resolve_member_fn_type(&current, &member_name)
-                            {
-                                current = method_ty;
-                            } else {
-                                current =
-                                    ParserDataType::new(node.span, ParserInnerType::Auto(None));
-                            }
-                        }
-                        NodeType::CallExpression { caller, .. } => {
-                            let NodeType::Identifier(method_ident) = &caller.node_type else {
-                                current =
-                                    ParserDataType::new(node.span, ParserInnerType::Auto(None));
-                                continue;
-                            };
-
-                            let method_name = self
-                                .resolve_dollar_ident_potential_generic_only(scope, method_ident)
-                                .map(|x| x.to_string())
-                                .unwrap_or(method_ident.to_string());
-                            let method_ty = self.resolve_member_fn_type(&current, &method_name);
-
-                            current = method_ty
-                                .and_then(|x| x.apply_callable())
-                                .unwrap_or(ParserDataType::auto(node.span));
-                        }
-                        _ => {
-                            current = ParserDataType::new(node.span, ParserInnerType::Auto(None));
+                let resolved_type = self.resolve_data_type(scope, base_type).unwrap_all_refs();
+                let index_type = match resolved_type.data_type {
+                    ParserInnerType::List(inner)
+                    | ParserInnerType::Option(inner)
+                    | ParserInnerType::Ptr(inner) => *inner,
+                    ParserInnerType::Tuple(values) => match &index.node_type {
+                        NodeType::IntLiteral(i) => ParsedIntLiteral::parse(i)
+                            .and_then(|idx| values.get(idx.value as usize).cloned())
+                            .unwrap_or_else(|| {
+                                ParserDataType::new(node.span, ParserInnerType::Auto(None))
+                            }),
+                        _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
+                    },
+                    ParserInnerType::Result { ok, err } => {
+                        if ok.data_type == err.data_type {
+                            *ok
+                        } else {
+                            ParserDataType::new(node.span, ParserInnerType::Dynamic)
                         }
                     }
-                }
-
-                Some(current)
+                    _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
+                };
+                Some(index_type)
             }
             NodeType::PipeExpression(path) => {
                 let mut iter = path.iter();
@@ -637,9 +579,6 @@ impl MiddleEnvironment {
                 } else {
                     Some(typ)
                 }
-            }
-            NodeType::ScopeMemberExpression { .. } => {
-                Some(ParserDataType::new(node.span, ParserInnerType::Auto(None)))
             }
             NodeType::ScopeDeclaration { .. } => unreachable!(),
             NodeType::Tag { .. } => {

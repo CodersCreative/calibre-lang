@@ -7,8 +7,8 @@ use crate::ast::nodes::{
 };
 use crate::ast::types::{ParserDataType, ParserInnerType};
 use crate::parse::util::{
-    ensure_scope_node, lex, member_node_from_head_and_tail, normalize_scope_member_chain,
-    parse_embedded_expr, parse_splits, span, span_from_nodes_or, unescape_string,
+    ensure_scope_node, lex, parse_embedded_expr, parse_splits, span, span_from_nodes_or,
+    unescape_string,
 };
 use crate::{
     Span,
@@ -120,8 +120,15 @@ pub fn build_tail_expression_parser<'a>(
                 .collect::<Vec<_>>(),
         )
         .map(|(head, indexes)| {
-            let tails = indexes.into_iter().map(|idx| (idx, true)).collect();
-            member_node_from_head_and_tail(head, tails)
+            indexes.into_iter().fold(head, |current, index| {
+                Node::new(
+                    Span::new_from_spans(current.span, index.span),
+                    NodeType::IndexAccess {
+                        base: Box::new(current),
+                        index: Box::new(index),
+                    },
+                )
+            })
         })
         .boxed();
 
@@ -158,14 +165,21 @@ pub fn build_tail_expression_parser<'a>(
                         .collect::<Vec<_>>(),
                 )
                 .map(|(head, indexes)| {
-                    let tails = indexes.into_iter().map(|idx| (idx, true)).collect();
-                    member_node_from_head_and_tail(head, tails)
+                    indexes.into_iter().fold(head, |current, index| {
+                        Node::new(
+                            Span::new_from_spans(current.span, index.span),
+                            NodeType::IndexAccess {
+                                base: Box::new(current),
+                                index: Box::new(index),
+                            },
+                        )
+                    })
                 })
                 .separated_by(comma.clone())
                 .allow_trailing()
                 .collect::<Vec<_>>()
                 .or_not()
-                .map(|x| x.unwrap_or_default()),
+                .map(|x: Option<Vec<Node>>| x.unwrap_or_default()),
         )
         .then_ignore(lex(pad.clone(), just(')')))
         .boxed();
@@ -222,27 +236,29 @@ pub fn build_tail_expression_parser<'a>(
 
     let apply_postfix_suffixes = |head: Node, rest: Vec<PostfixSuffix>| {
         let mut current = head;
-        let mut pending_members = Vec::new();
-
-        let flush_members = |current: Node, pending_members: &mut Vec<(Node, bool)>| {
-            if pending_members.is_empty() {
-                current
-            } else {
-                let members = std::mem::take(pending_members);
-                let (head, rest) = normalize_scope_member_chain(current, members);
-                if rest.is_empty() {
-                    head
-                } else {
-                    member_node_from_head_and_tail(head, rest)
-                }
-            }
-        };
 
         for suffix in rest {
             match suffix {
-                PostfixSuffix::Member(node, is_index) => pending_members.push((node, is_index)),
+                PostfixSuffix::Member(node, is_index) => {
+                    if is_index {
+                        current = Node::new(
+                            Span::new_from_spans(current.span, node.span),
+                            NodeType::IndexAccess {
+                                base: Box::new(current),
+                                index: Box::new(node),
+                            },
+                        );
+                    } else if let NodeType::Identifier(ident) = node.node_type {
+                        current = Node::new(
+                            Span::new_from_spans(current.span, node.span),
+                            NodeType::FieldAccess {
+                                base: Box::new(current),
+                                field: ident.into(),
+                            },
+                        );
+                    }
+                }
                 PostfixSuffix::Ref(mutability) => {
-                    current = flush_members(current, &mut pending_members);
                     current = Node::new(
                         current.span,
                         NodeType::RefStatement {
@@ -252,7 +268,6 @@ pub fn build_tail_expression_parser<'a>(
                     );
                 }
                 PostfixSuffix::Deref => {
-                    current = flush_members(current, &mut pending_members);
                     current = Node::new(
                         current.span,
                         NodeType::DerefStatement {
@@ -263,7 +278,7 @@ pub fn build_tail_expression_parser<'a>(
             }
         }
 
-        flush_members(current, &mut pending_members)
+        current
     };
 
     let postfix = atom

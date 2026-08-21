@@ -35,36 +35,6 @@ pub mod scopes;
 pub mod statements;
 
 impl MiddleEnvironment {
-    fn waitgroup_static_call(span: Span, member: &str) -> Node {
-        Node::call(
-            span,
-            Node::member(span, Node::identifier(span, "WaitGroup"), member),
-            Vec::new(),
-        )
-    }
-
-    fn scope_member_call(span: Span, path: &[&str], args: Vec<CallArg>) -> Node {
-        let mut module = Vec::with_capacity(path.len() - 1);
-        for p in &path[..path.len() - 1] {
-            module.push(ParserText::new(span, p).into());
-        }
-
-        Node::call_full(
-            span,
-            Node::new(
-                span,
-                NodeType::ScopeMemberExpression {
-                    module,
-                    value: Box::new(Node::identifier(span, path.last().unwrap())),
-                },
-            ),
-            vec![],
-            args,
-            vec![],
-            None,
-        )
-    }
-
     pub fn evaluate(&mut self, scope: &u64, node: Node) -> MiddleNode {
         let span = node.span;
         match self.evaluate_inner(scope, node) {
@@ -194,8 +164,14 @@ impl MiddleEnvironment {
                 },
                 node.span,
             )),
-            NodeType::MemberExpression { path } => {
-                self.evaluate_member_expression(scope, node.span, path)
+            NodeType::FieldAccess { base, field } => {
+                self.evaluate_field_access(scope, node.span, *base, field)
+            }
+            NodeType::ScopeAccess { base, field } => {
+                self.evaluate_scope_access(scope, node.span, *base, field)
+            }
+            NodeType::IndexAccess { base, index } => {
+                self.evaluate_index_access(scope, node.span, *base, *index)
             }
             NodeType::Spawn {
                 mut items,
@@ -344,8 +320,15 @@ impl MiddleEnvironment {
 
                         let wg_ident_node = Node::identifier(node.span, wg_ident.clone());
                         let start_ident_node = Node::identifier(node.span, start_ident.clone());
-
-                        let wg_new = Self::waitgroup_static_call(node.span, "new");
+                        let wg_new = Node::call(
+                            node.span,
+                            Node::member(
+                                node.span,
+                                Node::identifier(node.span, "WaitGroup"),
+                                "new",
+                            ),
+                            Vec::new(),
+                        );
 
                         let wg_decl = Node::new(
                             node.span,
@@ -536,7 +519,11 @@ impl MiddleEnvironment {
                     )),
                 );
 
-                let wg_new = Self::waitgroup_static_call(span, "new");
+                let wg_new = Node::call(
+                    span,
+                    Node::member(span, Node::identifier(span, "WaitGroup"), "new"),
+                    Vec::new(),
+                );
 
                 let wg_decl = Node::new(
                     span,
@@ -646,16 +633,7 @@ impl MiddleEnvironment {
                     ),
                     span: node.span,
                 }),
-                NodeType::MemberExpression { mut path } => {
-                    let Some((base_node, _)) = path.first().cloned() else {
-                        return Err(MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Internal(
-                                "expected base for move member expression".to_string(),
-                            )),
-                        ));
-                    };
-
+                NodeType::FieldAccess { base, field } => {
                     let tmp_ident: PotentialDollarIdentifier =
                         ParserText::temp_name_with_suffix("move", node.span).into();
 
@@ -668,17 +646,89 @@ impl MiddleEnvironment {
                             value: Box::new(Node::new(
                                 node.span,
                                 NodeType::MoveExpression {
-                                    value: Box::new(base_node),
+                                    value: Box::new(*base),
                                 },
                             )),
                         },
                     );
 
-                    path[0].0 = Node::new(
+                    let moved_base = Node::new(
                         node.span,
                         NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(tmp_ident)),
                     );
-                    let member = Node::new(node.span, NodeType::MemberExpression { path });
+                    let member = Node::new(
+                        node.span,
+                        NodeType::FieldAccess {
+                            base: Box::new(moved_base),
+                            field,
+                        },
+                    );
+
+                    self.evaluate_inner(scope, Node::new_temp_scope(vec![tmp_decl, member]))
+                }
+                NodeType::ScopeAccess { base, field } => {
+                    let tmp_ident: PotentialDollarIdentifier =
+                        ParserText::temp_name_with_suffix("move", node.span).into();
+
+                    let tmp_decl = Node::new(
+                        node.span,
+                        NodeType::VariableDeclaration {
+                            var_type: VarType::Immutable,
+                            identifier: tmp_ident.clone(),
+                            data_type: ParserDataType::auto(node.span),
+                            value: Box::new(Node::new(
+                                node.span,
+                                NodeType::MoveExpression {
+                                    value: Box::new(*base),
+                                },
+                            )),
+                        },
+                    );
+
+                    let moved_base = Node::new(
+                        node.span,
+                        NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(tmp_ident)),
+                    );
+                    let member = Node::new(
+                        node.span,
+                        NodeType::ScopeAccess {
+                            base: Box::new(moved_base),
+                            field,
+                        },
+                    );
+
+                    self.evaluate_inner(scope, Node::new_temp_scope(vec![tmp_decl, member]))
+                }
+                NodeType::IndexAccess { base, index } => {
+                    let tmp_ident: PotentialDollarIdentifier =
+                        ParserText::temp_name_with_suffix("move", node.span).into();
+
+                    let tmp_decl = Node::new(
+                        node.span,
+                        NodeType::VariableDeclaration {
+                            var_type: VarType::Immutable,
+                            identifier: tmp_ident.clone(),
+                            data_type: ParserDataType::auto(node.span),
+                            value: Box::new(Node::new(
+                                node.span,
+                                NodeType::MoveExpression {
+                                    value: Box::new(*base),
+                                },
+                            )),
+                        },
+                    );
+
+                    let moved_base = Node::new(
+                        node.span,
+                        NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(tmp_ident)),
+                    );
+                    let member = Node::new(
+                        node.span,
+                        NodeType::IndexAccess {
+                            base: Box::new(moved_base),
+                            index,
+                        },
+                    );
 
                     self.evaluate_inner(scope, Node::new_temp_scope(vec![tmp_decl, member]))
                 }
@@ -1315,14 +1365,12 @@ impl MiddleEnvironment {
                 {
                     let member = Node::new(
                         self.context.current_span(),
-                        NodeType::MemberExpression {
-                            path: vec![
-                                (*value.clone(), false),
-                                (
-                                    Node::identifier(self.context.current_span(), "contains"),
-                                    false,
-                                ),
-                            ],
+                        NodeType::FieldAccess {
+                            base: Box::new(*value.clone()),
+                            field: PotentialDollarIdentifier::new(
+                                self.context.current_span(),
+                                "contains",
+                            ),
                         },
                     );
 
@@ -1615,46 +1663,43 @@ impl MiddleEnvironment {
                         },
                         span: node.span,
                     }),
-                    NodeType::MemberExpression { path } => {
-                        let path_len = path.len();
-                        let last = path.last();
-                        if path_len >= 2
-                            && let Some((index_node, true)) = last
-                        {
-                            let base_path = &path[..path_len - 1];
-                            let base_node = if base_path.len() == 1 {
-                                base_path[0].0.clone()
-                            } else {
-                                Node::new(
-                                    base_path[0].0.span,
-                                    NodeType::MemberExpression {
-                                        path: base_path.to_vec(),
-                                    },
-                                )
-                            };
-
-                            if let Some(overloaded) = self.handle_index_assign_overload(
+                    NodeType::FieldAccess { base, field } => Ok(MiddleNode {
+                        node_type: MiddleNodeType::AssignmentExpression {
+                            identifier: Box::new(self.evaluate(
                                 scope,
-                                node.span,
-                                base_node.clone(),
-                                index_node.clone(),
-                                *value.clone(),
-                            )? {
-                                if let NodeType::Identifier(_) = base_node.node_type {
-                                    return Ok(MiddleNode {
-                                        node_type: MiddleNodeType::AssignmentExpression {
-                                            identifier: Box::new(self.evaluate(scope, base_node)),
-                                            value: Box::new(overloaded),
-                                        },
-                                        span: node.span,
-                                    });
-                                }
-                                return Ok(overloaded);
-                            }
+                                Node::new(node.span, NodeType::FieldAccess { base, field }),
+                            )),
+                            value: Box::new(self.evaluate(scope, *value)),
+                        },
+                        span: node.span,
+                    }),
+                    NodeType::ScopeAccess { base, field } => Ok(MiddleNode {
+                        node_type: MiddleNodeType::AssignmentExpression {
+                            identifier: Box::new(self.evaluate(
+                                scope,
+                                Node::new(node.span, NodeType::ScopeAccess { base, field }),
+                            )),
+                            value: Box::new(self.evaluate(scope, *value)),
+                        },
+                        span: node.span,
+                    }),
+                    NodeType::IndexAccess { base, index } => {
+                        if let Some(overloaded) = self.handle_index_assign_overload(
+                            scope,
+                            node.span,
+                            *base.clone(),
+                            *index.clone(),
+                            *value.clone(),
+                        )? {
+                            return Ok(overloaded);
                         }
+
                         Ok(MiddleNode {
                             node_type: MiddleNodeType::AssignmentExpression {
-                                identifier: Box::new(self.evaluate(scope, *identifier)),
+                                identifier: Box::new(self.evaluate(
+                                    scope,
+                                    Node::new(node.span, NodeType::IndexAccess { base, index }),
+                                )),
                                 value: Box::new(self.evaluate(scope, *value)),
                             },
                             span: node.span,
@@ -2686,17 +2731,12 @@ impl MiddleEnvironment {
 
                                 let extracted = Node::new(
                                     node.span,
-                                    NodeType::MemberExpression {
-                                        path: vec![
-                                            (
-                                                Node::new(
-                                                    node.span,
-                                                    NodeType::Identifier(tmp_ident.clone().into()),
-                                                ),
-                                                false,
-                                            ),
-                                            (Node::identifier(node.span, "next"), false),
-                                        ],
+                                    NodeType::FieldAccess {
+                                        base: Box::new(Node::new(
+                                            node.span,
+                                            NodeType::Identifier(tmp_ident.clone().into()),
+                                        )),
+                                        field: PotentialDollarIdentifier::new(node.span, "next"),
                                     },
                                 );
 
@@ -2922,44 +2962,6 @@ impl MiddleEnvironment {
                         },
                     ),
                 )
-            }
-            NodeType::ScopeMemberExpression { module, value } => {
-                let module_path: Vec<String> = module.iter().map(|x| x.to_string()).collect();
-                let new_scope: u64 = self.get_scope_list(*scope, module_path)?;
-
-                match value.node_type {
-                    NodeType::Identifier(ident) => {
-                        let resolved = self
-                            .resolve_potential_generic_ident(&new_scope, &ident)
-                            .unwrap_or(ident.to_string().into());
-                        Ok(MiddleNode::new(
-                            MiddleNodeType::Identifier(resolved),
-                            node.span,
-                        ))
-                    }
-                    NodeType::MemberExpression { mut path } => {
-                        if let Some((
-                            Node {
-                                node_type: NodeType::Identifier(first),
-                                ..
-                            },
-                            _,
-                        )) = path.first_mut()
-                        {
-                            let resolved = self
-                                .resolve_potential_generic_ident(&new_scope, first)
-                                .unwrap_or(first.to_string().into());
-                            *first = PotentialGenericTypeIdentifier::Identifier(
-                                PotentialDollarIdentifier::Identifier(resolved),
-                            );
-                        }
-                        Ok(self.evaluate(
-                            scope,
-                            Node::new(node.span, NodeType::MemberExpression { path }),
-                        ))
-                    }
-                    other => Ok(self.evaluate(&new_scope, Node::new(node.span, other))),
-                }
             }
             NodeType::PipeExpression(mut path) if !path.is_empty() => {
                 let mut value = path.remove(0).into();

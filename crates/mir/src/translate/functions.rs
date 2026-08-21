@@ -60,8 +60,11 @@ impl MiddleEnvironment {
                 then: Box::new(default),
                 otherwise: Box::new(Node::new(
                     span,
-                    NodeType::MemberExpression {
-                        path: vec![(value, false), (Node::identifier(span, "next"), false)],
+                    NodeType::FieldAccess {
+                        base: Box::new(value),
+                        field: PotentialDollarIdentifier::Identifier(
+                            ParserText::from(String::from("next")).into(),
+                        ),
                     },
                 )),
             },
@@ -86,7 +89,7 @@ impl MiddleEnvironment {
                 || parameters.len() == total_args)
     }
 
-    pub fn lower_defaulted_call_args(
+    pub(crate) fn lower_defaulted_call_args(
         &mut self,
         scope: &u64,
         span: Span,
@@ -526,7 +529,7 @@ impl MiddleEnvironment {
         Some(native)
     }
 
-    pub fn evaluate_extern_function(
+    pub(crate) fn evaluate_extern_function(
         &mut self,
         scope: &u64,
         span: Span,
@@ -593,7 +596,7 @@ impl MiddleEnvironment {
         })
     }
 
-    pub fn evaluate_function_declaration(
+    pub(crate) fn evaluate_function_declaration(
         &mut self,
         scope: &u64,
         span: Span,
@@ -737,7 +740,8 @@ impl MiddleEnvironment {
                             | MiddleNodeType::StringLiteral(_)
                             | MiddleNodeType::CharLiteral(_)
                             | MiddleNodeType::Null
-                            | MiddleNodeType::MemberExpression { .. }
+                            | MiddleNodeType::FieldAccess { .. }
+                            | MiddleNodeType::IndexAccess { .. }
                     );
                     if simple_return {
                         last = Some(MiddleNode::new(
@@ -834,7 +838,7 @@ impl MiddleEnvironment {
         Ok(fn_node)
     }
 
-    pub fn evaluate_call_expression(
+    pub(crate) fn evaluate_call_expression(
         &mut self,
         scope: &u64,
         span: Span,
@@ -853,21 +857,30 @@ impl MiddleEnvironment {
             return self.evaluate_inner(scope, *body);
         }
 
-        if let NodeType::MemberExpression { mut path } = caller.node_type.clone()
-            && let Some((last_node, is_dynamic)) = path.last_mut()
-            && !*is_dynamic
-            && matches!(last_node.node_type, NodeType::Identifier(_))
+        if let NodeType::FieldAccess { base, field } = caller.node_type.clone()
+            && matches!(field, PotentialDollarIdentifier::Identifier(_))
         {
-            let call = Node::call_full(
-                last_node.span,
-                last_node.clone(),
-                generic_types,
-                args,
-                reverse_args,
-                None,
+            let new_caller = Node::new(
+                caller.span,
+                NodeType::FieldAccess {
+                    base,
+                    field: PotentialDollarIdentifier::Identifier(
+                        ParserText::from(String::from("<method_result>")).into(),
+                    ),
+                },
             );
-            *last_node = call;
-            return self.evaluate_member_expression(scope, span, path);
+            return Ok(self.evaluate(
+                scope,
+                Node::new(
+                    caller.span,
+                    NodeType::FieldAccess {
+                        base: Box::new(new_caller),
+                        field: PotentialDollarIdentifier::Identifier(
+                            ParserText::from(String::from("call")).into(),
+                        ),
+                    },
+                ),
+            ));
         }
 
         if let NodeType::Identifier(caller_ident) = caller.node_type.clone() {
@@ -928,19 +941,23 @@ impl MiddleEnvironment {
                     let mapped_from_param =
                         self.symbols.variables.iter().find_map(|(name, var)| {
                             let suffix = name.rsplit_once(".").map(|(_, member)| member)?;
+
                             if suffix != caller_member_name {
                                 return None;
                             }
+
                             let ParserInnerType::Function { parameters, .. } =
                                 &var.data_type.data_type
                             else {
                                 return None;
                             };
+
                             let first = parameters.first()?;
                             let param_inner = match &first.data_type {
                                 ParserInnerType::Ref(inner, _) => &inner.data_type,
                                 other => other,
                             };
+
                             if param_inner.matches(&target_ty.data_type, &Vec::new()) {
                                 Some(name.clone())
                             } else {

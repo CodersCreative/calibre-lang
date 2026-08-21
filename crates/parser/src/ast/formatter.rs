@@ -1225,35 +1225,14 @@ impl Formatter {
 
                 txt
             }
-            NodeType::ScopeMemberExpression { module, value } => {
-                let mut parts = Vec::new();
-                for node in module.iter() {
-                    parts.push(node.to_string());
-                }
-                parts.push(self.format(&value));
-
-                let single = parts.join("::");
-                let multi = parts.join("\n");
-
-                self.wrap_if_wide(single, &multi)
+            NodeType::FieldAccess { base, field } => {
+                format!("{}.{}", self.format(base), field)
             }
-            NodeType::MemberExpression { path } => {
-                let base = self.format(&path[0].0);
-                let mut parts = Vec::new();
-                for node in path.iter().skip(1) {
-                    if node.1 {
-                        parts.push(format!("[{}]", self.format(&node.0)));
-                    } else {
-                        parts.push(format!(".{}", self.format(&node.0)));
-                    }
-                }
-                let single = format!("{}{}", base, parts.join(""));
-                let multi = format!(
-                    "{}\n{}",
-                    base,
-                    self.fmt_txt_with_tab(&parts.join("\n"), 1, true)
-                );
-                self.wrap_if_wide(single, &multi)
+            NodeType::ScopeAccess { base, field } => {
+                format!("{}::{}", self.format(base), field)
+            }
+            NodeType::IndexAccess { base, index } => {
+                format!("{}[{}]", self.format(base), self.format(index))
             }
             NodeType::Identifier(x) => x.to_string(),
             NodeType::IntLiteral(x) => x.to_string(),

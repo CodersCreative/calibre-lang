@@ -188,16 +188,18 @@ impl MiddleNodeType {
                 data_type,
                 x.into_iter().map(|x| x.rename(state)).collect(),
             ),
-            MiddleNodeType::MemberExpression { mut path } => {
-                path[0].0 = path[0].0.clone().rename(state);
-
-                path = path
-                    .into_iter()
-                    .map(|x| if x.1 { (x.0.rename(state), x.1) } else { x })
-                    .collect();
-
-                MiddleNodeType::MemberExpression { path }
-            }
+            MiddleNodeType::FieldAccess { base, field } => MiddleNodeType::FieldAccess {
+                base: Box::new(base.rename(state)),
+                field,
+            },
+            MiddleNodeType::ScopeAccess { base, field } => MiddleNodeType::ScopeAccess {
+                base: Box::new(base.rename(state)),
+                field,
+            },
+            MiddleNodeType::IndexAccess { base, index } => MiddleNodeType::IndexAccess {
+                base: Box::new(base.rename(state)),
+                index: Box::new(index.rename(state)),
+            },
             MiddleNodeType::CallExpression { caller, args } => MiddleNodeType::CallExpression {
                 caller: Box::new(caller.rename(state)),
                 args: args.into_iter().map(|x| x.rename(state)).collect(),

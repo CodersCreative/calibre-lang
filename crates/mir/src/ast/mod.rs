@@ -62,6 +62,10 @@ impl MiddleNode {
             MiddleNodeType::BinaryExpression { left, right, .. }
             | MiddleNodeType::ComparisonExpression { left, right, .. }
             | MiddleNodeType::BooleanExpression { left, right, .. }
+            | MiddleNodeType::IndexAccess {
+                base: left,
+                index: right,
+            }
             | MiddleNodeType::RangeDeclaration {
                 from: left,
                 to: right,
@@ -71,6 +75,8 @@ impl MiddleNode {
                 count += right.len();
             }
             MiddleNodeType::AsExpression { value, .. }
+            | MiddleNodeType::FieldAccess { base: value, .. }
+            | MiddleNodeType::ScopeAccess { base: value, .. }
             | MiddleNodeType::IsExpression { value, .. }
             | MiddleNodeType::NegExpression { value }
             | MiddleNodeType::RefStatement { value, .. }
@@ -92,11 +98,6 @@ impl MiddleNode {
                     count += s.len();
                 }
                 count += body.len();
-            }
-            MiddleNodeType::MemberExpression { path } => {
-                for (n, _) in path {
-                    count += n.len();
-                }
             }
             _ => {}
         }
@@ -164,10 +165,11 @@ impl MiddleNode {
                 }
                 body.substitute(repl);
             }
-            MiddleNodeType::MemberExpression { path } => {
-                for (n, _) in path.iter_mut() {
-                    n.substitute(repl);
-                }
+            MiddleNodeType::FieldAccess { base, .. } => base.substitute(repl),
+            MiddleNodeType::ScopeAccess { base, .. } => base.substitute(repl),
+            MiddleNodeType::IndexAccess { base, index } => {
+                base.substitute(repl);
+                index.substitute(repl);
             }
             MiddleNodeType::EnumExpression { data, .. } => {
                 if let Some(d) = data.as_mut() {
@@ -214,8 +216,10 @@ impl MiddleNode {
             MiddleNodeType::LoopDeclaration { state, body, .. } => {
                 state.as_ref().is_some_and(|s| s.calls_self(name)) || body.calls_self(name)
             }
-            MiddleNodeType::MemberExpression { path } => {
-                path.iter().any(|(n, _)| n.calls_self(name))
+            MiddleNodeType::FieldAccess { base, .. } => base.calls_self(name),
+            MiddleNodeType::ScopeAccess { base, .. } => base.calls_self(name),
+            MiddleNodeType::IndexAccess { base, index } => {
+                base.calls_self(name) || index.calls_self(name)
             }
             MiddleNodeType::EnumExpression { data, .. } => {
                 data.as_ref().is_some_and(|d| d.calls_self(name))
@@ -322,8 +326,17 @@ pub enum MiddleNodeType {
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(ParsedIntLiteral),
-    MemberExpression {
-        path: Vec<(MiddleNode, bool)>,
+    FieldAccess {
+        base: Box<MiddleNode>,
+        field: ParserText,
+    },
+    ScopeAccess {
+        base: Box<MiddleNode>,
+        field: ParserText,
+    },
+    IndexAccess {
+        base: Box<MiddleNode>,
+        index: Box<MiddleNode>,
     },
     CallExpression {
         caller: Box<MiddleNode>,
@@ -366,7 +379,9 @@ impl MiddleNodeType {
                 | MiddleNodeType::StringLiteral(_)
                 | MiddleNodeType::CharLiteral(_)
                 | MiddleNodeType::Null
-                | MiddleNodeType::MemberExpression { .. }
+                | MiddleNodeType::FieldAccess { .. }
+                | MiddleNodeType::ScopeAccess { .. }
+                | MiddleNodeType::IndexAccess { .. }
                 | MiddleNodeType::AggregateExpression { .. }
                 | MiddleNodeType::ListLiteral(_, _)
                 | MiddleNodeType::RangeDeclaration { .. }
@@ -612,16 +627,17 @@ impl Into<NodeType> for MiddleNodeType {
                 }
                 NodeType::IntLiteral(ParserText::from(out))
             }
-            Self::MemberExpression { path } => NodeType::MemberExpression {
-                path: {
-                    let mut lst = Vec::new();
-
-                    for node in path {
-                        lst.push((node.0.into(), node.1));
-                    }
-
-                    lst
-                },
+            Self::FieldAccess { base, field } => NodeType::FieldAccess {
+                base: Box::new((*base).into()),
+                field: field.into(),
+            },
+            Self::ScopeAccess { base, field } => NodeType::ScopeAccess {
+                base: Box::new((*base).into()),
+                field: field.into(),
+            },
+            Self::IndexAccess { base, index } => NodeType::IndexAccess {
+                base: Box::new((*base).into()),
+                index: Box::new((*index).into()),
             },
             Self::CallExpression { caller, args } => NodeType::CallExpression {
                 string_fn: None,

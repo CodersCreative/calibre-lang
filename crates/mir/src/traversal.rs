@@ -204,11 +204,17 @@ pub trait NodeVisitor {
                 then: Box::new(self.visit(*then)),
                 otherwise: Box::new(self.visit(*otherwise)),
             },
-            NodeType::MemberExpression { path } => NodeType::MemberExpression {
-                path: path
-                    .into_iter()
-                    .map(|(n, is_mut)| (self.visit(n), is_mut))
-                    .collect(),
+            NodeType::FieldAccess { base, field } => NodeType::FieldAccess {
+                base: Box::new(self.visit(*base)),
+                field,
+            },
+            NodeType::ScopeAccess { base, field } => NodeType::ScopeAccess {
+                base: Box::new(self.visit(*base)),
+                field,
+            },
+            NodeType::IndexAccess { base, index } => NodeType::IndexAccess {
+                base: Box::new(self.visit(*base)),
+                index: Box::new(self.visit(*index)),
             },
             NodeType::DestructureDeclaration {
                 var_type,
@@ -393,10 +399,6 @@ pub trait NodeVisitor {
                 value: Box::new(self.visit(*value)),
                 count: Box::new(self.visit(*count)),
             },
-            NodeType::ScopeMemberExpression { module, value } => NodeType::ScopeMemberExpression {
-                module,
-                value: Box::new(self.visit(*value)),
-            },
             NodeType::PipeExpression(segments) => NodeType::PipeExpression(
                 segments
                     .into_iter()
@@ -456,12 +458,19 @@ pub trait NodeAnalyzer {
         match node_type {
             NodeType::BinaryExpression { left, right, .. }
             | NodeType::BooleanExpression { left, right, .. }
-            | NodeType::ComparisonExpression { left, right, .. } => {
-                self.analyze(left) && self.analyze(right)
+            | NodeType::AssignmentExpression {
+                identifier: left,
+                value: right,
             }
-            NodeType::AssignmentExpression { identifier, value } => {
-                self.analyze(identifier) && self.analyze(value)
+            | NodeType::ComparisonExpression { left, right, .. }
+            | NodeType::IndexAccess {
+                base: left,
+                index: right,
             }
+            | NodeType::InDeclaration {
+                identifier: left,
+                value: right,
+            } => self.analyze(left) && self.analyze(right),
             NodeType::CallExpression {
                 caller,
                 args,
@@ -495,7 +504,12 @@ pub trait NodeAnalyzer {
             | NodeType::DebugExpression { value }
             | NodeType::AsExpression { value, .. }
             | NodeType::IsExpression { value, .. }
-            | NodeType::DerefStatement { value } => self.analyze(value),
+            | NodeType::FieldAccess { base: value, .. }
+            | NodeType::ScopeAccess { base: value, .. }
+            | NodeType::DerefStatement { value }
+            | NodeType::DestructureDeclaration { value, .. }
+            | NodeType::DestructureAssignment { value, .. }
+            | NodeType::MoveExpression { value } => self.analyze(value),
             NodeType::TupleLiteral { values } => values.iter().all(|n| self.analyze(n)),
             NodeType::StructLiteral { value, .. } => match value {
                 ObjectType::Map(fields) => fields.iter().all(|(_, n)| self.analyze(n)),
@@ -534,16 +548,10 @@ pub trait NodeAnalyzer {
                 then,
                 otherwise,
             } => self.analyze(comparison) && self.analyze(then) && self.analyze(otherwise),
-            NodeType::MemberExpression { path } => path.iter().all(|(n, _)| self.analyze(n)),
-            NodeType::DestructureDeclaration { value, .. }
-            | NodeType::DestructureAssignment { value, .. } => self.analyze(value),
             NodeType::Spawn { items, .. } => items.iter().all(|n| self.analyze(n)),
-            NodeType::MoveExpression { value } => self.analyze(value),
-            NodeType::InDeclaration { identifier, value } => {
-                self.analyze(identifier) && self.analyze(value)
+            NodeType::Return { value } | NodeType::Break { value, .. } => {
+                value.as_ref().is_none_or(|n| self.analyze(n))
             }
-            NodeType::Return { value } => value.as_ref().is_none_or(|n| self.analyze(n)),
-            NodeType::Break { value, .. } => value.as_ref().is_none_or(|n| self.analyze(n)),
             _ => true,
         }
     }

@@ -56,16 +56,6 @@ fn extract_single_return_expr(body: &MiddleNode) -> Option<MiddleNode> {
 
 fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
     match &mut node.node_type {
-        MiddleNodeType::ScopeDeclaration { body, .. } => {
-            for stmt in body {
-                inline_in_node(stmt, map);
-            }
-        }
-        MiddleNodeType::VariableDeclaration { value, .. } => inline_in_node(value, map),
-        MiddleNodeType::AssignmentExpression { identifier, value } => {
-            inline_in_node(identifier, map);
-            inline_in_node(value, map);
-        }
         MiddleNodeType::CallExpression { caller, args } => {
             inline_in_node(caller, map);
             for a in args.iter_mut() {
@@ -84,14 +74,27 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
                 *node = inlined;
             }
         }
-        MiddleNodeType::Return { value } => {
+        MiddleNodeType::Return { value } | MiddleNodeType::EnumExpression { data: value, .. } => {
             if let Some(v) = value.as_mut() {
                 inline_in_node(v, map);
             }
         }
         MiddleNodeType::BinaryExpression { left, right, .. }
+        | MiddleNodeType::AssignmentExpression {
+            identifier: left,
+            value: right,
+        }
+        | MiddleNodeType::IndexAccess {
+            base: left,
+            index: right,
+        }
         | MiddleNodeType::ComparisonExpression { left, right, .. }
-        | MiddleNodeType::BooleanExpression { left, right, .. } => {
+        | MiddleNodeType::BooleanExpression { left, right, .. }
+        | MiddleNodeType::RangeDeclaration {
+            from: left,
+            to: right,
+            ..
+        } => {
             inline_in_node(left, map);
             inline_in_node(right, map);
         }
@@ -100,31 +103,20 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
         | MiddleNodeType::NegExpression { value }
         | MiddleNodeType::RefStatement { value, .. }
         | MiddleNodeType::DerefStatement { value }
-        | MiddleNodeType::DebugExpression { value, .. } => inline_in_node(value, map),
-        MiddleNodeType::ListLiteral(_, values) => {
+        | MiddleNodeType::VariableDeclaration { value, .. }
+        | MiddleNodeType::DebugExpression { value, .. }
+        | MiddleNodeType::FieldAccess { base: value, .. } => inline_in_node(value, map),
+        MiddleNodeType::ListLiteral(_, values)
+        | MiddleNodeType::ScopeDeclaration { body: values, .. } => {
             for v in values {
                 inline_in_node(v, map);
             }
-        }
-        MiddleNodeType::RangeDeclaration { from, to, .. } => {
-            inline_in_node(from, map);
-            inline_in_node(to, map);
         }
         MiddleNodeType::LoopDeclaration { state, body, .. } => {
             if let Some(s) = state.as_mut() {
                 inline_in_node(s, map);
             }
             inline_in_node(body, map);
-        }
-        MiddleNodeType::MemberExpression { path } => {
-            for (n, _) in path.iter_mut() {
-                inline_in_node(n, map);
-            }
-        }
-        MiddleNodeType::EnumExpression { data, .. } => {
-            if let Some(d) = data.as_mut() {
-                inline_in_node(d, map);
-            }
         }
         _ => {}
     }

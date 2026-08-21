@@ -177,20 +177,6 @@ pub(super) fn member_path_span(path: &[(Node, bool)]) -> Span {
     }
 }
 
-pub(super) fn member_node_from_path(path: Vec<(Node, bool)>) -> Node {
-    Node::new(member_path_span(&path), NodeType::MemberExpression { path })
-}
-
-pub(super) fn member_node_from_head_and_tail(head: Node, mut tail: Vec<(Node, bool)>) -> Node {
-    if tail.is_empty() {
-        return head;
-    }
-    let mut path = Vec::with_capacity(tail.len() + 1);
-    path.push((head, false));
-    path.append(&mut tail);
-    member_node_from_path(path)
-}
-
 pub(super) fn span_from_nodes_or(first: &Node, last: Option<&Node>, fallback: Span) -> Span {
     let sp = last.map_or(first.span, |node| {
         Span::new_from_spans(first.span, node.span)
@@ -274,21 +260,28 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<Node
         .all(|part| !part.is_empty() && is_ident(part))
     {
         let sp = fallback_span;
-        let path = trimmed
-            .split('.')
-            .map(|part| {
-                (
-                    Node::new(
-                        sp,
-                        NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                            ParserText::from(part.to_string()).into(),
-                        )),
+        let parts: Vec<&str> = trimmed.split('.').collect();
+
+        let mut current = Node::new(
+            sp,
+            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                ParserText::from(parts[0].to_string()).into(),
+            )),
+        );
+
+        for part in parts.iter().skip(1) {
+            current = Node::new(
+                sp,
+                NodeType::FieldAccess {
+                    base: Box::new(current),
+                    field: PotentialDollarIdentifier::Identifier(
+                        ParserText::from(part.to_string()).into(),
                     ),
-                    false,
-                )
-            })
-            .collect();
-        return Ok(Node::new(sp, NodeType::MemberExpression { path }));
+                },
+            );
+        }
+
+        return Ok(current);
     }
 
     if ParsedIntLiteral::parse(trimmed).is_some() {
@@ -369,97 +362,6 @@ pub(super) fn with_named_scope(node: Node, named: NamedScope) -> Node {
             },
         ),
         _ => node,
-    }
-}
-
-pub(super) fn normalize_scope_member_chain(
-    head: Node,
-    rest: Vec<(Node, bool)>,
-) -> (Node, Vec<(Node, bool)>) {
-    #[inline]
-    fn prepend_member(
-        first: Node,
-        first_is_index: bool,
-        mut remaining: Vec<(Node, bool)>,
-    ) -> Vec<(Node, bool)> {
-        let mut out = Vec::with_capacity(remaining.len() + 1);
-        out.push((first, first_is_index));
-        out.append(&mut remaining);
-        out
-    }
-
-    if rest.is_empty() {
-        return (head, rest);
-    }
-
-    let mut iter = rest.into_iter();
-    let Some((first, first_is_index)) = iter.next() else {
-        return (head, Vec::new());
-    };
-
-    if first_is_index {
-        return (head, prepend_member(first, true, iter.collect()));
-    }
-
-    let remaining: Vec<(Node, bool)> = iter.collect();
-
-    match (&head.node_type, &first.node_type) {
-        (NodeType::ScopeMemberExpression { module, value }, NodeType::Identifier(_)) => {
-            let mut new_module = module.clone();
-            if let NodeType::Identifier(ident) = &value.node_type {
-                new_module.push(ident.clone().into());
-            }
-            let sp = Span::new_from_spans(head.span, first.span);
-            (
-                Node::new(
-                    sp,
-                    NodeType::ScopeMemberExpression {
-                        module: new_module,
-                        value: Box::new(first),
-                    },
-                ),
-                remaining,
-            )
-        }
-        (
-            NodeType::ScopeMemberExpression { module, value },
-            NodeType::CallExpression {
-                string_fn,
-                caller,
-                generic_types,
-                args,
-                reverse_args,
-            },
-        ) => {
-            if let NodeType::Identifier(_) = caller.node_type {
-                let mut new_module = module.clone();
-                if let NodeType::Identifier(ident) = &value.node_type {
-                    new_module.push(ident.clone().into());
-                }
-                let caller_span = Span::new_from_spans(head.span, caller.span);
-                let scoped_caller = Node::new(
-                    caller_span,
-                    NodeType::ScopeMemberExpression {
-                        module: new_module,
-                        value: Box::new(*caller.clone()),
-                    },
-                );
-                (
-                    Node::call_full(
-                        first.span,
-                        scoped_caller,
-                        generic_types.clone(),
-                        args.clone(),
-                        reverse_args.clone(),
-                        string_fn.clone(),
-                    ),
-                    remaining,
-                )
-            } else {
-                (head, prepend_member(first, false, remaining))
-            }
-        }
-        _ => (head, prepend_member(first, false, remaining)),
     }
 }
 
