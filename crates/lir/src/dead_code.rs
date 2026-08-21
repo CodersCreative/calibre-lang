@@ -26,21 +26,11 @@ impl WorkList {
 
 impl LirRegistry {
     pub fn eliminate_dead_code(mut self, entry_points: Vec<String>) -> LirRegistry {
-        let (mut reachable_functions, reachable_globals, referenced_types) =
+        let (reachable_functions, reachable_globals, referenced_types) =
             self.collect_references(entry_points);
 
-        self.dyn_vtables.retain(|concrete_type, trait_map| {
-            if referenced_types.contains(concrete_type) {
-                for (_trait_name, methods) in trait_map.iter() {
-                    for (_method_name, function_name) in methods {
-                        let _ = reachable_functions.insert(function_name.clone());
-                    }
-                }
-                true
-            } else {
-                false
-            }
-        });
+        self.dyn_vtables
+            .retain(|concrete_type, _| referenced_types.contains(concrete_type));
 
         self.functions
             .retain(|name, _| reachable_functions.contains(name));
@@ -70,10 +60,21 @@ impl LirRegistry {
             seen: entry_points.into_iter().collect(),
         };
 
-        while let Some(func_name) = worklist.pop() {
-            println!("{}", func_name);
-            if let Some(func) = self.functions.get(&func_name) {
-                func.collect_references(
+        for (concrete_type, trait_map) in &self.dyn_vtables {
+            if referenced_types.contains(concrete_type) {
+                for (_trait_name, methods) in trait_map {
+                    for (_method_name, function_name) in methods {
+                        if reachable_functions.insert(function_name.clone()) {
+                            worklist.push(function_name.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        for global_name in reachable_globals.clone() {
+            if let Some(global) = self.globals.get(&global_name) {
+                global.collect_references(
                     self,
                     &mut reachable_functions,
                     &mut reachable_globals,
@@ -83,10 +84,9 @@ impl LirRegistry {
             }
         }
 
-        for global_name in reachable_globals.clone() {
-            println!("{}", global_name);
-            if let Some(global) = self.globals.get(&global_name) {
-                global.collect_references(
+        while let Some(func_name) = worklist.pop() {
+            if let Some(func) = self.functions.get(&func_name) {
+                func.collect_references(
                     self,
                     &mut reachable_functions,
                     &mut reachable_globals,

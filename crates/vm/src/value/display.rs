@@ -21,7 +21,9 @@ where
 
 impl RuntimeValue {
     pub fn repr(&self, vm: &mut VM) -> String {
-        if let Ok(x) = vm.call_trait_for_type(self, "repr", Vec::new(), Some(0)) {
+        if let Ok(x) = vm.call_trait_for_type(self, "repr", Vec::new(), Some(0))
+            && !x.is_null()
+        {
             return x.repr(vm);
         }
 
@@ -137,7 +139,9 @@ impl RuntimeValue {
     }
 
     pub fn display(&self, vm: &mut VM) -> String {
-        if let Ok(x) = vm.call_trait_for_type(self, "display", Vec::new(), Some(0)) {
+        if let Ok(x) = vm.call_trait_for_type(self, "display", Vec::new(), Some(0))
+            && !x.is_null()
+        {
             return x.display(vm);
         }
 
