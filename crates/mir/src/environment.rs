@@ -12,7 +12,7 @@ use calibre_parser::{
     Span,
     ast::{
         Operator,
-        idents::{ParserText, PotentialDollarIdentifier},
+        idents::{ParserText},
         nodes::{FunctionHeader, Node, NodeType, Overload, VarType},
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },

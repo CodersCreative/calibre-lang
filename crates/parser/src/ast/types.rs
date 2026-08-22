@@ -9,7 +9,7 @@ use crate::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, hash::Hash, ops::Deref, println, str::FromStr};
+use std::{fmt::Display, hash::Hash, ops::Deref, str::FromStr};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParserDataType {

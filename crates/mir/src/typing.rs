@@ -47,8 +47,29 @@ impl Typing {
         .map(|x| x.impl_name())
         .collect();
 
-        self.find_impl_for_type(ty)?
-            .get_member(member, &generic_params)
+        if let Some(implementation) = self.find_impl_for_type(ty) {
+            return implementation.get_member(member, &generic_params);
+        }
+
+        let ParserInnerType::StructWithGenerics { identifier, .. } = &ty.data_type
+        else {
+            return None;
+        };
+
+        if let Some(implementation) = self.find_impl_for_type(&ParserDataType { data_type: ParserInnerType::Struct(identifier.clone()), span: ty.span }) {
+            return implementation.get_member(member, &generic_params);
+        }
+
+        // TODO Remove, its the worst case scenario
+        self.impls.values().find_map(|implementation| {
+            let ParserInnerType::Struct(name) = &implementation.data_type.data_type else {
+                return None;
+            };
+            let generic_name = format!("{identifier}:<");
+            name.contains(&generic_name)
+                .then(|| implementation.get_member(member, &generic_params))
+                .flatten()
+        })
     }
 
     pub fn collect_trait_default_members(
@@ -218,7 +239,9 @@ impl MiddleImpl {
         } else if let Some(x) = members.iter().find(|x| x.generic_params.is_empty()) {
             Some(x)
         } else {
-            None
+            members
+                .iter()
+                .find(|x| x.generic_params.len() == generic_params.len())
         }
     }
 

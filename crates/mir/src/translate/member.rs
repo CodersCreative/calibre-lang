@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
@@ -9,9 +7,9 @@ use calibre_parser::{
     Span,
     ast::{
         Operator,
-        idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        idents::{PotentialDollarIdentifier,},
         nodes::{CallArg, Node, NodeType},
-        types::{ParserDataType, ParserInnerType},
+        types::{ParserDataType,},
     },
 };
 
@@ -51,9 +49,14 @@ impl MiddleEnvironment {
 
         if let NodeType::Identifier(ident) = &base.node_type
             && let Some(ty) = self.resolve_potential_generic_ident_to_data_type(scope, &ident)
-            && let Some(x) = self.resolve_impl_member(scope, &ParserDataType::from(ty), &field_name)
         {
-            return Ok(MiddleNode::identifier(span, x));
+            if let Some(member) = self.typing.find_impl_member(&ty, &field_name) {
+                return Ok(MiddleNode::identifier(span, member.symbol_name.clone()));
+            }
+
+            if let Some(member) = self.resolve_impl_member(scope, &ty, &field_name) {
+                return Ok(MiddleNode::identifier(span, member));
+            }
         }
 
         Ok(MiddleNode::new(

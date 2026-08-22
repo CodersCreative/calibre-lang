@@ -1,11 +1,10 @@
 use crate::environment::MiddleEnvironment;
 use calibre_parser::ast::{
     Operator,
-    idents::{ParsedIntLiteral, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+    idents::{ParsedIntLiteral, PotentialGenericTypeIdentifier},
     nodes::{AsFailureMode, EmitType, Node, NodeType},
     types::{ParserDataType, ParserInnerType},
 };
-use std::str::FromStr;
 
 impl MiddleEnvironment {
     pub fn resolve_emit_type_from_node(

@@ -17,7 +17,6 @@ use calibre_parser::{
     },
 };
 use rustc_hash::FxHashMap;
-use std::str::FromStr;
 
 struct GeneratorReturnsRewriter;
 
@@ -859,10 +858,8 @@ impl MiddleEnvironment {
         }
 
         if let NodeType::FieldAccess { base, field } = caller.node_type.clone()
-            && matches!(field, PotentialDollarIdentifier::Identifier(_))
-            && let MiddleNodeType::Identifier(symbol) = self
-                .evaluate_field_access(scope, caller.span, *base, field)?
-                .node_type
+            && let resolved = self.evaluate_field_access(scope, caller.span, *base, field)?
+            && let MiddleNodeType::Identifier(symbol) = resolved.node_type
         {
             return self.evaluate_call_expression(
                 scope,
@@ -1049,6 +1046,24 @@ impl MiddleEnvironment {
         if let NodeType::Identifier(caller_ident) = &caller.node_type {
             if "tuple" == &caller_ident.to_string() {
                 return Ok(self.aggregate_from_call_nodes(scope, span, None, args, reverse_args));
+            }
+
+            if matches!(caller_ident, PotentialGenericTypeIdentifier::Generic { .. })
+                && let Some(data_type) =
+                    self.resolve_potential_generic_ident_to_data_type(scope, caller_ident)
+            {
+                let data_type = self.resolve_data_type(scope, data_type);
+                if let ParserInnerType::Struct(name) = data_type.data_type
+                    && self.typing.objects.contains_key(&name)
+                {
+                    return Ok(self.aggregate_from_call_nodes(
+                        scope,
+                        span,
+                        Some(ParserText::new(span, name)),
+                        args,
+                        reverse_args,
+                    ));
+                }
             }
 
             let base_ident = match caller_ident {

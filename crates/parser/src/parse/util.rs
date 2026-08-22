@@ -170,13 +170,6 @@ where
         .then_ignore(lex(pad, just('}')))
 }
 
-pub(super) fn member_path_span(path: &[(Node, bool)]) -> Span {
-    match (path.first(), path.last()) {
-        (Some(first), Some(last)) => Span::new_from_spans(first.0.span, last.0.span),
-        _ => Span::default(),
-    }
-}
-
 pub(super) fn span_from_nodes_or(first: &Node, last: Option<&Node>, fallback: Span) -> Span {
     let sp = last.map_or(first.span, |node| {
         Span::new_from_spans(first.span, node.span)

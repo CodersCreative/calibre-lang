@@ -16,9 +16,8 @@ type StackList := struct (list:<Stack2>);
 
 @init @fin(100)
 const main := fn => {
-	std::console::out("hello");
 	let mut arr := Stack { values : [0; 30] };
-	arr.smth();
+	// arr.smth();
 	arr.values[10] := 100;
 	let mut arr2 := Stack2(move arr);
 	arr2.0.values[9] := 90;

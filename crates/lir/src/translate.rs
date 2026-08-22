@@ -175,39 +175,6 @@ impl<'a> LirEnvironment<'a> {
         this.registry
     }
 
-    fn lower_member_lvalue(&mut self, path: Vec<(MiddleNode, bool)>) -> LirNodeType {
-        self.lower_member_path(path, true)
-    }
-
-    fn lower_member_path(
-        &mut self,
-        path: Vec<(MiddleNode, bool)>,
-        ref_identifier_base: bool,
-    ) -> LirNodeType {
-        let mut path = path.into_iter();
-
-        let Some((base_node, _)) = path.next() else {
-            return LirNodeType::null();
-        };
-
-        let mut current = match (ref_identifier_base, &base_node.node_type) {
-            (true, MiddleNodeType::Identifier(name)) => LirNodeType::Ref(Box::new(
-                LirNodeType::Load(name.text.clone().into_boxed_str()),
-            )),
-            _ => self.lower_node(base_node),
-        };
-
-        for (step, is_dynamic) in path {
-            if is_dynamic {
-                current = LirNodeType::Index(Box::new(current), Box::new(self.lower_node(step)));
-            } else {
-                current = LirNodeType::Member(Box::new(current), step.member_field());
-            }
-        }
-
-        current
-    }
-
     pub fn lower_and_add_node(&mut self, node: MiddleNode) {
         if !self.current_block_open() {
             return;
