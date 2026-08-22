@@ -26,10 +26,6 @@ impl Typing {
             Some(x)
         } else if let Some(x) = self.impls.get(&ty.clone().unwrap_all_refs().key()) {
             Some(x)
-        } else if let Some(x) = self.impls.get(&ParserInnerType::Struct(
-            ty.key().to_string().split_once(":<")?.0.to_string(),
-        )) {
-            Some(x)
         } else {
             None
         }

@@ -168,27 +168,7 @@ impl MiddleEnvironment {
                         generic_types,
                     } => {
                         let base = self.resolve_dollar_ident_only(scope, base).ok()?;
-                        let concrete: Vec<ParserDataType> = generic_types
-                            .iter()
-                            .map(|g| self.resolve_data_type(scope, g.clone()))
-                            .collect();
-
-                        if let Some((tpl_params, _, _)) =
-                            self.typing.generic_type_templates.get(&base.text).cloned()
-                        {
-                            if let Some(spec) = self.ensure_specialized_type(
-                                scope,
-                                &base.text,
-                                &tpl_params,
-                                &concrete,
-                            ) {
-                                ParserInnerType::Struct(spec)
-                            } else {
-                                ParserInnerType::Struct(base.text)
-                            }
-                        } else {
-                            ParserInnerType::Struct(base.text)
-                        }
+                        ParserInnerType::Struct(base.text)
                     }
                     _ => ParserInnerType::Struct(
                         self.resolve_potential_generic_ident(scope, identifier)?

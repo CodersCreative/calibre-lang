@@ -2337,28 +2337,7 @@ impl MiddleEnvironment {
                                 identifier: base,
                                 generic_types,
                             } => {
-                                let base = self.resolve_dollar_ident_only(scope, base)?;
-                                let concrete: Vec<ParserDataType> = generic_types
-                                    .iter()
-                                    .map(|g| self.resolve_data_type(scope, g.clone()))
-                                    .collect();
-
-                                if let Some(tpl_params) = self
-                                    .typing
-                                    .generic_type_templates
-                                    .get(&base.text)
-                                    .map(|x| x.0.clone())
-                                    && let Some(spec) = self.ensure_specialized_type(
-                                        scope,
-                                        &base.text,
-                                        &tpl_params,
-                                        &concrete,
-                                    )
-                                {
-                                    ParserText::from(spec)
-                                } else {
-                                    ParserText::from(base.text)
-                                }
+                                ParserText::from(self.resolve_dollar_ident_only(scope, base)?.text)
                             }
                             // TODO Remove or_else case
                             _ => self

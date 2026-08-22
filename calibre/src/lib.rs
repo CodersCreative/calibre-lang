@@ -17,10 +17,7 @@ use calibre_vm::{
 };
 use glob::glob;
 use serde::{Deserialize, Serialize};
-use std::{
-    fs::{self, File},
-    println,
-};
+use std::fs::{self, File};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,

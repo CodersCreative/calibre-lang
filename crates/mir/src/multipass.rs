@@ -1,4 +1,4 @@
-use crate::{environment::MiddleEnvironment, errors::MiddleErr, symbols::MiddleVariable};
+use crate::{environment::MiddleEnvironment, errors::MiddleErr};
 use calibre_parser::ast::{
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::{Node, NodeType, VarType},
@@ -19,9 +19,7 @@ impl MiddleEnvironment {
             NodeType::Tag { node: inner, .. } => self.predeclare_node(scope, inner.as_mut()),
             NodeType::TypeDeclaration {
                 identifier:
-                    PotentialGenericTypeIdentifier::Identifier(PotentialDollarIdentifier::Identifier(
-                        ident,
-                    )),
+                    PotentialGenericTypeIdentifier::Identifier(PotentialDollarIdentifier::Identifier(_)),
                 ..
             } => {
                 // TODO Account for types

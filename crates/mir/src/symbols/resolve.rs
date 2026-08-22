@@ -442,19 +442,6 @@ impl MiddleEnvironment {
                     };
                 }
 
-                if let Some((tpl_params, _, _)) =
-                    self.typing.generic_type_templates.get(&id).cloned()
-                    && tpl_params.len() == resolved_gens.len()
-                    && !resolved_gens.iter().any(|g| g.is_auto())
-                    && let Some(spec) =
-                        self.ensure_specialized_type(scope, &id, &tpl_params, &resolved_gens)
-                {
-                    return ParserDataType {
-                        data_type: ParserInnerType::Struct(spec),
-                        span: data_type.span,
-                    };
-                }
-
                 ParserDataType {
                     data_type: ParserInnerType::StructWithGenerics {
                         identifier: id,

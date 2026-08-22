@@ -1,5 +1,3 @@
-use std::println;
-
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
@@ -223,39 +221,10 @@ impl MiddleEnvironment {
         &mut self,
         scope: &u64,
         span: Span,
-        mut identifier: PotentialGenericTypeIdentifier,
+        identifier: PotentialGenericTypeIdentifier,
         object: TypeDefType,
         overloads: Vec<Overload>,
     ) -> Result<MiddleNode, MiddleErr> {
-        identifier = match identifier {
-            PotentialGenericTypeIdentifier::Generic {
-                identifier,
-                generic_types,
-            } => PotentialGenericTypeIdentifier::Generic {
-                identifier: PotentialDollarIdentifier::new(
-                    span,
-                    identifier
-                        .text()
-                        .split_once(":<")
-                        .map(|x| x.0)
-                        .unwrap_or(identifier.text()),
-                ),
-                generic_types,
-            },
-            PotentialGenericTypeIdentifier::Identifier(identifier) => {
-                PotentialGenericTypeIdentifier::Identifier(PotentialDollarIdentifier::new(
-                    span,
-                    identifier
-                        .text()
-                        .split_once(":<")
-                        .map(|x| x.0)
-                        .unwrap_or(identifier.text()),
-                ))
-            }
-        };
-
-        identifier.to_string();
-
         let mut has_default = false;
 
         for tag in &self.tagging.tag_info {

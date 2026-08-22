@@ -128,7 +128,7 @@ impl MiddleEnvironment {
                     body: Some(body), ..
                 } = &mut program.node_type
                 {
-                    self.predeclare_nodes(&scope, body);
+                    self.predeclare_nodes(&scope, body)?;
                 }
 
                 let node = self.evaluate(&scope, program);
@@ -175,7 +175,7 @@ impl MiddleEnvironment {
             body: Some(body), ..
         } = &mut program.node_type
         {
-            self.predeclare_nodes(&scope, body);
+            self.predeclare_nodes(&scope, body)?;
         }
 
         let node = self.evaluate(&scope, program);

@@ -1,5 +1,3 @@
-use std::println;
-
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,

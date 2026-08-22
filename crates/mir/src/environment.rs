@@ -109,7 +109,8 @@ impl MiddleEnvironment {
         Ok(())
     }
 
-    pub fn ensure_specialized_type(
+    // TODO I need to rework this system entirely
+    pub(crate) fn _ensure_specialized_type(
         &mut self,
         _scope: &u64,
         base: &str,
@@ -357,7 +358,9 @@ impl MiddleEnvironment {
             body: Some(body), ..
         } = &mut node.node_type
         {
-            env.predeclare_nodes(&scope, body);
+            let _ = env.predeclare_nodes(&scope, body).map_err(|err| {
+                env.context.push_error(err);
+            });
         }
 
         let inner = env.evaluate(&scope, node.clone());
