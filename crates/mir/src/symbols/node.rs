@@ -163,9 +163,10 @@ impl MiddleEnvironment {
             | NodeType::StructLiteral { identifier, .. } => Some(ParserDataType {
                 span: *identifier.span(),
                 data_type: match identifier {
+                    // TODO Handle generics
                     PotentialGenericTypeIdentifier::Generic {
                         identifier: base,
-                        generic_types,
+                        generic_types: _,
                     } => {
                         let base = self.resolve_dollar_ident_only(scope, base).ok()?;
                         ParserInnerType::Struct(base.text)

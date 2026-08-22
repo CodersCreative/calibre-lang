@@ -2329,13 +2329,14 @@ impl MiddleEnvironment {
                 define,
                 is_temp,
             ),
+            // TODO Handle generics
             NodeType::StructLiteral { identifier, value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::AggregateExpression {
                     identifier: Some({
                         match &identifier {
                             PotentialGenericTypeIdentifier::Generic {
                                 identifier: base,
-                                generic_types,
+                                generic_types: _,
                             } => {
                                 ParserText::from(self.resolve_dollar_ident_only(scope, base)?.text)
                             }
