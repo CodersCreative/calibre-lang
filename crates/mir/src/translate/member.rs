@@ -7,9 +7,9 @@ use calibre_parser::{
     Span,
     ast::{
         Operator,
-        idents::{PotentialDollarIdentifier,},
+        idents::PotentialDollarIdentifier,
         nodes::{CallArg, Node, NodeType},
-        types::{ParserDataType,},
+        types::ParserDataType,
     },
 };
 

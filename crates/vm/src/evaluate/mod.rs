@@ -752,6 +752,9 @@ impl VM {
 
     #[inline]
     fn resolve_runtime_value(&self, name: &str) -> Option<(RuntimeValue, String)> {
+        if let Some(native) = RuntimeValue::natives().get(name) {
+            return Some((native.clone(), name.to_string()));
+        }
         if let Some(func) = self.get_function_ref(name) {
             return Some((self.make_runtime_function(func), name.to_string()));
         }

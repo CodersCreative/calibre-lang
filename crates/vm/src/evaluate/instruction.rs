@@ -1,4 +1,4 @@
-use std::{sync::Mutex};
+use std::sync::Mutex;
 
 use super::*;
 use crate::{
@@ -1102,6 +1102,33 @@ impl VM {
                             member_source = Some((source_reg, map.0.0[idx].0.clone()));
                             let field_value = map.0.0[idx].1.clone();
                             field_value
+                        } else if let Some((_, wrapped)) =
+                            map.0.0.iter().find(|(field, _)| field == "0")
+                        {
+                            let wrapped = self.resolve_value_for_op_ref(wrapped)?;
+                            if tuple_index.is_some() {
+                                wrapped
+                            } else {
+                                let RuntimeValue::Aggregate(inner_type, inner_map) =
+                                    wrapped.clone()
+                                else {
+                                    return Err(RuntimeError::MissingMember {
+                                        target: RuntimeValue::Aggregate(Some(type_name), map),
+                                        member: name.to_string(),
+                                    });
+                                };
+                                let inner_name = inner_type.as_deref().unwrap_or_default();
+                                if let Some(idx) = self.resolve_aggregate_member_slot(
+                                    inner_name, &inner_map, name, short_name,
+                                ) {
+                                    inner_map.0.0[idx].1.clone()
+                                } else {
+                                    return Err(RuntimeError::MissingMember {
+                                        target: RuntimeValue::Aggregate(Some(type_name), map),
+                                        member: name.to_string(),
+                                    });
+                                }
+                            }
                         } else {
                             match self.resolve_associated_member_value(
                                 type_name.as_str(),
@@ -1250,7 +1277,16 @@ impl VM {
                     }
                     RuntimeValue::Str(value) => bind_assoc(self, "str", RuntimeValue::Str(value))?,
                     RuntimeValue::List(value) => {
-                        bind_assoc(self, "list", RuntimeValue::List(value))?
+                        if let Some(index) = tuple_index {
+                            value
+                                .as_ref()
+                                .0
+                                .get(index)
+                                .cloned()
+                                .unwrap_or_else(|| RuntimeValue::Null)
+                        } else {
+                            bind_assoc(self, "list", RuntimeValue::List(value))?
+                        }
                     }
                     RuntimeValue::Int(value) => bind_assoc(self, "int", RuntimeValue::Int(value))?,
                     RuntimeValue::UInt(value) => {
@@ -1637,6 +1673,34 @@ impl VM {
                                 Gc::new(crate::value::GcMap(ObjectMap(slice))),
                             )
                         }
+                        _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                    },
+                    RuntimeValue::Aggregate(Some(_), tuple) => match &index_val {
+                        RuntimeValue::Int(0) | RuntimeValue::UInt(0)
+                            if tuple.as_ref().0.0.len() == 1
+                                && matches!(tuple.as_ref().0.0[0].1, RuntimeValue::List(_)) =>
+                        {
+                            let RuntimeValue::List(list) = &tuple.as_ref().0.0[0].1 else {
+                                unreachable!()
+                            };
+                            list.as_ref()
+                                .0
+                                .first()
+                                .cloned()
+                                .unwrap_or(RuntimeValue::Null)
+                        }
+                        RuntimeValue::Int(index) => {
+                            Self::resolve_index(tuple.as_ref().0.0.len(), *index)
+                                .and_then(|i| tuple.as_ref().0.0.get(i).map(|(_, v)| v.clone()))
+                                .unwrap_or_else(|| RuntimeValue::Null)
+                        }
+                        RuntimeValue::UInt(index) => tuple
+                            .as_ref()
+                            .0
+                            .0
+                            .get(*index as usize)
+                            .map(|(_, v)| v.clone())
+                            .unwrap_or_else(|| RuntimeValue::Null),
                         _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
                     },
                     RuntimeValue::Str(s) => match &index_val {
