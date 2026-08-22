@@ -119,7 +119,7 @@ impl MiddleEnvironment {
             NodeType::ScopeDeclaration {
                 named: Some(named), ..
             } => {
-                let name = self.resolve_dollar_ident_only(scope, &named.name)?;
+                let name = self.resolve_dollar_ident_only(scope, &named.name).ok()?;
                 let resolved = self
                     .scoping
                     .resolve_macro(scope, &name)?
@@ -167,7 +167,7 @@ impl MiddleEnvironment {
                         identifier: base,
                         generic_types,
                     } => {
-                        let base = self.resolve_dollar_ident_only(scope, base)?;
+                        let base = self.resolve_dollar_ident_only(scope, base).ok()?;
                         let concrete: Vec<ParserDataType> = generic_types
                             .iter()
                             .map(|g| self.resolve_data_type(scope, g.clone()))

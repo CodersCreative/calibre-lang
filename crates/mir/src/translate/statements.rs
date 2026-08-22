@@ -1,3 +1,5 @@
+use std::println;
+
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
@@ -26,12 +28,7 @@ impl MiddleEnvironment {
         mut value: Node,
         data_type: ParserDataType,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = self
-            .resolve_dollar_ident_only(scope, &identifier)
-            .ok_or_else(|| {
-                self.context
-                    .err_at_current(MiddleErr::Scope(identifier.to_string()))
-            })?;
+        let identifier = self.resolve_dollar_ident_only(scope, &identifier)?;
 
         let new_name = ParserText::temp_name_with_suffix(identifier.text.trim(), span).text;
 
@@ -157,12 +154,7 @@ impl MiddleEnvironment {
             let new_scope = self.scoping.new_scope_from_parent_shallow(*scope);
 
             for param in header.parameters.iter() {
-                let og_name = self
-                    .resolve_dollar_ident_only(scope, &param.0)
-                    .ok_or_else(|| {
-                        self.context
-                            .err_at_current(MiddleErr::Scope(param.0.to_string()))
-                    })?;
+                let og_name = self.resolve_dollar_ident_only(scope, &param.0)?;
 
                 let new_name = ParserText::temp_name_with_suffix(og_name.trim(), span);
 
@@ -235,6 +227,8 @@ impl MiddleEnvironment {
         object: TypeDefType,
         overloads: Vec<Overload>,
     ) -> Result<MiddleNode, MiddleErr> {
+        println!("{}", identifier.get_ident());
+
         let mut has_default = false;
 
         for tag in &self.tagging.tag_info {
@@ -263,9 +257,8 @@ impl MiddleEnvironment {
                 _ => Vec::new(),
             };
 
-            let identifier = self
-                .resolve_dollar_ident_potential_generic_only(scope, &identifier)
-                .unwrap_or_else(|| ParserText::from(identifier.to_string()));
+            let identifier =
+                self.resolve_dollar_ident_potential_generic_only(scope, &identifier)?;
 
             let inner = self.resolve_data_type(scope, *inner.clone());
 
@@ -313,11 +306,7 @@ impl MiddleEnvironment {
             generic_types,
         } = identifier.clone()
         {
-            let base_ident = self
-                .resolve_dollar_ident_only(scope, &base_ident)
-                .ok_or_else(|| {
-                    MiddleErr::At(span, Box::new(MiddleErr::Scope(base_ident.to_string())))
-                })?;
+            let base_ident = self.resolve_dollar_ident_only(scope, &base_ident)?;
 
             let template_params: Vec<String> = generic_types
                 .iter()
@@ -374,11 +363,7 @@ impl MiddleEnvironment {
             });
         }
 
-        let identifier = self
-            .resolve_dollar_ident_potential_generic_only(scope, &identifier)
-            .ok_or_else(|| {
-                MiddleErr::At(span, Box::new(MiddleErr::Scope(identifier.to_string())))
-            })?;
+        let identifier = self.resolve_dollar_ident_potential_generic_only(scope, &identifier)?;
 
         let new_name = ParserText::temp_name_with_suffix(identifier.text.trim(), span).text;
 

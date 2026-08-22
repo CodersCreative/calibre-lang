@@ -1014,13 +1014,7 @@ impl MiddleEnvironment {
                                         value_node.clone(),
                                         idx.to_string(),
                                     );
-                                    let val = self
-                                        .resolve_dollar_ident_only(scope, &enum_val)
-                                        .ok_or_else(|| {
-                                            self.context.err_at_current(MiddleErr::Scope(
-                                                enum_val.to_string(),
-                                            ))
-                                        })?;
+                                    let val = self.resolve_dollar_ident_only(scope, &enum_val)?;
                                     let enum_index = self
                                         .enum_variant_index_from_value(
                                             scope,
@@ -1164,15 +1158,7 @@ impl MiddleEnvironment {
                                                                 .resolve_dollar_ident_only(
                                                                     scope,
                                                                     nested_enum_val,
-                                                                )
-                                                                .ok_or_else(|| {
-                                                                    self.context.err_at_current(
-                                                                        MiddleErr::Scope(
-                                                                            nested_enum_val
-                                                                                .to_string(),
-                                                                        ),
-                                                                    )
-                                                                })?;
+                                                                )?;
                                                             let nested_index = self
                                                                 .enum_variant_index_from_value(
                                                                     scope,
@@ -1687,11 +1673,7 @@ impl MiddleEnvironment {
                             destructure,
                             pattern: payload_pattern,
                         } => {
-                            let val =
-                                self.resolve_dollar_ident_only(scope, &val).ok_or_else(|| {
-                                    self.context
-                                        .err_at_current(MiddleErr::Scope(val.to_string()))
-                                })?;
+                            let val = self.resolve_dollar_ident_only(scope, &val)?;
                             let Some(index) = Self::builtin_enum_variant_index(val.text.trim())
                             else {
                                 return Err(MiddleErr::At(
@@ -1947,9 +1929,7 @@ impl MiddleEnvironment {
                     destructure,
                     pattern: payload_pattern,
                 } => {
-                    let val = self.resolve_dollar_ident_only(scope, &val).ok_or_else(|| {
-                        MiddleErr::At(*val.span(), Box::new(MiddleErr::Scope(val.to_string())))
-                    })?;
+                    let val = self.resolve_dollar_ident_only(scope, &val)?;
                     let index: i64 = if let Some(object) = enum_object.as_ref() {
                         let Some(index) = object.iter().position(|x| x.0.text == val.text) else {
                             return Err(MiddleErr::At(

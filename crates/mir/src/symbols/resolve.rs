@@ -1,5 +1,6 @@
 use crate::{
     environment::MiddleEnvironment,
+    errors::MiddleErr,
     typing::{MiddleTrait, MiddleTypeDefType},
 };
 use calibre_parser::{
@@ -312,7 +313,7 @@ impl MiddleEnvironment {
         &self,
         scope: &u64,
         iden: &PotentialGenericTypeIdentifier,
-    ) -> Option<ParserText> {
+    ) -> Result<ParserText, MiddleErr> {
         match iden {
             PotentialGenericTypeIdentifier::Identifier(identifier)
             | PotentialGenericTypeIdentifier::Generic {
@@ -371,8 +372,12 @@ impl MiddleEnvironment {
         &self,
         scope: &u64,
         iden: &PotentialDollarIdentifier,
-    ) -> Option<ParserText> {
-        self.resolve_identifier_with_mode(scope, iden, true, false)
+    ) -> Result<ParserText, MiddleErr> {
+        if let Some(x) = self.resolve_identifier_with_mode(scope, iden, true, false) {
+            Ok(x)
+        } else {
+            Err(MiddleErr::MacroArg(iden.text().clone()))
+        }
     }
 
     pub fn resolve_ffi_data_type(

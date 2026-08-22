@@ -33,6 +33,8 @@ pub enum MiddleErr {
     Scope(String),
     #[error("Unable to find variable : {0:?}")]
     Variable(String),
+    #[error("Unable to find macro arg : ${0}")]
+    MacroArg(String),
     #[error("Overload Invalid : {0:?}")]
     Overload(String),
     #[error("Unable to find object : {0:?}")]
@@ -83,6 +85,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::ParserErrors { .. } => 218,
             Self::InFile { .. } => 2019,
             Self::Multiple(_) => 220,
+            Self::MacroArg(_) => 221,
         }
     }
 
@@ -120,6 +123,9 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::Overload(msg) => Some(format!("overload error: {msg}")),
             Self::Object(obj) => Some(format!(
                 "object `{obj}` not found - check spelling or imports"
+            )),
+            Self::MacroArg(x) => Some(format!(
+                "macro arg `{x}` not found - check spelling or imports"
             )),
             Self::EnumVariant(variant) => Some(format!("enum variant `{variant}` does not exist")),
             Self::Internal(msg) => Some(format!("internal error: {msg} - please report this bug")),

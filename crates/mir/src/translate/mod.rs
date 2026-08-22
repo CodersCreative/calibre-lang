@@ -80,7 +80,7 @@ impl MiddleEnvironment {
                             PotentialDollarIdentifier::Identifier(text)
                         ) if ParserText::is_temp_name(&text.text)
                     ) {
-                        ParserText::from(x.to_string())
+                        self.resolve_dollar_ident_only(scope, x.get_ident())?
                     } else if let PotentialDollarIdentifier::DollarIdentifier(x) = x.get_ident() {
                         let val = self
                             .scoping
@@ -823,7 +823,7 @@ impl MiddleEnvironment {
                     let raw_label_text = label.as_ref().map(|l| l.to_string());
                     let label_text = label
                         .as_ref()
-                        .and_then(|l| self.resolve_dollar_ident_only(scope, l))
+                        .and_then(|l| self.resolve_dollar_ident_only(scope, l).ok())
                         .map(|t| t.text);
 
                     let (result_target, broke_target, target_scope) = {
@@ -930,7 +930,7 @@ impl MiddleEnvironment {
                     let raw_label_text = label.as_ref().map(|l| l.to_string());
                     let label_text = label
                         .as_ref()
-                        .and_then(|l| self.resolve_dollar_ident_only(scope, l))
+                        .and_then(|l| self.resolve_dollar_ident_only(scope, l).ok())
                         .map(|t| t.text);
 
                     let continue_ctx = if label.is_some() {
@@ -2020,6 +2020,9 @@ impl MiddleEnvironment {
                 for (identifier, object) in assoc_types {
                     if let TypeDefType::NewType(inner) = object {
                         let resolved_ty = self.resolve_data_type(scope, *inner).unwrap_all_refs();
+                        let ident = self
+                            .resolve_dollar_ident_only(scope, identifier.get_ident())?
+                            .text;
                         self.typing
                             .impls
                             .get_mut(&impl_key)
@@ -2032,7 +2035,7 @@ impl MiddleEnvironment {
                                 )
                             })?
                             .assoc_types
-                            .insert(identifier.to_string(), resolved_ty);
+                            .insert(ident, resolved_ty);
                     }
                 }
 
@@ -2278,7 +2281,7 @@ impl MiddleEnvironment {
                     let resolved = self
                         .resolve_dollar_ident_only(scope, &imp)
                         .map(|x| x.text)
-                        .unwrap_or_else(|| imp.to_string());
+                        .unwrap_or_else(|_| imp.to_string());
                     implied.push(resolved);
                 }
 
@@ -2334,14 +2337,7 @@ impl MiddleEnvironment {
                                 identifier: base,
                                 generic_types,
                             } => {
-                                let base = self.resolve_dollar_ident_only(scope, base).ok_or_else(
-                                    || {
-                                        MiddleErr::At(
-                                            node.span,
-                                            Box::new(MiddleErr::Scope(base.to_string())),
-                                        )
-                                    },
-                                )?;
+                                let base = self.resolve_dollar_ident_only(scope, base)?;
                                 let concrete: Vec<ParserDataType> = generic_types
                                     .iter()
                                     .map(|g| self.resolve_data_type(scope, g.clone()))
@@ -2364,6 +2360,7 @@ impl MiddleEnvironment {
                                     ParserText::from(base.text)
                                 }
                             }
+                            // TODO Remove or_else case
                             _ => self
                                 .resolve_potential_generic_ident(scope, &identifier)
                                 .unwrap_or_else(|| ParserText::from(identifier.to_string())),
@@ -3044,14 +3041,8 @@ impl MiddleEnvironment {
                             let keep_scope = point.is_named();
                             let var_dec = match &point {
                                 PipeSegment::Named { identifier, .. } => {
-                                    let ident = self
-                                        .resolve_dollar_ident_only(scope, identifier)
-                                        .ok_or_else(|| {
-                                        MiddleErr::At(
-                                            node.span,
-                                            Box::new(MiddleErr::Scope(identifier.to_string())),
-                                        )
-                                    })?;
+                                    let ident =
+                                        self.resolve_dollar_ident_only(scope, identifier)?;
 
                                     prior_mappings.insert(
                                         ident.text.clone(),

@@ -774,7 +774,7 @@ impl MiddleEnvironment {
         let label_text = label.as_ref().map(|l| {
             self.resolve_dollar_ident_only(&scope, l)
                 .map(|t| t.text)
-                .unwrap_or_else(|| l.to_string())
+                .unwrap_or_else(|_| l.to_string())
         });
 
         if let Some(until) = until {

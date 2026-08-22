@@ -380,7 +380,7 @@ impl MiddleTypeDefType {
                     for (k, v) in variants {
                         lst.push((
                             env.resolve_dollar_ident_only(scope, &k)
-                                .unwrap_or_else(|| ParserText::from(k.to_string()).into()),
+                                .unwrap_or_else(|_| ParserText::from(k.to_string()).into()),
                             if let Some(v) = v {
                                 Some(env.resolve_data_type(scope, v))
                             } else {

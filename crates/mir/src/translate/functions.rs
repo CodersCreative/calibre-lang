@@ -102,8 +102,7 @@ impl MiddleEnvironment {
 
         let name = self
             .resolve_dollar_ident_only(scope, name.get_ident())
-            .map(|x| x.text)
-            .unwrap_or(name.to_string());
+            .ok()?;
         let resolved_name = self.resolve_str(scope, &name).map(|x| x.to_string());
 
         let defaults_key = resolved_name.as_deref().unwrap_or(name.as_str());
@@ -427,12 +426,7 @@ impl MiddleEnvironment {
         library: String,
         symbol: Option<String>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let ident = self
-            .resolve_dollar_ident_only(scope, &identifier)
-            .ok_or_else(|| {
-                self.context
-                    .err_at_current(MiddleErr::Scope(identifier.to_string()))
-            })?;
+        let ident = self.resolve_dollar_ident_only(scope, &identifier)?;
 
         let new_name = self
             .scoping
@@ -499,12 +493,7 @@ impl MiddleEnvironment {
 
         for param in header.parameters {
             param_idents.push(param.0.clone());
-            let og_name = self
-                .resolve_dollar_ident_only(scope, &param.0)
-                .ok_or_else(|| {
-                    self.context
-                        .err_at_current(MiddleErr::Scope(param.0.to_string()))
-                })?;
+            let og_name = self.resolve_dollar_ident_only(scope, &param.0)?;
             let new_name = ParserText::temp_name_with_suffix(og_name.text.trim(), span).text;
 
             let data_type = if let Some(x) = param.1 {
@@ -919,7 +908,8 @@ impl MiddleEnvironment {
             .map(|x| x.unwrap_all_refs().data_type);
 
         let caller_name = if let NodeType::Identifier(ident) = &caller.node_type {
-            ident.to_string()
+            self.resolve_dollar_ident_potential_generic_only(scope, ident)?
+                .text
         } else {
             String::new()
         };

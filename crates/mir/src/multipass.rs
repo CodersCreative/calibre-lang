@@ -102,7 +102,7 @@ fn order_declarations_by_dependencies(types: &[Node], constants: &[Node]) -> Vec
     for (i, node) in all_declarations.iter().enumerate() {
         match &node.node_type {
             NodeType::TypeDeclaration { identifier, .. } => {
-                let name = identifier.to_string();
+                let name = identifier.get_ident().to_string();
                 decl_names.insert(name, i);
             }
             NodeType::ExternFunctionDeclaration { identifier, .. } => {
@@ -274,7 +274,7 @@ impl MiddleEnvironment {
                 self.predeclare_forward_refs(scope, body);
             }
             NodeType::TypeDeclaration { identifier, .. } => {
-                self.predeclare_type_binding(scope, &identifier.to_string());
+                self.predeclare_type_binding(scope, &identifier.get_ident().to_string());
             }
             NodeType::VariableDeclaration {
                 var_type,
@@ -327,7 +327,7 @@ impl MiddleEnvironment {
         value: &Node,
         data_type: &ParserDataType,
     ) {
-        let Some(identifier) = self.resolve_dollar_ident_only(scope, identifier) else {
+        let Ok(identifier) = self.resolve_dollar_ident_only(scope, identifier) else {
             return;
         };
 
@@ -366,7 +366,7 @@ impl MiddleEnvironment {
         scope: &u64,
         identifier: &PotentialDollarIdentifier,
     ) {
-        let Some(identifier) = self.resolve_dollar_ident_only(scope, identifier) else {
+        let Ok(identifier) = self.resolve_dollar_ident_only(scope, identifier) else {
             return;
         };
 
