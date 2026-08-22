@@ -41,12 +41,6 @@ impl MiddleEnvironment {
             .map(|x| x.text)
             .unwrap_or(field.text().clone());
 
-        if let Some(ty) = self.resolve_type_from_node(scope, &base)
-            && let Some(x) = self.resolve_impl_member(scope, &ty, &field_name)
-        {
-            return Ok(MiddleNode::identifier(span, x));
-        }
-
         if let NodeType::Identifier(ident) = &base.node_type
             && let Some(ty) = self.resolve_potential_generic_ident_to_data_type(scope, &ident)
         {
@@ -61,7 +55,7 @@ impl MiddleEnvironment {
 
         Ok(MiddleNode::new(
             MiddleNodeType::FieldAccess {
-                base: Box::new(self.evaluate(scope, base)),
+                base: Box::new(self.evaluate_inner(scope, base)?),
                 field: field_name.into(),
             },
             span,

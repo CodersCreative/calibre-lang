@@ -2,7 +2,6 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    scoping::MiddleScope,
     tags::TagInfo,
     traversal::NodeVisitor,
 };
@@ -16,7 +15,6 @@ use calibre_parser::{
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
-use rustc_hash::FxHashMap;
 
 struct GeneratorReturnsRewriter;
 
@@ -101,29 +99,19 @@ impl MiddleEnvironment {
         let NodeType::Identifier(name) = &caller.node_type else {
             return None;
         };
-        let raw_name = name.to_string();
 
-        if matches!(raw_name.as_str(), "some" | "ok" | "err")
-            && self.symbols.variables.get(&raw_name).is_some_and(|var| {
-                matches!(
-                    var.data_type.data_type,
-                    ParserInnerType::NativeFunction { .. }
-                )
-            })
-        {
-            return None;
-        }
+        let name = self
+            .resolve_dollar_ident_only(scope, name.get_ident())
+            .map(|x| x.text)
+            .unwrap_or(name.to_string());
+        let resolved_name = self.resolve_str(scope, &name).map(|x| x.to_string());
 
-        let resolved_name = self
-            .resolve_potential_generic_ident(scope, name)
-            .map(|x| x.to_string());
-
-        let defaults_key = resolved_name.as_deref().unwrap_or(raw_name.as_str());
+        let defaults_key = resolved_name.as_deref().unwrap_or(name.as_str());
         let defaults = self
             .symbols
             .function_param_defaults
             .get(defaults_key)
-            .or_else(|| self.symbols.function_param_defaults.get(raw_name.as_str()))
+            .or_else(|| self.symbols.function_param_defaults.get(name.as_str()))
             .cloned()?;
 
         if !defaults
@@ -293,61 +281,6 @@ impl MiddleEnvironment {
         }
     }
 
-    #[inline]
-    fn same_call_arg_text(a: &CallArg, b: &CallArg) -> bool {
-        let left: &Node = a.into();
-        let right: &Node = b.into();
-        ParserText::temp_name_suffix_matches(left, right)
-    }
-
-    #[inline]
-    fn dedupe_receiver_call_args(
-        args: &mut Vec<CallArg>,
-        reverse_args: &mut Vec<Node>,
-        caller: &Node,
-        data_type: &Option<ParserInnerType>,
-    ) {
-        let looks_like_member_rewrite = matches!(
-            &caller.node_type,
-            NodeType::Identifier(id) if ParserText::is_temp_name(&id)
-        );
-        if !looks_like_member_rewrite || args.is_empty() {
-            return;
-        }
-
-        let expected_len = match data_type {
-            Some(ParserInnerType::Function { parameters, .. }) => parameters.len(),
-            _ => return,
-        };
-        let mut total = args.len() + reverse_args.len();
-        if total <= expected_len {
-            return;
-        }
-
-        let receiver = args[0].clone();
-
-        let mut i = 1;
-        while i < args.len() && total > expected_len {
-            if Self::same_call_arg_text(&receiver, &args[i]) {
-                args.remove(i);
-                total -= 1;
-            } else {
-                i += 1;
-            }
-        }
-
-        let mut j = 0;
-        while j < reverse_args.len() && total > expected_len {
-            let right = CallArg::Value(reverse_args[j].clone());
-            if Self::same_call_arg_text(&receiver, &right) {
-                reverse_args.remove(j);
-                total -= 1;
-            } else {
-                j += 1;
-            }
-        }
-    }
-
     fn rewrite_generator_returns(node: Node) -> Node {
         let mut rewriter = GeneratorReturnsRewriter;
         rewriter.visit(node)
@@ -481,52 +414,6 @@ impl MiddleEnvironment {
             elem_type,
             span,
         )
-    }
-
-    #[inline]
-    fn resolved_callable_name(
-        &self,
-        scope: &u64,
-        ident: &PotentialGenericTypeIdentifier,
-    ) -> Option<String> {
-        let resolved = self.resolve_potential_generic_ident(scope, ident)?;
-        self.symbols
-            .variables
-            .get(&resolved.text)
-            .and_then(|var| (var.data_type.is_callable()).then_some(resolved.text))
-    }
-
-    #[inline]
-    fn should_prefer_native_constructor(
-        &self,
-        scope: &u64,
-        ident: &PotentialGenericTypeIdentifier,
-    ) -> Option<String> {
-        let name = ident.to_string();
-        if ParserText::is_temp_name(&name) || !matches!(name.as_str(), "ok" | "err" | "some") {
-            return None;
-        }
-
-        let native = self.symbols.variables.get(&name).and_then(|var| {
-            matches!(
-                var.data_type.data_type,
-                ParserInnerType::NativeFunction { .. }
-            )
-            .then_some(name.clone())
-        })?;
-
-        let resolved = self.resolved_callable_name(scope, ident);
-        if let Some(resolved_name) = resolved
-            && let Some(var) = self.symbols.variables.get(&resolved_name)
-            && matches!(
-                var.data_type.data_type,
-                ParserInnerType::NativeFunction { .. }
-            )
-        {
-            return None;
-        }
-
-        Some(native)
     }
 
     pub(crate) fn evaluate_extern_function(
@@ -838,138 +725,109 @@ impl MiddleEnvironment {
         Ok(fn_node)
     }
 
+    pub fn get_caller_context(&self, scope: &u64, span: Span) -> Option<Node> {
+        let scope_ref = self.scoping.scopes.get(scope)?;
+
+        let value = |v: String| Node::new(span, NodeType::StringLiteral(ParserText::new(span, v)));
+
+        let current_function_name = if scope_ref.namespace.parse::<u64>().is_ok() {
+            "main".to_string()
+        } else {
+            scope_ref.namespace.clone()
+        };
+
+        let module_name = if !scope_ref.path.as_os_str().is_empty() {
+            scope_ref.namespace.to_string()
+        } else {
+            "unknown".to_string()
+        };
+
+        Some(Node::new(
+            span,
+            NodeType::StructLiteral {
+                identifier: PotentialGenericTypeIdentifier::new(span, "ExecContext"),
+                value: ObjectType::Map(vec![
+                    ("function_name".to_string(), value(current_function_name)),
+                    ("module_name".to_string(), value(module_name)),
+                    (
+                        "path".to_string(),
+                        value(
+                            scope_ref
+                                .path
+                                .canonicalize()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string(),
+                        ),
+                    ),
+                    (
+                        "line".to_string(),
+                        Node::int(span, format!("{}u", span.from.line)),
+                    ),
+                    (
+                        "col".to_string(),
+                        Node::int(span, format!("{}u", span.from.col)),
+                    ),
+                ]),
+            },
+        ))
+    }
+
     pub(crate) fn evaluate_call_expression(
         &mut self,
         scope: &u64,
         span: Span,
-        mut caller: Node,
+        caller: Node,
         generic_types: Vec<ParserDataType>,
         mut args: Vec<CallArg>,
         mut reverse_args: Vec<Node>,
     ) -> Result<MiddleNode, MiddleErr> {
-        if generic_types.is_empty()
-            && args.is_empty()
-            && reverse_args.is_empty()
-            && let NodeType::FunctionDeclaration { header, body } = caller.node_type.clone()
-            && header.parameters.is_empty()
-            && header.param_destructures.is_empty()
-        {
-            return self.evaluate_inner(scope, *body);
-        }
+        match caller.node_type.clone() {
+            NodeType::FieldAccess { base, field } => {
+                let field_name = self
+                    .resolve_dollar_ident_only(scope, &field)
+                    .map(|x| x.text)
+                    .unwrap_or(field.text().clone());
 
-        if let NodeType::FieldAccess { base, field } = caller.node_type.clone()
-            && let resolved = self.evaluate_field_access(scope, caller.span, *base, field)?
-            && let MiddleNodeType::Identifier(symbol) = resolved.node_type
-        {
-            return self.evaluate_call_expression(
-                scope,
-                span,
-                Node::identifier(caller.span, symbol),
-                generic_types,
-                args,
-                reverse_args,
-            );
-        }
+                if let Some(ty) = self.resolve_type_from_node(scope, base.as_ref())
+                    && let Some(x) = self
+                        .typing
+                        .find_impl_member(&ty, &field_name)
+                        .map(|x| x.symbol_name.clone())
+                {
+                    args.insert(0, CallArg::Value(*base));
+                    return self.evaluate_call_expression(
+                        scope,
+                        span,
+                        Node::identifier(caller.span, x),
+                        generic_types,
+                        args,
+                        reverse_args,
+                    );
+                }
 
-        if let NodeType::Identifier(caller_ident) = caller.node_type.clone() {
-            let forced_native_constructor =
-                self.should_prefer_native_constructor(scope, &caller_ident);
-            let caller_name = caller_ident.to_string();
-            let caller_resolved = self.resolve_potential_generic_ident(scope, &caller_ident);
-            if !ParserText::is_temp_name(&caller_name)
-                && let Some(resolved) = caller_resolved.clone()
-                && ParserText::is_temp_name(&resolved.text)
-                && let Some(global_name) =
-                    self.scoping.get_global_scope().mappings.get(&caller_name)
-                && global_name != &resolved.text
-                && self
-                    .symbols
-                    .variables
-                    .get(global_name)
-                    .is_some_and(|var| var.data_type.is_callable())
-            {
-                caller = Node::identifier(span, global_name.clone());
-            }
-
-            let caller_exact_callable = self.resolved_callable_name(scope, &caller_ident).is_some();
-            if ParserText::is_temp_name(&caller_name)
-                && let Some(full_name) = self.symbols.variables.iter().find_map(|(name, var)| {
-                    if !name.ends_with(&caller_name) {
-                        return None;
-                    }
-                    if var.data_type.is_callable() {
-                        Some(name.clone())
-                    } else {
-                        None
-                    }
-                })
-            {
-                caller = Node::identifier(span, full_name);
-            }
-
-            if !caller_exact_callable
-                && let Some(first_arg) = args.first().cloned().map(|a| -> Node { a.into() })
-            {
-                let first_ty = self.resolve_type_from_node(scope, &first_arg).or_else(|| {
-                    match &first_arg.node_type {
-                        NodeType::RefStatement { value, .. } => {
-                            self.resolve_type_from_node(scope, value.as_ref())
-                        }
-                        _ => None,
-                    }
-                });
-
-                if let Some(first_ty) = first_ty {
-                    let target_ty = first_ty.unwrap_all_refs();
-                    let caller_member_name = caller_ident
-                        .to_string()
-                        .rsplit_once(".")
-                        .map(|(_, member)| member.to_string())
-                        .unwrap_or_else(|| caller_ident.to_string());
-                    let mapped_from_param =
-                        self.symbols.variables.iter().find_map(|(name, var)| {
-                            let suffix = name.rsplit_once(".").map(|(_, member)| member)?;
-
-                            if suffix != caller_member_name {
-                                return None;
-                            }
-
-                            let ParserInnerType::Function { parameters, .. } =
-                                &var.data_type.data_type
-                            else {
-                                return None;
-                            };
-
-                            let first = parameters.first()?;
-                            let param_inner = match &first.data_type {
-                                ParserInnerType::Ref(inner, _) => &inner.data_type,
-                                other => other,
-                            };
-
-                            if param_inner.matches(&target_ty.data_type, &Vec::new()) {
-                                Some(name.clone())
-                            } else {
-                                None
-                            }
-                        });
-
-                    if let Some(mapped_name) = self
-                        .resolve_member_fn_name(&target_ty, &caller_member_name)
-                        .or(mapped_from_param)
-                        && mapped_name != caller_ident.to_string()
-                        && let Some(var) = self.symbols.variables.get(&mapped_name)
-                        && var.data_type.is_callable()
-                    {
-                        caller = Node::identifier(span, mapped_name);
-                    }
+                if let Ok(resolved) =
+                    self.evaluate_field_access(scope, caller.span, *base.clone(), field.clone())
+                    && let MiddleNodeType::Identifier(symbol) = resolved.node_type
+                {
+                    return self.evaluate_call_expression(
+                        scope,
+                        span,
+                        Node::identifier(caller.span, symbol),
+                        generic_types,
+                        args,
+                        reverse_args,
+                    );
                 }
             }
-
-            if let Some(resolved_caller) = caller_resolved {
-                let base_name = resolved_caller.text.clone();
-
-                if let Some((tpl_params, header, _body)) =
-                    self.symbols.generic_fn_templates.get(&base_name).cloned()
+            NodeType::Identifier(caller_ident) => {
+                if let Some(resolved_caller) =
+                    self.resolve_potential_generic_ident(scope, &caller_ident)
+                    && let Some((tpl_params, header, _body)) = self
+                        .symbols
+                        .generic_fn_templates
+                        .get(&resolved_caller.text)
+                        .cloned()
                 {
                     let explicit_args: Vec<ParserDataType> = generic_types
                         .iter()
@@ -1007,7 +865,7 @@ impl MiddleEnvironment {
                     if let Some(concrete_args) = concrete_args
                         && let Some(spec) = self.ensure_specialized_function(
                             scope,
-                            &base_name,
+                            &resolved_caller.text,
                             &tpl_params,
                             &concrete_args,
                         )
@@ -1030,89 +888,35 @@ impl MiddleEnvironment {
                         );
                     }
                 }
-            }
 
-            if let Some(native_name) = forced_native_constructor {
-                return Ok(MiddleNode {
-                    node_type: MiddleNodeType::CallExpression {
-                        args: self.lower_call_args(scope, args, reverse_args),
-                        caller: Box::new(MiddleNode::identifier(span, native_name)),
-                    },
-                    span,
-                });
-            }
-        }
+                if "tuple" == &caller_ident.to_string() {
+                    return Ok(self.aggregate_from_call_nodes(
+                        scope,
+                        span,
+                        None,
+                        args,
+                        reverse_args,
+                    ));
+                }
 
-        if let NodeType::Identifier(caller_ident) = &caller.node_type {
-            if "tuple" == &caller_ident.to_string() {
-                return Ok(self.aggregate_from_call_nodes(scope, span, None, args, reverse_args));
-            }
-
-            if matches!(caller_ident, PotentialGenericTypeIdentifier::Generic { .. })
-                && let Some(data_type) =
-                    self.resolve_potential_generic_ident_to_data_type(scope, caller_ident)
-            {
-                let data_type = self.resolve_data_type(scope, data_type);
-                if let ParserInnerType::Struct(name) = data_type.data_type
-                    && self.typing.objects.contains_key(&name)
+                if let Some(caller) = self.resolve_potential_generic_ident(scope, &caller_ident)
+                    && self.typing.objects.contains_key(&caller.text)
                 {
                     return Ok(self.aggregate_from_call_nodes(
                         scope,
                         span,
-                        Some(ParserText::new(span, name)),
+                        Some(caller),
                         args,
                         reverse_args,
                     ));
                 }
             }
-
-            let base_ident = match caller_ident {
-                PotentialGenericTypeIdentifier::Identifier(id) => id.clone(),
-                PotentialGenericTypeIdentifier::Generic { identifier, .. } => identifier.clone(),
-            };
-
-            if let Some(resolved_base) = self.resolve_potential_dollar_ident(scope, &base_ident)
-                && self.typing.objects.contains_key(&resolved_base.text)
-            {
-                return Ok(self.aggregate_from_call_nodes(
-                    scope,
-                    span,
-                    Some(resolved_base),
-                    args,
-                    reverse_args,
-                ));
-            }
-
-            if let Some(caller) = self.resolve_potential_generic_ident(scope, caller_ident)
-                && self.typing.objects.contains_key(&caller.text)
-            {
-                return Ok(self.aggregate_from_call_nodes(
-                    scope,
-                    span,
-                    Some(caller),
-                    args,
-                    reverse_args,
-                ));
-            }
-        }
-
-        if let NodeType::Identifier(caller_ident) = &caller.node_type
-            && self.resolved_callable_name(scope, caller_ident).is_none()
-            && let Some(first_arg) = args.first().cloned().map(|a| -> Node { a.into() })
-            && let Some(first_ty) = self.resolve_type_from_node(scope, &first_arg)
-            && let Some(mapped_name) =
-                self.resolve_member_fn_name(&first_ty.unwrap_all_refs(), &caller_ident.to_string())
-            && let Some(var) = self.symbols.variables.get(&mapped_name)
-            && var.data_type.is_callable()
-        {
-            caller = Node::identifier(span, mapped_name);
+            _ => {}
         }
 
         let data_type = self
             .resolve_type_from_node(scope, &caller)
             .map(|x| x.unwrap_all_refs().data_type);
-
-        Self::dedupe_receiver_call_args(&mut args, &mut reverse_args, &caller, &data_type);
 
         let caller_name = if let NodeType::Identifier(ident) = &caller.node_type {
             ident.to_string()
@@ -1135,70 +939,8 @@ impl MiddleEnvironment {
             false
         };
 
-        if needs_caller_context {
-            let scope_ref = if let Some(s) = self.scoping.scopes.get(scope) {
-                s.clone()
-            } else {
-                MiddleScope {
-                    id: *scope,
-                    parent: None,
-                    mappings: FxHashMap::default(),
-                    type_mappings: FxHashMap::default(),
-                    macros: FxHashMap::default(),
-                    macro_args: FxHashMap::default(),
-                    children: FxHashMap::default(),
-                    namespace: "main".to_string(),
-                    path: std::path::PathBuf::from("unknown.cal"),
-                    defers: Vec::new(),
-                }
-            };
-
-            let value =
-                |v: String| Node::new(span, NodeType::StringLiteral(ParserText::new(span, v)));
-
-            let current_function_name = if scope_ref.namespace.parse::<u64>().is_ok() {
-                "main".to_string()
-            } else {
-                scope_ref.namespace.clone()
-            };
-
-            let module_name = if !scope_ref.path.as_os_str().is_empty() {
-                scope_ref.namespace.to_string()
-            } else {
-                "unknown".to_string()
-            };
-
-            let caller_context_arg = Node::new(
-                span,
-                NodeType::StructLiteral {
-                    identifier: PotentialGenericTypeIdentifier::new(span, "ExecContext"),
-                    value: ObjectType::Map(vec![
-                        ("function_name".to_string(), value(current_function_name)),
-                        ("module_name".to_string(), value(module_name)),
-                        (
-                            "path".to_string(),
-                            value(
-                                scope_ref
-                                    .path
-                                    .canonicalize()
-                                    .unwrap_or_default()
-                                    .to_string_lossy()
-                                    .to_string(),
-                            ),
-                        ),
-                        (
-                            "line".to_string(),
-                            Node::int(span, format!("{}u", span.from.line)),
-                        ),
-                        (
-                            "col".to_string(),
-                            Node::int(span, format!("{}u", span.from.col)),
-                        ),
-                    ]),
-                },
-            );
-
-            reverse_args.push(caller_context_arg);
+        if needs_caller_context && let Some(x) = self.get_caller_context(scope, span) {
+            reverse_args.push(x);
         }
 
         let lowered_args = self.lower_defaulted_call_args(

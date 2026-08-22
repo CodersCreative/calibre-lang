@@ -272,6 +272,10 @@ impl MiddleEnvironment {
                     .map(|x| x.text)
                     .unwrap_or(identifier.text().clone());
 
+                if self.symbols.variables.contains_key(&resolved) {
+                    return None;
+                }
+
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
                         ParserInnerType::Struct(x) => {
@@ -310,10 +314,8 @@ impl MiddleEnvironment {
         iden: &PotentialGenericTypeIdentifier,
     ) -> Option<ParserText> {
         match iden {
-            PotentialGenericTypeIdentifier::Identifier(x) => {
-                self.resolve_dollar_ident_only(scope, x)
-            }
-            PotentialGenericTypeIdentifier::Generic {
+            PotentialGenericTypeIdentifier::Identifier(identifier)
+            | PotentialGenericTypeIdentifier::Generic {
                 identifier,
                 generic_types: _,
             } => self.resolve_dollar_ident_only(scope, identifier),
