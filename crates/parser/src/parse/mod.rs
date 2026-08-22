@@ -379,6 +379,25 @@ pub fn parse_program_with_source(
                     }),
                 ident
                     .clone()
+                    .map(|(n, sp)| Node::identifier(sp, &n))
+                    .then(
+                        lex(pad.clone(), just('.'))
+                            .ignore_then(ident.clone().map(|(n, sp)| Node::identifier(sp, &n))),
+                    )
+                    .map(|(base, field)| {
+                        Node::new(
+                            Span::new_from_spans(base.span, field.span),
+                            NodeType::FieldAccess {
+                                base: Box::new(base),
+                                field: match field.node_type {
+                                    NodeType::Identifier(identifier) => identifier.into(),
+                                    _ => unreachable!(),
+                                },
+                            },
+                        )
+                    }),
+                ident
+                    .clone()
                     .map(|(n, sp)| ParserText::new(sp, &n))
                     .then(
                         lex(pad.clone(), just("::"))

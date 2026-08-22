@@ -241,39 +241,67 @@ impl MiddleEnvironment {
         scope: &u64,
         iden: &PotentialGenericTypeIdentifier,
     ) -> Option<ParserDataType> {
-        match iden {
+        let (ty, mut generic_types) = match iden {
             PotentialGenericTypeIdentifier::Identifier(x) => {
                 let resolved = self
-                    .resolve_potential_dollar_ident(scope, x)
-                    .unwrap_or_else(|| ParserText::from(x.to_string()));
+                    .resolve_dollar_ident_only(scope, x)
+                    .map(|x| x.text)
+                    .unwrap_or(x.text().clone());
 
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Struct(resolved.text.to_string()),
-                    span: resolved.span,
-                })
+                (
+                    match ParserInnerType::from_str(&resolved).unwrap() {
+                        ParserInnerType::Struct(x) => {
+                            ParserInnerType::Struct(self.resolve_str(scope, &x).unwrap_or(x))
+                        }
+                        x => x,
+                    },
+                    Vec::new(),
+                )
             }
             PotentialGenericTypeIdentifier::Generic {
                 identifier,
                 generic_types,
             } => {
-                let base = self
-                    .resolve_potential_dollar_ident(scope, identifier)
-                    .unwrap_or_else(|| ParserText::from(identifier.to_string()));
+                let generic_types: Vec<ParserDataType> = generic_types
+                    .iter()
+                    .map(|x| self.resolve_data_type(scope, x.clone()))
+                    .collect();
 
-                let mut gens: Vec<ParserDataType> = Vec::new();
-                for g in generic_types.iter() {
-                    gens.push(self.resolve_data_type(scope, g.clone()));
-                }
+                let resolved = self
+                    .resolve_dollar_ident_only(scope, identifier)
+                    .map(|x| x.text)
+                    .unwrap_or(identifier.text().clone());
 
-                Some(ParserDataType {
-                    data_type: ParserInnerType::StructWithGenerics {
-                        identifier: base.text.to_string(),
-                        generic_types: gens,
+                (
+                    match ParserInnerType::from_str(&resolved).unwrap() {
+                        ParserInnerType::Struct(x) => {
+                            ParserInnerType::Struct(self.resolve_str(scope, &x).unwrap_or(x))
+                        }
+                        x => x,
                     },
-                    span: *identifier.span(),
-                })
+                    generic_types,
+                )
             }
-        }
+        };
+
+        Some(ParserDataType {
+            span: *iden.span(),
+            data_type: match ty {
+                ParserInnerType::Struct(x) if !generic_types.is_empty() => {
+                    ParserInnerType::StructWithGenerics {
+                        identifier: x,
+                        generic_types,
+                    }
+                }
+                ParserInnerType::Ptr(_) if !generic_types.is_empty() => {
+                    ParserInnerType::Ptr(Box::new(generic_types.pop().unwrap()))
+                }
+                ParserInnerType::List(_) if !generic_types.is_empty() => {
+                    ParserInnerType::List(Box::new(generic_types.pop().unwrap()))
+                }
+                x => x,
+            },
+        })
     }
 
     pub fn resolve_dollar_ident_potential_generic_only(

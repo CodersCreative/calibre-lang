@@ -17,6 +17,7 @@ use calibre_parser::{
     },
 };
 use rustc_hash::FxHashMap;
+use std::str::FromStr;
 
 struct GeneratorReturnsRewriter;
 
@@ -859,28 +860,18 @@ impl MiddleEnvironment {
 
         if let NodeType::FieldAccess { base, field } = caller.node_type.clone()
             && matches!(field, PotentialDollarIdentifier::Identifier(_))
+            && let MiddleNodeType::Identifier(symbol) = self
+                .evaluate_field_access(scope, caller.span, *base, field)?
+                .node_type
         {
-            let new_caller = Node::new(
-                caller.span,
-                NodeType::FieldAccess {
-                    base,
-                    field: PotentialDollarIdentifier::Identifier(
-                        ParserText::from(String::from("<method_result>")).into(),
-                    ),
-                },
-            );
-            return Ok(self.evaluate(
+            return self.evaluate_call_expression(
                 scope,
-                Node::new(
-                    caller.span,
-                    NodeType::FieldAccess {
-                        base: Box::new(new_caller),
-                        field: PotentialDollarIdentifier::Identifier(
-                            ParserText::from(String::from("call")).into(),
-                        ),
-                    },
-                ),
-            ));
+                span,
+                Node::identifier(caller.span, symbol),
+                generic_types,
+                args,
+                reverse_args,
+            );
         }
 
         if let NodeType::Identifier(caller_ident) = caller.node_type.clone() {
