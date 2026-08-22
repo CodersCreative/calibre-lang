@@ -1,7 +1,6 @@
 use crate::ast::{MiddleNode, MiddleNodeType};
 use crate::context::MiddleContext;
 use crate::errors::MiddleErr;
-use crate::multipass::prepare_ast;
 use crate::scoping::Scoping;
 use crate::symbols::{MiddleOverload, MiddleVariable, Symbols};
 use crate::tags::Tagging;
@@ -99,10 +98,13 @@ impl MiddleEnvironment {
             },
         );
 
-        self.scoping
-            .scope_mut_or_err(scope)?
-            .mappings
-            .insert(original_name.to_string(), new_name);
+        let original_name = original_name.to_string();
+        if original_name != new_name {
+            self.scoping
+                .scope_mut_or_err(scope)?
+                .mappings
+                .insert(original_name.to_string(), new_name);
+        }
 
         Ok(())
     }
@@ -314,7 +316,7 @@ impl MiddleEnvironment {
     }
 
     pub fn new_and_evaluate_with_package(
-        node: Node,
+        mut node: Node,
         path: PathBuf,
         package_metadata: Option<PackageMetadata>,
         no_std: bool,
@@ -351,14 +353,11 @@ impl MiddleEnvironment {
             }
         };
 
-        let node = prepare_ast(node);
-
         if let NodeType::ScopeDeclaration {
-            body: Some(ref body),
-            ..
-        } = node.node_type
+            body: Some(body), ..
+        } = &mut node.node_type
         {
-            env.predeclare_forward_refs(&scope, body);
+            env.predeclare_nodes(&scope, body);
         }
 
         let inner = env.evaluate(&scope, node.clone());

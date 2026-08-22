@@ -43,6 +43,7 @@ impl<'a> LirEnvironment<'a> {
             span,
             LirNodeType::Declare {
                 dest: temp.to_string().into_boxed_str(),
+                data_type: ParserDataType::null(span),
                 value: Box::new(LirNodeType::null()),
             },
         ));
@@ -239,7 +240,10 @@ impl<'a> LirEnvironment<'a> {
                 LirNodeType::Load(name.to_string().into_boxed_str())
             }
             MiddleNodeType::VariableDeclaration {
-                identifier, value, ..
+                identifier,
+                value,
+                data_type,
+                ..
             } => {
                 if let MiddleNodeType::FunctionDeclaration { .. } = value.node_type {
                     self.last_ident = Some(identifier.to_string());
@@ -253,6 +257,7 @@ impl<'a> LirEnvironment<'a> {
                     identifier.span,
                     LirNodeType::Declare {
                         dest: identifier.to_string().into_boxed_str(),
+                        data_type,
                         value: Box::new(val),
                     },
                 ));
@@ -279,6 +284,7 @@ impl<'a> LirEnvironment<'a> {
                             ident_span,
                             LirNodeType::Declare {
                                 dest: ptr_tmp.clone().into_boxed_str(),
+                                data_type: ParserDataType::auto(ident_span),
                                 value: Box::new(ptr_expr),
                             },
                         ));
@@ -295,6 +301,7 @@ impl<'a> LirEnvironment<'a> {
                             ident_span,
                             LirNodeType::Declare {
                                 dest: base_tmp.clone().into_boxed_str(),
+                                data_type: ParserDataType::auto(ident_span),
                                 value: Box::new(base_expr),
                             },
                         ));
@@ -318,6 +325,7 @@ impl<'a> LirEnvironment<'a> {
                             ident_span,
                             LirNodeType::Declare {
                                 dest: base_tmp.clone().into_boxed_str(),
+                                data_type: ParserDataType::auto(ident_span),
                                 value: Box::new(base_expr),
                             },
                         ));
@@ -329,6 +337,7 @@ impl<'a> LirEnvironment<'a> {
                             ident_span,
                             LirNodeType::Declare {
                                 dest: index_tmp.clone().into_boxed_str(),
+                                data_type: ParserDataType::auto(ident_span),
                                 value: Box::new(index_expr),
                             },
                         ));
@@ -358,6 +367,7 @@ impl<'a> LirEnvironment<'a> {
                     ident_span,
                     LirNodeType::Declare {
                         dest: temp.clone().into_boxed_str(),
+                        data_type: ParserDataType::auto(ident_span),
                         value: Box::new(old_expr),
                     },
                 ));
@@ -582,6 +592,7 @@ impl<'a> LirEnvironment<'a> {
                         span,
                         LirNodeType::Declare {
                             dest: temp.clone().into_boxed_str(),
+                            data_type: ParserDataType::auto(span),
                             value: Box::new(lowered),
                         },
                     ));

@@ -380,19 +380,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                         } else {
                             Ok(ParserDataType::new(
                                 sp,
-                                match name.as_str() {
-                                    "int" => ParserInnerType::Int,
-                                    "uint" => ParserInnerType::UInt,
-                                    "byte" => ParserInnerType::Byte,
-                                    "float" => ParserInnerType::Float,
-                                    "bool" => ParserInnerType::Bool,
-                                    "str" => ParserInnerType::Str,
-                                    "char" => ParserInnerType::Char,
-                                    "dyn" => ParserInnerType::Dynamic,
-                                    "null" => ParserInnerType::Null,
-                                    "auto" => ParserInnerType::Auto(None),
-                                    _ => ParserInnerType::Struct(name),
-                                },
+                                ParserInnerType::from_str(name.as_str()).unwrap(),
                             ))
                         }
                     })

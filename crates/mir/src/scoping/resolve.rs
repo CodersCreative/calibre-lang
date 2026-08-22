@@ -110,7 +110,7 @@ impl MiddleEnvironment {
                     });
                 }
 
-                let program = match program.node_type {
+                let mut program = match program.node_type {
                     NodeType::ScopeDeclaration { body, .. } => Node {
                         node_type: NodeType::ScopeDeclaration {
                             body,
@@ -123,14 +123,12 @@ impl MiddleEnvironment {
                     },
                     _ => program,
                 };
-                let program = crate::multipass::prepare_ast(program);
 
                 if let NodeType::ScopeDeclaration {
-                    body: Some(ref body),
-                    ..
-                } = program.node_type
+                    body: Some(body), ..
+                } = &mut program.node_type
                 {
-                    self.predeclare_forward_refs(&scope, body);
+                    self.predeclare_nodes(&scope, body);
                 }
 
                 let node = self.evaluate(&scope, program);
@@ -162,7 +160,7 @@ impl MiddleEnvironment {
             )))
         })?;
         parser.set_source_path(Some(path.clone()));
-        let program = parser.produce_ast(&source);
+        let mut program = parser.produce_ast(&source);
 
         if !parser.errors.is_empty() {
             let errors = std::mem::take(&mut parser.errors);
@@ -173,14 +171,13 @@ impl MiddleEnvironment {
             });
         }
 
-        let program = crate::multipass::prepare_ast(program);
         if let NodeType::ScopeDeclaration {
-            body: Some(ref body),
-            ..
-        } = program.node_type
+            body: Some(body), ..
+        } = &mut program.node_type
         {
-            self.predeclare_forward_refs(&scope, body);
+            self.predeclare_nodes(&scope, body);
         }
+
         let node = self.evaluate(&scope, program);
         self.scoping.loaded_scopes.insert(scope);
 

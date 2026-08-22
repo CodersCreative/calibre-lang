@@ -211,7 +211,12 @@ impl LirNodeType {
                     worklist.push(label.as_ref().to_string());
                 }
             }
-            LirNodeType::List { elements, .. } => {
+            LirNodeType::List {
+                elements,
+                data_type,
+            } => {
+                referenced_types.insert(data_type.impl_name());
+
                 for element in elements {
                     element.collect_references(
                         registry,
@@ -289,13 +294,24 @@ impl LirNodeType {
                     );
                 }
             }
+            LirNodeType::As(value, data_type, _)
+            | LirNodeType::Declare {
+                value, data_type, ..
+            }
+            | LirNodeType::Is(value, data_type) => {
+                referenced_types.insert(data_type.impl_name());
+                value.collect_references(
+                    registry,
+                    reachable_functions,
+                    reachable_globals,
+                    referenced_types,
+                    worklist,
+                );
+            }
             LirNodeType::Spawn { callee: value }
-            | LirNodeType::Declare { value, .. }
             | LirNodeType::Deref(value)
             | LirNodeType::Ref(value)
-            | LirNodeType::Member(value, _)
-            | LirNodeType::As(value, _, _)
-            | LirNodeType::Is(value, _) => {
+            | LirNodeType::Member(value, _) => {
                 value.collect_references(
                     registry,
                     reachable_functions,

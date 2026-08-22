@@ -80,7 +80,7 @@ impl<'a> BlockLoweringCtx<'a> {
     pub(super) fn lower_instr(&mut self, node: LirNode, assigned: Option<Reg>, set_ret: bool) {
         match node.node_type {
             LirNodeType::Noop => {}
-            LirNodeType::Declare { dest, value } => {
+            LirNodeType::Declare { dest, value, .. } => {
                 let reg = self.lower_node(*value, node.span);
                 if !self.is_global {
                     let target = assigned.unwrap_or(reg);

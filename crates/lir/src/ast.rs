@@ -121,6 +121,7 @@ pub enum LirNodeType {
     Declare {
         dest: Box<str>,
         value: Box<LirNodeType>,
+        data_type: ParserDataType,
     },
     ExternFunction {
         abi: Box<str>,
@@ -246,7 +247,11 @@ impl Display for LirNodeType {
                     format!("{} as{} {}", node, suffix, data_type)
                 }
                 Self::Is(node, data_type) => format!("{node} is {data_type}"),
-                Self::Declare { dest, value } => format!("let {} := {}", dest, value),
+                Self::Declare {
+                    dest,
+                    data_type,
+                    value,
+                } => format!("let {} : {} = {}", dest, data_type, value),
                 Self::Assign { dest, value } => format!("{} := {}", dest, value),
                 Self::ExternFunction {
                     abi,

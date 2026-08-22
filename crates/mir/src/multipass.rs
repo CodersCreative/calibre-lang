@@ -1,396 +1,104 @@
-use crate::{environment::MiddleEnvironment, symbols::MiddleVariable};
-use calibre_parser::{
-    IdentifiersUsed, Span,
-    ast::{
-        idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{Node, NodeType, VarType},
-        types::{ParserDataType, ParserInnerType},
-    },
+use crate::{environment::MiddleEnvironment, errors::MiddleErr, symbols::MiddleVariable};
+use calibre_parser::ast::{
+    idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+    nodes::{Node, NodeType, VarType},
+    types::{ParserDataType, ParserInnerType},
 };
-use rustc_hash::{FxHashMap, FxHashSet};
-
-#[derive(Default)]
-struct ReorderBuckets {
-    imports: Vec<Node>,
-    types: Vec<Node>,
-    constants: Vec<Node>,
-    normal: Vec<Node>,
-    fin: Vec<Node>,
-    init: Vec<Node>,
-}
-
-impl ReorderBuckets {
-    fn append(&mut self, node: Node) {
-        match classify_statement(&node) {
-            StatementClass::Import => self.imports.push(node),
-            StatementClass::Type => self.types.push(node),
-            StatementClass::Constant => self.constants.push(node),
-            StatementClass::Init => self.init.push(node),
-            StatementClass::Fin => self.fin.push(node),
-            StatementClass::Normal => self.normal.push(node),
-        }
-    }
-
-    fn into_ordered(mut self) -> Vec<Node> {
-        let mut out = Vec::new();
-        out.append(&mut self.imports);
-
-        out.extend(order_declarations_by_dependencies(
-            &self.types,
-            &self.constants,
-        ));
-
-        out.append(&mut self.init);
-        out.append(&mut self.normal);
-        out.append(&mut self.fin);
-        out
-    }
-}
-
-enum StatementClass {
-    Import,
-    Type,
-    Constant,
-    Init,
-    Fin,
-    Normal,
-}
-
-pub enum CompilationPhase {
-    ImportsAndTypes,
-    Normal,
-    Fin,
-    Init,
-}
-
-fn classify_statement(node: &Node) -> StatementClass {
-    match &node.node_type {
-        NodeType::ImportStatement { .. } => StatementClass::Import,
-        NodeType::TypeDeclaration { .. }
-        | NodeType::TraitDeclaration { .. }
-        | NodeType::ImplDeclaration { .. }
-        | NodeType::ImplTraitDeclaration { .. } => StatementClass::Type,
-        NodeType::VariableDeclaration { var_type, .. } if *var_type == VarType::Constant => {
-            StatementClass::Constant
-        }
-        NodeType::ExternFunctionDeclaration { .. } => StatementClass::Constant,
-        NodeType::Tag { node, tag, .. } => match tag.text.as_str() {
-            "init" => StatementClass::Init,
-            "fin" => StatementClass::Fin,
-            _ => classify_statement(node),
-        },
-        _ => StatementClass::Normal,
-    }
-}
-
-pub fn compilation_phase(node: &Node) -> CompilationPhase {
-    match classify_statement(node) {
-        StatementClass::Import | StatementClass::Type | StatementClass::Constant => {
-            CompilationPhase::ImportsAndTypes
-        }
-        StatementClass::Fin => CompilationPhase::Fin,
-        StatementClass::Init => CompilationPhase::Init,
-        StatementClass::Normal => CompilationPhase::Normal,
-    }
-}
-
-fn order_declarations_by_dependencies(types: &[Node], constants: &[Node]) -> Vec<Node> {
-    let mut all_declarations: Vec<Node> = types.to_vec();
-    all_declarations.extend(constants.iter().cloned());
-
-    let mut decl_names: FxHashMap<String, usize> = FxHashMap::default();
-    for (i, node) in all_declarations.iter().enumerate() {
-        match &node.node_type {
-            NodeType::TypeDeclaration { identifier, .. } => {
-                let name = identifier.get_ident().to_string();
-                decl_names.insert(name, i);
-            }
-            NodeType::ExternFunctionDeclaration { identifier, .. } => {
-                let name = identifier.to_string();
-                decl_names.insert(name, i);
-            }
-            NodeType::VariableDeclaration {
-                identifier,
-                var_type,
-                ..
-            } if *var_type == VarType::Constant => {
-                let name = identifier.to_string();
-                decl_names.insert(name, i);
-            }
-            _ => {}
-        }
-    }
-
-    let mut dependencies: Vec<FxHashSet<usize>> =
-        vec![FxHashSet::default(); all_declarations.len()];
-    let mut dependents: Vec<FxHashSet<usize>> = vec![FxHashSet::default(); all_declarations.len()];
-
-    for (i, node) in all_declarations.iter().enumerate() {
-        match &node.node_type {
-            NodeType::TypeDeclaration { object, .. } => {
-                let referenced_names = object.owned_identifiers_used();
-
-                for ref_name in referenced_names {
-                    if let Some(&ref_idx) = decl_names.get(&ref_name)
-                        && ref_idx != i
-                    {
-                        dependencies[i].insert(ref_idx);
-                        dependents[ref_idx].insert(i);
-                    }
-                }
-            }
-            NodeType::VariableDeclaration {
-                var_type,
-                value,
-                data_type,
-                ..
-            } if *var_type == VarType::Constant => {
-                let mut referenced_names = value.owned_identifiers_used();
-                referenced_names.extend(data_type.owned_identifiers_used());
-
-                for ref_name in referenced_names {
-                    if let Some(&ref_idx) = decl_names.get(&ref_name)
-                        && ref_idx != i
-                    {
-                        dependencies[i].insert(ref_idx);
-                        dependents[ref_idx].insert(i);
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    let mut ordered = Vec::new();
-    let mut placed = FxHashSet::default();
-    let mut to_process: Vec<usize> = (0..all_declarations.len())
-        .filter(|i| dependencies[*i].is_empty())
-        .collect();
-
-    while !to_process.is_empty() {
-        let current = to_process.remove(0);
-        if placed.contains(&current) {
-            continue;
-        }
-        placed.insert(current);
-        ordered.push(all_declarations[current].clone());
-
-        for &dep in &dependents[current] {
-            if !placed.contains(&dep) {
-                let remaining_deps: FxHashSet<_> = dependencies[dep]
-                    .iter()
-                    .filter(|d| !placed.contains(d))
-                    .cloned()
-                    .collect();
-                if remaining_deps.is_empty() {
-                    to_process.push(dep);
-                }
-            }
-        }
-    }
-
-    for (i, x) in all_declarations.clone().into_iter().enumerate() {
-        if !placed.contains(&i) {
-            ordered.push(x);
-        }
-    }
-
-    ordered
-}
-
-fn reorder_scope_body(body: Vec<Node>) -> Vec<Node> {
-    let mut buckets = ReorderBuckets::default();
-
-    for stmt in body {
-        buckets.append(reorder_node(stmt));
-    }
-
-    buckets.into_ordered()
-}
-
-fn reorder_node(node: Node) -> Node {
-    match node.node_type {
-        NodeType::ScopeDeclaration {
-            body,
-            named,
-            is_temp,
-            create_new_scope,
-            define,
-        } => {
-            let body = body.map(reorder_scope_body);
-            Node::new(
-                node.span,
-                NodeType::ScopeDeclaration {
-                    body,
-                    named,
-                    is_temp,
-                    create_new_scope,
-                    define,
-                },
-            )
-        }
-        other => Node::new(node.span, other),
-    }
-}
-
-pub fn prepare_ast(node: Node) -> Node {
-    match node.node_type {
-        NodeType::ScopeDeclaration {
-            body,
-            named,
-            is_temp,
-            create_new_scope,
-            define,
-        } => {
-            let body = body.map(reorder_scope_body);
-            Node::new(
-                node.span,
-                NodeType::ScopeDeclaration {
-                    body,
-                    named,
-                    is_temp,
-                    create_new_scope,
-                    define,
-                },
-            )
-        }
-        other => Node::new(node.span, other),
-    }
-}
 
 impl MiddleEnvironment {
-    pub fn predeclare_forward_refs(&mut self, scope: &u64, nodes: &[Node]) {
+    pub fn predeclare_nodes(&mut self, scope: &u64, nodes: &mut [Node]) -> Result<(), MiddleErr> {
         for node in nodes {
-            self.predeclare_forward_ref_node(scope, node);
+            self.predeclare_node(scope, node)?;
         }
+
+        Ok(())
     }
 
-    fn predeclare_forward_ref_node(&mut self, scope: &u64, node: &Node) {
-        match &node.node_type {
-            NodeType::Tag { node: inner, .. } => self.predeclare_forward_ref_node(scope, inner),
-            NodeType::ScopeDeclaration {
-                body: Some(body), ..
+    fn predeclare_node(&mut self, scope: &u64, node: &mut Node) -> Result<(), MiddleErr> {
+        match &mut node.node_type {
+            NodeType::Tag { node: inner, .. } => self.predeclare_node(scope, inner.as_mut()),
+            NodeType::TypeDeclaration {
+                identifier:
+                    PotentialGenericTypeIdentifier::Identifier(PotentialDollarIdentifier::Identifier(
+                        ident,
+                    )),
+                ..
             } => {
-                self.predeclare_forward_refs(scope, body);
-            }
-            NodeType::TypeDeclaration { identifier, .. } => {
-                self.predeclare_type_binding(scope, &identifier.get_ident().to_string());
+                // TODO Account for types
+
+                Ok(())
             }
             NodeType::VariableDeclaration {
                 var_type,
-                identifier,
+                identifier: PotentialDollarIdentifier::Identifier(ident),
                 value,
                 data_type,
             } if *var_type == VarType::Constant => {
-                self.predeclare_constant_binding(
-                    scope, node.span, *var_type, identifier, value, data_type,
+                let new_name = ParserText::temp_name_with_suffix(&ident, node.span);
+
+                if self.symbols.variables.contains_key(&new_name.text) {
+                    return Ok(());
+                }
+
+                *data_type = if data_type.is_auto() {
+                    self.resolve_type_from_node(scope, value)
+                        .unwrap_or_else(|| {
+                            ParserDataType::new(node.span, ParserInnerType::Auto(None))
+                        })
+                } else {
+                    self.resolve_data_type(scope, data_type.clone())
+                };
+
+                self.register_variable(
+                    scope,
+                    &ident.text,
+                    new_name.text.clone(),
+                    data_type.clone(),
+                    VarType::Mutable,
+                )?;
+
+                *ident = new_name;
+
+                Ok(())
+            }
+            NodeType::ExternFunctionDeclaration {
+                identifier: PotentialDollarIdentifier::Identifier(ident),
+                parameters,
+                return_type,
+                ..
+            } => {
+                let new_name = ParserText::temp_name_with_suffix(&ident, node.span);
+
+                if self.symbols.variables.contains_key(&new_name.text) {
+                    return Ok(());
+                }
+
+                let mut params = Vec::new();
+                for ty in parameters.clone() {
+                    params.push(self.resolve_ffi_data_type(scope, ty));
+                }
+
+                let return_type = self.resolve_ffi_data_type(scope, return_type.clone());
+
+                let data_type = ParserDataType::function(
+                    self.context.current_span(),
+                    params.clone(),
+                    return_type.clone(),
                 );
+
+                self.register_variable(
+                    scope,
+                    &ident.text,
+                    new_name.text.clone(),
+                    data_type.clone(),
+                    VarType::Mutable,
+                )?;
+
+                *ident = new_name;
+
+                Ok(())
             }
-            NodeType::ExternFunctionDeclaration { identifier, .. } => {
-                self.predeclare_extern_function_binding(scope, identifier);
-            }
-            _ => {}
-        }
-    }
-
-    fn predeclare_type_binding(&mut self, scope: &u64, identifier: &str) {
-        let new_name =
-            ParserText::temp_name_with_suffix(identifier.trim(), self.context.current_span()).text;
-
-        if self.symbols.variables.contains_key(&new_name) {
-            return;
-        }
-
-        self.symbols.variables.insert(
-            new_name.clone(),
-            MiddleVariable {
-                data_type: ParserDataType::new(Span::default(), ParserInnerType::Auto(None)),
-                var_type: VarType::Immutable,
-                location: None,
-            },
-        );
-
-        if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
-            scope_ref
-                .mappings
-                .entry(identifier.to_string())
-                .or_insert(new_name);
-        }
-    }
-
-    fn predeclare_constant_binding(
-        &mut self,
-        scope: &u64,
-        span: Span,
-        var_type: VarType,
-        identifier: &PotentialDollarIdentifier,
-        value: &Node,
-        data_type: &ParserDataType,
-    ) {
-        let Ok(identifier) = self.resolve_dollar_ident_only(scope, identifier) else {
-            return;
-        };
-
-        let new_name = ParserText::temp_name_with_suffix(identifier.text.trim(), span).text;
-
-        if self.symbols.variables.contains_key(&new_name) {
-            return;
-        }
-
-        let const_type = if data_type.is_auto() {
-            self.resolve_type_from_node(scope, value)
-                .unwrap_or_else(|| ParserDataType::new(span, ParserInnerType::Auto(None)))
-        } else {
-            self.resolve_data_type(scope, data_type.clone())
-        };
-
-        self.symbols.variables.insert(
-            new_name.clone(),
-            MiddleVariable {
-                data_type: const_type,
-                var_type,
-                location: self.scoping.get_location(scope, span),
-            },
-        );
-
-        if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
-            scope_ref
-                .mappings
-                .entry(identifier.text.clone())
-                .or_insert(new_name);
-        }
-    }
-
-    fn predeclare_extern_function_binding(
-        &mut self,
-        scope: &u64,
-        identifier: &PotentialDollarIdentifier,
-    ) {
-        let Ok(identifier) = self.resolve_dollar_ident_only(scope, identifier) else {
-            return;
-        };
-
-        let new_name =
-            ParserText::temp_name_with_suffix(identifier.text.trim(), identifier.span).text;
-
-        if self.symbols.variables.contains_key(&new_name) {
-            return;
-        }
-
-        self.symbols.variables.insert(
-            new_name.clone(),
-            MiddleVariable {
-                data_type: ParserDataType::new(Span::default(), ParserInnerType::Auto(None)),
-                var_type: VarType::Constant,
-                location: None,
-            },
-        );
-
-        if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
-            scope_ref
-                .mappings
-                .entry(identifier.text.clone())
-                .or_insert(new_name);
+            _ => Ok(()),
         }
     }
 }
