@@ -49,49 +49,11 @@ impl MiddleEnvironment {
             return Ok(MiddleNode::identifier(span, x));
         }
 
-        if let NodeType::Identifier(generic_ident) = &base.node_type
-            && let Some(ident) = self.resolve_dollar_ident_only(scope, generic_ident.get_ident())
+        if let NodeType::Identifier(ident) = &base.node_type
+            && let Some(ty) = self.resolve_potential_generic_ident_to_data_type(scope, &ident)
+            && let Some(x) = self.resolve_impl_member(scope, &ParserDataType::from(ty), &field_name)
         {
-            let ty = self.resolve_str(scope, &ident.text).unwrap_or(ident.text);
-            let mut ty = ParserInnerType::from_str(&ty).unwrap();
-
-            if let PotentialGenericTypeIdentifier::Generic {
-                identifier: _,
-                generic_types,
-            } = generic_ident
-            {
-                let mut generic_types = generic_types
-                    .clone()
-                    .into_iter()
-                    .map(|x| self.resolve_data_type(scope, x))
-                    .collect::<Vec<_>>();
-                ty = match ty {
-                    ParserInnerType::List(_) if !generic_types.is_empty() => {
-                        ParserInnerType::List(Box::new(generic_types.pop().unwrap()))
-                    }
-                    ParserInnerType::Ptr(_) if !generic_types.is_empty() => {
-                        ParserInnerType::Ptr(Box::new(generic_types.pop().unwrap()))
-                    }
-                    ParserInnerType::StructWithGenerics {
-                        identifier,
-                        generic_types: _,
-                    }
-                    | ParserInnerType::Struct(identifier)
-                        if !generic_types.is_empty() =>
-                    {
-                        ParserInnerType::StructWithGenerics {
-                            identifier,
-                            generic_types,
-                        }
-                    }
-                    x => x,
-                }
-            }
-
-            if let Some(x) = self.resolve_impl_member(scope, &ParserDataType::from(ty), &field_name)
-            {
-                return Ok(MiddleNode::identifier(span, x));
-            }
+            return Ok(MiddleNode::identifier(span, x));
         }
 
         Ok(MiddleNode::new(
