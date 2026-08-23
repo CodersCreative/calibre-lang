@@ -1997,7 +1997,7 @@ impl Formatter {
                         };
                         types.push(field_txt);
                     }
-                    txt.push_str(&format!("({})", types.join(", ")));
+                    txt.push_str(&format!("struct ({})", types.join(", ")));
                 }
             },
         }
