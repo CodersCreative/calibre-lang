@@ -59,41 +59,48 @@ impl LirRegistry {
             stack: entry_points.clone(),
             seen: entry_points.into_iter().collect(),
         };
+        let mut worklist_len = worklist.seen.len();
 
-        for (concrete_type, trait_map) in &self.dyn_vtables {
-            if referenced_types.contains(concrete_type) {
-                for (_trait_name, methods) in trait_map {
-                    for (_method_name, function_name) in methods {
-                        if reachable_functions.insert(function_name.clone()) {
-                            worklist.push(function_name.clone());
+        for _ in 0..64 {
+            for (concrete_type, trait_map) in &self.dyn_vtables {
+                if referenced_types.contains(concrete_type) {
+                    for (_trait_name, methods) in trait_map {
+                        for (_method_name, function_name) in methods {
+                            if reachable_functions.insert(function_name.clone()) {
+                                worklist.push(function_name.clone());
+                            }
                         }
                     }
                 }
             }
-        }
 
-        for global_name in reachable_globals.clone() {
-            if let Some(global) = self.globals.get(&global_name) {
-                global.collect_references(
-                    self,
-                    &mut reachable_functions,
-                    &mut reachable_globals,
-                    &mut referenced_types,
-                    &mut worklist,
-                );
+            for global_name in reachable_globals.clone() {
+                if let Some(global) = self.globals.get(&global_name) {
+                    global.collect_references(
+                        self,
+                        &mut reachable_functions,
+                        &mut reachable_globals,
+                        &mut referenced_types,
+                        &mut worklist,
+                    );
+                }
             }
-        }
 
-        while let Some(func_name) = worklist.pop() {
-            if let Some(func) = self.functions.get(&func_name) {
-                func.collect_references(
-                    self,
-                    &mut reachable_functions,
-                    &mut reachable_globals,
-                    &mut referenced_types,
-                    &mut worklist,
-                );
+            while let Some(func_name) = worklist.pop() {
+                if let Some(func) = self.functions.get(&func_name) {
+                    func.collect_references(
+                        self,
+                        &mut reachable_functions,
+                        &mut reachable_globals,
+                        &mut referenced_types,
+                        &mut worklist,
+                    );
+                }
             }
+            if worklist.seen.len() == worklist_len {
+                break;
+            }
+            worklist_len = worklist.seen.len();
         }
 
         (reachable_functions, reachable_globals, referenced_types)
