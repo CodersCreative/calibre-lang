@@ -212,7 +212,7 @@ pub fn build_statement_parser<'a>(
                             type_name
                                 .clone()
                                 .separated_by(
-                                    choice((comma.clone().ignored(), delim.clone()))
+                                    comma.clone().ignored()
                                         .repeated()
                                         .at_least(1)
                                         .ignored(),
@@ -403,9 +403,7 @@ pub fn build_statement_parser<'a>(
         .then_ignore(lex(pad.clone(), just('{')))
         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
         .then(
-            trait_member
-                .separated_by(delim.clone())
-                .allow_trailing()
+            trait_member.then_ignore(delim.clone().repeated().collect::<Vec<_>>()).repeated()
                 .collect::<Vec<_>>()
                 .or_not()
                 .map(|x| x.unwrap_or_default()),
@@ -436,9 +434,7 @@ pub fn build_statement_parser<'a>(
         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
         .then(
             statement
-                .clone()
-                .separated_by(delim.clone())
-                .allow_trailing()
+                .clone().then_ignore(delim.clone().repeated().collect::<Vec<_>>()).repeated()
                 .collect::<Vec<_>>()
                 .or_not()
                 .map(|x| x.unwrap_or_default()),
@@ -830,9 +826,7 @@ pub fn build_statement_parser<'a>(
             .ignore_then(delim.clone().repeated().collect::<Vec<_>>())
             .ignore_then(
                 statement
-                    .clone()
-                    .separated_by(delim.clone())
-                    .allow_trailing()
+                    .clone().then_ignore(delim.clone().repeated().collect::<Vec<_>>()).repeated()
                     .collect::<Vec<_>>()
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
@@ -1207,16 +1201,6 @@ pub fn build_statement_parser<'a>(
         tag_stmt,
         return_stmt,
         destruct_assign_stmt,
-        delim
-            .clone()
-            .repeated()
-            .at_least(1)
-            .ignored()
-            .map_with_span({
-                let ls = line_starts.clone();
-                move |_, r| Node::new(span(ls.as_ref(), r), NodeType::EmptyLine)
-            })
-            .boxed(),
         expr,
     ))
     .boxed()

@@ -16,7 +16,7 @@ use crate::{
     },
 };
 use rustc_hash::FxHashMap;
-use std::error::Error;
+use std::{error::Error, println};
 
 pub struct Tab {
     character: char,
@@ -1961,7 +1961,7 @@ impl Formatter {
                         .iter()
                         .any(|(_, leading, trailing)| leading.is_some() || trailing.is_some());
 
-                    let mut single = String::from("{ ");
+                    let mut single = String::from("struct { ");
                     for (field_txt, _, _) in &fields_vec {
                         single.push_str(&format!("{}, ", field_txt));
                     }
@@ -1969,7 +1969,7 @@ impl Formatter {
                     single = single.trim_end().trim_end_matches(",").to_string();
                     single.push_str(" }");
 
-                    let mut multi = String::from("{\n");
+                    let mut multi = String::from("struct {\n");
                     for (field_txt, leading, trailing) in &fields_vec {
                         let mut line = handle_comment!(leading.clone(), field_txt.clone());
                         if let Some(trailing) = trailing {

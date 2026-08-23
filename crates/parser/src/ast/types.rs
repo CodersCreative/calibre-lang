@@ -624,7 +624,7 @@ impl Display for ParserInnerType {
                     )
                 }
             }
-            Self::FfiType(x) => write!(f, "@{}", x),
+            Self::FfiType(x) => write!(f, "{}", x),
             Self::List(x) => write!(f, "list:<{}>", x),
             Self::Tuple(types) => {
                 write!(

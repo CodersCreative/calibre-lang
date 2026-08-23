@@ -42,7 +42,7 @@ pub(super) fn scope_node_parser<'a, P>(
 where
     P: Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a,
 {
-    let body_items = statement
+    let body_items = statement.then_ignore(delim.clone().repeated().collect::<Vec<_>>())
         .repeated()
         .collect::<Vec<_>>()
         .or_not()
