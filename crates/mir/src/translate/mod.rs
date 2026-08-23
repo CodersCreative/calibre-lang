@@ -154,7 +154,7 @@ impl MiddleEnvironment {
                 scope,
                 Node::call(
                     node.span,
-                    Node::member(node.span, *channel, "raw_send"),
+                    Node::member(node.span, *channel, "send"),
                     vec![CallArg::Value(*value)],
                 ),
             ),

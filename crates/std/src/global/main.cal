@@ -59,6 +59,12 @@ trait Display {
 	const display : fn (&Self) -> str;
 };
 
+trait Send {
+	type Item;
+
+	const send : fn (&mut Self, Self::Item) -> bool;
+};
+
 type ListIter:<T> := struct { data : list:<T>, index : int };
 
 type gen:<T> := struct { data : fn() -> T?, index : int, done : bool };

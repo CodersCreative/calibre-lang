@@ -401,11 +401,14 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                         .then_ignore(lex(pad.clone(), just('>')))
                         .map_with_span({
                             let ls = line_starts.clone();
-                            move |types, r| {
+                            move |mut types, r| {
+                                if types.len() == 1 {
+                                    types.pop().unwrap()
+                                }else {
                                 ParserDataType::new(
                                     span(ls.as_ref(), r),
                                     ParserInnerType::Tuple(types),
-                                )
+                                )}
                             }
                         }),
                     lex(pad.clone(), just('@'))
