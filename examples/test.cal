@@ -51,7 +51,12 @@ const main := fn => {
 	// The inputs get combined into a list
 	print_text("1", "2", "6");
 	
-	let mut d := [[2, 0, 4], [1, 9, 3], [4, 7, 9], [9, 0, 1]];
+	let mut d := [
+		[2, 0, 4],
+		[1, 9, 3],
+		[4, 7, 9],
+		[9, 0, 1]
+	];
 	
 	let lst := list:<int>[2, 0, 4];
 	
@@ -70,7 +75,7 @@ const main := fn => {
 	print(match_res);
 	
 	let => @add_scope [$first := 9f, $second := 11f, $t := type : float] {
-		// match_res will be captured at the call_site;
+		// match_res will be captured at the call_site;;
 		let sum : $t = $first + $second + match_res;
 		print("add_scope: ");
 		print(sum);

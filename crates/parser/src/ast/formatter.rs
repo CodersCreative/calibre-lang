@@ -1674,7 +1674,7 @@ impl Formatter {
         if !overloads.is_empty() {
             let mut txt = String::from(" @overload {\n");
 
-            for func in overloads {
+            for (i, func) in overloads.iter().enumerate() {
                 let func_txt = {
                     let mut txt = format!("const \"{}\" := fn (", func.operator);
 
@@ -1733,7 +1733,11 @@ impl Formatter {
                 };
 
                 let temp = handle_comment!(self.get_potential_comment(func.span()), func_txt);
-                txt.push_str(&format!("\n{};\n", self.fmt_txt_with_tab(&temp, 1, true)));
+                txt.push_str(&format!(
+                    "{}{};\n",
+                    if i > 0 { "" } else { "\n" },
+                    self.fmt_txt_with_tab(&temp, 1, true)
+                ));
             }
 
             txt = txt.trim_end().to_string();
@@ -1964,7 +1968,7 @@ impl Formatter {
                     txt.push_str(&self.wrap_if_wide_or_if(
                         single,
                         &multi,
-                        variants.len() > self.max_values + 2,
+                        variants.len() > self.max_values,
                     ));
                 }
             }

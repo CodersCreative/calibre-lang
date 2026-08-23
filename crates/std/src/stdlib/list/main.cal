@@ -49,7 +49,7 @@ impl<T> list:<T> {
 		return n;
 	};
 
-	const slice := fn (self : list:<T>, start : int, end : int) -> list:<T> => {
+	const slice := fn (self : list:<T>, start end : int) -> list:<T> => {
 		let l := len(self);
 		let s := if start < 0 => emit 0 else => emit start;
 		
@@ -133,15 +133,15 @@ impl<T> list:<T> {
 		for i in 0..len(other) => self <<= other[i];
 	};
 
-	const concat := fn (self : list:<T>, other : list:<T>) -> list:<T> => {
+	const concat := fn (self other : list:<T>) -> list:<T> => {
 		let mut out := list:<T>[self[i] for i in 0..len(self)];
 		for i in 0..len(other) => out <<= other[i];
 		return out;
 	};
 
-	const sort := fn (self : list:<T>, compare : fn(T, T) -> int) -> list:<T> => return sort_by(self, compare);
+	const sort := fn (self : list:<T>, compare : fn (T, T) -> int) -> list:<T> => return sort_by(self, compare);
 
-	const binary_search := fn (self : list:<T>, needle : T, compare : fn(T, T) -> int) -> int? => return binary_search_by(self, needle, compare);
+	const binary_search := fn (self : list:<T>, needle : T, compare : fn (T, T) -> int) -> int? => return binary_search_by(self, needle, compare);
 
 	const join := fn (self : list:<str>, sep : str = "") -> str => {
 		let mut out := "";

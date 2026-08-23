@@ -48,7 +48,7 @@ impl Vars {
 		.None => return false
 	};
 
-	const set := fn (name : str, value : str) => set_var(name, value);
+	const set := fn (name value : str) => set_var(name, value);
 
 	const remove := fn (name : str) => remove_var(name);
 

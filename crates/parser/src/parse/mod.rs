@@ -118,15 +118,14 @@ pub fn parse_program_with_source(
                 .then(
                     lex(pad.clone(), just(":<"))
                         .ignore_then(
-                            type_name
-                                .clone()
+                            lex(pad_with_newline.clone(), type_name.clone())
                                 .separated_by(comma.clone())
                                 .allow_trailing()
                                 .collect::<Vec<_>>()
                                 .or_not()
                                 .map(|x| x.unwrap_or_default()),
                         )
-                        .then_ignore(lex(pad.clone(), just('>')))
+                        .then_ignore(lex(pad_with_newline.clone(), just('>')))
                         .or_not(),
                 )
                 .map(|((n, sp), generics)| {
@@ -189,7 +188,7 @@ pub fn parse_program_with_source(
 
             let matching = build_match_parsers(
                 MatchParsers {
-                    pad: pad.clone(),
+                    pad: pad_with_newline.clone(),
                     delim: delim.clone(),
                     comma: comma.clone(),
                     arrow: arrow.clone(),
@@ -244,33 +243,33 @@ pub fn parse_program_with_source(
                     })
                     .then(lex(pad.clone(), just('[')))
                     .then(choice((
-                        expr.clone()
+                        lex(pad_with_newline.clone(), expr.clone())
                             .then_ignore(lex(pad.clone(), just(';')))
                             .then(int_lit.clone())
                             .map(|(value, count)| (Some((value, count)), Vec::new())),
-                        expr.clone()
+                        lex(pad_with_newline.clone(), expr.clone())
                             .separated_by(comma.clone())
                             .allow_trailing()
                             .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| (None, x.unwrap_or_default())),
                     )))
-                    .then_ignore(lex(pad.clone(), just(']')))
+                    .then_ignore(lex(pad_with_newline.clone(), just(']')))
                     .then(
                         choice((
-                            lex(pad.clone(), just('.'))
+                            lex(pad_with_newline.clone(), just('.'))
                                 .ignore_then(ident.clone())
                                 .then(
                                     lex(pad.clone(), just('('))
                                         .ignore_then(
-                                            expr.clone()
+                                            lex(pad_with_newline.clone(), expr.clone())
                                                 .separated_by(comma.clone())
                                                 .allow_trailing()
                                                 .collect::<Vec<_>>()
                                                 .or_not()
                                                 .map(|x| x.unwrap_or_default()),
                                         )
-                                        .then_ignore(lex(pad.clone(), just(')')))
+                                        .then_ignore(lex(pad_with_newline.clone(), just(')')))
                                         .or_not(),
                                 )
                                 .map(|((name, sp), args)| {
@@ -291,9 +290,9 @@ pub fn parse_program_with_source(
                                         (member, false)
                                     }
                                 }),
-                            lex(pad.clone(), just('['))
-                                .ignore_then(expr.clone())
-                                .then_ignore(lex(pad.clone(), just(']')))
+                            lex(pad_with_newline.clone(), just('['))
+                                .ignore_then(lex(pad_with_newline.clone(), expr.clone()))
+                                .then_ignore(lex(pad_with_newline.clone(), just(']')))
                                 .map(|idx| (idx, true)),
                         ))
                         .repeated()
@@ -355,14 +354,14 @@ pub fn parse_program_with_source(
                 }),
                 lex(pad.clone(), just("$("))
                     .ignore_then(
-                        expr.clone()
+                        lex(pad_with_newline.clone(), expr.clone())
                             .separated_by(comma.clone())
                             .allow_trailing()
                             .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| x.unwrap_or_default()),
                     )
-                    .then_ignore(lex(pad.clone(), just(')')))
+                    .then_ignore(lex(pad_with_newline.clone(), just(')')))
                     .map_with_span({
                         let ls = line_starts.clone();
                         move |args, r| {
@@ -381,7 +380,7 @@ pub fn parse_program_with_source(
                     .clone()
                     .map(|(n, sp)| Node::identifier(sp, &n))
                     .then(
-                        lex(pad.clone(), just('.'))
+                        lex(pad_with_newline.clone(), just('.'))
                             .ignore_then(ident.clone().map(|(n, sp)| Node::identifier(sp, &n))),
                     )
                     .map(|(base, field)| {
@@ -400,7 +399,7 @@ pub fn parse_program_with_source(
                     .clone()
                     .map(|(n, sp)| ParserText::new(sp, &n))
                     .then(
-                        lex(pad.clone(), just("::"))
+                        lex(pad_with_newline.clone(), just("::"))
                             .ignore_then(ident.clone().map(|(n, sp)| ParserText::new(sp, &n)))
                             .repeated()
                             .at_least(1)
@@ -438,7 +437,7 @@ pub fn parse_program_with_source(
                 generic_ident
                     .clone()
                     .then(
-                        lex(pad.clone(), just('.'))
+                        lex(pad_with_newline.clone(), just('.'))
                             .ignore_then(ident.clone().map(|(n, sp)| Node::identifier(sp, &n))),
                     )
                     .map(|(base, field)| {
@@ -458,14 +457,14 @@ pub fn parse_program_with_source(
                 }),
                 lex(pad.clone(), just('('))
                     .ignore_then(
-                        expr.clone()
+                        lex(pad_with_newline.clone(), expr.clone())
                             .separated_by(comma.clone())
                             .allow_trailing()
                             .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| x.unwrap_or_default()),
                     )
-                    .then_ignore(lex(pad.clone(), just(')')))
+                    .then_ignore(lex(pad_with_newline.clone(), just(')')))
                     .map_with_span({
                         let ls = line_starts.clone();
                         move |values, r| {

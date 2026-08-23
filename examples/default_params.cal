@@ -1,7 +1,7 @@
 const maybe_none := fn -> int? => return none;
 const maybe_config := fn (value : int?) -> int? => value;
 
-const setup := fn (size : int = 1024, num : int) => {
+const setup := fn (size num : int) => {
 	print(size);
 	print(num);
 };

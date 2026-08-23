@@ -73,20 +73,21 @@ pub fn build_function_parsers<'a>(
     let tuple_destructure_param = lex(pad.clone(), just('('))
         .ignore_then(
             choice((
-                lex(pad.clone(), just("..")).to(None),
-                lex(pad.clone(), just("mut"))
-                    .or_not()
-                    .then(ident.clone())
-                    .map(|(mut_tok, (name, sp))| {
-                        Some((
-                            if mut_tok.is_some() {
-                                VarType::Mutable
-                            } else {
-                                VarType::Immutable
-                            },
-                            PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
-                        ))
-                    }),
+                lex(pad_with_newline.clone(), just("..")).to(None),
+                lex(
+                    pad_with_newline.clone(),
+                    just("mut").or_not().then(ident.clone()),
+                )
+                .map(|(mut_tok, (name, sp))| {
+                    Some((
+                        if mut_tok.is_some() {
+                            VarType::Mutable
+                        } else {
+                            VarType::Immutable
+                        },
+                        PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
+                    ))
+                }),
             ))
             .separated_by(comma.clone())
             .at_least(2)
@@ -114,7 +115,7 @@ pub fn build_function_parsers<'a>(
         });
 
     let struct_destructure_param =
-        struct_destructure_fields_parser(pad.clone(), comma.clone(), ident.clone())
+        struct_destructure_fields_parser(pad_with_newline.clone(), comma.clone(), ident.clone())
             .then(
                 lex(pad.clone(), just(':'))
                     .ignore_then(type_name.clone().or_not())
@@ -155,31 +156,32 @@ pub fn build_function_parsers<'a>(
         })
         .boxed();
 
-    let plain_param = lex(pad.clone(), just("mut"))
-        .or_not()
-        .ignore_then(ident.clone())
-        .repeated()
-        .at_least(1)
-        .collect::<Vec<_>>()
-        .then(
-            lex(pad.clone(), just(':'))
-                .ignore_then(choice((impl_trait_param_type.clone(), type_name.clone())).or_not())
-                .then(lex(pad.clone(), just('=').ignore_then(expr.clone())).or_not()),
+    let plain_param = lex(
+        pad_with_newline.clone(),
+        just("mut").or_not().ignore_then(ident.clone()),
+    )
+    .repeated()
+    .at_least(1)
+    .collect::<Vec<_>>()
+    .then(
+        lex(pad.clone(), just(':'))
+            .ignore_then(choice((impl_trait_param_type.clone(), type_name.clone())).or_not())
+            .then(lex(pad.clone(), just('=').ignore_then(expr.clone())).or_not()),
+    )
+    .map(|(names, (ty, default))| {
+        FnParamGroup::Plain(
+            names
+                .into_iter()
+                .map(|(n, sp)| {
+                    (
+                        PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
+                        ty.clone(),
+                        default.clone().map(Box::new),
+                    )
+                })
+                .collect::<Vec<_>>(),
         )
-        .map(|(names, (ty, default))| {
-            FnParamGroup::Plain(
-                names
-                    .into_iter()
-                    .map(|(n, sp)| {
-                        (
-                            PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)),
-                            ty.clone(),
-                            default.clone().map(Box::new),
-                        )
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        });
+    });
 
     let fn_param_groups = choice((
         tuple_destructure_param,
@@ -193,14 +195,14 @@ pub fn build_function_parsers<'a>(
     .map(|x| x.unwrap_or_default())
     .boxed();
 
-    let fn_params = lex(pad.clone(), just('('))
+    let fn_params = lex(pad_with_newline.clone(), just('('))
         .ignore_then(fn_param_groups.clone())
-        .then_ignore(lex(pad.clone(), just(')')))
+        .then_ignore(lex(pad_with_newline.clone(), just(')')))
         .or_not()
         .map(|x| x.unwrap_or_default())
         .boxed();
 
-    let scope_block = fat_arrow
+    let scope_block = lex(pad_with_newline.clone(), fat_arrow)
         .clone()
         .ignore_then(choice((
             labelled_scope.clone(),
@@ -221,7 +223,13 @@ pub fn build_function_parsers<'a>(
         .then_ignore(lex(pad.clone(), just("match")).not())
         .ignore_then(generic_params.clone())
         .then(fn_params)
-        .then(arrow.clone().ignore_then(type_name.clone()).or_not())
+        .then(lex(
+            pad_with_newline.clone(),
+            arrow
+                .clone()
+                .ignore_then(lex(pad_with_newline.clone(), type_name.clone()))
+                .or_not(),
+        ))
         .then(scope_block.clone())
         .map(|(((generics, params), ret), body)| {
             let mut parameters = Vec::new();

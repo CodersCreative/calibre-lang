@@ -1,113 +1,132 @@
 trait Animal {
-  const name : fn(&Self) -> str;
-  const sound : fn(&Self) -> str;
-  const size : fn(&Self) -> int;
-  const intelligence : fn(&Self) -> int;
+	const name : fn (&Self) -> str;
 
-  const Description := fn (self : &Self) -> str => {
-    return fmt"The animal's name is {self.name()}, it makes a {self.sound()}, its size is {self.size()} and its intelligence level is {self.intelligence()}";
-  };
-}
+	const sound : fn (&Self) -> str;
+
+	const size : fn (&Self) -> int;
+
+	const intelligence : fn (&Self) -> int;
+
+	const Description := fn (self : &Self) -> str => {
+		return fmt"The animal's name is {self.name()}, it makes a {self.sound()}, its size is {self.size()} and its intelligence level is {self.intelligence()}";
+	};
+};
 
 type GenericAnimal := struct {
-  Name Sound  : str,
-  Size Intelligence : int
-}
+	Name Sound : str,
+	Size Intelligence : int
+};
 
 impl GenericAnimal {
-  const new := fn (Name Sound  : str, Size Intelligence : int) -> Self => return Parrot {
-    Name,
-    Sound,
-    Size,
-    Intelligence,
-  };
-}
+	const new := fn (Name Sound : str, Size Intelligence : int) -> Self => return Parrot {Name, Sound, Size, Intelligence};
+};
 
 impl Animal for GenericAnimal {
-  const name := fn(self : &Self) -> str => return self.Name;
-  const sound := fn(self : &Self) -> str => return self.Sound;
-  const size := fn(self : &Self) -> int => return self.Size;
-  const intelligence := fn(self : &Self) -> int => return self.Intelligence;
-}
+	const name := fn (self : &Self) -> str => return self.Name;
+
+	const sound := fn (self : &Self) -> str => return self.Sound;
+
+	const size := fn (self : &Self) -> int => return self.Size;
+
+	const intelligence := fn (self : &Self) -> int => return self.Intelligence;
+};
 
 type Parrot := struct {
-  Name Sound  : str,
-  Size Intelligence WingSpan NumberWords : int
-}
+	Name Sound : str,
+	Size Intelligence WingSpan NumberWords : int
+};
 
 impl Parrot {
-  const new := fn (Name Sound  : str, Size Intelligence WingSpan NumberWords: int) -> Self => return Parrot {
-    Name,
-    Sound,
-    Size,
-    Intelligence,
-    WingSpan,
-    NumberWords
-  };
+	const new := fn (
+		Name: str,
+		Sound: str,
+		Size: int,
+		Intelligence: int,
+		WingSpan: int,
+		NumberWords: int
+	) -> Self => return Parrot {Name, Sound, Size, Intelligence, WingSpan, NumberWords};
 
-  const ChangeNumberWords := fn (self : &mut Self, words : int) => self.NumberWords += words;
-}
+	const ChangeNumberWords := fn (self : &mut Self, words : int) => self.NumberWords += words;
+};
 
 impl Animal for Parrot {
-  const name := fn(self : &Self) -> str => return self.Name;
-  const sound := fn(self : &Self) -> str => return self.Sound;
-  const size := fn(self : &Self) -> int => return self.Size;
-  const intelligence := fn(self : &Self) -> int => return self.Intelligence;
+	const name := fn (self : &Self) -> str => return self.Name;
 
-  const Description := fn (self : &Self) -> str => {
-    return "The animal's name is " & self.Name & ", it makes a " & self.Sound & ", its size is " & self.Size & " and its intelligence level is " & self.Intelligence & ". Its has a wingspan of " & self.WingSpan & " cm and can say " & self.NumberWords & " words.";
-  };
-}
+	const sound := fn (self : &Self) -> str => return self.Sound;
+
+	const size := fn (self : &Self) -> int => return self.Size;
+
+	const intelligence := fn (self : &Self) -> int => return self.Intelligence;
+
+	const Description :=
+		fn (self : &Self) -> str => {
+			return "The animal\'s name is " & self.Name & ", it makes a " & self.Sound & ", its size is " & self.Size & " and its intelligence level is " & self.Intelligence & ". Its has a wingspan of " & self.WingSpan & " cm and can say " & self.NumberWords & " words.";
+		};
+};
 
 type Wolf := struct {
-  Name Sound  : str,
-  Size Intelligence TerritorySize : int
-}
+	Name Sound : str,
+	Size Intelligence TerritorySize : int
+};
 
 impl Wolf {
-  const new := fn (Name Sound  : str, Size Intelligence TerritorySize: int) -> Self => return Wolf {
-    Name,
-    Sound,
-    Size,
-    Intelligence,
-    TerritorySize,
-  };
+	const new := fn (Name Sound : str, Size Intelligence TerritorySize : int) -> Self => return Wolf {Name, Sound, Size, Intelligence, TerritorySize};
 
-  const SetTerritorySize := fn (self : &mut Self, size : int) => self.TerritorySize := size;
-}
+	const SetTerritorySize := fn (self : &mut Self, size : int) => self.TerritorySize := size;
+};
 
 impl Animal for Wolf {
-  const name := fn(self : &Self) -> str => return self.Name;
-  const sound := fn(self : &Self) -> str => return self.Sound;
-  const size := fn(self : &Self) -> int => return self.Size;
-  const intelligence := fn(self : &Self) -> int => return self.Intelligence;
+	const name := fn (self : &Self) -> str => return self.Name;
 
-  const Description := fn (self : &Self) -> str => {
-    return fmt"The animal's name is {self.Name}, it makes a {self.Sound}, its size is {self.Size} and its intelligence level is {self.Intelligence}. Its territory is {self.TerritorySize} square miles.";
-  };
-}
+	const sound := fn (self : &Self) -> str => return self.Sound;
+
+	const size := fn (self : &Self) -> int => return self.Size;
+
+	const intelligence := fn (self : &Self) -> int => return self.Intelligence;
+
+	const Description := fn (self : &Self) -> str => {
+		return fmt"The animal's name is {self.Name}, it makes a {self.Sound}, its size is {self.Size} and its intelligence level is {self.Intelligence}. Its territory is {self.TerritorySize} square miles.";
+	};
+};
 
 const main := fn => {
-  const parrot := Parrot.new("Chewie", "Squawk", 1, 10, 30, 29);
-  const wolf := Wolf.new("Nighteyes", "Howl", 8, 7, 100);
-  const horse := GenericAnimal.new("Cooper", "Neigh", 10, 6);
-
-  wolf.SetTerritorySize(80);
-  parrot.ChangeNumberWords(2);
-
-  print(parrot.Description());
-  print(wolf.Description());  
-  print(horse.Description());
-
-
-  let mut animal : dyn:<Animal> = wolf;
-  print(animal.Description());
-  match animal {
-    is Wolf => {
-      let animal : Wold = animal as! Wolf;
-      print(animal);
-      print(animal.Description())
-    }
-    _ => print("Not Wolf");
-  }
-}
+	const parrot := Parrot.new(
+		"Chewie",
+		"Squawk",
+		1,
+		10,
+		30,
+		29
+	);
+	const wolf := Wolf.new(
+		"Nighteyes",
+		"Howl",
+		8,
+		7,
+		100
+	);
+	const horse := GenericAnimal.new(
+		"Cooper",
+		"Neigh",
+		10,
+		6
+	);
+	
+	wolf.SetTerritorySize(80);
+	parrot.ChangeNumberWords(2);
+	
+	print(parrot.Description());
+	print(wolf.Description());
+	print(horse.Description());
+	
+	let mut animal : dyn:<Animal> = wolf;
+	print(animal.Description());
+	match animal {
+		is Wolf => {
+			let animal : Wold = animal as! Wolf;
+			print(animal);
+			print(animal.Description());
+		},
+		_ => print("Not Wolf")
+	};
+};

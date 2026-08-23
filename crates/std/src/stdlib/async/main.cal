@@ -2,10 +2,7 @@ type Channel:<T> := struct { inner : host };
 type WaitGroup := struct { inner : host };
 type Mutex:<T> := struct { inner : host };
 
-type LazyLock:<T> := struct {
-	inner : Mutex:<T?>,
-	init_fn : fn() -> T,
-};
+type LazyLock:<T> := struct { inner : Mutex:<T?>, init_fn : fn () -> T };
 
 impl<T> Channel:<T> {
 	const new := fn -> Channel:<T> => return Channel:<T> { inner : channel_new() };
@@ -27,8 +24,7 @@ impl<T> Send for Channel:<T> {
 	type Item := T;
 
 	const send := fn (self : &mut Self, value : Self::Item) -> bool => return channel_try_send(self.inner, value);
-}
-
+};
 
 impl WaitGroup {
 	const new := fn -> WaitGroup => return WaitGroup { inner : waitgroup_new() };
@@ -51,7 +47,7 @@ impl<T> Mutex:<T> {
 
 	const set := fn (self : &mut Mutex:<T>, value : T) => mutex_set(self.inner, value);
 
-	const with := fn <U> (self : &mut Mutex:<T>, op : fn(T) -> U) -> U => return mutex_with(self.inner, op);
+	const with := fn <U> (self : &mut Mutex:<T>, op : fn (T) -> U) -> U => return mutex_with(self.inner, op);
 
 	const write := fn (self : &mut Mutex:<T>) -> &mut T => return mutex_write(self.inner);
 
@@ -61,23 +57,18 @@ impl<T> Mutex:<T> {
 		return current;
 	};
 
-	const update := fn (self : &mut Mutex:<T>, op : fn(T) -> T) => {
+	const update := fn (self : &mut Mutex:<T>, op : fn (T) -> T) => {
 		let current := self.get();
 		self.set(op(current));
 	};
 };
 
 impl<T> LazyLock:<T> {
-	const new := fn(init_fn : fn() -> T) =>
-		return LazyLock:<T> {
-			inner : Mutex:<T>.new(),
-			init_fn,
-		};
-	
-	const get := fn(self : &Self) -> &mut T? =>
-		return self.inner.get();
+	const new := fn (init_fn : fn () -> T) => return LazyLock:<T> { inner : Mutex:<T>.new(), init_fn };
 
-	const get_or_init := fn(self : &Self) -> &mut T => {
+	const get := fn (self : &Self) -> &mut T? => return self.inner.get();
+
+	const get_or_init := fn (self : &Self) -> &mut T => {
 		let value : &mut T? = self.inner.get();
 		match value {
 			.Some : x => x,
@@ -85,10 +76,10 @@ impl<T> LazyLock:<T> {
 				value.* := self.init_fn();
 				return try value => panic();
 			}
-		}
+		};
 	};
 
-	const get_or_set := fn(self : &Self, default : T) -> &mut T => {
+	const get_or_set := fn (self : &Self, default : T) -> &mut T => {
 		let value : &mut T? = self.inner.get();
 		match value {
 			.Some : x => x,
@@ -96,6 +87,6 @@ impl<T> LazyLock:<T> {
 				value.* := default;
 				return try value => panic();
 			}
-		}
+		};
 	};
-}
+};

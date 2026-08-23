@@ -1,19 +1,19 @@
-type ErrNo := struct {code : int};
+type ErrNo := struct { code : int };
 
 impl ErrNo {
-    const get := fn () -> Self => {
-        return ErrNo {code : get_c_errno()};
-    };
+	const get := fn -> Self => {
+		return ErrNo { code : get_c_errno() };
+	};
 
-    const description := fn (self : &Self) -> str => {
-        return get_c_errno_description(self.code);
-    };
+	const description := fn (self : &Self) -> str => {
+		return get_c_errno_description(self.code);
+	};
 
-    const set := fn (self : Self) => {
-        set_c_errno(self.code);
-    };
-}
+	const set := fn (self : Self) => {
+		set_c_errno(self.code);
+	};
+};
 
 impl Display for ErrNo {
-    const display := fn (self : &Self) -> str => self.description();
-}
+	const display := fn (self : &Self) -> str => self.description();
+};

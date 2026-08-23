@@ -44,10 +44,20 @@ const main := fn => {
 	let mapped := list:<int>[1, 2, 3].into_iter().map(fn (x : int) -> int => return x * 2).collect();
 	print(mapped);
 	
-	let filtered := list:<int>[1, 2, 3, 4].into_iter().filter(fn (x : int) -> bool => return x % 2 = 0).collect();
+	let filtered := list:<int>[
+		1,
+		2,
+		3,
+		4
+	].into_iter().filter(fn (x : int) -> bool => return x % 2 = 0).collect();
 	print(filtered);
 	
-	let sum := list:<int>[1, 2, 3, 4].into_iter().fold(0, fn (acc : int, x : int) -> int => return acc + x);
+	let sum := list:<int>[
+		1,
+		2,
+		3,
+		4
+	].into_iter().fold(0, fn (acc x : int) -> int => return acc + x);
 	print(sum);
 	
 	let any_big := list:<int>[1, 2, 3].into_iter().any(fn (x : int) -> bool => return x > 2);
@@ -59,21 +69,46 @@ const main := fn => {
 	let found := list:<int>[3, 4, 5].into_iter().find(fn (x : int) -> bool => return x = 4);
 	print(found);
 	
-	let taken := list:<int>[1, 2, 3, 4, 5].into_iter().take(3).collect();
+	let taken := list:<int>[
+		1,
+		2,
+		3,
+		4,
+		5
+	].into_iter().take(3).collect();
 	print(taken);
 	
-	let skipped := list:<int>[1, 2, 3, 4, 5].into_iter().skip(2).collect();
+	let skipped := list:<int>[
+		1,
+		2,
+		3,
+		4,
+		5
+	].into_iter().skip(2).collect();
 	print(skipped);
 	
 	let mut enumerated := list:<int>[10, 20, 30].into_iter().enumerate();
 	print(enumerated.next());
 	print(enumerated.next());
 	
-	let mut stepped := list:<int>[1, 2, 3, 4, 5, 6].into_iter().step_by(2);
+	let mut stepped := list:<int>[
+		1,
+		2,
+		3,
+		4,
+		5,
+		6
+	].into_iter().step_by(2);
 	print(stepped.next());
 	print(stepped.next());
 	
-	let parts := list:<int>[1, 2, 3, 4, 5].into_iter().partition(fn (x : int) -> bool => return x % 2 = 0);
+	let parts := list:<int>[
+		1,
+		2,
+		3,
+		4,
+		5
+	].into_iter().partition(fn (x : int) -> bool => return x % 2 = 0);
 	let mut evens := parts.0;
 	let mut odds := parts.1;
 	print(evens.next());

@@ -6,7 +6,7 @@ type Metadata := struct { inner : host };
 type Dir := struct { path : Path };
 
 impl Path {
-	const new := fn (path : str) -> Path => return Path { inner : path_new(path)};
+	const new := fn (path : str) -> Path => return Path { inner : path_new(path) };
 
 	const as_str := fn (self : &Path) -> str => return path_as_str(self.inner);
 
@@ -19,8 +19,8 @@ impl Path {
 	const canonicalize := fn (self : &Path) -> str!Path => {
 		match path_canonicalize(self.inner) {
 			.Ok : p => return ok(Path { inner : p }),
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
 
 	const parent := fn (self : &Path) -> Path? => {
@@ -43,7 +43,7 @@ impl Path {
 		if s = null => return none else => return some(s);
 	};
 
-	const join := fn (self : &Path, other : str) -> null => path_join(self.inner, other);
+	const join := fn (self : &Path, other : str) => path_join(self.inner, other);
 
 	const with_extension := fn (self : &Path, extension : str) -> Path => return Path { inner : path_with_extension(self.inner, extension) };
 
@@ -53,19 +53,19 @@ impl Path {
 		match path_read_dir(self.inner) {
 			.Ok : entries => {
 				let entries : list:<host> = entries;
-				return ok(list:<DirEntry>[DirEntry { inner : entries[i]} for i in 0..len(entries)])
+				return ok(list:<DirEntry>[DirEntry { inner : entries[i] } for i in 0..len(entries)]);
 			},
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
-}
+};
 
 impl File {
 	const open := fn (path : Path, mode : str) -> str!File => {
 		match file_open(path.inner, mode) {
 			.Ok : f => return ok(File { inner : f }),
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
 
 	const open_read := fn (path : Path) -> str!File => return File.open(path, "r");
@@ -77,29 +77,29 @@ impl File {
 	const close := fn (self : &File) -> str!null => {
 		match file_close(self.inner) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
 
 	const flush := fn (self : &File) -> str!null => {
 		match file_flush(self.inner) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
 
 	const write := fn (self : &File, content : dyn) -> str!null => {
 		match file_write(self.inner, "" & content) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
 
 	const write_line := fn (self : &File, content : dyn) -> str!null => {
 		match file_write_line(self.inner, "" & content) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
 
 	const read_lines := fn (self : &File) -> str!list:<str> => {
@@ -115,8 +115,8 @@ impl File {
 	const read_all := fn (self : &File) -> str!str => {
 		match file_read_all(self.inner) {
 			.Ok : content => return ok(content),
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
 
 	const read_to_string := fn (path : str) -> str!str => {
@@ -132,7 +132,7 @@ impl File {
 		let _ := file.close();
 		return lines;
 	};
-}
+};
 
 impl DirEntry {
 	const path := fn (self : &DirEntry) -> Path => return Path { inner : direntry_path(self.inner) };
@@ -142,17 +142,17 @@ impl DirEntry {
 	const file_type := fn (self : &DirEntry) -> str!FileType => {
 		match direntry_file_type(self.inner) {
 			.Ok : ft => return ok(FileType { inner : ft }),
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
 
 	const metadata := fn (self : &DirEntry) -> str!Metadata => {
 		match direntry_metadata(self.inner) {
 			.Ok : meta => return ok(Metadata { inner : meta }),
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
-}
+};
 
 impl FileType {
 	const is_file := fn (self : &FileType) -> bool => return filetype_is_file(self.inner);
@@ -160,7 +160,7 @@ impl FileType {
 	const is_dir := fn (self : &FileType) -> bool => return filetype_is_dir(self.inner);
 
 	const is_symlink := fn (self : &FileType) -> bool => return filetype_is_symlink(self.inner);
-}
+};
 
 impl Metadata {
 	const is_file := fn (self : &Metadata) -> bool => return metadata_is_file(self.inner);
@@ -173,26 +173,26 @@ impl Metadata {
 	const modified := fn (self : &Metadata) -> str!int => {
 		match metadata_modified(self.inner) {
 			.Ok : time => return ok(time),
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
 
 	const created := fn (self : &Metadata) -> str!int => {
 		match metadata_created(self.inner) {
 			.Ok : time => return ok(time),
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
 
 	const accessed := fn (self : &Metadata) -> str!int => {
 		match metadata_accessed(self.inner) {
 			.Ok : time => return ok(time),
-			.Err : e => return err(e),
-		}
+			.Err : e => return err(e)
+		};
 	};
 
 	const is_readonly := fn (self : &Metadata) -> bool => return metadata_is_readonly(self.inner);
-}
+};
 
 impl Dir {
 	const new := fn (path : str) -> Dir => return Dir { path : Path.new(path) };
@@ -207,28 +207,28 @@ impl Dir {
 			.Err : e => {
 				if self.exists() => return ok(null) else => return err("failed to create directory: " & e);
 			}
-		}
+		};
 	};
 
 	const create_all := fn (self : &Dir) -> str!null => {
 		match dir_create_all(self.path.as_str()) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err("failed to create directory: " & e),
-		}
+			.Err : e => return err("failed to create directory: " & e)
+		};
 	};
 
 	const remove := fn (self : &Dir) -> str!null => {
 		match dir_remove(self.path.as_str()) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err("failed to remove directory: " & e),
-		}
+			.Err : e => return err("failed to remove directory: " & e)
+		};
 	};
 
 	const remove_all := fn (self : &Dir) -> str!null => {
 		match dir_remove_all(self.path.as_str()) {
 			.Ok : _ => return ok(null),
-			.Err : e => return err("failed to remove directory: " & e),
-		}
+			.Err : e => return err("failed to remove directory: " & e)
+		};
 	};
 
 	const ensure := fn (self : &Dir) -> str!null => if self.exists() => return ok(null) else => return self.create_all();
@@ -248,4 +248,4 @@ impl Dir {
 		for entry in entries => out <<= entry.file_name();
 		return ok(out);
 	};
-}
+};

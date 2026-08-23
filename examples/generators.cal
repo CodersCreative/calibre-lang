@@ -1,4 +1,4 @@
-const count_up := fn (start : int, end : int) -> gen:<int> => {
+const count_up := fn (start end : int) -> gen:<int> => {
 	let mut i := start;
 	
 	for i < end => {

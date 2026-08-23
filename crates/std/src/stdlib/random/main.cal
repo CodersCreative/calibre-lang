@@ -18,7 +18,7 @@ const bool := fn -> bool => return (c_rand() & 1) = 1;
 
 const ratio := fn -> float => return (try c_rand() as float => 0f) / (try RAND_MAX as float => 1f);
 
-const range := fn (min : int, max : int, inclusive : bool = false) -> int => {
+const range := fn (min max : int, inclusive : bool = false) -> int => {
 	if inclusive => max += 1;
 	if max <= min => return min else => {
 		let span := max - min;
@@ -26,10 +26,9 @@ const range := fn (min : int, max : int, inclusive : bool = false) -> int => {
 	};
 };
 
-@deprecated("use std::random::range with inclusive : true instead.")
-const range_inclusive := fn (min : int, max : int) -> int => return range(min, max + 1);
+@deprecated("use std::random::range with inclusive : true instead.") const range_inclusive := fn (min max : int) -> int => return range(min, max + 1);
 
-const float_range := fn (min : float, max : float) -> float => {
+const float_range := fn (min max : float) -> float => {
 	if max <= min => return min else => return min + (ratio() * (max - min));
 };
 

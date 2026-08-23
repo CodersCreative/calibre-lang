@@ -1,9 +1,8 @@
-const recursive := fn (a : int, b : int) -> int => {
-    if a <= 0 => return 1;
-    let val := recursive(a - 1, b);
-    return a * b + val;
-}
+const recursive := fn (a b : int) -> int => {
+	if a <= 0 => return 1;
+	let val := recursive(a - 1, b);
+	return a * b + val;
+};
 
 // Should print '50501'
 const main := fn => print(recursive(100, 10));
-

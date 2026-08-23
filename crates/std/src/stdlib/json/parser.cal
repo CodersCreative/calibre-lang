@@ -2,7 +2,14 @@ import (Tokenizer, Token, TokenType) from lexer;
 
 type Parser := struct { tokens : list:<Token>, index : int, errors : list:<str> };
 
-type JsonValue := enum { Number : float, String : str, Map : HashMap:<str, JsonValue>, List : list:<JsonValue>, Bool : bool, Null };
+type JsonValue := enum {
+	Number : float,
+	String : str,
+	Map : HashMap:<str, JsonValue>,
+	List : list:<JsonValue>,
+	Bool : bool,
+	Null
+};
 
 impl Display for JsonValue {
 	const display := fn (self : &Self) -> str => {

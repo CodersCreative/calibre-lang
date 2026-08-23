@@ -120,15 +120,14 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
 
     let generic_params = lex(pad.clone(), just('<'))
         .ignore_then(
-            ident
-                .clone()
+            lex(pad_with_newline.clone(), ident.clone())
                 .separated_by(comma.clone())
                 .allow_trailing()
                 .collect::<Vec<_>>()
                 .or_not()
                 .map(|items| items.unwrap_or_default()),
         )
-        .then_ignore(lex(pad.clone(), just('>')))
+        .then_ignore(lex(pad_with_newline.clone(), just('>')))
         .or_not()
         .map(|items| {
             GenericTypes(
@@ -300,7 +299,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                 let type_path = raw_ident
                     .clone()
                     .then(
-                        lex(pad.clone(), just("::"))
+                        lex(pad_with_newline.clone(), just("::"))
                             .ignore_then(raw_ident.clone())
                             .repeated()
                             .collect::<Vec<_>>(),
@@ -324,14 +323,14 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                     .then(
                         lex(pad.clone(), just(":<"))
                             .ignore_then(
-                                ty.clone()
+                                lex(pad_with_newline.clone(),ty.clone())
                                     .separated_by(comma.clone())
                                     .allow_trailing()
                                     .collect::<Vec<_>>()
                                     .or_not()
                                     .map(|items| items.unwrap_or_default()),
                             )
-                            .then_ignore(lex(pad.clone(), just('>')))
+                            .then_ignore(lex(pad_with_newline.clone(), just('>')))
                             .or_not(),
                     )
                     .try_map(|((name, sp), generic_types), parser_sp| {
@@ -421,7 +420,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                     lex(pad.clone(), just("fn"))
                         .ignore_then(lex(pad.clone(), just('(')))
                         .ignore_then(
-                            ty.clone()
+                            lex(pad_with_newline.clone(),ty.clone())
                                 .separated_by(comma.clone())
                                 .allow_trailing()
                                 .collect::<Vec<_>>()
@@ -430,7 +429,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                                     items.unwrap_or_default()
                                 }),
                         )
-                        .then_ignore(lex(pad.clone(), just(')')))
+                        .then_ignore(lex(pad_with_newline.clone(), just(')')))
                         .then(arrow.clone().ignore_then(ty.clone()).or_not())
                         .map_with_span({
                             let ls = line_starts.clone();

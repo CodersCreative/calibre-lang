@@ -9,9 +9,9 @@ type int := int @overload {
 
 type Vec2 := struct { x y : int } @overload {
 
-	const "+" := fn (a : Vec2, b : Vec2) -> Vec2 => return Vec2 { x : a.x + b.x, y : a.y + b.y };
+	const "+" := fn (a b : Vec2) -> Vec2 => return Vec2 { x : a.x + b.x, y : a.y + b.y };
 
-	const "=" := fn (a : Vec2, b : Vec2) -> bool => return a.x = b.x && a.y = b.y;
+	const "=" := fn (a b : Vec2) -> bool => return a.x = b.x && a.y = b.y;
 
 	const "[]" := fn (self : Vec2, idx : int) -> int => {
 		if idx = 0 => return self.x;
@@ -21,7 +21,7 @@ type Vec2 := struct { x y : int } @overload {
 		return 0;
 	};
 
-	const "[]=" := fn (self : Vec2, idx : int, value : int) -> Vec2 => {
+	const "[]=" := fn (self : Vec2, idx value : int) -> Vec2 => {
 		if idx = 0 => self.x := value;
 		if idx = 1 => self.y := value;
 		return self;

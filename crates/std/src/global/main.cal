@@ -1,27 +1,17 @@
 type Package := struct {
-	name : str,
-	version : str,
-	description : str,
-	license : str,
-	repository : str,
-	homepage : str,
-	src : str,
-	root : str,
-}
+	name version description license repository homepage src root : str
+};
 
 type ExecContext := struct {
-	function_name : str,
-	module_name : str,
-	path : str,
-	line : uint,
-	col : uint,
-}
+	function_name module_name path : str,
+	line col : uint
+};
 
 const print := fn (msg : list:<dyn>) => {
 	let mut txt := "";
 	for m in msg => txt &= m;
 	
-	return console_output(1, txt & "\n")
+	return console_output(1, txt & "\n");
 };
 
 const range := fn (start end : mut int, step : int = 1, inclusive : bool = false) -> list:<int> => {
@@ -44,7 +34,7 @@ const range := fn (start end : mut int, step : int = 1, inclusive : bool = false
 	return lst;
 };
 
-const fmt := fn (splits : list:<str>, inputs : list:<str>) -> str => {
+const fmt := fn (splits inputs : list:<str>) -> str => {
 	let mut txt : str = "";
 	
 	for i in 0..len(splits) => {
@@ -67,7 +57,7 @@ trait Send {
 
 type ListIter:<T> := struct { data : list:<T>, index : int };
 
-type gen:<T> := struct { data : fn() -> T?, index : int, done : bool };
+type gen:<T> := struct { data : fn () -> T?, index : int, done : bool };
 
 type RangeIter := struct { range : range, index : int };
 
@@ -84,7 +74,7 @@ trait Iter {
 		return out;
 	};
 
-	const map := fn <U> (self : Self, op : fn(Self::Item) -> U) -> ListIter:<U> => {
+	const map := fn <U> (self : Self, op : fn (Self::Item) -> U) -> ListIter:<U> => {
 		let mut out := list:<U>[];
 		
 		for  => {
@@ -97,7 +87,7 @@ trait Iter {
 		return ListIter:<U> { data : out, index : 0 };
 	};
 
-	const filter := fn (self : Self, pred : fn(Self::Item) -> bool) -> ListIter:<Self::Item> => {
+	const filter := fn (self : Self, pred : fn (Self::Item) -> bool) -> ListIter:<Self::Item> => {
 		let mut out := list:<Self::Item>[];
 		
 		for  => {
@@ -111,7 +101,7 @@ trait Iter {
 		return ListIter:<Self::Item> { data : out, index : 0 };
 	};
 
-	const for_each := fn (self : Self, op : fn(Self::Item) -> null) => {
+	const for_each := fn (self : Self, op : fn (Self::Item)) => {
 		for  => {
 			let v := self.next();
 			if v = none => break;
@@ -120,7 +110,7 @@ trait Iter {
 		};
 	};
 
-	const fold := fn <U> (self : Self, init : U, op : fn(U, Self::Item) -> U) -> U => {
+	const fold := fn <U> (self : Self, init : U, op : fn (U, Self::Item) -> U) -> U => {
 		let mut acc := init;
 		
 		for  => {
@@ -133,7 +123,7 @@ trait Iter {
 		return acc;
 	};
 
-	const any := fn (self : Self, pred : fn(Self::Item) -> bool) -> bool => {
+	const any := fn (self : Self, pred : fn (Self::Item) -> bool) -> bool => {
 		for  => {
 			let v := self.next();
 			if v = none => break;
@@ -144,7 +134,7 @@ trait Iter {
 		return false;
 	};
 
-	const all := fn (self : Self, pred : fn(Self::Item) -> bool) -> bool => {
+	const all := fn (self : Self, pred : fn (Self::Item) -> bool) -> bool => {
 		for  => {
 			let v := self.next();
 			if v = none => break;
@@ -155,7 +145,7 @@ trait Iter {
 		return true;
 	};
 
-	const find := fn (self : Self, pred : fn(Self::Item) -> bool) -> Self::Item? => {
+	const find := fn (self : Self, pred : fn (Self::Item) -> bool) -> Self::Item? => {
 		for  => {
 			let v := self.next();
 			if v = none => break;
@@ -251,7 +241,7 @@ trait Iter {
 		return ListIter:<Self::Item> { data : out, index : 0 };
 	};
 
-	const partition := fn (self : Self, pred : fn(Self::Item) -> bool) -> <ListIter:<Self::Item>, ListIter:<Self::Item>> => {
+	const partition := fn (self : Self, pred : fn (Self::Item) -> bool) -> <ListIter:<Self::Item>, ListIter:<Self::Item>> => {
 		let mut left := list:<Self::Item>[];
 		
 		let mut right := list:<Self::Item>[];
@@ -271,7 +261,7 @@ trait Iter {
 impl<T> Iter for ListIter:<T> {
 	type Item := T;
 
-	const partition := fn (self : ListIter:<T>, pred : fn(T) -> bool) -> <ListIter:<T>, ListIter:<T>> => {
+	const partition := fn (self : ListIter:<T>, pred : fn (T) -> bool) -> <ListIter:<T>, ListIter:<T>> => {
 		let mut left := list:<T>[];
 		
 		let mut right := list:<T>[];

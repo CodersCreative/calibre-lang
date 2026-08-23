@@ -1,23 +1,19 @@
 const main := fn => {
-  print("hello");
-  smth_panic();
+	print("hello");
+	smth_panic();
 };
 
 const smth_panic := fn => panic("Run using test");
 
-const divide := fn(a b : int) -> int => {
-  if b = 0 =>
-    panic("b must not be 0");
-  return a / b;
+const divide := fn (a b : int) -> int => {
+	if b = 0 => panic("b must not be 0");
+	return a / b;
 };
 
-@suite("main") {
-  @panics
-  test "something" => {
-    assert(7 = 9, "Should fail");
-    assert("hello" = "hi", "Should fail");
-    divide(10, 0);
-  };
-  
-  test "regular" => assert("Hi" = "Hi", "Worked!");
-}
+@suite("main") @panics test "something" => {
+	assert(7 = 9, "Should fail");
+	assert("hello" = "hi", "Should fail");
+	divide(10, 0);
+};
+
+@suite("main") test "regular" => assert("Hi" = "Hi", "Worked!");

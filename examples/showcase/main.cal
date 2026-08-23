@@ -133,11 +133,11 @@ const main := fn => {
 	// Match with enum payload destructuring.
 	let nested_lang : Language = Language.ARABIC : Language.FRENCH : FrenchData { data : 1, code : 2 }, Language.SPANISH;
 	
-	/*match nested_lang {
-		.ARABIC : (.FRENCH : {data: l, code: r}, _) => print("nested enum/struct => " & (l + r)),
-		_ => print("no enum match")
-	};*/
-	
+	/* match nested_lang {
+	.ARABIC : (.FRENCH : {data: l, code: r}, _) => print("nested enum/struct => " & (l + r)),
+	_ => print("no enum match")
+	};
+	*/
 	// if let / for let with destructuring.
 	if let .FRENCH : {data: v, code: c} <- language => {
 		print("if let => " & (v + c));
@@ -151,7 +151,7 @@ const main := fn => {
 	};
 	
 	/* List comprehensions with loops.
-			Also an example of the until statement that can be used to create end tested loops.
+	Also an example of the until statement that can be used to create end tested loops.
 	*/
 	let mut lst : list:<int> = [n ** 2 for n in 0..20 if n % 2 = 0 if n % 4 != 0];
 	
@@ -257,7 +257,7 @@ const main := fn => {
 	
 	// String-template function call syntax.
 	let name := "Ty";
-	let intro : str = fn (splits : list:<str>, inputs : list:<str>) -> str => {
+	let intro : str = fn (splits inputs : list:<str>) -> str => {
 		let mut txt : str = "";
 		
 		for i in len(splits) => {
@@ -272,8 +272,18 @@ const main := fn => {
 	
 	// Iter helpers from std iter trait implementations.
 	let mapped := list:<int>[1, 2, 3].into_iter().map(fn (x : int) -> int => x * 10).collect();
-	let filtered := list:<int>[1, 2, 3, 4].into_iter().filter(fn (x : int) -> bool => x % 2 = 0).collect();
-	let folded := list:<int>[1, 2, 3, 4].into_iter().fold(0, fn (acc : int, x : int) -> int => acc + x);
+	let filtered := list:<int>[
+		1,
+		2,
+		3,
+		4
+	].into_iter().filter(fn (x : int) -> bool => x % 2 = 0).collect();
+	let folded := list:<int>[
+		1,
+		2,
+		3,
+		4
+	].into_iter().fold(0, fn (acc x : int) -> int => acc + x);
 	print("iter mapped => " & mapped);
 	print("iter filtered => " & filtered);
 	print("iter folded => " & folded);
@@ -294,7 +304,7 @@ const main := fn => {
 	}));
 	
 	=> {
-		// Defer in a temp scope.;
+		// Defer in a temp scope.;;
 		defer print("defer fired");
 		print("before defer");
 	};
@@ -310,7 +320,7 @@ const main := fn => {
 	print("ptr as! => " & raw_ptr);
 	
 	/* Small async + select showcase.
-			Unlike in golang my channels can store a small temporary stack of values.
+	Unlike in golang my channels can store a small temporary stack of values.
 	*/
 	let mut channel : Channel:<int> = Channel.new();
 	
@@ -334,7 +344,7 @@ const main := fn => {
 	
 	// Membership checks.
 	if (4 in [4, 16, 32]) => print("4 in list");
-
+	
 	// using tags to get metadata.
 	@package @current_context const handle_contextual := fn => {
 		// Built-in package metadata
@@ -342,7 +352,7 @@ const main := fn => {
 		print("package.version => " & package.version);
 		print("current_context.module_name => " & current_context.module_name);
 		print("current_context.path => " & current_context.path);
-
+		
 		// File IO (read current showcase data module)
 		let file := File.open_read(Path.new(current_context.path.replace("main.cal", "data.cal")));
 		let text := file.read_all();

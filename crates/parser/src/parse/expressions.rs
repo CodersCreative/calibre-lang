@@ -110,12 +110,11 @@ pub fn build_tail_expression_parser<'a>(
     })
     .boxed();
 
-    let arg_value = expr
-        .clone()
+    let arg_value = lex(pad_with_newline.clone(), expr.clone())
         .then(
             lex(pad.clone(), just('['))
-                .ignore_then(expr.clone())
-                .then_ignore(lex(pad.clone(), just(']')))
+                .ignore_then(lex(pad_with_newline.clone(), expr.clone()))
+                .then_ignore(lex(pad_with_newline.clone(), just(']')))
                 .repeated()
                 .collect::<Vec<_>>(),
         )
@@ -135,7 +134,7 @@ pub fn build_tail_expression_parser<'a>(
     let call_arg = choice((
         named_ident
             .clone()
-            .then_ignore(lex(pad.clone(), just(':')))
+            .then_ignore(lex(pad_with_newline.clone(), just(':')))
             .then(arg_value.clone())
             .map(|(name, value)| CallArg::Named(name, value)),
         arg_value.map(CallArg::Value),
@@ -144,19 +143,19 @@ pub fn build_tail_expression_parser<'a>(
 
     let call_args = lex(pad.clone(), just('('))
         .ignore_then(
-            call_arg
+            lex(pad_with_newline.clone(), call_arg)
                 .separated_by(comma.clone())
                 .allow_trailing()
                 .collect::<Vec<_>>()
                 .or_not()
                 .map(|x| x.unwrap_or_default()),
         )
-        .then_ignore(lex(pad.clone(), just(')')))
+        .then_ignore(lex(pad_with_newline.clone(), just(')')))
         .boxed();
 
-    let reverse_args = lex(pad.clone(), just("<("))
+    let reverse_args = lex(pad_with_newline.clone(), just("<("))
         .ignore_then(
-            expr.clone()
+            lex(pad_with_newline.clone(), expr.clone())
                 .then(
                     lex(pad.clone(), just('['))
                         .ignore_then(expr.clone())
@@ -181,7 +180,7 @@ pub fn build_tail_expression_parser<'a>(
                 .or_not()
                 .map(|x: Option<Vec<Node>>| x.unwrap_or_default()),
         )
-        .then_ignore(lex(pad.clone(), just(')')))
+        .then_ignore(lex(pad_with_newline.clone(), just(')')))
         .boxed();
 
     #[derive(Clone)]
@@ -370,18 +369,18 @@ pub fn build_tail_expression_parser<'a>(
         .clone()
         .then(lex(pad.clone(), just('[')))
         .then(choice((
-            expr.clone()
+            lex(pad_with_newline.clone(), expr.clone())
                 .then_ignore(lex(pad.clone(), just(';')))
                 .then(int_lit.clone())
                 .map(|(value, count)| (Some((value, count)), Vec::new())),
-            expr.clone()
+            lex(pad_with_newline.clone(), expr.clone())
                 .separated_by(comma.clone())
                 .allow_trailing()
                 .collect::<Vec<_>>()
                 .or_not()
                 .map(|x| (None, x.unwrap_or_default())),
         )))
-        .then_ignore(lex(pad.clone(), just(']')))
+        .then_ignore(lex(pad_with_newline.clone(), just(']')))
         .then(member.clone().repeated().collect::<Vec<_>>())
         .map_with_span({
             let ls = line_starts.clone();
@@ -891,10 +890,10 @@ pub fn build_tail_expression_parser<'a>(
         .boxed();
 
     let try_expr = lex(pad.clone(), just("try"))
-        .ignore_then(statement.clone())
+        .ignore_then(lex(pad_with_newline.clone(), statement.clone()))
         .then(
             choice((
-                lex(pad.clone(), just(':'))
+                lex(pad_with_newline.clone(), just(':'))
                     .ignore_then(ident.clone())
                     .then(scope_block.clone())
                     .map(|((name, sp), body)| TryCatch {
@@ -1115,12 +1114,12 @@ pub fn build_tail_expression_parser<'a>(
         )
         .then(scope_block.clone())
         .then(
-            lex(pad.clone(), just("else"))
+            lex(pad_with_newline.clone(), just("else"))
                 .ignore_then(scope_block.clone())
                 .or_not(),
         )
         .then(
-            lex(pad.clone(), just("until"))
+            lex(pad_with_newline.clone(), just("until"))
                 .ignore_then(expr.clone())
                 .or_not(),
         )
@@ -1142,7 +1141,7 @@ pub fn build_tail_expression_parser<'a>(
         .boxed();
 
     let if_expr = recursive(|if_e| {
-        let if_let_cond = lex(pad.clone(), just("let"))
+        let if_let_cond = lex(pad_with_newline.clone(), just("let"))
             .ignore_then(let_pattern_list.clone())
             .then_ignore(left_arrow.clone())
             .then(expr.clone())
@@ -1229,6 +1228,7 @@ pub fn build_tail_expression_parser<'a>(
             lex(pad.clone(), just("+=")).to(Some(BinaryOperator::Add)),
             lex(pad.clone(), just("-=")).to(Some(BinaryOperator::Sub)),
             lex(pad.clone(), just("*=")).to(Some(BinaryOperator::Mul)),
+            lex(pad.clone(), just("**=")).to(Some(BinaryOperator::Pow)),
             lex(pad.clone(), just("/=")).to(Some(BinaryOperator::Div)),
             lex(pad.clone(), just("%=")).to(Some(BinaryOperator::Mod)),
             lex(pad.clone(), just("&=")).to(Some(BinaryOperator::BitAnd)),

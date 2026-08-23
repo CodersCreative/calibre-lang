@@ -124,7 +124,12 @@ const main := fn => {
 		print("if let => " & token & " / " & payload);
 	};
 	
-	for let item @ in 0..4 <- [1, 5, 3, 7] => {
+	for let item @ in 0..4 <- [
+		1,
+		5,
+		3,
+		7
+	] => {
 		print("for let matched => " & item);
 	};
 	

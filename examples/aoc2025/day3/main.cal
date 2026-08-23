@@ -3,7 +3,12 @@ import Channel from std::async;
 
 const solve_part1 := fn (banks : list:<str>, worker_count : int) -> int => {
 	let mut out := Channel:<int>.new();
-	spawn@ for i in 0..worker_count => worker_part1(banks, i, worker_count, out);
+	spawn@ for i in 0..worker_count => worker_part1(
+		banks,
+		i,
+		worker_count,
+		out
+	);
 	
 	let mut sum := 0;
 	
@@ -21,7 +26,12 @@ const solve_part1 := fn (banks : list:<str>, worker_count : int) -> int => {
 
 const solve_part2 := fn (banks : list:<str>, worker_count : int) -> int => {
 	let mut out := Channel:<int>.new();
-	spawn@ for i in 0..worker_count => worker_part2(banks, i, worker_count, out);
+	spawn@ for i in 0..worker_count => worker_part2(
+		banks,
+		i,
+		worker_count,
+		out
+	);
 	
 	let mut sum := 0;
 	
@@ -37,7 +47,7 @@ const solve_part2 := fn (banks : list:<str>, worker_count : int) -> int => {
 	return sum;
 };
 
-const worker_part1 := fn (banks : list:<str>, start_idx : int, step : int, out : Channel:<int>) => {
+const worker_part1 := fn (banks : list:<str>, start_idx step : int, out : Channel:<int>) => {
 	let mut idx := start_idx;
 	let mut local := 0;
 	
@@ -49,7 +59,7 @@ const worker_part1 := fn (banks : list:<str>, start_idx : int, step : int, out :
 	emit out local;
 };
 
-const worker_part2 := fn (banks : list:<str>, start_idx : int, step : int, out : Channel:<int>) => {
+const worker_part2 := fn (banks : list:<str>, start_idx step : int, out : Channel:<int>) => {
 	let mut idx := start_idx;
 	let mut local := 0;
 	

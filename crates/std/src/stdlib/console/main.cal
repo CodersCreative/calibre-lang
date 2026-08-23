@@ -2,14 +2,14 @@ const out := fn (msg : list:<dyn>) => {
 	let mut txt := "";
 	for m in msg => txt &= m;
 	
-	console_output(1, txt)
+	console_output(1, txt);
 };
 
 const stderr := fn (msg : list:<dyn>) => {
 	let mut txt := "";
 	for m in msg => txt &= m;
-
-	console_output(2, txt)
+	
+	console_output(2, txt);
 };
 
 const clear := fn => {

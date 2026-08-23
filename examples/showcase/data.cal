@@ -10,7 +10,7 @@ type Language := enum {
 };
 
 // Struct declaration
-type CountryBase := struct 	{
+type CountryBase := struct {
 	// Fields in a struct must be explicitly typed.
 	language : Language
 };

@@ -28,7 +28,12 @@ const main := fn => {
 		print("entry => " & pair.0 & ":" & pair.1);
 	};
 	
-	let mut set := HashSet.new("red", "green", "blue", "red");
+	let mut set := HashSet.new(
+		"red",
+		"green",
+		"blue",
+		"red"
+	);
 	print("set len => " & set.len());
 	print("contains green => " & set.contains("green"));
 	print("add green => " & set.add("green"));

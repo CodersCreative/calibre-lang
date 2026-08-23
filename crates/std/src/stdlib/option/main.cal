@@ -19,12 +19,12 @@ impl<T> T? {
 		.None => return default
 	};
 
-	const map := fn <U> (self : T?, op : fn(T) -> U) -> U? => match self {
+	const map := fn <U> (self : T?, op : fn (T) -> U) -> U? => match self {
 		.Some : v => return some(op(v)),
 		.None => return none
 	};
 
-	const and_then := fn <U> (self : T?, op : fn(T) -> U?) -> U? => match self {
+	const and_then := fn <U> (self : T?, op : fn (T) -> U?) -> U? => match self {
 		.Some : v => return op(v),
 		.None => return none
 	};

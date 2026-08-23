@@ -25,7 +25,7 @@ const build_grid := fn (lines : list:<str>) -> list:<list:<char>> => {
 	return grid;
 };
 
-const count_neighbors := fn (grid : list:<list:<char>>, row : int, col : int) -> int => {
+const count_neighbors := fn (grid : list:<list:<char>>, row col : int) -> int => {
 	let rows := len(grid);
 	if row < 0 || row >= rows => return 0;
 	

@@ -3,14 +3,14 @@ const min := 10;
 const sec := 30;
 
 const main := fn => {
-    let out := "";
-    out &= hour;
-    out := out & ":" & min;
-    out &= ":" & sec;
-    
-    print(out);
-    
-    print(fmt"{hour}:{min}:{sec}");
-    
-    print(hour & ":" & min & ":" & sec);
-}
+	let out := "";
+	out &= hour;
+	out := out & ":" & min;
+	out &= ":" & sec;
+	
+	print(out);
+	
+	print(fmt"{hour}:{min}:{sec}");
+	
+	print(hour & ":" & min & ":" & sec);
+};

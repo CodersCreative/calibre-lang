@@ -1,23 +1,22 @@
 import std::console;
 
-@default
-type Stack := struct { values : list:<int> };
+@default type Stack := struct { values : list:<int> };
 
 impl Stack {
-	@current_context const smth := fn(self : &Self) => {
+	@current_context const smth := fn (self : &Self) => {
 		print(current_context);
 		print(self);
-	}
-}
+	};
+};
 
 type Stack2 := struct (Stack);
 
 type StackList := struct (list:<Stack2>);
 
-@init @fin(100)
-const main := fn => {
-	print("\nNew")
+@init @fin(100) const main := fn => {
+	print("\nNew");
 	let mut arr := Stack { values : [0; 30] };
+	
 	// arr.smth();
 	arr.values[10] := 100;
 	let mut arr2 := Stack2(move arr);

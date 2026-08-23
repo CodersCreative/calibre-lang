@@ -19,12 +19,12 @@ impl<E, T> E!T {
 		.Err : _ => return default
 	};
 
-	const map := fn <U> (self : E!T, op : fn(T) -> U) -> U!E => match self {
+	const map := fn <U> (self : E!T, op : fn (T) -> U) -> U!E => match self {
 		.Ok : v => return ok(op(v)),
 		.Err : e => return err(e)
 	};
 
-	const map_err := fn <F> (self : E!T, op : fn(E) -> F) -> T!F => match self {
+	const map_err := fn <F> (self : E!T, op : fn (E) -> F) -> T!F => match self {
 		.Ok : v => return ok(v),
 		.Err : e => return err(op(e))
 	};

@@ -1,40 +1,33 @@
-@init(10)
-const setup := fn => {
-    print("Setting up...");
+@init(10) const setup := fn => {
+	print("Setting up...");
 };
 
-@init(5)
-const load := fn => {
-    print("Loading...");
+@init(5) const load := fn => {
+	print("Loading...");
 };
 
 // @init(0)
 const main := fn => {
-    print("Running");
+	print("Running");
 };
 
-@fin(10)
-const cleanup := fn => {
-    print("Cleaning up...");
+@fin(10) const cleanup := fn => {
+	print("Cleaning up...");
 };
 
-@fin(5)
-const close := fn => {
-    print("Closing...");
+@fin(5) const close := fn => {
+	print("Closing...");
 };
 
-@fin(0)
-const save := fn => {
-    print("Saving...");
+@fin(0) const save := fn => {
+	print("Saving...");
 };
 
 // @init(100)
-@init {
-    const logging := fn => {
-        print("Logs are totally starting...");
-    };
-    
-    const init := fn => {
-        print("Init...");
-    };
-}
+@init const logging := fn => {
+	print("Logs are totally starting...");
+};
+
+@init const init := fn => {
+	print("Init...");
+};

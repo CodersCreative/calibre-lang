@@ -6,7 +6,13 @@ import * from std::math;
 import * from std::net;
 
 const main := fn => {
-	let mut nums := list:<int>[1, 2, 3, 4, 5];
+	let mut nums := list:<int>[
+		1,
+		2,
+		3,
+		4,
+		5
+	];
 	
 	print("pop => " & nums.pop());
 	nums.insert(2, 99);
@@ -30,7 +36,13 @@ const main := fn => {
 	print("range to_list => " & rng.to_list());
 	print("range is_empty => " & (0..0).is_empty());
 	
-	let squares := list:<int>[1, 2, 3, 4, 5].into_iter().map(fn (x : int) -> int => return x * x).collect();
+	let squares := list:<int>[
+		1,
+		2,
+		3,
+		4,
+		5
+	].into_iter().map(fn (x : int) -> int => return x * x).collect();
 	print("squares => " & squares);
 	
 	let opt := some(10).map(fn (x : int) -> int => return x + 1).unwrap_or(0);
@@ -70,10 +82,23 @@ const main := fn => {
 	print("float => ln/log10/log2 => " & float.ln(E) & ", " & float.log10(1000f) & ", " & float.log2(8f));
 	print("float => sin/cos/tan(PI/4) => " & float.sin(PI / 4f) & ", " & float.cos(PI / 4f) & ", " & float.tan(PI / 4f));
 	print("float => deg/rad => " & float.deg_to_rad(180f) & ", " & float.rad_to_deg(PI));
-	print("float => lerp/remap => " & float.lerp(10f, 20f, 0.25) & ", " & float.remap(0f, 100f, -1f, 1f, 75f));
+	print("float => lerp/remap => " & float.lerp(10f, 20f, 0.25) & ", " & float.remap(
+		0f,
+		100f,
+		-1f,
+		1f,
+		75f
+	));
 	print("float approx_eq => " & float.approx_eq(float.sqrt(2f) * float.sqrt(2f), 2f, EPSILON));
 	
-	let stats := list:<float>[1f, 2f, 3f, 4f, 5f, 10f];
+	let stats := list:<float>[
+		1f,
+		2f,
+		3f,
+		4f,
+		5f,
+		10f
+	];
 	
 	print("list<float> => mean/var/std/median => " & stats.mean() & ", " & stats.variance() & ", " & stats.std_dev() & ", " & stats.median());
 };

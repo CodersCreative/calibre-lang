@@ -2,7 +2,9 @@ type Position := struct { line col : int };
 
 type Span := struct { start end : Position };
 
-type TokenType := enum { Number, String, CurlyOpen, CurlyClose, SquareOpen, SquareClose, Comma, Colon, True, False, Null, WhiteSpace, EOF };
+type TokenType := enum {
+	Number, String, CurlyOpen, CurlyClose, SquareOpen, SquareClose, Comma, Colon, True, False, Null, WhiteSpace, EOF
+};
 
 impl Display for TokenType {
 	const display := fn match &Self -> str {
