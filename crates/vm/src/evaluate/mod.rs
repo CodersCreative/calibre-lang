@@ -151,15 +151,44 @@ impl VM {
         let updated_field = self.get_reg_value_in_frame(frame_idx, field_reg).clone();
         let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg).clone();
         let parent_resolved = self.resolve_value_for_op_ref(&parent_raw)?;
-        if let RuntimeValue::Aggregate(type_name, mut map) = parent_resolved
-            && let Some(entry) = Gc::make_mut(&mut map)
-                .0
-                .0
-                .iter_mut()
-                .find(|(field, _)| field == field_name)
-        {
-            entry.1 = updated_field;
-            let updated_parent = RuntimeValue::Aggregate(type_name, map);
+        fn update(
+            value: RuntimeValue,
+            field: &str,
+            replacement: &RuntimeValue,
+        ) -> Option<RuntimeValue> {
+            match value {
+                RuntimeValue::Aggregate(type_name, mut map) => {
+                    let entries = &mut Gc::make_mut(&mut map).0.0;
+                    if let Some(entry) = entries.iter_mut().find(|(name, _)| name == field) {
+                        entry.1 = replacement.clone();
+                        return Some(RuntimeValue::Aggregate(type_name, map));
+                    }
+                    let Some((_, wrapped)) = entries.iter_mut().find(|(name, _)| name == "0")
+                    else {
+                        return None;
+                    };
+                    let nested = update(wrapped.clone(), field, replacement)?;
+                    *wrapped = nested;
+                    Some(RuntimeValue::Aggregate(type_name, map))
+                }
+                RuntimeValue::List(mut list) => {
+                    let values = &mut Gc::make_mut(&mut list).0;
+                    let mut changed = false;
+                    for item in values.iter_mut() {
+                        if let Some(nested) = update(item.clone(), field, replacement) {
+                            item.clone_from(&nested);
+                            changed = true;
+                        }
+                    }
+                    changed.then_some(RuntimeValue::List(list))
+                }
+                _ => None,
+            }
+        }
+
+        let leaf = field_name.rsplit('.').next().unwrap_or(field_name);
+        let leaf = leaf.rsplit_once(']').map(|(_, name)| name).unwrap_or(leaf);
+        if let Some(updated_parent) = update(parent_resolved, leaf, &updated_field) {
             let parent_source = self
                 .frames
                 .get(frame_idx)

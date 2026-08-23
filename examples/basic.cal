@@ -16,15 +16,17 @@ type StackList := struct (list:<Stack2>);
 
 @init @fin(100)
 const main := fn => {
+	print("\nNew")
 	let mut arr := Stack { values : [0; 30] };
 	// arr.smth();
 	arr.values[10] := 100;
 	let mut arr2 := Stack2(move arr);
+	print("arr2.0.values[9] = " & arr2.0.values[9]);
 	arr2.0.values[9] := 90;
+	print("arr2.0.values[9] = " & arr2.0.values[9]);
 	let mut stacks := StackList(list:<Stack2>[move arr2]);
-	stacks.0[0].0.values[8] := 80;
-	print(stacks);
-	print(stacks.0[0].0.values[8]);
+	stacks.0[0].0.values[2] := 80;
+	print("stacks.0[0].0.values[2] = " & stacks.0[0].0.values[2]);
 	let mut hashmap : HashMap:<str, str> = HashMap:<str, str>.new(("hello", "world"), ("world", "hello"));
 	if let .Some : x <- HashMap:<str, str>.get(hashmap.&, "hello") => print(x);
 	if let .Some : x <- hashmap.get("world") => print(x);

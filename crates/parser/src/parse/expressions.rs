@@ -256,6 +256,14 @@ pub fn build_tail_expression_parser<'a>(
                                 field: ident.into(),
                             },
                         );
+                    } else if let NodeType::IntLiteral(value) = node.node_type {
+                        current = Node::new(
+                            Span::new_from_spans(current.span, value.span),
+                            NodeType::FieldAccess {
+                                base: Box::new(current),
+                                field: value.into(),
+                            },
+                        );
                     }
                 }
                 PostfixSuffix::Ref(mutability) => {

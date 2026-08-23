@@ -1099,7 +1099,15 @@ impl VM {
                         if let Some(idx) =
                             self.resolve_aggregate_member_slot(&type_name, &map, name, short_name)
                         {
-                            member_source = Some((source_reg, map.0.0[idx].0.clone()));
+                            member_source = Some(
+                                self.current_frame()
+                                    .member_sources
+                                    .get(&source_reg)
+                                    .map(|(parent, path)| {
+                                        (parent.to_owned(), format!("{path}.{}", map.0.0[idx].0))
+                                    })
+                                    .unwrap_or((source_reg, map.0.0[idx].0.clone())),
+                            );
                             let field_value = map.0.0[idx].1.clone();
                             field_value
                         } else if let Some((_, wrapped)) =
@@ -1107,6 +1115,15 @@ impl VM {
                         {
                             let wrapped = self.resolve_value_for_op_ref(wrapped)?;
                             if tuple_index.is_some() {
+                                member_source = Some(
+                                    self.current_frame()
+                                        .member_sources
+                                        .get(&source_reg)
+                                        .map(|(parent, path)| {
+                                            (parent.to_owned(), format!("{path}.0"))
+                                        })
+                                        .unwrap_or((source_reg, "0".to_string())),
+                                );
                                 wrapped
                             } else {
                                 let RuntimeValue::Aggregate(inner_type, inner_map) =
@@ -1320,9 +1337,17 @@ impl VM {
                             .insert(*dst, (parent, field));
                     }
                     None => {
-                        self.current_frame_mut()
+                        let source = self
+                            .current_frame()
                             .member_sources
-                            .insert(*dst, (source_reg, name.to_string()));
+                            .get(&source_reg)
+                            .cloned();
+                        self.current_frame_mut().member_sources.insert(
+                            *dst,
+                            source
+                                .map(|(parent, path)| (parent, format!("{path}.{name}")))
+                                .unwrap_or((source_reg, name.to_string())),
+                        );
                     }
                 }
             }

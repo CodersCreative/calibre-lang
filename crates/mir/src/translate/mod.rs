@@ -2332,20 +2332,10 @@ impl MiddleEnvironment {
             // TODO Handle generics
             NodeType::StructLiteral { identifier, value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::AggregateExpression {
-                    identifier: Some({
-                        match &identifier {
-                            PotentialGenericTypeIdentifier::Generic {
-                                identifier: base,
-                                generic_types: _,
-                            } => {
-                                ParserText::from(self.resolve_dollar_ident_only(scope, base)?.text)
-                            }
-                            // TODO Remove or_else case
-                            _ => self
-                                .resolve_potential_generic_ident(scope, &identifier)
-                                .unwrap_or_else(|| ParserText::from(identifier.to_string())),
-                        }
-                    }),
+                    identifier: Some(
+                        self.resolve_potential_generic_ident(scope, &identifier)
+                            .unwrap_or_else(|| ParserText::from(identifier.to_string())),
+                    ),
                     value: ObjectMap(match value {
                         ObjectType::Map(x) => {
                             let mut map = Vec::new();
