@@ -2020,23 +2020,7 @@ impl VM {
                 self.propagate_member_source_alias(*value, *dst);
             }
             VMInstruction::Deref { dst, value } => {
-                let out = match self.get_reg_value(*value).clone() {
-                    RuntimeValue::Ref(x) => self
-                        .variables
-                        .get(&x)
-                        .cloned()
-                        .ok_or(RuntimeError::DanglingRef(x))?,
-                    RuntimeValue::VarRef(id) => self
-                        .variables
-                        .get_by_id(id)
-                        .cloned()
-                        .ok_or(RuntimeError::DanglingRef(format!("#{}", id)))?,
-                    RuntimeValue::RegRef { frame, reg } => {
-                        self.get_reg_value_in_frame(frame, reg).clone()
-                    }
-                    RuntimeValue::MutexGuard(guard) => guard.get_clone(),
-                    other => other,
-                };
+                let out = self.resolve_value_for_op_ref(self.get_reg_value(*value))?;
                 self.set_reg_value(*dst, out);
             }
             VMInstruction::SetRef { target, value } => {

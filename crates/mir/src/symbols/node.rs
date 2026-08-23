@@ -76,9 +76,9 @@ impl MiddleEnvironment {
             NodeType::Null | NodeType::Defer { .. } | NodeType::Drop(_) | NodeType::EmptyLine => {
                 Some(ParserDataType::new(node.span, ParserInnerType::Null))
             }
-            NodeType::MoveExpression { value } | NodeType::ParenExpression { value } => {
-                self.resolve_type_from_node(scope, value)
-            }
+            NodeType::MoveExpression { value } | NodeType::ParenExpression { value } => self
+                .resolve_type_from_node(scope, value)
+                .map(|x| x.unwrap_all_refs()),
             NodeType::TupleLiteral { values } => {
                 let mut types = Vec::new();
                 for value in values {
@@ -97,7 +97,7 @@ impl MiddleEnvironment {
             }
             NodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
-                    Box::new(self.resolve_type_from_node(scope, value)?),
+                    Box::new(self.resolve_type_from_node(scope, value)?.unwrap_all_refs()),
                     *mutability,
                 ),
                 span: node.span,
@@ -567,15 +567,9 @@ impl MiddleEnvironment {
 
                 Some(current)
             }
-            NodeType::DerefStatement { value } => {
-                let typ = self.resolve_type_from_node(scope, &value)?;
-
-                if let ParserInnerType::Ref(x, _) = typ.data_type {
-                    Some(*x)
-                } else {
-                    Some(typ)
-                }
-            }
+            NodeType::DerefStatement { value } => self
+                .resolve_type_from_node(scope, &value)
+                .map(|x| x.unwrap_all_refs()),
             NodeType::ScopeDeclaration { .. } => unreachable!(),
             NodeType::Tag { .. } => {
                 Some(ParserDataType::new(node.span, ParserInnerType::Auto(None)))
