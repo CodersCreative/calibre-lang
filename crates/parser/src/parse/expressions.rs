@@ -264,6 +264,34 @@ pub fn build_tail_expression_parser<'a>(
                                 field: value.into(),
                             },
                         );
+                    } else if let NodeType::CallExpression {
+                        caller,
+                        string_fn,
+                        generic_types,
+                        args,
+                        reverse_args,
+                    } = &node.node_type
+                        && let NodeType::Identifier(ident) = &caller.node_type
+                    {
+                        current = Node::new(
+                            Span::new_from_spans(current.span, node.span),
+                            NodeType::FieldAccess {
+                                base: Box::new(current),
+                                field: ident.clone().into(),
+                            },
+                        );
+                        current = Node::new(
+                            Span::new_from_spans(current.span, node.span),
+                            NodeType::CallExpression {
+                                caller: Box::new(current),
+                                string_fn: string_fn.clone(),
+                                generic_types: generic_types.clone(),
+                                args: args.clone(),
+                                reverse_args: reverse_args.clone(),
+                            },
+                        );
+                    } else {
+                        current = node;
                     }
                 }
                 PostfixSuffix::Ref(mutability) => {

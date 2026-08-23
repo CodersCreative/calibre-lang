@@ -543,7 +543,8 @@ pub fn parse_program_with_source(
         .clone()
         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
         .ignore_then(
-            parser.then_ignore(delim.clone().repeated().collect::<Vec<_>>())
+            parser
+                .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
                 .repeated()
                 .collect::<Vec<_>>()
                 .or_not()

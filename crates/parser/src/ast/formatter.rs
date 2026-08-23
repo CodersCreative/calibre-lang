@@ -66,6 +66,7 @@ pub enum CommentKind {
 pub struct Formatter {
     pub comments: Vec<Comment>,
     pub max_width: usize,
+    pub max_values: usize,
     pub tab: Tab,
 }
 
@@ -73,7 +74,8 @@ impl Default for Formatter {
     fn default() -> Self {
         Self {
             comments: Vec::new(),
-            max_width: 200,
+            max_width: 100,
+            max_values: 3,
             tab: Tab::default(),
         }
     }
@@ -307,7 +309,11 @@ impl Formatter {
     }
 
     fn wrap_if_wide(&self, single: String, multiline: &str) -> String {
-        if self.should_wrap_width_only(&single) {
+        self.wrap_if_wide_or_if(single, multiline, false)
+    }
+
+    fn wrap_if_wide_or_if(&self, single: String, multiline: &str, condition: bool) -> String {
+        if self.should_wrap_width_only(&single) || condition {
             multiline.to_string()
         } else {
             single
@@ -545,6 +551,7 @@ impl Formatter {
                 for val in values {
                     value_lines.push(val.to_string());
                 }
+
                 format!(
                     "import (\n{}\n) from {}",
                     self.fmt_txt_with_tab(&value_lines.join(",\n"), 1, true),
@@ -834,7 +841,7 @@ impl Formatter {
                         self.fmt_txt_with_tab(&arg_txt.join(",\n"), 1, true),
                         self.tab.get_tab_from_amt(0)
                     );
-                    txt = self.wrap_if_wide(single, &multi);
+                    txt = self.wrap_if_wide_or_if(single, &multi, args.len() > self.max_values);
                 };
 
                 if !reverse_args.is_empty() {
@@ -870,7 +877,15 @@ impl Formatter {
                             .join(", ")
                     )
                 };
-                format!("@{}{} {}", tag, args_str, self.format(node))
+                let node_formatted = self.format(node);
+                let single_line = format!("@{}{} {}", tag, args_str, node_formatted);
+                let multi_line = format!(
+                    "@{}{}\n{}",
+                    tag,
+                    args_str,
+                    self.fmt_txt_with_tab(&node_formatted, 1, true)
+                );
+                self.wrap_if_wide(single_line, &multi_line)
             }
             NodeType::EnumExpression {
                 identifier,
@@ -1056,8 +1071,9 @@ impl Formatter {
                         self.fmt_txt_with_tab(&param_txt_expanded.join(",\n"), 1, true),
                         self.tab.get_tab_from_amt(0)
                     );
+
                     let force_third_layout = self.has_comment_between_spans(&node.span, &body.span);
-                    txt = if force_third_layout {
+                    txt = if force_third_layout || header.parameters.len() > self.max_values + 2 {
                         multi_expanded
                     } else if !self.should_wrap_width_only(&single) {
                         single
@@ -1288,7 +1304,7 @@ impl Formatter {
                     prefix,
                     self.fmt_txt_with_tab(&items.join(",\n"), 1, true)
                 );
-                self.wrap_if_wide(single, &multi)
+                self.wrap_if_wide_or_if(single, &multi, values.len() > self.max_values)
             }
             NodeType::ListRepeatLiteral {
                 data_type,
@@ -1459,7 +1475,8 @@ impl Formatter {
                 } else {
                     format!("({}\n{})", head, tail)
                 };
-                self.wrap_if_wide(single, &multi)
+
+                self.wrap_if_wide_or_if(single, &multi, values.len() > self.max_values)
             }
             NodeType::ParenExpression { value } => format!("({})", self.format(&*value)),
             NodeType::TypeDeclaration {
@@ -1736,10 +1753,15 @@ impl Formatter {
                 match comment.kind {
                     CommentKind::Line => format!("// {}", value),
                     CommentKind::Block => {
-                        if value.contains('\n') {
-                            format!("/* {}\n*/", value)
+                        let stripped = value
+                            .lines()
+                            .map(|line| line.trim_start())
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        if stripped.contains('\n') {
+                            format!("/* {}\n*/", stripped)
                         } else {
-                            format!("/* {} */", value)
+                            format!("/* {} */", stripped)
                         }
                     }
                 }
@@ -1863,18 +1885,18 @@ impl Formatter {
                         }
 
                         if let Some(data_txt) = data_txt {
-                            single.push_str(&format!("{} : {}, ", names.join(" "), data_txt));
+                            single.push_str(&format!("{} : {}", names.join(" "), data_txt));
                         } else {
-                            single.push_str(&format!("{}, ", names.join(", ")));
+                            single.push_str(&names.join(", "));
                         }
 
                         if let Some(x) = default_value
                             && i == default_idx
                         {
-                            single.push_str(&format!(" = {}, ", self.format(x)));
-                        } else {
-                            single.push_str(", ");
+                            single.push_str(&format!(" = {}", self.format(x)));
                         }
+
+                        single.push_str(", ");
                     }
                 }
                 single = single.trim_end().trim_end_matches(",").to_string();
@@ -1927,10 +1949,10 @@ impl Formatter {
                         if let Some(x) = default_value
                             && i == default_idx
                         {
-                            multi.push_str(&format!(" = {},\n", self.format(x)));
-                        } else {
-                            multi.push_str(",\n");
+                            multi.push_str(&format!(" = {}", self.format(x)));
                         }
+
+                        multi.push_str(",\n");
                     }
                 }
 
@@ -1939,7 +1961,11 @@ impl Formatter {
                 if has_comments {
                     txt.push_str(&multi);
                 } else {
-                    txt.push_str(&self.wrap_if_wide(single, &multi));
+                    txt.push_str(&self.wrap_if_wide_or_if(
+                        single,
+                        &multi,
+                        variants.len() > self.max_values + 2,
+                    ));
                 }
             }
             TypeDefType::NewType(x) => txt.push_str(&x.to_string()),
@@ -1955,35 +1981,119 @@ impl Formatter {
                         } else {
                             format!("{} : {}", key, type_txt)
                         };
-                        fields_vec.push((field_txt, leading, trailing));
+                        fields_vec.push((
+                            key.clone(),
+                            type_txt,
+                            field_txt,
+                            leading,
+                            trailing,
+                            default_value.is_some(),
+                        ));
                     }
-                    let has_comments = fields_vec
-                        .iter()
-                        .any(|(_, leading, trailing)| leading.is_some() || trailing.is_some());
+                    let has_comments = fields_vec.iter().any(|(_, _, _, leading, trailing, _)| {
+                        leading.is_some() || trailing.is_some()
+                    });
+
+                    let mut grouped = Vec::new();
+                    let mut i = 0;
+                    while i < fields_vec.len() {
+                        let (key, type_txt, field_txt, leading, trailing, has_default) =
+                            &fields_vec[i];
+
+                        if leading.is_some() || trailing.is_some() || *has_default {
+                            grouped.push(vec![(
+                                key.clone(),
+                                type_txt.clone(),
+                                field_txt.clone(),
+                                leading.clone(),
+                                trailing.clone(),
+                            )]);
+                            i += 1;
+                        } else {
+                            let mut group = vec![(
+                                key.clone(),
+                                type_txt.clone(),
+                                field_txt.clone(),
+                                leading.clone(),
+                                trailing.clone(),
+                            )];
+                            let current_type = type_txt.clone();
+                            i += 1;
+
+                            while i < fields_vec.len() {
+                                let (
+                                    next_key,
+                                    next_type,
+                                    _,
+                                    next_leading,
+                                    next_trailing,
+                                    next_has_default,
+                                ) = &fields_vec[i];
+                                if next_type == &current_type
+                                    && !next_has_default
+                                    && next_leading.is_none()
+                                    && next_trailing.is_none()
+                                {
+                                    group.push((
+                                        next_key.clone(),
+                                        next_type.clone(),
+                                        String::new(),
+                                        next_leading.clone(),
+                                        next_trailing.clone(),
+                                    ));
+                                    i += 1;
+                                } else {
+                                    break;
+                                }
+                            }
+                            grouped.push(group);
+                        }
+                    }
 
                     let mut single = String::from("struct { ");
-                    for (field_txt, _, _) in &fields_vec {
-                        single.push_str(&format!("{}, ", field_txt));
+                    for group in &grouped {
+                        if group.len() == 1 {
+                            single.push_str(&format!("{}, ", group[0].2));
+                        } else {
+                            let names: Vec<&str> = group
+                                .iter()
+                                .map(|(name, _, _, _, _)| name.as_str())
+                                .collect();
+                            single.push_str(&format!("{} : {}, ", names.join(" "), group[0].1));
+                        }
                     }
 
                     single = single.trim_end().trim_end_matches(",").to_string();
                     single.push_str(" }");
 
                     let mut multi = String::from("struct {\n");
-                    for (field_txt, leading, trailing) in &fields_vec {
-                        let mut line = handle_comment!(leading.clone(), field_txt.clone());
-                        if let Some(trailing) = trailing {
-                            line.push(' ');
-                            line.push_str(trailing);
+                    for group in &grouped {
+                        if group.len() == 1 {
+                            let (_, _, field_txt, leading, trailing) = &group[0];
+                            let mut line = handle_comment!(leading.clone(), field_txt.clone());
+                            if let Some(trailing) = trailing {
+                                line.push(' ');
+                                line.push_str(trailing);
+                            }
+                            multi.push_str(&format!("{},\n", line));
+                        } else {
+                            let names: Vec<&str> = group
+                                .iter()
+                                .map(|(name, _, _, _, _)| name.as_str())
+                                .collect();
+                            multi.push_str(&format!("{} : {},\n", names.join(" "), group[0].1));
                         }
-                        multi.push_str(&format!("{},\n", line));
                     }
                     multi = self.fmt_txt_with_tab(multi.trim_end().trim_end_matches(","), 1, false);
                     multi.push_str("\n}");
                     if has_comments {
                         txt.push_str(&multi);
                     } else {
-                        txt.push_str(&self.wrap_if_wide(single, &multi));
+                        txt.push_str(&self.wrap_if_wide_or_if(
+                            single,
+                            &multi,
+                            x.len() > self.max_values,
+                        ));
                     }
                 }
                 ObjectType::Tuple(x) => {
@@ -2061,7 +2171,7 @@ impl Formatter {
                 if has_comments {
                     txt
                 } else {
-                    self.wrap_if_wide(single, &txt)
+                    self.wrap_if_wide_or_if(single, &txt, map.len() > self.max_values)
                 }
             }
             ObjectType::Tuple(lst) => {
@@ -2091,7 +2201,7 @@ impl Formatter {
                 if has_comments {
                     txt
                 } else {
-                    self.wrap_if_wide(single, &txt)
+                    self.wrap_if_wide_or_if(single, &txt, lst.len() > self.max_values)
                 }
             }
         }
@@ -2320,9 +2430,7 @@ impl Formatter {
         let lhs = self.format(left);
         let rhs = self.format(right);
         let op = operator.to_string();
-        let single = format!("{} {} {}", lhs, op, rhs);
-        let multi = format!("{} {}\n{}", lhs, op, self.fmt_txt_with_tab(&rhs, 1, true));
-        self.wrap_if_wide(single, &multi)
+        format!("{} {} {}", lhs, op, rhs)
     }
 
     fn fmt_tuple_literal(&mut self, values: &[Node], bare: bool) -> String {
@@ -2340,7 +2448,7 @@ impl Formatter {
             "\n{}",
             self.fmt_txt_with_tab(&single_values.join(",\n"), 1, true)
         );
-        self.wrap_if_wide(single, &multi)
+        self.wrap_if_wide_or_if(single, &multi, values.len() > self.max_values)
     }
 
     fn fmt_value_preserving_bare_tuple(&mut self, value: &Node) -> String {

@@ -212,10 +212,7 @@ pub fn build_statement_parser<'a>(
                             type_name
                                 .clone()
                                 .separated_by(
-                                    comma.clone().ignored()
-                                        .repeated()
-                                        .at_least(1)
-                                        .ignored(),
+                                    comma.clone().ignored().repeated().at_least(1).ignored(),
                                 )
                                 .allow_trailing()
                                 .collect::<Vec<_>>()
@@ -403,7 +400,9 @@ pub fn build_statement_parser<'a>(
         .then_ignore(lex(pad.clone(), just('{')))
         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
         .then(
-            trait_member.then_ignore(delim.clone().repeated().collect::<Vec<_>>()).repeated()
+            trait_member
+                .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
+                .repeated()
                 .collect::<Vec<_>>()
                 .or_not()
                 .map(|x| x.unwrap_or_default()),
@@ -434,7 +433,9 @@ pub fn build_statement_parser<'a>(
         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
         .then(
             statement
-                .clone().then_ignore(delim.clone().repeated().collect::<Vec<_>>()).repeated()
+                .clone()
+                .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
+                .repeated()
                 .collect::<Vec<_>>()
                 .or_not()
                 .map(|x| x.unwrap_or_default()),
@@ -826,7 +827,9 @@ pub fn build_statement_parser<'a>(
             .ignore_then(delim.clone().repeated().collect::<Vec<_>>())
             .ignore_then(
                 statement
-                    .clone().then_ignore(delim.clone().repeated().collect::<Vec<_>>()).repeated()
+                    .clone()
+                    .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
+                    .repeated()
                     .collect::<Vec<_>>()
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
