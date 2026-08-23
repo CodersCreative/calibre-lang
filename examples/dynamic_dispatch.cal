@@ -98,6 +98,7 @@ const main := fn => {
 		30,
 		29
 	);
+	
 	const wolf := Wolf.new(
 		"Nighteyes",
 		"Howl",
@@ -105,6 +106,7 @@ const main := fn => {
 		7,
 		100
 	);
+	
 	const horse := GenericAnimal.new(
 		"Cooper",
 		"Neigh",

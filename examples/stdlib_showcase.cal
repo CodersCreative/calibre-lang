@@ -89,6 +89,7 @@ const main := fn => {
 		1f,
 		75f
 	));
+	
 	print("float approx_eq => " & float.approx_eq(float.sqrt(2f) * float.sqrt(2f), 2f, EPSILON));
 	
 	let stats := list:<float>[

@@ -78,6 +78,7 @@ const main := fn => {
 		10,
 		0
 	][-1]);
+	
 	a_fn();
 	a_two_fn();
 	

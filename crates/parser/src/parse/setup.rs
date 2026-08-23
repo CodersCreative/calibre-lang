@@ -439,7 +439,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                                     sp,
                                     ParserInnerType::Function {
                                         return_type: Box::new(
-                                            ret.unwrap_or(ParserDataType::auto(sp)),
+                                            ret.unwrap_or(ParserDataType::null(sp)),
                                         ),
                                         parameters,
                                     },

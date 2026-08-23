@@ -1735,7 +1735,7 @@ impl Formatter {
                 let temp = handle_comment!(self.get_potential_comment(func.span()), func_txt);
                 txt.push_str(&format!(
                     "{}{};\n",
-                    if i > 0 { "" } else { "\n" },
+                    if i == 0 { "" } else { "\n" },
                     self.fmt_txt_with_tab(&temp, 1, true)
                 ));
             }

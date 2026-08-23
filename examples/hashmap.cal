@@ -34,6 +34,7 @@ const main := fn => {
 		"blue",
 		"red"
 	);
+	
 	print("set len => " & set.len());
 	print("contains green => " & set.contains("green"));
 	print("add green => " & set.add("green"));

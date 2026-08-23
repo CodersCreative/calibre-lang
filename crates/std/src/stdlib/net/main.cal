@@ -139,6 +139,7 @@ impl HttpClient {
 			self.port,
 			path
 		);
+		
 		return Http.request(method, url, body);
 	};
 

@@ -33,6 +33,7 @@ const main := fn => {
 			results.&mut,
 			total.&mut
 		);
+		
 		print("spawned worker " & i & "\n");
 	};
 	

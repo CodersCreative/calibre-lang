@@ -3,12 +3,10 @@ import * from std::list;
 import * from std::str;
 
 type int := int @overload {
-
 	const "as" := fn (self : int) -> str!str => ok("int");
 };
 
 type Vec2 := struct { x y : int } @overload {
-
 	const "+" := fn (a b : Vec2) -> Vec2 => return Vec2 { x : a.x + b.x, y : a.y + b.y };
 
 	const "=" := fn (a b : Vec2) -> bool => return a.x = b.x && a.y = b.y;
