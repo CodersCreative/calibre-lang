@@ -9,6 +9,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+mod builders;
 pub mod context;
 pub mod defaults;
 
@@ -42,6 +43,7 @@ pub enum TagInfo {
     Init(i32),
     Fin(i32),
     Default,
+    Builder,
     Panics,
     Bench,
     CallerContext,
@@ -135,6 +137,26 @@ impl MiddleEnvironment {
             "default".to_string(),
             TagHandler {
                 handler: default_handler,
+            },
+        );
+
+        let builder_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             _args: Vec<Node>| {
+                env.tagging.tag_info.push(TagInfo::Builder);
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "builder".to_string(),
+            TagHandler {
+                handler: builder_handler,
             },
         );
 

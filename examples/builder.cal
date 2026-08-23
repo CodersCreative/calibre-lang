@@ -1,0 +1,33 @@
+@default
+@builder
+type Host := struct {
+	name : str = "localhost",
+};
+
+
+// This doesn't have a default method but builder will take advantage of the default values set when building an empty builder
+@builder
+type Server := struct {
+	// Host will need to be provided because no default was set
+	host : Host,
+	port : int = 8080,
+	secure : bool = false,
+};
+
+const main := fn => {
+	print(Host.default());
+
+	// Every builder has its own default method.
+	print(HostBuilder.default());
+	
+	let defaults := ServerBuilder.default();
+	print(defaults.build());
+
+	// It should now work because we provided host
+	let defaults := defaults.host(Host.default());
+	print(defaults.build());
+
+	let custom_builder := ServerBuilder.default();
+	let custom_builder := custom_builder.host(Host { name : "example.com" }).port(443).secure(true);
+	print(custom_builder.build());
+};

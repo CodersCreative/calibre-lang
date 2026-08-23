@@ -226,12 +226,19 @@ impl MiddleEnvironment {
         overloads: Vec<Overload>,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut has_default = false;
+        let mut has_builder = false;
 
         for tag in &self.tagging.tag_info {
+            if has_builder && has_default {
+                break;
+            }
+
             match tag {
+                TagInfo::Builder => {
+                    has_builder = true;
+                }
                 TagInfo::Default => {
                     has_default = true;
-                    break;
                 }
                 _ => {}
             }
@@ -424,6 +431,18 @@ impl MiddleEnvironment {
             None
         };
 
+        let builder_nodes = if has_builder {
+            Some(self.generate_builder(
+                scope,
+                span,
+                identifier.clone(),
+                object.clone(),
+                has_default,
+            )?)
+        } else {
+            None
+        };
+
         for overload in overloads {
             if let Some(processed) =
                 self.process_overload(scope, overload, Vec::new(), Some(new_name.clone()))?
@@ -451,13 +470,30 @@ impl MiddleEnvironment {
             }
         }
 
-        if let Some(node) = default_node {
-            Ok(node)
-        } else {
-            Ok(MiddleNode {
+        match (default_node, builder_nodes) {
+            (Some(node), None) => Ok(node),
+            (None, None) => Ok(MiddleNode {
                 node_type: MiddleNodeType::EmptyLine,
                 span,
-            })
+            }),
+            (None, Some(nodes)) => Ok(MiddleNode {
+                node_type: MiddleNodeType::ScopeDeclaration {
+                    body: vec![nodes.0, nodes.1],
+                    create_new_scope: false,
+                    is_temp: false,
+                    scope_id: *scope,
+                },
+                span,
+            }),
+            (Some(node), Some(nodes)) => Ok(MiddleNode {
+                node_type: MiddleNodeType::ScopeDeclaration {
+                    body: vec![node, nodes.0, nodes.1],
+                    create_new_scope: false,
+                    is_temp: false,
+                    scope_id: *scope,
+                },
+                span,
+            }),
         }
     }
 }
