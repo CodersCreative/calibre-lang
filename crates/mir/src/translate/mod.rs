@@ -27,6 +27,7 @@ use calibre_parser::{
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::str::FromStr;
+use tracing::{debug, instrument, trace};
 
 pub mod functions;
 pub mod loops;
@@ -36,19 +37,23 @@ pub mod scopes;
 pub mod statements;
 
 impl MiddleEnvironment {
+    #[instrument(skip_all, fields(scope = scope))]
     pub fn evaluate(&mut self, scope: &u64, node: Node) -> MiddleNode {
         let span = node.span;
         match self.evaluate_inner(scope, node) {
             Ok(node) => node,
             Err(err) => {
+                debug!(error = %err, "evaluation failed, pushing error");
                 self.context.push_error(err);
                 MiddleNode::new(MiddleNodeType::EmptyLine, span)
             }
         }
     }
 
+    #[instrument(skip_all, fields(scope = scope))]
     pub fn evaluate_inner(&mut self, scope: &u64, node: Node) -> Result<MiddleNode, MiddleErr> {
         self.context.current_location = self.scoping.get_location(scope, node.span);
+        trace!(location = ?self.context.current_location, "evaluating node");
 
         match node.node_type {
             NodeType::DataType { .. } => unreachable!(),

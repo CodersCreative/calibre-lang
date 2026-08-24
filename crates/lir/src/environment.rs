@@ -3,6 +3,7 @@ use calibre_parser::ast::types::ParserDataType;
 use rustc_hash::FxHashMap;
 use std::fmt::Display;
 use std::sync::atomic::Ordering;
+use tracing::{debug, instrument};
 
 use crate::{
     COUNTER,
@@ -106,7 +107,9 @@ impl<'a> LirEnvironment<'a> {
         Self::new_with_hoist(env, true)
     }
 
+    #[instrument(skip_all, fields(allow_global_hoist = allow_global_hoist))]
     pub fn new_with_hoist(env: &'a MiddleEnvironment, allow_global_hoist: bool) -> Self {
+        debug!("creating LIR environment");
         let entry_id = BlockId(0);
 
         let scope_to_file: FxHashMap<u64, String> = env
@@ -115,6 +118,11 @@ impl<'a> LirEnvironment<'a> {
             .iter()
             .map(|(id, scope)| (*id, scope.path.to_string_lossy().to_string()))
             .collect();
+
+        debug!(
+            scope_count = scope_to_file.len(),
+            "built scope to file mapping"
+        );
 
         Self {
             env,

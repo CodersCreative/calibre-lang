@@ -12,6 +12,7 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
+tracing = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true}
 rustc-hash = { workspace = true }

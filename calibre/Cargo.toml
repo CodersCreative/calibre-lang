@@ -22,8 +22,13 @@ serde = { workspace = true }
 rustyline = {workspace = true }
 thiserror = {workspace = true }
 rustc-hash = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-flame = { workspace = true }
+tracing-appender = { workspace = true }
+smol = { workspace = true }
+
 clap = { version = "4.5.40", features = ["derive"] }
-smol = "2.0.2"
 bincode = "1"
 blake3 = "1.6.1"
 toml = "1.0.1"

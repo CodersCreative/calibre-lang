@@ -10,6 +10,7 @@ use std::{
     sync::{LazyLock, RwLock},
 };
 use thiserror::Error;
+use tracing::{debug, info, instrument};
 
 pub mod ast;
 pub mod native;
@@ -124,13 +125,17 @@ impl Parser {
         self.source_path = path;
     }
 
+    #[instrument(skip_all, fields(bytes = source.len(), path = ?self.source_path))]
     pub fn produce_ast(&mut self, source: &str) -> Node {
+        debug!(lines = source.lines().count(), "starting parse");
         match parse_program_with_source(source, self.source_path.as_deref()) {
             Ok(ast) => {
                 self.errors.clear();
+                info!("parse completed");
                 ast
             }
             Err(errs) => {
+                tracing::warn!(errors = errs.len(), "parse failed");
                 self.errors = errs;
                 empty_scope_node()
             }

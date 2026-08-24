@@ -15,3 +15,7 @@ readme.workspace = true
 clap = { version = "4.5.40", features = ["derive"] }
 calibre-parser = { workspace = true }
 calibre-diagnostics = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-flame = { workspace = true }
+tracing-appender = { workspace = true }

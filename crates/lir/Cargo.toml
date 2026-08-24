@@ -12,6 +12,7 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
+tracing = { workspace = true }
 calibre-mir = { workspace = true }
 calibre-parser = { workspace = true }
 rustc-hash = { workspace = true }

@@ -1,4 +1,4 @@
-use std::{print, sync::Mutex};
+use std::sync::Mutex;
 
 use super::*;
 use crate::{

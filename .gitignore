@@ -47,3 +47,4 @@ target/
 **.tgz
 **.zip
 .codex
+*.folded

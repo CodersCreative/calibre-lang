@@ -12,6 +12,7 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
+tracing = { workspace = true }
 thiserror = { workspace = true }
 calibre-parser = { workspace = true }
 calibre-std = { workspace = true }

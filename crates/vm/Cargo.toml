@@ -12,6 +12,7 @@ categories.workspace = true
 license.workspace = true
 
 [dependencies]
+tracing = { workspace = true }
 calibre-lir = { workspace = true }
 calibre-parser = { workspace = true }
 fastrand = { workspace = true }

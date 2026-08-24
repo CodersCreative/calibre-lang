@@ -26,15 +26,41 @@ use calibre_parser::{CalibreError, Parser, ParserError, Position as CalPosition,
 use futures::future::{BoxFuture, ready};
 use model::*;
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::ops::ControlFlow;
 use std::time::Duration;
 use tower::ServiceBuilder;
-use tracing::Level;
+use tracing_flame::{self, FlameLayer};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::{EnvFilter, Registry, fmt};
 
 mod features;
 mod model;
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
+    let file_appender = tracing_appender::rolling::never("/var/log/calibre", "lsp.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    let fmt_layer = fmt::Layer::default()
+        .with_ansi(false)
+        .pretty()
+        .with_writer(non_blocking);
+    let filter_layer = EnvFilter::from_default_env();
+
+    let _flame_guard = if std::env::var("CALIBRE_FLAME").is_ok() {
+        let (flame_layer, guard) = FlameLayer::with_file("/var/log/lsp.folded").unwrap();
+        let subscriber = Registry::default()
+            .with(fmt_layer)
+            .with(flame_layer)
+            .with(filter_layer);
+        tracing::subscriber::set_global_default(subscriber)?;
+        Some(guard)
+    } else {
+        let subscriber = Registry::default().with(fmt_layer).with(filter_layer);
+        tracing::subscriber::set_global_default(subscriber)?;
+        None
+    };
+
     smol::block_on(async {
         let (server, _) = async_lsp::MainLoop::new_server(|client| {
             ServiceBuilder::new()
@@ -45,12 +71,6 @@ fn main() {
                 .layer(ClientProcessMonitorLayer::new(client.clone()))
                 .service(CalibreLanguageServer::new_router(client))
         });
-
-        tracing_subscriber::fmt()
-            .with_max_level(Level::INFO)
-            .with_ansi(false)
-            .with_writer(std::io::stderr)
-            .init();
 
         #[cfg(unix)]
         let (stdin, stdout) = {
@@ -87,4 +107,6 @@ fn main() {
             eprintln!("server exited with error: {error}");
         }
     });
+
+    Ok(())
 }

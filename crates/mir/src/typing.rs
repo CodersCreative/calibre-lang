@@ -10,6 +10,7 @@ use calibre_parser::{
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt::Display;
+use tracing::{debug, instrument, trace};
 
 #[derive(Debug, Clone, Default)]
 pub struct Typing {
@@ -21,16 +22,22 @@ pub struct Typing {
 }
 
 impl Typing {
+    #[instrument(skip_all, fields(ty = %ty))]
     pub fn find_impl_for_type(&self, ty: &ParserDataType) -> Option<&MiddleImpl> {
+        trace!("finding impl for type");
         if let Some(x) = self.impls.get(&ty.key()) {
+            debug!("found impl by direct key");
             Some(x)
         } else if let Some(x) = self.impls.get(&ty.clone().unwrap_all_refs().key()) {
+            debug!("found impl by unwrapped refs");
             Some(x)
         } else {
+            debug!("no impl found for type");
             None
         }
     }
 
+    #[instrument(skip_all, fields(ty = %ty, member = %member.to_string()))]
     pub fn find_impl_member(
         &self,
         ty: &ParserDataType,
@@ -70,6 +77,7 @@ impl Typing {
         })
     }
 
+    #[instrument(skip_all, fields(root_trait = %root_trait))]
     pub fn collect_trait_default_members(
         trait_defs: &FxHashMap<String, MiddleTrait>,
         root_trait: &str,
@@ -109,19 +117,24 @@ impl Typing {
         out
     }
 
+    #[instrument(skip_all, fields(struct_name = %struct_name))]
     pub fn find_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
+        trace!("finding object for struct name");
         self.objects.get(struct_name)
     }
 
+    #[instrument(skip_all, fields(base = %base, name = %name))]
     pub fn resolve_associated_type(
         &self,
         base: &ParserDataType,
         name: &str,
     ) -> Option<ParserDataType> {
+        trace!("resolving associated type");
         self.find_impl_for_type(base)
             .and_then(|imp| imp.assoc_types.get(name).cloned())
     }
 
+    #[instrument(skip_all, fields(ty = %ty))]
     pub fn get_or_create_impl(
         &mut self,
         ty: ParserDataType,

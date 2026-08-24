@@ -8,6 +8,7 @@ use crate::{
     },
 };
 use chumsky::prelude::*;
+use tracing::{debug, instrument, trace};
 
 pub(super) fn lex<'a, P, O: 'a>(
     pad: impl Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
@@ -178,7 +179,9 @@ pub(super) fn span_from_nodes_or(first: &Node, last: Option<&Node>, fallback: Sp
     if sp == Span::default() { fallback } else { sp }
 }
 
+#[instrument(skip_all, fields(input_len = input.len()))]
 pub(super) fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
+    trace!("parsing string interpolation splits");
     let mut normal_parts = Vec::new();
     let mut extracted_parts = Vec::new();
     let mut current_buffer = String::new();
@@ -220,12 +223,20 @@ pub(super) fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
     }
 
     normal_parts.push(current_buffer);
+    debug!(
+        normal_count = normal_parts.len(),
+        extracted_count = extracted_parts.len(),
+        "parsed splits"
+    );
     (normal_parts, extracted_parts)
 }
 
+#[instrument(skip_all, fields(txt_len = txt.len()))]
 pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<Node, String> {
+    trace!("parsing embedded expression");
     let trimmed = txt.trim();
     if trimmed.is_empty() {
+        debug!("empty expression in string interpolation");
         return Err("expected expression inside string interpolation".to_string());
     }
 
@@ -241,6 +252,7 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<Node
     };
 
     if is_ident(trimmed) {
+        debug!(ident = %trimmed, "parsed as identifier");
         return Ok(Node::new(
             fallback_span,
             NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(

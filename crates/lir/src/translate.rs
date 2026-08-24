@@ -16,6 +16,7 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
+use tracing::{debug, info, instrument, trace};
 
 use crate::{
     ast::{BlockId, LirLValue, LirLiteral, LirNode, LirNodeType, LirTerminator},
@@ -151,20 +152,30 @@ impl<'a> LirEnvironment<'a> {
         out
     }
 
+    #[instrument(skip_all)]
     pub fn lower(env: &'a MiddleEnvironment, node: MiddleNode) -> LirRegistry {
         let mut this = Self::new(env);
         this.lower_and_add_node(node);
+
+        info!(
+            functions = this.registry.functions.len(),
+            "LIR lowering completed"
+        );
+
         this.registry
     }
 
+    #[instrument(skip_all, fields(root_name = %root_name))]
     pub fn lower_with_root(
         env: &'a MiddleEnvironment,
         node: MiddleNode,
         root_name: String,
     ) -> LirRegistry {
+        debug!("lowering with root");
         let mut this = Self::new(env);
         this.lower_and_add_node(node);
         if !this.blocks.is_empty() {
+            debug!("creating global for root");
             let blocks = std::mem::take(&mut this.blocks).into_boxed_slice();
             this.registry.globals.insert(
                 root_name.clone(),
@@ -198,8 +209,10 @@ impl<'a> LirEnvironment<'a> {
         self.add_instr(LirNode::new(span, value));
     }
 
+    #[instrument(skip_all)]
     pub fn lower_node(&mut self, node: MiddleNode) -> LirNodeType {
         let span = node.span;
+        trace!("lowering MIR node to LIR");
         match node.node_type {
             MiddleNodeType::Emit { value } => {
                 // TODO Add emit support

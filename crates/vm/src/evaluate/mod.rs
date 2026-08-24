@@ -6,6 +6,7 @@ use calibre_parser::ast::{ObjectMap, idents::ParserText};
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
+use tracing::{debug, instrument, trace};
 
 use crate::{
     VM, VarName,
@@ -60,7 +61,9 @@ impl VM {
         )
     }
 
+    #[instrument(skip_all)]
     fn write_back_runtime_value(&mut self, target: RuntimeValue, value: RuntimeValue) {
+        trace!("writing back runtime value");
         match target {
             RuntimeValue::Ref(name) => {
                 if let Some(current) = self.variables.get(&name).cloned() {
@@ -109,6 +112,7 @@ impl VM {
         }
     }
 
+    #[instrument(skip_all, fields(args_count = args.len()))]
     fn propagate_member_source_args(
         &mut self,
         args: &[u16],
@@ -141,6 +145,7 @@ impl VM {
         Ok(())
     }
 
+    #[instrument(skip_all, fields(frame_idx = frame_idx, field_reg = field_reg, parent_reg = parent_reg, field_name = %field_name))]
     fn write_back_member_field_update(
         &mut self,
         frame_idx: usize,
@@ -302,6 +307,7 @@ impl VM {
         candidates
     }
 
+    #[instrument(skip_all, fields(args_count = args.len(), callsite_block = callsite_block))]
     pub(crate) fn call_runtime_callable_at(
         &mut self,
         callable: RuntimeValue,
@@ -309,6 +315,7 @@ impl VM {
         callsite_block: usize,
         callsite_tag: u32,
     ) -> Result<RuntimeValue, RuntimeError> {
+        trace!("calling runtime callable");
         match self.resolve_value_for_op_ref(&callable)? {
             RuntimeValue::Function { name, captures } => {
                 let callsite = (self.current_frame().func_ptr, callsite_block, callsite_tag);
@@ -809,6 +816,7 @@ impl VM {
             .map(|var| self.resolve_saveable_runtime_value_ref(&var))
     }
 
+    #[instrument(skip_all, fields(function = %function.name, args = args.len()))]
     pub fn run(
         &mut self,
         function: &VMFunction,
@@ -818,6 +826,7 @@ impl VM {
         self.run_function(function, args, Self::empty_captures())
     }
 
+    #[instrument(skip_all, fields(count = self.registry.globals.len()))]
     pub fn run_globals(&mut self) -> Result<(), RuntimeError> {
         if self.registry.globals.is_empty() {
             return Ok(());
@@ -829,7 +838,9 @@ impl VM {
         Ok(())
     }
 
+    #[instrument(skip_all, fields(entry = ?global.entry))]
     pub fn run_global(&mut self, global: &VMGlobal) -> Result<RuntimeValue, RuntimeError> {
+        debug!("running global");
         let entry = global
             .block_map
             .get(&global.entry)
@@ -867,6 +878,7 @@ impl VM {
         Ok(RuntimeValue::Null)
     }
 
+    #[instrument(skip_all, fields(function = %function.name))]
     pub fn run_function<I>(
         &mut self,
         function: &VMFunction,
@@ -876,6 +888,7 @@ impl VM {
     where
         I: IntoIterator<Item = RuntimeValue>,
     {
+        trace!("entering function");
         let mut state = crate::TaskState::default();
         match self.run_function_with_budget(function, args, captures, usize::MAX, &mut state)? {
             Some(value) => Ok(value),
@@ -883,6 +896,7 @@ impl VM {
         }
     }
 
+    #[instrument(skip_all, fields(function = %function.name, args_count = args.len()))]
     #[inline]
     fn run_function_from_regs(
         &mut self,
@@ -1043,6 +1057,7 @@ impl VM {
         Some(TerminateValue::Jump(func.entry))
     }
 
+    #[instrument(skip_all, fields(function = %function.name, budget = budget))]
     pub fn run_function_with_budget<I>(
         &mut self,
         function: &VMFunction,
@@ -1054,6 +1069,7 @@ impl VM {
     where
         I: IntoIterator<Item = RuntimeValue>,
     {
+        trace!("running function with budget");
         state.yielded = None;
         let prev_vars = if state.block.is_none() {
             let func_ptr = function as *const VMFunction as usize;
@@ -1207,6 +1223,7 @@ impl VM {
         }
         let mut fuel = budget.unwrap_or(usize::MAX);
         for (ip, instruction) in block.instructions.iter().enumerate().skip(start_ip) {
+            tracing::trace!(ip, instruction = ?instruction, "executing instruction");
             if (ip & 0x3f) == 0 {
                 self.maybe_collect_garbage();
             }

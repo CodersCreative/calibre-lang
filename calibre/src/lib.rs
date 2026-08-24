@@ -23,6 +23,7 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
+use tracing::{debug, instrument};
 
 pub mod config;
 
@@ -259,6 +260,7 @@ impl CalibreEngine {
         self
     }
 
+    #[instrument(skip_all, fields(mode = ?self.compile_mode, source = ?self.source_path))]
     pub fn compile_source(
         &self,
         source: impl Into<String>,
@@ -305,6 +307,7 @@ impl CalibreEngine {
         }
 
         calibre_mir::inline::inline_small_calls(&mut mir, 20);
+        debug!(scope, "MIR construction completed");
 
         let entry_name = env
             .resolve_str(&scope, &self.entry_name)
@@ -346,6 +349,7 @@ impl CalibreEngine {
         })
     }
 
+    #[instrument(skip_all, fields(enabled = self.cache_enabled))]
     pub fn compile_cached_program_source(
         &self,
         source: impl Into<String>,
@@ -356,6 +360,7 @@ impl CalibreEngine {
         if self.cache_enabled
             && let Some(cached) = self.try_load_cached_program(&full_source)?
         {
+            debug!("loaded program from cache");
             return Ok(CalibreArtifacts {
                 ast: None,
                 mir: None,
@@ -378,6 +383,7 @@ impl CalibreEngine {
         Ok(artifacts)
     }
 
+    #[instrument(skip_all, fields(source = ?self.source_path, entry = %self.entry_name))]
     pub fn run_source(&self, source: impl Into<String>) -> Result<RunResult, CalibreError> {
         let source = source.into();
         let full_source = self.compose_source(&source);

@@ -1,4 +1,5 @@
 use super::*;
+use tracing::{instrument, trace};
 
 impl<'a> BlockLoweringCtx<'a> {
     pub(super) fn alloc_reg(&mut self) -> Reg {
@@ -77,7 +78,9 @@ impl<'a> BlockLoweringCtx<'a> {
         self.block.instruction_spans.push(span);
     }
 
+    #[instrument(skip_all)]
     pub(super) fn lower_instr(&mut self, node: LirNode, assigned: Option<Reg>, set_ret: bool) {
+        trace!("lowering LIR node to VM instruction");
         match node.node_type {
             LirNodeType::Noop => {}
             LirNodeType::Declare { dest, value, .. } => {
@@ -230,7 +233,9 @@ impl<'a> BlockLoweringCtx<'a> {
         }
     }
 
+    #[instrument(skip_all)]
     pub(super) fn lower_node(&mut self, node: LirNodeType, span: Span) -> Reg {
+        trace!("lowering LIR node to VM instruction");
         match node {
             LirNodeType::Noop => self.null_reg,
             LirNodeType::Spawn { callee } => {

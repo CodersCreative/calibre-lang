@@ -1,14 +1,14 @@
+use calibre_parser::{
+    Parser, ParserError,
+    ast::{formatter::Formatter, nodes::NodeType},
+};
 use std::{
     error::Error,
     fmt, fs,
     io::Write,
     path::{Path, PathBuf},
 };
-
-use calibre_parser::{
-    Parser, ParserError,
-    ast::{formatter::Formatter, nodes::NodeType},
-};
+use tracing::{debug, instrument};
 
 #[derive(Debug)]
 pub enum FormatError {
@@ -80,17 +80,20 @@ fn parse_errors(text: &str) -> Result<(), Vec<ParserError>> {
     }
 }
 
+#[instrument(skip_all, fields(path = ?path, output = ?output))]
 pub fn format_file(
     formatter: &mut Formatter,
     path: &PathBuf,
     output: &PathBuf,
 ) -> Result<(), Box<dyn Error>> {
+    debug!("formatting file");
     let contents = fs::read_to_string(path).map_err(|source| FormatError::Read {
         path: path.clone(),
         source,
     })?;
 
     if let Err(errors) = parse_errors(&contents) {
+        debug!(error_count = errors.len(), "source parse failed");
         return Err(Box::new(FormatError::SourceParseFailed {
             path: path.clone(),
             contents,
@@ -98,6 +101,7 @@ pub fn format_file(
         }));
     }
 
+    debug!("applying formatter");
     let out = formatter.start_format(&contents, None).map_err(|err| {
         Box::new(FormatError::FormatterFailed {
             path: path.clone(),
@@ -106,6 +110,7 @@ pub fn format_file(
     })?;
 
     if let Err(errors) = parse_errors(&out) {
+        debug!(error_count = errors.len(), "formatted parse failed");
         return Err(Box::new(FormatError::FormattedParseFailed {
             path: path.clone(),
             formatted: out,
@@ -113,6 +118,7 @@ pub fn format_file(
         }));
     }
 
+    debug!("writing formatted output");
     fs::File::create(output)
         .and_then(|mut file| file.write_all(out.as_bytes()))
         .map_err(|source| FormatError::Write {
@@ -122,11 +128,14 @@ pub fn format_file(
     Ok(())
 }
 
+#[instrument(skip_all, fields(path = ?path))]
 pub fn format_all(formatter: &mut Formatter, path: &PathBuf) -> Result<(), Box<dyn Error>> {
+    debug!("formatting all imports");
     let contents = fs::read_to_string(path)?;
     let imports = formatter.get_imports(&contents)?;
 
     let Some(base) = path.parent() else {
+        debug!("no parent directory, skipping");
         return Ok(());
     };
 
@@ -147,6 +156,7 @@ pub fn format_all(formatter: &mut Formatter, path: &PathBuf) -> Result<(), Box<d
                 base.join(format!("{}/main.cal", module[0])),
             ] {
                 if candidate.exists() {
+                    debug!(candidate = ?candidate, "formatting import");
                     format_all(formatter, &candidate)?;
                     break;
                 }
@@ -157,7 +167,9 @@ pub fn format_all(formatter: &mut Formatter, path: &PathBuf) -> Result<(), Box<d
     format_file(formatter, path, path)
 }
 
+#[instrument(skip_all, fields(root = ?root))]
 pub fn format_recursive(formatter: &mut Formatter, root: &PathBuf) -> Result<(), Box<dyn Error>> {
+    debug!("formatting recursively");
     fn walk(formatter: &mut Formatter, dir: &PathBuf) -> Result<(), Box<dyn Error>> {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
@@ -167,6 +179,7 @@ pub fn format_recursive(formatter: &mut Formatter, root: &PathBuf) -> Result<(),
                 continue;
             }
             if path.extension().and_then(|x| x.to_str()) == Some("cal") {
+                debug!(file = ?path, "formatting file");
                 format_file(formatter, &path, &path)?;
             }
         }

@@ -20,6 +20,9 @@ use std::{
     process::Command,
     str::FromStr,
 };
+use tracing::info;
+use tracing_flame::FlameLayer;
+use tracing_subscriber::{EnvFilter, Registry, fmt, layer::SubscriberExt};
 
 pub mod config;
 
@@ -943,6 +946,12 @@ async fn repl(initial_session: Vec<String>) -> Result<(), Box<dyn Error>> {
 struct Args {
     #[arg(long, default_value_t = false)]
     no_cache: bool,
+    #[arg(long, default_value_t = false)]
+    flamegraph: bool,
+    #[arg(long, default_value = "error")]
+    log: String,
+    #[arg(long, default_value = "calibre.log")]
+    log_file: String,
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -1024,6 +1033,33 @@ enum Commands {
 const DEFAULT_MAIN: &'static str = "const main := fn => print(\"Hello, World!\");";
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let args = Args::parse();
+
+    let file_appender = tracing_appender::rolling::never(".", &args.log_file);
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    let fmt_layer = fmt::Layer::default()
+        .with_ansi(false)
+        .pretty()
+        .with_writer(non_blocking);
+    let filter_layer = EnvFilter::from_str(&args.log)?;
+
+    let _flame_guard = if args.flamegraph {
+        let (flame_layer, guard) = FlameLayer::with_file("./tracing.folded").unwrap();
+        let subscriber = Registry::default()
+            .with(fmt_layer)
+            .with(flame_layer)
+            .with(filter_layer);
+        tracing::subscriber::set_global_default(subscriber)?;
+        Some(guard)
+    } else {
+        let subscriber = Registry::default().with(fmt_layer).with(filter_layer);
+        tracing::subscriber::set_global_default(subscriber)?;
+        None
+    };
+
+    info!("tracing initialized to file: {}", args.log_file);
+
     fn run_with_large_stack<F>(f: F) -> Result<(), Box<dyn Error>>
     where
         F: FnOnce() -> Result<(), String> + Send + 'static,
@@ -1038,7 +1074,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let args = Args::parse();
     run_with_large_stack(move || {
         smol::block_on(async move {
             match args.command {

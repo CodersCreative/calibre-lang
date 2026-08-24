@@ -1,7 +1,10 @@
 use super::*;
+use tracing::{debug, instrument};
 
 impl VMFunction {
+    #[instrument(skip_all, fields(name = %name))]
     pub(crate) fn from_global(name: String, blocks: Vec<LirBlock>) -> Self {
+        debug!("lowering global to VM function");
         let func = LirFunction {
             name: name.into_boxed_str(),
             params: Vec::new().into_boxed_slice(),
@@ -13,6 +16,7 @@ impl VMFunction {
         lower.build_cfg();
         lower.build_ssa();
         lower.emit_blocks();
+        debug!("global lowering completed");
         VMFunction {
             name: lower.func.name.to_string(),
             params: Vec::new().into_boxed_slice(),
@@ -72,12 +76,15 @@ struct FunctionLowering {
 }
 
 impl FunctionLowering {
+    #[instrument(skip_all, fields(function = %func.name))]
     fn lower(func: LirFunction) -> VMFunction {
+        debug!("lowering LIR function to VM function");
         let mut lower = Self::new(func, false);
         lower.build_cfg();
         lower.build_ssa();
         lower.emit_blocks();
 
+        debug!("function lowering completed");
         VMFunction {
             name: lower.func.name.to_string(),
             params: lower

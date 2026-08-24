@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, write},
     ops::{Deref, DerefMut},
     str::FromStr,
 };
@@ -30,6 +30,20 @@ pub enum Operator {
     IndexAssign,
     In,
     As,
+}
+
+impl Display for Operator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::As => write!(f, "as"),
+            Self::In => write!(f, "in"),
+            Self::Index => write!(f, "[]"),
+            Self::IndexAssign => write!(f, "[]="),
+            Self::Binary(x) => write!(f, "{x}"),
+            Self::Comparison(x) => write!(f, "{x}"),
+            Self::Boolean(x) => write!(f, "{x}"),
+        }
+    }
 }
 
 impl FromStr for Operator {

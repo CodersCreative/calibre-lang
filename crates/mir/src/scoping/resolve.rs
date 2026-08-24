@@ -8,23 +8,31 @@ use calibre_parser::{
     ast::nodes::{Node, NodeType},
 };
 use std::fs;
+use tracing::{debug, instrument};
 
 impl MiddleEnvironment {
+    #[instrument(skip_all, fields(scope = scope, list = ?list))]
     pub fn get_scope_list(&self, scope: u64, mut list: Vec<String>) -> Result<u64, MiddleErr> {
+        debug!("getting scope list");
         if list.len() <= 0 {
+            debug!("empty scope list, returning current scope");
             return Ok(scope);
         }
         let first = list.remove(0);
+        debug!(next = %first, "navigating to next scope");
         let scope = self.get_next_scope(scope, first.as_str())?;
         self.get_scope_list(scope, list)
     }
 
+    #[instrument(skip_all, fields(scope = scope, list = ?list))]
     pub fn import_scope_list(
         &mut self,
         scope: u64,
         mut list: Vec<String>,
     ) -> Result<(u64, Option<MiddleNode>), MiddleErr> {
+        debug!("importing scope list");
         let first = list.remove(0);
+        debug!(first = %first, "importing first scope");
         let scope = self.import_next_scope(scope, first.as_str());
         if list.is_empty() {
             scope
@@ -70,16 +78,19 @@ impl MiddleEnvironment {
         })
     }
 
+    #[instrument(skip_all, fields(scope = scope, parent = parent, key = %key))]
     fn load_import_scope(
         &mut self,
         scope: u64,
         parent: u64,
         key: &str,
     ) -> Result<(u64, Option<MiddleNode>), MiddleErr> {
+        debug!("loading import scope");
         let mut parser = Parser::default();
         let build_node = if let Some(scope) = self.scoping.new_build_scope_from_parent(parent, key)
         {
             if self.scoping.loaded_scopes.contains(&scope) {
+                debug!("scope already loaded, skipping build");
                 None
             } else {
                 let path = self
@@ -93,6 +104,7 @@ impl MiddleEnvironment {
                     })?
                     .path
                     .clone();
+                debug!(path = ?path, "reading source file");
                 let source = fs::read_to_string(&path).map_err(|err| {
                     self.context.err_at_current(MiddleErr::Internal(format!(
                         "failed to read {path:?}: {err}"
@@ -131,6 +143,7 @@ impl MiddleEnvironment {
                     self.predeclare_nodes(&scope, body)?;
                 }
 
+                debug!("evaluating build scope");
                 let node = self.evaluate(&scope, program);
                 self.scoping.loaded_scopes.insert(scope);
                 Some(node)
@@ -140,6 +153,7 @@ impl MiddleEnvironment {
         };
 
         if self.scoping.loaded_scopes.contains(&scope) {
+            debug!("scope already loaded");
             return Ok((scope, None));
         }
 
@@ -154,6 +168,7 @@ impl MiddleEnvironment {
             })?
             .path
             .clone();
+        debug!(path = ?path, "reading source file for import");
         let source = fs::read_to_string(&path).map_err(|err| {
             self.context.err_at_current(MiddleErr::Internal(format!(
                 "failed to read {path:?}: {err}"
@@ -178,6 +193,7 @@ impl MiddleEnvironment {
             self.predeclare_nodes(&scope, body)?;
         }
 
+        debug!("evaluating imported scope");
         let node = self.evaluate(&scope, program);
         self.scoping.loaded_scopes.insert(scope);
 

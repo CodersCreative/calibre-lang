@@ -16,6 +16,7 @@ use matching::{MatchParsers, build_match_parsers};
 use setup::build_parser_prelude;
 use statements::{StatementParsers, build_statement_parser};
 use std::sync::Arc;
+use tracing::instrument;
 use util::{lex, span, strip_block_comments_keep_layout};
 
 mod diagnostics;
@@ -56,6 +57,7 @@ where
     any().and_is(end.not()).repeated().collect::<String>()
 }
 
+#[instrument(skip_all, fields(path = ?source_path, bytes = source.len()))]
 pub fn parse_program_with_source(
     source: &str,
     source_path: Option<&std::path::Path>,
