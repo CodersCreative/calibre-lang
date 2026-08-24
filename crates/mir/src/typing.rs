@@ -40,6 +40,7 @@ impl Typing {
             ParserInnerType::StructWithGenerics { generic_types, .. } => {
                 generic_types.iter().collect()
             }
+            ParserInnerType::Ptr(x) => vec![&**x],
             ParserInnerType::List(x) => vec![&**x],
             _ => Vec::new(),
         }
@@ -51,9 +52,7 @@ impl Typing {
             return implementation.get_member(member, &generic_params);
         }
 
-        let ParserInnerType::StructWithGenerics { identifier, .. } = &ty.data_type else {
-            return None;
-        };
+        let identifier = ty.impl_name();
 
         if let Some(implementation) = self.find_impl_for_type(&ParserDataType {
             data_type: ParserInnerType::Struct(identifier.clone()),
@@ -64,11 +63,8 @@ impl Typing {
 
         // TODO Remove, its the worst case scenario
         self.impls.values().find_map(|implementation| {
-            let ParserInnerType::Struct(name) = &implementation.data_type.data_type else {
-                return None;
-            };
-            let generic_name = format!("{identifier}:<");
-            name.contains(&generic_name)
+            let name = &implementation.data_type.impl_name();
+            name.contains(&identifier)
                 .then(|| implementation.get_member(member, &generic_params))
                 .flatten()
         })

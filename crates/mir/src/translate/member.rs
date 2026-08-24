@@ -2,6 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    typing::MiddleTypeDefType,
 };
 use calibre_parser::{
     Span,
@@ -51,6 +52,33 @@ impl MiddleEnvironment {
             if let Some(member) = self.resolve_impl_member(scope, &ty, &field_name) {
                 return Ok(MiddleNode::identifier(span, member));
             }
+
+            if let Some(MiddleTypeDefType::Enum { .. }) = self
+                .typing
+                .find_object_for_struct_name(&ty.impl_name())
+                .map(|x| &x.object_type)
+            {
+                return self.evaluate_inner(
+                    scope,
+                    Node::new(
+                        span,
+                        NodeType::EnumExpression {
+                            identifier: ident.clone(),
+                            value: PotentialDollarIdentifier::new(span, field_name),
+                            data: None,
+                        },
+                    ),
+                );
+            }
+        }
+
+        if let Some(ty) = self.resolve_type_from_node(scope, &base)
+            && let Some(x) = self
+                .typing
+                .find_impl_member(&ty, &field_name)
+                .map(|x| x.symbol_name.clone())
+        {
+            return Ok(MiddleNode::identifier(span, x));
         }
 
         Ok(MiddleNode::new(
@@ -74,14 +102,16 @@ impl MiddleEnvironment {
             .map(|x| x.text)
             .unwrap_or(field.text().clone());
 
-        if let NodeType::Identifier(module_name) = &base.node_type {
-            let module_path = vec![module_name.get_ident().text().clone(), field_name.clone()];
-
-            if let Ok(new_scope) = self.get_scope_list(*scope, module_path) {
+        let mut module_path = Vec::new();
+        if base.scope_access_path(&mut module_path) {
+            if let Ok(new_scope) = self
+                .get_scope_list(*scope, module_path.clone())
+                .or_else(|_| self.import_scope_list(*scope, module_path).map(|x| x.0))
+            {
                 let resolved = self
                     .resolve_potential_dollar_ident(&new_scope, &field)
                     .unwrap_or(field_name.into());
-                return Ok(MiddleNode::new(MiddleNodeType::Identifier(resolved), span));
+                return Ok(self.evaluate(&new_scope, Node::identifier(span, &resolved.text)));
             }
         }
 

@@ -51,6 +51,10 @@ impl ParserDataType {
                 identifier,
                 generic_types: _,
             } => ParserInnerType::Struct(identifier),
+            ParserInnerType::List(_) => ParserInnerType::Struct(String::from("list")),
+            ParserInnerType::Ptr(_) => ParserInnerType::Struct(String::from("ptr")),
+            ParserInnerType::Option(_) => ParserInnerType::Struct(String::from("option")),
+            ParserInnerType::Result { .. } => ParserInnerType::Struct(String::from("result")),
             x => x,
         }
     }
@@ -363,6 +367,12 @@ impl FromStr for ParserInnerType {
             "str" => Self::Str,
             "char" => Self::Char,
             "dyn" => Self::Dynamic,
+            "option" => Self::Option(Box::new(ParserDataType::auto(Span::default()))),
+            "result" => Self::Result {
+                ok: Box::new(ParserDataType::auto(Span::default())),
+                err: Box::new(ParserDataType::auto(Span::default())),
+            },
+            "ptr" => Self::Ptr(Box::new(ParserDataType::auto(Span::default()))),
             "list" => Self::List(Box::new(ParserDataType::auto(Span::default()))),
             "host" => Self::Host,
             "null" => Self::Null,

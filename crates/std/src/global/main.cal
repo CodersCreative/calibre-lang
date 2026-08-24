@@ -271,7 +271,7 @@ impl<T> Iter for ListIter:<T> {
 		for  => {
 			if i >= len(self.data) => break;
 			
-			let value := self.data[i += 1];
+			let value : T = self.data[i += 1];
 			if pred(value) => left <<= value else => right <<= value;
 		};
 		

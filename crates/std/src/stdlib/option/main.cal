@@ -1,4 +1,4 @@
-impl<T> T? {
+impl<T> option:<T> {
 	const is_some := fn (self : T?) -> bool => match self {
 		.Some : _ => return true,
 		.None => return false

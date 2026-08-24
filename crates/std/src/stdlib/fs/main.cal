@@ -102,20 +102,21 @@ impl File {
 		};
 	};
 
+	const read_all := fn (self : &File) -> str!str => {
+		match file_read_all(self.inner) {
+			.Ok : content => return ok(content),
+			.Err : e => return err(e)
+		};
+	};
+
 	const read_lines := fn (self : &File) -> str!list:<str> => {
-		match self.read_all() {
+		let result : str!str = self.read_all();
+		match  {
 			.Ok : content => return ok(content.split("\n")),
 			.Err : e => {
 				if e = "eof" => break;
 				return err(e);
 			}
-		};
-	};
-
-	const read_all := fn (self : &File) -> str!str => {
-		match file_read_all(self.inner) {
-			.Ok : content => return ok(content),
-			.Err : e => return err(e)
 		};
 	};
 

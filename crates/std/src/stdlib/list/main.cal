@@ -109,9 +109,9 @@ impl<T> list:<T> {
 	};
 
 	const remove_value := fn (self : &mut list:<T>, needle : T) -> bool => {
-		let idx := self.index_of(needle);
+		let idx := list:<T>.index_of(self, needle);
 		if idx = -1 => return false;
-		let _ := self.remove(idx);
+		let _ := list:<T>.remove(self, idx);
 		return true;
 	};
 

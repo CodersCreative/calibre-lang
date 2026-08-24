@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::{print, sync::Mutex};
 
 use super::*;
 use crate::{
@@ -367,18 +367,6 @@ impl VM {
                 let Some(func) = self.resolve_callable_cached(name.as_str(), callsite) else {
                     return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
                 };
-
-                if name.ends_with(".next")
-                    && let Some(first) = args.first()
-                    && matches!(
-                        self.resolve_value_for_op_ref(self.get_reg_value(*first))?,
-                        RuntimeValue::Option(_)
-                    )
-                {
-                    let value = self.resolve_value_for_op_ref(self.get_reg_value(*first))?;
-                    self.set_reg_value(dst, value);
-                    return Ok(None);
-                }
 
                 let mut owned_args: Option<Vec<u16>> = None;
                 let mut use_args = args;
@@ -1050,14 +1038,17 @@ impl VM {
                         if let Some(callee_name) =
                             vtable.get(member_short).or_else(|| vtable.get(name))
                         {
-                            let Some(callee) = self.resolve_dyn_method_callable(
+                            if let Some(callee) = self.resolve_dyn_method_callable(
                                 type_name.as_str(),
                                 member_short,
                                 Some(callee_name.as_str()),
-                            ) else {
+                            ) {
+                                callee.bind_if_callable(value.as_ref().clone())
+                            } else if let Some(x) = self.resolve_runtime_value(callee_name) {
+                                x.0
+                            } else {
                                 return Err(RuntimeError::FunctionNotFound(callee_name.clone()));
-                            };
-                            callee.bind_if_callable(value.as_ref().clone())
+                            }
                         } else if let Some(callee) =
                             self.resolve_dyn_method_callable(type_name.as_str(), member_short, None)
                         {
@@ -1071,6 +1062,10 @@ impl VM {
                                     .map(|x| RuntimeValue::Str(Arc::new(Mutex::new(x.clone()))))
                                     .collect(),
                             )))
+                        } else if let Some(x) =
+                            self.resolve_runtime_value(&format!("{}.{}", type_name, member_short))
+                        {
+                            x.0
                         } else {
                             return Err(RuntimeError::MissingMember {
                                 target: RuntimeValue::DynObject {

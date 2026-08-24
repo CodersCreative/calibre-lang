@@ -499,10 +499,11 @@ impl MiddleEnvironment {
             let data_type = if let Some(x) = param.1 {
                 self.resolve_data_type(scope, x)
             } else if let Some(node) = &param.2 {
-                self.resolve_type_from_node(scope, node)
-                    .ok_or(MiddleErr::InferImpossible)?
+                let err = self.context.err_at_current(MiddleErr::InferImpossible);
+                self.resolve_type_from_node(scope, node).ok_or(err)?
             } else {
-                return Err(MiddleErr::InferImpossible);
+                let err: MiddleErr = self.context.err_at_current(MiddleErr::InferImpossible);
+                return Err(err);
             };
 
             self.register_variable(

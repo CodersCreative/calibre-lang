@@ -1,7 +1,7 @@
-use crate::environment::MiddleEnvironment;
+use crate::{environment::MiddleEnvironment, typing::MiddleTypeDefType};
 use calibre_parser::ast::{
     Operator,
-    idents::{ParsedIntLiteral, PotentialGenericTypeIdentifier},
+    idents::ParsedIntLiteral,
     nodes::{AsFailureMode, EmitType, Node, NodeType},
     types::{ParserDataType, ParserInnerType},
 };
@@ -162,20 +162,9 @@ impl MiddleEnvironment {
             NodeType::EnumExpression { identifier, .. }
             | NodeType::StructLiteral { identifier, .. } => Some(ParserDataType {
                 span: *identifier.span(),
-                data_type: match identifier {
-                    // TODO Handle generics
-                    PotentialGenericTypeIdentifier::Generic {
-                        identifier: base,
-                        generic_types: _,
-                    } => {
-                        let base = self.resolve_dollar_ident_only(scope, base).ok()?;
-                        ParserInnerType::Struct(base.text)
-                    }
-                    _ => ParserInnerType::Struct(
-                        self.resolve_potential_generic_ident(scope, identifier)?
-                            .to_string(),
-                    ),
-                },
+                data_type: self
+                    .resolve_potential_generic_ident_to_data_type(scope, identifier)?
+                    .data_type,
             }),
             NodeType::FunctionDeclaration { header, .. }
             | NodeType::FnMatchDeclaration { header, .. } => Some(ParserDataType {
@@ -344,11 +333,10 @@ impl MiddleEnvironment {
             },
             NodeType::CallExpression {
                 caller,
-                generic_types: _,
+                generic_types: _generic_types,
                 args,
                 ..
             } => {
-                // TODO handle generics
                 if let NodeType::FieldAccess { base, field } = &caller.node_type {
                     let member_name = self
                         .resolve_dollar_ident_only(scope, field)
@@ -465,8 +453,8 @@ impl MiddleEnvironment {
                     None
                 }
             }
-            NodeType::FieldAccess { base, .. } => {
-                let base_type = self.resolve_type_from_node(scope, base).or_else(|| {
+            NodeType::FieldAccess { base, field } => {
+                let ty = self.resolve_type_from_node(scope, base).or_else(|| {
                     if let NodeType::Identifier(id) = &base.node_type {
                         self.resolve_potential_generic_ident_to_data_type(scope, id)
                     } else {
@@ -474,20 +462,49 @@ impl MiddleEnvironment {
                     }
                 })?;
 
-                let resolved_type = self.resolve_data_type(scope, base_type).unwrap_all_refs();
-                Some(resolved_type)
+                let member = self
+                    .resolve_dollar_ident_only(scope, field)
+                    .map(|x| x.text)
+                    .unwrap_or_else(|_| field.text().clone());
+
+                if let Some(member_type) = self.resolve_member_fn_type(&ty, &member) {
+                    return Some(member_type);
+                }
+
+                if let Some(MiddleTypeDefType::Enum { .. }) = self
+                    .typing
+                    .find_object_for_struct_name(&ty.impl_name())
+                    .map(|x| &x.object_type)
+                {
+                    return Some(ty);
+                }
+
+                self.resolve_member_field_type(scope, &ty, &member, node.span)
             }
-            NodeType::ScopeAccess { base, .. } => {
-                let base_type = self.resolve_type_from_node(scope, base).or_else(|| {
-                    if let NodeType::Identifier(id) = &base.node_type {
-                        self.resolve_potential_generic_ident_to_data_type(scope, id)
-                    } else {
-                        None
+            NodeType::ScopeAccess { base, field } => {
+                let mut module_path = Vec::new();
+                if base.scope_access_path(&mut module_path) {
+                    let member = self
+                        .resolve_dollar_ident_only(scope, field)
+                        .map(|x| x.text)
+                        .unwrap_or_else(|_| field.text().clone());
+                    if let Ok(member_scope) = self
+                        .get_scope_list(*scope, module_path.clone())
+                        .or_else(|_| self.import_scope_list(*scope, module_path).map(|x| x.0))
+                    {
+                        let resolved = self
+                            .resolve_potential_dollar_ident(&member_scope, field)
+                            .map(|x| x.text)
+                            .unwrap_or(member);
+                        return self
+                            .symbols
+                            .variables
+                            .get(&resolved)
+                            .map(|x| x.data_type.clone());
                     }
-                })?;
+                }
 
-                let resolved_type = self.resolve_data_type(scope, base_type).unwrap_all_refs();
-                Some(resolved_type)
+                None
             }
             NodeType::IndexAccess { base, index } => {
                 let base_type = self.resolve_type_from_node(scope, base).or_else(|| {

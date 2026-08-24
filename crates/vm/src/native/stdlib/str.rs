@@ -8,7 +8,10 @@ use crate::{
     value::{GcVec, RuntimeValue},
 };
 use dumpster::sync::Gc;
-use std::sync::{Arc, Mutex};
+use std::{
+    println,
+    sync::{Arc, Mutex},
+};
 
 pub struct CharLowercase;
 
@@ -52,8 +55,8 @@ impl NativeFunction for StrSplit {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let text = resolve_str(env, &pop_or_null(&mut args))?;
         let delim = resolve_str(env, &pop_or_null(&mut args))?;
+        let text = resolve_str(env, &pop_or_null(&mut args))?;
 
         let parts = if delim.lock().unwrap().is_empty() {
             text.lock()
@@ -83,8 +86,8 @@ impl NativeFunction for StrContains {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let text = resolve_str(env, &pop_or_null(&mut args))?;
         let needle = resolve_str(env, &pop_or_null(&mut args))?;
+        let text = resolve_str(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             text.lock()
@@ -105,8 +108,8 @@ impl NativeFunction for StrStartsWith {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let text = resolve_str(env, &pop_or_null(&mut args))?;
         let prefix = resolve_str(env, &pop_or_null(&mut args))?;
+        let text = resolve_str(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             text.lock()
@@ -127,8 +130,8 @@ impl NativeFunction for StrEndsWith {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let text = resolve_str(env, &pop_or_null(&mut args))?;
         let suffix = resolve_str(env, &pop_or_null(&mut args))?;
+        let text = resolve_str(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             text.lock()

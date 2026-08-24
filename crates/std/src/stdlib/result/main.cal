@@ -1,4 +1,4 @@
-impl<E, T> E!T {
+impl<E, T> result:<E, T> {
 	const is_ok := fn (self : E!T) -> bool => match self {
 		.Ok : _ => return true,
 		.Err : _ => return false

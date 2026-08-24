@@ -1,5 +1,3 @@
-// TODO Fix - FAILING - Missing Member Generics
-
 type Counter := struct { current end : int };
 
 impl Iter for Counter {
@@ -15,6 +13,7 @@ impl Iter for Counter {
 };
 
 const main := fn => {
+	print("Starting: ");
 	let mut list_it : ListIter:<int> = list:<int>[1, 2, 3].iter();
 	
 	for  => {
@@ -25,6 +24,7 @@ const main := fn => {
 		};
 	};
 	
+	print("\nRanges: ");
 	let mut range_it : RangeIter = (0..3).into_iter();
 	
 	for  => {
@@ -35,17 +35,20 @@ const main := fn => {
 		};
 	};
 	
+	print("\nFor let: ");
 	let mut counter := Counter { current : 5, end : 8 };
 	for let .Some : value <- counter.next() => print(value);
 	
+	print("\nIter Mut: ");
 	let mut mutable_list := list:<int>[10, 20, 30];
-	
 	let mut mut_it : ListIter:<int> = mutable_list.iter_mut();
 	print(mut_it.next());
-	
+
+	print("\nMap: ");
 	let mapped := list:<int>[1, 2, 3].into_iter().map(fn (x : int) -> int => return x * 2).collect();
 	print(mapped);
 	
+	print("\nFilter: ");
 	let filtered := list:<int>[
 		1,
 		2,
@@ -54,6 +57,7 @@ const main := fn => {
 	].into_iter().filter(fn (x : int) -> bool => return x % 2 = 0).collect();
 	print(filtered);
 	
+	print("\nFold: ");
 	let sum := list:<int>[
 		1,
 		2,
@@ -62,15 +66,19 @@ const main := fn => {
 	].into_iter().fold(0, fn (acc x : int) -> int => return acc + x);
 	print(sum);
 	
+	print("\nAny: ");
 	let any_big := list:<int>[1, 2, 3].into_iter().any(fn (x : int) -> bool => return x > 2);
 	print(any_big);
-	
+
+	print("\nAll: ");
 	let all_pos := list:<int>[1, 2, 3].into_iter().all(fn (x : int) -> bool => return x > 0);
 	print(all_pos);
 	
+	print("\Find: ");
 	let found := list:<int>[3, 4, 5].into_iter().find(fn (x : int) -> bool => return x = 4);
 	print(found);
 	
+	print("\nTake: ");
 	let taken := list:<int>[
 		1,
 		2,
@@ -80,6 +88,7 @@ const main := fn => {
 	].into_iter().take(3).collect();
 	print(taken);
 	
+	print("\nSkip: ");
 	let skipped := list:<int>[
 		1,
 		2,
@@ -89,10 +98,12 @@ const main := fn => {
 	].into_iter().skip(2).collect();
 	print(skipped);
 	
+	print("\nEnumerate: ");
 	let mut enumerated := list:<int>[10, 20, 30].into_iter().enumerate();
 	print(enumerated.next());
 	print(enumerated.next());
 	
+	print("\nStep by: ");
 	let mut stepped := list:<int>[
 		1,
 		2,
@@ -104,15 +115,14 @@ const main := fn => {
 	print(stepped.next());
 	print(stepped.next());
 	
-	let parts := list:<int>[
+	print("\nPartitions: ");
+	let mut evens, mut odds := list:<int>[
 		1,
 		2,
 		3,
 		4,
 		5
 	].into_iter().partition(fn (x : int) -> bool => return x % 2 = 0);
-	let mut evens := parts.0;
-	let mut odds := parts.1;
 	print(evens.next());
 	print(odds.next());
 };

@@ -176,6 +176,23 @@ impl Node {
         }
     }
 
+    pub fn scope_access_path(&self, path: &mut Vec<String>) -> bool {
+        match &self.node_type {
+            NodeType::Identifier(identifier) => {
+                path.push(identifier.get_ident().text().clone());
+                true
+            }
+            NodeType::ScopeAccess { base, field } => {
+                if !base.scope_access_path(path) {
+                    return false;
+                }
+                path.push(field.text().clone());
+                true
+            }
+            _ => false,
+        }
+    }
+
     pub fn new_temp_scope(body: Vec<Node>) -> Node {
         Self::new_temp_scope_with_create(body, Some(true))
     }

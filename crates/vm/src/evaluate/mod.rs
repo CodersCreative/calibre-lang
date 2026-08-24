@@ -235,8 +235,10 @@ impl VM {
         short_member: Option<&str>,
     ) {
         candidates.push(format!("{owner}::{member}"));
+        candidates.push(format!("{owner}.{member}"));
         if let Some(short) = short_member {
             candidates.push(format!("{owner}::{short}"));
+            candidates.push(format!("{owner}.{short}"));
         }
     }
 
@@ -296,6 +298,7 @@ impl VM {
                 short_member,
             );
         }
+
         candidates
     }
 
@@ -306,7 +309,7 @@ impl VM {
         callsite_block: usize,
         callsite_tag: u32,
     ) -> Result<RuntimeValue, RuntimeError> {
-        match callable {
+        match self.resolve_value_for_op_ref(&callable)? {
             RuntimeValue::Function { name, captures } => {
                 let callsite = (self.current_frame().func_ptr, callsite_block, callsite_tag);
                 let Some(func) = self.resolve_callable_cached(name.as_str(), callsite) else {
