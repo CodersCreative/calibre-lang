@@ -1,6 +1,6 @@
 import Duration from std::thread;
 
 const main := fn => {
-    Duration.from_s(5).sleep()
-    print("Okay!!");
-}
+	Duration.from_s(5).sleep();
+	print("Okay!!");
+};

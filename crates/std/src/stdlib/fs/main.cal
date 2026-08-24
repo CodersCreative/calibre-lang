@@ -111,7 +111,7 @@ impl File {
 
 	const read_lines := fn (self : &File) -> str!list:<str> => {
 		let result : str!str = self.read_all();
-		match  {
+		match {
 			.Ok : content => return ok(content.split("\n")),
 			.Err : e => {
 				if e = "eof" => break;

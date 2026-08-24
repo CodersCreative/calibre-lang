@@ -1,5 +1,4 @@
 // TODO Fix - FAILING - Async
-
 import (Channel, Mutex, WaitGroup) from std::async;
 
 const main := fn => {
@@ -7,7 +6,7 @@ const main := fn => {
 	
 	let wg := spawn => {
 		print("Spawned!!!");
-		emit ch "Hello, Joe!";
+		emit ch"Hello, Joe!";
 	};
 	
 	defer wg.wait();

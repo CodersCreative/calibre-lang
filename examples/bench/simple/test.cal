@@ -1,5 +1,4 @@
 // TODO Fix - FAILING - Matching Invalid Output
-
 type Thing := struct { name : str };
 
 type ThingEnum := enum {
@@ -27,6 +26,7 @@ const main := fn => {
 	print(thing.name);
 	let thing := ThingEnum.Person : thing;
 	print(thing);
+	
 	// print(global_thing.name());
 	print("mentioned object : " & ThingEnum.name(thing));
 	print("object inferred : " & thing.name());

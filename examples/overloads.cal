@@ -1,5 +1,4 @@
 // TODO Fix - FAILING - Stack Overflow?
-
 import * from std::console;
 import * from std::list;
 import * from std::str;

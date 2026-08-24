@@ -28,7 +28,7 @@ const print_vector := fn (v : list:<int>, nc : int) => {
 			col := 0;
 		};
 	};
-
+	
 	print(txt);
 };
 

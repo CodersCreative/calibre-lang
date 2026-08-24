@@ -24,7 +24,7 @@ impl<T> Send for Channel:<T> {
 	type Item := T;
 
 	const send := fn (self : &mut Self, value : Self::Item) -> bool => {
-		return channel_try_send(self.inner, value)
+		return channel_try_send(self.inner, value);
 	};
 };
 
@@ -32,7 +32,7 @@ impl<T> Send for Channel:<T> {
 impl WaitGroup {
 	const new := fn -> WaitGroup => return WaitGroup { inner : waitgroup_new() };
 
-	const raw_new := fn(inner : host) -> WaitGroup => return WaitGroup { inner };
+	const raw_new := fn (inner : host) -> WaitGroup => return WaitGroup { inner };
 
 	const raw_add := fn (self : &mut WaitGroup, value : int) => return waitgroup_raw_add((!(self.* is WaitGroup)) ? self : self.inner, value);
 

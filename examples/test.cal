@@ -1,5 +1,4 @@
 // TODO Fix - FAILING - Stack Overflow? (Overloads)
-
 import (Channel, WaitGroup) from std::async;
 
 type NumType := struct { num : int } @overload {
@@ -76,7 +75,7 @@ const main := fn => {
 	print(match_res);
 	
 	let => @add_scope [$first := 9f, $second := 11f, $t := type : float] {
-		// match_res will be captured at the call_site;;
+		// match_res will be captured at the call_site;;;
 		let sum : $t = $first + $second + match_res;
 		print("add_scope: ");
 		print(sum);

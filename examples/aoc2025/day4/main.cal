@@ -1,5 +1,4 @@
 // TODO Fix - FAILING - Type Inference
-
 import File from std::fs;
 
 const CELL_KEY := 1000000;

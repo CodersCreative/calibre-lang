@@ -43,7 +43,7 @@ const main := fn => {
 	let mut mutable_list := list:<int>[10, 20, 30];
 	let mut mut_it : ListIter:<int> = mutable_list.iter_mut();
 	print(mut_it.next());
-
+	
 	print("\nMap: ");
 	let mapped := list:<int>[1, 2, 3].into_iter().map(fn (x : int) -> int => return x * 2).collect();
 	print(mapped);
@@ -69,12 +69,12 @@ const main := fn => {
 	print("\nAny: ");
 	let any_big := list:<int>[1, 2, 3].into_iter().any(fn (x : int) -> bool => return x > 2);
 	print(any_big);
-
+	
 	print("\nAll: ");
 	let all_pos := list:<int>[1, 2, 3].into_iter().all(fn (x : int) -> bool => return x > 0);
 	print(all_pos);
 	
-	print("\Find: ");
+	print("\nFind: ");
 	let found := list:<int>[3, 4, 5].into_iter().find(fn (x : int) -> bool => return x = 4);
 	print(found);
 	
