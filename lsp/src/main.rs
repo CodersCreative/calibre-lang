@@ -22,8 +22,8 @@ use calibre_mir::errors::MiddleErr;
 use calibre_mir::typing::MiddleTypeDefType;
 use calibre_parser::ast::formatter::{Formatter, Tab};
 use calibre_parser::ast::types::{ParserDataType, ParserInnerType};
-use calibre_parser::{CalibreError, ParserError, Position as CalPosition, Span as CalSpan};
-use clap::Parser;
+use calibre_parser::{CalibreError, Parser, ParserError, Position as CalPosition, Span as CalSpan};
+use clap::Parser as ClapParser;
 use futures::future::{BoxFuture, ready};
 use model::*;
 use std::collections::{HashMap, HashSet};
@@ -40,7 +40,7 @@ use tracing_subscriber::{EnvFilter, Registry, fmt};
 mod features;
 mod model;
 
-#[derive(Parser, Debug)]
+#[derive(ClapParser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(long, default_value_t = false)]

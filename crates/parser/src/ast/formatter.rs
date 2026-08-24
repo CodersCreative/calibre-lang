@@ -16,7 +16,7 @@ use crate::{
     },
 };
 use rustc_hash::FxHashMap;
-use std::{error::Error, println};
+use std::error::Error;
 
 pub struct Tab {
     character: char,

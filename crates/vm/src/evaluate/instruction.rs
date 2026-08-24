@@ -368,15 +368,13 @@ impl VM {
                     return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
                 };
 
-                let mut use_args = args;
-
                 if captures.as_ref().is_empty()
                     && std::ptr::eq(
                         func.as_ref() as *const VMFunction,
                         self.current_frame().func_ptr as *const VMFunction,
                     )
                     && let Some(step) =
-                        self.try_trampoline_self_tail_call(block, ip, dst, use_args, func.as_ref())
+                        self.try_trampoline_self_tail_call(block, ip, dst, args, func.as_ref())
                 {
                     return Ok(Some(step));
                 }
@@ -402,10 +400,10 @@ impl VM {
                 }
 
                 let refreshed = Arc::new(refreshed_caps);
-                let value = self.run_function_from_regs(func.as_ref(), use_args, refreshed)?;
+                let value = self.run_function_from_regs(func.as_ref(), args, refreshed)?;
                 self.set_reg_value(dst, value);
                 let frame_idx = self.frames.len().saturating_sub(1);
-                self.propagate_member_source_args(use_args, frame_idx)?;
+                self.propagate_member_source_args(args, frame_idx)?;
                 return Ok(None);
             }
             RuntimeValue::NativeFunction(func) => {

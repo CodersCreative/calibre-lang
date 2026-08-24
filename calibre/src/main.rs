@@ -1,5 +1,5 @@
 use crate::config::Config;
-use calibre::{CalibreEngine, CalibreError, CompileMode};
+use calibre::{CalibreEngine, CalibreError, CompileMode, standalone::CalibreStandalone};
 use calibre_diagnostics;
 use calibre_lir::environment::LirEnvironment;
 use calibre_mir::{
@@ -39,10 +39,9 @@ async fn run_source(
     no_std: Option<bool>,
 ) -> Result<(), Box<dyn Error>> {
     let start = std::time::Instant::now();
-    let mut engine = CalibreEngine::new()
+    let mut engine = CalibreEngine::default()
         .with_vm_config(vm_config.clone())
         .with_source_path(path.to_path_buf())
-        .with_compile_mode(CompileMode::Run)
         .with_cache_enabled(cache);
 
     if let Some(dir) = cache_base_dir {
@@ -215,8 +214,10 @@ fn collect_project_sources(project: Option<&ProjectContext>, cwd: &Path, out: &m
 
         let tests_dir = project.root.join("tests");
         collect_cal_sources(&tests_dir, out);
+
         let bench_dir = project.root.join("bench");
         collect_cal_sources(&bench_dir, out);
+
         let benches_dir = project.root.join("benches");
         collect_cal_sources(&benches_dir, out);
     } else {
@@ -269,10 +270,9 @@ async fn run_suite(
     for path in files {
         let contents = fs::read_to_string(&path).await?;
 
-        let mut engine = CalibreEngine::new()
+        let mut engine = CalibreEngine::default()
             .with_vm_config(vm_config.clone())
             .with_source_path(path.clone())
-            .with_compile_mode(compile_mode)
             .with_cache_enabled(!no_cache);
 
         if let Some(metadata) = package_metadata.clone() {

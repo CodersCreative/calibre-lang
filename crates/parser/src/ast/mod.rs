@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
-    fmt::{Debug, Display, write},
+    fmt::{Debug, Display},
     ops::{Deref, DerefMut},
     str::FromStr,
 };
