@@ -12,6 +12,7 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
+clap = { workspace = true }
 calibre-parser = { workspace = true }
 calibre-mir = { workspace = true }
 

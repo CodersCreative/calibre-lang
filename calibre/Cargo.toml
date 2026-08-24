@@ -12,6 +12,7 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
+clap = { workspace = true }
 calibre-parser = {workspace = true}
 calibre-diagnostics = {workspace = true}
 calibre-mir = { workspace = true }
@@ -28,7 +29,6 @@ tracing-flame = { workspace = true }
 tracing-appender = { workspace = true }
 smol = { workspace = true }
 
-clap = { version = "4.5.40", features = ["derive"] }
 bincode = "1"
 blake3 = "1.6.1"
 toml = "1.0.1"

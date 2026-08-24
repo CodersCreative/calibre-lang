@@ -383,6 +383,7 @@ dependencies = [
  "async-lsp",
  "calibre-mir",
  "calibre-parser",
+ "clap",
  "futures",
  "smol",
  "tower",

@@ -22,12 +22,15 @@ use calibre_mir::errors::MiddleErr;
 use calibre_mir::typing::MiddleTypeDefType;
 use calibre_parser::ast::formatter::{Formatter, Tab};
 use calibre_parser::ast::types::{ParserDataType, ParserInnerType};
-use calibre_parser::{CalibreError, Parser, ParserError, Position as CalPosition, Span as CalSpan};
+use calibre_parser::{CalibreError, ParserError, Position as CalPosition, Span as CalSpan};
+use clap::Parser;
 use futures::future::{BoxFuture, ready};
 use model::*;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::ops::ControlFlow;
+use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tracing_flame::{self, FlameLayer};
@@ -37,28 +40,55 @@ use tracing_subscriber::{EnvFilter, Registry, fmt};
 mod features;
 mod model;
 
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(long, default_value_t = false)]
+    flamegraph: bool,
+    #[arg(long, default_value = "error")]
+    log: String,
+    #[arg(long)]
+    log_file: Option<PathBuf>,
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
-    let file_appender = tracing_appender::rolling::never("/var/log/calibre", "lsp.log");
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    let args = Args::parse();
 
-    let fmt_layer = fmt::Layer::default()
-        .with_ansi(false)
-        .pretty()
-        .with_writer(non_blocking);
-    let filter_layer = EnvFilter::from_default_env();
+    let (_guard, _flame_guard) = if let Some(path) = args.log_file {
+        let file_appender = tracing_appender::rolling::never(
+            path.parent()
+                .map(|x| x.to_path_buf())
+                .unwrap_or(PathBuf::from(".")),
+            path.file_name()
+                .map(|x| x.to_string_lossy().to_string())
+                .unwrap_or(String::from("lsp.log")),
+        );
+        let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
-    let _flame_guard = if std::env::var("CALIBRE_FLAME").is_ok() {
-        let (flame_layer, guard) = FlameLayer::with_file("/var/log/lsp.folded").unwrap();
-        let subscriber = Registry::default()
-            .with(fmt_layer)
-            .with(flame_layer)
-            .with(filter_layer);
-        tracing::subscriber::set_global_default(subscriber)?;
-        Some(guard)
+        let fmt_layer = fmt::Layer::default()
+            .with_ansi(false)
+            .pretty()
+            .with_writer(non_blocking);
+        let filter_layer = EnvFilter::from_str(&args.log)?;
+
+        (
+            Some(guard),
+            if args.flamegraph {
+                let (flame_layer, guard) = FlameLayer::with_file("./tracing.folded").unwrap();
+                let subscriber = Registry::default()
+                    .with(fmt_layer)
+                    .with(flame_layer)
+                    .with(filter_layer);
+                tracing::subscriber::set_global_default(subscriber)?;
+                Some(guard)
+            } else {
+                let subscriber = Registry::default().with(fmt_layer).with(filter_layer);
+                tracing::subscriber::set_global_default(subscriber)?;
+                None
+            },
+        )
     } else {
-        let subscriber = Registry::default().with(fmt_layer).with(filter_layer);
-        tracing::subscriber::set_global_default(subscriber)?;
-        None
+        (None, None)
     };
 
     smol::block_on(async {

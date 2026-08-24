@@ -12,7 +12,7 @@ repository.workspace = true
 readme.workspace = true
 
 [dependencies]
-clap = { version = "4.5.40", features = ["derive"] }
+clap = { workspace = true }
 calibre-parser = { workspace = true }
 calibre-diagnostics = { workspace = true }
 tracing = { workspace = true }
