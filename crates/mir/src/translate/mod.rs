@@ -434,31 +434,39 @@ impl MiddleEnvironment {
                         let fn_ident: PotentialDollarIdentifier =
                             ParserText::temp_name_with_suffix("spawn_fn", body.span).into();
 
-                        let scope_node = Node::new(
-                            self.context.current_span(),
-                            NodeType::ScopeDeclaration {
-                                body: Some(vec![
-                                    Node::new(
-                                        self.context.current_span(),
-                                        NodeType::VariableDeclaration {
-                                            var_type: VarType::Immutable,
-                                            identifier: fn_ident.clone(),
-                                            data_type: ParserDataType::auto(
-                                                self.context.current_span(),
-                                            ),
-                                            value: Box::new(Node::new(
-                                                self.context.current_span(),
-                                                NodeType::FunctionDeclaration { header, body },
-                                            )),
-                                        },
-                                    ),
-                                    Node::identifier(self.context.current_span(), fn_ident),
-                                ]),
-                                named: None,
-                                is_temp: true,
-                                create_new_scope: Some(true),
-                                define: false,
-                            },
+                        let scope_node = Node::call(
+                            node.span,
+                            Node::member(
+                                node.span,
+                                Node::identifier(node.span, "WaitGroup"),
+                                "raw_new",
+                            ),
+                            vec![CallArg::Value(Node::new(
+                                self.context.current_span(),
+                                NodeType::ScopeDeclaration {
+                                    body: Some(vec![
+                                        Node::new(
+                                            self.context.current_span(),
+                                            NodeType::VariableDeclaration {
+                                                var_type: VarType::Immutable,
+                                                identifier: fn_ident.clone(),
+                                                data_type: ParserDataType::auto(
+                                                    self.context.current_span(),
+                                                ),
+                                                value: Box::new(Node::new(
+                                                    self.context.current_span(),
+                                                    NodeType::FunctionDeclaration { header, body },
+                                                )),
+                                            },
+                                        ),
+                                        Node::identifier(self.context.current_span(), fn_ident),
+                                    ]),
+                                    named: None,
+                                    is_temp: true,
+                                    create_new_scope: Some(true),
+                                    define: false,
+                                },
+                            ))],
                         );
 
                         self.evaluate(scope, scope_node)
@@ -2668,10 +2676,10 @@ impl MiddleEnvironment {
                                     ParserText::temp_name_with_suffix("select", node.span),
                                 );
 
-                                let try_get_call = Self::scope_member_call(
+                                let try_get_call = Node::call(
                                     node.span,
-                                    &["std", "async", "channel_try_get"],
-                                    vec![CallArg::Value(right)],
+                                    Node::member(node.span, right, "try_get"),
+                                    vec![],
                                 );
 
                                 loop_body.push(Node::new(
@@ -2790,10 +2798,10 @@ impl MiddleEnvironment {
                                 let Some(right) = right.clone() else { continue };
 
                                 let cond = fold_guards(
-                                    Self::scope_member_call(
+                                    Node::call(
                                         node.span,
-                                        &["std", "async", "channel_try_send"],
-                                        vec![CallArg::Value(left), CallArg::Value(right)],
+                                        Node::member(node.span, left, "try_send"),
+                                        vec![CallArg::Value(right)],
                                     ),
                                     &arm.conditionals,
                                 );

@@ -1,3 +1,5 @@
+// TODO Fix - FAILING - Async
+
 import (Channel, WaitGroup) from std::async;
 
 const test_str := fn (splits inputs : list:<str>, extra : bool, extra2 : int) => {
@@ -42,9 +44,9 @@ const main := fn => {
 	};
 	
 	// end of scope printed here
-	let mut bmi_ch : Channel:<float> = Channel.new();
+	let mut bmi_ch := Channel:<float>.new();
 	let mut fac_ch := Channel:<int>.new();
-	let mut lock_ch : Channel:<bool> = Channel.new();
+	let mut lock_ch := Channel:<bool>.new();
 	
 	let wg := spawn {
 		=> emit bmi_ch bmi(52.5, 1.65),

@@ -1,3 +1,5 @@
+// TODO Fix - FAILING - Missing Member
+
 import (Path, File) from std::fs;
 
 const parse_direction := fn (line : str) -> char => {

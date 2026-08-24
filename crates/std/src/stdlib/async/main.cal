@@ -23,21 +23,26 @@ impl<T> Channel:<T> {
 impl<T> Send for Channel:<T> {
 	type Item := T;
 
-	const send := fn (self : &mut Self, value : Self::Item) -> bool => return channel_try_send(self.inner, value);
+	const send := fn (self : &mut Self, value : Self::Item) -> bool => {
+		return channel_try_send(self.inner, value)
+	};
 };
 
+// TODO Find out whats still leaking raw WaitGroup's in spawn
 impl WaitGroup {
 	const new := fn -> WaitGroup => return WaitGroup { inner : waitgroup_new() };
 
-	const raw_add := fn (self : &mut WaitGroup, value : int) => return waitgroup_raw_add(self.inner, value);
+	const raw_new := fn(inner : host) -> WaitGroup => return WaitGroup { inner };
 
-	const raw_done := fn (self : &mut WaitGroup) => waitgroup_raw_done(self.inner);
+	const raw_add := fn (self : &mut WaitGroup, value : int) => return waitgroup_raw_add((!(self.* is WaitGroup)) ? self : self.inner, value);
 
-	const join := fn (self : &mut WaitGroup, other : WaitGroup) => waitgroup_join(self.inner, other.inner);
+	const raw_done := fn (self : &mut WaitGroup) => waitgroup_raw_done((!(self.* is WaitGroup)) ? self : self.inner);
 
-	const wait := fn (self : &WaitGroup) => waitgroup_wait(self.inner);
+	const join := fn (self : &mut WaitGroup, other : WaitGroup) => waitgroup_join((!(self.* is WaitGroup)) ? self : self.inner, (!(other.* is WaitGroup)) ? other : other.inner);
 
-	const count := fn (self : &WaitGroup) -> int => return waitgroup_count(self.inner);
+	const wait := fn (self : &WaitGroup) => waitgroup_wait((!(self.* is WaitGroup)) ? self : self.inner);
+
+	const count := fn (self : &WaitGroup) -> int => return waitgroup_count((!(self.* is WaitGroup)) ? self : self.inner);
 };
 
 impl<T> Mutex:<T> {

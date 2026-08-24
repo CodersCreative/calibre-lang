@@ -1,3 +1,5 @@
+// TODO Fix - FAILING - Missing Member Generics
+
 type Counter := struct { current end : int };
 
 impl Iter for Counter {

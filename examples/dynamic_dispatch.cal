@@ -1,3 +1,5 @@
+// TODO Fix - FAILING - Missing Member
+
 trait Animal {
 	const name : fn (&Self) -> str;
 

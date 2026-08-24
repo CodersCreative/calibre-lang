@@ -1,3 +1,5 @@
+// TODO Fix - FAILING - Enum Variant
+
 type Thing := struct { name : str };
 
 type ThingEnum := enum {

@@ -1,5 +1,7 @@
 extern "c" const c_usleep := fn(@int) -> @int from "libc" as "usleep";
 
+const wait := fn (ms : int = 1000) => if ms <= 0 => {} else => c_usleep(ms * 1000);
+
 type Duration := struct { ms : int };
 
 impl Duration {
@@ -16,10 +18,6 @@ impl Duration {
 	const is_zero := fn (self : Duration) -> bool => return self.ms <= 0;
 
 	const sleep := fn (self : Duration) => wait(self.ms);
-};
-
-const wait := fn (ms : int = 1000) => if ms <= 0 => null else => {
-	c_usleep(ms * 1000);
 };
 
 const sleep := fn (d : Duration) => d.sleep();

@@ -272,7 +272,7 @@ impl MiddleEnvironment {
                     );
                     let starts_with_call = Node::call(
                         self.context.current_span(),
-                        Node::identifier(self.context.current_span(), "starts_with"),
+                        Node::member(text.span, Node::identifier(text.span, "str"), "starts_with"),
                         vec![
                             CallArg::Value(current.clone()),
                             CallArg::Value(literal_node.clone()),
@@ -282,7 +282,11 @@ impl MiddleEnvironment {
 
                     let strip_prefix_call = Node::call(
                         self.context.current_span(),
-                        Node::identifier(self.context.current_span(), "strip_prefix"),
+                        Node::member(
+                            text.span,
+                            Node::identifier(text.span, "str"),
+                            "strip_prefix",
+                        ),
                         vec![
                             CallArg::Value(current.clone()),
                             CallArg::Value(literal_node),

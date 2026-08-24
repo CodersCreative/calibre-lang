@@ -1,3 +1,5 @@
+// TODO Fix - FAILING - "missing function"
+
 const main := fn => {
 	print("hello");
 	smth_panic();

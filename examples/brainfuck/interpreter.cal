@@ -1,3 +1,5 @@
+// TODO Fix - FAILING - Path is not canonicalized
+
 import std::console;
 import File from std::fs;
 import Args from std::env;
@@ -100,7 +102,7 @@ impl BrainFuck {
 	});
 	
 	let mut file := try File.open_read(input_path) : e => {
-		print(e);
+		print("Path " & input_path.as_str() & " : " & e);
 		return;
 	};
 	

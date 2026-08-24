@@ -1,12 +1,8 @@
-import * from std::collections;
-import * from std::console;
-
 const main := fn => {
-	let mut map := HashMap.new(("a", 1), ("b", 2), ("c", 3));
+	let mut map := HashMap:<str, int>.new(("a", 1), ("b", 2), ("c", 3));
 	
 	print("len => " & map.len());
 	print("has b => " & map.contains("b"));
-	print("b => " & map.get_or("b", 0));
 	
 	map.set("d", 4);
 	let removed := map.remove("a");
@@ -28,7 +24,7 @@ const main := fn => {
 		print("entry => " & pair.0 & ":" & pair.1);
 	};
 	
-	let mut set := HashSet.new(
+	let mut set := HashSet:<str>.new(
 		"red",
 		"green",
 		"blue",

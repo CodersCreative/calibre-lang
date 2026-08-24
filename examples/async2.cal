@@ -1,13 +1,16 @@
+// TODO Fix - FAILING - Async
+
 import (Channel, Mutex, WaitGroup) from std::async;
 
 const main := fn => {
 	let mut ch := Channel:<str>.new();
 	
 	let wg := spawn => {
-		emit ch"Hello, Joe!";
+		print("Spawned!!!");
+		emit ch "Hello, Joe!";
 	};
 	
 	defer wg.wait();
-	
+	print("Started getting");
 	if let .Some : x <- ch.get() => print(x);
 };

@@ -19,7 +19,7 @@ impl MiddleEnvironment {
         for segment in path.iter().skip(1) {
             result = Node::new(
                 span,
-                NodeType::FieldAccess {
+                NodeType::ScopeAccess {
                     base: Box::new(result),
                     field: PotentialDollarIdentifier::new(span, segment),
                 },

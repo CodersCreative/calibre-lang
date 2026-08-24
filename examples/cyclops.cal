@@ -1,0 +1,161 @@
+const main := fn => {
+	let first50 := first_cyclops(50);
+	print("First 50 cyclops numbers:");
+	print_vector(first50, 10);
+	
+	let prime50 := first_cyclops_primes(50);
+	print("\nFirst 50 prime cyclops numbers:");
+	print_vector(prime50, 10);
+	
+	let blind50 := first_blind_cyclops_primes(50);
+	print("\nFirst 50 blind prime cyclops numbers:");
+	print_vector(blind50, 10);
+	
+	let palindrome50 := first_palindrome_cyclops_primes(50);
+	print("\nFirst 50 palindromic prime cyclops numbers:");
+	print_vector(palindrome50, 10);
+};
+
+const print_vector := fn (v : list:<int>, nc : int) => {
+	let mut col := 0;
+	let txt := "";
+	
+	for e in v => {
+		txt &= fmt"{e}\t";
+		col += 1;
+		if col = nc => {
+			txt &= "\n";
+			col := 0;
+		};
+	};
+
+	print(txt);
+};
+
+const is_cyclops_number := fn (num : int) -> bool => {
+	if num = 0 => return true;
+	
+	let mut m := num % 10;
+	let mut count := 0;
+	
+	// Count digits before the zero
+	for m != 0 => {
+		count += 1;
+		num /= 10;
+		m := num % 10;
+	};
+	
+	// Skip the zero
+	num /= 10;
+	m := num % 10;
+	
+	// Count digits after the zero
+	for m != 0 => {
+		count -= 1;
+		num /= 10;
+		m := num % 10;
+	};
+	
+	return num = 0 && count = 0;
+};
+
+const first_cyclops := fn (n : int) -> list:<int> => {
+	let mut result := list:<int>[];
+	let mut i := 0;
+	
+	for len(result) < n => {
+		if is_cyclops_number(i) => result <<= i;
+		
+		i += 1;
+	};
+	
+	return result;
+};
+
+const is_prime := fn (n : int) -> bool => {
+	if n < 2 => return false;
+	
+	let sqrt_n := float.sqrt(n as! float) as! int;
+	
+	for i in 2..=sqrt_n => if n % i = 0 => return false;
+	
+	return true;
+};
+
+const first_cyclops_primes := fn (n : int) -> list:<int> => {
+	let mut result := list:<int>[];
+	let mut i := 0;
+	
+	for len(result) < n => {
+		if is_cyclops_number(i) && is_prime(i) => result <<= i;
+		
+		i += 1;
+	};
+	
+	return result;
+};
+
+const blind_cyclops := fn (num : int) -> int => {
+	let mut m := num % 10;
+	let mut k := 0;
+	
+	// Extract digits before the zero
+	for m != 0 => {
+		k := 10 * k + m;
+		num /= 10;
+		m := num % 10;
+	};
+	
+	// Skip the zero
+	num /= 10;
+	
+	// Reconstruct the number by reversing the first part
+	for k != 0 => {
+		m := k % 10;
+		num := 10 * num + m;
+		k /= 10;
+	};
+	
+	return num;
+};
+
+const first_blind_cyclops_primes := fn (n : int) -> list:<int> => {
+	let mut result := list:<int>[];
+	let mut i := 0;
+	
+	for len(result) < n => {
+		if is_cyclops_number(i) && is_prime(i) => {
+			let j := blind_cyclops(i);
+			if is_prime(j) => result <<= i;
+		};
+		
+		i += 1;
+	};
+	
+	return result;
+};
+
+const is_palindrome := fn (n : int) -> bool => {
+	let mut k := 0;
+	let mut l := n;
+	
+	for l != 0 => {
+		let m := l % 10;
+		k := 10 * k + m;
+		l /= 10;
+	};
+	
+	return n = k;
+};
+
+const first_palindrome_cyclops_primes := fn (n : int) -> list:<int> => {
+	let mut result := list:<int>[];
+	let mut i := 0;
+	
+	for len(result) < n => {
+		if is_cyclops_number(i) && is_prime(i) && is_palindrome(i) => result <<= i;
+		i += 1;
+	};
+	
+	return result;
+};
