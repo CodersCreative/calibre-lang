@@ -168,7 +168,7 @@ impl Metadata {
 
 	const is_dir := fn (self : &Metadata) -> bool => return metadata_is_dir(self.inner);
 
-	const len := fn (self : &Metadata) -> int => return metadata_len(self.inner);
+	const len := fn (self : &Metadata) -> uint => return metadata_len(self.inner);
 
 	// TODO Make a DateTime struct
 	const modified := fn (self : &Metadata) -> str!int => {

@@ -179,7 +179,7 @@ impl list:<int> {
 
 impl list:<uint> {
 	const sum := fn (self : list:<uint>) -> uint => {
-		let mut acc := 0;
+		let mut acc := 0u;
 		for i in 0..len(self) => acc += self[i];
 		return acc;
 	};

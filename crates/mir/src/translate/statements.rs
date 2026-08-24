@@ -133,11 +133,31 @@ impl MiddleEnvironment {
                 .insert(identifier.text.clone(), defaults);
         }
 
+        let node_ty = self.resolve_type_from_node(scope, &value);
+
         let data_type = if data_type.is_auto() {
-            let err = self.context.err_at_current(MiddleErr::InferImpossible);
-            self.resolve_type_from_node(scope, &value).ok_or(err)?
+            None
         } else {
-            self.resolve_data_type(scope, data_type)
+            Some(self.resolve_data_type(scope, data_type))
+        };
+
+        let data_type = match (data_type, node_ty) {
+            (None, None) => return Err(self.context.err_at_current(MiddleErr::InferImpossible)),
+            (Some(x), None) => x,
+            (None, Some(x)) => x,
+            (Some(x), Some(_)) if self.tagging.tag_info.contains(&TagInfo::IgnoreInvalidLet) => x,
+            (Some(x), Some(y)) => {
+                if x.loose_eq(&y) {
+                    x
+                } else {
+                    return Err(self.context.err_at_current(
+                        MiddleErr::InvalidVarDeclarationType {
+                            expected: x,
+                            found: y,
+                        },
+                    ));
+                }
+            }
         };
 
         let mut value = if let Some((header, _)) = function_decl {

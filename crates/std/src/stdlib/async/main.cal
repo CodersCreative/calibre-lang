@@ -48,11 +48,11 @@ impl WaitGroup {
 impl<T> Mutex:<T> {
 	const new := fn (value : T) -> Mutex:<T> => return Mutex:<T> { inner : mutex_new(value) };
 
-	const get := fn (self : &Mutex:<T>) -> &mut T => return mutex_get(self.inner);
+	@ignore_invalid_return const get := fn (self : &Mutex:<T>) -> &mut T => return mutex_get(self.inner);
 
 	const set := fn (self : &mut Mutex:<T>, value : T) => mutex_set(self.inner, value);
 
-	const with := fn <U> (self : &mut Mutex:<T>, op : fn (T) -> U) -> U => return mutex_with(self.inner, op);
+	@ignore_invalid_return const with := fn <U> (self : &mut Mutex:<T>, op : fn (T) -> U) -> U => return mutex_with(self.inner, op);
 
 	const write := fn (self : &mut Mutex:<T>) -> &mut T => return mutex_write(self.inner);
 
@@ -69,11 +69,11 @@ impl<T> Mutex:<T> {
 };
 
 impl<T> LazyLock:<T> {
-	const new := fn (init_fn : fn () -> T) => return LazyLock:<T> { inner : Mutex:<T>.new(), init_fn };
+	const new := fn (init_fn : fn () -> T) -> LazyLock:<T> => return LazyLock:<T> { inner : Mutex:<T>.new(), init_fn };
 
 	const get := fn (self : &Self) -> &mut T? => return self.inner.get();
 
-	const get_or_init := fn (self : &Self) -> &mut T => {
+	@ignore_invalid_return const get_or_init := fn (self : &Self) -> &mut T => {
 		let value : &mut T? = self.inner.get();
 		match value {
 			.Some : x => x,
@@ -84,7 +84,7 @@ impl<T> LazyLock:<T> {
 		};
 	};
 
-	const get_or_set := fn (self : &Self, default : T) -> &mut T => {
+	@ignore_invalid_return const get_or_set := fn (self : &Self, default : T) -> &mut T => {
 		let value : &mut T? = self.inner.get();
 		match value {
 			.Some : x => x,

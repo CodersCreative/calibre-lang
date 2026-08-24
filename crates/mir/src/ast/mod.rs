@@ -15,6 +15,8 @@ use calibre_parser::{
 use rustc_hash::FxHashMap;
 use std::fmt::Display;
 
+use crate::errors::MiddleErr;
+
 pub mod identifiers;
 pub mod renaming;
 
@@ -33,8 +35,8 @@ impl MiddleNode {
         Self::new(MiddleNodeType::Identifier(text.to_string().into()), span)
     }
 
-    pub fn member_field(&self) -> Box<str> {
-        match &self.node_type {
+    pub fn member_field(&self) -> Result<Box<str>, MiddleErr> {
+        Ok(match &self.node_type {
             MiddleNodeType::Identifier(name) => name.text.clone().into_boxed_str(),
             MiddleNodeType::IntLiteral(ParsedIntLiteral { value, int_type }) => match int_type {
                 IntLiteralType::Int => value.to_string().into_boxed_str(),
@@ -42,8 +44,8 @@ impl MiddleNode {
                 IntLiteralType::Byte => format!("{value}b").into_boxed_str(),
             },
             MiddleNodeType::FloatLiteral(x) => x.to_string().into_boxed_str(),
-            _ => "<invalid>".to_string().into_boxed_str(),
-        }
+            _ => return Err(MiddleErr::InvalidMember),
+        })
     }
 
     pub fn len(&self) -> usize {

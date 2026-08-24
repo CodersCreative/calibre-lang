@@ -247,6 +247,10 @@ impl ParserDataType {
         }
     }
 
+    pub fn loose_eq(&self, other: &Self) -> bool {
+        self.key().loose_eq(&other.key())
+    }
+
     pub fn function(
         span: Span,
         parameters: Vec<ParserDataType>,
@@ -408,6 +412,14 @@ impl ParserInnerType {
         matches!(self, Self::Auto(_))
     }
 
+    pub fn is_dyn(&self) -> bool {
+        matches!(self, Self::Dynamic)
+    }
+
+    pub fn is_dyn_trait(&self) -> bool {
+        matches!(self, Self::DynamicTraits { .. })
+    }
+
     pub fn is_result(&self) -> bool {
         matches!(self, Self::Result { .. })
     }
@@ -422,6 +434,15 @@ impl ParserInnerType {
 
     pub fn is_list(&self) -> bool {
         matches!(self, Self::List(_))
+    }
+
+    pub fn loose_eq(&self, other: &Self) -> bool {
+        other.is_auto()
+            || other.is_dyn()
+            || other.is_dyn_trait()
+            || self.is_dyn()
+            || self.is_dyn_trait()
+            || other == self
     }
 
     pub fn verify(self) -> Self {

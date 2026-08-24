@@ -368,35 +368,7 @@ impl VM {
                     return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
                 };
 
-                let mut owned_args: Option<Vec<u16>> = None;
                 let mut use_args = args;
-
-                if args.len() > func.params.len() {
-                    let mut filtered = args.to_vec();
-
-                    while filtered.len() > func.params.len() {
-                        let drop_leading_invalid = filtered.first().is_some_and(|reg| {
-                            self.current_frame()
-                                .member_sources
-                                .get(reg)
-                                .is_some_and(|(_, name)| name == "<invalid>")
-                        });
-
-                        if drop_leading_invalid {
-                            filtered.remove(0);
-                        } else {
-                            break;
-                        }
-                    }
-
-                    if filtered.len() != args.len() {
-                        owned_args = Some(filtered);
-                    }
-                }
-
-                if let Some(ref vec) = owned_args {
-                    use_args = vec.as_slice();
-                }
 
                 if captures.as_ref().is_empty()
                     && std::ptr::eq(
@@ -943,14 +915,6 @@ impl VM {
                 let source_reg = *value;
                 let name = self.local_string(block, *member)?;
                 let raw_receiver = self.get_reg_value(*value).clone();
-                if name == "<invalid>" {
-                    let resolved = self.resolve_value_for_op_ref(&raw_receiver)?;
-                    self.set_reg_value(*dst, resolved);
-                    self.current_frame_mut()
-                        .member_sources
-                        .insert(*dst, (source_reg, name.to_string()));
-                    return Ok(TerminateValue::None);
-                }
                 let (short_name, tuple_index) = Self::member_parts(name);
                 let mut resolved = self.resolve_value_for_op_ref(&raw_receiver)?;
                 if matches!(resolved, RuntimeValue::Null) {

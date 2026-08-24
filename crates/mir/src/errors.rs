@@ -19,6 +19,8 @@ pub enum MiddleErr {
     InferImpossible,
     #[error("Index out of bounds for list, {0}.")]
     InvalidIndex(i64),
+    #[error("Invalid Member.")]
+    InvalidMember,
     #[error("Default value name not identifier.")]
     InvalidDefaultFuncArg,
     #[error("No associated enum item : {1:?} in enum {0:?}")]
@@ -41,6 +43,20 @@ pub enum MiddleErr {
     Object(String),
     #[error("Enum Variant does not exist : {0:?}")]
     EnumVariant(String),
+    #[error("`return` attempted out of a function scope")]
+    ReturnOutOfFunction,
+    #[error("Attempted to assign value of type : {found} to a variable of type : {expected}")]
+    InvalidVarDeclarationType {
+        expected: ParserDataType,
+        found: ParserDataType,
+    },
+    #[error(
+        "Attempted to return a value of type : {found} from a function with return type : {expected}"
+    )]
+    InvalidReturnType {
+        expected: ParserDataType,
+        found: ParserDataType,
+    },
     #[error("Internal error: {0}")]
     Internal(String),
     #[error("Cannot perform enum style pattern matching on type : {0}")]
@@ -86,6 +102,10 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::InFile { .. } => 2019,
             Self::Multiple(_) => 220,
             Self::MacroArg(_) => 221,
+            Self::InvalidMember => 222,
+            Self::ReturnOutOfFunction => 223,
+            Self::InvalidReturnType { .. } => 224,
+            Self::InvalidVarDeclarationType { .. } => 225,
         }
     }
 

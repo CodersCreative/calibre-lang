@@ -543,6 +543,7 @@ impl MiddleEnvironment {
         }
 
         let return_type = self.resolve_data_type(&new_scope, header.return_type);
+        self.scoping.return_type_stack.push(return_type.key());
 
         body = body.rewrite_main_emits_to_returns();
 
@@ -587,7 +588,7 @@ impl MiddleEnvironment {
             body = Self::wrap_generator_body(body, elem_type, span);
         }
 
-        let body = self.evaluate(&new_scope, body);
+        let body = self.evaluate_inner(&new_scope, body)?;
         let mut func_defers = Vec::new();
         func_defers.append(&mut self.symbols.func_defers);
 
@@ -600,7 +601,7 @@ impl MiddleEnvironment {
         {
             let mut last = scope_body.pop();
             for defer in func_defers {
-                scope_body.push(self.evaluate(&scope_id, defer));
+                scope_body.push(self.evaluate_inner(&scope_id, defer)?);
             }
 
             if return_type.data_type != ParserInnerType::Null
@@ -695,6 +696,7 @@ impl MiddleEnvironment {
             },
             span,
         };
+        let _ = self.scoping.return_type_stack.pop();
 
         // TODO revisit this
         for (p_name, _, _) in params.iter() {

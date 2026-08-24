@@ -159,18 +159,6 @@ impl LirNodeType {
     }
 
     #[inline]
-    pub fn is_invalid_member_placeholder(&self) -> bool {
-        match self {
-            LirNodeType::Member(_, field) => field.as_ref() == "<invalid>",
-            LirNodeType::Ref(inner) | LirNodeType::Deref(inner) => {
-                Self::is_invalid_member_placeholder(inner)
-            }
-            LirNodeType::RefLoad(_) => false,
-            _ => false,
-        }
-    }
-
-    #[inline]
     pub fn null() -> LirNodeType {
         LirNodeType::Literal(LirLiteral::Null)
     }

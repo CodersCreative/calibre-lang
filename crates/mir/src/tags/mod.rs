@@ -47,6 +47,8 @@ pub enum TagInfo {
     Panics,
     Bench,
     CallerContext,
+    IgnoreInvalidReturn,
+    IgnoreInvalidLet,
     Suite(String),
     Todo(Option<String>),
     Deprecated(Option<String>),
@@ -343,6 +345,46 @@ impl MiddleEnvironment {
             "caller_context".to_string(),
             TagHandler {
                 handler: caller_context_handler,
+            },
+        );
+
+        let ignore_invalid_return_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             _args: Vec<Node>| {
+                env.tagging.tag_info.push(TagInfo::IgnoreInvalidReturn);
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "ignore_invalid_return".to_string(),
+            TagHandler {
+                handler: ignore_invalid_return_handler,
+            },
+        );
+
+        let ignore_invalid_let_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: &u64,
+             node: Node,
+             _tag: ParserText,
+             _args: Vec<Node>| {
+                env.tagging.tag_info.push(TagInfo::IgnoreInvalidLet);
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "ignore_invalid_let".to_string(),
+            TagHandler {
+                handler: ignore_invalid_let_handler,
             },
         );
 

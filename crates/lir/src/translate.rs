@@ -1,3 +1,5 @@
+use std::unreachable;
+
 use calibre_mir::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
@@ -841,36 +843,21 @@ impl<'a> LirEnvironment<'a> {
                 operator,
             },
             MiddleNodeType::CallExpression { caller, args } => {
-                let caller_node = *caller;
+                let mut needs_ref_first_arg = false;
 
-                let needs_ref_first_arg = if let MiddleNodeType::Identifier(name) =
-                    &caller_node.node_type
-                    && let Some(var) = self.env.symbols.variables.get(&name.text)
-                    && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
-                    && let Some(first) = parameters.first()
-                {
-                    matches!(first.data_type, ParserInnerType::Ref(_, _))
-                } else {
-                    false
-                };
-
-                let l_caller = self.lower_node(caller_node);
+                let l_caller = self.lower_node(*caller);
                 let mut l_args = self.lower_nodes(args);
 
                 if let LirNodeType::Load(name) | LirNodeType::Move(name) = &l_caller
                     && let Some(var) = self.env.symbols.variables.get(name.as_ref())
                     && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
                 {
+                    if let Some(first) = parameters.first() {
+                        needs_ref_first_arg = matches!(first.data_type, ParserInnerType::Ref(_, _))
+                    }
                     let expected = parameters.len();
                     while l_args.len() > expected {
-                        if let Some(pos) = l_args
-                            .iter()
-                            .position(LirNodeType::is_invalid_member_placeholder)
-                        {
-                            l_args.remove(pos);
-                        } else {
-                            l_args.remove(0);
-                        }
+                        l_args.remove(0);
                     }
                 }
 
@@ -947,7 +934,7 @@ impl<'a> LirEnvironment<'a> {
                     Box::new(self.lower_node(*index)),
                 )))
             }
-            _ => LirLValue::Var(Box::<str>::from("<invalid>")),
+            _ => unreachable!(),
         }
     }
 }

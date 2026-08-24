@@ -2,6 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    tags::TagInfo,
     typing::{
         MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType, Typing,
     },
@@ -1009,6 +1010,37 @@ impl MiddleEnvironment {
                     value: {
                         let mut lst = Vec::new();
 
+                        if !self
+                            .tagging
+                            .tag_info
+                            .contains(&TagInfo::IgnoreInvalidReturn)
+                        {
+                            if let Some(ret_ty) = self.scoping.return_type_stack.last().cloned() {
+                                let node_ty = if let Some(value) = &value {
+                                    if let Some(x) = self.resolve_type_from_node(scope, &value) {
+                                        x.key()
+                                    } else {
+                                        ParserInnerType::Dynamic
+                                    }
+                                } else {
+                                    ParserInnerType::Null
+                                };
+
+                                if !node_ty.loose_eq(&ret_ty) {
+                                    return Err(self.context.err_at_current(
+                                        MiddleErr::InvalidReturnType {
+                                            expected: ParserDataType::new(node.span, ret_ty),
+                                            found: ParserDataType::new(node.span, node_ty),
+                                        },
+                                    ));
+                                }
+                            } else {
+                                return Err(self
+                                    .context
+                                    .err_at_current(MiddleErr::ReturnOutOfFunction));
+                            }
+                        }
+
                         let value = value.map(|x| self.evaluate(scope, *x));
 
                         let chain_defers = self.scoping.collect_defers_until(scope, None);
@@ -1034,7 +1066,7 @@ impl MiddleEnvironment {
                                     is_temp: true,
                                     scope_id: *scope,
                                 },
-                                self.context.current_span(),
+                                node.span,
                             )))
                         }
                     },

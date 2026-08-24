@@ -18,6 +18,7 @@ pub struct Scoping {
     pub scopes: FxHashMap<u64, MiddleScope>,
     pub loaded_scopes: FxHashSet<u64>,
     pub loop_stack: Vec<LoopContext>,
+    pub return_type_stack: Vec<ParserInnerType>,
 }
 
 impl Scoping {
