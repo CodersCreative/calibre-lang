@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
+use crate::standalone::CalibreStandalone;
+use crate::{CalibreEngine, CalibreError};
 use calibre_vm::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
-
-use crate::CalibreEngine;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct NativeBinding {
@@ -30,6 +29,8 @@ impl NativeFunction for ClosureNative {
 }
 
 pub trait CalibreEmbedded {
+    fn run(&mut self, source: impl Into<String>) -> Result<RuntimeValue, CalibreError>;
+
     fn with_prelude(self, source: impl Into<String>) -> Self;
 
     fn with_global(self, name: impl Into<String>, value: RuntimeValue) -> Self;
@@ -47,6 +48,10 @@ pub trait CalibreEmbedded {
 }
 
 impl CalibreEmbedded for CalibreEngine {
+    fn run(&mut self, source: impl Into<String>) -> Result<RuntimeValue, CalibreError> {
+        self.run_source(source).map(|r| r.return_value)
+    }
+
     fn with_prelude(mut self, source: impl Into<String>) -> Self {
         self.prelude.push(source.into());
         self
@@ -65,10 +70,12 @@ impl CalibreEmbedded for CalibreEngine {
         N: NativeFunction + 'static,
     {
         let name = func.name();
+
         self.bindings.push(NativeBinding {
             name,
             value: RuntimeValue::NativeFunction(Arc::new(func)),
         });
+
         self
     }
 
@@ -83,10 +90,12 @@ impl CalibreEmbedded for CalibreEngine {
             name: name.into(),
             callback: Arc::new(func),
         };
+
         self.bindings.push(NativeBinding {
             name: native.name.clone(),
             value: RuntimeValue::NativeFunction(Arc::new(native)),
         });
+
         self
     }
 }

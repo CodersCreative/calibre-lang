@@ -38,6 +38,7 @@ use std::{
 mod bridge;
 pub mod conversion;
 mod display;
+pub mod embedded;
 mod ffi;
 pub mod operation;
 pub use bridge::TerminateValue;
