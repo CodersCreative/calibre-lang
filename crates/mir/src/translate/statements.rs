@@ -2,7 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    symbols::FunctionParamDefault,
+    symbols::{FunctionParamDefault, resolve::ResolutionOptions},
     tags::TagInfo,
     typing::{MiddleObject, MiddleTypeDefType},
 };
@@ -26,9 +26,13 @@ impl MiddleEnvironment {
         mut value: Node,
         data_type: ParserDataType,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = self.resolve_dollar_ident_only(scope, &identifier)?;
+        let identifier = self.resolve(
+            scope,
+            &identifier,
+            ResolutionOptions::default().with_dollar(),
+        )?;
 
-        let new_name = ParserText::temp_name_with_suffix(identifier.text.trim(), span).text;
+        let new_name = ParserText::temp_name_with_suffix(identifier.trim(), span).text;
 
         if let NodeType::CallExpression {
             caller,
@@ -38,7 +42,7 @@ impl MiddleEnvironment {
             ..
         } = value.clone().node_type
             && let NodeType::Identifier(callee_ident) = &caller.node_type
-            && callee_ident.to_string() == identifier.text
+            && callee_ident.to_string() == identifier
             && let Some(first_arg) = args.first().cloned().map(|a| -> Node { a.into() })
         {
             let first_ty = self.resolve_type_from_node(scope, &first_arg).or_else(|| {
@@ -130,7 +134,7 @@ impl MiddleEnvironment {
                 .insert(new_name.clone(), defaults.clone());
             self.symbols
                 .function_param_defaults
-                .insert(identifier.text.clone(), defaults);
+                .insert(identifier.clone(), defaults);
         }
 
         let node_ty = self.resolve_type_from_node(scope, &value);
@@ -163,7 +167,7 @@ impl MiddleEnvironment {
         let mut value = if let Some((header, _)) = function_decl {
             self.register_variable(
                 scope,
-                &identifier.text,
+                &identifier,
                 new_name.clone(),
                 data_type.clone(),
                 var_type,
@@ -172,7 +176,8 @@ impl MiddleEnvironment {
             let new_scope = self.scoping.new_scope_from_parent_shallow(*scope);
 
             for param in header.parameters.iter() {
-                let og_name = self.resolve_dollar_ident_only(scope, &param.0)?;
+                let og_name =
+                    self.resolve(scope, &param.0, ResolutionOptions::default().with_dollar())?;
 
                 let new_name = ParserText::temp_name_with_suffix(og_name.trim(), span);
 
@@ -188,7 +193,7 @@ impl MiddleEnvironment {
 
                 self.register_variable(
                     &new_scope,
-                    &og_name.text,
+                    &og_name,
                     new_name.text.clone(),
                     data_type.clone(),
                     VarType::Mutable,
@@ -217,7 +222,7 @@ impl MiddleEnvironment {
         ) {
             self.register_variable(
                 scope,
-                &identifier.text,
+                &identifier,
                 new_name.clone(),
                 data_type.clone(),
                 var_type.clone(),
@@ -229,7 +234,7 @@ impl MiddleEnvironment {
                 var_type,
                 identifier: ParserText {
                     text: new_name,
-                    span: identifier.span,
+                    span,
                 },
                 value: Box::new(value),
                 data_type,
@@ -281,13 +286,16 @@ impl MiddleEnvironment {
                 _ => Vec::new(),
             };
 
-            let identifier =
-                self.resolve_dollar_ident_potential_generic_only(scope, &identifier)?;
+            let identifier = self.resolve(
+                scope,
+                &identifier,
+                ResolutionOptions::default().with_dollar(),
+            )?;
 
             let inner = self.resolve_data_type(scope, *inner.clone());
 
-            let target_name = if identifier.text == inner.impl_name() {
-                Some(identifier.text.clone())
+            let target_name = if identifier == inner.impl_name() {
+                Some(identifier.clone())
             } else {
                 None
             };
@@ -330,7 +338,11 @@ impl MiddleEnvironment {
             generic_types,
         } = identifier.clone()
         {
-            let base_ident = self.resolve_dollar_ident_only(scope, &base_ident)?;
+            let base_ident = self.resolve(
+                scope,
+                &base_ident,
+                ResolutionOptions::default().with_dollar(),
+            )?;
 
             let template_params: Vec<String> = generic_types
                 .iter()
@@ -345,13 +357,13 @@ impl MiddleEnvironment {
 
             self.typing
                 .generic_type_templates
-                .entry(base_ident.text.clone())
+                .entry(base_ident.clone())
                 .or_insert((template_params, object.clone(), overloads.clone()));
 
             let generic_params = self
                 .typing
                 .generic_type_templates
-                .get(&base_ident.text)
+                .get(&base_ident)
                 .map(|(params, _, _)| params.clone())
                 .unwrap_or_default();
 
@@ -373,11 +385,11 @@ impl MiddleEnvironment {
 
                 scope_ref
                     .mappings
-                    .insert(base_ident.text.clone(), base_ident.text.clone());
+                    .insert(base_ident.clone(), base_ident.clone());
 
                 scope_ref.type_mappings.insert(
-                    ParserInnerType::Struct(base_ident.text.clone()),
-                    ParserInnerType::Struct(base_ident.text.clone()),
+                    ParserInnerType::Struct(base_ident.clone()),
+                    ParserInnerType::Struct(base_ident.clone()),
                 );
             }
 
@@ -387,9 +399,13 @@ impl MiddleEnvironment {
             });
         }
 
-        let identifier = self.resolve_dollar_ident_potential_generic_only(scope, &identifier)?;
+        let identifier = self.resolve(
+            scope,
+            &identifier,
+            ResolutionOptions::default().with_dollar(),
+        )?;
 
-        let new_name = ParserText::temp_name_with_suffix(identifier.text.trim(), span).text;
+        let new_name = ParserText::temp_name_with_suffix(identifier.trim(), span).text;
 
         let object = MiddleTypeDefType::from_type_def_type(self, scope, object.clone());
 
@@ -402,13 +418,13 @@ impl MiddleEnvironment {
                 _ => false,
             };
 
-        let default_ident = self.resolve_str(scope, "Default");
+        let default_ident = self.resolve(scope, &"Default", ResolutionOptions::all());
         self.typing.objects.insert(
             new_name.clone(),
             MiddleObject {
                 object_type: object.clone(),
                 variables: FxHashMap::default(),
-                traits: if let Some(x) = default_ident
+                traits: if let Ok(x) = default_ident
                     && has_default
                 {
                     vec![x]
@@ -427,11 +443,9 @@ impl MiddleEnvironment {
                 )
             })?;
 
-            scope
-                .mappings
-                .insert(identifier.text.clone(), new_name.clone());
+            scope.mappings.insert(identifier.clone(), new_name.clone());
             scope.type_mappings.insert(
-                ParserInnerType::Struct(identifier.text.clone()),
+                ParserInnerType::Struct(identifier.clone()),
                 ParserInnerType::Struct(new_name.clone()),
             );
 
@@ -446,6 +460,7 @@ impl MiddleEnvironment {
             )
         };
 
+        let identifier = ParserText::new(span, identifier);
         let default_node = if has_default {
             Some(self.generate_default_impl(scope, span, identifier.clone(), object.clone())?)
         } else {

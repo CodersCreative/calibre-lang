@@ -1,4 +1,4 @@
-use crate::environment::MiddleEnvironment;
+use crate::{environment::MiddleEnvironment, symbols::resolve::ResolutionOptions};
 use calibre_parser::{
     Location,
     ast::{
@@ -384,8 +384,10 @@ impl MiddleTypeDefType {
 
                     for (k, v) in variants {
                         lst.push((
-                            env.resolve_dollar_ident_only(scope, &k)
-                                .unwrap_or_else(|_| ParserText::from(k.to_string()).into()),
+                            ParserText::from(
+                                env.resolve(scope, &k, ResolutionOptions::default().with_dollar())
+                                    .unwrap_or_else(|_| k.to_string()),
+                            ),
                             if let Some(v) = v {
                                 Some(env.resolve_data_type(scope, v))
                             } else {

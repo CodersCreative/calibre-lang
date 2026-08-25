@@ -3,6 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::LoopContext,
+    symbols::resolve::ResolutionOptions,
     traversal::NodeVisitor,
 };
 use calibre_parser::{
@@ -764,8 +765,7 @@ impl MiddleEnvironment {
 
         let scope = self.scoping.new_scope_from_parent_shallow(*scope);
         let label_text = label.as_ref().map(|l| {
-            self.resolve_dollar_ident_only(&scope, l)
-                .map(|t| t.text)
+            self.resolve(&scope, l, ResolutionOptions::default().with_dollar())
                 .unwrap_or_else(|_| l.to_string())
         });
 

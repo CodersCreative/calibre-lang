@@ -1,4 +1,6 @@
-use crate::{environment::MiddleEnvironment, typing::MiddleTypeDefType};
+use crate::{
+    environment::MiddleEnvironment, symbols::resolve::ResolutionOptions, typing::MiddleTypeDefType,
+};
 use calibre_parser::ast::{
     Operator,
     idents::ParsedIntLiteral,
@@ -119,7 +121,13 @@ impl MiddleEnvironment {
             NodeType::ScopeDeclaration {
                 named: Some(named), ..
             } => {
-                let name = self.resolve_dollar_ident_only(scope, &named.name).ok()?;
+                let name = self
+                    .resolve(
+                        scope,
+                        &named.name,
+                        ResolutionOptions::default().with_dollar(),
+                    )
+                    .ok()?;
                 let resolved = self
                     .scoping
                     .resolve_macro(scope, &name)?
@@ -339,8 +347,7 @@ impl MiddleEnvironment {
             } => {
                 if let NodeType::FieldAccess { base, field } = &caller.node_type {
                     let member_name = self
-                        .resolve_dollar_ident_only(scope, field)
-                        .map(|x| x.text)
+                        .resolve(scope, field, ResolutionOptions::default().with_dollar())
                         .unwrap_or(field.text().clone());
 
                     if !member_name.is_empty() {
@@ -445,8 +452,8 @@ impl MiddleEnvironment {
                 caller_type.data_type.apply_callable()
             }
             NodeType::Identifier(x) => {
-                if let Some(iden) = self.resolve_potential_generic_ident(scope, x)
-                    && let Some(x) = self.symbols.variables.get(&iden.text)
+                if let Ok(iden) = self.resolve(scope, x, ResolutionOptions::all())
+                    && let Some(x) = self.symbols.variables.get(&iden)
                 {
                     Some(x.data_type.clone())
                 } else {
@@ -463,8 +470,7 @@ impl MiddleEnvironment {
                 })?;
 
                 let member = self
-                    .resolve_dollar_ident_only(scope, field)
-                    .map(|x| x.text)
+                    .resolve(scope, field, ResolutionOptions::default().with_dollar())
                     .unwrap_or_else(|_| field.text().clone());
 
                 if let Some(member_type) = self.resolve_member_fn_type(&ty, &member) {
@@ -485,16 +491,14 @@ impl MiddleEnvironment {
                 let mut module_path = Vec::new();
                 if base.scope_access_path(&mut module_path) {
                     let member = self
-                        .resolve_dollar_ident_only(scope, field)
-                        .map(|x| x.text)
+                        .resolve(scope, field, ResolutionOptions::default().with_dollar())
                         .unwrap_or_else(|_| field.text().clone());
                     if let Ok(member_scope) = self
                         .get_scope_list(*scope, module_path.clone())
                         .or_else(|_| self.import_scope_list(*scope, module_path).map(|x| x.0))
                     {
                         let resolved = self
-                            .resolve_potential_dollar_ident(&member_scope, field)
-                            .map(|x| x.text)
+                            .resolve(&member_scope, field, ResolutionOptions::all())
                             .unwrap_or(member);
                         return self
                             .symbols

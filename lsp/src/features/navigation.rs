@@ -1,5 +1,5 @@
 use super::*;
-use calibre_mir::ast::MiddleNodeType;
+use calibre_mir::{ast::MiddleNodeType, symbols::resolve::ResolutionOptions};
 
 impl CalibreLanguageServer {
     pub(super) fn find_scope_at_with(
@@ -168,10 +168,10 @@ impl CalibreLanguageServer {
             let position_scope = Self::find_scope_at_with(&middle_ast, scope, position);
 
             let resolved = env
-                .resolve_str(&position_scope, &word)
-                .or_else(|| env.resolve_str(&scope, &word));
+                .resolve(&position_scope, &word, ResolutionOptions::all())
+                .or_else(|_| env.resolve(&scope, &word, ResolutionOptions::all()));
 
-            if let Some(resolved) = resolved {
+            if let Ok(resolved) = resolved {
                 if let Some(var) = env.symbols.variables.get(&resolved)
                     && let Some(loc) = &var.location
                     && let Ok(uri) = Url::from_file_path(&loc.path)
@@ -343,8 +343,9 @@ impl CalibreLanguageServer {
         let (env, scope, middle_ast) = MiddleEnvironment::new_and_evaluate(ast, path, false);
 
         let position_scope = Self::find_scope_at_with(&middle_ast, scope, position);
-        env.resolve_str(&position_scope, &word)
-            .or_else(|| env.resolve_str(&scope, &word))
+        env.resolve(&position_scope, &word, ResolutionOptions::all())
+            .or_else(|_| env.resolve(&scope, &word, ResolutionOptions::all()))
+            .ok()
     }
 
     pub(super) fn semantic_references_in_document(
@@ -372,7 +373,8 @@ impl CalibreLanguageServer {
             for range in Self::find_word_occurrences(text, visible_name) {
                 let scope_at_occurrence = Self::find_scope_at_with(&middle_ast, scope, range.start);
                 if env
-                    .resolve_str(&scope_at_occurrence, visible_name)
+                    .resolve(&scope_at_occurrence, visible_name, ResolutionOptions::all())
+                    .ok()
                     .as_deref()
                     == Some(canonical)
                 {

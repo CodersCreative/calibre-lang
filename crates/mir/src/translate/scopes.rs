@@ -3,6 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeMacro,
+    symbols::resolve::ResolutionOptions,
 };
 use calibre_parser::{
     Span,
@@ -33,9 +34,17 @@ impl MiddleEnvironment {
         value: NamedScope,
         create_new_scope: Option<bool>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifer = self.resolve_dollar_ident_only(scope, &identifier)?.text;
+        let identifer = self.resolve(
+            scope,
+            &identifier,
+            ResolutionOptions::default().with_dollar(),
+        )?;
 
-        let name = self.resolve_dollar_ident_only(scope, &value.name)?.text;
+        let name = self.resolve(
+            scope,
+            &value.name,
+            ResolutionOptions::default().with_dollar(),
+        )?;
 
         let scope_macro = self
             .scoping
@@ -47,15 +56,15 @@ impl MiddleEnvironment {
         let mut added = Vec::new();
 
         for arg in value.args {
-            let arg_text = self.resolve_dollar_ident_only(scope, &arg.0)?;
-            added.push(arg_text.text.clone());
+            added.push(self.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?);
             args.push(arg);
         }
 
         for arg in scope_macro.args {
-            let arg_text = self.resolve_dollar_ident_only(scope, &arg.0)?;
+            let arg_text =
+                self.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?;
             if !added.contains(&arg_text) {
-                added.push(arg_text.text.clone());
+                added.push(arg_text.clone());
                 args.push(arg);
             }
         }
@@ -95,7 +104,11 @@ impl MiddleEnvironment {
 
         if let Some(named) = named {
             if define {
-                let name = self.resolve_dollar_ident_only(scope, &named.name)?.text;
+                let name = self.resolve(
+                    scope,
+                    &named.name,
+                    ResolutionOptions::default().with_dollar(),
+                )?;
 
                 let scope_macro = ScopeMacro {
                     name: name.clone(),
@@ -115,7 +128,11 @@ impl MiddleEnvironment {
                 });
             }
 
-            let name = self.resolve_dollar_ident_only(scope, &named.name)?.text;
+            let name = self.resolve(
+                scope,
+                &named.name,
+                ResolutionOptions::default().with_dollar(),
+            )?;
             if self.scoping.resolve_macro(scope, &name).is_none() {
                 if !named.args.is_empty() {
                     let scope_macro = ScopeMacro {
@@ -172,16 +189,18 @@ impl MiddleEnvironment {
             };
 
             for arg in named.args {
-                let arg_text = self.resolve_dollar_ident_only(scope, &arg.0)?;
-                added.push(arg_text.text.clone());
-                macro_args_to_insert.push((arg_text.text, arg.1));
+                let arg_text =
+                    self.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?;
+                added.push(arg_text.clone());
+                macro_args_to_insert.push((arg_text, arg.1));
             }
 
             for arg in scope_macro_args {
-                let arg_text = self.resolve_dollar_ident_only(scope, &arg.0)?;
+                let arg_text =
+                    self.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?;
                 if !added.contains(&arg_text) {
-                    added.push(arg_text.text.clone());
-                    macro_args_to_insert.push((arg_text.text, arg.1));
+                    added.push(arg_text.clone());
+                    macro_args_to_insert.push((arg_text, arg.1));
                 }
             }
         }
@@ -210,12 +229,16 @@ impl MiddleEnvironment {
                 } = &stmt.node_type
                     && matches!(value.node_type, NodeType::FunctionDeclaration { .. })
                 {
-                    let ident = self.resolve_dollar_ident_only(&new_scope, identifier)?;
-                    let new_name = ParserText::temp_name_with_suffix(ident.text.trim(), span).text;
+                    let ident = self.resolve(
+                        &new_scope,
+                        identifier,
+                        ResolutionOptions::default().with_dollar(),
+                    )?;
+                    let new_name = ParserText::temp_name_with_suffix(ident.trim(), span).text;
                     self.scoping
                         .scope_mut_or_err(&new_scope)?
                         .mappings
-                        .entry(ident.text.clone())
+                        .entry(ident.clone())
                         .or_insert(new_name);
                 }
             }

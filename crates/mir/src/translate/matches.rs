@@ -2,6 +2,7 @@ use crate::{
     ast::MiddleNode,
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    symbols::resolve::ResolutionOptions,
     traversal::{NodeAnalyzer, NodeVisitor},
     typing::MiddleTypeDefType,
 };
@@ -489,7 +490,7 @@ impl MiddleEnvironment {
                 }
             },
             NodeType::Identifier(id)
-                if self.resolve_potential_generic_ident(scope, id).is_none() =>
+                if self.resolve(scope, id, ResolutionOptions::all()).is_err() =>
             {
                 self.match_add_binding(id.clone(), actual, None, body_nodes, guard_bindings);
             }
@@ -535,7 +536,7 @@ impl MiddleEnvironment {
                         MatchTupleItem::Value(Node {
                             node_type: NodeType::Identifier(id),
                             ..
-                        }) if self.resolve_potential_generic_ident(scope, id).is_none() => {
+                        }) if self.resolve(scope, id, ResolutionOptions::all()).is_err() => {
                             body_nodes.push(Self::auto_var_decl(
                                 self.context.current_span(),
                                 VarType::Immutable,
@@ -813,7 +814,7 @@ impl MiddleEnvironment {
                 node_type: NodeType::Identifier(id),
                 ..
             }) = &pattern.0
-                && self.resolve_potential_generic_ident(scope, id).is_none()
+                && self.resolve(scope, id, ResolutionOptions::all()).is_err()
             {
                 pattern.0 = MatchArmType::Let {
                     var_type: VarType::Immutable,
@@ -839,13 +840,8 @@ impl MiddleEnvironment {
                             &mut guard_bindings,
                         );
                         let wants_other = self
-                            .resolve_potential_generic_ident(
-                                scope,
-                                &PotentialGenericTypeIdentifier::Identifier(
-                                    ParserText::from("other".to_string()).into(),
-                                ),
-                            )
-                            .is_none()
+                            .resolve(scope, &"other", ResolutionOptions::all())
+                            .is_err()
                             && (Self::node_uses_ident(&pattern.2, "other")
                                 || guard_nodes
                                     .iter()
@@ -1018,13 +1014,13 @@ impl MiddleEnvironment {
                                         value_node.clone(),
                                         idx.to_string(),
                                     );
-                                    let val = self.resolve_dollar_ident_only(scope, &enum_val)?;
+                                    let val = self.resolve(
+                                        scope,
+                                        &enum_val,
+                                        ResolutionOptions::default().with_dollar(),
+                                    )?;
                                     let enum_index = self
-                                        .enum_variant_index_from_value(
-                                            scope,
-                                            &current,
-                                            val.text.trim(),
-                                        )
+                                        .enum_variant_index_from_value(scope, &current, val.trim())
                                         .or_else(|| {
                                             tuple_item_types
                                                 .as_ref()
@@ -1032,7 +1028,7 @@ impl MiddleEnvironment {
                                                 .and_then(|dt| {
                                                     self.enum_variant_index_from_data_type(
                                                         dt,
-                                                        val.text.trim(),
+                                                        val.trim(),
                                                     )
                                                 })
                                         })
@@ -1158,16 +1154,17 @@ impl MiddleEnvironment {
                                                                 payload_value.clone(),
                                                                 pidx.to_string(),
                                                             );
-                                                            let resolved = self
-                                                                .resolve_dollar_ident_only(
-                                                                    scope,
-                                                                    nested_enum_val,
-                                                                )?;
+                                                            let resolved = self.resolve(
+                                                                scope,
+                                                                nested_enum_val,
+                                                                ResolutionOptions::default()
+                                                                    .with_dollar(),
+                                                            )?;
                                                             let nested_index = self
                                                                 .enum_variant_index_from_value(
                                                                     scope,
                                                                     &pcur,
-                                                                    resolved.text.trim(),
+                                                                    resolved.trim(),
                                                                 )
                                                                 .ok_or_else(|| {
                                                                     self.context.err_at_current(
@@ -1372,13 +1369,8 @@ impl MiddleEnvironment {
                         );
 
                         let wants_other = self
-                            .resolve_potential_generic_ident(
-                                scope,
-                                &PotentialGenericTypeIdentifier::Identifier(
-                                    ParserText::from("other".to_string()).into(),
-                                ),
-                            )
-                            .is_none()
+                            .resolve(scope, &"other", ResolutionOptions::all())
+                            .is_err()
                             && (Self::node_uses_ident(&pattern.2, "other")
                                 || guard_nodes
                                     .iter()
@@ -1677,13 +1669,16 @@ impl MiddleEnvironment {
                             destructure,
                             pattern: payload_pattern,
                         } => {
-                            let val = self.resolve_dollar_ident_only(scope, &val)?;
-                            let Some(index) = Self::builtin_enum_variant_index(val.text.trim())
-                            else {
+                            let val = self.resolve(
+                                scope,
+                                &val,
+                                ResolutionOptions::default().with_dollar(),
+                            )?;
+                            let Some(index) = Self::builtin_enum_variant_index(val.trim()) else {
                                 return Err(MiddleErr::At(
-                                    val.span,
+                                    value.span,
                                     Box::new(MiddleErr::CantMatch(ParserDataType::new(
-                                        val.span,
+                                        value.span,
                                         ParserInnerType::Auto(None),
                                     ))),
                                 ));
@@ -1933,22 +1928,23 @@ impl MiddleEnvironment {
                     destructure,
                     pattern: payload_pattern,
                 } => {
-                    let val = self.resolve_dollar_ident_only(scope, &val)?;
+                    let val =
+                        self.resolve(scope, &val, ResolutionOptions::default().with_dollar())?;
                     let index: i64 = if let Some(object) = enum_object.as_ref() {
-                        let Some(index) = object.iter().position(|x| x.0.text == val.text) else {
+                        let Some(index) = object.iter().position(|x| x.0.text == val) else {
                             return Err(MiddleErr::At(
-                                val.span,
-                                Box::new(MiddleErr::EnumVariant(val.text)),
+                                value.span,
+                                Box::new(MiddleErr::EnumVariant(val)),
                             ));
                         };
                         index as i64
                     } else if let Some(index) =
-                        self.enum_variant_index_from_data_type(resolved_data_type, val.text.trim())
+                        self.enum_variant_index_from_data_type(resolved_data_type, val.trim())
                     {
                         index
                     } else {
                         return Err(MiddleErr::At(
-                            val.span,
+                            value.span,
                             Box::new(MiddleErr::CantMatch(resolved_data_type.clone())),
                         ));
                     };

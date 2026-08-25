@@ -2,6 +2,7 @@ use crate::ast::{MiddleNode, MiddleNodeType};
 use crate::context::MiddleContext;
 use crate::errors::MiddleErr;
 use crate::scoping::Scoping;
+use crate::symbols::resolve::ResolutionOptions;
 use crate::symbols::{MiddleOverload, MiddleVariable, Symbols};
 use crate::tags::Tagging;
 use crate::tags::context::PackageMetadata;
@@ -227,8 +228,7 @@ impl MiddleEnvironment {
                 NodeType::ScopeAccess { base, field } => {
                     if let NodeType::Identifier(module_name) = &base.node_type {
                         let field_text = self
-                            .resolve_dollar_ident_only(scope, field)
-                            .map(|x| x.text)
+                            .resolve(scope, field, ResolutionOptions::default().with_dollar())
                             .unwrap_or(field.text().clone());
                         let module_path =
                             vec![module_name.get_ident().text().clone(), field_text.clone()];

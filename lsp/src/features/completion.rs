@@ -1,4 +1,4 @@
-use calibre_mir::typing::MiddleObject;
+use calibre_mir::{symbols::resolve::ResolutionOptions, typing::MiddleObject};
 use calibre_parser::ast::idents::ParserText;
 
 use super::*;
@@ -84,8 +84,8 @@ impl CalibreLanguageServer {
 
         let first = parts[0];
         let canonical_first = env
-            .resolve_str(&scope, first)
-            .unwrap_or_else(|| first.to_string());
+            .resolve(&scope, &first, ResolutionOptions::all())
+            .unwrap_or_else(|_| first.to_string());
         let mut current = if let Some(var) = env.symbols.variables.get(&canonical_first) {
             var.data_type.clone()
         } else if env.typing.objects.contains_key(&canonical_first) {
@@ -370,9 +370,9 @@ impl CalibreLanguageServer {
             let (env, scope, middle_ast) = MiddleEnvironment::new_and_evaluate(ast, path, false);
             let current_scope = Self::find_scope_at_with(&middle_ast, scope, position);
 
-            if let Some(canonical) = env
-                .resolve_str(&current_scope, &callee)
-                .or_else(|| env.resolve_str(&scope, &callee))
+            if let Ok(canonical) = env
+                .resolve(&current_scope, &callee, ResolutionOptions::all())
+                .or_else(|_| env.resolve(&scope, &callee, ResolutionOptions::all()))
                 && let Some(var) = env.symbols.variables.get(&canonical)
                 && let Some(sig) =
                     Self::signature_information_for_data_type(&callee, &var.data_type)

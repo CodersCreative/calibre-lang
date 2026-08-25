@@ -2,6 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    symbols::resolve::ResolutionOptions,
     typing::MiddleTypeDefType,
 };
 use calibre_parser::{
@@ -37,10 +38,7 @@ impl MiddleEnvironment {
         base: Node,
         field: PotentialDollarIdentifier,
     ) -> Result<MiddleNode, MiddleErr> {
-        let field_name = self
-            .resolve_dollar_ident_only(scope, &field)
-            .map(|x| x.text)
-            .unwrap_or(field.text().clone());
+        let field_name = self.resolve(scope, &field, ResolutionOptions::default().with_dollar())?;
 
         if let NodeType::Identifier(ident) = &base.node_type
             && let Some(ty) = self.resolve_potential_generic_ident_to_data_type(scope, &ident)
@@ -97,10 +95,7 @@ impl MiddleEnvironment {
         base: Node,
         field: PotentialDollarIdentifier,
     ) -> Result<MiddleNode, MiddleErr> {
-        let field_name = self
-            .resolve_dollar_ident_only(scope, &field)
-            .map(|x| x.text)
-            .unwrap_or(field.text().clone());
+        let field_name = self.resolve(scope, &field, ResolutionOptions::default().with_dollar())?;
 
         let mut module_path = Vec::new();
         if base.scope_access_path(&mut module_path) {
@@ -108,10 +103,9 @@ impl MiddleEnvironment {
                 .get_scope_list(*scope, module_path.clone())
                 .or_else(|_| self.import_scope_list(*scope, module_path).map(|x| x.0))
             {
-                let resolved = self
-                    .resolve_potential_dollar_ident(&new_scope, &field)
-                    .unwrap_or(field_name.into());
-                return Ok(self.evaluate(&new_scope, Node::identifier(span, &resolved.text)));
+                let resolved = self.resolve(&new_scope, &field, ResolutionOptions::all())?;
+
+                return Ok(self.evaluate(&new_scope, Node::identifier(span, &resolved)));
             }
         }
 

@@ -1,5 +1,6 @@
 use crate::{CalibreArtifacts, CalibreEngine, CalibreError, RunResult};
 use calibre_lir::environment::LirEnvironment;
+use calibre_mir::symbols::resolve::ResolutionOptions;
 use calibre_mir::{environment::MiddleEnvironment, errors::MiddleErr, testing::Testing};
 use calibre_parser::Parser;
 use calibre_std::{get_globals_path, get_stdlib_path};
@@ -351,9 +352,8 @@ impl CalibreStandalone for CalibreEngine {
         debug!(scope, "MIR construction completed");
 
         let entry_name = env
-            .resolve_str(&scope, &self.entry_name)
-            .map(|x| x.to_string())
-            .unwrap_or_else(|| self.entry_name.clone());
+            .resolve(&scope, &self.entry_name, ResolutionOptions::all())
+            .unwrap_or_else(|_| self.entry_name.clone());
 
         let mut init_functions = std::mem::take(&mut env.tagging.init_functions);
 

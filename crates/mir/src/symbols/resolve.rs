@@ -1,6 +1,6 @@
 use crate::{
     environment::MiddleEnvironment,
-    errors::MiddleErr,
+    errors::MiddleErr::{self},
     typing::{MiddleTrait, MiddleTypeDefType},
 };
 use calibre_parser::{
@@ -12,7 +12,102 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr, write};
+use tracing::{instrument, trace, warn};
+
+pub enum IdentifierType<'a> {
+    Generic(&'a PotentialGenericTypeIdentifier),
+    Dollar(&'a PotentialDollarIdentifier),
+    Ident(&'a dyn ToString),
+}
+
+impl<'a> Display for IdentifierType<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Generic(x) => x.get_ident().to_string(),
+                Self::Dollar(x) => x.to_string(),
+                Self::Ident(x) => x.to_string(),
+            }
+        )
+    }
+}
+
+impl<'a> IdentifierType<'a> {
+    pub fn supports_dollar(&self) -> bool {
+        matches!(self, Self::Generic(_) | Self::Dollar(_))
+    }
+}
+
+impl<'a> Into<IdentifierType<'a>> for &'a PotentialGenericTypeIdentifier {
+    fn into(self) -> IdentifierType<'a> {
+        IdentifierType::Generic(self)
+    }
+}
+
+impl<'a> Into<IdentifierType<'a>> for &'a PotentialDollarIdentifier {
+    fn into(self) -> IdentifierType<'a> {
+        IdentifierType::Dollar(self)
+    }
+}
+
+impl<'a> Into<IdentifierType<'a>> for &'a ParserText {
+    fn into(self) -> IdentifierType<'a> {
+        IdentifierType::Ident(&self.text)
+    }
+}
+
+impl<'a> Into<IdentifierType<'a>> for &'a dyn ToString {
+    fn into(self) -> IdentifierType<'a> {
+        IdentifierType::Ident(self)
+    }
+}
+
+impl<'a> Into<IdentifierType<'a>> for &'a String {
+    fn into(self) -> IdentifierType<'a> {
+        IdentifierType::Ident(self)
+    }
+}
+
+impl<'a> Into<IdentifierType<'a>> for &'a &'a str {
+    fn into(self) -> IdentifierType<'a> {
+        IdentifierType::Ident(self)
+    }
+}
+
+#[derive(Default)]
+pub struct ResolutionOptions {
+    pub dollar_resolution: bool,
+    pub name_resolution: bool,
+    pub type_resolution: bool,
+}
+
+impl ResolutionOptions {
+    pub fn all() -> Self {
+        Self {
+            dollar_resolution: true,
+            name_resolution: true,
+            type_resolution: true,
+        }
+    }
+
+    pub fn with_dollar(mut self) -> Self {
+        self.dollar_resolution = true;
+        self
+    }
+
+    pub fn with_name(mut self) -> Self {
+        self.name_resolution = true;
+        self
+    }
+
+    pub fn with_type(mut self) -> Self {
+        self.type_resolution = true;
+        self
+    }
+}
 
 impl MiddleEnvironment {
     pub fn resolve_member_fn_type(
@@ -163,78 +258,144 @@ impl MiddleEnvironment {
         })
     }
 
-    pub fn resolve_str(&self, scope: &u64, iden: &str) -> Option<String> {
-        if self.symbols.variables.contains_key(iden)
-            || self.typing.objects.contains_key(iden)
-            || self.typing.trait_defs.contains_key(iden)
-        {
-            return Some(iden.to_string());
+    #[instrument(skip_all)]
+    pub fn resolve<'a>(
+        &'a self,
+        scope: &'a u64,
+        ident: impl Into<IdentifierType<'a>>,
+        options: ResolutionOptions,
+    ) -> Result<String, MiddleErr> {
+        let ident = ident.into();
+        trace!(ident = %ident, "Resolving identifier");
+
+        let (ident, dollar_ident) = match ident {
+            IdentifierType::Generic(x) => {
+                return self.resolve(scope, x.get_ident(), options);
+            }
+            IdentifierType::Dollar(PotentialDollarIdentifier::DollarIdentifier(x)) => {
+                (None, Some(x))
+            }
+            IdentifierType::Dollar(PotentialDollarIdentifier::Identifier(x)) => {
+                (Some(x.text.clone()), None)
+            }
+            IdentifierType::Ident(x) => (Some(x.to_string()), None),
+        };
+
+        if dollar_ident.is_some() && !options.dollar_resolution {
+            warn!("Resolution failed : No dollar resolution allowed but dollar ident provided");
+            return Err(self
+                .context
+                .err_at_current(MiddleErr::Internal(String::from(
+                    "No dollar resolution allowed but dollar ident provided",
+                ))));
         }
 
-        let scope_ref = self.scoping.scopes.get(scope)?;
+        let ident = if let Some(x) = dollar_ident {
+            let resolved = self.scoping.resolve_macro_arg(scope, x).ok_or_else(|| {
+                self.context
+                    .err_at_current(MiddleErr::MacroArg(x.to_string()))
+            })?;
 
-        if let Some(x) = scope_ref.mappings.get(iden).cloned() {
-            return Some(x);
+            match &resolved.node_type {
+                NodeType::Identifier(x) => match x.get_ident() {
+                    PotentialDollarIdentifier::Identifier(x) => x.text.clone(),
+                    x => return self.resolve(scope, x, options),
+                },
+                _ => {
+                    return Err(self
+                        .context
+                        .err_at_current(MiddleErr::UnexpectedMacroArgType(x.to_string())));
+                }
+            }
+        } else {
+            ident.unwrap()
+        };
+
+        trace!(ident = %ident, "Dollar resolution succedded");
+
+        if options.type_resolution {
+            if self.typing.objects.contains_key(&ident)
+                || self.typing.trait_defs.contains_key(&ident)
+            {
+                return Ok(ident);
+            }
+
+            let scope_ref = self.scoping.scopes.get(scope).ok_or_else(|| {
+                self.context
+                    .err_at_current(MiddleErr::Scope(scope.to_string()))
+            })?;
+
+            let ty = ParserDataType::from(ParserInnerType::from_str(&ident).unwrap());
+
+            if let Some(x) = scope_ref.type_mappings.get(&ty.key()).cloned() {
+                return Ok(ParserDataType::from(x).impl_name());
+            }
+
+            if options.name_resolution {
+                if self.symbols.variables.contains_key(&ident) {
+                    return Ok(ident);
+                }
+
+                if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
+                    return Ok(x);
+                }
+            }
+
+            if let Some(x) = scope_ref.parent {
+                return self.resolve(&x, &ident, options);
+            }
+
+            for key in self.typing.trait_defs.keys() {
+                if key == &ident || ParserText::temp_name_suffix_matches(key, &ident) {
+                    return Ok(key.clone());
+                }
+            }
+
+            for key in self.typing.objects.keys() {
+                if key == &ident || ParserText::temp_name_suffix_matches(key, &ident) {
+                    return Ok(key.clone());
+                }
+            }
+
+            if options.name_resolution {
+                for key in self.symbols.variables.keys() {
+                    if key == &ident || ParserText::temp_name_suffix_matches(key, &ident) {
+                        return Ok(key.clone());
+                    }
+                }
+            }
+
+            return Err(self.context.err_at_current(MiddleErr::Object(ident)));
         }
 
-        if let Some(x) = scope_ref
-            .type_mappings
-            .get(&ParserInnerType::from_str(iden).ok()?)
-            .cloned()
-        {
-            return Some(ParserDataType::from(x).impl_name());
+        if !options.name_resolution {
+            return Ok(ident);
+        }
+
+        if self.symbols.variables.contains_key(&ident) {
+            return Ok(ident);
+        }
+
+        let scope_ref = self.scoping.scopes.get(scope).ok_or_else(|| {
+            self.context
+                .err_at_current(MiddleErr::Scope(scope.to_string()))
+        })?;
+
+        if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
+            return Ok(x);
         }
 
         if let Some(x) = scope_ref.parent {
-            return self.resolve_str(&x, iden);
-        }
-
-        // TODO Remove this, its a bit of a worst case scenario and costly
-
-        for key in self.typing.trait_defs.keys() {
-            if key == iden || ParserText::temp_name_suffix_matches(key, &iden) {
-                return Some(key.clone());
-            }
-        }
-
-        for key in self.typing.objects.keys() {
-            if key == iden || ParserText::temp_name_suffix_matches(key, &iden) {
-                return Some(key.clone());
-            }
+            return self.resolve(&x, &ident, options);
         }
 
         for key in self.symbols.variables.keys() {
-            if key == iden || ParserText::temp_name_suffix_matches(key, &iden) {
-                return Some(key.clone());
+            if key == &ident || ParserText::temp_name_suffix_matches(key, &ident) {
+                return Ok(key.clone());
             }
         }
 
-        None
-    }
-
-    pub fn resolve_parser_text(&self, scope: &u64, iden: &ParserText) -> Option<ParserText> {
-        let resolved = self.resolve_str(scope, &iden.text);
-
-        Some(ParserText {
-            text: resolved?.to_string(),
-            span: iden.span,
-        })
-    }
-
-    pub fn resolve_potential_generic_ident(
-        &self,
-        scope: &u64,
-        iden: &PotentialGenericTypeIdentifier,
-    ) -> Option<ParserText> {
-        match iden {
-            PotentialGenericTypeIdentifier::Identifier(x) => {
-                self.resolve_potential_dollar_ident(scope, x)
-            }
-            PotentialGenericTypeIdentifier::Generic {
-                identifier,
-                generic_types: _,
-            } => self.resolve_potential_dollar_ident(scope, identifier),
-        }
+        Err(self.context.err_at_current(MiddleErr::Variable(ident)))
     }
 
     pub fn resolve_potential_generic_ident_to_data_type(
@@ -245,15 +406,15 @@ impl MiddleEnvironment {
         let (ty, mut generic_types) = match iden {
             PotentialGenericTypeIdentifier::Identifier(x) => {
                 let resolved = self
-                    .resolve_dollar_ident_only(scope, x)
-                    .map(|x| x.text)
+                    .resolve(scope, x, ResolutionOptions::default().with_dollar())
                     .unwrap_or(x.text().clone());
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
-                        ParserInnerType::Struct(x) => {
-                            ParserInnerType::Struct(self.resolve_str(scope, &x).unwrap_or(x))
-                        }
+                        ParserInnerType::Struct(x) => ParserInnerType::Struct(
+                            self.resolve(scope, &x, ResolutionOptions::all())
+                                .unwrap_or(x),
+                        ),
                         x => x,
                     },
                     Vec::new(),
@@ -269,8 +430,11 @@ impl MiddleEnvironment {
                     .collect();
 
                 let resolved = self
-                    .resolve_dollar_ident_only(scope, identifier)
-                    .map(|x| x.text)
+                    .resolve(
+                        scope,
+                        identifier,
+                        ResolutionOptions::default().with_dollar(),
+                    )
                     .unwrap_or(identifier.text().clone());
 
                 if self.symbols.variables.contains_key(&resolved) {
@@ -279,9 +443,10 @@ impl MiddleEnvironment {
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
-                        ParserInnerType::Struct(x) => {
-                            ParserInnerType::Struct(self.resolve_str(scope, &x).unwrap_or(x))
-                        }
+                        ParserInnerType::Struct(x) => ParserInnerType::Struct(
+                            self.resolve(scope, &x, ResolutionOptions::all())
+                                .unwrap_or(x),
+                        ),
                         x => x,
                     },
                     generic_types,
@@ -307,77 +472,6 @@ impl MiddleEnvironment {
                 x => x,
             },
         })
-    }
-
-    pub fn resolve_dollar_ident_potential_generic_only(
-        &self,
-        scope: &u64,
-        iden: &PotentialGenericTypeIdentifier,
-    ) -> Result<ParserText, MiddleErr> {
-        match iden {
-            PotentialGenericTypeIdentifier::Identifier(identifier)
-            | PotentialGenericTypeIdentifier::Generic {
-                identifier,
-                generic_types: _,
-            } => self.resolve_dollar_ident_only(scope, identifier),
-        }
-    }
-
-    fn resolve_identifier_with_mode(
-        &self,
-        scope: &u64,
-        iden: &PotentialDollarIdentifier,
-        with_macro_expansion: bool,
-        with_scope_resolution: bool,
-    ) -> Option<ParserText> {
-        let base_text = match iden {
-            PotentialDollarIdentifier::Identifier(x) => Some(x.clone()),
-            PotentialDollarIdentifier::DollarIdentifier(x) => if with_macro_expansion {
-                self.scoping
-                    .resolve_macro_arg(scope, x)
-                    .map(|x| match &x.node_type {
-                        NodeType::Identifier(x) => match x.get_ident() {
-                            PotentialDollarIdentifier::DollarIdentifier(x) => Some(x.clone()),
-                            PotentialDollarIdentifier::Identifier(x) => Some(x.clone()),
-                        },
-                        _ => None,
-                    })
-                    .flatten()
-            } else {
-                None
-            }
-            .or_else(|| Some(x.clone())),
-        };
-
-        if let Some(text) = base_text {
-            if with_scope_resolution {
-                self.resolve_parser_text(scope, &text)
-            } else {
-                Some(text)
-            }
-        } else {
-            None
-        }
-    }
-
-    pub fn resolve_potential_dollar_ident(
-        &self,
-        scope: &u64,
-        iden: &PotentialDollarIdentifier,
-    ) -> Option<ParserText> {
-        self.resolve_identifier_with_mode(scope, iden, true, true)
-    }
-
-    pub fn resolve_dollar_ident_only(
-        &self,
-        scope: &u64,
-        iden: &PotentialDollarIdentifier,
-    ) -> Result<ParserText, MiddleErr> {
-        if let Some(x) = self.resolve_identifier_with_mode(scope, iden, true, false) {
-            Ok(x)
-        } else {
-            Err(MiddleErr::MacroArg(iden.text().clone()))
-        }
     }
 
     pub fn resolve_ffi_data_type(
@@ -421,7 +515,8 @@ impl MiddleEnvironment {
         match data_type.data_type {
             ParserInnerType::Struct(identifier) => ParserDataType {
                 data_type: ParserInnerType::Struct(
-                    self.resolve_str(scope, &identifier).unwrap_or(identifier),
+                    self.resolve(scope, &identifier, ResolutionOptions::all())
+                        .unwrap_or(identifier),
                 ),
                 span: data_type.span,
             },
@@ -429,7 +524,9 @@ impl MiddleEnvironment {
                 identifier,
                 generic_types,
             } => {
-                let id = self.resolve_str(scope, &identifier).unwrap_or(identifier);
+                let id = self
+                    .resolve(scope, &identifier, ResolutionOptions::all())
+                    .unwrap_or(identifier);
                 let mut resolved_gens: Vec<ParserDataType> = Vec::new();
                 for g in generic_types {
                     resolved_gens.push(self.resolve_data_type(scope, g));
@@ -541,7 +638,10 @@ impl MiddleEnvironment {
                 data_type: ParserInnerType::DynamicTraits(
                     traits
                         .into_iter()
-                        .map(|t| self.resolve_str(scope, &t).unwrap_or(t))
+                        .map(|t| {
+                            self.resolve(scope, &t, ResolutionOptions::all())
+                                .unwrap_or(t)
+                        })
                         .collect(),
                 ),
                 span: data_type.span,

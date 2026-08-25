@@ -2,6 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    symbols::resolve::ResolutionOptions,
     tags::TagInfo,
     typing::{
         MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType, Typing,
@@ -78,15 +79,22 @@ impl MiddleEnvironment {
             }
             NodeType::Identifier(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::Identifier(
-                    if let Some(x) = self.resolve_potential_generic_ident(scope, &x) {
-                        x
+                    if let Ok(x) = self.resolve(scope, &x, ResolutionOptions::all()) {
+                        ParserText::new(node.span, x)
                     } else if matches!(
                         &x,
                         PotentialGenericTypeIdentifier::Identifier(
                             PotentialDollarIdentifier::Identifier(text)
                         ) if ParserText::is_temp_name(&text.text)
                     ) {
-                        self.resolve_dollar_ident_only(scope, x.get_ident())?
+                        ParserText::new(
+                            node.span,
+                            self.resolve(
+                                scope,
+                                x.get_ident(),
+                                ResolutionOptions::default().with_dollar(),
+                            )?,
+                        )
                     } else if let PotentialDollarIdentifier::DollarIdentifier(x) = x.get_ident() {
                         let val = self
                             .scoping
@@ -100,10 +108,10 @@ impl MiddleEnvironment {
                             })?;
                         return self.evaluate_inner(scope, val);
                     } else if let PotentialGenericTypeIdentifier::Generic { identifier, .. } = &x {
-                        if let Some(base_resolved) =
-                            self.resolve_potential_dollar_ident(scope, identifier)
+                        if let Ok(base_resolved) =
+                            self.resolve(scope, identifier, ResolutionOptions::all())
                         {
-                            base_resolved
+                            ParserText::new(node.span, base_resolved)
                         } else {
                             return Err(MiddleErr::At(
                                 node.span,
@@ -636,15 +644,10 @@ impl MiddleEnvironment {
             ),
             NodeType::MoveExpression { value } => match value.node_type {
                 NodeType::Identifier(x) => Ok(MiddleNode {
-                    node_type: MiddleNodeType::Move(
-                        self.resolve_potential_generic_ident(scope, &x)
-                            .ok_or_else(|| {
-                                MiddleErr::At(
-                                    node.span,
-                                    Box::new(MiddleErr::Variable(x.to_string())),
-                                )
-                            })?,
-                    ),
+                    node_type: MiddleNodeType::Move(ParserText::new(
+                        node.span,
+                        self.resolve(scope, &x, ResolutionOptions::all())?,
+                    )),
                     span: node.span,
                 }),
                 NodeType::FieldAccess { base, field } => {
@@ -762,13 +765,10 @@ impl MiddleEnvironment {
             }
 
             NodeType::Drop(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::Drop(
-                    self.resolve_potential_dollar_ident(scope, &x)
-                        .ok_or(MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Variable(x.to_string())),
-                        ))?,
-                ),
+                node_type: MiddleNodeType::Drop(ParserText::new(
+                    node.span,
+                    self.resolve(scope, &x, ResolutionOptions::all())?,
+                )),
                 span: node.span,
             }),
             NodeType::IfStatement {
@@ -835,10 +835,10 @@ impl MiddleEnvironment {
                     let mut lst = Vec::new();
 
                     let raw_label_text = label.as_ref().map(|l| l.to_string());
-                    let label_text = label
-                        .as_ref()
-                        .and_then(|l| self.resolve_dollar_ident_only(scope, l).ok())
-                        .map(|t| t.text);
+                    let label_text = label.as_ref().and_then(|l| {
+                        self.resolve(scope, l, ResolutionOptions::default().with_dollar())
+                            .ok()
+                    });
 
                     let (result_target, broke_target, target_scope) = {
                         let target_ctx = if label.is_some() {
@@ -942,10 +942,10 @@ impl MiddleEnvironment {
                     let mut lst = Vec::new();
 
                     let raw_label_text = label.as_ref().map(|l| l.to_string());
-                    let label_text = label
-                        .as_ref()
-                        .and_then(|l| self.resolve_dollar_ident_only(scope, l).ok())
-                        .map(|t| t.text);
+                    let label_text = label.as_ref().and_then(|l| {
+                        self.resolve(scope, l, ResolutionOptions::default().with_dollar())
+                            .ok()
+                    });
 
                     let continue_ctx = if label.is_some() {
                         self.scoping
@@ -1780,8 +1780,7 @@ impl MiddleEnvironment {
                     .0
                     .iter()
                     .map(|g| {
-                        self.resolve_potential_dollar_ident(scope, &g.identifier)
-                            .map(|x| x.text)
+                        self.resolve(scope, &g.identifier, ResolutionOptions::all())
                             .unwrap_or(g.identifier.to_string())
                     })
                     .collect();
@@ -1983,12 +1982,7 @@ impl MiddleEnvironment {
                     }
                 }
 
-                let resolved_trait = self
-                    .resolve_potential_generic_ident(scope, &trait_ident)
-                    .ok_or_else(|| {
-                        self.context
-                            .err_at_current(MiddleErr::Scope(trait_ident.to_string()))
-                    })?;
+                let resolved_trait = self.resolve(scope, &trait_ident, ResolutionOptions::all())?;
 
                 let resolved_target = self.resolve_data_type(scope, target).unwrap_all_refs();
                 let self_name = resolved_target.impl_name();
@@ -2012,7 +2006,7 @@ impl MiddleEnvironment {
                 let mut all_vars = variables;
                 for (name, member) in Typing::collect_trait_default_members(
                     &self.typing.trait_defs,
-                    &resolved_trait.text,
+                    &resolved_trait,
                     &provided,
                 ) {
                     if member.default.is_none() {
@@ -2065,9 +2059,11 @@ impl MiddleEnvironment {
                 for (identifier, object) in assoc_types {
                     if let TypeDefType::NewType(inner) = object {
                         let resolved_ty = self.resolve_data_type(scope, *inner).unwrap_all_refs();
-                        let ident = self
-                            .resolve_dollar_ident_only(scope, identifier.get_ident())?
-                            .text;
+                        let ident = self.resolve(
+                            scope,
+                            identifier.get_ident(),
+                            ResolutionOptions::default().with_dollar(),
+                        )?;
                         self.typing
                             .impls
                             .get_mut(&impl_key)
@@ -2199,11 +2195,11 @@ impl MiddleEnvironment {
                         &iden,
                         MiddleImplMember::new(new_name, generic_params.clone(), dependant),
                     );
-                    if !impl_ref.traits.contains(&resolved_trait.text) {
-                        impl_ref.traits.push(resolved_trait.text.clone());
+                    if !impl_ref.traits.contains(&resolved_trait) {
+                        impl_ref.traits.push(resolved_trait.clone());
                     }
 
-                    if let Some(trait_def) = self.typing.trait_defs.get(&resolved_trait.text) {
+                    if let Some(trait_def) = self.typing.trait_defs.get(&resolved_trait) {
                         for implied in &trait_def.implied_traits {
                             if !impl_ref.traits.contains(implied) {
                                 impl_ref.traits.push(implied.clone());
@@ -2324,8 +2320,7 @@ impl MiddleEnvironment {
                 let mut implied = Vec::new();
                 for imp in implied_traits {
                     let resolved = self
-                        .resolve_dollar_ident_only(scope, &imp)
-                        .map(|x| x.text)
+                        .resolve(scope, &imp, ResolutionOptions::default().with_dollar())
                         .unwrap_or_else(|_| imp.to_string());
                     implied.push(resolved);
                 }
@@ -2377,10 +2372,11 @@ impl MiddleEnvironment {
             // TODO Handle generics
             NodeType::StructLiteral { identifier, value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::AggregateExpression {
-                    identifier: Some(
-                        self.resolve_potential_generic_ident(scope, &identifier)
-                            .unwrap_or_else(|| ParserText::from(identifier.to_string())),
-                    ),
+                    identifier: Some(ParserText::new(
+                        node.span,
+                        self.resolve(scope, &identifier, ResolutionOptions::all())
+                            .unwrap_or_else(|_| identifier.to_string()),
+                    )),
                     value: ObjectMap(match value {
                         ObjectType::Map(x) => {
                             let mut map = Vec::new();
@@ -2409,18 +2405,10 @@ impl MiddleEnvironment {
                 value,
                 data,
             } => {
-                let identifier =
-                    if let Some(x) = self.resolve_potential_generic_ident(scope, &identifier) {
-                        x
-                    } else {
-                        return Err(MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Object(identifier.to_string())),
-                        ));
-                    };
+                let identifier = self.resolve(scope, &identifier, ResolutionOptions::all())?;
 
                 let raw_variant = value.to_string();
-                let obj = self.typing.objects.get(&identifier.text);
+                let obj = self.typing.objects.get(&identifier);
 
                 let value = if let Some(obj) = obj
                     && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
@@ -2442,7 +2430,7 @@ impl MiddleEnvironment {
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::EnumExpression {
-                        identifier,
+                        identifier: ParserText::new(node.span, identifier),
                         value,
                         data: if let Some(data) = data {
                             Some(Box::new(self.evaluate_inner(scope, *data)?))
@@ -2546,7 +2534,8 @@ impl MiddleEnvironment {
                 let module_path: Vec<String> = module.iter().map(|x| x.to_string()).collect();
 
                 let alias = if let Some(alias) = alias {
-                    self.resolve_potential_dollar_ident(scope, &alias)
+                    self.resolve(scope, &alias, ResolutionOptions::default().with_dollar())
+                        .ok()
                 } else {
                     None
                 };
@@ -2980,11 +2969,11 @@ impl MiddleEnvironment {
                 let mut prior_mappings = FxHashMap::default();
                 let is_callable_point = |env: &mut Self, point: &PipeSegment| {
                     if let NodeType::Identifier(id) = &point.get_node().node_type
-                        && let Some(resolved) = env.resolve_potential_generic_ident(scope, id)
+                        && let Ok(resolved) = env.resolve(scope, id, ResolutionOptions::all())
                         && env
                             .symbols
                             .variables
-                            .get(&resolved.text)
+                            .get(&resolved)
                             .is_some_and(|var| var.data_type.is_callable())
                     {
                         return true;
@@ -3056,19 +3045,22 @@ impl MiddleEnvironment {
                             let keep_scope = point.is_named();
                             let var_dec = match &point {
                                 PipeSegment::Named { identifier, .. } => {
-                                    let ident =
-                                        self.resolve_dollar_ident_only(scope, identifier)?;
+                                    let ident = self.resolve(
+                                        scope,
+                                        identifier,
+                                        ResolutionOptions::default().with_dollar(),
+                                    )?;
 
-                                    prior_mappings.insert(
-                                        ident.text.clone(),
-                                        get_mapping(self, &ident.text)?,
-                                    );
+                                    prior_mappings
+                                        .insert(ident.clone(), get_mapping(self, &ident)?);
 
                                     Node::new(
                                         self.context.current_span(),
                                         NodeType::VariableDeclaration {
                                             var_type: VarType::Mutable,
-                                            identifier: ident.into(),
+                                            identifier: PotentialDollarIdentifier::new(
+                                                node.span, ident,
+                                            ),
                                             value: Box::new(value),
                                             data_type: ParserDataType::auto(
                                                 self.context.current_span(),

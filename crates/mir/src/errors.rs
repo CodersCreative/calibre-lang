@@ -37,6 +37,8 @@ pub enum MiddleErr {
     Variable(String),
     #[error("Unable to find macro arg : ${0}")]
     MacroArg(String),
+    #[error("Unexpected macro arg type from : ${0}")]
+    UnexpectedMacroArgType(String),
     #[error("Overload Invalid : {0:?}")]
     Overload(String),
     #[error("Unable to find object : {0:?}")]
@@ -106,6 +108,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::ReturnOutOfFunction => 223,
             Self::InvalidReturnType { .. } => 224,
             Self::InvalidVarDeclarationType { .. } => 225,
+            Self::UnexpectedMacroArgType(_) => 226,
         }
     }
 
@@ -147,6 +150,9 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::MacroArg(x) => Some(format!(
                 "macro arg `{x}` not found - check spelling or imports"
             )),
+            Self::UnexpectedMacroArgType(x) => {
+                Some(format!("macro arg `{x}` needs to be an identifier"))
+            }
             Self::EnumVariant(variant) => Some(format!("enum variant `{variant}` does not exist")),
             Self::Internal(msg) => Some(format!("internal error: {msg} - please report this bug")),
             Self::CantMatch(ty) => Some(format!(

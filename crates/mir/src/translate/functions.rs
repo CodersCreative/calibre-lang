@@ -2,6 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    symbols::resolve::ResolutionOptions,
     tags::TagInfo,
     traversal::NodeVisitor,
 };
@@ -101,9 +102,15 @@ impl MiddleEnvironment {
         };
 
         let name = self
-            .resolve_dollar_ident_only(scope, name.get_ident())
+            .resolve(
+                scope,
+                name.get_ident(),
+                ResolutionOptions::default().with_dollar(),
+            )
             .ok()?;
-        let resolved_name = self.resolve_str(scope, &name).map(|x| x.to_string());
+        let resolved_name = self
+            .resolve(scope, &name, ResolutionOptions::all())
+            .map(|x| x.to_string());
 
         let defaults_key = resolved_name.as_deref().unwrap_or(name.as_str());
         let defaults = self
@@ -426,13 +433,17 @@ impl MiddleEnvironment {
         library: String,
         symbol: Option<String>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let ident = self.resolve_dollar_ident_only(scope, &identifier)?;
+        let ident = self.resolve(
+            scope,
+            &identifier,
+            ResolutionOptions::default().with_dollar(),
+        )?;
 
         let new_name = self
             .scoping
             .scope_or_err(scope)?
             .mappings
-            .get(&ident.text)
+            .get(&ident)
             .cloned()
             .unwrap_or_else(|| ParserText::temp_name_with_suffix(ident.trim(), span).text);
 
@@ -451,7 +462,7 @@ impl MiddleEnvironment {
 
         self.register_variable(
             scope,
-            &ident.text,
+            &ident,
             new_name.clone(),
             fn_type.clone(),
             VarType::Constant,
@@ -465,7 +476,7 @@ impl MiddleEnvironment {
                     MiddleNodeType::ExternFunction {
                         abi,
                         library,
-                        symbol: symbol.unwrap_or_else(|| ident.text.clone()),
+                        symbol: symbol.unwrap_or_else(|| ident.clone()),
                         parameters: params,
                         return_type,
                     },
@@ -493,8 +504,9 @@ impl MiddleEnvironment {
 
         for param in header.parameters {
             param_idents.push(param.0.clone());
-            let og_name = self.resolve_dollar_ident_only(scope, &param.0)?;
-            let new_name = ParserText::temp_name_with_suffix(og_name.text.trim(), span).text;
+            let og_name =
+                self.resolve(scope, &param.0, ResolutionOptions::default().with_dollar())?;
+            let new_name = ParserText::temp_name_with_suffix(og_name.trim(), span).text;
 
             let data_type = if let Some(x) = param.1 {
                 self.resolve_data_type(scope, x)
@@ -508,7 +520,7 @@ impl MiddleEnvironment {
 
             self.register_variable(
                 &new_scope,
-                &og_name.text,
+                &og_name,
                 new_name.clone(),
                 data_type.clone(),
                 VarType::Mutable,
@@ -777,8 +789,7 @@ impl MiddleEnvironment {
         match caller.node_type.clone() {
             NodeType::FieldAccess { base, field } => {
                 let field_name = self
-                    .resolve_dollar_ident_only(scope, &field)
-                    .map(|x| x.text)
+                    .resolve(scope, &field, ResolutionOptions::default().with_dollar())
                     .unwrap_or(field.text().clone());
 
                 if let Some(ty) = self.resolve_type_from_node(scope, base.as_ref())
@@ -823,13 +834,13 @@ impl MiddleEnvironment {
                     ));
                 }
 
-                if let Some(caller) = self.resolve_potential_generic_ident(scope, &caller_ident)
-                    && self.typing.objects.contains_key(&caller.text)
+                if let Ok(caller) = self.resolve(scope, &caller_ident, ResolutionOptions::all())
+                    && self.typing.objects.contains_key(&caller)
                 {
                     return Ok(self.aggregate_from_call_nodes(
                         scope,
                         span,
-                        Some(caller),
+                        Some(ParserText::new(span, caller)),
                         args,
                         reverse_args,
                     ));
@@ -843,8 +854,7 @@ impl MiddleEnvironment {
             .map(|x| x.unwrap_all_refs().data_type);
 
         let caller_name = if let NodeType::Identifier(ident) = &caller.node_type {
-            self.resolve_dollar_ident_potential_generic_only(scope, ident)?
-                .text
+            self.resolve(scope, ident, ResolutionOptions::default().with_dollar())?
         } else {
             String::new()
         };
