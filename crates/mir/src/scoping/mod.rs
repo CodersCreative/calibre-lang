@@ -358,7 +358,7 @@ pub struct MiddleScope {
     pub id: u64,
     pub parent: Option<u64>,
     pub mappings: FxHashMap<String, String>,
-    pub type_mappings: FxHashMap<ParserInnerType, ParserInnerType>,
+    pub type_mappings: FxHashMap<String, ParserInnerType>,
     pub macros: FxHashMap<String, ScopeMacro>,
     pub macro_args: FxHashMap<String, Node>,
     pub children: FxHashMap<String, u64>,

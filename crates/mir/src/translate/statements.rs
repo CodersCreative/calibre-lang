@@ -308,10 +308,9 @@ impl MiddleEnvironment {
                     )
                 })?;
 
-                scope_ref.type_mappings.insert(
-                    ParserInnerType::Struct(identifier.to_string()),
-                    inner.data_type,
-                );
+                scope_ref
+                    .type_mappings
+                    .insert(identifier.to_string(), inner.data_type);
             }
 
             if !overloads.is_empty() {
@@ -388,7 +387,7 @@ impl MiddleEnvironment {
                     .insert(base_ident.clone(), base_ident.clone());
 
                 scope_ref.type_mappings.insert(
-                    ParserInnerType::Struct(base_ident.clone()),
+                    base_ident.clone(),
                     ParserInnerType::Struct(base_ident.clone()),
                 );
             }
@@ -445,7 +444,7 @@ impl MiddleEnvironment {
 
             scope.mappings.insert(identifier.clone(), new_name.clone());
             scope.type_mappings.insert(
-                ParserInnerType::Struct(identifier.clone()),
+                identifier.clone(),
                 ParserInnerType::Struct(new_name.clone()),
             );
 
@@ -454,7 +453,7 @@ impl MiddleEnvironment {
                     .mappings
                     .insert(String::from("Self"), new_name.clone()),
                 scope.type_mappings.insert(
-                    ParserInnerType::Struct(String::from("Self")),
+                    String::from("Self"),
                     ParserInnerType::Struct(new_name.clone()),
                 ),
             )
@@ -500,9 +499,7 @@ impl MiddleEnvironment {
             }
 
             if let Some(prev) = previous_self_type {
-                scope
-                    .type_mappings
-                    .insert(ParserInnerType::Struct(String::from("Self")), prev);
+                scope.type_mappings.insert(String::from("Self"), prev);
             }
         }
 

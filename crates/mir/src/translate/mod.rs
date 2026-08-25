@@ -27,7 +27,6 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::str::FromStr;
 use tracing::{debug, instrument, trace};
 
 pub mod functions;
@@ -1833,10 +1832,9 @@ impl MiddleEnvironment {
                         scope
                             .mappings
                             .insert(String::from("Self"), self_name.clone()),
-                        scope.type_mappings.insert(
-                            ParserInnerType::Struct(String::from("Self")),
-                            resolved.data_type.clone(),
-                        ),
+                        scope
+                            .type_mappings
+                            .insert(String::from("Self"), resolved.data_type.clone()),
                     )
                 };
 
@@ -1954,9 +1952,7 @@ impl MiddleEnvironment {
                     }
 
                     if let Some(prev) = previous_self_type {
-                        scope
-                            .type_mappings
-                            .insert(ParserInnerType::Struct(String::from("Self")), prev);
+                        scope.type_mappings.insert(String::from("Self"), prev);
                     }
 
                     for (name, prev) in prev_generics {
@@ -2049,10 +2045,9 @@ impl MiddleEnvironment {
                         scope
                             .mappings
                             .insert(String::from("Self"), self_name.clone()),
-                        scope.type_mappings.insert(
-                            ParserInnerType::Struct(String::from("Self")),
-                            resolved_target.data_type.clone(),
-                        ),
+                        scope
+                            .type_mappings
+                            .insert(String::from("Self"), resolved_target.data_type.clone()),
                     )
                 };
 
@@ -2234,9 +2229,7 @@ impl MiddleEnvironment {
                     }
 
                     if let Some(prev) = previous_self_type {
-                        scope
-                            .type_mappings
-                            .insert(ParserInnerType::Struct(String::from("Self")), prev);
+                        scope.type_mappings.insert(String::from("Self"), prev);
                     }
 
                     for (name, prev) in prev_generics {
@@ -2632,9 +2625,8 @@ impl MiddleEnvironment {
                             continue;
                         }
 
-                        let key_type = ParserInnerType::from_str(&key).ok().unwrap();
-                        if let Some(value) = type_map.get(&key_type).cloned() {
-                            scope.type_mappings.insert(key_type, value);
+                        if let Some(value) = type_map.get(&key.text).cloned() {
+                            scope.type_mappings.insert(key.to_string(), value);
                         } else {
                             return Err(MiddleErr::At(
                                 key.span,

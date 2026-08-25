@@ -327,7 +327,7 @@ impl MiddleEnvironment {
 
             let ty = ParserDataType::from(ParserInnerType::from_str(&ident).unwrap());
 
-            if let Some(x) = scope_ref.type_mappings.get(&ty.key()).cloned() {
+            if let Some(x) = scope_ref.type_mappings.get(&ty.impl_name()).cloned() {
                 return Ok(ParserDataType::from(x).impl_name());
             }
 
@@ -488,7 +488,7 @@ impl MiddleEnvironment {
         data_type: &ParserInnerType,
     ) -> Option<&ParserInnerType> {
         let scope_ref = self.scoping.scopes.get(scope)?;
-        match scope_ref.type_mappings.get(data_type) {
+        match scope_ref.type_mappings.get(&data_type.to_string()) {
             Some(x) => return Some(x),
             _ => scope_ref
                 .parent
