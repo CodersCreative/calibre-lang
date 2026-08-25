@@ -17,9 +17,9 @@ impl<T> Iter for gen:<T> {
 };
 
 impl<T> gen:<T> {
-	const iter := fn (self : gen:<T>) -> gen:<T> => return self;
+	const iter := fn (self : Self) -> Self => return self;
 
-	const iter_mut := fn (self : &mut gen:<T>) -> gen:<T> => return self;
+	const iter_mut := fn (self : &mut Self) -> Self => return self.*;
 
-	const into_iter := fn (self : gen:<T>) -> gen:<T> => return self;
+	const into_iter := fn (self : Self) -> Self => return self;
 };

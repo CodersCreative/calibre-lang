@@ -6,7 +6,7 @@ use crate::{
 use calibre_parser::ast::{
     Operator,
     idents::ParsedIntLiteral,
-    nodes::{AsFailureMode, CallArg, EmitType, Node, NodeType},
+    nodes::{AsFailureMode, EmitType, Node, NodeType},
     types::{ParserDataType, ParserInnerType},
 };
 

@@ -318,12 +318,11 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                     )
                     .map(|((first, sp), rest)| {
                         if rest.is_empty() {
-                            (first, sp)
+                            (vec![first], sp)
                         } else {
-                            let mut text = first;
+                            let mut text = vec![first];
                             for (segment, _) in rest {
-                                text.push_str("::");
-                                text.push_str(&segment);
+                                text.push(segment);
                             }
                             (text, sp)
                         }
@@ -345,9 +344,16 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                             .then_ignore(lex(pad_with_newline.clone(), just('>')))
                             .or_not(),
                     )
-                    .try_map(|((name, sp), generic_types), parser_sp| {
+                    .try_map(|((mut path, sp), generic_types), parser_sp| {
                         if let Some(mut generic_types) = generic_types {
-                            match name.as_str() {
+                            let name = path.pop().unwrap();
+                            let mut path : Vec<ParserDataType> = path.into_iter().map(|x| ParserDataType::new(
+                                sp,
+                                ParserInnerType::from_str(x.as_str()).unwrap(),
+                            )).collect();
+
+
+                            let end = match name.as_str() {
                                 "dyn" => {
                                     let traits = generic_types
                                         .into_iter()
@@ -356,43 +362,63 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                                             (!text.is_empty()).then_some(text)
                                         })
                                         .collect::<Vec<_>>();
-                                    Ok(ParserDataType::new(sp, ParserInnerType::DynamicTraits(traits)))
+                                    ParserDataType::new(sp, ParserInnerType::DynamicTraits(traits))
                                 },
                                 "list" => {
                                     if generic_types.len() == 1 {
-                                        Ok(ParserDataType::new(sp, ParserInnerType::List(Box::new(generic_types.pop().unwrap()))))}
+                                        ParserDataType::new(sp, ParserInnerType::List(Box::new(generic_types.pop().unwrap())))}
                                     else {
-                                        Err(Rich::custom(
+                                        return Err(Rich::custom(
                                             parser_sp,
                                             "expected exactly one type parameter with a 'list' type",
-                                        ))
+                                        ));
                                     }
                                 },
                                 "ptr" => {
                                     if generic_types.len() == 1 {
-                                        Ok(ParserDataType::new(sp, ParserInnerType::Ptr(Box::new(generic_types.pop().unwrap()))))}
+                                        ParserDataType::new(sp, ParserInnerType::Ptr(Box::new(generic_types.pop().unwrap())))}
                                     else {
-                                        Err(Rich::custom(
+                                        return Err(Rich::custom(
                                             parser_sp,
                                             "expected exactly one type parameter with a 'ptr' type",
                                         ))
                                     }
                                 },
                                 _ => {
-                                    Ok(ParserDataType::new(
+                                    ParserDataType::new(
                                         sp,
                                         ParserInnerType::StructWithGenerics {
                                             identifier: name,
                                             generic_types,
                                         },
-                                    ))
+                                    )
                                 }
+                            };
+
+                            if path.is_empty() {
+                                Ok(end)
+                            } else{
+                                path.push(end);
+                                Ok(ParserDataType::new(
+                                sp,
+                                ParserInnerType::Scope(path),
+                            ))
                             }
                         } else {
-                            Ok(ParserDataType::new(
+                            let mut path: Vec<ParserDataType> = path.into_iter().map(|x| ParserDataType::new(
                                 sp,
-                                ParserInnerType::from_str(name.as_str()).unwrap(),
+                                ParserInnerType::from_str(x.as_str()).unwrap(),
+                            )).collect();
+
+                            if path.len() > 1 {
+Ok(ParserDataType::new(
+                                sp,
+                                ParserInnerType::Scope(path),
                             ))
+                            }else{
+                                Ok(path.pop().unwrap())
+                            }
+                            
                         }
                     })
                     .boxed();

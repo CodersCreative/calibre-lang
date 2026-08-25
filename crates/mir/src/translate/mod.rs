@@ -1831,6 +1831,20 @@ impl MiddleEnvironment {
                         }
                     }).collect::<Vec<_>>();
 
+                    let type_defs = variables.iter().filter_map(|var| {
+                        if let NodeType::TypeDeclaration { identifier, object, .. } = &var.node_type {
+                            let ident = self.resolve(scope, identifier.get_ident(), ResolutionOptions::default().with_dollar()).ok()?;
+                            if let TypeDefType::NewType(inner) = object {
+                                let resolved_ty = self.resolve_data_type(scope, inner.as_ref(), ResolutionOptions::typing()).ok()?.unwrap_all_refs();
+                                Some((ident, resolved_ty))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    }).collect::<Vec<_>>();
+
                     let impl_ref = self.typing.impls.get_mut(&impl_key).ok_or_else(|| {
                         MiddleErr::At(
                             node.span,
@@ -1844,6 +1858,10 @@ impl MiddleEnvironment {
                             var.1,
                             var.2,
                         );
+                    }
+
+                    for (ident, ty) in type_defs {
+                        impl_ref.assoc_types.insert(ident, ty);
                     }
                 }
 
@@ -2105,24 +2123,23 @@ impl MiddleEnvironment {
                         let resolved_ty = self
                             .resolve_data_type(scope, inner.as_ref(), ResolutionOptions::typing())?
                             .unwrap_all_refs();
+                        
                         let ident = self.resolve(
                             scope,
                             identifier.get_ident(),
                             ResolutionOptions::default().with_dollar(),
                         )?;
-                        self.typing
-                            .impls
-                            .get_mut(&impl_key)
-                            .ok_or_else(|| {
-                                MiddleErr::At(
-                                    node.span,
-                                    Box::new(MiddleErr::Internal(format!(
-                                        "missing impl {impl_key:?}"
-                                    ))),
-                                )
-                            })?
-                            .assoc_types
-                            .insert(ident, resolved_ty);
+
+                        let impl_ref = self.typing.impls.get_mut(&impl_key).ok_or_else(|| {
+                            MiddleErr::At(
+                                node.span,
+                                Box::new(MiddleErr::Internal(format!(
+                                    "missing impl {impl_key:?}"
+                                ))),
+                            )
+                        })?;
+
+                        impl_ref.assoc_types.insert(ident, resolved_ty);
                     }
                 }
 

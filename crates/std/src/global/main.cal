@@ -103,10 +103,12 @@ trait Iter {
 
 	const for_each := fn (self : Self, op : fn (Self::Item)) => {
 		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			op(v.next);
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				op(value);
+			}else{
+				break;
+			}
 		};
 	};
 
@@ -114,10 +116,12 @@ trait Iter {
 		let mut acc := init;
 		
 		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			acc := op(acc, v.next);
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				acc := op(acc, value);
+			}else{
+				break;
+			}
 		};
 		
 		return acc;
@@ -125,10 +129,12 @@ trait Iter {
 
 	const any := fn (self : Self, pred : fn (Self::Item) -> bool) -> bool => {
 		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			if pred(v.next) => return true;
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				if pred(value) => return true
+			}else{
+				break;
+			}
 		};
 		
 		return false;
@@ -136,10 +142,12 @@ trait Iter {
 
 	const all := fn (self : Self, pred : fn (Self::Item) -> bool) -> bool => {
 		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			if !pred(v.next) => return false;
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				if !pred(value) => return false
+			}else{
+				break;
+			}
 		};
 		
 		return true;
@@ -147,11 +155,12 @@ trait Iter {
 
 	const find := fn (self : Self, pred : fn (Self::Item) -> bool) -> Self::Item? => {
 		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			let value := v.next;
-			if pred(value) => return some(value);
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				if pred(value) => return some(value)
+			}else{
+				break;
+			}
 		};
 		
 		return none;
