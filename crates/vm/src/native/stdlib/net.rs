@@ -8,10 +8,10 @@ use crate::{
     value::RuntimeValue,
 };
 use dumpster::sync::Gc;
-use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::{collections::HashMap, time::Duration};
 
 fn port_redirects() -> &'static Mutex<HashMap<String, i64>> {
     static REDIRECTS: OnceLock<Mutex<HashMap<String, i64>>> = OnceLock::new();
@@ -79,7 +79,7 @@ fn parse_http_args(
 fn send_http_request(method: &str, url: &str, body: &str) -> Result<String, RuntimeError> {
     let config = ureq::Agent::config_builder()
         .http_status_as_error(false)
-        .timeout_global(Some(std::time::Duration::from_secs(5)))
+        .timeout_global(Some(Duration::from_secs(5)))
         .build();
     let agent = ureq::Agent::new_with_config(config);
     let request = ureq::http::Request::builder()
@@ -156,8 +156,8 @@ impl NativeFunction for TcpConnect {
         stream
             .set_nonblocking(false)
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
-        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(3)));
-        let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(3)));
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(3)));
         Ok(RuntimeValue::Host(Arc::new(Mutex::new(stream))))
     }
 }
@@ -252,8 +252,8 @@ impl NativeFunction for TcpAccept {
             .accept()
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
 
-        let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(3)));
-        let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(3)));
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(3)));
 
         Ok(RuntimeValue::Host(Arc::new(Mutex::new(stream))))
     }

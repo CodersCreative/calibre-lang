@@ -194,7 +194,7 @@ impl NativeFunction for AssertFn {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1, 2])?;
 
-        match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
+        match env.resolve_value_for_op_ref(&first_or_null(&mut args))? {
             RuntimeValue::Option(Some(_))
             | RuntimeValue::Result(Ok(_))
             | RuntimeValue::Bool(true) => Ok(RuntimeValue::Null),

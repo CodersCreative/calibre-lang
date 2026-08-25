@@ -8,10 +8,13 @@ use crate::{
     value::{GcVec, RuntimeValue},
 };
 use dumpster::sync::Gc;
-use std::fs::{DirEntry, File, FileType, Metadata, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::{
+    fs::{DirEntry, File, FileType, Metadata, OpenOptions},
+    time::Duration,
+};
 
 // Path
 
@@ -633,7 +636,7 @@ impl NativeFunction for FsMetadataModified {
             .modified()
         {
             Ok(time) => {
-                let duration: std::time::Duration = time
+                let duration: Duration = time
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
                 Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
@@ -667,7 +670,7 @@ impl NativeFunction for FsMetadataCreated {
             .created()
         {
             Ok(time) => {
-                let duration: std::time::Duration = time
+                let duration: Duration = time
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
                 Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
@@ -701,7 +704,7 @@ impl NativeFunction for FsMetadataAccessed {
             .accessed()
         {
             Ok(time) => {
-                let duration: std::time::Duration = time
+                let duration: Duration = time
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
                 Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(

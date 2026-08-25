@@ -25,9 +25,13 @@ impl WorkList {
 }
 
 impl LirRegistry {
-    pub fn eliminate_dead_code(mut self, entry_points: Vec<String>) -> LirRegistry {
+    pub fn eliminate_dead_code(
+        mut self,
+        entry_points: Vec<String>,
+        include_tests: bool,
+    ) -> LirRegistry {
         let (reachable_functions, reachable_globals, referenced_types) =
-            self.collect_references(entry_points);
+            self.collect_references(entry_points, include_tests);
 
         self.dyn_vtables
             .retain(|concrete_type, _| referenced_types.contains(concrete_type));
@@ -44,6 +48,7 @@ impl LirRegistry {
     fn collect_references(
         &self,
         entry_points: Vec<String>,
+        include_tests: bool,
     ) -> (FxHashSet<String>, FxHashSet<String>, FxHashSet<String>) {
         let mut reachable_functions: FxHashSet<String> = FxHashSet::default();
         let mut reachable_globals: FxHashSet<String> = FxHashSet::default();
@@ -51,6 +56,12 @@ impl LirRegistry {
 
         for entry in entry_points.iter() {
             if self.functions.contains_key(entry) {
+                reachable_functions.insert(entry.clone());
+            }
+        }
+
+        if include_tests {
+            for entry in self.functions.keys().filter(|x| x.contains("test::")) {
                 reachable_functions.insert(entry.clone());
             }
         }

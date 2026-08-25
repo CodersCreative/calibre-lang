@@ -51,14 +51,18 @@ pub trait CalibreStandalone {
         source: impl Into<String>,
     ) -> Result<CalibreArtifacts, CalibreError>;
 
-    fn compile_source(&self, source: impl Into<String>) -> Result<CalibreArtifacts, CalibreError>;
+    fn compile_source(
+        &self,
+        source: impl Into<String>,
+        include_tests: bool,
+    ) -> Result<CalibreArtifacts, CalibreError>;
 }
 
 impl CalibreStandalone for CalibreEngine {
     fn compile_file(self, path: impl AsRef<Path>) -> Result<CalibreArtifacts, CalibreError> {
         let path = path.as_ref();
         self.with_source_path(path.to_path_buf())
-            .compile_source(fs::read_to_string(path)?)
+            .compile_source(fs::read_to_string(path)?, false)
     }
 
     fn run_file(self, path: impl AsRef<Path>) -> Result<RunResult, CalibreError> {
@@ -290,7 +294,7 @@ impl CalibreStandalone for CalibreEngine {
             });
         }
 
-        let artifacts = self.compile_source(input)?;
+        let artifacts = self.compile_source(input, false)?;
         if self.cache_enabled {
             self.store_cached_program(&full_source, &artifacts)?;
         }
@@ -298,7 +302,11 @@ impl CalibreStandalone for CalibreEngine {
     }
 
     #[instrument(skip_all, fields(source = ?self.source_path))]
-    fn compile_source(&self, source: impl Into<String>) -> Result<CalibreArtifacts, CalibreError> {
+    fn compile_source(
+        &self,
+        source: impl Into<String>,
+        include_tests: bool,
+    ) -> Result<CalibreArtifacts, CalibreError> {
         let input = source.into();
         let full_source = self.compose_source(&input);
         let path = self
@@ -367,6 +375,7 @@ impl CalibreStandalone for CalibreEngine {
                 .map(|x| x.1)
                 .chain(fin_functions.clone().into_iter().map(|x| x.1))
                 .collect(),
+            include_tests,
         );
 
         Ok(CalibreArtifacts {

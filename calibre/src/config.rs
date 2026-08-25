@@ -86,6 +86,7 @@ pub struct VmConfigToml {
 #[derive(Debug, Clone)]
 pub struct ProjectContext {
     pub root: PathBuf,
+    #[allow(dead_code)]
     pub manifest_path: PathBuf,
     pub config: Config,
 }
