@@ -320,6 +320,10 @@ impl MiddleEnvironment {
                 data_type: ParserInnerType::Char,
                 span: node.span,
             }),
+            NodeType::BigLiteral(_) => Some(ParserDataType {
+                data_type: ParserInnerType::Big,
+                span: node.span,
+            }),
             NodeType::StringLiteral(_) => Some(ParserDataType {
                 data_type: ParserInnerType::Str,
                 span: node.span,

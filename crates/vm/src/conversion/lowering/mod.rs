@@ -1,4 +1,5 @@
 use super::ir::*;
+use astro_float::Consts;
 use calibre_lir::{
     ast::{BlockId, LirBlock, LirLValue, LirLiteral, LirNode, LirNodeType, LirTerminator},
     environment::LirFunction,
@@ -25,4 +26,5 @@ struct BlockLoweringCtx<'a> {
     char_literals: FxHashMap<char, u16>,
     string_literals: FxHashMap<String, u16>,
     current_fn_name: String,
+    big_consts: &'a mut Consts,
 }

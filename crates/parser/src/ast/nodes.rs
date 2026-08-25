@@ -721,6 +721,7 @@ pub enum NodeType {
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(ParserText),
+    BigLiteral(ParserText),
     FieldAccess {
         base: Box<Node>,
         field: PotentialDollarIdentifier,

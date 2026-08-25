@@ -261,6 +261,7 @@ impl Display for RuntimeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Null => write!(f, "null"),
+            Self::Big(x) => write!(f, "{}g", x),
             Self::Float(x) => write!(f, "{}f", x),
             Self::UInt(x) => write!(f, "{}u", x),
             Self::Byte(x) => write!(f, "{}b", x),

@@ -265,11 +265,12 @@ pub trait NodeVisitor {
             NodeType::Continue { label } => NodeType::Continue { label },
             NodeType::EmptyLine => NodeType::EmptyLine,
             NodeType::Null => NodeType::Null,
-            NodeType::Identifier(_) => node_type,
-            NodeType::StringLiteral(_) => node_type,
-            NodeType::IntLiteral(_) => node_type,
-            NodeType::FloatLiteral(_) => node_type,
-            NodeType::CharLiteral(_) => node_type,
+            NodeType::Identifier(_)
+            | NodeType::StringLiteral(_)
+            | NodeType::IntLiteral(_)
+            | NodeType::BigLiteral(_)
+            | NodeType::FloatLiteral(_)
+            | NodeType::CharLiteral(_) => node_type,
             NodeType::SelectStatement { arms } => NodeType::SelectStatement { arms },
             NodeType::Emit(emit_type) => NodeType::Emit(emit_type),
             NodeType::RefStatement { mutability, value } => NodeType::RefStatement {

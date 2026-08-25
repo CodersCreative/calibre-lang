@@ -256,30 +256,42 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
     let float_lit = lex(
         pad.clone(),
         choice((
-            dec_digits.clone().then_ignore(just('f')).map(|n| n),
+            dec_digits
+                .clone()
+                .then(choice((just('f'), just('g'))))
+                .map(|n| (n.0, Some(n.1))),
             dec_digits
                 .clone()
                 .then_ignore(just('.'))
                 .then(dec_digits.clone())
                 .then(exponent_part.clone().or_not())
-                .then_ignore(just('f').or_not())
-                .map(|((a, b), exp)| match exp {
-                    Some(exp) => format!("{a}.{b}e{exp}"),
-                    None => format!("{a}.{b}"),
+                .then(choice((just('f'), just('g'))).or_not())
+                .map(|(((a, b), exp), typ)| match exp {
+                    Some(exp) => (format!("{a}.{b}e{exp}"), typ),
+                    None => (format!("{a}.{b}"), typ),
                 }),
             dec_digits
                 .clone()
                 .then(exponent_part.clone())
                 .then_ignore(choice((just('u'), just('i'), just('b'))).not())
-                .then_ignore(just('f').or_not())
-                .map(|(number, exp)| format!("{number}e{exp}")),
+                .then(choice((just('f'), just('g'))).or_not())
+                .map(|((number, exp), typ)| (format!("{number}e{exp}"), typ)),
         )),
     )
     .map_with_span({
         let ls = line_starts.clone();
-        move |number: String, r| {
-            let value = number.replace('_', "").parse::<f64>().unwrap_or_default();
-            Node::new(span(ls.as_ref(), r), NodeType::FloatLiteral(value))
+        move |(number, typ), r| {
+            let sp = span(ls.as_ref(), r);
+            Node::new(
+                sp,
+                if typ == Some('g') {
+                    NodeType::BigLiteral(ParserText::new(sp, number.replace('_', "")))
+                } else {
+                    NodeType::FloatLiteral(
+                        number.replace('_', "").parse::<f64>().unwrap_or_default(),
+                    )
+                },
+            )
         }
     })
     .boxed();

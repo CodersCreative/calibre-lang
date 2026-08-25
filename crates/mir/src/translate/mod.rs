@@ -140,6 +140,17 @@ impl MiddleEnvironment {
                 ),
                 span: node.span,
             }),
+            NodeType::BigLiteral(x) => Ok(MiddleNode {
+                node_type: MiddleNodeType::BigLiteral(ParserText {
+                    text: x
+                        .text
+                        .strip_suffix('g')
+                        .map(|x| x.to_string())
+                        .unwrap_or(x.text),
+                    ..x
+                }),
+                span: node.span,
+            }),
             NodeType::FloatLiteral(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::FloatLiteral(x),
                 span: node.span,

@@ -1,3 +1,4 @@
+use astro_float::{BigFloat, Consts};
 use calibre_lir::{
     ast::{BlockId, LirLiteral},
     environment::{LirGlobal, LirRegistry},
@@ -13,6 +14,8 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::sync::Arc;
+
+use crate::value::{BIG_PRECISION, BIG_ROUNDING};
 
 pub type Reg = u16;
 
@@ -256,6 +259,7 @@ pub struct AggregateLayout {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VMLiteral {
+    Big(BigFloat),
     Int(i64),
     UInt(u64),
     Byte(u8),
@@ -284,6 +288,7 @@ impl Display for VMLiteral {
             Self::Byte(x) => write!(f, "{x}b"),
             Self::Float(x) => write!(f, "{x}f"),
             Self::Char(x) => write!(f, "'{x}'"),
+            Self::Big(x) => write!(f, "{x}g"),
             Self::String(x) => write!(f, "{x:?}"),
             Self::Null => write!(f, "null"),
             Self::Closure { label, .. } => write!(f, "CLOSURE {label}"),
@@ -310,8 +315,8 @@ impl Display for VMLiteral {
     }
 }
 
-impl From<LirLiteral> for VMLiteral {
-    fn from(value: LirLiteral) -> Self {
+impl VMLiteral {
+    pub fn from_lir_literal(value: LirLiteral, cc: &mut Consts) -> Self {
         match value {
             LirLiteral::Int(x) => Self::Int(x),
             LirLiteral::UInt(x) => Self::UInt(x),
@@ -319,6 +324,13 @@ impl From<LirLiteral> for VMLiteral {
             LirLiteral::Float(x) => Self::Float(x),
             LirLiteral::Char(x) => Self::Char(x),
             LirLiteral::String(x) => Self::String(x),
+            LirLiteral::Big(x) => Self::Big(BigFloat::parse(
+                &x,
+                astro_float::Radix::Dec,
+                BIG_PRECISION,
+                BIG_ROUNDING,
+                cc,
+            )),
             LirLiteral::Null => Self::Null,
         }
     }

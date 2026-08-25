@@ -7,6 +7,7 @@ use crate::{
         stdlib::{self, generator::GeneratorState},
     },
 };
+use astro_float::{BigFloat, RoundingMode};
 use calibre_lir::ast::BlockId;
 use calibre_parser::ast::{
     ObjectMap,
@@ -39,8 +40,10 @@ pub mod conversion;
 mod display;
 mod ffi;
 pub mod operation;
-
 pub use bridge::TerminateValue;
+
+pub const BIG_PRECISION: usize = 128;
+pub const BIG_ROUNDING: RoundingMode = RoundingMode::ToEven;
 
 #[derive(Debug, Clone)]
 pub struct GcVec(pub Vec<RuntimeValue>);
@@ -251,6 +254,7 @@ pub enum RuntimeValue {
     #[default]
     Null,
     Float(f64),
+    Big(BigFloat),
     Int(i64),
     UInt(u64),
     Byte(u8),
@@ -723,6 +727,7 @@ impl RuntimeValue {
 impl From<VMLiteral> for RuntimeValue {
     fn from(value: VMLiteral) -> Self {
         match value {
+            VMLiteral::Big(x) => Self::Big(x),
             VMLiteral::Int(x) => Self::Int(x),
             VMLiteral::UInt(x) => Self::UInt(x),
             VMLiteral::Byte(x) => Self::Byte(x),

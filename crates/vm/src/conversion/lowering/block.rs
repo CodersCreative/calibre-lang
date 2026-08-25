@@ -248,8 +248,8 @@ impl<'a> BlockLoweringCtx<'a> {
                 if let LirLiteral::Null = x {
                     return self.null_reg;
                 }
-
-                let lit = self.add_literal(x.into());
+                let lit = VMLiteral::from_lir_literal(x.into(), &mut self.big_consts);
+                let lit = self.add_literal(lit);
                 let dst = self.alloc_reg();
                 self.emit(VMInstruction::LoadLiteral { dst, literal: lit }, span);
 

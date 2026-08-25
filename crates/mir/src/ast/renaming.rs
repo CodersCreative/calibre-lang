@@ -34,6 +34,7 @@ impl MiddleNodeType {
             | MiddleNodeType::EnumExpression { data: None, .. }
             | MiddleNodeType::CharLiteral(_)
             | MiddleNodeType::FloatLiteral(_)
+            | MiddleNodeType::BigLiteral(_)
             | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::ExternFunction { .. } => self,

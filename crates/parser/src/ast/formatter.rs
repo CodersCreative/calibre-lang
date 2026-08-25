@@ -1252,6 +1252,7 @@ impl Formatter {
             }
             NodeType::Identifier(x) => x.to_string(),
             NodeType::IntLiteral(x) => x.to_string(),
+            NodeType::BigLiteral(x) => format!("{}g", x),
             NodeType::FloatLiteral(x) => {
                 let mut temp = x.to_string();
                 if temp.contains(".") {

@@ -1,4 +1,8 @@
-use crate::{VM, error::RuntimeError, value::RuntimeValue};
+use crate::{
+    VM,
+    error::RuntimeError,
+    value::{BIG_PRECISION, BIG_ROUNDING, RuntimeValue},
+};
 use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
@@ -31,6 +35,7 @@ pub fn comparison(
         match (left, right) {
             (RuntimeValue::Null, RuntimeValue::Null) => Some(true),
             (RuntimeValue::Bool(a), RuntimeValue::Bool(b)) => Some(a == b),
+            (RuntimeValue::Big(a), RuntimeValue::Big(b)) => Some(a == b),
             (RuntimeValue::Int(a), RuntimeValue::Int(b)) => Some(a == b),
             (RuntimeValue::UInt(a), RuntimeValue::UInt(b)) => Some(a == b),
             (RuntimeValue::Byte(a), RuntimeValue::Byte(b)) => Some(a == b),
@@ -151,6 +156,9 @@ pub fn comparison(
                 op.clone(),
             )),
         },
+        (RuntimeValue::Big(x), RuntimeValue::Big(y), op) => {
+            Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
+        }
         (RuntimeValue::Int(x), RuntimeValue::Int(y), op) => {
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
         }
@@ -315,28 +323,40 @@ pub fn binary(
     left: RuntimeValue,
     right: RuntimeValue,
 ) -> Result<RuntimeValue, RuntimeError> {
-    Ok(match op {
-        BinaryOperator::Add => left + right,
-        BinaryOperator::Sub => left - right,
-        BinaryOperator::Mul => left * right,
-        BinaryOperator::Div => left / right,
-        BinaryOperator::Pow => left.pow(right),
-        BinaryOperator::Mod => left.modulus(right),
-        BinaryOperator::BitXor => left ^ right,
-        BinaryOperator::BitOr => left | right,
-        BinaryOperator::BitAnd => match left.special_and(vm, right) {
-            Ok(x) => Ok(x),
-            Err((l, r)) => l & r,
-        },
-        BinaryOperator::Shl => match left.special_shl(vm, right) {
-            Ok(x) => Ok(x),
-            Err((l, r)) => l << r,
-        },
-        BinaryOperator::Shr => match left.special_shr(vm, right) {
-            Ok(x) => Ok(x),
-            Err((l, r)) => l >> r,
-        },
-    }?)
+    match (left, right) {
+        (RuntimeValue::Big(x), RuntimeValue::Big(y)) => Ok(match op {
+            BinaryOperator::Add => RuntimeValue::Big(x.add(&y, BIG_PRECISION, BIG_ROUNDING)),
+            BinaryOperator::Sub => RuntimeValue::Big(x.sub(&y, BIG_PRECISION, BIG_ROUNDING)),
+            BinaryOperator::Mul => RuntimeValue::Big(x.mul(&y, BIG_PRECISION, BIG_ROUNDING)),
+            BinaryOperator::Div => RuntimeValue::Big(x.div(&y, BIG_PRECISION, BIG_ROUNDING)),
+            BinaryOperator::Pow => {
+                RuntimeValue::Big(x.pow(&y, BIG_PRECISION, BIG_ROUNDING, &mut vm.big_consts))
+            }
+            _ => return RuntimeValue::Big(x).panic_operator(&RuntimeValue::Big(y), op),
+        }),
+        (left, right) => Ok(match op {
+            BinaryOperator::Add => left + right,
+            BinaryOperator::Sub => left - right,
+            BinaryOperator::Mul => left * right,
+            BinaryOperator::Div => left / right,
+            BinaryOperator::Pow => left.pow(right),
+            BinaryOperator::Mod => left.modulus(right),
+            BinaryOperator::BitXor => left ^ right,
+            BinaryOperator::BitOr => left | right,
+            BinaryOperator::BitAnd => match left.special_and(vm, right) {
+                Ok(x) => Ok(x),
+                Err((l, r)) => l & r,
+            },
+            BinaryOperator::Shl => match left.special_shl(vm, right) {
+                Ok(x) => Ok(x),
+                Err((l, r)) => l << r,
+            },
+            BinaryOperator::Shr => match left.special_shr(vm, right) {
+                Ok(x) => Ok(x),
+                Err((l, r)) => l >> r,
+            },
+        }?),
+    }
 }
 
 impl RuntimeValue {

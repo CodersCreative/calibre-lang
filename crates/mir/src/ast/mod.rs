@@ -328,6 +328,7 @@ pub enum MiddleNodeType {
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(ParsedIntLiteral),
+    BigLiteral(ParserText),
     FieldAccess {
         base: Box<MiddleNode>,
         field: ParserText,
@@ -378,6 +379,7 @@ impl MiddleNodeType {
             MiddleNodeType::Identifier(_)
                 | MiddleNodeType::IntLiteral { .. }
                 | MiddleNodeType::FloatLiteral(_)
+                | MiddleNodeType::BigLiteral(_)
                 | MiddleNodeType::StringLiteral(_)
                 | MiddleNodeType::CharLiteral(_)
                 | MiddleNodeType::Null
@@ -620,6 +622,7 @@ impl Into<NodeType> for MiddleNodeType {
             }),
             Self::CharLiteral(x) => NodeType::CharLiteral(x),
             Self::FloatLiteral(x) => NodeType::FloatLiteral(x),
+            Self::BigLiteral(x) => NodeType::BigLiteral(x),
             Self::IntLiteral(x) => {
                 let mut out = x.value.to_string();
                 match x.int_type {

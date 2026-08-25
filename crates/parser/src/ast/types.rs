@@ -189,6 +189,7 @@ pub enum ParserInnerType {
     UInt,
     Byte,
     Int,
+    Big,
     Null,
     Bool,
     Str,
@@ -364,6 +365,7 @@ impl FromStr for ParserInnerType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "int" => Self::Int,
+            "big" => Self::Big,
             "uint" => Self::UInt,
             "byte" => Self::Byte,
             "float" => Self::Float,
@@ -611,6 +613,7 @@ impl Display for ParserInnerType {
         match self {
             Self::Float => write!(f, "float"),
             Self::Int => write!(f, "int"),
+            Self::Big => write!(f, "big"),
             Self::UInt => write!(f, "uint"),
             Self::Byte => write!(f, "byte"),
             Self::Null => write!(f, "null"),

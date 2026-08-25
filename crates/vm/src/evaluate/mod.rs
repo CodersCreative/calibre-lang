@@ -685,6 +685,7 @@ impl VM {
             },
             ParserInnerType::Auto(_) => true,
             ParserInnerType::Ref(inner, _) => self.runtime_matches_type(value, &inner.data_type),
+            ParserInnerType::Big => matches!(value, RuntimeValue::Big(_)),
             ParserInnerType::Float => matches!(value, RuntimeValue::Float(_)),
             ParserInnerType::Int => matches!(value, RuntimeValue::Int(_)),
             ParserInnerType::UInt => matches!(value, RuntimeValue::UInt(_)),

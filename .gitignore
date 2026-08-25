@@ -8,6 +8,7 @@ target/
 /src/test*
 **.svg
 **test*.txt
+**.log
 
 # Node artifacts
 **/build/

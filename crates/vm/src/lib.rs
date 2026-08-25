@@ -6,6 +6,7 @@ use crate::{
     value::{GcMap, GcVec, RuntimeValue, WaitGroupInner},
     variables::VariableStore,
 };
+use astro_float::Consts;
 use calibre_lir::ast::BlockId;
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -66,7 +67,7 @@ impl Default for VMFrame {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug)]
 pub struct VM {
     pub variables: VariableStore,
     pub registry: Arc<VMRegistry>,
@@ -87,6 +88,34 @@ pub struct VM {
     pub(crate) moved_functions: FxHashSet<String>,
     pub suppress_output: bool,
     pub captured_output: String,
+    pub big_consts: Consts,
+}
+
+impl Clone for VM {
+    fn clone(&self) -> Self {
+        VM {
+            variables: self.variables.clone(),
+            registry: self.registry.clone(),
+            mappings: self.mappings.clone(),
+            program_args: self.program_args.clone(),
+            counter: self.counter.clone(),
+            ptr_heap: self.ptr_heap.clone(),
+            config: self.config.clone(),
+            source_file_override: self.source_file_override.clone(),
+            reg_arena: self.reg_arena.clone(),
+            reg_top: self.reg_top.clone(),
+            frames: self.frames.clone(),
+            frame_pool: self.frame_pool.clone(),
+            caches: self.caches.clone(),
+            gc: self.gc.clone(),
+            scheduler: self.scheduler.clone(),
+            task_state: self.task_state.clone(),
+            moved_functions: self.moved_functions.clone(),
+            suppress_output: self.suppress_output.clone(),
+            captured_output: self.captured_output.clone(),
+            big_consts: Consts::new().unwrap(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -226,6 +255,7 @@ impl VM {
             moved_functions: FxHashSet::default(),
             suppress_output: false,
             captured_output: String::new(),
+            big_consts: Consts::new().unwrap(),
         };
 
         if let Some(interval) = vm.config.gc_interval {

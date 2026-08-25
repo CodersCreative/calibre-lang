@@ -37,6 +37,7 @@ pub enum LirLiteral {
     Byte(u8),
     Float(f64),
     Char(char),
+    Big(String),
     String(String),
     Null,
 }
@@ -49,6 +50,7 @@ impl Display for LirLiteral {
             Self::Byte(x) => write!(f, "{x}b"),
             Self::Float(x) => write!(f, "{x}f"),
             Self::Char(x) => write!(f, "'{x}'"),
+            Self::Big(x) => write!(f, "{x}g"),
             Self::String(x) => write!(f, "{x:?}"),
             Self::Null => write!(f, "null"),
         }

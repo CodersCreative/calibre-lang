@@ -224,6 +224,7 @@ impl<'a> LirEnvironment<'a> {
                 IntLiteralType::Byte => LirNodeType::Literal(LirLiteral::Byte(value as u8)),
             },
             MiddleNodeType::FloatLiteral(f) => LirNodeType::Literal(LirLiteral::Float(f)),
+            MiddleNodeType::BigLiteral(x) => LirNodeType::Literal(LirLiteral::Big(x.text)),
             MiddleNodeType::CharLiteral(c) => LirNodeType::Literal(LirLiteral::Char(c)),
             MiddleNodeType::Null => LirNodeType::null(),
             MiddleNodeType::StringLiteral(s) => {

@@ -14,6 +14,7 @@ impl IdentifiersUsed for MiddleNode {
                 data: None,
             }
             | MiddleNodeType::StringLiteral(_)
+            | MiddleNodeType::BigLiteral(_)
             | MiddleNodeType::CharLiteral(_)
             | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::FloatLiteral(_)
@@ -177,6 +178,7 @@ impl MiddleNode {
             }
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::CharLiteral(_)
+            | MiddleNodeType::BigLiteral(_)
             | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::Return { value: None }

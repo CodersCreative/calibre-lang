@@ -73,6 +73,7 @@ struct FunctionLowering {
     ret_reg: Reg,
     is_global: bool,
     assign_regs: Vec<Vec<Option<Reg>>>,
+    big_consts: Consts,
 }
 
 impl FunctionLowering {
@@ -188,6 +189,7 @@ impl FunctionLowering {
             ret_reg,
             is_global,
             assign_regs,
+            big_consts: Consts::new().unwrap(),
         }
     }
 
@@ -382,6 +384,7 @@ impl FunctionLowering {
                 char_literals: FxHashMap::default(),
                 string_literals: FxHashMap::default(),
                 current_fn_name: self.func.name.to_string(),
+                big_consts: &mut self.big_consts,
             };
 
             if block.id == self.entry {

@@ -55,6 +55,26 @@ impl RuntimeValue {
         }
 
         match (self, data_type) {
+            (RuntimeValue::Big(x), ParserInnerType::Int) => {
+                Ok(RuntimeValue::Int((x.int().to_string()).parse::<i64>()?))
+            }
+            (RuntimeValue::Big(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(!x.is_zero())),
+            (RuntimeValue::Big(x), ParserInnerType::UInt) => {
+                Ok(RuntimeValue::UInt((x.int().to_string()).parse::<u64>()?))
+            }
+            (RuntimeValue::Big(x), ParserInnerType::Byte) => {
+                Ok(RuntimeValue::Byte((x.int().to_string()).parse::<u8>()?))
+            }
+            (RuntimeValue::Big(x), ParserInnerType::Float) => {
+                Ok(RuntimeValue::Float((x.to_string()).parse::<f64>()?))
+            }
+            (RuntimeValue::Big(x), ParserInnerType::Char) => Ok(RuntimeValue::Char(
+                (x.int().to_string()).parse::<u8>()? as char,
+            )),
+            (RuntimeValue::Big(x), ParserInnerType::Str) => {
+                Ok(RuntimeValue::Str(Arc::new(Mutex::new(x.to_string()))))
+            }
+
             (RuntimeValue::UInt(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
             (RuntimeValue::UInt(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
             (RuntimeValue::UInt(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x)),
@@ -66,7 +86,6 @@ impl RuntimeValue {
             (RuntimeValue::UInt(x), ParserInnerType::Str) => {
                 Ok(RuntimeValue::Str(Arc::new(Mutex::new(x.to_string()))))
             }
-
             (RuntimeValue::Int(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x)),
             (RuntimeValue::Int(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
             (RuntimeValue::Int(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
