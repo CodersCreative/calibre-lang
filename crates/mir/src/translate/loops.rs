@@ -17,6 +17,7 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
+use tracing::instrument;
 
 struct MutIterAliasDerefVisitor<'a> {
     alias: &'a str,
@@ -160,6 +161,7 @@ impl MiddleEnvironment {
         })
     }
 
+    #[instrument(skip_all, fields(scope))]
     pub fn evaluate_iter_expression(
         &mut self,
         scope: &u64,
@@ -730,6 +732,7 @@ impl MiddleEnvironment {
         )
     }
 
+    #[instrument(skip_all, fields(scope))]
     pub fn evaluate_loop_statement(
         &mut self,
         scope: &u64,

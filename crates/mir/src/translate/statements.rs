@@ -15,8 +15,10 @@ use calibre_parser::{
     },
 };
 use rustc_hash::FxHashMap;
+use tracing::instrument;
 
 impl MiddleEnvironment {
+    #[instrument(skip_all, fields(scope, identifier))]
     pub fn evaluate_var_declaration(
         &mut self,
         scope: &u64,
@@ -242,6 +244,7 @@ impl MiddleEnvironment {
         })
     }
 
+    #[instrument(skip_all, fields(scope, identifier))]
     pub fn evaluate_type_declaration(
         &mut self,
         scope: &u64,
