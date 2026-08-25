@@ -19,6 +19,8 @@ pub struct Scoping {
     pub loaded_scopes: FxHashSet<u64>,
     pub loop_stack: Vec<LoopContext>,
     pub return_type_stack: Vec<ParserInnerType>,
+    pub generic_param_stack: Vec<Vec<String>>,
+    pub all_time_generics: FxHashSet<String>,
 }
 
 impl Scoping {
@@ -32,6 +34,24 @@ impl Scoping {
         self.scopes
             .get_mut(scope)
             .ok_or_else(|| MiddleErr::Internal(format!("missing scope {scope}")))
+    }
+
+    pub fn push_generic_params(&mut self, params: Vec<String>) {
+        self.all_time_generics.extend(params.clone().into_iter());
+        self.generic_param_stack.push(params);
+    }
+
+    pub fn pop_generic_params(&mut self) {
+        self.generic_param_stack.pop();
+    }
+
+    pub fn is_generic_param(&self, ident: &str) -> bool {
+        for params in self.generic_param_stack.iter().rev() {
+            if params.contains(&ident.to_string()) {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn get_location(&self, scope: &u64, span: Span) -> Option<Location> {

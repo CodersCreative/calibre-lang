@@ -1798,10 +1798,18 @@ impl MiddleEnvironment {
                     .0
                     .iter()
                     .map(|g| {
-                        self.resolve(scope, &g.identifier, ResolutionOptions::all())
-                            .unwrap_or(g.identifier.to_string())
+                        self.resolve(
+                            scope,
+                            &g.identifier,
+                            ResolutionOptions::default().with_dollar(),
+                        )
+                        .unwrap_or(g.identifier.to_string())
                     })
                     .collect();
+
+                if !generic_params.is_empty() {
+                    self.scoping.push_generic_params(generic_params.clone());
+                }
 
                 let impl_key = self
                     .typing
@@ -1864,14 +1872,13 @@ impl MiddleEnvironment {
                                     let param_type = if let Some(Some(param)) =
                                         header.parameters.first().map(|x| &x.1)
                                     {
-                                        Some(
-                                            self.resolve_data_type(
-                                                scope,
-                                                param,
-                                                ResolutionOptions::default(),
-                                            )?
-                                            .unwrap_all_refs(),
+                                        self.resolve_data_type(
+                                            scope,
+                                            param,
+                                            ResolutionOptions::default(),
                                         )
+                                        .ok()
+                                        .map(|x| x.unwrap_all_refs())
                                     } else if let Some(Some(node)) =
                                         header.parameters.first().map(|x| x.2.clone())
                                     {
@@ -1977,6 +1984,10 @@ impl MiddleEnvironment {
                             scope.mappings.remove(&name);
                         }
                     }
+
+                    if !generic_params.is_empty() {
+                        self.scoping.pop_generic_params();
+                    }
                 }
 
                 Ok(MiddleNode {
@@ -2002,6 +2013,19 @@ impl MiddleEnvironment {
                         prev_generics.push((name.clone(), scope_ref.mappings.get(&name).cloned()));
                         scope_ref.mappings.insert(name.clone(), name.clone());
                     }
+                }
+
+                let generic_params: Vec<String> = generics
+                    .0
+                    .iter()
+                    .map(|g| {
+                        self.resolve(scope, &g.identifier, ResolutionOptions::all())
+                            .unwrap_or(g.identifier.to_string())
+                    })
+                    .collect();
+
+                if !generic_params.is_empty() {
+                    self.scoping.push_generic_params(generic_params.clone());
                 }
 
                 let resolved_trait = self.resolve(scope, &trait_ident, ResolutionOptions::all())?;
@@ -2067,12 +2091,6 @@ impl MiddleEnvironment {
                             .insert(String::from("Self"), resolved_target.data_type.clone()),
                     )
                 };
-
-                let generic_params: Vec<String> = generics
-                    .0
-                    .iter()
-                    .map(|g| g.identifier.to_string())
-                    .collect();
 
                 let impl_key = self.typing.get_or_create_impl(
                     resolved_target.clone(),
@@ -2264,6 +2282,10 @@ impl MiddleEnvironment {
                         } else {
                             scope.mappings.remove(&name);
                         }
+                    }
+
+                    if !generic_params.is_empty() {
+                        self.scoping.pop_generic_params();
                     }
                 }
 

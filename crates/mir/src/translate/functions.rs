@@ -508,6 +508,17 @@ impl MiddleEnvironment {
         let mut old_func_defers = std::mem::take(&mut self.symbols.func_defers);
         let new_scope = self.scoping.new_scope_from_parent_shallow(*scope);
 
+        let generic_params: Vec<String> = header
+            .generics
+            .0
+            .iter()
+            .map(|g| g.identifier.to_string())
+            .collect();
+
+        if !generic_params.is_empty() {
+            self.scoping.push_generic_params(generic_params.clone());
+        }
+
         let needs_caller_context = self.tagging.tag_info.contains(&TagInfo::CallerContext);
 
         for param in header.parameters {
@@ -717,6 +728,10 @@ impl MiddleEnvironment {
             span,
         };
         let _ = self.scoping.return_type_stack.pop();
+
+        if !header.generics.0.is_empty() {
+            self.scoping.pop_generic_params();
+        }
 
         // TODO revisit this
         for (p_name, _, _) in params.iter() {

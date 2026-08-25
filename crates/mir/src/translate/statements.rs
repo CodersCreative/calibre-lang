@@ -80,6 +80,7 @@ impl MiddleEnvironment {
             NodeType::FunctionDeclaration { header, body, .. } => Some((header, body)),
             _ => None,
         };
+
         if let Some((header, body)) = function_decl
             && !header.generics.0.is_empty()
         {

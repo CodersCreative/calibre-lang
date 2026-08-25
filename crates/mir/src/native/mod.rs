@@ -105,24 +105,19 @@ impl MiddleEnvironment {
         vars.append(&mut funcs);
 
         for var in vars {
-            let name = var.0.clone();
+            let name = ParserText::temp_name_with_suffix(&var.0, var.1.span).text;
 
-            let _ = self.symbols.variables.insert(
+            let _ = self.register_variable(
+                scope,
+                var.0.clone(),
                 name.clone(),
-                MiddleVariable {
-                    data_type: var.1.clone(),
-                    var_type: VarType::Constant,
-                    location: None,
-                },
+                var.1.clone(),
+                VarType::Constant,
             );
 
             self.symbols
                 .native_mappings
-                .insert(var.0.clone(), name.clone());
-
-            if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
-                scope_ref.mappings.insert(var.0.clone(), name);
-            }
+                .insert(var.0.clone(), name);
         }
 
         self.register_tag_handlers();
@@ -191,29 +186,20 @@ impl MiddleEnvironment {
 
         for (original_name, var) in funcs {
             let short_name = original_name
-                .split_once(".")
+                .rsplit_once(".")
                 .map(|x| x.1)
                 .unwrap_or(&original_name)
                 .trim()
                 .to_string();
+
             let name = ParserText::temp_name_with_suffix(&short_name, var.span).text;
 
-            let _ = self.symbols.variables.insert(
-                name.clone(),
-                MiddleVariable {
-                    data_type: var.clone(),
-                    var_type: VarType::Constant,
-                    location: None,
-                },
-            );
+            let _ = self.register_variable(&scope, short_name, name.clone(),  var.clone(), VarType::Constant);
+
 
             self.symbols
                 .native_mappings
-                .insert(original_name.clone(), name.clone());
-
-            if let Some(scope_ref) = self.scoping.scopes.get_mut(&scope) {
-                scope_ref.mappings.insert(short_name, name);
-            }
+                .insert(original_name.clone(), name);
         }
 
         if load_source {

@@ -331,7 +331,8 @@ impl MiddleEnvironment {
         trace!(ident = %ident, "Dollar resolution succedded");
 
         if options.type_resolution {
-            if self.typing.objects.contains_key(&ident)
+            if self.scoping.is_generic_param(&ident)
+                || self.typing.objects.contains_key(&ident)
                 || self.typing.trait_defs.contains_key(&ident)
             {
                 return Ok(ident);
@@ -363,20 +364,24 @@ impl MiddleEnvironment {
             }
 
             for key in self.typing.trait_defs.keys() {
-                if key == &ident || ParserText::temp_name_suffix_matches(key, &ident) {
+                if ParserText::temp_name_suffix_matches(key, &ident) {
                     return Ok(key.clone());
                 }
             }
 
             for key in self.typing.objects.keys() {
-                if key == &ident || ParserText::temp_name_suffix_matches(key, &ident) {
+                if ParserText::temp_name_suffix_matches(key, &ident) {
                     return Ok(key.clone());
                 }
             }
 
+            if self.scoping.all_time_generics.contains(&ident) {
+                return Ok(ident);
+            }
+
             if options.name_resolution {
                 for key in self.symbols.variables.keys() {
-                    if key == &ident || ParserText::temp_name_suffix_matches(key, &ident) {
+                    if ParserText::temp_name_suffix_matches(key, &ident) {
                         return Ok(key.clone());
                     }
                 }
@@ -407,7 +412,7 @@ impl MiddleEnvironment {
         }
 
         for key in self.symbols.variables.keys() {
-            if key == &ident || ParserText::temp_name_suffix_matches(key, &ident) {
+            if ParserText::temp_name_suffix_matches(key, &ident) {
                 return Ok(key.clone());
             }
         }

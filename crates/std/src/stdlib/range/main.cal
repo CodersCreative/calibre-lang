@@ -8,8 +8,8 @@ impl range {
 	const is_empty := fn (self : range) -> bool => return len(self) = min_or_zero(self);
 
 	const contains := fn (self : range, value : int) -> bool => {
-		let s := min_or_zero(self);
-		let e := len(self);
+		let s : int = min_or_zero(self);
+		let e : int = len(self);
 		return value >= s && value < e;
 	};
 
@@ -17,7 +17,7 @@ impl range {
 		let mut out := list:<int>[];
 		
 		// TODO Fix range iter
-		// for i in self => out <<= i;
+		for i in self => out <<= i;
 		return out;
 	};
 
@@ -25,7 +25,7 @@ impl range {
 		let mut acc := 0;
 		
 		// TODO Fix range iter
-		// for i in self => acc += i;
+		for i in self => acc += i;
 		return acc;
 	};
 

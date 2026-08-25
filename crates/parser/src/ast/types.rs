@@ -362,6 +362,7 @@ impl FromStr for ParserInnerType {
             "byte" => Self::Byte,
             "float" => Self::Float,
             "bool" => Self::Bool,
+            "range" => Self::Range,
             "str" => Self::Str,
             "char" => Self::Char,
             "dyn" => Self::Dynamic,
