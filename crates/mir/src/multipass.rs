@@ -1,8 +1,10 @@
-use crate::{environment::MiddleEnvironment, errors::MiddleErr};
+use crate::{
+    environment::MiddleEnvironment, errors::MiddleErr, symbols::resolve::ResolutionOptions,
+};
 use calibre_parser::ast::{
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::{Node, NodeType, VarType},
-    types::{ParserDataType, ParserInnerType},
+    types::ParserDataType,
 };
 
 impl MiddleEnvironment {
@@ -40,11 +42,9 @@ impl MiddleEnvironment {
 
                 *data_type = if data_type.is_auto() {
                     self.resolve_type_from_node(scope, value)
-                        .unwrap_or_else(|| {
-                            ParserDataType::new(node.span, ParserInnerType::Auto(None))
-                        })
+                        .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?
                 } else {
-                    self.resolve_data_type(scope, data_type.clone())
+                    self.resolve_data_type(scope, &*data_type, ResolutionOptions::typing())?
                 };
 
                 self.register_variable(
@@ -73,10 +73,18 @@ impl MiddleEnvironment {
 
                 let mut params = Vec::new();
                 for ty in parameters.clone() {
-                    params.push(self.resolve_ffi_data_type(scope, ty));
+                    params.push(self.resolve_data_type(
+                        scope,
+                        &ty.resolve_ffi(),
+                        ResolutionOptions::typing(),
+                    )?);
                 }
 
-                let return_type = self.resolve_ffi_data_type(scope, return_type.clone());
+                let return_type = self.resolve_data_type(
+                    scope,
+                    &return_type.clone().resolve_ffi(),
+                    ResolutionOptions::typing(),
+                )?;
 
                 let data_type = ParserDataType::function(
                     self.context.current_span(),

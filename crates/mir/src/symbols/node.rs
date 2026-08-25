@@ -22,7 +22,10 @@ impl MiddleEnvironment {
             _ => None,
         };
 
-        typ.map(|typ| self.resolve_data_type(scope, typ))
+        typ.and_then(|typ| {
+            self.resolve_data_type(scope, &typ, ResolutionOptions::typing())
+                .ok()
+        })
     }
 
     pub fn resolve_type_from_node(&mut self, scope: &u64, node: &Node) -> Option<ParserDataType> {
@@ -170,22 +173,26 @@ impl MiddleEnvironment {
             NodeType::EnumExpression { identifier, .. }
             | NodeType::StructLiteral { identifier, .. } => Some(ParserDataType {
                 span: *identifier.span(),
-                data_type: self
-                    .resolve_potential_generic_ident_to_data_type(scope, identifier)?
-                    .data_type,
+                data_type: self.resolve_to_data_type(scope, identifier).ok()?.data_type,
             }),
             NodeType::FunctionDeclaration { header, .. }
             | NodeType::FnMatchDeclaration { header, .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Function {
                     return_type: Box::new(
-                        self.resolve_data_type(scope, header.return_type.clone()),
+                        self.resolve_data_type(
+                            scope,
+                            &header.return_type,
+                            ResolutionOptions::typing(),
+                        )
+                        .ok()?,
                     ),
                     parameters: {
                         let mut params = Vec::new();
 
                         for param in header.parameters.clone() {
                             let data_type = if let Some(x) = param.1 {
-                                self.resolve_data_type(scope, x)
+                                self.resolve_data_type(scope, &x, ResolutionOptions::typing())
+                                    .ok()?
                             } else if let Some(node) = &param.2 {
                                 self.resolve_type_from_node(scope, node)?
                             } else {
@@ -250,7 +257,8 @@ impl MiddleEnvironment {
             } => {
                 let list_type = ParserDataType {
                     data_type: ParserInnerType::List(Box::new(
-                        self.resolve_data_type(scope, data_type.clone()),
+                        self.resolve_data_type(scope, data_type, ResolutionOptions::typing())
+                            .ok()?,
                     )),
                     span: node.span,
                 };
@@ -269,7 +277,8 @@ impl MiddleEnvironment {
             NodeType::ListLiteral(data_type, _) | NodeType::ListRepeatLiteral { data_type, .. } => {
                 Some(ParserDataType {
                     data_type: ParserInnerType::List(Box::new(
-                        self.resolve_data_type(scope, data_type.clone()),
+                        self.resolve_data_type(scope, data_type, ResolutionOptions::typing())
+                            .ok()?,
                     )),
                     span: node.span,
                 })
@@ -282,7 +291,9 @@ impl MiddleEnvironment {
                 data_type,
                 failure_mode,
             } => {
-                let ok = self.resolve_data_type(scope, data_type.clone());
+                let ok = self
+                    .resolve_data_type(scope, data_type, ResolutionOptions::typing())
+                    .ok()?;
                 match failure_mode {
                     AsFailureMode::Panic => Some(ok),
                     AsFailureMode::Option => Some(ParserDataType {
@@ -357,7 +368,7 @@ impl MiddleEnvironment {
                     if !member_name.is_empty() {
                         let ty = self.resolve_type_from_node(scope, base).or_else(|| {
                             if let NodeType::Identifier(id) = &base.node_type {
-                                self.resolve_potential_generic_ident_to_data_type(scope, id)
+                                self.resolve_to_data_type(scope, id).ok()
                             } else {
                                 None
                             }
@@ -416,9 +427,7 @@ impl MiddleEnvironment {
                         });
                     }
 
-                    if let Some(caller_ty) =
-                        self.resolve_potential_generic_ident_to_data_type(scope, caller)
-                    {
+                    if let Ok(caller_ty) = self.resolve_to_data_type(scope, caller) {
                         match &caller_ty.data_type {
                             ParserInnerType::Struct(name) => {
                                 if self.typing.objects.contains_key(name) {
@@ -467,7 +476,7 @@ impl MiddleEnvironment {
             NodeType::FieldAccess { base, field } => {
                 let ty = self.resolve_type_from_node(scope, base).or_else(|| {
                     if let NodeType::Identifier(id) = &base.node_type {
-                        self.resolve_potential_generic_ident_to_data_type(scope, id)
+                        self.resolve_to_data_type(scope, id).ok()
                     } else {
                         None
                     }
@@ -517,13 +526,16 @@ impl MiddleEnvironment {
             NodeType::IndexAccess { base, index } => {
                 let base_type = self.resolve_type_from_node(scope, base).or_else(|| {
                     if let NodeType::Identifier(id) = &base.node_type {
-                        self.resolve_potential_generic_ident_to_data_type(scope, id)
+                        self.resolve_to_data_type(scope, id).ok()
                     } else {
                         None
                     }
                 })?;
 
-                let resolved_type = self.resolve_data_type(scope, base_type).unwrap_all_refs();
+                let resolved_type = self
+                    .resolve_data_type(scope, &base_type, ResolutionOptions::typing())
+                    .ok()?
+                    .unwrap_all_refs();
                 let index_type = match resolved_type.data_type {
                     ParserInnerType::List(inner)
                     | ParserInnerType::Option(inner)
@@ -601,6 +613,9 @@ impl MiddleEnvironment {
             }
         };
 
-        typ.map(|typ| self.resolve_data_type(scope, typ))
+        typ.and_then(|typ| {
+            self.resolve_data_type(scope, &typ, ResolutionOptions::typing())
+                .ok()
+        })
     }
 }

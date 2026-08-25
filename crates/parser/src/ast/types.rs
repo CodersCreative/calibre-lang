@@ -40,23 +40,19 @@ impl From<ParserInnerType> for ParserDataType {
     }
 }
 
+impl<'a> From<&'a ParserDataType> for &'a ParserInnerType {
+    fn from(value: &'a ParserDataType) -> Self {
+        return &value.data_type;
+    }
+}
+
 impl ParserDataType {
     pub fn new(span: Span, data_type: ParserInnerType) -> Self {
         Self { data_type, span }
     }
 
     pub fn key(&self) -> ParserInnerType {
-        match self.clone().unwrap_all_refs().data_type {
-            ParserInnerType::StructWithGenerics {
-                identifier,
-                generic_types: _,
-            } => ParserInnerType::Struct(identifier),
-            ParserInnerType::List(_) => ParserInnerType::Struct(String::from("list")),
-            ParserInnerType::Ptr(_) => ParserInnerType::Struct(String::from("ptr")),
-            ParserInnerType::Option(_) => ParserInnerType::Struct(String::from("option")),
-            ParserInnerType::Result { .. } => ParserInnerType::Struct(String::from("result")),
-            x => x,
-        }
+        self.data_type.key()
     }
 
     pub fn member_base_name_candidates(&self) -> Vec<String> {
@@ -96,11 +92,7 @@ impl ParserDataType {
     }
 
     pub fn impl_name(&self) -> String {
-        match self.key() {
-            ParserInnerType::StructWithGenerics { identifier, .. }
-            | ParserInnerType::Struct(identifier) => identifier,
-            other => other.to_string(),
-        }
+        self.data_type.impl_name()
     }
 
     pub fn substitute(&self, subst: &FxHashMap<String, ParserDataType>) -> ParserDataType {
@@ -408,6 +400,28 @@ impl ParserInnerType {
             self.unwrap_all_refs(),
             ParserInnerType::Function { .. } | ParserInnerType::NativeFunction { .. }
         )
+    }
+
+    pub fn key(&self) -> ParserInnerType {
+        match self.unwrap_all_refs().clone() {
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types: _,
+            } => ParserInnerType::Struct(identifier),
+            ParserInnerType::List(_) => ParserInnerType::Struct(String::from("list")),
+            ParserInnerType::Ptr(_) => ParserInnerType::Struct(String::from("ptr")),
+            ParserInnerType::Option(_) => ParserInnerType::Struct(String::from("option")),
+            ParserInnerType::Result { .. } => ParserInnerType::Struct(String::from("result")),
+            x => x,
+        }
+    }
+
+    pub fn impl_name(&self) -> String {
+        match self.key() {
+            ParserInnerType::StructWithGenerics { identifier, .. }
+            | ParserInnerType::Struct(identifier) => identifier,
+            other => other.to_string(),
+        }
     }
 
     pub fn is_auto(&self) -> bool {

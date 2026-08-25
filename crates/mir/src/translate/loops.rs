@@ -172,9 +172,9 @@ impl MiddleEnvironment {
     ) -> Result<MiddleNode, MiddleErr> {
         let resolved_data_type = if data_type.is_auto() {
             self.resolve_type_from_node(scope, &map)
-                .unwrap_or(self.resolve_data_type(scope, data_type.clone()))
+                .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?
         } else {
-            self.resolve_data_type(scope, data_type.clone())
+            self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?
         };
 
         if spawned {

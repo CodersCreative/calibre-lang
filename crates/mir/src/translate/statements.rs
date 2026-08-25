@@ -142,7 +142,7 @@ impl MiddleEnvironment {
         let data_type = if data_type.is_auto() {
             None
         } else {
-            Some(self.resolve_data_type(scope, data_type))
+            Some(self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?)
         };
 
         let data_type = match (data_type, node_ty) {
@@ -182,13 +182,12 @@ impl MiddleEnvironment {
                 let new_name = ParserText::temp_name_with_suffix(og_name.trim(), span);
 
                 let data_type = if let Some(x) = param.1.clone() {
-                    self.resolve_data_type(scope, x)
+                    self.resolve_data_type(scope, &x, ResolutionOptions::typing())?
                 } else if let Some(node) = &param.2 {
-                    let err = self.context.err_at_current(MiddleErr::InferImpossible);
-                    self.resolve_type_from_node(scope, node).ok_or(err)?
+                    self.resolve_type_from_node(scope, node)
+                        .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?
                 } else {
-                    let err = self.context.err_at_current(MiddleErr::InferImpossible);
-                    return Err(err);
+                    return Err(self.context.err_at_current(MiddleErr::InferImpossible));
                 };
 
                 self.register_variable(
@@ -292,7 +291,8 @@ impl MiddleEnvironment {
                 ResolutionOptions::default().with_dollar(),
             )?;
 
-            let inner = self.resolve_data_type(scope, *inner.clone());
+            let inner =
+                self.resolve_data_type(scope, inner.as_ref(), ResolutionOptions::typing())?;
 
             let target_name = if identifier == inner.impl_name() {
                 Some(identifier.clone())
@@ -382,10 +382,6 @@ impl MiddleEnvironment {
                     )
                 })?;
 
-                scope_ref
-                    .mappings
-                    .insert(base_ident.clone(), base_ident.clone());
-
                 scope_ref.type_mappings.insert(
                     base_ident.clone(),
                     ParserInnerType::Struct(base_ident.clone()),
@@ -434,7 +430,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let (previous_self, previous_self_type) = {
+        let previous_self_type = {
             let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
                 MiddleErr::At(
                     span,
@@ -442,20 +438,14 @@ impl MiddleEnvironment {
                 )
             })?;
 
-            scope.mappings.insert(identifier.clone(), new_name.clone());
             scope.type_mappings.insert(
                 identifier.clone(),
                 ParserInnerType::Struct(new_name.clone()),
             );
 
-            (
-                scope
-                    .mappings
-                    .insert(String::from("Self"), new_name.clone()),
-                scope.type_mappings.insert(
-                    String::from("Self"),
-                    ParserInnerType::Struct(new_name.clone()),
-                ),
+            scope.type_mappings.insert(
+                String::from("Self"),
+                ParserInnerType::Struct(new_name.clone()),
             )
         };
 
@@ -493,10 +483,6 @@ impl MiddleEnvironment {
                     Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
                 )
             })?;
-
-            if let Some(prev) = previous_self {
-                scope.mappings.insert(String::from("Self"), prev);
-            }
 
             if let Some(prev) = previous_self_type {
                 scope.type_mappings.insert(String::from("Self"), prev);

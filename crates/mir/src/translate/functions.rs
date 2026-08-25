@@ -449,10 +449,18 @@ impl MiddleEnvironment {
 
         let mut params = Vec::new();
         for ty in parameters {
-            params.push(self.resolve_ffi_data_type(scope, ty));
+            params.push(self.resolve_data_type(
+                scope,
+                &ty.resolve_ffi(),
+                ResolutionOptions::typing(),
+            )?);
         }
 
-        let return_type = self.resolve_ffi_data_type(scope, return_type);
+        let return_type = self.resolve_data_type(
+            scope,
+            &return_type.resolve_ffi(),
+            ResolutionOptions::typing(),
+        )?;
 
         let fn_type = ParserDataType::function(
             self.context.current_span(),
@@ -509,13 +517,12 @@ impl MiddleEnvironment {
             let new_name = ParserText::temp_name_with_suffix(og_name.trim(), span).text;
 
             let data_type = if let Some(x) = param.1 {
-                self.resolve_data_type(scope, x)
+                self.resolve_data_type(scope, &x, ResolutionOptions::typing())?
             } else if let Some(node) = &param.2 {
-                let err = self.context.err_at_current(MiddleErr::InferImpossible);
-                self.resolve_type_from_node(scope, node).ok_or(err)?
+                self.resolve_type_from_node(scope, node)
+                    .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?
             } else {
-                let err: MiddleErr = self.context.err_at_current(MiddleErr::InferImpossible);
-                return Err(err);
+                return Err(self.context.err_at_current(MiddleErr::InferImpossible));
             };
 
             self.register_variable(
@@ -554,7 +561,8 @@ impl MiddleEnvironment {
             ));
         }
 
-        let return_type = self.resolve_data_type(&new_scope, header.return_type);
+        let return_type =
+            self.resolve_data_type(&new_scope, &header.return_type, ResolutionOptions::typing())?;
         self.scoping.return_type_stack.push(return_type.key());
 
         body = body.rewrite_main_emits_to_returns();

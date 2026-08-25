@@ -41,7 +41,7 @@ impl MiddleEnvironment {
         let field_name = self.resolve(scope, &field, ResolutionOptions::default().with_dollar())?;
 
         if let NodeType::Identifier(ident) = &base.node_type
-            && let Some(ty) = self.resolve_potential_generic_ident_to_data_type(scope, &ident)
+            && let Ok(ty) = self.resolve_to_data_type(scope, ident)
         {
             if let Some(member) = self.typing.find_impl_member(&ty, &field_name) {
                 return Ok(MiddleNode::identifier(span, member.symbol_name.clone()));
@@ -170,7 +170,9 @@ impl MiddleEnvironment {
         data_type: &ParserDataType,
         member: &impl ToString,
     ) -> Option<String> {
-        let resolved = self.resolve_data_type(scope, data_type.clone());
+        let resolved = self
+            .resolve_data_type(scope, data_type, ResolutionOptions::typing())
+            .ok()?;
         self.typing
             .find_impl_member(&resolved, member)
             .map(|x| x.symbol_name.clone())

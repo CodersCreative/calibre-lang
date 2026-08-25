@@ -389,7 +389,10 @@ impl MiddleTypeDefType {
                                     .unwrap_or_else(|_| k.to_string()),
                             ),
                             if let Some(v) = v {
-                                Some(env.resolve_data_type(scope, v))
+                                Some(
+                                    env.resolve_data_type(scope, &v, ResolutionOptions::typing())
+                                        .unwrap_or(v),
+                                )
                             } else {
                                 None
                             },
@@ -406,13 +409,17 @@ impl MiddleTypeDefType {
                 match fields {
                     ObjectType::Map(field_map) => {
                         for (k, (t, v)) in field_map {
-                            let resolved_type = env.resolve_data_type(scope, t);
+                            let resolved_type = env
+                                .resolve_data_type(scope, &t, ResolutionOptions::typing())
+                                .unwrap_or(t);
                             map.push((k, (resolved_type, v.map(Box::new))));
                         }
                     }
                     ObjectType::Tuple(types) => {
                         for (t, v) in types {
-                            let resolved_type = env.resolve_data_type(scope, t);
+                            let resolved_type = env
+                                .resolve_data_type(scope, &t, ResolutionOptions::typing())
+                                .unwrap_or(t);
                             map.push((format!("{}", map.len()), (resolved_type, v.map(Box::new))));
                         }
                     }
@@ -420,7 +427,10 @@ impl MiddleTypeDefType {
 
                 ObjectMap(map)
             }),
-            TypeDefType::NewType(x) => MiddleTypeDefType::NewType(env.resolve_data_type(scope, *x)),
+            TypeDefType::NewType(x) => MiddleTypeDefType::NewType(
+                env.resolve_data_type(scope, x.as_ref(), ResolutionOptions::typing())
+                    .unwrap_or(*x),
+            ),
         }
     }
 }

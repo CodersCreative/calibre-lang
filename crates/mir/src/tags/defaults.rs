@@ -1,4 +1,5 @@
 use crate::environment::MiddleEnvironment;
+use crate::symbols::resolve::ResolutionOptions;
 use crate::{ast::MiddleNode, errors::MiddleErr, typing::MiddleTypeDefType};
 use calibre_parser::ast::idents::{
     ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
@@ -87,7 +88,9 @@ impl MiddleEnvironment {
                         } else if let Some(default) = field_type.default_node() {
                             (field_name.clone(), default)
                         } else {
-                            let resolved = self.resolve_data_type(scope, field_type.clone());
+                            let resolved = self
+                                .resolve_data_type(scope, field_type, ResolutionOptions::typing())
+                                .unwrap_or(field_type.clone());
                             let type_name = resolved.impl_name();
                             (
                                 field_name.clone(),

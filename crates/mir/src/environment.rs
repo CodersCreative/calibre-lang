@@ -45,14 +45,20 @@ impl MiddleEnvironment {
 
         let operator = Operator::from_str(&overload.operator.text).map_err(MiddleErr::Overload)?;
 
-        let return_type = self.resolve_data_type(scope, overload.header.return_type.clone());
+        let return_type = self.resolve_data_type(
+            scope,
+            &overload.header.return_type,
+            ResolutionOptions::typing(),
+        )?;
 
         let mut params = Vec::new();
         let mut contains_target = false;
 
         for param in overload.header.parameters.iter() {
             let ty = match param.1.clone() {
-                Some(x) if param.2.is_none() => self.resolve_data_type(scope, x),
+                Some(x) if param.2.is_none() => {
+                    self.resolve_data_type(scope, &x, ResolutionOptions::typing())?
+                }
                 _ => {
                     return Err(MiddleErr::Overload(String::from(
                         "Type needs to be explicit when doing overloads and default types arent allowed",

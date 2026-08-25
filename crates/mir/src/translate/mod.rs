@@ -1268,7 +1268,8 @@ impl MiddleEnvironment {
                 data_type,
                 failure_mode,
             } => {
-                let target = self.resolve_data_type(scope, data_type.clone());
+                let target =
+                    self.resolve_data_type(scope, &data_type, ResolutionOptions::default())?;
                 if self
                     .handle_as_overload_exists(scope, *value.clone(), target.clone())
                     .unwrap_or_default()
@@ -1329,7 +1330,11 @@ impl MiddleEnvironment {
             NodeType::IsExpression { value, data_type } => Ok(MiddleNode {
                 node_type: MiddleNodeType::IsExpression {
                     value: Box::new(self.evaluate_inner(scope, *value)?),
-                    data_type: self.resolve_data_type(scope, data_type),
+                    data_type: self.resolve_data_type(
+                        scope,
+                        &data_type,
+                        ResolutionOptions::default(),
+                    )?,
                 },
                 span: node.span,
             }),
@@ -1458,13 +1463,14 @@ impl MiddleEnvironment {
             NodeType::ListLiteral(data_type, x) => {
                 let data_type = if data_type.is_auto() && !x.is_empty() {
                     if let Some(first) = x.first() {
-                        self.resolve_type_from_node(scope, first)
-                            .unwrap_or(self.resolve_data_type(scope, data_type))
+                        self.resolve_type_from_node(scope, first).ok_or_else(|| {
+                            self.context.err_at_current(MiddleErr::InferImpossible)
+                        })?
                     } else {
-                        self.resolve_data_type(scope, data_type)
+                        return Err(self.context.err_at_current(MiddleErr::InferImpossible));
                     }
                 } else {
-                    self.resolve_data_type(scope, data_type)
+                    self.resolve_data_type(scope, &data_type, ResolutionOptions::default())?
                 };
 
                 let lst = x
@@ -1497,9 +1503,9 @@ impl MiddleEnvironment {
 
                 let data_type = if data_type.is_auto() && count > 0 {
                     self.resolve_type_from_node(scope, &value)
-                        .unwrap_or(self.resolve_data_type(scope, data_type))
+                        .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?
                 } else {
-                    self.resolve_data_type(scope, data_type)
+                    self.resolve_data_type(scope, &data_type, ResolutionOptions::default())?
                 };
 
                 let item = self.evaluate(scope, *value);
@@ -1774,7 +1780,9 @@ impl MiddleEnvironment {
                 target,
                 variables,
             } => {
-                let resolved = self.resolve_data_type(scope, target).unwrap_all_refs();
+                let resolved = self
+                    .resolve_data_type(scope, &target, ResolutionOptions::default())?
+                    .unwrap_all_refs();
                 let self_name = resolved.impl_name();
 
                 let mut prev_generics = Vec::new();
@@ -1854,9 +1862,16 @@ impl MiddleEnvironment {
                             let dependant = match &value.node_type {
                                 NodeType::FunctionDeclaration { header, .. } => {
                                     let param_type = if let Some(Some(param)) =
-                                        header.parameters.first().map(|x| x.1.clone())
+                                        header.parameters.first().map(|x| &x.1)
                                     {
-                                        Some(self.resolve_data_type(scope, param).unwrap_all_refs())
+                                        Some(
+                                            self.resolve_data_type(
+                                                scope,
+                                                param,
+                                                ResolutionOptions::default(),
+                                            )?
+                                            .unwrap_all_refs(),
+                                        )
                                     } else if let Some(Some(node)) =
                                         header.parameters.first().map(|x| x.2.clone())
                                     {
@@ -1991,7 +2006,9 @@ impl MiddleEnvironment {
 
                 let resolved_trait = self.resolve(scope, &trait_ident, ResolutionOptions::all())?;
 
-                let resolved_target = self.resolve_data_type(scope, target).unwrap_all_refs();
+                let resolved_target = self
+                    .resolve_data_type(scope, &target, ResolutionOptions::default())?
+                    .unwrap_all_refs();
                 let self_name = resolved_target.impl_name();
 
                 let mut provided = FxHashSet::default();
@@ -2064,7 +2081,9 @@ impl MiddleEnvironment {
 
                 for (identifier, object) in assoc_types {
                     if let TypeDefType::NewType(inner) = object {
-                        let resolved_ty = self.resolve_data_type(scope, *inner).unwrap_all_refs();
+                        let resolved_ty = self
+                            .resolve_data_type(scope, inner.as_ref(), ResolutionOptions::typing())?
+                            .unwrap_all_refs();
                         let ident = self.resolve(
                             scope,
                             identifier.get_ident(),
@@ -2121,9 +2140,16 @@ impl MiddleEnvironment {
                             let dependant = match &value.node_type {
                                 NodeType::FunctionDeclaration { header, .. } => {
                                     let param_type = if let Some(Some(param)) =
-                                        header.parameters.first().map(|x| x.1.clone())
+                                        header.parameters.first().map(|x| &x.1)
                                     {
-                                        Some(self.resolve_data_type(scope, param).unwrap_all_refs())
+                                        Some(
+                                            self.resolve_data_type(
+                                                scope,
+                                                param,
+                                                ResolutionOptions::typing(),
+                                            )?
+                                            .unwrap_all_refs(),
+                                        )
                                     } else if let Some(Some(node)) =
                                         header.parameters.first().map(|x| x.2.clone())
                                     {
@@ -2305,11 +2331,19 @@ impl MiddleEnvironment {
                 for member in members {
                     match member.kind {
                         TraitMemberKind::Type => {
-                            let data_type = self.resolve_data_type(scope, member.data_type);
+                            let data_type = self.resolve_data_type(
+                                scope,
+                                &member.data_type,
+                                ResolutionOptions::typing(),
+                            )?;
                             assoc_types.insert(member.identifier.to_string(), data_type);
                         }
                         TraitMemberKind::Const => {
-                            let data_type = self.resolve_data_type(scope, member.data_type);
+                            let data_type = self.resolve_data_type(
+                                scope,
+                                &member.data_type,
+                                ResolutionOptions::typing(),
+                            )?;
                             trait_members.insert(
                                 member.identifier.to_string(),
                                 MiddleTraitMember {

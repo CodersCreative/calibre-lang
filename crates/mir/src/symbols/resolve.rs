@@ -77,7 +77,7 @@ impl<'a> Into<IdentifierType<'a>> for &'a &'a str {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub struct ResolutionOptions {
     pub dollar_resolution: bool,
     pub name_resolution: bool,
@@ -90,6 +90,22 @@ impl ResolutionOptions {
             dollar_resolution: true,
             name_resolution: true,
             type_resolution: true,
+        }
+    }
+
+    pub fn typing() -> Self {
+        Self {
+            dollar_resolution: true,
+            name_resolution: false,
+            type_resolution: true,
+        }
+    }
+
+    pub fn idents() -> Self {
+        Self {
+            dollar_resolution: true,
+            name_resolution: true,
+            type_resolution: false,
         }
     }
 
@@ -165,7 +181,8 @@ impl MiddleEnvironment {
         }
 
         let resolved = self
-            .resolve_data_type(scope, base.clone())
+            .resolve_data_type(scope, base, ResolutionOptions::typing())
+            .ok()?
             .unwrap_all_refs();
         let out = match &resolved.data_type {
             ParserInnerType::Struct(struct_name) => self
@@ -398,21 +415,31 @@ impl MiddleEnvironment {
         Err(self.context.err_at_current(MiddleErr::Variable(ident)))
     }
 
-    pub fn resolve_potential_generic_ident_to_data_type(
-        &mut self,
-        scope: &u64,
-        iden: &PotentialGenericTypeIdentifier,
-    ) -> Option<ParserDataType> {
-        let (ty, mut generic_types) = match iden {
-            PotentialGenericTypeIdentifier::Identifier(x) => {
+    #[instrument(skip_all)]
+    pub fn resolve_to_data_type<'a>(
+        &'a mut self,
+        scope: &'a u64,
+        ident: impl Into<IdentifierType<'a>>,
+    ) -> Result<ParserDataType, MiddleErr> {
+        let ident = ident.into();
+        trace!(ident = %ident, "Resolving identifier");
+
+        let (ty, mut generic_types) = match ident {
+            IdentifierType::Ident(x) => {
+                let x = x.to_string();
+
                 let resolved = self
-                    .resolve(scope, x, ResolutionOptions::default().with_dollar())
-                    .unwrap_or(x.text().clone());
+                    .resolve(scope, &x, ResolutionOptions::default().with_dollar())
+                    .unwrap_or(x.clone());
+
+                if self.symbols.variables.contains_key(&resolved) {
+                    return Err(self.context.err_at_current(MiddleErr::Object(resolved)));
+                }
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
                         ParserInnerType::Struct(x) => ParserInnerType::Struct(
-                            self.resolve(scope, &x, ResolutionOptions::all())
+                            self.resolve(scope, &x, ResolutionOptions::typing())
                                 .unwrap_or(x),
                         ),
                         x => x,
@@ -420,13 +447,37 @@ impl MiddleEnvironment {
                     Vec::new(),
                 )
             }
-            PotentialGenericTypeIdentifier::Generic {
+            IdentifierType::Generic(PotentialGenericTypeIdentifier::Identifier(x))
+            | IdentifierType::Dollar(x) => {
+                let resolved = self
+                    .resolve(scope, x, ResolutionOptions::default().with_dollar())
+                    .unwrap_or(x.text().clone());
+
+                if self.symbols.variables.contains_key(&resolved) {
+                    return Err(self.context.err_at_current(MiddleErr::Object(resolved)));
+                }
+
+                (
+                    match ParserInnerType::from_str(&resolved).unwrap() {
+                        ParserInnerType::Struct(x) => ParserInnerType::Struct(
+                            self.resolve(scope, &x, ResolutionOptions::typing())
+                                .unwrap_or(x),
+                        ),
+                        x => x,
+                    },
+                    Vec::new(),
+                )
+            }
+            IdentifierType::Generic(PotentialGenericTypeIdentifier::Generic {
                 identifier,
                 generic_types,
-            } => {
+            }) => {
                 let generic_types: Vec<ParserDataType> = generic_types
                     .iter()
-                    .map(|x| self.resolve_data_type(scope, x.clone()))
+                    .map(|x| {
+                        self.resolve_data_type(scope, x, ResolutionOptions::typing())
+                            .unwrap()
+                    })
                     .collect();
 
                 let resolved = self
@@ -438,13 +489,13 @@ impl MiddleEnvironment {
                     .unwrap_or(identifier.text().clone());
 
                 if self.symbols.variables.contains_key(&resolved) {
-                    return None;
+                    return Err(self.context.err_at_current(MiddleErr::Object(resolved)));
                 }
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
                         ParserInnerType::Struct(x) => ParserInnerType::Struct(
-                            self.resolve(scope, &x, ResolutionOptions::all())
+                            self.resolve(scope, &x, ResolutionOptions::typing())
                                 .unwrap_or(x),
                         ),
                         x => x,
@@ -454,8 +505,8 @@ impl MiddleEnvironment {
             }
         };
 
-        Some(ParserDataType {
-            span: *iden.span(),
+        Ok(ParserDataType {
+            span: self.context.current_span(),
             data_type: match ty {
                 ParserInnerType::Struct(x) if !generic_types.is_empty() => {
                     ParserInnerType::StructWithGenerics {
@@ -474,69 +525,44 @@ impl MiddleEnvironment {
         })
     }
 
-    pub fn resolve_ffi_data_type(
-        &mut self,
-        scope: &u64,
-        data_type: ParserDataType,
-    ) -> ParserDataType {
-        self.resolve_data_type(scope, data_type).resolve_ffi()
-    }
+    #[instrument(skip_all)]
+    pub fn resolve_data_type<'a>(
+        &'a self,
+        scope: &'a u64,
+        data_type: impl Into<&'a ParserInnerType>,
+        options: ResolutionOptions,
+    ) -> Result<ParserDataType, MiddleErr> {
+        let data_type = data_type.into();
+        trace!(data_type = %data_type, "Resolving type");
 
-    pub fn resolve_type_from_type_mappings(
-        &self,
-        scope: &u64,
-        data_type: &ParserInnerType,
-    ) -> Option<&ParserInnerType> {
-        let scope_ref = self.scoping.scopes.get(scope)?;
-        match scope_ref.type_mappings.get(&data_type.to_string()) {
-            Some(x) => return Some(x),
-            _ => scope_ref
-                .parent
-                .and_then(|x| self.resolve_type_from_type_mappings(&x, data_type)),
-        }
-    }
-
-    pub fn resolve_data_type(&mut self, scope: &u64, data_type: ParserDataType) -> ParserDataType {
-        let mut data_type = self
-            .resolve_type_from_type_mappings(scope, &data_type.data_type)
-            .map(|x| ParserDataType::new(data_type.span, x.clone()))
-            .unwrap_or(data_type);
-        data_type = self.resolve_type_from_mappings(scope, data_type);
-        self.resolve_type_from_type_mappings(scope, &data_type.data_type)
-            .map(|x| ParserDataType::new(data_type.span, x.clone()))
-            .unwrap_or(data_type)
-    }
-
-    pub fn resolve_type_from_mappings(
-        &mut self,
-        scope: &u64,
-        data_type: ParserDataType,
-    ) -> ParserDataType {
-        match data_type.data_type {
+        Ok(match data_type {
             ParserInnerType::Struct(identifier) => ParserDataType {
-                data_type: ParserInnerType::Struct(
-                    self.resolve(scope, &identifier, ResolutionOptions::all())
-                        .unwrap_or(identifier),
-                ),
-                span: data_type.span,
+                data_type: ParserInnerType::Struct(self.resolve(scope, identifier, options)?),
+                span: self.context.current_span(),
             },
             ParserInnerType::StructWithGenerics {
                 identifier,
                 generic_types,
             } => {
-                let id = self
-                    .resolve(scope, &identifier, ResolutionOptions::all())
-                    .unwrap_or(identifier);
+                let id = self.resolve(scope, identifier, options)?;
+
                 let mut resolved_gens: Vec<ParserDataType> = Vec::new();
                 for g in generic_types {
-                    resolved_gens.push(self.resolve_data_type(scope, g));
+                    resolved_gens.push(self.resolve_data_type(scope, g, options)?);
                 }
 
                 if id == "ptr" && resolved_gens.len() == 1 {
-                    return ParserDataType {
+                    return Ok(ParserDataType {
                         data_type: ParserInnerType::Ptr(Box::new(resolved_gens.remove(0))),
-                        span: data_type.span,
-                    };
+                        span: self.context.current_span(),
+                    });
+                }
+
+                if id == "list" && resolved_gens.len() == 1 {
+                    return Ok(ParserDataType {
+                        data_type: ParserInnerType::List(Box::new(resolved_gens.remove(0))),
+                        span: self.context.current_span(),
+                    });
                 }
 
                 ParserDataType {
@@ -544,19 +570,19 @@ impl MiddleEnvironment {
                         identifier: id,
                         generic_types: resolved_gens,
                     },
-                    span: data_type.span,
+                    span: self.context.current_span(),
                 }
             }
             ParserInnerType::Tuple(x) => {
                 let mut lst = Vec::new();
 
                 for x in x {
-                    lst.push(self.resolve_data_type(scope, x));
+                    lst.push(self.resolve_data_type(scope, x, options)?);
                 }
 
                 ParserDataType {
                     data_type: ParserInnerType::Tuple(lst),
-                    span: data_type.span,
+                    span: self.context.current_span(),
                 }
             }
             ParserInnerType::Function {
@@ -564,50 +590,66 @@ impl MiddleEnvironment {
                 parameters,
             } => ParserDataType {
                 data_type: ParserInnerType::Function {
-                    return_type: Box::new(self.resolve_data_type(scope, *return_type)),
+                    return_type: Box::new(self.resolve_data_type(
+                        scope,
+                        return_type.as_ref(),
+                        options,
+                    )?),
                     parameters: {
                         let mut params = Vec::new();
 
                         for param in parameters {
-                            params.push(self.resolve_data_type(scope, param));
+                            params.push(self.resolve_data_type(scope, param, options)?);
                         }
 
                         params
                     },
                 },
-                span: data_type.span,
+                span: self.context.current_span(),
             },
             ParserInnerType::Ref(d_type, mutability) => ParserDataType {
                 data_type: ParserInnerType::Ref(
-                    Box::new(self.resolve_data_type(scope, *d_type)),
-                    mutability,
+                    Box::new(self.resolve_data_type(scope, d_type.as_ref(), options)?),
+                    mutability.clone(),
                 ),
-                span: data_type.span,
+                span: self.context.current_span(),
             },
             ParserInnerType::List(x) => ParserDataType {
-                data_type: ParserInnerType::List(Box::new(self.resolve_data_type(scope, *x))),
-                span: data_type.span,
+                data_type: ParserInnerType::List(Box::new(self.resolve_data_type(
+                    scope,
+                    x.as_ref(),
+                    options,
+                )?)),
+                span: self.context.current_span(),
             },
             ParserInnerType::Ptr(x) => ParserDataType {
-                data_type: ParserInnerType::Ptr(Box::new(self.resolve_data_type(scope, *x))),
-                span: data_type.span,
+                data_type: ParserInnerType::Ptr(Box::new(self.resolve_data_type(
+                    scope,
+                    x.as_ref(),
+                    options,
+                )?)),
+                span: self.context.current_span(),
             },
             ParserInnerType::Option(x) => ParserDataType {
-                data_type: ParserInnerType::Option(Box::new(self.resolve_data_type(scope, *x))),
-                span: data_type.span,
+                data_type: ParserInnerType::Option(Box::new(self.resolve_data_type(
+                    scope,
+                    x.as_ref(),
+                    options,
+                )?)),
+                span: self.context.current_span(),
             },
             ParserInnerType::Result { ok, err } => ParserDataType {
                 data_type: ParserInnerType::Result {
-                    err: Box::new(self.resolve_data_type(scope, *err)),
-                    ok: Box::new(self.resolve_data_type(scope, *ok)),
+                    err: Box::new(self.resolve_data_type(scope, err.as_ref(), options.clone())?),
+                    ok: Box::new(self.resolve_data_type(scope, ok.as_ref(), options)?),
                 },
-                span: data_type.span,
+                span: self.context.current_span(),
             },
             ParserInnerType::Scope(x) => {
                 let mut lst = Vec::new();
 
                 for x in x {
-                    lst.push(self.resolve_data_type(scope, x));
+                    lst.push(self.resolve_data_type(scope, x, options)?);
                 }
 
                 if lst.len() == 2
@@ -615,23 +657,23 @@ impl MiddleEnvironment {
                     && let Some(resolved) =
                         self.typing.resolve_associated_type(&lst[0], name.as_str())
                 {
-                    return resolved;
+                    return Ok(resolved);
                 }
 
                 ParserDataType {
                     data_type: ParserInnerType::Scope(lst),
-                    span: data_type.span,
+                    span: self.context.current_span(),
                 }
             }
-            ParserInnerType::DollarIdentifier(ref x) => {
+            ParserInnerType::DollarIdentifier(x) => {
                 if let Some(node) = self.scoping.resolve_macro_arg(scope, x) {
                     let NodeType::DataType { data_type } = node.node_type.clone() else {
                         unimplemented!()
                     };
 
-                    self.resolve_data_type(scope, data_type.clone())
+                    self.resolve_data_type(scope, &data_type, options)?
                 } else {
-                    data_type
+                    return Err(self.context.err_at_current(MiddleErr::MacroArg(x.clone())));
                 }
             }
             ParserInnerType::DynamicTraits(traits) => ParserDataType {
@@ -639,15 +681,18 @@ impl MiddleEnvironment {
                     traits
                         .into_iter()
                         .map(|t| {
-                            self.resolve(scope, &t, ResolutionOptions::all())
-                                .unwrap_or(t)
+                            self.resolve(scope, t, ResolutionOptions::typing())
+                                .unwrap_or(t.to_string())
                         })
                         .collect(),
                 ),
-                span: data_type.span,
+                span: self.context.current_span(),
             },
-            _ => data_type,
+            x => ParserDataType {
+                data_type: x.clone(),
+                span: self.context.current_span(),
+            },
         }
-        .verify()
+        .verify())
     }
 }
