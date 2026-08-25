@@ -879,12 +879,7 @@ impl Formatter {
                 };
                 let node_formatted = self.format(node);
                 let single_line = format!("@{}{} {}", tag, args_str, node_formatted);
-                let multi_line = format!(
-                    "@{}{}\n{}",
-                    tag,
-                    args_str,
-                    self.fmt_txt_with_tab(&node_formatted, 1, true)
-                );
+                let multi_line = format!("@{}{}\n{}", tag, args_str, node_formatted);
                 self.wrap_if_wide(single_line, &multi_line)
             }
             NodeType::EnumExpression {

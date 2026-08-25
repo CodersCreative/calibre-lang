@@ -84,9 +84,10 @@ impl Animal for Wolf {
 
 	const intelligence := fn (self : &Self) -> int => return self.Intelligence;
 
-	const Description := fn (self : &Self) -> str => {
-		return fmt"The animal's name is {self.Name}, it makes a {self.Sound}, its size is {self.Size} and its intelligence level is {self.Intelligence}. Its territory is {self.TerritorySize} square miles.";
-	};
+	const Description :=
+		fn (self : &Self) -> str => {
+			return fmt"The animal's name is {self.Name}, it makes a {self.Sound}, its size is {self.Size} and its intelligence level is {self.Intelligence}. Its territory is {self.TerritorySize} square miles.";
+		};
 };
 
 const main := fn => {

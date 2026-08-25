@@ -1,5 +1,3 @@
-use std::println;
-
 use crate::{
     environment::MiddleEnvironment, symbols::resolve::ResolutionOptions, typing::MiddleTypeDefType,
 };
@@ -389,10 +387,10 @@ impl MiddleEnvironment {
                             } else {
                                 None
                             }
-                        })
-                            && let Some(method_ty) = self.resolve_member_fn_type(&ty, &member_name)
+                        }) && let Some(method_ty) =
+                            self.resolve_member_fn_type(&ty, &member_name)
                         {
-                            return method_ty.apply_callable()
+                            return method_ty.apply_callable();
                         }
 
                         return Some(ParserDataType::new(base.span, ParserInnerType::Dynamic));
@@ -443,9 +441,7 @@ impl MiddleEnvironment {
                     }
                 }
 
-                println!("{}\n{:?}", caller, caller_type);
-                caller_type = caller_type.or_else(||self.resolve_type_from_node(scope, &caller));
-                println!("{:?}\n\n", caller_type);
+                caller_type = caller_type.or_else(|| self.resolve_type_from_node(scope, &caller));
 
                 caller_type?.data_type.apply_callable()
             }

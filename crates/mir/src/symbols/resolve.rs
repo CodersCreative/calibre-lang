@@ -12,7 +12,7 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::{arch::x86_64, fmt::Display, println, str::FromStr, write};
+use std::{fmt::Display, str::FromStr, write};
 use tracing::{instrument, trace, warn};
 
 pub enum IdentifierType<'a> {
@@ -284,9 +284,11 @@ impl MiddleEnvironment {
         let mut current = self.resolve_inner(scope, ident, options)?;
 
         for _ in 0..64 {
-            if let Ok(x) = self.resolve_inner(scope, &current, options) && current != x{
+            if let Ok(x) = self.resolve_inner(scope, &current, options)
+                && current != x
+            {
                 current = x;
-            }else{
+            } else {
                 break;
             }
         }
@@ -560,14 +562,10 @@ impl MiddleEnvironment {
         trace!(data_type = %data_type, "Resolving type");
 
         Ok(match data_type {
-            ParserInnerType::Struct(identifier) => {
-                if identifier.contains("::") {
-                    println!("Invalid : {identifier}\n");
-                }
-                ParserDataType {
+            ParserInnerType::Struct(identifier) => ParserDataType {
                 data_type: ParserInnerType::Struct(self.resolve(scope, identifier, options)?),
                 span: self.context.current_span(),
-            }},
+            },
             ParserInnerType::StructWithGenerics {
                 identifier,
                 generic_types,
@@ -676,12 +674,12 @@ impl MiddleEnvironment {
             ParserInnerType::Scope(x) => {
                 let mut lst = Vec::new();
 
-                println!("Scopes Bef : {x:?}");
                 for x in x {
-                    lst.push(self.resolve_data_type(scope, x, options).unwrap_or(x.clone()));
+                    lst.push(
+                        self.resolve_data_type(scope, x, options)
+                            .unwrap_or(x.clone()),
+                    );
                 }
-
-                println!("Aft : {lst:?}\n");
 
                 if lst.len() == 2
                     && let ParserInnerType::Struct(name) = &lst[1].data_type

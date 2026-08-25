@@ -68,9 +68,10 @@ const normalize_host := fn (host : str) -> str => {
 	return out;
 };
 
-const infer_scheme := fn (host : str, port : int) -> str => {
-	if starts_with(host, "https://") => return "https" else => if starts_with(host, "http://") => return "http" else => if port = 443 => return "https" else => return "http";
-};
+const infer_scheme :=
+	fn (host : str, port : int) -> str => {
+		if starts_with(host, "https://") => return "https" else => if starts_with(host, "http://") => return "http" else => if port = 443 => return "https" else => return "http";
+	};
 
 const build_url := fn (scheme host : str, port : int, path : str) -> str => {
 	let mut url := scheme & "://" & host;

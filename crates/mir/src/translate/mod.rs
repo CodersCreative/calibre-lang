@@ -1816,34 +1816,59 @@ impl MiddleEnvironment {
                     .get_or_create_impl(resolved.clone(), self.context.current_location.clone());
 
                 {
-                    let placeholders = variables.iter().filter_map(|var| {
-                        if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type {
-                            let identifier = self.resolve(scope, identifier, ResolutionOptions::default().with_dollar()).ok()?;
-                            let resolved_iden = format!("{}.{}", self_name, identifier);
-                            // TODO Unpack the dollar ident only without resolving
-                            Some((
-                                identifier,
-                                resolved_iden,
-                                generic_params.clone(),
-                            ))
-                        }else{
-                            None
-                        }
-                    }).collect::<Vec<_>>();
-
-                    let type_defs = variables.iter().filter_map(|var| {
-                        if let NodeType::TypeDeclaration { identifier, object, .. } = &var.node_type {
-                            let ident = self.resolve(scope, identifier.get_ident(), ResolutionOptions::default().with_dollar()).ok()?;
-                            if let TypeDefType::NewType(inner) = object {
-                                let resolved_ty = self.resolve_data_type(scope, inner.as_ref(), ResolutionOptions::typing()).ok()?.unwrap_all_refs();
-                                Some((ident, resolved_ty))
+                    let placeholders = variables
+                        .iter()
+                        .filter_map(|var| {
+                            if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type
+                            {
+                                let identifier = self
+                                    .resolve(
+                                        scope,
+                                        identifier,
+                                        ResolutionOptions::default().with_dollar(),
+                                    )
+                                    .ok()?;
+                                let resolved_iden = format!("{}.{}", self_name, identifier);
+                                // TODO Unpack the dollar ident only without resolving
+                                Some((identifier, resolved_iden, generic_params.clone()))
                             } else {
                                 None
                             }
-                        } else {
-                            None
-                        }
-                    }).collect::<Vec<_>>();
+                        })
+                        .collect::<Vec<_>>();
+
+                    let type_defs = variables
+                        .iter()
+                        .filter_map(|var| {
+                            if let NodeType::TypeDeclaration {
+                                identifier, object, ..
+                            } = &var.node_type
+                            {
+                                let ident = self
+                                    .resolve(
+                                        scope,
+                                        identifier.get_ident(),
+                                        ResolutionOptions::default().with_dollar(),
+                                    )
+                                    .ok()?;
+                                if let TypeDefType::NewType(inner) = object {
+                                    let resolved_ty = self
+                                        .resolve_data_type(
+                                            scope,
+                                            inner.as_ref(),
+                                            ResolutionOptions::typing(),
+                                        )
+                                        .ok()?
+                                        .unwrap_all_refs();
+                                    Some((ident, resolved_ty))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
 
                     let impl_ref = self.typing.impls.get_mut(&impl_key).ok_or_else(|| {
                         MiddleErr::At(
@@ -1853,11 +1878,7 @@ impl MiddleEnvironment {
                     })?;
 
                     for var in placeholders {
-                        impl_ref.insert_member_placeholder(
-                            &var.0,
-                            var.1,
-                            var.2,
-                        );
+                        impl_ref.insert_member_placeholder(&var.0, var.1, var.2);
                     }
 
                     for (ident, ty) in type_defs {
@@ -1873,10 +1894,9 @@ impl MiddleEnvironment {
                         )
                     })?;
 
-                    
-                        scope
-                            .type_mappings
-                            .insert(String::from("Self"), resolved.data_type.clone())
+                    scope
+                        .type_mappings
+                        .insert(String::from("Self"), resolved.data_type.clone())
                 };
 
                 let mut statements = Vec::new();
@@ -1889,7 +1909,11 @@ impl MiddleEnvironment {
                             value,
                             data_type,
                         } => {
-                            let identifier = self.resolve(scope, &identifier, ResolutionOptions::default().with_dollar())?;
+                            let identifier = self.resolve(
+                                scope,
+                                &identifier,
+                                ResolutionOptions::default().with_dollar(),
+                            )?;
                             let resolved_iden = format!("{}.{}", self_name, identifier);
 
                             let dependant = match &value.node_type {
@@ -2123,7 +2147,7 @@ impl MiddleEnvironment {
                         let resolved_ty = self
                             .resolve_data_type(scope, inner.as_ref(), ResolutionOptions::typing())?
                             .unwrap_all_refs();
-                        
+
                         let ident = self.resolve(
                             scope,
                             identifier.get_ident(),
@@ -2133,9 +2157,7 @@ impl MiddleEnvironment {
                         let impl_ref = self.typing.impls.get_mut(&impl_key).ok_or_else(|| {
                             MiddleErr::At(
                                 node.span,
-                                Box::new(MiddleErr::Internal(format!(
-                                    "missing impl {impl_key:?}"
-                                ))),
+                                Box::new(MiddleErr::Internal(format!("missing impl {impl_key:?}"))),
                             )
                         })?;
 

@@ -291,9 +291,7 @@ impl ParserDataType {
             {
                 Some(ParserDataType::new(sp, ParserInnerType::Auto(None)))
             }
-            ParserInnerType::Gen(x) => {
-                Some(*x)
-            }
+            ParserInnerType::Gen(x) => Some(*x),
             _ => None,
         }
     }
@@ -658,7 +656,8 @@ impl Display for ParserInnerType {
             }
             Self::Result { err, ok } => write!(f, "{}!{}", err, ok),
             Self::Option(x) => write!(f, "{}?", x),
-            Self::Ptr(x) => write!(f, "ptr:<{}>", x),Self::Gen(x) => write!(f, "gen:<{}>", x),
+            Self::Ptr(x) => write!(f, "ptr:<{}>", x),
+            Self::Gen(x) => write!(f, "gen:<{}>", x),
             Self::Struct(x) => write!(f, "{}", x),
             Self::StructWithGenerics {
                 identifier,

@@ -1,5 +1,3 @@
-use std::println;
-
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
@@ -344,7 +342,7 @@ impl MiddleEnvironment {
             ResolutionOptions::default().with_dollar(),
         )?;
 
-                let generic_params = if let PotentialGenericTypeIdentifier::Generic {
+        let generic_params = if let PotentialGenericTypeIdentifier::Generic {
             identifier: _,
             generic_types,
         } = identifier.clone()
@@ -365,13 +363,14 @@ impl MiddleEnvironment {
                 .entry(ident.clone())
                 .or_insert((template_params, object.clone(), overloads.clone()));
 
-            self
-                .typing
+            self.typing
                 .generic_type_templates
                 .get(&ident)
                 .map(|(params, _, _)| params.clone())
                 .unwrap_or_default()
-        }else {Vec::new()};
+        } else {
+            Vec::new()
+        };
 
         let new_name = ParserText::temp_name_with_suffix(ident.trim(), span).text;
 
@@ -411,12 +410,9 @@ impl MiddleEnvironment {
                 )
             })?;
 
-            scope.type_mappings.insert(
-                ident.clone(),
-                ParserInnerType::Struct(new_name.clone()),
-            );
-
-            println!("Added : {}\n", ident);
+            scope
+                .type_mappings
+                .insert(ident.clone(), ParserInnerType::Struct(new_name.clone()));
 
             scope.type_mappings.insert(
                 String::from("Self"),
@@ -445,9 +441,12 @@ impl MiddleEnvironment {
         };
 
         for overload in overloads {
-            if let Some(processed) =
-                self.process_overload(scope, overload, generic_params.clone(), Some(new_name.clone()))?
-            {
+            if let Some(processed) = self.process_overload(
+                scope,
+                overload,
+                generic_params.clone(),
+                Some(new_name.clone()),
+            )? {
                 self.symbols.overloads.push(processed);
             }
         }

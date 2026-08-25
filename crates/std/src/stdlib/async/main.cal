@@ -38,7 +38,8 @@ impl WaitGroup {
 
 	const raw_done := fn (self : &mut WaitGroup) => waitgroup_raw_done((!(self.* is WaitGroup)) ? self : self.inner);
 
-	const join := fn (self : &mut WaitGroup, other : WaitGroup) => waitgroup_join((!(self.* is WaitGroup)) ? self : self.inner, (!(other.* is WaitGroup)) ? other : other.inner);
+	const join :=
+		fn (self : &mut WaitGroup, other : WaitGroup) => waitgroup_join((!(self.* is WaitGroup)) ? self : self.inner, (!(other.* is WaitGroup)) ? other : other.inner);
 
 	const wait := fn (self : &WaitGroup) => waitgroup_wait((!(self.* is WaitGroup)) ? self : self.inner);
 

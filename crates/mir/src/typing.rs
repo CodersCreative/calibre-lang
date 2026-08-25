@@ -130,7 +130,7 @@ impl Typing {
         name: &str,
     ) -> Option<ParserDataType> {
         trace!("resolving associated type");
-        
+
         if let ParserInnerType::Struct(trait_name) = &base.data_type {
             if let Some(trait_def) = self.trait_defs.get(trait_name) {
                 if let Some(assoc_type) = trait_def.assoc_types.get(name) {
@@ -138,16 +138,17 @@ impl Typing {
                 }
             }
         }
-        
+
         if let Some(imp) = self.find_impl_for_type(base) {
             if let Some(assoc_type) = imp.assoc_types.get(name) {
                 return Some(assoc_type.clone());
             }
-            
+
             for trait_name in imp.traits.iter() {
-                if let Some(trait_def) = self.trait_defs.get(trait_name) && let Some(assoc_type) = trait_def.assoc_types.get(name) {
-                        return Some(assoc_type.clone());
-                    
+                if let Some(trait_def) = self.trait_defs.get(trait_name)
+                    && let Some(assoc_type) = trait_def.assoc_types.get(name)
+                {
+                    return Some(assoc_type.clone());
                 }
             }
         }

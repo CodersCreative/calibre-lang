@@ -19,16 +19,19 @@ type ExecOptions := struct {
 type Process := struct { };
 
 impl Process {
-	const options := fn (command : str) -> ExecOptions => return ExecOptions {command, args : list:<str>[], cwd : none, shell : false, stdin : none, check : false};
+	const options :=
+		fn (command : str) -> ExecOptions => return ExecOptions {command, args : list:<str>[], cwd : none, shell : false, stdin : none, check : false};
 
 	const raw := fn (options : ExecOptions) -> str!ProcessResult => return raw_exec(options);
 
-	const run := fn (program : str, args : list:<str>) -> str!ProcessResult => return Process.raw(ExecOptions {command : program, args, cwd : none, shell : false, stdin : none, check : false});
+	const run :=
+		fn (program : str, args : list:<str>) -> str!ProcessResult => return Process.raw(ExecOptions {command : program, args, cwd : none, shell : false, stdin : none, check : false});
 
 	const run_in :=
 		fn (program : str, args : list:<str>, cwd : str) -> str!ProcessResult => return Process.raw(ExecOptions {command : program, args, cwd : some(cwd), shell : false, stdin : none, check : false});
 
-	const shell := fn (command : str) -> str!ProcessResult => return Process.raw(ExecOptions {command, args : list:<str>[], cwd : none, shell : true, stdin : none, check : false});
+	const shell :=
+		fn (command : str) -> str!ProcessResult => return Process.raw(ExecOptions {command, args : list:<str>[], cwd : none, shell : true, stdin : none, check : false});
 
 	const which := fn (program : str) -> str? => {
 		let out := try Process.shell("command -v " & program) : _ => return none;

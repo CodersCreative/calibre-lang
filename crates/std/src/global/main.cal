@@ -75,11 +75,11 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				out <<= value;
-			}else => {
+			} else => {
 				break;
-			}
+			};
 		};
-
+		
 		return out;
 	};
 
@@ -90,9 +90,9 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				out <<= op(v.next);
-			}else => {
+			} else => {
 				break;
-			}
+			};
 		};
 		
 		return ListIter:<U> { data : out, index : 0 };
@@ -105,9 +105,9 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				if pred(value) => out <<= value;
-			}else => {
+			} else => {
 				break;
-			}
+			};
 		};
 		
 		return ListIter:<Self::Item> { data : out, index : 0 };
@@ -118,9 +118,9 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				op(value);
-			}else => {
+			} else => {
 				break;
-			}
+			};
 		};
 	};
 
@@ -131,9 +131,9 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				acc := op(acc, value);
-			}else => {
+			} else => {
 				break;
-			}
+			};
 		};
 		
 		return acc;
@@ -143,10 +143,10 @@ trait Iter {
 		for  => {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
-				if pred(value) => return true
-			}else => {
+				if pred(value) => return true;
+			} else => {
 				break;
-			}
+			};
 		};
 		
 		return false;
@@ -156,10 +156,10 @@ trait Iter {
 		for  => {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
-				if !pred(value) => return false
-			}else => {
+				if !pred(value) => return false;
+			} else => {
 				break;
-			}
+			};
 		};
 		
 		return true;
@@ -169,10 +169,10 @@ trait Iter {
 		for  => {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
-				if pred(value) => return some(value)
-			}else => {
+				if pred(value) => return some(value);
+			} else => {
 				break;
-			}
+			};
 		};
 		
 		return none;
@@ -185,9 +185,9 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : _ <- v => {
 				n += 1;
-			}else => {
+			} else => {
 				break;
-			}
+			};
 		};
 		
 		return n;
@@ -203,9 +203,9 @@ trait Iter {
 			if let .Some : value <- v => {
 				out <<= value;
 				i += 1;
-			}else => {
+			} else => {
 				break;
-			}
+			};
 		};
 		
 		return ListIter:<Self::Item> { data : out, index : 0 };
@@ -219,8 +219,8 @@ trait Iter {
 			
 			if let .None <- v => {
 				break;
-			}
-
+			};
+			
 			i += 1;
 		};
 		
@@ -230,9 +230,9 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				out <<= value;
-			}else => {
+			} else => {
 				break;
-			}
+			};
 		};
 		
 		return ListIter:<Self::Item> { data : out, index : 0 };
@@ -247,9 +247,9 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				out <<= tuple(i += 1, value);
-			}else => {
+			} else => {
 				break;
-			}		
+			};
 		};
 		
 		return ListIter:<<int, Self::Item>> { data : out, index : 0 };
@@ -266,10 +266,10 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				if i % step = 0 => out <<= value;
-			i += 1;
-			}else => {
+				i += 1;
+			} else => {
 				break;
-			}	
+			};
 		};
 		
 		return ListIter:<Self::Item> { data : out, index : 0 };
@@ -284,9 +284,9 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				if pred(value) => left <<= value else => right <<= value;
-			}else => {
+			} else => {
 				break;
-			}	
+			};
 		};
 		
 		return tuple(ListIter:<Self::Item> { data : left, index : 0 }, ListIter:<Self::Item> { data : right, index : 0 });

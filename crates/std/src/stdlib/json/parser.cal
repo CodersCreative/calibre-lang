@@ -27,7 +27,8 @@ impl Display for JsonValue {
 impl Parser {
 	const new := fn -> Parser => Parser { tokens : [], index : 0, errors : [] };
 
-	const eof_token := fn -> Token => Token { value : "EndOfFile", token_type : TokenType.EOF, span : Span { start : Position { line : 0, col : 0 }, end : Position { line : 0, col : 0 } } };
+	const eof_token :=
+		fn -> Token => Token { value : "EndOfFile", token_type : TokenType.EOF, span : Span { start : Position { line : 0, col : 0 }, end : Position { line : 0, col : 0 } } };
 
 	const first := fn (self : &Self) -> Token => {
 		if self.index < len(self.tokens) => self.tokens[self.index] else => Self.eof_token();

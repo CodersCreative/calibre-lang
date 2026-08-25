@@ -856,8 +856,7 @@ pub fn build_tail_expression_parser<'a>(
                         Some(generic_types[0].clone())
                     }
                     Some(ParserDataType {
-                        data_type:
-                            ParserInnerType::Gen(x),
+                        data_type: ParserInnerType::Gen(x),
                         ..
                     }) => Some(*x.clone()),
                     Some(_) => {

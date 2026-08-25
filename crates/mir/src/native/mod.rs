@@ -2,7 +2,6 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{MiddleScope, Scoping},
-    symbols::MiddleVariable,
 };
 use calibre_parser::{
     Parser,
@@ -10,7 +9,7 @@ use calibre_parser::{
 };
 use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
 use rustc_hash::FxHashMap;
-use std::{eprintln, fs, path::PathBuf, println};
+use std::{eprintln, fs, path::PathBuf};
 
 impl Scoping {
     pub fn new_root_scope_no_std(
@@ -69,11 +68,10 @@ impl MiddleEnvironment {
         let global_path = get_globals_path();
         if let Ok(globals) = fs::read_to_string(global_path.clone()) {
             let program = parser.produce_ast(&globals);
-            
+
             if !parser.errors.is_empty() {
                 eprintln!("WARNING STDLIB PARSER ERROR :\n{:?}", parser.errors);
             }
-            
 
             let error_count_before = self.context.errors.len();
             let middle = self.evaluate(&scope, program);
@@ -90,8 +88,6 @@ impl MiddleEnvironment {
             }
 
             self.context.stdlib_nodes.push(middle);
-        } else {
-            println!("globalssss");
         }
 
         let std = self
@@ -124,9 +120,7 @@ impl MiddleEnvironment {
                 VarType::Constant,
             );
 
-            self.symbols
-                .native_mappings
-                .insert(var.0.clone(), name);
+            self.symbols.native_mappings.insert(var.0.clone(), name);
         }
     }
 
@@ -138,7 +132,7 @@ impl MiddleEnvironment {
         {
             let scope_path = scope_ref.path.clone();
             let program = parser.produce_ast(&stdlib);
-            
+
             if !parser.errors.is_empty() {
                 eprintln!("WARNING STDLIB PARSER ERROR :\n{:?}", parser.errors);
             }
@@ -206,8 +200,13 @@ impl MiddleEnvironment {
 
             let name = ParserText::temp_name_with_suffix(&short_name, var.span).text;
 
-            let _ = self.register_variable(&scope, short_name, name.clone(),  var.clone(), VarType::Constant);
-
+            let _ = self.register_variable(
+                &scope,
+                short_name,
+                name.clone(),
+                var.clone(),
+                VarType::Constant,
+            );
 
             self.symbols
                 .native_mappings

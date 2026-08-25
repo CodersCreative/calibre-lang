@@ -418,7 +418,6 @@ Ok(ParserDataType::new(
                             }else{
                                 Ok(path.pop().unwrap())
                             }
-                            
                         }
                     })
                     .boxed();

@@ -20,7 +20,7 @@ struct Args {
     all: bool,
     #[arg(short, long)]
     recursive: bool,
-    #[arg(long, default_value_t = 100)]
+    #[arg(long, default_value_t = 150)]
     max_width: usize,
     #[arg(long, default_value_t = false)]
     flamegraph: bool,
