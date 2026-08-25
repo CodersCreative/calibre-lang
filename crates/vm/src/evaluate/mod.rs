@@ -690,6 +690,7 @@ impl VM {
             ParserInnerType::Int => matches!(value, RuntimeValue::Int(_)),
             ParserInnerType::UInt => matches!(value, RuntimeValue::UInt(_)),
             ParserInnerType::Host => matches!(value, RuntimeValue::Host(_)),
+            ParserInnerType::Gen(_) => matches!(value, RuntimeValue::Generator{..}),
             ParserInnerType::Byte => matches!(value, RuntimeValue::Byte(_)),
             ParserInnerType::Null => matches!(value, RuntimeValue::Null),
             ParserInnerType::Bool => matches!(value, RuntimeValue::Bool(_)),

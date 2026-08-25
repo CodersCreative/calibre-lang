@@ -7,6 +7,14 @@ type ExecContext := struct {
 	line col : uint
 };
 
+type ListIter:<T> := struct { data : list:<T>, index : int };
+
+type gen:<T> := struct { data : fn () -> T?, index : int, done : bool };
+
+type RangeIter := struct { range : range, index : int };
+
+type StrIter := struct { data : list:<char>, index : int };
+
 const print := fn (msg : list:<dyn>) => {
 	let mut txt := "";
 	for m in msg => txt &= m;
@@ -55,14 +63,6 @@ trait Send {
 	const send : fn (&mut Self, Self::Item) -> bool;
 };
 
-type ListIter:<T> := struct { data : list:<T>, index : int };
-
-type gen:<T> := struct { data : fn () -> T?, index : int, done : bool };
-
-type RangeIter := struct { range : range, index : int };
-
-type StrIter := struct { data : list:<char>, index : int };
-
 trait Iter {
 	type Item;
 
@@ -70,7 +70,16 @@ trait Iter {
 
 	const collect := fn (self : Self) -> list:<Self::Item> => {
 		let mut out := list:<Self::Item>[];
-		for let .Some : value <- self.next() => out <<= value;
+		
+		for  => {
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				out <<= value;
+			}else => {
+				break;
+			}
+		};
+
 		return out;
 	};
 
@@ -78,10 +87,12 @@ trait Iter {
 		let mut out := list:<U>[];
 		
 		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			out <<= op(v.next);
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				out <<= op(v.next);
+			}else => {
+				break;
+			}
 		};
 		
 		return ListIter:<U> { data : out, index : 0 };
@@ -91,11 +102,12 @@ trait Iter {
 		let mut out := list:<Self::Item>[];
 		
 		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			let value := v.next;
-			if pred(value) => out <<= value;
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				if pred(value) => out <<= value;
+			}else => {
+				break;
+			}
 		};
 		
 		return ListIter:<Self::Item> { data : out, index : 0 };
@@ -106,7 +118,7 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				op(value);
-			}else{
+			}else => {
 				break;
 			}
 		};
@@ -119,7 +131,7 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				acc := op(acc, value);
-			}else{
+			}else => {
 				break;
 			}
 		};
@@ -132,7 +144,7 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				if pred(value) => return true
-			}else{
+			}else => {
 				break;
 			}
 		};
@@ -145,7 +157,7 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				if !pred(value) => return false
-			}else{
+			}else => {
 				break;
 			}
 		};
@@ -158,7 +170,7 @@ trait Iter {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
 				if pred(value) => return some(value)
-			}else{
+			}else => {
 				break;
 			}
 		};
@@ -170,10 +182,12 @@ trait Iter {
 		let mut n := 0;
 		
 		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			n += 1;
+			let v : Self::Item? = self.next();
+			if let .Some : _ <- v => {
+				n += 1;
+			}else => {
+				break;
+			}
 		};
 		
 		return n;
@@ -185,11 +199,13 @@ trait Iter {
 		let mut i := 0;
 		
 		for i < n => {
-			let v := self.next();
-			if v = none => break;
-			
-			out <<= v.next;
-			i += 1;
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				out <<= value;
+				i += 1;
+			}else => {
+				break;
+			}
 		};
 		
 		return ListIter:<Self::Item> { data : out, index : 0 };
@@ -199,19 +215,24 @@ trait Iter {
 		let mut i := 0;
 		
 		for i < n => {
-			let v := self.next();
-			if v = none => break;
+			let v : Self::Item? = self.next();
 			
+			if let .None <- v => {
+				break;
+			}
+
 			i += 1;
 		};
 		
 		let mut out := list:<Self::Item>[];
 		
 		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			out <<= v.next;
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				out <<= value;
+			}else => {
+				break;
+			}
 		};
 		
 		return ListIter:<Self::Item> { data : out, index : 0 };
@@ -223,10 +244,12 @@ trait Iter {
 		let mut i := 0;
 		
 		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			out <<= tuple(i += 1, v.next);
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				out <<= tuple(i += 1, value);
+			}else => {
+				break;
+			}		
 		};
 		
 		return ListIter:<<int, Self::Item>> { data : out, index : 0 };
@@ -240,11 +263,13 @@ trait Iter {
 		let mut i := 0;
 		
 		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			if i % step = 0 => out <<= v.next;
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				if i % step = 0 => out <<= value;
 			i += 1;
+			}else => {
+				break;
+			}	
 		};
 		
 		return ListIter:<Self::Item> { data : out, index : 0 };
@@ -256,11 +281,12 @@ trait Iter {
 		let mut right := list:<Self::Item>[];
 		
 		for  => {
-			let v := self.next();
-			if v = none => break;
-			
-			let value := v.next;
-			if pred(value) => left <<= value else => right <<= value;
+			let v : Self::Item? = self.next();
+			if let .Some : value <- v => {
+				if pred(value) => left <<= value else => right <<= value;
+			}else => {
+				break;
+			}	
 		};
 		
 		return tuple(ListIter:<Self::Item> { data : left, index : 0 }, ListIter:<Self::Item> { data : right, index : 0 });

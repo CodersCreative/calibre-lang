@@ -191,6 +191,7 @@ pub enum ParserInnerType {
     DynamicTraits(Vec<String>),
     Tuple(Vec<ParserDataType>),
     List(Box<ParserDataType>),
+    Gen(Box<ParserDataType>),
     Scope(Vec<ParserDataType>),
     Auto(Option<u16>),
     Range,
@@ -290,6 +291,9 @@ impl ParserDataType {
             {
                 Some(ParserDataType::new(sp, ParserInnerType::Auto(None)))
             }
+            ParserInnerType::Gen(x) => {
+                Some(*x)
+            }
             _ => None,
         }
     }
@@ -366,6 +370,7 @@ impl FromStr for ParserInnerType {
             "str" => Self::Str,
             "char" => Self::Char,
             "dyn" => Self::Dynamic,
+            "gen" => Self::Gen(Box::new(ParserDataType::auto(Span::default()))),
             "option" => Self::Option(Box::new(ParserDataType::auto(Span::default()))),
             "result" => Self::Result {
                 ok: Box::new(ParserDataType::auto(Span::default())),
@@ -411,6 +416,7 @@ impl ParserInnerType {
             } => ParserInnerType::Struct(identifier),
             ParserInnerType::List(_) => ParserInnerType::Struct(String::from("list")),
             ParserInnerType::Ptr(_) => ParserInnerType::Struct(String::from("ptr")),
+            ParserInnerType::Gen(_) => ParserInnerType::Struct(String::from("gen")),
             ParserInnerType::Option(_) => ParserInnerType::Struct(String::from("option")),
             ParserInnerType::Result { .. } => ParserInnerType::Struct(String::from("result")),
             x => x,
@@ -652,7 +658,7 @@ impl Display for ParserInnerType {
             }
             Self::Result { err, ok } => write!(f, "{}!{}", err, ok),
             Self::Option(x) => write!(f, "{}?", x),
-            Self::Ptr(x) => write!(f, "ptr:<{}>", x),
+            Self::Ptr(x) => write!(f, "ptr:<{}>", x),Self::Gen(x) => write!(f, "gen:<{}>", x),
             Self::Struct(x) => write!(f, "{}", x),
             Self::StructWithGenerics {
                 identifier,

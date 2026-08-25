@@ -74,10 +74,7 @@ impl MiddleEnvironment {
 
                 Some(ParserDataType::new(
                     node.span,
-                    ParserInnerType::StructWithGenerics {
-                        identifier: "gen".to_string(),
-                        generic_types: vec![elem],
-                    },
+                    ParserInnerType::Gen(Box::new(elem)),
                 ))
             }
             NodeType::Null | NodeType::Defer { .. } | NodeType::Drop(_) | NodeType::EmptyLine => {

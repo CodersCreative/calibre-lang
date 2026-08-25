@@ -855,6 +855,11 @@ pub fn build_tail_expression_parser<'a>(
                     }) if identifier == "gen" && generic_types.len() == 1 => {
                         Some(generic_types[0].clone())
                     }
+                    Some(ParserDataType {
+                        data_type:
+                            ParserInnerType::Gen(x),
+                        ..
+                    }) => Some(*x.clone()),
                     Some(_) => {
                         return Err(Rich::custom(
                             sp,
