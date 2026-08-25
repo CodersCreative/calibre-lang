@@ -9,8 +9,9 @@ impl Args {
 		
 		let mut idx := 0;
 		
+		// Fix Args.nth
 		for  => {
-			match Args.nth(idx) {
+			match Args.nth(idx) as! str? {
 				.Some : x => {
 					out <<= x;
 					idx += 1;
@@ -26,7 +27,7 @@ impl Args {
 		let mut idx := 0;
 		
 		for  => {
-			match Args.nth(idx) {
+			match Args.nth(idx) as! str? {
 				.Some : _ => idx += 1,
 				.None => break
 			};

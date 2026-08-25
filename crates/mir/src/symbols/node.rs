@@ -6,7 +6,7 @@ use crate::{
 use calibre_parser::ast::{
     Operator,
     idents::ParsedIntLiteral,
-    nodes::{AsFailureMode, EmitType, Node, NodeType},
+    nodes::{AsFailureMode, CallArg, EmitType, Node, NodeType},
     types::{ParserDataType, ParserInnerType},
 };
 
@@ -386,37 +386,16 @@ impl MiddleEnvironment {
                         .unwrap_or(field.text().clone());
 
                     if !member_name.is_empty() {
-                        let ty = self.resolve_type_from_node(scope, base).or_else(|| {
+                        if let Some(ty) = &self.resolve_type_from_node(scope, base).or_else(|| {
                             if let NodeType::Identifier(id) = &base.node_type {
                                 self.resolve_to_data_type(scope, id).ok()
                             } else {
                                 None
                             }
-                        });
-
-                        if let Some(ty) = &ty
+                        })
                             && let Some(method_ty) = self.resolve_member_fn_type(&ty, &member_name)
                         {
-                            match method_ty.data_type {
-                                ParserInnerType::Function { return_type, .. }
-                                | ParserInnerType::NativeFunction { return_type, .. } => {
-                                    return Some(*return_type);
-                                }
-                                _ => return Some(method_ty),
-                            }
-                        }
-
-                        if let Some(ty) = ty.clone()
-                            && let Some(member_ty) =
-                                self.resolve_member_field_type(scope, &ty, &member_name, base.span)
-                        {
-                            match member_ty.data_type {
-                                ParserInnerType::Function { return_type, .. }
-                                | ParserInnerType::NativeFunction { return_type, .. } => {
-                                    return Some(*return_type);
-                                }
-                                _ => return Some(member_ty),
-                            }
+                            return method_ty.apply_callable()
                         }
 
                         return Some(ParserDataType::new(base.span, ParserInnerType::Dynamic));

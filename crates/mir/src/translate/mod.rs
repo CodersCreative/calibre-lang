@@ -1816,6 +1816,21 @@ impl MiddleEnvironment {
                     .get_or_create_impl(resolved.clone(), self.context.current_location.clone());
 
                 {
+                    let placeholders = variables.iter().filter_map(|var| {
+                        if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type {
+                            let identifier = self.resolve(scope, identifier, ResolutionOptions::default().with_dollar()).ok()?;
+                            let resolved_iden = format!("{}.{}", self_name, identifier);
+                            // TODO Unpack the dollar ident only without resolving
+                            Some((
+                                identifier,
+                                resolved_iden,
+                                generic_params.clone(),
+                            ))
+                        }else{
+                            None
+                        }
+                    }).collect::<Vec<_>>();
+
                     let impl_ref = self.typing.impls.get_mut(&impl_key).ok_or_else(|| {
                         MiddleErr::At(
                             node.span,
@@ -1823,20 +1838,16 @@ impl MiddleEnvironment {
                         )
                     })?;
 
-                    for var in &variables {
-                        if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type {
-                            let resolved_iden = format!("{}.{}", self_name, identifier);
-                            // TODO Unpack the dollar ident only without resolving
-                            impl_ref.insert_member_placeholder(
-                                &identifier.to_string(),
-                                resolved_iden,
-                                generic_params.clone(),
-                            );
-                        }
+                    for var in placeholders {
+                        impl_ref.insert_member_placeholder(
+                            &var.0,
+                            var.1,
+                            var.2,
+                        );
                     }
                 }
 
-                let (previous_self, previous_self_type) = {
+                let previous_self_type = {
                     let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
                         MiddleErr::At(
                             node.span,
@@ -1844,14 +1855,10 @@ impl MiddleEnvironment {
                         )
                     })?;
 
-                    (
-                        scope
-                            .mappings
-                            .insert(String::from("Self"), self_name.clone()),
+                    
                         scope
                             .type_mappings
-                            .insert(String::from("Self"), resolved.data_type.clone()),
-                    )
+                            .insert(String::from("Self"), resolved.data_type.clone())
                 };
 
                 let mut statements = Vec::new();
@@ -1864,7 +1871,7 @@ impl MiddleEnvironment {
                             value,
                             data_type,
                         } => {
-                            let iden = identifier.to_string();
+                            let identifier = self.resolve(scope, &identifier, ResolutionOptions::default().with_dollar())?;
                             let resolved_iden = format!("{}.{}", self_name, identifier);
 
                             let dependant = match &value.node_type {
@@ -1911,7 +1918,7 @@ impl MiddleEnvironment {
                                         data_type,
                                     },
                                 },
-                                iden,
+                                identifier,
                                 dependant,
                             )
                         }
@@ -1968,10 +1975,6 @@ impl MiddleEnvironment {
                             Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
                         )
                     })?;
-
-                    if let Some(prev) = previous_self {
-                        scope.mappings.insert(String::from("Self"), prev);
-                    }
 
                     if let Some(prev) = previous_self_type {
                         scope.type_mappings.insert(String::from("Self"), prev);

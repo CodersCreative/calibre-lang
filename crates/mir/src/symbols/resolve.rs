@@ -12,7 +12,7 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::{fmt::Display, str::FromStr, write};
+use std::{arch::x86_64, fmt::Display, str::FromStr, write};
 use tracing::{instrument, trace, warn};
 
 pub enum IdentifierType<'a> {
@@ -275,8 +275,27 @@ impl MiddleEnvironment {
         })
     }
 
-    #[instrument(skip_all)]
     pub fn resolve<'a>(
+        &'a self,
+        scope: &'a u64,
+        ident: impl Into<IdentifierType<'a>>,
+        options: ResolutionOptions,
+    ) -> Result<String, MiddleErr> {
+        let mut current = self.resolve_inner(scope, ident, options)?;
+
+        for _ in 0..64 {
+            if let Ok(x) = self.resolve_inner(scope, &current, options) && current != x{
+                current = x;
+            }else{
+                break;
+            }
+        }
+
+        Ok(current)
+    }
+
+    #[instrument(skip_all)]
+    fn resolve_inner<'a>(
         &'a self,
         scope: &'a u64,
         ident: impl Into<IdentifierType<'a>>,
@@ -287,7 +306,7 @@ impl MiddleEnvironment {
 
         let (ident, dollar_ident) = match ident {
             IdentifierType::Generic(x) => {
-                return self.resolve(scope, x.get_ident(), options);
+                return self.resolve_inner(scope, x.get_ident(), options);
             }
             IdentifierType::Dollar(PotentialDollarIdentifier::DollarIdentifier(x)) => {
                 (None, Some(x))
@@ -316,7 +335,7 @@ impl MiddleEnvironment {
             match &resolved.node_type {
                 NodeType::Identifier(x) => match x.get_ident() {
                     PotentialDollarIdentifier::Identifier(x) => x.text.clone(),
-                    x => return self.resolve(scope, x, options),
+                    x => return self.resolve_inner(scope, x, options),
                 },
                 _ => {
                     return Err(self
@@ -360,7 +379,7 @@ impl MiddleEnvironment {
             }
 
             if let Some(x) = scope_ref.parent {
-                return self.resolve(&x, &ident, options);
+                return self.resolve_inner(&x, &ident, options);
             }
 
             for key in self.typing.trait_defs.keys() {
@@ -408,7 +427,7 @@ impl MiddleEnvironment {
         }
 
         if let Some(x) = scope_ref.parent {
-            return self.resolve(&x, &ident, options);
+            return self.resolve_inner(&x, &ident, options);
         }
 
         for key in self.symbols.variables.keys() {
@@ -693,6 +712,20 @@ impl MiddleEnvironment {
                 ),
                 span: self.context.current_span(),
             },
+            ParserInnerType::Scope(x) => {
+                let mut path = Vec::new();
+
+                for node in x {
+                    if let ParserInnerType::Struct(x) = &node.data_type {
+                        path.push(x.clone());
+                    }
+                }
+
+                if path.len() == 2 {
+
+                }
+                todo!()
+            }
             x => ParserDataType {
                 data_type: x.clone(),
                 span: self.context.current_span(),

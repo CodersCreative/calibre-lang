@@ -1,3 +1,5 @@
+use std::println;
+
 use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
@@ -574,6 +576,7 @@ impl MiddleEnvironment {
 
         let return_type =
             self.resolve_data_type(&new_scope, &header.return_type, ResolutionOptions::typing())?;
+        println!("ret : {:?}\n", return_type);
         self.scoping.return_type_stack.push(return_type.key());
 
         body = body.rewrite_main_emits_to_returns();
