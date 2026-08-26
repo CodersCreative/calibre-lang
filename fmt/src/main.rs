@@ -2,7 +2,14 @@ use calibre_diagnostics::{emit_calibre_errors, emit_error};
 use calibre_fmt::{FormatError, default_all_entry_path, format_all, format_file, format_recursive};
 use calibre_parser::ast::formatter::Formatter;
 use clap::Parser;
-use std::{env, error::Error, path::PathBuf, str::FromStr};
+use std::{
+    env,
+    error::Error,
+    fs,
+    io::{self, Write},
+    path::PathBuf,
+    str::FromStr,
+};
 use tracing::info;
 use tracing_flame::FlameLayer;
 use tracing_subscriber::{EnvFilter, Registry, fmt, layer::SubscriberExt};
@@ -14,6 +21,8 @@ struct Args {
     input: Option<String>,
     #[arg(long)]
     stdin: bool,
+    #[arg(long)]
+    stdin_filename: Option<String>,
     #[arg(short, long)]
     output: Option<String>,
     #[arg(short, long)]
@@ -79,10 +88,27 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let result = if args.stdin {
-        if let Some(x) = args.input {
+        if let Some(path) = args.stdin_filename {
+            let contents = if let Ok(x) = fs::read_to_string(&path) {
+                x
+            } else {
+                let path = PathBuf::from_str(&path)?;
+                fs::read_to_string(path.file_name().unwrap_or_default())?
+            };
+
+            match formatter.start_format(&contents, None) {
+                Ok(x) => {
+                    print!("{x}");
+                    io::stdout().flush()?;
+                    return Ok(());
+                }
+                Err(e) => Err(e),
+            }
+        } else if let Some(x) = args.input {
             match formatter.start_format(&x, None) {
                 Ok(x) => {
                     print!("{x}");
+                    io::stdout().flush()?;
                     return Ok(());
                 }
                 Err(e) => Err(e),
