@@ -434,6 +434,7 @@ version = "0.0.1"
 dependencies = [
  "calibre-parser",
  "calibre-std",
+ "derive_builder",
  "fastrand",
  "indextree",
  "rustc-hash",

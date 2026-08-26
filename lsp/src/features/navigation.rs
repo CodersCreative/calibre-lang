@@ -1,5 +1,5 @@
 use super::*;
-use calibre_mir::{ast::MiddleNodeType, scoping::ScopeId, symbols::resolve::ResolutionOptions};
+use calibre_mir::{ast::{MiddleNodeType, MirDeref, MirRef}, scoping::ScopeId, symbols::resolve::ResolutionOptions};
 
 impl CalibreLanguageServer {
     pub(super) fn find_scope_at_with(
@@ -36,8 +36,8 @@ impl CalibreLanguageServer {
             }
 
             match &node.node_type {
-                MiddleNodeType::RefStatement { value, .. }
-                | MiddleNodeType::DerefStatement { value, .. }
+                MiddleNodeType::RefStatement (MirRef{ value, .. })
+                | MiddleNodeType::DerefStatement (MirDeref{ value, .. })
                 | MiddleNodeType::VariableDeclaration { value, .. }
                 | MiddleNodeType::EnumExpression {
                     data: Some(value), ..

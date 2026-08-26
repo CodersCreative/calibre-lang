@@ -1,11 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
-    environment::MiddleEnvironment,
-    errors::MiddleErr,
-    scoping::ScopeId,
-    symbols::resolve::ResolutionOptions,
-    tags::TagInfo,
-    typing::{
+    ast::{MiddleNode, MiddleNodeType, MirBreak, MirContinue, MirDeref, MirDrop, MirMove, MirRef, MirSpawn}, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId, symbols::resolve::ResolutionOptions, tags::TagInfo, typing::{
         MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType, Typing,
     },
 };
@@ -531,9 +525,9 @@ impl MiddleEnvironment {
                     Ok(self.evaluate(scope, wait_scope))
                 } else {
                     Ok(MiddleNode::new(
-                        MiddleNodeType::Spawn {
+                        MiddleNodeType::Spawn (MirSpawn{
                             value: Box::new(inner),
-                        },
+                }),
                         node.span,
                     ))
                 }
@@ -652,10 +646,10 @@ impl MiddleEnvironment {
             ),
             AstNodeType::MoveExpression { value } => match value.node_type {
                 AstNodeType::Identifier(x) => Ok(MiddleNode {
-                    node_type: MiddleNodeType::Move(ParserText::new(
+                    node_type: MiddleNodeType::Move(MirMove{ identifier : ParserText::new(
                         node.span,
                         self.resolve(scope, &x, ResolutionOptions::all())?,
-                    )),
+                    )}),
                     span: node.span,
                 }),
                 AstNodeType::FieldAccess { base, field } => {
@@ -779,10 +773,10 @@ impl MiddleEnvironment {
             }
 
             AstNodeType::Drop(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::Drop(ParserText::new(
+                node_type: MiddleNodeType::Drop(MirDrop { identifier : ParserText::new(
                     node.span,
                     self.resolve(scope, &x, ResolutionOptions::all())?,
-                )),
+                )}),
                 span: node.span,
             }),
             AstNodeType::IfStatement {
@@ -930,10 +924,10 @@ impl MiddleEnvironment {
                     }
 
                     let break_node = MiddleNode::new(
-                        MiddleNodeType::Break {
+                        MiddleNodeType::Break (MirBreak {
                             label: label_text.or(raw_label_text).map(Into::into),
                             value: None,
-                        },
+                        }),
                         self.context.current_span(),
                     );
 
@@ -1000,9 +994,9 @@ impl MiddleEnvironment {
                     }
 
                     let cont_node = MiddleNode::new(
-                        MiddleNodeType::Continue {
+                        MiddleNodeType::Continue ( MirContinue{
                             label: label_text.or(raw_label_text).map(Into::into),
-                        },
+                        }),
                         self.context.current_span(),
                     );
 
@@ -1098,16 +1092,16 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             AstNodeType::RefStatement { mutability, value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::RefStatement {
+                node_type: MiddleNodeType::RefStatement ( MirRef{
                     mutability,
                     value: Box::new(self.evaluate_inner(scope, *value)?),
-                },
+                }),
                 span: node.span,
             }),
             AstNodeType::DerefStatement { value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::DerefStatement {
+                node_type: MiddleNodeType::DerefStatement (MirDeref{
                     value: Box::new(self.evaluate_inner(scope, *value)?),
-                },
+                }),
                 span: node.span,
             }),
             AstNodeType::ParenExpression { value } => self.evaluate_inner(scope, *value),

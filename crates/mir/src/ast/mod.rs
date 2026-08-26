@@ -12,6 +12,7 @@ use calibre_parser::{
         types::{GenericTypes, ParserDataType},
     },
 };
+use derive_builder::Builder;
 use rustc_hash::FxHashMap;
 use std::fmt::Display;
 
@@ -83,8 +84,8 @@ impl MiddleNode {
             | MiddleNodeType::ScopeAccess { base: value, .. }
             | MiddleNodeType::IsExpression { value, .. }
             | MiddleNodeType::NegExpression { value }
-            | MiddleNodeType::RefStatement { value, .. }
-            | MiddleNodeType::DerefStatement { value }
+            | MiddleNodeType::RefStatement (MirRef{ value, .. })
+            | MiddleNodeType::DerefStatement (MirDeref{ value })
             | MiddleNodeType::DebugExpression { value, .. }
             | MiddleNodeType::Return { value: Some(value) }
             | MiddleNodeType::EnumExpression {
@@ -154,8 +155,8 @@ impl MiddleNode {
             MiddleNodeType::AsExpression { value, .. }
             | MiddleNodeType::IsExpression { value, .. }
             | MiddleNodeType::NegExpression { value }
-            | MiddleNodeType::RefStatement { value, .. }
-            | MiddleNodeType::DerefStatement { value }
+            | MiddleNodeType::RefStatement (MirRef{ value, .. })
+            | MiddleNodeType::DerefStatement (MirDeref{ value })
             | MiddleNodeType::DebugExpression { value, .. }
             | MiddleNodeType::VariableDeclaration { value, .. } => value.substitute(repl),
             MiddleNodeType::ListLiteral(_, values) => {
@@ -212,8 +213,8 @@ impl MiddleNode {
             MiddleNodeType::AsExpression { value, .. }
             | MiddleNodeType::IsExpression { value, .. }
             | MiddleNodeType::NegExpression { value }
-            | MiddleNodeType::RefStatement { value, .. }
-            | MiddleNodeType::DerefStatement { value }
+            | MiddleNodeType::RefStatement (MirRef{ value, .. })
+            | MiddleNodeType::DerefStatement (MirDeref{ value })
             | MiddleNodeType::DebugExpression { value, .. }
             | MiddleNodeType::VariableDeclaration { value, .. } => value.calls_self(name),
             MiddleNodeType::ListLiteral(_, values) => values.iter().any(|v| v.calls_self(name)),
@@ -235,30 +236,60 @@ impl MiddleNode {
 
 // TODO split Data in the struct into their own structs
 // Have those structs implement a Translate trait in the LIR
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirBreak {
+    pub label: Option<ParserText>,
+    pub value: Option<Box<MiddleNode>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirContinue {
+    pub label: Option<ParserText>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirRef {
+    pub mutability: RefMutability,
+    pub value: Box<MiddleNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirDrop {
+    pub identifier : ParserText
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirMove {
+    pub identifier : ParserText
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirSpawn {
+    pub value: Box<MiddleNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirDeref {
+    pub value: Box<MiddleNode>,
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
-    Break {
-        label: Option<ParserText>,
-        value: Option<Box<MiddleNode>>,
-    },
-    Continue {
-        label: Option<ParserText>,
-    },
     EmptyLine,
     Null,
-    RefStatement {
-        mutability: RefMutability,
-        value: Box<MiddleNode>,
-    },
-    Drop(ParserText),
-    Move(ParserText),
-    Spawn {
-        value: Box<MiddleNode>,
-    },
-    DerefStatement {
-        value: Box<MiddleNode>,
-    },
+
+    Break(MirBreak),
+    Continue(MirContinue),
+
+    RefStatement(MirRef),
+    Drop(MirDrop),
+
+    Move(MirMove),
+    Spawn(MirSpawn),
+    DerefStatement(MirDeref),
+
     VariableDeclaration {
         var_type: VarType,
         identifier: ParserText,
@@ -425,29 +456,29 @@ impl From<MiddleNodeType> for AstNodeType {
             MiddleNodeType::Emit { value } => {
                 AstNodeType::Emit(EmitType::Scope(Box::new((*value).into())))
             }
-            MiddleNodeType::Spawn { value } => AstNodeType::Spawn {
-                items: vec![(*value).into()],
+            MiddleNodeType::Spawn (value) => AstNodeType::Spawn {
+                items: vec![(*value.value).into()],
                 auto_wait: false,
             },
-            MiddleNodeType::Drop(x) => AstNodeType::Drop(x.into()),
-            MiddleNodeType::Move(x) => AstNodeType::MoveExpression {
-                value: Box::new(AstNode::new(x.span, AstNodeType::Identifier(x.into()))),
+            MiddleNodeType::Drop(value) => AstNodeType::Drop(value.identifier.into()),
+            MiddleNodeType::Move(value) => AstNodeType::MoveExpression {
+                value: Box::new(AstNode::new(value.identifier.span, AstNodeType::Identifier(value.identifier.into()))),
             },
-            MiddleNodeType::Break { label, value } => AstNodeType::Break {
-                label: label.map(Into::into),
-                value: value.map(|v| Box::new((*v).into())),
+            MiddleNodeType::Break(value) => AstNodeType::Break {
+                label: value.label.map(Into::into),
+                value: value.value.map(|v| Box::new((*v).into())),
             },
-            MiddleNodeType::Continue { label } => AstNodeType::Continue {
-                label: label.map(Into::into),
+            MiddleNodeType::Continue(value) => AstNodeType::Continue {
+                label: value.label.map(Into::into),
             },
             MiddleNodeType::EmptyLine => AstNodeType::EmptyLine,
             MiddleNodeType::Null => AstNodeType::Null,
-            MiddleNodeType::RefStatement { mutability, value } => AstNodeType::RefStatement {
-                mutability,
-                value: Box::new((*value).into()),
+            MiddleNodeType::RefStatement(value) => AstNodeType::RefStatement {
+                mutability: value.mutability,
+                value: Box::new((*value.value).into()),
             },
-            MiddleNodeType::DerefStatement { value } => AstNodeType::DerefStatement {
-                value: Box::new((*value).into()),
+            MiddleNodeType::DerefStatement(value) => AstNodeType::DerefStatement {
+                value: Box::new((*value.value).into()),
             },
             MiddleNodeType::VariableDeclaration {
                 var_type,
