@@ -16,6 +16,8 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
+use indextree::{Arena, NodeId};
+use rustc_hash::FxHashMap;
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -23,12 +25,21 @@ use tracing::{debug, instrument};
 
 #[derive(Debug, Clone, Default)]
 pub struct MiddleEnvironment {
+    pub nodes: MirNodes,
     pub context: MiddleContext,
     pub symbols: Symbols,
     pub typing: Typing,
     pub scoping: Scoping,
     pub tagging: Tagging,
     pub testing: Testing,
+}
+
+pub type MirId = NodeId;
+
+#[derive(Debug, Clone, Default)]
+pub struct MirNodes {
+    pub nodes: Arena<MiddleNodeType>,
+    pub spans: FxHashMap<MirId, Span>,
 }
 
 impl MiddleEnvironment {

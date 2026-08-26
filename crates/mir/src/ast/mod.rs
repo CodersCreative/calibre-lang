@@ -233,6 +233,8 @@ impl MiddleNode {
     }
 }
 
+// TODO split Data in the struct into their own structs
+// Have those structs implement a Translate trait in the LIR
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
