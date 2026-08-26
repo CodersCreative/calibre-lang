@@ -414,6 +414,7 @@ impl VM {
         Ok(None)
     }
 
+    #[instrument(skip_all)]
     pub(super) fn run_instruction(
         &mut self,
         instruction: &VMInstruction,

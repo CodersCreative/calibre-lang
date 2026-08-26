@@ -1,10 +1,13 @@
-use crate::{MiddleNode, MiddleNodeType, ast::{MirBreak, MirDeref, MirDrop, MirMove, MirRef, MirSpawn}};
+use crate::{
+    MiddleNode, MiddleNodeType,
+    ast::{MirBreak, MirDeref, MirDrop, MirMove, MirRef, MirSpawn},
+};
 use calibre_parser::IdentifiersUsed;
 
 impl IdentifiersUsed for MiddleNode {
     fn identifiers_used(&self) -> Vec<&String> {
         match &self.node_type {
-            MiddleNodeType::Break (MirBreak{ value: None, .. })
+            MiddleNodeType::Break(MirBreak { value: None, .. })
             | MiddleNodeType::EmptyLine
             | MiddleNodeType::Continue { .. }
             | MiddleNodeType::Null
@@ -19,18 +22,20 @@ impl IdentifiersUsed for MiddleNode {
             | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::Return { value: None } => Vec::new(),
-            MiddleNodeType::Identifier(identifier) | MiddleNodeType::Drop(MirDrop { identifier }) | MiddleNodeType::Move(MirMove { identifier }) => {
+            MiddleNodeType::Identifier(identifier)
+            | MiddleNodeType::Drop(MirDrop { identifier })
+            | MiddleNodeType::Move(MirMove { identifier }) => {
                 vec![identifier]
             }
-            MiddleNodeType::RefStatement (MirRef{
+            MiddleNodeType::RefStatement(MirRef {
                 mutability: _,
                 value,
             })
-            | MiddleNodeType::Break (MirBreak{
+            | MiddleNodeType::Break(MirBreak {
                 value: Some(value), ..
             })
-            | MiddleNodeType::DerefStatement (MirDeref{ value })
-            | MiddleNodeType::Spawn (MirSpawn{ value })
+            | MiddleNodeType::DerefStatement(MirDeref { value })
+            | MiddleNodeType::Spawn(MirSpawn { value })
             | MiddleNodeType::VariableDeclaration {
                 var_type: _,
                 identifier: _,
@@ -185,15 +190,15 @@ impl MiddleNode {
             | MiddleNodeType::Identifier(_)
             | MiddleNodeType::Drop(_)
             | MiddleNodeType::Move(_) => Vec::new(),
-            MiddleNodeType::RefStatement (MirRef{
+            MiddleNodeType::RefStatement(MirRef {
                 mutability: _,
                 value,
             })
             | MiddleNodeType::ScopeAccess { base: value, .. }
             | MiddleNodeType::FieldAccess { base: value, .. }
-            | MiddleNodeType::DerefStatement (MirDeref{ value })
+            | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::NegExpression { value }
-            | MiddleNodeType::Spawn (MirSpawn{ value })
+            | MiddleNodeType::Spawn(MirSpawn { value })
             | MiddleNodeType::AsExpression {
                 value,
                 data_type: _,

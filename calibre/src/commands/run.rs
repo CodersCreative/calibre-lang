@@ -13,6 +13,7 @@ use std::{
     error::Error,
     path::{Path, PathBuf},
 };
+use tracing::instrument;
 
 #[derive(Builder, Debug)]
 pub struct Run {
@@ -25,6 +26,7 @@ pub struct Run {
 }
 
 impl Run {
+    #[instrument]
     pub async fn execute(mut self) -> Result<(), Box<dyn Error>> {
         if let Some(path) = resolve_run_target(self.path, self.example)? {
             let contents = fs::read_to_string(&path).await?;

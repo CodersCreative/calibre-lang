@@ -1,7 +1,13 @@
 use std::unreachable;
 
+use crate::{
+    ast::{BlockId, LirLValue, LirLiteral, LirNode, LirNodeType, LirTerminator},
+    environment::{LirEnvironment, LirFunction, LirGlobal, LirRegistry},
+};
 use calibre_mir::{
-    ast::{MiddleNode, MiddleNodeType, MirDeref}, environment::MiddleEnvironment, typing::{MiddleImpl, MiddleTrait, MiddleTypeDefType},
+    ast::{MiddleNode, MiddleNodeType, MirDeref},
+    environment::MiddleEnvironment,
+    typing::{MiddleImpl, MiddleTrait, MiddleTypeDefType},
 };
 use calibre_parser::{
     Span,
@@ -15,10 +21,6 @@ use calibre_parser::{
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use tracing::{debug, info, instrument, trace};
-use crate::{
-    ast::{BlockId, LirLValue, LirLiteral, LirNode, LirNodeType, LirTerminator},
-    environment::{LirEnvironment, LirFunction, LirGlobal, LirRegistry},
-};
 
 pub mod access;
 pub mod declarations;
@@ -29,9 +31,12 @@ pub mod memory;
 pub mod statements;
 
 pub trait LirLowering {
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span : Span) -> LirNodeType;
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType;
 
-    fn lower_lvalue<'a>(self, _env: &mut LirEnvironment<'a>, _span : Span) -> LirLValue where Self : Sized{
+    fn lower_lvalue<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirLValue
+    where
+        Self: Sized,
+    {
         unreachable!()
     }
 }

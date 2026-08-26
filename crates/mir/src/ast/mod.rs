@@ -84,8 +84,8 @@ impl MiddleNode {
             | MiddleNodeType::ScopeAccess { base: value, .. }
             | MiddleNodeType::IsExpression { value, .. }
             | MiddleNodeType::NegExpression { value }
-            | MiddleNodeType::RefStatement (MirRef{ value, .. })
-            | MiddleNodeType::DerefStatement (MirDeref{ value })
+            | MiddleNodeType::RefStatement(MirRef { value, .. })
+            | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::DebugExpression { value, .. }
             | MiddleNodeType::Return { value: Some(value) }
             | MiddleNodeType::EnumExpression {
@@ -155,8 +155,8 @@ impl MiddleNode {
             MiddleNodeType::AsExpression { value, .. }
             | MiddleNodeType::IsExpression { value, .. }
             | MiddleNodeType::NegExpression { value }
-            | MiddleNodeType::RefStatement (MirRef{ value, .. })
-            | MiddleNodeType::DerefStatement (MirDeref{ value })
+            | MiddleNodeType::RefStatement(MirRef { value, .. })
+            | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::DebugExpression { value, .. }
             | MiddleNodeType::VariableDeclaration { value, .. } => value.substitute(repl),
             MiddleNodeType::ListLiteral(_, values) => {
@@ -213,8 +213,8 @@ impl MiddleNode {
             MiddleNodeType::AsExpression { value, .. }
             | MiddleNodeType::IsExpression { value, .. }
             | MiddleNodeType::NegExpression { value }
-            | MiddleNodeType::RefStatement (MirRef{ value, .. })
-            | MiddleNodeType::DerefStatement (MirDeref{ value })
+            | MiddleNodeType::RefStatement(MirRef { value, .. })
+            | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::DebugExpression { value, .. }
             | MiddleNodeType::VariableDeclaration { value, .. } => value.calls_self(name),
             MiddleNodeType::ListLiteral(_, values) => values.iter().any(|v| v.calls_self(name)),
@@ -256,12 +256,12 @@ pub struct MirRef {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirDrop {
-    pub identifier : ParserText
+    pub identifier: ParserText,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirMove {
-    pub identifier : ParserText
+    pub identifier: ParserText,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -456,13 +456,16 @@ impl From<MiddleNodeType> for AstNodeType {
             MiddleNodeType::Emit { value } => {
                 AstNodeType::Emit(EmitType::Scope(Box::new((*value).into())))
             }
-            MiddleNodeType::Spawn (value) => AstNodeType::Spawn {
+            MiddleNodeType::Spawn(value) => AstNodeType::Spawn {
                 items: vec![(*value.value).into()],
                 auto_wait: false,
             },
             MiddleNodeType::Drop(value) => AstNodeType::Drop(value.identifier.into()),
             MiddleNodeType::Move(value) => AstNodeType::MoveExpression {
-                value: Box::new(AstNode::new(value.identifier.span, AstNodeType::Identifier(value.identifier.into()))),
+                value: Box::new(AstNode::new(
+                    value.identifier.span,
+                    AstNodeType::Identifier(value.identifier.into()),
+                )),
             },
             MiddleNodeType::Break(value) => AstNodeType::Break {
                 label: value.label.map(Into::into),

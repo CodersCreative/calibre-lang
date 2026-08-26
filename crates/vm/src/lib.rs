@@ -18,6 +18,7 @@ use std::{
     },
 };
 use std::{fmt::Display, sync::OnceLock};
+use tracing::instrument;
 
 static NULL_RUNTIME_VALUE: RuntimeValue = RuntimeValue::Null;
 static EMPTY_FRAME: OnceLock<VMFrame> = OnceLock::new();
@@ -158,6 +159,7 @@ impl VM {
         std::ptr::eq(a.as_ref(), b.as_ref())
     }
 
+    #[instrument(skip_all)]
     fn replace_list_aliases_in_runtime_value(
         value: &mut RuntimeValue,
         old_list: &Gc<GcVec>,
@@ -308,6 +310,7 @@ impl VM {
         Self::from_shared_parts(registry, mappings, config, true)
     }
 
+    #[instrument(skip_all)]
     pub fn spawn_async_task(
         &mut self,
         mut func: RuntimeValue,
@@ -416,6 +419,7 @@ impl VM {
     }
 
     #[inline(always)]
+    #[instrument(skip_all)]
     pub(crate) fn get_reg_value(&self, reg: Reg) -> &RuntimeValue {
         let frame = self.current_frame();
         let idx = reg as usize;
@@ -490,6 +494,7 @@ impl VM {
     }
 
     #[inline]
+    #[instrument(skip_all)]
     pub(crate) fn maybe_collect_garbage(&mut self) {
         self.gc.counter = self.gc.counter.wrapping_add(1);
         if self.gc.counter < self.gc.interval {
@@ -508,6 +513,7 @@ impl VM {
         self.gc.in_flight.store(false, Ordering::Release);
     }
 
+    #[instrument(skip_all)]
     pub(crate) fn resolve_value_for_op_ref(
         &self,
         value: &RuntimeValue,

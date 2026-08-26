@@ -1,4 +1,7 @@
-use crate::{MiddleNode, MiddleNodeType, ast::{MirBreak, MirDeref, MirDrop, MirMove, MirRef, MirSpawn}};
+use crate::{
+    MiddleNode, MiddleNodeType,
+    ast::{MirBreak, MirDeref, MirDrop, MirMove, MirRef, MirSpawn},
+};
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
 use rustc_hash::FxHashMap;
 
@@ -24,7 +27,7 @@ fn mapped_name_or_original(state: &AlphaRenameState, original: String) -> String
 impl MiddleNodeType {
     pub fn rename(self, state: &mut AlphaRenameState) -> Self {
         match self {
-            MiddleNodeType::Break (MirBreak{
+            MiddleNodeType::Break(MirBreak {
                 label: _,
                 value: None,
             })
@@ -38,32 +41,36 @@ impl MiddleNodeType {
             | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::ExternFunction { .. } => self,
-            MiddleNodeType::Break (MirBreak{
+            MiddleNodeType::Break(MirBreak {
                 label,
                 value: Some(value),
-            }) => MiddleNodeType::Break (MirBreak{
+            }) => MiddleNodeType::Break(MirBreak {
                 label,
                 value: Some(Box::new(value.rename(state))),
             }),
             MiddleNodeType::Emit { value } => MiddleNodeType::Emit {
                 value: Box::new(value.rename(state)),
             },
-            MiddleNodeType::Spawn (MirSpawn{ value }) => MiddleNodeType::Spawn (MirSpawn {
+            MiddleNodeType::Spawn(MirSpawn { value }) => MiddleNodeType::Spawn(MirSpawn {
                 value: Box::new(value.rename(state)),
             }),
-            MiddleNodeType::RefStatement (MirRef{ mutability, value }) => MiddleNodeType::RefStatement (MirRef{
-                mutability,
-                value: Box::new(value.rename(state)),
-            }),
-            MiddleNodeType::DerefStatement (MirDeref{ value }) => MiddleNodeType::DerefStatement (MirDeref{
-                value: Box::new(value.rename(state)),
-            }),
-            MiddleNodeType::Drop(MirDrop { identifier }) => {
-                MiddleNodeType::Drop(MirDrop { identifier : mapped_name_or_original(state, identifier.text).into()})
+            MiddleNodeType::RefStatement(MirRef { mutability, value }) => {
+                MiddleNodeType::RefStatement(MirRef {
+                    mutability,
+                    value: Box::new(value.rename(state)),
+                })
             }
-            MiddleNodeType::Move(MirMove { identifier }) => {
-                MiddleNodeType::Move(MirMove { identifier : mapped_name_or_original(state, identifier.text).into()})
+            MiddleNodeType::DerefStatement(MirDeref { value }) => {
+                MiddleNodeType::DerefStatement(MirDeref {
+                    value: Box::new(value.rename(state)),
+                })
             }
+            MiddleNodeType::Drop(MirDrop { identifier }) => MiddleNodeType::Drop(MirDrop {
+                identifier: mapped_name_or_original(state, identifier.text).into(),
+            }),
+            MiddleNodeType::Move(MirMove { identifier }) => MiddleNodeType::Move(MirMove {
+                identifier: mapped_name_or_original(state, identifier.text).into(),
+            }),
             MiddleNodeType::VariableDeclaration {
                 var_type,
                 identifier,

@@ -1,3 +1,5 @@
+use tracing::instrument;
+
 use super::*;
 
 pub enum TerminateValue {
@@ -14,6 +16,7 @@ pub enum TerminateValue {
 
 impl VM {
     #[inline]
+    #[instrument(skip_all)]
     pub(crate) fn resolve_saveable_runtime_value_ref(&self, value: &RuntimeValue) -> RuntimeValue {
         match value {
             RuntimeValue::Ref(pointer) => self
@@ -46,6 +49,8 @@ impl VM {
         }
     }
 
+    #[inline]
+    #[instrument(skip_all)]
     pub fn convert_runtime_var_into_saveable(&self, value: RuntimeValue) -> RuntimeValue {
         fn transform(env: &VM, val: RuntimeValue) -> RuntimeValue {
             match val {

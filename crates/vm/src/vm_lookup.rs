@@ -115,6 +115,7 @@ impl VM {
         }
     }
 
+    #[instrument(skip_all)]
     pub(crate) fn capture_values(
         &self,
         captures: &[String],

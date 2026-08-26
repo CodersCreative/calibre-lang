@@ -1181,6 +1181,7 @@ impl VM {
         Ok(Some(result))
     }
 
+    #[instrument(skip_all)]
     fn apply_phis(&mut self, block: &VMBlock, prev: Option<BlockId>) -> Result<(), RuntimeError> {
         if block.phis.is_empty() {
             return Ok(());
@@ -1205,6 +1206,7 @@ impl VM {
     }
 
     #[inline]
+    #[instrument(skip_all)]
     pub fn run_block(
         &mut self,
         block: &VMBlock,
@@ -1213,6 +1215,7 @@ impl VM {
         self.run_block_with_budget(block, prev, 0, None)
     }
 
+    #[instrument(skip_all)]
     pub fn run_block_with_budget(
         &mut self,
         block: &VMBlock,

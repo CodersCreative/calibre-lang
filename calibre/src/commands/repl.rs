@@ -10,6 +10,7 @@ use std::{
     error::Error,
     path::{Path, PathBuf},
 };
+use tracing::instrument;
 
 #[derive(Builder, Debug, Default)]
 pub struct Repl {
@@ -17,6 +18,7 @@ pub struct Repl {
 }
 
 impl Repl {
+    #[instrument]
     pub async fn execute(self) -> Result<(), Box<dyn Error>> {
         let mut session = self.initial_session;
         let repl_path = PathBuf::from("<repl>");

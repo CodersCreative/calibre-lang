@@ -4,6 +4,7 @@ use crate::config::load_project_from;
 use calibre::CompileMode;
 use derive_builder::Builder;
 use std::error::Error;
+use tracing::instrument;
 
 #[derive(Builder, Debug)]
 pub struct Testing<'a> {
@@ -16,6 +17,7 @@ pub struct Testing<'a> {
 }
 
 impl<'a> Testing<'a> {
+    #[instrument]
     pub async fn execute(self) -> Result<(), Box<dyn Error>> {
         let cwd = std::env::current_dir()?;
         let project = load_project_from(&cwd).map_err(|e| format!("config error: {e}"))?;

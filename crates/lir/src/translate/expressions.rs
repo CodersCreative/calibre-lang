@@ -1,5 +1,5 @@
 /*
-This file handles : 
+This file handles :
 BinaryExpression,
 ComparisonExpression,
 BooleanExpression,

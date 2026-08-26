@@ -2,6 +2,7 @@ use crate::config::Config;
 use derive_builder::Builder;
 use smol::fs;
 use std::{error::Error, path::PathBuf, str::FromStr};
+use tracing::instrument;
 
 const DEFAULT_MAIN: &str = "const main := fn => print(\"Hello, World!\");";
 
@@ -12,6 +13,7 @@ pub struct New {
 }
 
 impl New {
+    #[instrument]
     pub async fn execute(self) -> Result<(), Box<dyn Error>> {
         let config = Config {
             no_std: self.no_std,

@@ -1,5 +1,6 @@
 use derive_builder::Builder;
 use rustc_hash::FxHashSet;
+use tracing::instrument;
 
 use crate::config::load_project_from;
 use std::{
@@ -7,10 +8,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Builder, Default)]
+#[derive(Builder, Default, Debug)]
 pub struct Clear {}
 
 impl Clear {
+    #[instrument]
     pub fn execute(self) -> Result<(), Box<dyn Error>> {
         fn clear_target(target: &Path) -> Result<bool, Box<dyn Error>> {
             if !target.exists() || !target.is_dir() {

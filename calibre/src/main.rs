@@ -38,13 +38,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         (
             Some(guard),
             if args.flamegraph {
-                let (flame_layer, guard) = FlameLayer::with_file("./tracing.folded").unwrap();
+                let (flame_layer, flame_guard) = FlameLayer::with_file("./tracing.folded").unwrap();
                 let subscriber = Registry::default()
                     .with(fmt_layer)
                     .with(flame_layer)
                     .with(filter_layer);
                 tracing::subscriber::set_global_default(subscriber)?;
-                Some(guard)
+                Some(flame_guard)
             } else {
                 let subscriber = Registry::default().with(fmt_layer).with(filter_layer);
                 tracing::subscriber::set_global_default(subscriber)?;
@@ -57,101 +57,84 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     info!("tracing initialized");
 
-    fn run_with_large_stack<F>(f: F) -> Result<(), Box<dyn Error>>
-    where
-        F: FnOnce() -> Result<(), String> + Send + 'static,
-    {
-        let handle = std::thread::Builder::new()
-            .name("calibre-main".to_string())
-            .stack_size(64 * 1024 * 1024)
-            .spawn(f)?;
-        match handle.join() {
-            Ok(res) => res.map_err(|e| e.into()),
-            Err(_) => Err("calibre runtime thread panicked".into()),
-        }
-    }
-
-    run_with_large_stack(move || {
-        smol::block_on(async move {
-            match args.command {
-                Some(Commands::New { path, no_std }) => {
-                    NewBuilder::default()
-                        .path(path)
-                        .no_std(no_std)
-                        .build()?
-                        .execute()
-                        .await
-                }
-                Some(Commands::Run {
-                    path,
-                    example,
-                    verbosity,
-                    no_std,
-                    program_args,
-                    no_cache,
-                }) => {
-                    RunBuilder::default()
-                        .path(path)
-                        .example(example)
-                        .verbosity(verbosity)
-                        .no_std(no_std)
-                        .program_args(program_args)
-                        .cache_enabled(!no_cache)
-                        .build()?
-                        .execute()
-                        .await
-                }
-                Some(Commands::Clear) => Clear::default().execute(),
-                Some(Commands::Test {
-                    path,
-                    example,
-                    recursive,
-                    verbose,
-                    tests,
-                    suites,
-                }) => {
-                    TestingBuilder::default()
-                        .wanted(&tests)
-                        .suites(&suites)
-                        .path(path)
-                        .example(example)
-                        .recursive(recursive)
-                        .verbose(verbose)
-                        .build()?
-                        .execute()
-                        .await
-                }
-                Some(Commands::Bench {
-                    path,
-                    example,
-                    recursive,
-                    verbose,
-                    warmup,
-                    min_runs,
-                    max_runs,
-                    time_limit_ms,
-                    benchmarks,
-                    suites,
-                }) => {
-                    BenchmarksBuilder::default()
-                        .wanted(&benchmarks)
-                        .suites(&suites)
-                        .path(path)
-                        .example(example)
-                        .recursive(recursive)
-                        .warmup(warmup)
-                        .min_runs(min_runs)
-                        .max_runs(max_runs)
-                        .time_limit_ms(time_limit_ms)
-                        .verbose(verbose)
-                        .build()?
-                        .execute()
-                        .await
-                }
-                Some(Commands::External(cmd)) => commands::utils::run_external_subcommand(&cmd),
-                None => Repl::default().execute().await,
+    smol::block_on(async move {
+        match args.command {
+            Some(Commands::New { path, no_std }) => {
+                NewBuilder::default()
+                    .path(path)
+                    .no_std(no_std)
+                    .build()?
+                    .execute()
+                    .await
             }
-        })
-        .map_err(|e| e.to_string())
+            Some(Commands::Run {
+                path,
+                example,
+                verbosity,
+                no_std,
+                program_args,
+                no_cache,
+            }) => {
+                RunBuilder::default()
+                    .path(path)
+                    .example(example)
+                    .verbosity(verbosity)
+                    .no_std(no_std)
+                    .program_args(program_args)
+                    .cache_enabled(!no_cache)
+                    .build()?
+                    .execute()
+                    .await
+            }
+            Some(Commands::Clear) => Clear::default().execute(),
+            Some(Commands::Test {
+                path,
+                example,
+                recursive,
+                verbose,
+                tests,
+                suites,
+            }) => {
+                TestingBuilder::default()
+                    .wanted(&tests)
+                    .suites(&suites)
+                    .path(path)
+                    .example(example)
+                    .recursive(recursive)
+                    .verbose(verbose)
+                    .build()?
+                    .execute()
+                    .await
+            }
+            Some(Commands::Bench {
+                path,
+                example,
+                recursive,
+                verbose,
+                warmup,
+                min_runs,
+                max_runs,
+                time_limit_ms,
+                benchmarks,
+                suites,
+            }) => {
+                BenchmarksBuilder::default()
+                    .wanted(&benchmarks)
+                    .suites(&suites)
+                    .path(path)
+                    .example(example)
+                    .recursive(recursive)
+                    .warmup(warmup)
+                    .min_runs(min_runs)
+                    .max_runs(max_runs)
+                    .time_limit_ms(time_limit_ms)
+                    .verbose(verbose)
+                    .build()?
+                    .execute()
+                    .await
+            }
+            Some(Commands::External(cmd)) => commands::utils::run_external_subcommand(&cmd),
+            None => Repl::default().execute().await,
+        }
     })
 }

@@ -1,5 +1,5 @@
 /*
-This file handles : 
+This file handles :
 FieldAccess,
 ScopeAccess,
 IndexAccess,

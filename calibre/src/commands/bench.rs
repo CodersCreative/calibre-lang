@@ -7,8 +7,9 @@ use calibre::CompileMode;
 use derive_builder::Builder;
 use std::error::Error;
 use std::time::Duration;
+use tracing::instrument;
 
-#[derive(Builder, Default, Clone)]
+#[derive(Builder, Default, Clone, Debug)]
 pub struct Benchmarks<'a> {
     wanted: &'a [String],
     suites: &'a [String],
@@ -23,6 +24,7 @@ pub struct Benchmarks<'a> {
 }
 
 impl<'a> Benchmarks<'a> {
+    #[instrument]
     pub async fn execute(self) -> Result<(), Box<dyn Error>> {
         let cwd = std::env::current_dir()?;
         let project = load_project_from(&cwd).map_err(|e| format!("config error: {e}"))?;

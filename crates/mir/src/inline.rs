@@ -101,8 +101,8 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
         MiddleNodeType::AsExpression { value, .. }
         | MiddleNodeType::IsExpression { value, .. }
         | MiddleNodeType::NegExpression { value }
-        | MiddleNodeType::RefStatement (MirRef { value, .. })
-        | MiddleNodeType::DerefStatement (MirDeref { value })
+        | MiddleNodeType::RefStatement(MirRef { value, .. })
+        | MiddleNodeType::DerefStatement(MirDeref { value })
         | MiddleNodeType::VariableDeclaration { value, .. }
         | MiddleNodeType::DebugExpression { value, .. }
         | MiddleNodeType::FieldAccess { base: value, .. } => inline_in_node(value, map),

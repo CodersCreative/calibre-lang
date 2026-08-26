@@ -7,6 +7,7 @@ use std::{
     process::Command,
     time::Duration,
 };
+use tracing::instrument;
 
 pub fn collect_cal_sources(root: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(root) else {
@@ -140,6 +141,7 @@ pub fn package_metadata_from_project(project: Option<&ProjectContext>) -> Option
     })
 }
 
+#[instrument]
 pub fn run_external_subcommand(cmd: &[String]) -> Result<(), Box<dyn Error>> {
     if cmd.is_empty() {
         return Ok(());
