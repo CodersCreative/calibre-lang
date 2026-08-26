@@ -311,81 +311,85 @@ impl MiddleEnvironment {
         let ident = ident.into();
         trace!(ident = %ident, "Resolving identifier");
 
-        let (ident, dollar_ident) = match ident {
+        let ident = match ident {
             IdentifierType::Generic(x) => {
-                return self.resolve_inner(scope, x.get_ident(), options);
+                let inner_ident = x.get_ident();
+                inner_ident.to_string()
             }
             IdentifierType::Dollar(PotentialDollarIdentifier::DollarIdentifier(x)) => {
-                (None, Some(x))
-            }
-            IdentifierType::Dollar(PotentialDollarIdentifier::Identifier(x)) => {
-                (Some(x.text.clone()), None)
-            }
-            IdentifierType::Ident(x) => (Some(x.to_string()), None),
-        };
-
-        if dollar_ident.is_some() && !options.dollar_resolution {
-            warn!("Resolution failed : No dollar resolution allowed but dollar ident provided");
-            return Err(self
-                .context
-                .err_at_current(MiddleErr::Internal(String::from(
-                    "No dollar resolution allowed but dollar ident provided",
-                ))));
-        }
-
-        let ident = if let Some(x) = dollar_ident {
-            let resolved = self.scoping.resolve_macro_arg(scope, x).ok_or_else(|| {
-                self.context
-                    .err_at_current(MiddleErr::MacroArg(x.to_string()))
-            })?;
-
-            match &resolved.node_type {
-                AstNodeType::Identifier(x) => match x.get_ident() {
-                    PotentialDollarIdentifier::Identifier(x) => x.text.clone(),
-                    x => return self.resolve_inner(scope, x, options),
-                },
-                _ => {
+                if !options.dollar_resolution {
+                    warn!(
+                        "Resolution failed : No dollar resolution allowed but dollar ident provided"
+                    );
                     return Err(self
                         .context
-                        .err_at_current(MiddleErr::UnexpectedMacroArgType(x.to_string())));
+                        .err_at_current(MiddleErr::Internal(String::from(
+                            "No dollar resolution allowed but dollar ident provided",
+                        ))));
+                }
+                let resolved = self.scoping.resolve_macro_arg(scope, x).ok_or_else(|| {
+                    self.context
+                        .err_at_current(MiddleErr::MacroArg(x.to_string()))
+                })?;
+
+                match &resolved.node_type {
+                    AstNodeType::Identifier(x) => match x.get_ident() {
+                        PotentialDollarIdentifier::Identifier(x) => x.text.clone(),
+                        PotentialDollarIdentifier::DollarIdentifier(x) => x.to_string(),
+                    },
+                    _ => {
+                        return Err(self
+                            .context
+                            .err_at_current(MiddleErr::UnexpectedMacroArgType(x.to_string())));
+                    }
                 }
             }
-        } else {
-            ident.unwrap()
+            IdentifierType::Dollar(PotentialDollarIdentifier::Identifier(x)) => x.text.clone(),
+            IdentifierType::Ident(x) => x.to_string(),
         };
 
-        trace!(ident = %ident, "Dollar resolution succedded");
+        trace!(ident = %ident, "Identifier resolution complete");
 
-        if options.type_resolution {
-            if self.scoping.is_generic_param(&ident)
-                || self.typing.objects.contains_key(&ident)
-                || self.typing.trait_defs.contains_key(&ident)
-            {
-                return Ok(ident);
-            }
+        for current_scope in scope.ancestors(&self.scoping.scopes) {
+            if options.type_resolution {
+                if self.scoping.is_generic_param(&ident)
+                    || self.typing.objects.contains_key(&ident)
+                    || self.typing.trait_defs.contains_key(&ident)
+                {
+                    return Ok(ident);
+                }
 
-            let ty = ParserDataType::from(ParserInnerType::from_str(&ident).unwrap());
+                let ty = ParserDataType::from(ParserInnerType::from_str(&ident).unwrap());
 
-            let scope_ref = self.scoping.scope_or_err(scope)?;
+                let scope_ref = self.scoping.scope_or_err(current_scope)?;
 
-            if let Some(x) = scope_ref.type_mappings.get(&ty.impl_name()).cloned() {
-                return Ok(ParserDataType::from(x).impl_name());
-            }
+                if let Some(x) = scope_ref.type_mappings.get(&ty.impl_name()).cloned() {
+                    return Ok(ParserDataType::from(x).impl_name());
+                }
 
-            if options.name_resolution {
+                if options.name_resolution {
+                    if self.symbols.variables.contains_key(&ident) {
+                        return Ok(ident);
+                    }
+
+                    if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
+                        return Ok(x);
+                    }
+                }
+            } else if options.name_resolution {
                 if self.symbols.variables.contains_key(&ident) {
                     return Ok(ident);
                 }
+
+                let scope_ref = self.scoping.scope_or_err(current_scope)?;
 
                 if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
                     return Ok(x);
                 }
             }
+        }
 
-            if let Some(x) = self.scoping.get_parent(scope) {
-                return self.resolve_inner(x, &ident, options);
-            }
-
+        if options.type_resolution {
             for key in self.typing.trait_defs.keys() {
                 if ParserText::temp_name_suffix_matches(key, &ident) {
                     return Ok(key.clone());
@@ -415,20 +419,6 @@ impl MiddleEnvironment {
 
         if !options.name_resolution {
             return Ok(ident);
-        }
-
-        if self.symbols.variables.contains_key(&ident) {
-            return Ok(ident);
-        }
-
-        let scope_ref = self.scoping.scope_or_err(scope)?;
-
-        if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
-            return Ok(x);
-        }
-
-        if let Some(x) = self.scoping.get_parent(scope) {
-            return self.resolve_inner(x, &ident, options);
         }
 
         for key in self.symbols.variables.keys() {

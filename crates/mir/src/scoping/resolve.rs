@@ -53,9 +53,9 @@ impl MiddleEnvironment {
     ) -> Result<(ScopeId, Option<MiddleNode>), MiddleErr> {
         Ok(match key {
             "super" => {
-                let parent = self
-                    .scoping
-                    .get_parent(scope)
+                let parent = scope
+                    .ancestors(&self.scoping.scopes)
+                    .nth(1)
                     .ok_or_else(|| MiddleErr::Scope("super".to_string()))?;
                 (parent, None)
             }
@@ -216,10 +216,13 @@ impl MiddleEnvironment {
 
     pub fn get_next_scope(&self, scope: ScopeId, key: &str) -> Result<ScopeId, MiddleErr> {
         Ok(match key {
-            "super" => self.scoping.get_parent(scope).ok_or_else(|| {
-                self.context
-                    .err_at_current(MiddleErr::Scope("super".to_string()))
-            })?,
+            "super" => scope
+                .ancestors(&self.scoping.scopes)
+                .nth(1)
+                .ok_or_else(|| {
+                    self.context
+                        .err_at_current(MiddleErr::Scope("super".to_string()))
+                })?,
             _ => {
                 if let Ok(x) = self.scoping.get_scope_from_children(scope, key) {
                     x

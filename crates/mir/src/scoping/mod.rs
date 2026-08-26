@@ -71,7 +71,7 @@ impl Scoping {
 
     #[inline(always)]
     pub fn resolve_macro_arg(&self, scope: ScopeId, iden: &str) -> Option<&AstNode> {
-        scope.descendants(&self.scopes).find_map(|x| {
+        scope.ancestors(&self.scopes).find_map(|x| {
             self.scope_or_err(x.clone())
                 .ok()
                 .and_then(|x| x.macro_args.get(iden))
@@ -80,7 +80,7 @@ impl Scoping {
 
     #[inline(always)]
     pub fn resolve_macro(&self, scope: ScopeId, iden: &str) -> Option<&ScopeMacro> {
-        scope.descendants(&self.scopes).find_map(|x| {
+        scope.ancestors(&self.scopes).find_map(|x| {
             self.scope_or_err(x.clone())
                 .ok()
                 .and_then(|x| x.macros.get(iden))
@@ -94,7 +94,7 @@ impl Scoping {
 
     #[inline(always)]
     pub fn get_parent(&self, scope: ScopeId) -> Option<ScopeId> {
-        scope.descendants(&self.scopes).nth(1)
+        scope.ancestors(&self.scopes).nth(1)
     }
 
     pub fn get_id(&self, scope: &Node<MiddleScope>) -> Option<ScopeId> {
@@ -323,7 +323,7 @@ impl Scoping {
         let mut out = Vec::new();
 
         scope
-            .descendants(&self.scopes)
+            .ancestors(&self.scopes)
             .take_while(|id| !stop_scope.is_some_and(|stop| &stop == id))
             .for_each(|x| {
                 if let Ok(s) = self.scope_or_err(x) {

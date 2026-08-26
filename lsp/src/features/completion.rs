@@ -564,20 +564,18 @@ impl CalibreLanguageServer {
         prefix: &str,
         out: &mut HashMap<String, CompletionItem>,
     ) {
-        current_scope
-            .descendants(&env.scoping.scopes)
-            .for_each(|x| {
-                if let Ok(scope_ref) = env.scoping.scope_or_err(x) {
-                    for (visible, canonical) in &scope_ref.mappings {
-                        if !prefix.is_empty() && !visible.starts_with(prefix) {
-                            continue;
-                        }
-                        out.entry(visible.clone()).or_insert_with(|| {
-                            Self::global_semantic_completion_item(env, visible, canonical)
-                        });
+        current_scope.ancestors(&env.scoping.scopes).for_each(|x| {
+            if let Ok(scope_ref) = env.scoping.scope_or_err(x) {
+                for (visible, canonical) in &scope_ref.mappings {
+                    if !prefix.is_empty() && !visible.starts_with(prefix) {
+                        continue;
                     }
+                    out.entry(visible.clone()).or_insert_with(|| {
+                        Self::global_semantic_completion_item(env, visible, canonical)
+                    });
                 }
-            });
+            }
+        });
     }
 
     pub(super) fn collect_member_semantic_completions(
