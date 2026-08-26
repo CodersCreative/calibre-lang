@@ -61,9 +61,7 @@ impl MiddleEnvironment {
                     span,
                     NodeType::FieldAccess {
                         base: Box::new(value),
-                        field: PotentialDollarIdentifier::Identifier(
-                            ParserText::from(String::from("next")).into(),
-                        ),
+                        field: PotentialDollarIdentifier::new(span, "next"),
                     },
                 )),
             },
@@ -801,6 +799,8 @@ impl MiddleEnvironment {
         ))
     }
 
+    // TODO Deal with generics
+    #[allow(clippy::only_used_in_recursion)]
     pub(crate) fn evaluate_call_expression(
         &mut self,
         scope: &u64,
@@ -952,7 +952,7 @@ impl MiddleEnvironment {
                                                 .cloned()
                                                 .map(|p| p.unwrap_all_refs().data_type)
                                             {
-                                                Some(ParserInnerType::List(x)) => (*x).into(),
+                                                Some(ParserInnerType::List(x)) => *x,
                                                 _ => ParserDataType::auto(
                                                     self.context.current_span(),
                                                 ),
@@ -970,7 +970,7 @@ impl MiddleEnvironment {
                                             .cloned()
                                             .map(|p| p.unwrap_all_refs().data_type)
                                         {
-                                            Some(ParserInnerType::List(x)) => (*x).into(),
+                                            Some(ParserInnerType::List(x)) => *x,
                                             _ => ParserDataType::auto(self.context.current_span()),
                                         },
                                         args.into_iter().map(|x| x.into()).collect(),

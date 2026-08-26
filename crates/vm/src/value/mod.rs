@@ -88,24 +88,14 @@ impl From<HashKey> for RuntimeValue {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ChannelInner {
     pub queue: Mutex<VecDeque<RuntimeValue>>,
     pub closed: AtomicBool,
     pub cvar: Condvar,
 }
 
-impl ChannelInner {
-    pub fn new() -> Self {
-        Self {
-            queue: Mutex::new(VecDeque::new()),
-            closed: AtomicBool::new(false),
-            cvar: Condvar::new(),
-        }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct WaitGroupInner {
     pub count: AtomicIsize,
     pub mutex: Mutex<()>,
@@ -114,15 +104,6 @@ pub struct WaitGroupInner {
 }
 
 impl WaitGroupInner {
-    pub fn new() -> Self {
-        Self {
-            count: AtomicIsize::new(0),
-            mutex: Mutex::new(()),
-            cvar: Condvar::new(),
-            joined: Mutex::new(Vec::new()),
-        }
-    }
-
     pub fn done(&self) {
         let remaining = self.count.fetch_sub(1, Ordering::AcqRel) - 1;
         if remaining <= 0 {

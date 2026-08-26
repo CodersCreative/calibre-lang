@@ -41,39 +41,39 @@ impl<'a> IdentifierType<'a> {
     }
 }
 
-impl<'a> Into<IdentifierType<'a>> for &'a PotentialGenericTypeIdentifier {
-    fn into(self) -> IdentifierType<'a> {
-        IdentifierType::Generic(self)
+impl<'a> From<&'a PotentialGenericTypeIdentifier> for IdentifierType<'a> {
+    fn from(val: &'a PotentialGenericTypeIdentifier) -> IdentifierType<'a> {
+        IdentifierType::Generic(val)
     }
 }
 
-impl<'a> Into<IdentifierType<'a>> for &'a PotentialDollarIdentifier {
-    fn into(self) -> IdentifierType<'a> {
-        IdentifierType::Dollar(self)
+impl<'a> From<&'a PotentialDollarIdentifier> for IdentifierType<'a> {
+    fn from(val: &'a PotentialDollarIdentifier) -> IdentifierType<'a> {
+        IdentifierType::Dollar(val)
     }
 }
 
-impl<'a> Into<IdentifierType<'a>> for &'a ParserText {
-    fn into(self) -> IdentifierType<'a> {
-        IdentifierType::Ident(&self.text)
+impl<'a> From<&'a ParserText> for IdentifierType<'a> {
+    fn from(val: &'a ParserText) -> IdentifierType<'a> {
+        IdentifierType::Ident(&val.text)
     }
 }
 
-impl<'a> Into<IdentifierType<'a>> for &'a dyn ToString {
-    fn into(self) -> IdentifierType<'a> {
-        IdentifierType::Ident(self)
+impl<'a> From<&'a dyn ToString> for IdentifierType<'a> {
+    fn from(val: &'a dyn ToString) -> IdentifierType<'a> {
+        IdentifierType::Ident(val)
     }
 }
 
-impl<'a> Into<IdentifierType<'a>> for &'a String {
-    fn into(self) -> IdentifierType<'a> {
-        IdentifierType::Ident(self)
+impl<'a> From<&'a String> for IdentifierType<'a> {
+    fn from(val: &'a String) -> IdentifierType<'a> {
+        IdentifierType::Ident(val)
     }
 }
 
-impl<'a> Into<IdentifierType<'a>> for &'a &'a str {
-    fn into(self) -> IdentifierType<'a> {
-        IdentifierType::Ident(self)
+impl<'a> From<&'a &'a str> for IdentifierType<'a> {
+    fn from(val: &'a &'a str) -> IdentifierType<'a> {
+        IdentifierType::Ident(val)
     }
 }
 
@@ -640,7 +640,7 @@ impl MiddleEnvironment {
             ParserInnerType::Ref(d_type, mutability) => ParserDataType {
                 data_type: ParserInnerType::Ref(
                     Box::new(self.resolve_data_type(scope, d_type.as_ref(), options)?),
-                    mutability.clone(),
+                    *mutability,
                 ),
                 span: self.context.current_span(),
             },
@@ -670,7 +670,7 @@ impl MiddleEnvironment {
             },
             ParserInnerType::Result { ok, err } => ParserDataType {
                 data_type: ParserInnerType::Result {
-                    err: Box::new(self.resolve_data_type(scope, err.as_ref(), options.clone())?),
+                    err: Box::new(self.resolve_data_type(scope, err.as_ref(), options)?),
                     ok: Box::new(self.resolve_data_type(scope, ok.as_ref(), options)?),
                 },
                 span: self.context.current_span(),
@@ -712,7 +712,7 @@ impl MiddleEnvironment {
             ParserInnerType::DynamicTraits(traits) => ParserDataType {
                 data_type: ParserInnerType::DynamicTraits(
                     traits
-                        .into_iter()
+                        .iter()
                         .map(|t| {
                             self.resolve(scope, t, ResolutionOptions::typing())
                                 .unwrap_or(t.to_string())

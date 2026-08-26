@@ -1030,20 +1030,22 @@ pub fn build_statement_parser<'a>(
         )
         .map(
             move |(((((abi, (name, sp)), parameters), return_type), mut library), symbol)| {
-                if !library.is_empty() {
-                    if let Some(base) = source_path.and_then(|p| p.parent()) {
-                        let candidates = [
-                            base.join(&library),
-                            base.join(library.trim_start().trim_start_matches("./")),
-                        ];
-                        for candidate in candidates {
-                            if candidate.exists() {
-                                library = candidate.to_string_lossy().to_string();
-                                break;
-                            }
+                if !library.is_empty()
+                    && let Some(base) = source_path.and_then(|p| p.parent())
+                {
+                    let candidates = [
+                        base.join(&library),
+                        base.join(library.trim_start().trim_start_matches("./")),
+                    ];
+
+                    for candidate in candidates {
+                        if candidate.exists() {
+                            library = candidate.to_string_lossy().to_string();
+                            break;
                         }
                     }
                 }
+
                 Node::new(
                     sp,
                     NodeType::ExternFunctionDeclaration {

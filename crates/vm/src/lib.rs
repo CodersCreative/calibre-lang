@@ -98,12 +98,12 @@ impl Clone for VM {
             registry: self.registry.clone(),
             mappings: self.mappings.clone(),
             program_args: self.program_args.clone(),
-            counter: self.counter.clone(),
+            counter: self.counter,
             ptr_heap: self.ptr_heap.clone(),
             config: self.config.clone(),
             source_file_override: self.source_file_override.clone(),
             reg_arena: self.reg_arena.clone(),
-            reg_top: self.reg_top.clone(),
+            reg_top: self.reg_top,
             frames: self.frames.clone(),
             frame_pool: self.frame_pool.clone(),
             caches: self.caches.clone(),
@@ -111,26 +111,17 @@ impl Clone for VM {
             scheduler: self.scheduler.clone(),
             task_state: self.task_state.clone(),
             moved_functions: self.moved_functions.clone(),
-            suppress_output: self.suppress_output.clone(),
+            suppress_output: self.suppress_output,
             captured_output: self.captured_output.clone(),
             big_consts: Consts::new().unwrap(),
         }
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct VMCaches {
     call: FxHashMap<String, Arc<VMFunction>>,
     callsite: FxHashMap<(usize, usize, u32), Arc<VMFunction>>,
-}
-
-impl Default for VMCaches {
-    fn default() -> Self {
-        Self {
-            call: FxHashMap::default(),
-            callsite: FxHashMap::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -451,10 +442,8 @@ impl VM {
         if let RuntimeValue::Null = value {
             let frame = self.current_frame();
             let idx = reg as usize;
-            if idx < frame.reg_count {
-                if let RuntimeValue::Null = self.reg_arena[frame.reg_start + idx] {
-                    return;
-                }
+            if idx < frame.reg_count && self.reg_arena[frame.reg_start + idx].is_null() {
+                return;
             }
         }
         let _ = self.replace_reg_value(reg, value);
@@ -675,10 +664,8 @@ impl VM {
             RuntimeValue::Result(Err(x)) => {
                 self.drop_runtime_value_inner_ref(x.as_ref(), seen, seen_regs);
             }
-            RuntimeValue::Enum(_, _, payload) => {
-                if let Some(val) = payload {
-                    self.drop_runtime_value_inner_ref(val.as_ref(), seen, seen_regs);
-                }
+            RuntimeValue::Enum(_, _, Some(val)) => {
+                self.drop_runtime_value_inner_ref(val.as_ref(), seen, seen_regs);
             }
             RuntimeValue::Generator { .. } => {}
             RuntimeValue::Channel(ch) => {

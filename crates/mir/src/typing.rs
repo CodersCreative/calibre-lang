@@ -132,12 +132,11 @@ impl Typing {
     ) -> Option<ParserDataType> {
         trace!("resolving associated type");
 
-        if let ParserInnerType::Struct(trait_name) = &base.data_type {
-            if let Some(trait_def) = self.trait_defs.get(trait_name) {
-                if let Some(assoc_type) = trait_def.assoc_types.get(name) {
-                    return Some(assoc_type.clone());
-                }
-            }
+        if let ParserInnerType::Struct(trait_name) = &base.data_type
+            && let Some(trait_def) = self.trait_defs.get(trait_name)
+            && let Some(assoc_type) = trait_def.assoc_types.get(name)
+        {
+            return Some(assoc_type.clone());
         }
 
         if let Some(imp) = self.find_impl_for_type(base) {
@@ -251,11 +250,7 @@ impl MiddleImpl {
             .entry(Self::normalize_member_name(name))
             .or_default();
 
-        if entry
-            .iter_mut()
-            .find(|x| x.generic_params == generic_params)
-            .is_none()
-        {
+        if !entry.iter_mut().any(|x| x.generic_params == generic_params) {
             entry.push(MiddleImplMember::new(symbol_name, generic_params, false));
         }
     }
@@ -325,11 +320,12 @@ impl Display for MiddleTypeDefType {
                 default_value,
             } => {
                 writeln!(f, "enum {{")?;
+
                 for (i, (name, data_type)) in variants.iter().enumerate() {
-                    if let Some(idx) = default_variant {
-                        if i == *idx {
-                            writeln!(f, "\t@default")?;
-                        }
+                    if let Some(idx) = default_variant
+                        && i == *idx
+                    {
+                        writeln!(f, "\t@default")?;
                     }
                     write!(f, "\t{}", name.text)?;
                     if let Some(dt) = data_type {
@@ -337,10 +333,10 @@ impl Display for MiddleTypeDefType {
                     }
 
                     if let Some(idx) = default_variant
+                        && let Some(v) = default_value
                         && i == *idx
-                        && default_value.is_some()
                     {
-                        write!(f, " = {:?}", default_value)?;
+                        write!(f, " = {}", v)?;
                     }
                     writeln!(f, ",")?;
                 }
@@ -410,14 +406,10 @@ impl MiddleTypeDefType {
                                 env.resolve(scope, &k, ResolutionOptions::default().with_dollar())
                                     .unwrap_or_else(|_| k.to_string()),
                             ),
-                            if let Some(v) = v {
-                                Some(
-                                    env.resolve_data_type(scope, &v, ResolutionOptions::typing())
-                                        .unwrap_or(v),
-                                )
-                            } else {
-                                None
-                            },
+                            v.map(|v| {
+                                env.resolve_data_type(scope, &v, ResolutionOptions::typing())
+                                    .unwrap_or(v)
+                            }),
                         ));
                     }
                     lst

@@ -167,7 +167,7 @@ impl CalibreLanguageServer {
 
         raw.split("::")
             .last()
-            .map(|x| x.split('.').last().unwrap_or(x).to_string())
+            .map(|x| x.split('.').next_back().unwrap_or(x).to_string())
     }
 
     pub(super) fn call_context_at(text: &str, position: Position) -> Option<(String, u32)> {
@@ -635,8 +635,7 @@ impl CalibreLanguageServer {
                     kind: Some(CompletionItemKind::METHOD),
                     documentation: Some(Documentation::String(format!(
                         "Method from impl/trait on `{}`\n\nCanonical: `{}`",
-                        base_ty.to_string(),
-                        canonical_member.symbol_name
+                        base_ty, canonical_member.symbol_name
                     ))),
                     sort_text: Some(format!("1_{}", member_name)),
                     ..CompletionItem::default()

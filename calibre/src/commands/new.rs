@@ -2,7 +2,7 @@ use crate::config::Config;
 use smol::fs;
 use std::{error::Error, path::PathBuf, str::FromStr};
 
-const DEFAULT_MAIN: &'static str = "const main := fn => print(\"Hello, World!\");";
+const DEFAULT_MAIN: &str = "const main := fn => print(\"Hello, World!\");";
 
 pub async fn execute(path: Option<String>, no_std: bool) -> Result<(), Box<dyn Error>> {
     let config = Config {

@@ -26,8 +26,8 @@ fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<String>, RuntimeErro
     };
 
     let mut out = Vec::with_capacity(values.0.len());
-    for value in values.0.iter().cloned() {
-        let value = env.resolve_value_for_op_ref(&value)?;
+    for value in values.0.iter() {
+        let value = env.resolve_value_for_op_ref(value)?;
         match value {
             RuntimeValue::Str(v) => out.push(v.lock().unwrap().clone()),
             other => return Err(RuntimeError::UnexpectedType(other)),

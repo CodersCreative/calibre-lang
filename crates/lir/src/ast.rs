@@ -219,13 +219,7 @@ impl Display for LirNodeType {
                     )
                 }
                 Self::Aggregate { name, fields: _ } => {
-                    let txt = if let Some(name) = name {
-                        name.to_string()
-                    } else {
-                        String::new()
-                    };
-
-                    txt
+                    name.as_ref().map(|x| x.to_string()).unwrap_or_default()
                 }
                 Self::Literal(x) => x.to_string(),
                 Self::As(node, data_type, failure_mode) => {
@@ -290,7 +284,7 @@ impl Display for LirNodeType {
                         txt.push_str(&format!("{}, ", arg));
                     }
                     txt = txt.trim_end().trim_end_matches(",").to_string();
-                    txt.push_str(&format!(")"));
+                    txt.push(')');
                     txt
                 }
                 Self::Ref(x) => format!("&{}", x),

@@ -141,7 +141,7 @@ pub fn resolve_hashmap(env: &mut VM, value: &RuntimeValue) -> Result<RuntimeHash
 
 #[inline]
 pub fn resolve_hashset(env: &mut VM, value: &RuntimeValue) -> Result<RuntimeHashSet, RuntimeError> {
-    let resolved = env.resolve_value_for_op_ref(&value)?;
+    let resolved = env.resolve_value_for_op_ref(value)?;
     if let RuntimeValue::HashSet(set) = resolved {
         Ok(set)
     } else {

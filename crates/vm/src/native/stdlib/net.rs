@@ -65,7 +65,7 @@ fn parse_http_args(
     }
 
     let method_idx = method_idx.unwrap_or(2);
-    let url_idx = url_idx.unwrap_or_else(|| if method_idx == 2 { 1 } else { 2 });
+    let url_idx = url_idx.unwrap_or(if method_idx == 2 { 1 } else { 2 });
     let body_idx = (0..3)
         .find(|idx| *idx != method_idx && *idx != url_idx)
         .unwrap_or(0);

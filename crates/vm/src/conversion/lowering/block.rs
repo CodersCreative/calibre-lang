@@ -218,16 +218,14 @@ impl<'a> BlockLoweringCtx<'a> {
             },
             other => {
                 let reg = self.lower_node(other, node.span);
-                if set_ret {
-                    if reg != self.ret_reg {
-                        self.emit(
-                            VMInstruction::Copy {
-                                dst: self.ret_reg,
-                                src: reg,
-                            },
-                            node.span,
-                        );
-                    }
+                if set_ret && reg != self.ret_reg {
+                    self.emit(
+                        VMInstruction::Copy {
+                            dst: self.ret_reg,
+                            src: reg,
+                        },
+                        node.span,
+                    );
                 }
             }
         }
@@ -248,7 +246,7 @@ impl<'a> BlockLoweringCtx<'a> {
                 if let LirLiteral::Null = x {
                     return self.null_reg;
                 }
-                let lit = VMLiteral::from_lir_literal(x.into(), &mut self.big_consts);
+                let lit = VMLiteral::from_lir_literal(x, self.big_consts);
                 let lit = self.add_literal(lit);
                 let dst = self.alloc_reg();
                 self.emit(VMInstruction::LoadLiteral { dst, literal: lit }, span);
@@ -310,7 +308,7 @@ impl<'a> BlockLoweringCtx<'a> {
                 if let Some(reg) = self.map.get(name.as_ref())
                     && reg != &self.null_reg
                 {
-                    reg.clone()
+                    *reg
                 } else {
                     let idx = self.add_string(name.to_string());
                     let dst = self.alloc_reg();

@@ -75,8 +75,8 @@ impl LirRegistry {
         for _ in 0..64 {
             for (concrete_type, trait_map) in &self.dyn_vtables {
                 if referenced_types.contains(concrete_type) {
-                    for (_trait_name, methods) in trait_map {
-                        for (_method_name, function_name) in methods {
+                    for methods in trait_map.values() {
+                        for function_name in methods.values() {
                             if reachable_functions.insert(function_name.clone()) {
                                 worklist.push(function_name.clone());
                             }

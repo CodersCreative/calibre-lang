@@ -4,10 +4,6 @@ use crate::{
     value::{GcVec, RuntimeValue},
 };
 use calibre_parser::ast::types::ParserInnerType;
-use calibre_parser::{
-    Span,
-    ast::{idents::ParserText, types::ParserDataType},
-};
 use dumpster::sync::Gc;
 use std::sync::{Arc, Mutex};
 
@@ -20,10 +16,7 @@ impl RuntimeValue {
         if let RuntimeValue::DynObject {
             type_name, value, ..
         } = &self
-            && ParserText::temp_name_suffix_matches(
-                type_name,
-                &ParserDataType::new(Span::default(), data_type.clone()).impl_name(),
-            )
+            && type_name.as_ref() == &data_type.impl_name()
         {
             let resolved = env.resolve_operand_value(value.as_ref().clone())?;
             return Ok(resolved);
@@ -193,7 +186,7 @@ impl RuntimeValue {
                     x.lock()
                         .unwrap()
                         .chars()
-                        .map(|x| RuntimeValue::Char(x))
+                        .map(RuntimeValue::Char)
                         .collect::<Vec<RuntimeValue>>(),
                 ))))
             }
@@ -230,33 +223,33 @@ impl RuntimeValue {
                 Ok(RuntimeValue::List(Gc::new(GcVec(lst))))
             }
             (x, ParserInnerType::List(t)) => {
-                let x = x.convert(env, &t)?;
+                let x = x.convert(env, t)?;
                 Ok(RuntimeValue::List(Gc::new(GcVec(vec![x]))))
             }
             (RuntimeValue::Option(x), ParserInnerType::Option(t)) => {
                 if let Some(x) = x {
-                    let x = x.as_ref().clone().convert(env, &t)?;
+                    let x = x.as_ref().clone().convert(env, t)?;
                     Ok(RuntimeValue::Option(Some(Gc::new(x))))
                 } else {
                     Ok(RuntimeValue::Option(None))
                 }
             }
             (x, ParserInnerType::Option(t)) => {
-                let x = x.convert(env, &t)?;
+                let x = x.convert(env, t)?;
                 Ok(RuntimeValue::Option(Some(Gc::new(x))))
             }
             (RuntimeValue::Result(x), ParserInnerType::Result { ok, err }) => match x {
                 Ok(x) => {
-                    let x = x.as_ref().clone().convert(env, &ok)?;
+                    let x = x.as_ref().clone().convert(env, ok)?;
                     Ok(RuntimeValue::Result(Ok(Gc::new(x))))
                 }
                 Err(x) => {
-                    let x = x.as_ref().clone().convert(env, &err)?;
+                    let x = x.as_ref().clone().convert(env, err)?;
                     Ok(RuntimeValue::Result(Err(Gc::new(x))))
                 }
             },
             (x, ParserInnerType::Result { ok, err: _ }) => {
-                let x = x.convert(env, &ok)?;
+                let x = x.convert(env, ok)?;
                 Ok(RuntimeValue::Result(Ok(Gc::new(x))))
             }
             (RuntimeValue::Ptr(id), t) => {

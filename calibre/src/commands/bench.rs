@@ -124,7 +124,7 @@ pub async fn execute(
         let fastest = rows.first().map(|x| x.2).unwrap_or(1.0).max(1e-9);
 
         // TODO Use a minimal TUI library for this
-        println!("");
+        println!();
         println!(
             "{:<24}\t{:>10}\t{:>24}\t{:>10}\t{:>10}\t{:>10}\t{:>10}",
             "Benchmark", "Runs", "Time (mean ± σ)", "Median", "Min", "Max", "Relative"

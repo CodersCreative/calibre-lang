@@ -17,9 +17,9 @@ pub struct Args {
 #[derive(Debug, Default, Clone, Parser, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum Verbosity {
     All,
-    AST,
-    MIR,
-    LIR,
+    Ast,
+    Mir,
+    Lir,
     Byte,
     #[default]
     None,

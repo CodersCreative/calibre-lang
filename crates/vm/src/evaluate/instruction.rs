@@ -76,13 +76,6 @@ impl VM {
             return callee;
         }
 
-        if let RuntimeValue::Ref(name) = raw_receiver
-            && let Some(ty) = self.concrete_runtime_type_name(&resolved_receiver)
-            && ParserText::temp_name_suffix_matches(&ty, name)
-        {
-            return callee;
-        }
-
         if ParserText::is_temp_name(&member_name) {
             return callee.bind_if_callable(resolved_receiver);
         }
@@ -94,6 +87,7 @@ impl VM {
 
             _ => resolved_receiver,
         };
+
         callee.bind_if_callable(receiver)
     }
 
@@ -139,10 +133,10 @@ impl VM {
         let mut s = start;
         let mut e = end;
         if s < 0 {
-            s = len as i64 + s;
+            s += len as i64;
         }
         if e < 0 {
-            e = len as i64 + e;
+            e += len as i64;
         }
         if s < 0 {
             s = 0;
@@ -205,28 +199,27 @@ impl VM {
                     let updated_field = self.get_reg_value(reg).clone();
                     let parent_raw = self.get_reg_value(parent_reg).clone();
                     let parent_resolved = self.resolve_value_for_op_ref(&parent_raw)?;
-                    if let RuntimeValue::Aggregate(type_name, mut map) = parent_resolved {
-                        if let Some(entry) = Gc::make_mut(&mut map)
+                    if let RuntimeValue::Aggregate(type_name, mut map) = parent_resolved
+                        && let Some(entry) = Gc::make_mut(&mut map)
                             .0
                             .0
                             .iter_mut()
                             .find(|(field, _)| field == &member_name)
-                        {
-                            entry.1 = updated_field;
-                            let updated_parent = RuntimeValue::Aggregate(type_name, map);
-                            match parent_raw {
-                                RuntimeValue::RegRef { frame, reg } => {
-                                    self.set_reg_value_in_frame(frame, reg, updated_parent);
-                                }
-                                RuntimeValue::Ref(name) => {
-                                    self.variables.insert(&name, updated_parent);
-                                }
-                                RuntimeValue::VarRef(id) => {
-                                    let _ = self.variables.set_by_id(id, updated_parent);
-                                }
-                                _ => {
-                                    self.set_reg_value(parent_reg, updated_parent);
-                                }
+                    {
+                        entry.1 = updated_field;
+                        let updated_parent = RuntimeValue::Aggregate(type_name, map);
+                        match parent_raw {
+                            RuntimeValue::RegRef { frame, reg } => {
+                                self.set_reg_value_in_frame(frame, reg, updated_parent);
+                            }
+                            RuntimeValue::Ref(name) => {
+                                self.variables.insert(&name, updated_parent);
+                            }
+                            RuntimeValue::VarRef(id) => {
+                                let _ = self.variables.set_by_id(id, updated_parent);
+                            }
+                            _ => {
+                                self.set_reg_value(parent_reg, updated_parent);
                             }
                         }
                     }
@@ -294,20 +287,16 @@ impl VM {
                 .resolve_value_for_op_ref(&raw_receiver)
                 .unwrap_or(func.clone());
             let resolved = match &resolved_receiver {
-                RuntimeValue::Aggregate(Some(type_name), _) => {
-                    if let Some(callee) =
-                        self.resolve_associated_member_value(type_name, &member_name, short_name)
-                    {
-                        Some(self.bind_member_receiver_if_callable(
+                RuntimeValue::Aggregate(Some(type_name), _) => self
+                    .resolve_associated_member_value(type_name, &member_name, short_name)
+                    .map(|callee| {
+                        self.bind_member_receiver_if_callable(
                             callee,
                             &member_name,
                             &raw_receiver,
                             resolved_receiver.clone(),
-                        ))
-                    } else {
-                        None
-                    }
-                }
+                        )
+                    }),
                 RuntimeValue::Ref(owner) => self
                     .resolve_associated_member_value(owner, &member_name, short_name)
                     .or_else(|| {
@@ -668,7 +657,7 @@ impl VM {
                 if let RuntimeValue::Int(left) = self.current_frame().acc.clone()
                     && let RuntimeValue::Int(right) = self.get_reg_value(*right).clone()
                     && let Some(value) = {
-                        let out = match op {
+                        match op {
                             BinaryOperator::Add => {
                                 Some(RuntimeValue::Int(left.wrapping_add(right)))
                             }
@@ -702,8 +691,7 @@ impl VM {
                                 Some(RuntimeValue::Int(left.wrapping_shr(right as u32)))
                             }
                             BinaryOperator::Pow => None,
-                        };
-                        out
+                        }
                     }
                 {
                     self.current_frame_mut().acc = value;
@@ -891,7 +879,7 @@ impl VM {
                             .iter()
                             .map(|(k, v)| {
                                 let resolved = self
-                                    .resolve_value_for_op_ref(&v)
+                                    .resolve_value_for_op_ref(v)
                                     .unwrap_or_else(|_| RuntimeValue::Null);
                                 let resolved = self.convert_runtime_var_into_saveable(resolved);
                                 (k.clone(), resolved)
@@ -904,7 +892,7 @@ impl VM {
                     }
                     other => other,
                 };
-                let wg = Arc::new(WaitGroupInner::new());
+                let wg = Arc::new(WaitGroupInner::default());
                 wg.count.store(1, std::sync::atomic::Ordering::Release);
                 self.spawn_async_task(to_spawn, Some(wg.clone()));
                 self.set_reg_value(*dst, RuntimeValue::WaitGroup(wg));
@@ -914,20 +902,20 @@ impl VM {
                 let name = self.local_string(block, *member)?;
                 let raw_receiver = self.get_reg_value(*value).clone();
                 let (short_name, tuple_index) = Self::member_parts(name);
+
                 let mut resolved = self.resolve_value_for_op_ref(&raw_receiver)?;
-                if matches!(resolved, RuntimeValue::Null) {
-                    if let RuntimeValue::Ref(owner) = &raw_receiver {
-                        if let Some(callee) =
-                            self.resolve_associated_member_value(owner, name, short_name)
-                        {
-                            self.set_reg_value(*dst, callee);
-                            self.current_frame_mut()
-                                .member_sources
-                                .insert(*dst, (source_reg, name.to_string()));
-                            return Ok(TerminateValue::None);
-                        }
-                    }
+                if resolved.is_null()
+                    && let RuntimeValue::Ref(owner) = &raw_receiver
+                    && let Some(callee) =
+                        self.resolve_associated_member_value(owner, name, short_name)
+                {
+                    self.set_reg_value(*dst, callee);
+                    self.current_frame_mut()
+                        .member_sources
+                        .insert(*dst, (source_reg, name.to_string()));
+                    return Ok(TerminateValue::None);
                 }
+
                 let member_short = short_name.unwrap_or(name);
                 let bind_assoc = |vm: &mut VM,
                                   type_name: &str,
@@ -1065,8 +1053,8 @@ impl VM {
                                     })
                                     .unwrap_or((source_reg, map.0.0[idx].0.clone())),
                             );
-                            let field_value = map.0.0[idx].1.clone();
-                            field_value
+
+                            map.0.0[idx].1.clone()
                         } else if let Some((_, wrapped)) =
                             map.0.0.iter().find(|(field, _)| field == "0")
                         {
@@ -1153,15 +1141,12 @@ impl VM {
                         } else {
                             let mut inner_value =
                                 self.resolve_value_for_op_ref(&inner.as_ref().clone())?;
-                            loop {
-                                match inner_value.clone() {
-                                    RuntimeValue::Option(Some(nested)) => {
-                                        inner_value = self
-                                            .resolve_value_for_op_ref(&nested.as_ref().clone())?;
-                                    }
-                                    _ => break,
-                                }
+
+                            while let RuntimeValue::Option(Some(nested)) = inner_value.clone() {
+                                inner_value =
+                                    self.resolve_value_for_op_ref(&nested.as_ref().clone())?;
                             }
+
                             match inner_value.clone() {
                                 RuntimeValue::Aggregate(type_name, map) => {
                                     if let Some(idx) = self.resolve_aggregate_member_slot(

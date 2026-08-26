@@ -159,8 +159,8 @@ impl MiddleEnvironment {
                 } else {
                     return Err(self.context.err_at_current(
                         MiddleErr::InvalidVarDeclarationType {
-                            expected: x,
-                            found: y,
+                            expected: Box::new(x),
+                            found: Box::new(y),
                         },
                     ));
                 }
@@ -227,7 +227,7 @@ impl MiddleEnvironment {
                 &identifier,
                 new_name.clone(),
                 data_type.clone(),
-                var_type.clone(),
+                var_type,
             )?;
         }
 

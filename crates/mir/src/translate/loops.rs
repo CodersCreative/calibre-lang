@@ -356,7 +356,7 @@ impl MiddleEnvironment {
                                 Node::identifier(self.context.current_span(), "Channel"),
                                 "new",
                             ),
-                            vec![resolved_data_type.clone().into()],
+                            vec![resolved_data_type.clone()],
                             Vec::new(),
                         )),
                     },
@@ -437,7 +437,7 @@ impl MiddleEnvironment {
                             self.context.current_span(),
                             NodeType::ListLiteral(data_type.clone(), Vec::new()),
                         )),
-                        data_type: list_type.clone().into(),
+                        data_type: list_type.clone(),
                     },
                 ),
                 collect_loop,
@@ -499,11 +499,7 @@ impl MiddleEnvironment {
                 NodeType::VariableDeclaration {
                     var_type: VarType::Mutable,
                     identifier: chan_ident.clone(),
-                    data_type: ParserDataType::new(
-                        self.context.current_span(),
-                        ParserInnerType::Auto(None),
-                    )
-                    .into(),
+                    data_type: ParserDataType::auto(self.context.current_span()),
                     value: Box::new(Node::call_with_generics(
                         self.context.current_span(),
                         Node::member(
@@ -511,7 +507,7 @@ impl MiddleEnvironment {
                             Node::identifier(self.context.current_span(), "Channel"),
                             "new",
                         ),
-                        vec![resolved_data_type.clone().into()],
+                        vec![resolved_data_type.clone()],
                         Vec::new(),
                     )),
                 },
@@ -526,12 +522,12 @@ impl MiddleEnvironment {
                         self.context.current_span(),
                         NodeType::ListLiteral(data_type.clone(), Vec::new()),
                     )),
-                    data_type: list_type.clone().into(),
+                    data_type: list_type.clone(),
                 },
             ));
 
             let wg_ident: PotentialDollarIdentifier =
-                ParserText::from(String::from("anon_iter_wg")).into();
+                PotentialDollarIdentifier::new(self.context.current_span(), "anon_iter_wg");
             let wg_ident_node = Node::identifier(self.context.current_span(), &wg_ident);
 
             body.push(Node::new(
@@ -539,11 +535,7 @@ impl MiddleEnvironment {
                 NodeType::VariableDeclaration {
                     var_type: VarType::Immutable,
                     identifier: wg_ident.clone(),
-                    data_type: ParserDataType::new(
-                        self.context.current_span(),
-                        ParserInnerType::Auto(None),
-                    )
-                    .into(),
+                    data_type: ParserDataType::auto(self.context.current_span()),
                     value: Box::new(Node::new(
                         self.context.current_span(),
                         NodeType::Spawn {
@@ -648,14 +640,14 @@ impl MiddleEnvironment {
                     Node::identifier(self.context.current_span(), "Mutex"),
                     "new",
                 ),
-                vec![list_type.clone().into()],
+                vec![list_type.clone()],
                 vec![CallArg::Value(list_ident_node.clone())],
             ));
 
             return self.evaluate_inner(scope, Node::new_temp_scope(body));
         } else {
             let map_tmp_ident: PotentialDollarIdentifier =
-                ParserText::from(String::from("iter_map_value")).into();
+                PotentialDollarIdentifier::new(self.context.current_span(), "iter_map_value");
 
             let map_tmp_decl = Node::new(
                 self.context.current_span(),
@@ -723,7 +715,7 @@ impl MiddleEnvironment {
                             self.context.current_span(),
                             NodeType::ListLiteral(data_type.clone(), Vec::new()),
                         )),
-                        data_type: list_type.into(),
+                        data_type: list_type,
                     },
                 ),
                 loop_node,
@@ -1033,7 +1025,7 @@ impl MiddleEnvironment {
                             },
                             identifier: iter_id.clone(),
                             value: Box::new(iter_value),
-                            data_type: ParserDataType::auto(span).into(),
+                            data_type: ParserDataType::auto(span),
                         },
                     ),
                 );
@@ -1061,7 +1053,7 @@ impl MiddleEnvironment {
                                 var_type: VarType::Mutable,
                                 identifier: idx_id.clone(),
                                 value: Box::new(idx_initial),
-                                data_type: ParserDataType::new(span, ParserInnerType::Int).into(),
+                                data_type: ParserDataType::new(span, ParserInnerType::Int),
                             },
                         ),
                     );
@@ -1084,7 +1076,7 @@ impl MiddleEnvironment {
                                 var_type: VarType::Mutable,
                                 identifier: next_id.clone(),
                                 value: Box::new(Node::none(span)),
-                                data_type: ParserDataType::auto(span).into(),
+                                data_type: ParserDataType::auto(span),
                             },
                         ),
                     );
@@ -1177,9 +1169,7 @@ impl MiddleEnvironment {
                     self.context.current_span(),
                     NodeType::FieldAccess {
                         base: Box::new(Node::identifier(span, &next_id)),
-                        field: PotentialDollarIdentifier::Identifier(
-                            ParserText::from(String::from("next")).into(),
-                        ),
+                        field: PotentialDollarIdentifier::new(span, "next"),
                     },
                 );
                 let loop_item_value = if is_count_loop {

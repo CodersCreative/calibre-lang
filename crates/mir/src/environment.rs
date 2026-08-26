@@ -222,43 +222,4 @@ impl MiddleEnvironment {
         debug!("starting MIR construction");
         Self::new_and_evaluate_with_package(node, path, None, no_std)
     }
-
-    // TODO Remove
-    pub fn quick_resolve_potential_scope_member(
-        &mut self,
-        scope: &u64,
-        node: Node,
-    ) -> Result<Node, MiddleErr> {
-        Ok(Node {
-            node_type: match &node.node_type {
-                NodeType::ScopeAccess { base, field } => {
-                    if let NodeType::Identifier(module_name) = &base.node_type {
-                        let field_text = self
-                            .resolve(scope, field, ResolutionOptions::default().with_dollar())
-                            .unwrap_or(field.text().clone());
-                        let module_path =
-                            vec![module_name.get_ident().text().clone(), field_text.clone()];
-
-                        for prefix_len in (0..=module_path.len()).rev() {
-                            let prefix = module_path[..prefix_len].to_vec();
-                            let new_scope = self
-                                .get_scope_list(*scope, prefix.clone())
-                                .or_else(|_| self.import_scope_list(*scope, prefix).map(|x| x.0));
-
-                            if let Ok(new_scope) = new_scope
-                                && prefix_len == module_path.len()
-                            {
-                                let resolved_value: MiddleNode = self
-                                    .evaluate(&new_scope, Node::identifier(node.span, field_text));
-                                return Ok(resolved_value.into());
-                            }
-                        }
-                    }
-                    node.node_type.clone()
-                }
-                _ => node.node_type.clone(),
-            },
-            span: node.span,
-        })
-    }
 }

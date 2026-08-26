@@ -165,7 +165,7 @@ impl MiddleEnvironment {
             NodeType::LoopDeclaration {
                 else_body: Some(body),
                 ..
-            } => self.resolve_type_from_node(scope, &body),
+            } => self.resolve_type_from_node(scope, body),
             NodeType::MatchStatement { value: _, body } => {
                 if let Some((_arm_type, _guards, arm_body)) = body.first() {
                     self.resolve_type_from_node(scope, arm_body)
@@ -236,7 +236,7 @@ impl MiddleEnvironment {
                 scope,
                 left,
                 right,
-                Operator::Comparison(operator.clone()),
+                Operator::Comparison(*operator),
                 node.span,
             ),
             NodeType::BooleanExpression {
@@ -247,7 +247,7 @@ impl MiddleEnvironment {
                 scope,
                 left,
                 right,
-                Operator::Boolean(operator.clone()),
+                Operator::Boolean(*operator),
                 node.span,
             ),
             NodeType::BinaryExpression {
@@ -255,12 +255,9 @@ impl MiddleEnvironment {
                 right,
                 operator,
             } => {
-                if let Some(x) = self.get_operator_overload(
-                    scope,
-                    left,
-                    right,
-                    &Operator::Binary(operator.clone()),
-                ) {
+                if let Some(x) =
+                    self.get_operator_overload(scope, left, right, &Operator::Binary(*operator))
+                {
                     Some(x.return_type.clone())
                 } else {
                     self.resolve_type_from_node(scope, left)
@@ -387,8 +384,7 @@ impl MiddleEnvironment {
                             } else {
                                 None
                             }
-                        }) && let Some(method_ty) =
-                            self.resolve_member_fn_type(&ty, &member_name)
+                        }) && let Some(method_ty) = self.resolve_member_fn_type(ty, &member_name)
                         {
                             return method_ty.apply_callable();
                         }
@@ -441,7 +437,7 @@ impl MiddleEnvironment {
                     }
                 }
 
-                caller_type = caller_type.or_else(|| self.resolve_type_from_node(scope, &caller));
+                caller_type = caller_type.or_else(|| self.resolve_type_from_node(scope, caller));
 
                 caller_type?.data_type.apply_callable()
             }
@@ -596,7 +592,7 @@ impl MiddleEnvironment {
                 Some(current)
             }
             NodeType::DerefStatement { value } => self
-                .resolve_type_from_node(scope, &value)
+                .resolve_type_from_node(scope, value)
                 .map(|x| x.unwrap_all_refs()),
             NodeType::ScopeDeclaration { .. } => unreachable!(),
             NodeType::Tag { .. } => {

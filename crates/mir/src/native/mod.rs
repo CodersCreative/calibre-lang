@@ -101,16 +101,16 @@ impl MiddleEnvironment {
 
     pub fn setup_global(&mut self, scope: &u64) {
         let mut funcs = ParserDataType::natives()
-            .into_iter()
+            .iter()
             .filter(|x| !x.0.contains("."))
             .collect();
 
         let mut vars: Vec<(&String, &ParserDataType)> =
-            ParserDataType::constants().into_iter().collect();
+            ParserDataType::constants().iter().collect();
         vars.append(&mut funcs);
 
         for var in vars {
-            let name = ParserText::temp_name_with_suffix(&var.0, var.1.span).text;
+            let name = ParserText::temp_name_with_suffix(var.0, var.1.span).text;
 
             let _ = self.register_variable(
                 scope,
@@ -186,7 +186,7 @@ impl MiddleEnvironment {
             .new_scope(Some(*parent), scope_path.clone(), Some(name));
 
         let funcs: Vec<(&String, &ParserDataType)> = ParserDataType::natives()
-            .into_iter()
+            .iter()
             .filter(|x| x.0.contains(&format!("{}.", name)))
             .collect();
 
@@ -194,7 +194,7 @@ impl MiddleEnvironment {
             let short_name = original_name
                 .rsplit_once(".")
                 .map(|x| x.1)
-                .unwrap_or(&original_name)
+                .unwrap_or(original_name)
                 .trim()
                 .to_string();
 

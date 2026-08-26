@@ -164,14 +164,14 @@ impl VM {
             match value {
                 RuntimeValue::Aggregate(type_name, mut map) => {
                     let entries = &mut Gc::make_mut(&mut map).0.0;
+
                     if let Some(entry) = entries.iter_mut().find(|(name, _)| name == field) {
                         entry.1 = replacement.clone();
                         return Some(RuntimeValue::Aggregate(type_name, map));
                     }
-                    let Some((_, wrapped)) = entries.iter_mut().find(|(name, _)| name == "0")
-                    else {
-                        return None;
-                    };
+
+                    let (_, wrapped) = entries.iter_mut().find(|(name, _)| name == "0")?;
+
                     let nested = update(wrapped.clone(), field, replacement)?;
                     *wrapped = nested;
                     Some(RuntimeValue::Aggregate(type_name, map))
@@ -638,7 +638,7 @@ impl VM {
     fn collect_call_args_vec(&self, args: &[u16]) -> Vec<RuntimeValue> {
         let frame = self.frames.len().saturating_sub(1);
 
-        args.into_iter()
+        args.iter()
             .map(|reg| self.call_arg_from_frame_reg(frame, *reg))
             .collect()
     }
@@ -752,7 +752,7 @@ impl VM {
                 RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
                     actual == identifier
                 }
-                RuntimeValue::Generator { type_name, .. } => type_name == type_name,
+                RuntimeValue::Generator { type_name, .. } => identifier == type_name.as_ref(),
                 _ => false,
             },
             ParserInnerType::Scope(_)
@@ -766,10 +766,10 @@ impl VM {
         name: &str,
         callsite: (usize, usize, u32),
     ) -> Option<Arc<VMFunction>> {
-        if let Some(cached) = self.caches.callsite.get(&callsite) {
-            if cached.name == name {
-                return Some(Arc::clone(cached));
-            }
+        if let Some(cached) = self.caches.callsite.get(&callsite)
+            && cached.name == name
+        {
+            return Some(Arc::clone(cached));
         }
 
         if let Some(cached) = self.caches.call.get(name) {
@@ -1020,7 +1020,7 @@ impl VM {
 
         let caller_frame = self.frames.len().saturating_sub(1);
         let call_args = args
-            .into_iter()
+            .iter()
             .map(|reg| self.call_arg_from_frame_reg(caller_frame, *reg))
             .collect::<Vec<_>>();
 

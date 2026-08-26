@@ -42,7 +42,7 @@ impl From<ParserInnerType> for ParserDataType {
 
 impl<'a> From<&'a ParserDataType> for &'a ParserInnerType {
     fn from(value: &'a ParserDataType) -> Self {
-        return &value.data_type;
+        &value.data_type
     }
 }
 
@@ -119,9 +119,7 @@ impl ParserDataType {
                 return_type: Box::new(return_type.substitute(subst)),
                 parameters: parameters.iter().map(|p| p.substitute(subst)).collect(),
             },
-            ParserInnerType::Ref(x, m) => {
-                ParserInnerType::Ref(Box::new(x.substitute(subst)), m.clone())
-            }
+            ParserInnerType::Ref(x, m) => ParserInnerType::Ref(Box::new(x.substitute(subst)), *m),
             ParserInnerType::StructWithGenerics {
                 identifier,
                 generic_types,
@@ -275,22 +273,7 @@ impl ParserDataType {
     }
 
     pub fn get_gen(self) -> Option<ParserDataType> {
-        let sp = self.span;
         match self.unwrap_all_refs().data_type {
-            ParserInnerType::StructWithGenerics {
-                identifier,
-                generic_types,
-            } if ParserText::temp_name_suffix_matches(&identifier, &"gen")
-                && generic_types.len() == 1 =>
-            {
-                Some(generic_types[0].clone())
-            }
-            ParserInnerType::Struct(identifier)
-            | ParserInnerType::StructWithGenerics { identifier, .. }
-                if ParserText::temp_name_suffix_matches(&identifier, &"gen") =>
-            {
-                Some(ParserDataType::new(sp, ParserInnerType::Auto(None)))
-            }
             ParserInnerType::Gen(x) => Some(*x),
             _ => None,
         }
@@ -312,7 +295,7 @@ impl ParserDataType {
             ParserInnerType::Null => Some(Node::new(self.span, NodeType::Null)),
             ParserInnerType::List(t) => Some(Node::new(
                 self.span,
-                NodeType::ListLiteral((*t.clone()).into(), Vec::new()),
+                NodeType::ListLiteral(*t.clone(), Vec::new()),
             )),
             ParserInnerType::Range => Some(Node::new(
                 self.span,

@@ -52,9 +52,10 @@ impl CalibreLanguageServer {
         options: &async_lsp::lsp_types::FormattingOptions,
     ) -> Formatter {
         if options.insert_spaces {
-            let mut formatter = Formatter::default();
-            formatter.tab = Tab::new(' ', options.tab_size as usize);
-            formatter
+            Formatter {
+                tab: Tab::new(' ', options.tab_size as usize),
+                ..Default::default()
+            }
         } else {
             Formatter::default()
         }

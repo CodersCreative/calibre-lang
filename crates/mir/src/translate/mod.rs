@@ -216,11 +216,7 @@ impl MiddleEnvironment {
                                             header: FunctionHeader {
                                                 generics: GenericTypes::default(),
                                                 parameters: Vec::new(),
-                                                return_type: ParserDataType::new(
-                                                    node.span,
-                                                    ParserInnerType::Auto(None),
-                                                )
-                                                .into(),
+                                                return_type: ParserDataType::auto(node.span),
                                                 param_destructures: Vec::new(),
                                             },
                                             body: Box::new(value),
@@ -283,8 +279,7 @@ impl MiddleEnvironment {
                                 header: FunctionHeader {
                                     generics: GenericTypes::default(),
                                     parameters: Vec::new(),
-                                    return_type: ParserDataType::auto(self.context.current_span())
-                                        .into(),
+                                    return_type: ParserDataType::auto(self.context.current_span()),
                                     param_destructures: Vec::new(),
                                 },
                                 body: Box::new(Node::call_full(
@@ -334,13 +329,11 @@ impl MiddleEnvironment {
                         else_body,
                     } => {
                         let wg_name = ParserText::temp_name_with_suffix("spawn_wg", node.span);
-                        let wg_ident: PotentialDollarIdentifier =
-                            ParserText::from(wg_name.clone()).into();
+                        let wg_ident: PotentialDollarIdentifier = wg_name.clone().into();
 
                         let start_name =
                             ParserText::temp_name_with_suffix("spawn_start", node.span);
-                        let start_ident: PotentialDollarIdentifier =
-                            ParserText::from(start_name.clone()).into();
+                        let start_ident: PotentialDollarIdentifier = start_name.clone().into();
 
                         let wg_ident_node = Node::identifier(node.span, wg_ident.clone());
                         let start_ident_node = Node::identifier(node.span, start_ident.clone());
@@ -1032,7 +1025,7 @@ impl MiddleEnvironment {
                         {
                             if let Some(ret_ty) = self.scoping.return_type_stack.last().cloned() {
                                 let node_ty = if let Some(value) = &value {
-                                    if let Some(x) = self.resolve_type_from_node(scope, &value) {
+                                    if let Some(x) = self.resolve_type_from_node(scope, value) {
                                         x.key()
                                     } else {
                                         ParserInnerType::Dynamic
@@ -1044,8 +1037,12 @@ impl MiddleEnvironment {
                                 if !node_ty.loose_eq(&ret_ty) {
                                     return Err(self.context.err_at_current(
                                         MiddleErr::InvalidReturnType {
-                                            expected: ParserDataType::new(node.span, ret_ty),
-                                            found: ParserDataType::new(node.span, node_ty),
+                                            expected: Box::new(ParserDataType::new(
+                                                node.span, ret_ty,
+                                            )),
+                                            found: Box::new(ParserDataType::new(
+                                                node.span, node_ty,
+                                            )),
                                         },
                                     ));
                                 }
@@ -2701,15 +2698,11 @@ impl MiddleEnvironment {
                     ))?;
 
                     for (key, value) in ident_map {
-                        if !scope.mappings.contains_key(&key) {
-                            scope.mappings.insert(key, value);
-                        }
+                        scope.mappings.entry(key).or_insert(value);
                     }
 
                     for (key, value) in type_map {
-                        if !scope.type_mappings.contains_key(&key) {
-                            scope.type_mappings.insert(key, value);
-                        }
+                        scope.type_mappings.entry(key).or_insert(value);
                     }
                 } else {
                     let scope = self.scoping.scopes.get_mut(scope).ok_or(MiddleErr::At(
@@ -3068,6 +3061,7 @@ impl MiddleEnvironment {
             NodeType::PipeExpression(mut path) if !path.is_empty() => {
                 let mut value = path.remove(0).into();
                 let mut prior_mappings = FxHashMap::default();
+
                 let is_callable_point = |env: &mut Self, point: &PipeSegment| {
                     if let NodeType::Identifier(id) = &point.get_node().node_type
                         && let Ok(resolved) = env.resolve(scope, id, ResolutionOptions::all())
@@ -3087,6 +3081,7 @@ impl MiddleEnvironment {
                     }
                     false
                 };
+
                 let get_mapping = |env: &Self, key: &str| -> Result<Option<String>, MiddleErr> {
                     Ok(env
                         .scoping
@@ -3095,6 +3090,7 @@ impl MiddleEnvironment {
                         .get(key)
                         .map(|x| x.to_string()))
                 };
+
                 let restore_mapping =
                     |env: &mut Self, key: String, value: Option<String>| -> Result<(), MiddleErr> {
                         let scope_ref = env.scoping.scope_mut_or_err(scope)?;
@@ -3122,16 +3118,15 @@ impl MiddleEnvironment {
                         && let Some(next) = next_point
                         && !next.is_named()
                         && !next.get_node().node_type.is_call()
+                        && is_callable_point(self, &next)
                     {
-                        if is_callable_point(self, &next) {
-                            value = Node::call(
-                                self.context.current_span(),
-                                next.into(),
-                                vec![CallArg::Value(value), CallArg::Value(point.into())],
-                            );
-                            idx += 2;
-                            continue;
-                        }
+                        value = Node::call(
+                            self.context.current_span(),
+                            next.into(),
+                            vec![CallArg::Value(value), CallArg::Value(point.into())],
+                        );
+                        idx += 2;
+                        continue;
                     }
 
                     match point_callable || point_is_identifier {

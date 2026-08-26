@@ -111,16 +111,16 @@ pub struct ObjectMap<T>(pub Vec<(String, T)>);
 
 impl<T> ObjectMap<T> {
     pub fn get(&self, key: &str) -> Option<&T> {
-        self.0.iter().find(|x| &x.0 == key).map(|x| &x.1)
+        self.0.iter().find(|x| x.0 == key).map(|x| &x.1)
     }
 
     pub fn remove(&mut self, key: &str) -> Option<T> {
-        let index = self.0.iter().position(|x| &x.0 == key)?;
+        let index = self.0.iter().position(|x| x.0 == key)?;
         Some(self.0.remove(index).1)
     }
 
     pub fn contains_key(&self, key: &str) -> bool {
-        self.0.iter().find(|x| &x.0 == key).is_some()
+        self.0.iter().any(|x| x.0 == key)
     }
 }
 
@@ -193,8 +193,8 @@ impl<T: PartialEq> PartialOrd for ObjectType<T> {
     }
 }
 
-impl<T: PartialEq + ToString> ToString for ObjectType<T> {
-    fn to_string(&self) -> String {
+impl<T: PartialEq + ToString> Display for ObjectType<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ObjectType::Map(x) => {
                 let mut txt = String::from("{");
@@ -202,14 +202,11 @@ impl<T: PartialEq + ToString> ToString for ObjectType<T> {
                     txt.push_str(&format!("{k} : {}, ", v.to_string()));
                 }
 
-                let mut txt = txt.trim_end().trim_end_matches(",").to_string();
-                txt.push_str("}");
-
-                txt
+                write!(f, "{}}}", txt.trim_end().trim_end_matches(",").to_string())
             }
             ObjectType::Tuple(data) => {
                 let lst: Vec<&T> = data.iter().collect();
-                print_list(&lst, '(', ')')
+                write!(f, "{}", print_list(&lst, '(', ')'))
             }
         }
     }
@@ -237,23 +234,20 @@ impl<T: PartialEq> PartialOrd for ObjectMap<T> {
     }
 }
 
-impl<T: PartialEq + ToString> ToString for ObjectMap<T> {
-    fn to_string(&self) -> String {
-        if !self.0.is_empty() {
-            if self.get("0").is_some() {
-                let lst: Vec<&T> = self.0.iter().map(|x| &x.1).collect();
-                return print_list(&lst, '(', ')');
-            }
+impl<T: PartialEq + ToString> Display for ObjectMap<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.0.is_empty() && self.get("0").is_some() {
+            let lst: Vec<&T> = self.0.iter().map(|x| &x.1).collect();
+            return write!(f, "{}", print_list(&lst, '(', ')'));
         }
+
         let mut txt = String::from("{");
+
         for (k, v) in self.0.iter() {
             txt.push_str(&format!("{k} : {}, ", v.to_string()));
         }
 
-        let mut txt = txt.trim_end().trim_end_matches(",").to_string();
-        txt.push_str("}");
-
-        txt
+        write!(f, "{}}}", txt.trim_end().trim_end_matches(",").to_string())
     }
 }
 

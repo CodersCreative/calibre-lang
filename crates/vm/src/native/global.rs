@@ -223,7 +223,7 @@ impl NativeFunction for Len {
             match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
                 RuntimeValue::List(data) => data.as_ref().0.len() as u64,
                 RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as u64,
-                RuntimeValue::Range(from, to) => (to - from).max(0).abs() as u64,
+                RuntimeValue::Range(from, to) => (to - from).max(0).unsigned_abs(),
                 RuntimeValue::Str(x) => x.lock().unwrap().len() as u64,
                 RuntimeValue::Null => 0,
                 RuntimeValue::HashMap(map) => map.lock().map(|m| m.len() as u64).unwrap_or(0),
@@ -344,7 +344,7 @@ impl NativeFunction for DiscriminantFn {
         Ok(RuntimeValue::Int(
             match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
                 RuntimeValue::Enum(_, index, _) => index as i64,
-                RuntimeValue::Option(Some(_)) | RuntimeValue::Result(Ok(_)) => 0 as i64,
+                RuntimeValue::Option(Some(_)) | RuntimeValue::Result(Ok(_)) => 0,
                 RuntimeValue::Option(None) | RuntimeValue::Result(Err(_)) => 1,
                 _ => 0,
             },

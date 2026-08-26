@@ -163,12 +163,12 @@ impl FunctionLowering {
         for block in &func.blocks {
             let mut regs = vec![None; block.instructions.len()];
             for (idx, instr) in block.instructions.iter().enumerate() {
-                if let Some(name) = instr.node_type.local_name() {
-                    if locals.contains(name) {
-                        let r = reg_count;
-                        reg_count += 1;
-                        regs[idx] = Some(r);
-                    }
+                if let Some(name) = instr.node_type.local_name()
+                    && locals.contains(name)
+                {
+                    let r = reg_count;
+                    reg_count += 1;
+                    regs[idx] = Some(r);
                 }
             }
             assign_regs.push(regs);

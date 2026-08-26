@@ -104,7 +104,7 @@ pub fn comparison(
             _ => Err(RuntimeError::Comparison(
                 RuntimeValue::Option(a),
                 RuntimeValue::Option(b),
-                op.clone(),
+                *op,
             )),
         },
         (RuntimeValue::Enum(a_name, a_idx, _), RuntimeValue::Enum(b_name, b_idx, _), op) => {
@@ -118,7 +118,7 @@ pub fn comparison(
                 _ => Err(RuntimeError::Comparison(
                     RuntimeValue::Enum(a_name, a_idx, None),
                     RuntimeValue::Enum(b_name, b_idx, None),
-                    op.clone(),
+                    *op,
                 )),
             }
         }
@@ -140,7 +140,7 @@ pub fn comparison(
             _ => Err(RuntimeError::Comparison(
                 RuntimeValue::List(a),
                 RuntimeValue::List(b),
-                op.clone(),
+                *op,
             )),
         },
         (RuntimeValue::List(a), other, op) | (other, RuntimeValue::List(a), op) => match op {
@@ -150,11 +150,7 @@ pub fn comparison(
             ComparisonOperator::NotEqual => {
                 Ok(RuntimeValue::Bool(!matches!(other, RuntimeValue::List(_))))
             }
-            _ => Err(RuntimeError::Comparison(
-                RuntimeValue::List(a),
-                other,
-                op.clone(),
-            )),
+            _ => Err(RuntimeError::Comparison(RuntimeValue::List(a), other, *op)),
         },
         (RuntimeValue::Big(x), RuntimeValue::Big(y), op) => {
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
@@ -195,9 +191,7 @@ pub fn comparison(
                         | ComparisonOperator::NotEqual
                 )))
             } else {
-                Ok(RuntimeValue::Bool(comparison_value_handle(
-                    op, x as i64, y as i64,
-                )))
+                Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y as i64)))
             }
         }
         (RuntimeValue::Int(x), RuntimeValue::UInt(y), op) => {
@@ -244,7 +238,7 @@ pub fn comparison(
             eq_value(&left, &right),
             Some(true)
         ))),
-        (left, right, op) => Err(RuntimeError::Comparison(left, right, op.clone())),
+        (left, right, op) => Err(RuntimeError::Comparison(left, right, *op)),
     }
 }
 
@@ -260,7 +254,7 @@ pub fn boolean(
         (RuntimeValue::Bool(x), RuntimeValue::Bool(y), BooleanOperator::Or) => {
             Ok(RuntimeValue::Bool(x || y))
         }
-        (left, right, op) => Err(RuntimeError::Boolean(left, right, op.clone())),
+        (left, right, op) => Err(RuntimeError::Boolean(left, right, *op)),
     }
 }
 
@@ -365,11 +359,7 @@ impl RuntimeValue {
         rhs: &Self,
         operator: &BinaryOperator,
     ) -> Result<RuntimeValue, RuntimeError> {
-        Err(RuntimeError::Binary(
-            self.clone(),
-            rhs.clone(),
-            operator.clone(),
-        ))
+        Err(RuntimeError::Binary(self.clone(), rhs.clone(), *operator))
     }
 }
 
@@ -536,7 +526,7 @@ impl RuntimeValue {
             (RuntimeValue::Int(x), RuntimeValue::UInt(y)) => Ok(RuntimeValue::Int(x.pow(y as u32))),
             (RuntimeValue::Int(x), RuntimeValue::Byte(y)) => Ok(RuntimeValue::Int(x.pow(y as u32))),
             (RuntimeValue::Int(x), RuntimeValue::Float(y)) => {
-                Ok(RuntimeValue::Int((x as f64).powf(y as f64) as i64))
+                Ok(RuntimeValue::Int((x as f64).powf(y) as i64))
             }
             (RuntimeValue::UInt(x), RuntimeValue::UInt(y)) => {
                 Ok(RuntimeValue::UInt(x.pow(y as u32)))
@@ -552,7 +542,7 @@ impl RuntimeValue {
                 }
             }
             (RuntimeValue::UInt(x), RuntimeValue::Float(y)) => {
-                Ok(RuntimeValue::UInt((x as f64).powf(y as f64) as u64))
+                Ok(RuntimeValue::UInt((x as f64).powf(y) as u64))
             }
             (RuntimeValue::Float(x), RuntimeValue::Float(y)) => Ok(RuntimeValue::Float(x.powf(y))),
             (RuntimeValue::Float(x), RuntimeValue::Int(y)) => {
@@ -578,7 +568,7 @@ impl RuntimeValue {
                 }
             }
             (RuntimeValue::Byte(x), RuntimeValue::Float(y)) => {
-                Ok(RuntimeValue::Float((x as f64).powf(y as f64)))
+                Ok(RuntimeValue::Float((x as f64).powf(y)))
             }
             (lhs, rhs) => lhs.panic_operator(&rhs, &BinaryOperator::Pow),
         }

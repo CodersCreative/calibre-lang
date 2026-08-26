@@ -98,15 +98,14 @@ impl MiddleEnvironment {
         let field_name = self.resolve(scope, &field, ResolutionOptions::default().with_dollar())?;
 
         let mut module_path = Vec::new();
-        if base.scope_access_path(&mut module_path) {
-            if let Ok(new_scope) = self
+        if base.scope_access_path(&mut module_path)
+            && let Ok(new_scope) = self
                 .get_scope_list(*scope, module_path.clone())
                 .or_else(|_| self.import_scope_list(*scope, module_path).map(|x| x.0))
-            {
-                let resolved = self.resolve(&new_scope, &field, ResolutionOptions::all())?;
+        {
+            let resolved = self.resolve(&new_scope, &field, ResolutionOptions::all())?;
 
-                return Ok(self.evaluate(&new_scope, Node::identifier(span, &resolved)));
-            }
+            return Ok(self.evaluate(&new_scope, Node::identifier(span, &resolved)));
         }
 
         Ok(MiddleNode::new(

@@ -132,7 +132,7 @@ impl ExternFunction {
                     max_align = max_align.max(align);
                     let padding = (align - (offset % align)) % align;
                     if padding > 0 {
-                        bytes.extend(std::iter::repeat(0u8).take(padding));
+                        bytes.extend(std::iter::repeat_n(0u8, padding));
                         offset += padding;
                     }
                     bytes.extend_from_slice(&field_bytes);
@@ -142,7 +142,7 @@ impl ExternFunction {
 
                 let tail_padding = (max_align - (offset % max_align)) % max_align;
                 if tail_padding > 0 {
-                    bytes.extend(std::iter::repeat(0u8).take(tail_padding));
+                    bytes.extend(std::iter::repeat_n(0u8, tail_padding));
                 }
 
                 Some((bytes, Type::structure(fields)))
@@ -359,7 +359,7 @@ impl ExternFunction {
                                 }
                             };
                             arg_types.push(ty.clone());
-                            let mut backing = vec![0u64; (bytes.len() + 7) / 8];
+                            let mut backing = vec![0u64; bytes.len().div_ceil(8)];
                             if !bytes.is_empty() {
                                 let raw = backing.as_mut_ptr() as *mut u8;
                                 let raw_len = backing.len() * std::mem::size_of::<u64>();
@@ -456,7 +456,7 @@ impl ExternFunction {
                             | ParserFfiInnerType::ULong
                             | ParserFfiInnerType::ULongLong,
                             RuntimeValue::UInt(x),
-                        ) => FfiArg::U64(x as u64),
+                        ) => FfiArg::U64(x),
                         (
                             ParserFfiInnerType::U64
                             | ParserFfiInnerType::ULong
@@ -474,7 +474,7 @@ impl ExternFunction {
                             | ParserFfiInnerType::Long
                             | ParserFfiInnerType::LongLong,
                             RuntimeValue::Int(x),
-                        ) => FfiArg::I64(x as i64),
+                        ) => FfiArg::I64(x),
                         (
                             ParserFfiInnerType::I64
                             | ParserFfiInnerType::Long
@@ -487,12 +487,12 @@ impl ExternFunction {
                             | ParserFfiInnerType::LongLong,
                             RuntimeValue::Float(x),
                         ) => FfiArg::I64(x as i64),
-                        (ParserFfiInnerType::USize, RuntimeValue::UInt(x)) => FfiArg::U64(x as u64),
+                        (ParserFfiInnerType::USize, RuntimeValue::UInt(x)) => FfiArg::U64(x),
                         (ParserFfiInnerType::USize, RuntimeValue::Int(x)) => FfiArg::U64(x as u64),
                         (ParserFfiInnerType::USize, RuntimeValue::Float(x)) => {
                             FfiArg::U64(x as u64)
                         }
-                        (ParserFfiInnerType::ISize, RuntimeValue::Int(x)) => FfiArg::I64(x as i64),
+                        (ParserFfiInnerType::ISize, RuntimeValue::Int(x)) => FfiArg::I64(x),
                         (ParserFfiInnerType::ISize, RuntimeValue::UInt(x)) => FfiArg::I64(x as i64),
                         (ParserFfiInnerType::ISize, RuntimeValue::Float(x)) => {
                             FfiArg::I64(x as i64)
@@ -503,7 +503,7 @@ impl ExternFunction {
                         (
                             ParserFfiInnerType::F64 | ParserFfiInnerType::LongDouble,
                             RuntimeValue::Float(x),
-                        ) => FfiArg::F64(x as f64),
+                        ) => FfiArg::F64(x),
                         (
                             ParserFfiInnerType::F64 | ParserFfiInnerType::LongDouble,
                             RuntimeValue::Int(x),
@@ -549,27 +549,23 @@ impl ExternFunction {
         unsafe {
             match &self.return_type.data_type {
                 x if !matches!(x, ParserInnerType::FfiType(_)) => match x {
-                    ParserInnerType::Float => {
-                        Ok(RuntimeValue::Float(cif.call(code, &mut libffi_args)))
-                    }
-                    ParserInnerType::UInt => {
-                        Ok(RuntimeValue::UInt(cif.call(code, &mut libffi_args)))
-                    }
-                    ParserInnerType::Int => Ok(RuntimeValue::Int(cif.call(code, &mut libffi_args))),
+                    ParserInnerType::Float => Ok(RuntimeValue::Float(cif.call(code, &libffi_args))),
+                    ParserInnerType::UInt => Ok(RuntimeValue::UInt(cif.call(code, &libffi_args))),
+                    ParserInnerType::Int => Ok(RuntimeValue::Int(cif.call(code, &libffi_args))),
                     ParserInnerType::Bool => {
-                        let res: u8 = cif.call(code, &mut libffi_args);
+                        let res: u8 = cif.call(code, &libffi_args);
                         Ok(RuntimeValue::Bool(res != 0))
                     }
                     ParserInnerType::Null => {
-                        let _: () = cif.call(code, &mut libffi_args);
+                        let _: () = cif.call(code, &libffi_args);
                         Ok(RuntimeValue::Null)
                     }
                     ParserInnerType::Char => {
-                        let res: u8 = cif.call(code, &mut libffi_args);
+                        let res: u8 = cif.call(code, &libffi_args);
                         Ok(RuntimeValue::Char(res as char))
                     }
                     ParserInnerType::Str => {
-                        let res: *const c_char = cif.call(code, &mut libffi_args);
+                        let res: *const c_char = cif.call(code, &libffi_args);
                         if res.is_null() {
                             Ok(RuntimeValue::Str(Arc::new(Mutex::new(String::new()))))
                         } else {
@@ -580,18 +576,18 @@ impl ExternFunction {
                         }
                     }
                     ParserInnerType::Ptr(_) => {
-                        let res: *const c_void = cif.call(code, &mut libffi_args);
+                        let res: *const c_void = cif.call(code, &libffi_args);
                         Ok(RuntimeValue::UInt(res as u64))
                     }
                     _ => Err(RuntimeError::InvalidFunctionCall),
                 },
                 ParserInnerType::FfiType(x) => match x {
                     ParserFfiInnerType::F32 => {
-                        let res: f32 = cif.call(code, &mut libffi_args);
+                        let res: f32 = cif.call(code, &libffi_args);
                         Ok(RuntimeValue::Float(res as f64))
                     }
                     ParserFfiInnerType::F64 | ParserFfiInnerType::LongDouble => {
-                        Ok(RuntimeValue::Float(cif.call(code, &mut libffi_args)))
+                        Ok(RuntimeValue::Float(cif.call(code, &libffi_args)))
                     }
                     ParserFfiInnerType::U8
                     | ParserFfiInnerType::U16
@@ -603,7 +599,7 @@ impl ExternFunction {
                     | ParserFfiInnerType::ULong
                     | ParserFfiInnerType::ULongLong
                     | ParserFfiInnerType::UChar => {
-                        let res: u64 = cif.call(code, &mut libffi_args);
+                        let res: u64 = cif.call(code, &libffi_args);
                         Ok(RuntimeValue::UInt(res))
                     }
                     ParserFfiInnerType::I8
@@ -616,11 +612,11 @@ impl ExternFunction {
                     | ParserFfiInnerType::Long
                     | ParserFfiInnerType::LongLong
                     | ParserFfiInnerType::SChar => {
-                        let res: i64 = cif.call(code, &mut libffi_args);
+                        let res: i64 = cif.call(code, &libffi_args);
                         Ok(RuntimeValue::Int(res))
                     }
                 },
-                _ => return Err(RuntimeError::InvalidFunctionCall),
+                _ => Err(RuntimeError::InvalidFunctionCall),
             }
         }
     }

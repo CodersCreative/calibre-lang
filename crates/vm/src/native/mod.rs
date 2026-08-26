@@ -1,5 +1,4 @@
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
-use calibre_parser::ast::idents::ParserText;
 use std::{cmp::Ordering, fmt::Debug};
 
 pub mod global;
@@ -13,14 +12,7 @@ pub trait NativeFunction: Send + Sync {
 
     fn get_resolved_name(&self, env: &VM) -> String {
         let name = self.name();
-        let name = env
-            .mappings
-            .iter()
-            .find(|x| ParserText::temp_name_suffix_matches(x, &name))
-            .map(|x| x.to_string())
-            .unwrap_or(name);
-
-        name
+        env.registry.natives.get(&name).cloned().unwrap_or_default()
     }
 }
 
@@ -31,10 +23,6 @@ impl Debug for dyn NativeFunction {
 }
 
 impl PartialEq for dyn NativeFunction {
-    fn ne(&self, _other: &Self) -> bool {
-        false
-    }
-
     fn eq(&self, _other: &Self) -> bool {
         true
     }
@@ -65,7 +53,7 @@ impl PartialOrd for dyn NativeFunction {
 impl VM {
     pub fn setup_stdlib(&mut self) {
         for (full_name, value) in RuntimeValue::constants()
-            .into_iter()
+            .iter()
             .chain(RuntimeValue::natives())
         {
             let name = self.registry.natives.get(full_name).unwrap();

@@ -37,7 +37,7 @@ impl Scoping {
     }
 
     pub fn push_generic_params(&mut self, params: Vec<String>) {
-        self.all_time_generics.extend(params.clone().into_iter());
+        self.all_time_generics.extend(params.clone());
         self.generic_param_stack.push(params);
     }
 
@@ -85,11 +85,11 @@ impl Scoping {
         }
     }
 
-    pub fn get_global_scope<'a>(&'a self) -> &'a MiddleScope {
+    pub fn get_global_scope(&self) -> &MiddleScope {
         self.scopes.get(&0).unwrap_or_else(|| empty_scope())
     }
 
-    pub fn get_root_scope<'a>(&'a self) -> &'a MiddleScope {
+    pub fn get_root_scope(&self) -> &MiddleScope {
         for i in 1..self.scope_counter {
             if let Some(scope) = self.scopes.get(&i)
                 && scope.namespace == "root"
@@ -154,7 +154,7 @@ impl Scoping {
                 path,
             };
 
-            let _ = self.add_scope(scope);
+            self.add_scope(scope);
 
             if let Some(scope_ref) = self.scopes.get_mut(&parent) {
                 scope_ref.children.insert(
@@ -181,7 +181,7 @@ impl Scoping {
                 defers: Vec::new(),
                 path,
             };
-            let _ = self.add_scope(scope);
+            self.add_scope(scope);
             self.scope_counter - 1
         }
     }
@@ -299,17 +299,16 @@ impl Scoping {
         };
 
         let path_ends = [".cal", "/main.cal", "/mod.cal"];
-        let path_starts = [format!("{extra}{namespace}"), format!("{namespace}")];
+        let path_starts = [format!("{extra}{namespace}"), namespace.to_string()];
         let paths: Vec<PathBuf> = path_starts
             .into_iter()
-            .map(|x| {
+            .flat_map(|x| {
                 let folder = folder.to_path_buf();
                 path_ends
                     .iter()
                     .map(|y| folder.join(format!("{}{}", x, y)))
                     .collect::<Vec<_>>()
             })
-            .flatten()
             .collect();
 
         for path in paths.clone() {

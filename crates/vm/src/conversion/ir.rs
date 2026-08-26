@@ -141,13 +141,13 @@ impl VMFunction {
                     | VMInstruction::LoadVar { name, .. }
                     | VMInstruction::MoveVar { name, .. }
                     | VMInstruction::LoadVarRef { name, .. } => {
-                        if let Some(dest) = block.local_strings.get(*name as usize) {
-                            if !declared.contains_key(dest) {
-                                declared.insert(
-                                    dest.to_string(),
-                                    format!("{}->{}", dest, fastrand::u32(0..u32::MAX)),
-                                );
-                            }
+                        if let Some(dest) = block.local_strings.get(*name as usize)
+                            && !declared.contains_key(dest)
+                        {
+                            declared.insert(
+                                dest.to_string(),
+                                format!("{}->{}", dest, fastrand::u32(0..u32::MAX)),
+                            );
                         }
                     }
                     _ => {}
@@ -161,13 +161,10 @@ impl VMFunction {
             }
 
             for literal in block.local_literals.iter_mut() {
-                match literal {
-                    VMLiteral::Closure { label, captures: _ } => {
-                        if let Some(x) = declared.get(label) {
-                            *label = x.to_string();
-                        }
-                    }
-                    _ => {}
+                if let VMLiteral::Closure { label, captures: _ } = literal
+                    && let Some(x) = declared.get(label)
+                {
+                    *label = x.to_string();
                 }
             }
         }
@@ -192,7 +189,7 @@ impl Display for VMFunction {
             txt.push_str(&format!("{}, ", param));
         }
         txt = txt.trim_end().trim_end_matches(",").to_string();
-        txt.push_str(")");
+        txt.push(')');
         for block in &self.blocks {
             txt.push_str(&format!("\n{}", block).replace("\n", "\n\t"));
         }

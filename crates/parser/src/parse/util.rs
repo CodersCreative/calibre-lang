@@ -280,9 +280,7 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<Node
                 sp,
                 NodeType::FieldAccess {
                     base: Box::new(current),
-                    field: PotentialDollarIdentifier::Identifier(
-                        ParserText::from(part.to_string()).into(),
-                    ),
+                    field: PotentialDollarIdentifier::new(sp, part),
                 },
             );
         }

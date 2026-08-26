@@ -23,13 +23,13 @@ struct IdentAnalyzer<'a> {
     found: bool,
 }
 
-impl<'a> crate::traversal::NodeAnalyzer for IdentAnalyzer<'a> {
+impl<'a> NodeAnalyzer for IdentAnalyzer<'a> {
     fn analyze_node_type(&mut self, node_type: &NodeType) -> bool {
-        if let NodeType::Identifier(id) = node_type {
-            if id.get_ident().to_string() == self.target {
-                self.found = true;
-                return false; // Stop traversal
-            }
+        if let NodeType::Identifier(id) = node_type
+            && id.get_ident().to_string() == self.target
+        {
+            self.found = true;
+            return false;
         }
         !self.found && self.analyze_children(node_type)
     }
@@ -762,7 +762,7 @@ impl MiddleEnvironment {
                     self.context.current_span(),
                     NodeType::VariableDeclaration {
                         var_type: VarType::Mutable,
-                        identifier: ParserText::from(tmp_name.clone()).into(),
+                        identifier: tmp_name.clone().into(),
                         data_type: resolved
                             .unwrap_or_else(|| ParserDataType::auto(self.context.current_span())),
                         value,
@@ -989,7 +989,7 @@ impl MiddleEnvironment {
                                     );
                                     body_nodes.push(Self::auto_var_decl(
                                         self.context.current_span(),
-                                        var_type.clone(),
+                                        var_type,
                                         name.clone(),
                                         current.clone(),
                                     ));
@@ -1034,10 +1034,10 @@ impl MiddleEnvironment {
                                         })
                                         .ok_or_else(|| {
                                             self.context.err_at_current(MiddleErr::CantMatch(
-                                                ParserDataType::new(
+                                                Box::new(ParserDataType::new(
                                                     self.context.current_span(),
                                                     ParserInnerType::Auto(None),
-                                                ),
+                                                )),
                                             ))
                                         })?;
                                     self.match_add_discriminant_eq(
@@ -1169,10 +1169,10 @@ impl MiddleEnvironment {
                                                                 .ok_or_else(|| {
                                                                     self.context.err_at_current(
                                                                         MiddleErr::CantMatch(
-                                                                            ParserDataType::new(
+                                                                            Box::new(ParserDataType::new(
                                                                                 self.context.current_span(),
                                                                                 ParserInnerType::Auto(None),
-                                                                            ),
+                                                                            )),
                                                                         ),
                                                                     )
                                                                 })?;
@@ -1298,7 +1298,7 @@ impl MiddleEnvironment {
                                         body_nodes.push(Node::new(
                                             self.context.current_span(),
                                             NodeType::VariableDeclaration {
-                                                var_type: var_type.clone(),
+                                                var_type,
                                                 identifier: bind_name.clone(),
                                                 value: Box::new(payload_value.clone()),
                                                 data_type: ParserDataType::auto(
@@ -1677,10 +1677,10 @@ impl MiddleEnvironment {
                             let Some(index) = Self::builtin_enum_variant_index(val.trim()) else {
                                 return Err(MiddleErr::At(
                                     value.span,
-                                    Box::new(MiddleErr::CantMatch(ParserDataType::new(
+                                    Box::new(MiddleErr::CantMatch(Box::new(ParserDataType::new(
                                         value.span,
                                         ParserInnerType::Auto(None),
-                                    ))),
+                                    )))),
                                 ));
                             };
 
@@ -1701,7 +1701,7 @@ impl MiddleEnvironment {
                                 body_nodes.push(Node::new(
                                     self.context.current_span(),
                                     NodeType::VariableDeclaration {
-                                        var_type: var_type.clone(),
+                                        var_type,
                                         identifier: bind_name.clone(),
                                         value: Box::new(Node::member(
                                             self.context.current_span(),
@@ -1805,7 +1805,7 @@ impl MiddleEnvironment {
                 | MatchArmType::StructPattern(_) => {
                     return Err(MiddleErr::At(
                         value.span,
-                        Box::new(MiddleErr::CantMatch(resolved_data_type.clone())),
+                        Box::new(MiddleErr::CantMatch(Box::new(resolved_data_type.clone()))),
                     ));
                 }
                 MatchArmType::Wildcard(_) => ifs.push(Node::new(
@@ -1908,7 +1908,7 @@ impl MiddleEnvironment {
                                     var_type,
                                     identifier: name,
                                     value: Box::new(value.clone()),
-                                    data_type: resolved_data_type.clone().into(),
+                                    data_type: resolved_data_type.clone(),
                                 },
                             ),
                             *self.wrap_then_with_aliases(
@@ -1945,7 +1945,7 @@ impl MiddleEnvironment {
                     } else {
                         return Err(MiddleErr::At(
                             value.span,
-                            Box::new(MiddleErr::CantMatch(resolved_data_type.clone())),
+                            Box::new(MiddleErr::CantMatch(Box::new(resolved_data_type.clone()))),
                         ));
                     };
 
@@ -1964,7 +1964,7 @@ impl MiddleEnvironment {
                             body_nodes.push(Node::new(
                                 self.context.current_span(),
                                 NodeType::VariableDeclaration {
-                                    var_type: var_type.clone(),
+                                    var_type,
                                     identifier: bind_name.clone(),
                                     value: if reference.is_some()
                                         && reference != Some(RefMutability::Value)

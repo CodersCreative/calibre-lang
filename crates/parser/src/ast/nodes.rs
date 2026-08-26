@@ -13,7 +13,7 @@ use crate::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, matches, str::FromStr};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -108,7 +108,7 @@ impl TypeDefType {
                     .iter()
                     .map(|(k, v)| (k.clone(), v.as_ref().map(|p| p.substitute(subst))))
                     .collect(),
-                default_variant: default_variant.clone(),
+                default_variant: *default_variant,
                 default_value: default_value.clone(),
             },
             TypeDefType::NewType(inner) => TypeDefType::NewType(Box::new(inner.substitute(subst))),
@@ -267,9 +267,7 @@ impl Node {
             span,
             NodeType::FieldAccess {
                 base: Box::new(base),
-                field: PotentialDollarIdentifier::Identifier(
-                    ParserText::from(member.to_string()).into(),
-                ),
+                field: PotentialDollarIdentifier::new(span, member),
             },
         )
     }
@@ -432,13 +430,13 @@ pub struct Overload {
     pub header: FunctionHeader,
 }
 
-impl Into<Node> for Overload {
-    fn into(self) -> Node {
+impl From<Overload> for Node {
+    fn from(val: Overload) -> Node {
         Node::new(
-            self.operator.span,
+            val.operator.span,
             NodeType::FunctionDeclaration {
-                header: self.header,
-                body: self.body,
+                header: val.header,
+                body: val.body,
             },
         )
     }
@@ -794,11 +792,9 @@ pub enum PipeSegment {
 
 impl PipeSegment {
     pub fn is_named(&self) -> bool {
-        match self {
-            Self::Unnamed(_) => false,
-            _ => true,
-        }
+        !matches!(self, Self::Unnamed(_))
     }
+
     pub fn span(&self) -> &Span {
         match self {
             Self::Unnamed(x) => &x.span,
@@ -820,11 +816,11 @@ impl PipeSegment {
     }
 }
 
-impl Into<Node> for PipeSegment {
-    fn into(self) -> Node {
-        match self {
-            Self::Unnamed(x) => x,
-            Self::Named {
+impl From<PipeSegment> for Node {
+    fn from(val: PipeSegment) -> Node {
+        match val {
+            PipeSegment::Unnamed(x) => x,
+            PipeSegment::Named {
                 identifier: _,
                 node,
             } => node,
@@ -863,14 +859,14 @@ impl Display for NodeType {
 impl Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut formatter = Formatter::default();
-        write!(f, "{}", formatter.format(&self))
+        write!(f, "{}", formatter.format(self))
     }
 }
 
 impl Display for LoopType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut formatter = Formatter::default();
-        write!(f, "{}", formatter.fmt_loop_type(&self))
+        write!(f, "{}", formatter.fmt_loop_type(self))
     }
 }
 

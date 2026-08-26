@@ -56,7 +56,7 @@ async fn run_suite(
         let mut engine = CalibreEngine::default()
             .with_vm_config(vm_config.clone())
             .with_source_path(path.clone())
-            .with_cache_enabled(!false);
+            .with_cache_enabled(true);
 
         if let Some(metadata) = package_metadata.clone() {
             engine = engine.with_package_metadata(metadata);

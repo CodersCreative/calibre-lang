@@ -114,7 +114,6 @@ impl MiddleEnvironment {
 
                 for (i, entry) in tail.into_iter().enumerate() {
                     if let Some((var_type, name)) = entry {
-                        let offset = (total_tail - i as i64) as i64;
                         let index_expr = Node::new(
                             span,
                             NodeType::BinaryExpression {
@@ -129,7 +128,7 @@ impl MiddleEnvironment {
                                         ),
                                     ),
                                 )),
-                                right: Box::new(Node::int(span, offset)),
+                                right: Box::new(Node::int(span, total_tail - i as i64)),
                                 operator: BinaryOperator::Sub,
                             },
                         );

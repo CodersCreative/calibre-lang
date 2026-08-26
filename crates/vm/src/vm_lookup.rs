@@ -12,11 +12,7 @@ pub(crate) enum VarName {
 
 impl VM {
     pub(crate) fn resolve_function_by_name(&self, name: &str) -> Option<Arc<VMFunction>> {
-        if let Some(found) = self.registry.functions.get(name) {
-            Some(found.clone())
-        } else {
-            None
-        }
+        self.registry.functions.get(name).cloned()
     }
 
     pub(crate) fn resolve_library_candidates(name: &str) -> Vec<String> {

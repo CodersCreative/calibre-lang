@@ -20,7 +20,7 @@ impl NativeFunction for ChannelNew {
     }
 
     fn run(&self, _env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        Ok(RuntimeValue::Channel(Arc::new(ChannelInner::new())))
+        Ok(RuntimeValue::Channel(Arc::new(ChannelInner::default())))
     }
 }
 
@@ -203,7 +203,7 @@ impl NativeFunction for WaitGroupNew {
     }
 
     fn run(&self, _env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        Ok(RuntimeValue::WaitGroup(Arc::new(WaitGroupInner::new())))
+        Ok(RuntimeValue::WaitGroup(Arc::new(WaitGroupInner::default())))
     }
 }
 

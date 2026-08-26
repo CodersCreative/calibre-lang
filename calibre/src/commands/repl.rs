@@ -97,7 +97,7 @@ async fn run_repl_source(
 
     if !parser.errors.is_empty() {
         calibre_diagnostics::emit_calibre_errors(path, &contents, &parser.errors);
-        return Err(format!("parse failed").into());
+        return Err(String::from("parse failed").into());
     }
 
     let (mut env, scope, middle_node) =
@@ -106,7 +106,7 @@ async fn run_repl_source(
     let mir_errors = env.context.take_errors();
     if !mir_errors.is_empty() {
         calibre_diagnostics::emit_mir_error(path, &contents, &MiddleErr::Multiple(mir_errors));
-        return Err(format!("compile failed").into());
+        return Err(String::from("compile failed").into());
     }
 
     let middle_result = (env, scope, middle_node);
@@ -132,20 +132,20 @@ async fn run_repl_source(
     for (_, global) in globals {
         if let Err(err) = vm.run_global(&global) {
             calibre_diagnostics::emit_calibre_error(path, &contents, &err, None);
-            return Err(format!("runtime error").into());
+            return Err(String::from("runtime error").into());
         }
     }
 
     let Some(repl_global) = repl_global else {
         calibre_diagnostics::emit_error(path, &contents, "Missing REPL scope".to_string(), None);
-        return Err(format!("runtime error").into());
+        return Err(String::from("runtime error").into());
     };
 
     let value = match vm.run_global(&repl_global) {
         Ok(value) => value,
         Err(err) => {
             calibre_diagnostics::emit_calibre_error(path, &contents, &err, None);
-            return Err(format!("runtime error").into());
+            return Err(String::from("runtime error").into());
         }
     };
 

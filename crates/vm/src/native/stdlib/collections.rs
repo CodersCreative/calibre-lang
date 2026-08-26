@@ -399,11 +399,7 @@ impl NativeFunction for HashSetValues {
 
         let mut out = Vec::new();
         if let Ok(guard) = set.lock() {
-            out = guard
-                .clone()
-                .into_iter()
-                .map(|key| RuntimeValue::from(key))
-                .collect();
+            out = guard.clone().into_iter().map(RuntimeValue::from).collect();
         }
 
         Ok(RuntimeValue::List(Gc::new(GcVec(out))))

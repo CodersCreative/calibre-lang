@@ -27,10 +27,12 @@ pub struct MiddleNode {
 }
 
 impl MiddleNode {
+    #[inline(always)]
     pub fn new(node_type: MiddleNodeType, span: Span) -> Self {
         Self { node_type, span }
     }
 
+    #[inline(always)]
     pub fn identifier(span: Span, text: impl ToString) -> Self {
         Self::new(MiddleNodeType::Identifier(text.to_string().into()), span)
     }
@@ -406,44 +408,46 @@ impl Display for MiddleNodeType {
     }
 }
 
-impl Into<Node> for MiddleNode {
-    fn into(self) -> Node {
+impl From<MiddleNode> for Node {
+    fn from(val: MiddleNode) -> Node {
         Node {
-            node_type: self.node_type.into(),
-            span: self.span,
+            node_type: val.node_type.into(),
+            span: val.span,
         }
     }
 }
 
-impl Into<NodeType> for MiddleNodeType {
-    fn into(self) -> NodeType {
-        match self {
-            Self::Emit { value } => NodeType::Emit(EmitType::Scope(Box::new((*value).into()))),
-            Self::Spawn { value } => NodeType::Spawn {
+impl From<MiddleNodeType> for NodeType {
+    fn from(val: MiddleNodeType) -> Self {
+        match val {
+            MiddleNodeType::Emit { value } => {
+                NodeType::Emit(EmitType::Scope(Box::new((*value).into())))
+            }
+            MiddleNodeType::Spawn { value } => NodeType::Spawn {
                 items: vec![(*value).into()],
                 auto_wait: false,
             },
-            Self::Drop(x) => NodeType::Drop(x.into()),
-            Self::Move(x) => NodeType::MoveExpression {
+            MiddleNodeType::Drop(x) => NodeType::Drop(x.into()),
+            MiddleNodeType::Move(x) => NodeType::MoveExpression {
                 value: Box::new(Node::new(x.span, NodeType::Identifier(x.into()))),
             },
-            Self::Break { label, value } => NodeType::Break {
+            MiddleNodeType::Break { label, value } => NodeType::Break {
                 label: label.map(Into::into),
                 value: value.map(|v| Box::new((*v).into())),
             },
-            Self::Continue { label } => NodeType::Continue {
+            MiddleNodeType::Continue { label } => NodeType::Continue {
                 label: label.map(Into::into),
             },
-            Self::EmptyLine => NodeType::EmptyLine,
-            Self::Null => NodeType::Null,
-            Self::RefStatement { mutability, value } => NodeType::RefStatement {
+            MiddleNodeType::EmptyLine => NodeType::EmptyLine,
+            MiddleNodeType::Null => NodeType::Null,
+            MiddleNodeType::RefStatement { mutability, value } => NodeType::RefStatement {
                 mutability,
                 value: Box::new((*value).into()),
             },
-            Self::DerefStatement { value } => NodeType::DerefStatement {
+            MiddleNodeType::DerefStatement { value } => NodeType::DerefStatement {
                 value: Box::new((*value).into()),
             },
-            Self::VariableDeclaration {
+            MiddleNodeType::VariableDeclaration {
                 var_type,
                 identifier,
                 value,
@@ -452,22 +456,18 @@ impl Into<NodeType> for MiddleNodeType {
                 var_type,
                 identifier: identifier.into(),
                 value: Box::new((*value).into()),
-                data_type: data_type.into(),
+                data_type,
             },
-            Self::EnumExpression {
+            MiddleNodeType::EnumExpression {
                 identifier,
                 value,
                 data,
             } => NodeType::EnumExpression {
                 identifier: identifier.into(),
                 value: value.into(),
-                data: if let Some(data) = data {
-                    Some(Box::new((*data).into()))
-                } else {
-                    None
-                },
+                data: data.map(|data| Box::new((*data).into())),
             },
-            Self::ScopeDeclaration {
+            MiddleNodeType::ScopeDeclaration {
                 body,
                 create_new_scope,
                 is_temp,
@@ -487,7 +487,7 @@ impl Into<NodeType> for MiddleNodeType {
                 create_new_scope: Some(create_new_scope),
                 define: false,
             },
-            Self::FunctionDeclaration {
+            MiddleNodeType::FunctionDeclaration {
                 parameters,
                 body,
                 return_type,
@@ -501,18 +501,18 @@ impl Into<NodeType> for MiddleNodeType {
                         for param in parameters {
                             lst.push((
                                 param.0.into(),
-                                Some(param.1.into()),
+                                Some(param.1),
                                 param.2.map(|x| Box::new((*x).into())),
                             ));
                         }
                         lst
                     },
-                    return_type: return_type.into(),
+                    return_type,
                     param_destructures: Vec::new(),
                 },
                 body: Box::new((*body).into()),
             },
-            Self::ExternFunction {
+            MiddleNodeType::ExternFunction {
                 abi,
                 library,
                 symbol,
@@ -526,46 +526,44 @@ impl Into<NodeType> for MiddleNodeType {
                 library,
                 symbol: None,
             },
-            Self::AssignmentExpression { identifier, value } => NodeType::AssignmentExpression {
-                identifier: Box::new((*identifier).into()),
-                value: Box::new((*value).into()),
-            },
-            Self::DebugExpression {
+            MiddleNodeType::AssignmentExpression { identifier, value } => {
+                NodeType::AssignmentExpression {
+                    identifier: Box::new((*identifier).into()),
+                    value: Box::new((*value).into()),
+                }
+            }
+            MiddleNodeType::DebugExpression {
                 pretty_printed_str: _,
                 value,
             } => NodeType::DebugExpression {
                 value: Box::new((*value).into()),
             },
-            Self::NegExpression { value } => NodeType::NotExpression {
+            MiddleNodeType::NegExpression { value } => NodeType::NotExpression {
                 value: Box::new((*value).into()),
             },
-            Self::AsExpression {
+            MiddleNodeType::AsExpression {
                 value,
                 data_type,
                 failure_mode,
             } => NodeType::AsExpression {
                 value: Box::new((*value).into()),
-                data_type: data_type.into(),
+                data_type,
                 failure_mode,
             },
-            Self::IsExpression { value, data_type } => NodeType::IsExpression {
+            MiddleNodeType::IsExpression { value, data_type } => NodeType::IsExpression {
                 value: Box::new((*value).into()),
-                data_type: data_type.into(),
+                data_type,
             },
-            Self::Conditional {
+            MiddleNodeType::Conditional {
                 comparison,
                 then,
                 otherwise,
             } => NodeType::IfStatement {
                 comparison: Box::new(IfComparisonType::If((*comparison).into())),
                 then: Box::new((*then).into()),
-                otherwise: if let Some(otherwise) = otherwise {
-                    Some(Box::new((*otherwise).into()))
-                } else {
-                    None
-                },
+                otherwise: otherwise.map(|otherwise| Box::new((*otherwise).into())),
             },
-            Self::RangeDeclaration {
+            MiddleNodeType::RangeDeclaration {
                 from,
                 to,
                 inclusive,
@@ -574,7 +572,7 @@ impl Into<NodeType> for MiddleNodeType {
                 to: Box::new((*to).into()),
                 inclusive,
             },
-            Self::LoopDeclaration {
+            MiddleNodeType::LoopDeclaration {
                 state,
                 body,
                 scope_id: _,
@@ -605,13 +603,13 @@ impl Into<NodeType> for MiddleNodeType {
                 create_new_scope: Some(false),
                 define: false,
             },
-            Self::Return { value: Some(value) } => NodeType::Return {
+            MiddleNodeType::Return { value: Some(value) } => NodeType::Return {
                 value: Some(Box::new((*value).into())),
             },
-            Self::Return { value: None } => NodeType::Return { value: None },
-            Self::Identifier(x) => NodeType::Identifier(x.into()),
-            Self::StringLiteral(x) => NodeType::StringLiteral(x),
-            Self::ListLiteral(typ, data) => NodeType::ListLiteral(typ.into(), {
+            MiddleNodeType::Return { value: None } => NodeType::Return { value: None },
+            MiddleNodeType::Identifier(x) => NodeType::Identifier(x.into()),
+            MiddleNodeType::StringLiteral(x) => NodeType::StringLiteral(x),
+            MiddleNodeType::ListLiteral(typ, data) => NodeType::ListLiteral(typ, {
                 let mut lst = Vec::new();
 
                 for node in data {
@@ -620,10 +618,10 @@ impl Into<NodeType> for MiddleNodeType {
 
                 lst
             }),
-            Self::CharLiteral(x) => NodeType::CharLiteral(x),
-            Self::FloatLiteral(x) => NodeType::FloatLiteral(x),
-            Self::BigLiteral(x) => NodeType::BigLiteral(x),
-            Self::IntLiteral(x) => {
+            MiddleNodeType::CharLiteral(x) => NodeType::CharLiteral(x),
+            MiddleNodeType::FloatLiteral(x) => NodeType::FloatLiteral(x),
+            MiddleNodeType::BigLiteral(x) => NodeType::BigLiteral(x),
+            MiddleNodeType::IntLiteral(x) => {
                 let mut out = x.value.to_string();
                 match x.int_type {
                     IntLiteralType::Int => {}
@@ -632,19 +630,19 @@ impl Into<NodeType> for MiddleNodeType {
                 }
                 NodeType::IntLiteral(ParserText::from(out))
             }
-            Self::FieldAccess { base, field } => NodeType::FieldAccess {
+            MiddleNodeType::FieldAccess { base, field } => NodeType::FieldAccess {
                 base: Box::new((*base).into()),
                 field: field.into(),
             },
-            Self::ScopeAccess { base, field } => NodeType::ScopeAccess {
+            MiddleNodeType::ScopeAccess { base, field } => NodeType::ScopeAccess {
                 base: Box::new((*base).into()),
                 field: field.into(),
             },
-            Self::IndexAccess { base, index } => NodeType::IndexAccess {
+            MiddleNodeType::IndexAccess { base, index } => NodeType::IndexAccess {
                 base: Box::new((*base).into()),
                 index: Box::new((*index).into()),
             },
-            Self::CallExpression { caller, args } => NodeType::CallExpression {
+            MiddleNodeType::CallExpression { caller, args } => NodeType::CallExpression {
                 string_fn: None,
                 generic_types: Vec::new(),
                 caller: Box::new((*caller).into()),
@@ -658,7 +656,7 @@ impl Into<NodeType> for MiddleNodeType {
                 },
                 reverse_args: Vec::new(),
             },
-            Self::BinaryExpression {
+            MiddleNodeType::BinaryExpression {
                 left,
                 right,
                 operator,
@@ -667,7 +665,7 @@ impl Into<NodeType> for MiddleNodeType {
                 right: Box::new((*right).into()),
                 operator,
             },
-            Self::ComparisonExpression {
+            MiddleNodeType::ComparisonExpression {
                 left,
                 right,
                 operator,
@@ -676,7 +674,7 @@ impl Into<NodeType> for MiddleNodeType {
                 right: Box::new((*right).into()),
                 operator,
             },
-            Self::BooleanExpression {
+            MiddleNodeType::BooleanExpression {
                 left,
                 right,
                 operator,
@@ -685,7 +683,7 @@ impl Into<NodeType> for MiddleNodeType {
                 right: Box::new((*right).into()),
                 operator,
             },
-            Self::AggregateExpression { identifier, value } => {
+            MiddleNodeType::AggregateExpression { identifier, value } => {
                 let is_tuple = if value.is_empty() {
                     true
                 } else {
@@ -726,7 +724,7 @@ impl Into<NodeType> for MiddleNodeType {
                 } else {
                     NodeType::StructLiteral {
                         identifier: identifier
-                            .unwrap_or_else(|| ParserText::from(String::from("map")).into())
+                            .unwrap_or_else(|| ParserText::new(Default::default(), "map").into())
                             .into(),
                         value: ObjectType::Map(
                             value.0.into_iter().map(|x| (x.0, x.1.into())).collect(),

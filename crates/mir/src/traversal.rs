@@ -153,7 +153,7 @@ pub trait NodeVisitor {
             } => NodeType::VariableDeclaration {
                 var_type,
                 identifier,
-                data_type: data_type,
+                data_type,
                 value: Box::new(self.visit(*value)),
             },
             NodeType::TypeDeclaration {

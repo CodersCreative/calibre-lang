@@ -93,7 +93,7 @@ async fn run_source(
     }
 
     let mut artifacts =
-        match if verbosity.is_level(&Verbosity::AST) || verbosity.is_level(&Verbosity::MIR) {
+        match if verbosity.is_level(&Verbosity::Ast) || verbosity.is_level(&Verbosity::Mir) {
             engine.compile_source(contents.clone(), false)
         } else {
             engine.compile_cached_program_source(contents.clone())
@@ -108,7 +108,7 @@ async fn run_source(
                 ast_artifacts,
                 ..
             }) => {
-                if verbosity.is_level(&Verbosity::AST)
+                if verbosity.is_level(&Verbosity::Ast)
                     && let Some(ast) = ast_artifacts
                 {
                     println!("{}", ast);
@@ -129,7 +129,7 @@ async fn run_source(
             Err(other) => return Err(other.to_string().into()),
         };
 
-    if verbosity.is_level(&Verbosity::AST) {
+    if verbosity.is_level(&Verbosity::Ast) {
         println!("Parser - elapsed {}ms:", start.elapsed().as_millis());
         if let Some(ast) = &artifacts.ast {
             println!("{}\nStarting mir...", ast);
@@ -138,7 +138,7 @@ async fn run_source(
         }
     }
 
-    if verbosity.is_level(&Verbosity::MIR) {
+    if verbosity.is_level(&Verbosity::Mir) {
         println!("Mir - elapsed {}ms:", start.elapsed().as_millis());
         if let Some(mir) = &artifacts.mir {
             println!("{}", mir);
@@ -148,7 +148,7 @@ async fn run_source(
         }
     }
 
-    if verbosity.is_level(&Verbosity::LIR) {
+    if verbosity.is_level(&Verbosity::Lir) {
         println!("Lir - elapsed {}ms:", start.elapsed().as_millis());
         if let Some(lir) = &artifacts.lir {
             println!("{}", lir);
@@ -189,11 +189,11 @@ async fn run_source(
     }
 
     for (_, func_name) in artifacts.fin_functions {
-        if let Some(fin_func) = vm.registry.functions.get(&func_name).cloned() {
-            if let Err(err) = vm.run(fin_func.as_ref(), Vec::new()) {
-                calibre_diagnostics::emit_calibre_error(path, &contents, &err, None);
-                return Err("runtime error".into());
-            }
+        if let Some(fin_func) = vm.registry.functions.get(&func_name).cloned()
+            && let Err(err) = vm.run(fin_func.as_ref(), Vec::new())
+        {
+            calibre_diagnostics::emit_calibre_error(path, &contents, &err, None);
+            return Err("runtime error".into());
         }
     }
 

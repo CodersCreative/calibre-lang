@@ -212,23 +212,21 @@ impl MiddleEnvironment {
         if let (Some(left_ty), Some(right_ty)) = (
             self.resolve_type_from_node(scope, left),
             self.resolve_type_from_node(scope, right),
-        ) {
-            if let Some(overload) = self
-                .symbols
-                .overloads
-                .iter()
-                .filter(|x| x.parameters.len() == 2 && &x.operator == operator)
-                .find(|x| {
-                    x.parameters[0]
+        ) && let Some(overload) = self
+            .symbols
+            .overloads
+            .iter()
+            .filter(|x| x.parameters.len() == 2 && &x.operator == operator)
+            .find(|x| {
+                x.parameters[0]
+                    .data_type
+                    .matches(&left_ty.data_type, &x.generic_params)
+                    && x.parameters[1]
                         .data_type
-                        .matches(&left_ty.data_type, &x.generic_params)
-                        && x.parameters[1]
-                            .data_type
-                            .matches(&right_ty.data_type, &x.generic_params)
-                })
-            {
-                return Some(overload);
-            }
+                        .matches(&right_ty.data_type, &x.generic_params)
+            })
+        {
+            return Some(overload);
         }
 
         None

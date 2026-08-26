@@ -425,7 +425,6 @@ impl<'a> LirEnvironment<'a> {
                                 .map(|v| v.data_type.clone())
                                 .unwrap_or_else(|| {
                                     ParserDataType::new(Span::default(), ParserInnerType::Dynamic)
-                                        .into()
                                 }),
                         )
                     })
@@ -463,14 +462,12 @@ impl<'a> LirEnvironment<'a> {
                         }
                     };
 
-                if !has_body_value {
-                    if let Some(expr) = fallback_expr {
-                        if expr.node_type.is_simple_function_fallback() {
-                            body_val = sub_lowerer.lower_node(expr);
-                            has_body_value = true;
-                        } else if is_temp_body {
-                            sub_lowerer.lower_and_add_node(expr);
-                        }
+                if !has_body_value && let Some(expr) = fallback_expr {
+                    if expr.node_type.is_simple_function_fallback() {
+                        body_val = sub_lowerer.lower_node(expr);
+                        has_body_value = true;
+                    } else if is_temp_body {
+                        sub_lowerer.lower_and_add_node(expr);
                     }
                 }
 
@@ -727,12 +724,8 @@ impl<'a> LirEnvironment<'a> {
                     let _ = self.lower_node(then_return);
 
                     self.switch_to(else_id);
-                    let else_return = MiddleNode::new(
-                        MiddleNodeType::Return {
-                            value: otherwise.map(|o| o),
-                        },
-                        span,
-                    );
+                    let else_return =
+                        MiddleNode::new(MiddleNodeType::Return { value: otherwise }, span);
                     let _ = self.lower_node(else_return);
 
                     self.switch_to(merge_id);

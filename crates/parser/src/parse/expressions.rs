@@ -185,7 +185,7 @@ pub fn build_tail_expression_parser<'a>(
 
     #[derive(Clone)]
     enum PostfixSuffix {
-        Member(Node, bool),
+        Member(Box<Node>, bool),
         Ref(RefMutability),
         Deref,
     }
@@ -204,12 +204,12 @@ pub fn build_tail_expression_parser<'a>(
                 let node = calls.into_iter().fold(m, |c, args| {
                     Node::call_full(c.span, c, Vec::new(), args, Vec::new(), None)
                 });
-                PostfixSuffix::Member(node, false)
+                PostfixSuffix::Member(Box::new(node), false)
             }),
         lex(pad.clone(), just('['))
             .ignore_then(expr.clone())
             .then_ignore(lex(pad.clone(), just(']')))
-            .map(|e| PostfixSuffix::Member(e, true)),
+            .map(|e| PostfixSuffix::Member(Box::new(e), true)),
     ))
     .boxed();
 
@@ -244,7 +244,7 @@ pub fn build_tail_expression_parser<'a>(
                             Span::new_from_spans(current.span, node.span),
                             NodeType::IndexAccess {
                                 base: Box::new(current),
-                                index: Box::new(node),
+                                index: node,
                             },
                         );
                     } else if let NodeType::Identifier(ident) = node.node_type {
@@ -290,7 +290,7 @@ pub fn build_tail_expression_parser<'a>(
                             },
                         );
                     } else {
-                        current = node;
+                        current = *node;
                     }
                 }
                 PostfixSuffix::Ref(mutability) => {

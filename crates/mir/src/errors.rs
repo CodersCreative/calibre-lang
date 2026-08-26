@@ -49,20 +49,20 @@ pub enum MiddleErr {
     ReturnOutOfFunction,
     #[error("Attempted to assign value of type : {found} to a variable of type : {expected}")]
     InvalidVarDeclarationType {
-        expected: ParserDataType,
-        found: ParserDataType,
+        expected: Box<ParserDataType>,
+        found: Box<ParserDataType>,
     },
     #[error(
         "Attempted to return a value of type : {found} from a function with return type : {expected}"
     )]
     InvalidReturnType {
-        expected: ParserDataType,
-        found: ParserDataType,
+        expected: Box<ParserDataType>,
+        found: Box<ParserDataType>,
     },
     #[error("Internal error: {0}")]
     Internal(String),
     #[error("Cannot perform enum style pattern matching on type : {0}")]
-    CantMatch(ParserDataType),
+    CantMatch(Box<ParserDataType>),
     #[error("Parser error in {path:?}")]
     ParserErrors {
         path: PathBuf,

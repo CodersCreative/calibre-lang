@@ -71,11 +71,11 @@ impl PotentialGenericTypeIdentifier {
     }
 }
 
-impl Into<PotentialDollarIdentifier> for PotentialGenericTypeIdentifier {
-    fn into(self) -> PotentialDollarIdentifier {
-        match self {
-            Self::Identifier(x) => x,
-            Self::Generic {
+impl From<PotentialGenericTypeIdentifier> for PotentialDollarIdentifier {
+    fn from(val: PotentialGenericTypeIdentifier) -> PotentialDollarIdentifier {
+        match val {
+            PotentialGenericTypeIdentifier::Identifier(x) => x,
+            PotentialGenericTypeIdentifier::Generic {
                 identifier,
                 generic_types: _,
             } => identifier,
@@ -83,11 +83,11 @@ impl Into<PotentialDollarIdentifier> for PotentialGenericTypeIdentifier {
     }
 }
 
-impl Into<Node> for PotentialGenericTypeIdentifier {
-    fn into(self) -> Node {
+impl From<PotentialGenericTypeIdentifier> for Node {
+    fn from(val: PotentialGenericTypeIdentifier) -> Node {
         Node {
-            span: *self.span(),
-            node_type: NodeType::Identifier(self),
+            span: *val.span(),
+            node_type: NodeType::Identifier(val),
         }
     }
 }
@@ -136,17 +136,17 @@ impl PotentialDollarIdentifier {
     }
 }
 
-impl Into<PotentialGenericTypeIdentifier> for PotentialDollarIdentifier {
-    fn into(self) -> PotentialGenericTypeIdentifier {
-        PotentialGenericTypeIdentifier::Identifier(self)
+impl From<PotentialDollarIdentifier> for PotentialGenericTypeIdentifier {
+    fn from(val: PotentialDollarIdentifier) -> PotentialGenericTypeIdentifier {
+        PotentialGenericTypeIdentifier::Identifier(val)
     }
 }
 
-impl Into<Node> for PotentialDollarIdentifier {
-    fn into(self) -> Node {
+impl From<PotentialDollarIdentifier> for Node {
+    fn from(val: PotentialDollarIdentifier) -> Node {
         Node {
-            span: *self.span(),
-            node_type: NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(self)),
+            span: *val.span(),
+            node_type: NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(val)),
         }
     }
 }
@@ -290,7 +290,6 @@ impl ParserText {
         Some(ident.split_once(']')?.1.to_string())
     }
 
-    #[deprecated(note = "Needs to be phased out in favour of proper identifier resolving")]
     pub fn temp_name_suffix_matches(left: &impl ToString, right: &impl ToString) -> bool {
         let (left, right) = (left.to_string(), right.to_string());
         if left == right {

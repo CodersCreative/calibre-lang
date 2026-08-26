@@ -14,7 +14,7 @@ impl MiddleEnvironment {
     #[instrument(skip_all, fields(scope = scope, list = ?list))]
     pub fn get_scope_list(&self, scope: u64, mut list: Vec<String>) -> Result<u64, MiddleErr> {
         debug!("getting scope list");
-        if list.len() <= 0 {
+        if list.is_empty() {
             debug!("empty scope list, returning current scope");
             return Ok(scope);
         }
@@ -242,23 +242,23 @@ impl MiddleEnvironment {
                         .err_at_current(MiddleErr::Scope(scope.to_string()))
                 })?;
                 if let Some(x) = current.children.get(key) {
-                    x.clone()
+                    *x
                 } else if let Some(mapped) = current.mappings.get(key)
                     && let Some(x) = current.children.get(mapped)
                 {
-                    x.clone()
+                    *x
                 } else if let Some(s) = self.scoping.get_global_scope().children.get(key) {
-                    s.clone()
+                    *s
                 } else if let Some(mapped) = self.scoping.get_global_scope().mappings.get(key)
                     && let Some(s) = self.scoping.get_global_scope().children.get(mapped)
                 {
-                    s.clone()
+                    *s
                 } else if let Some(s) = self.scoping.get_root_scope().children.get(key) {
-                    s.clone()
+                    *s
                 } else if let Some(mapped) = self.scoping.get_root_scope().mappings.get(key)
                     && let Some(s) = self.scoping.get_root_scope().children.get(mapped)
                 {
-                    s.clone()
+                    *s
                 } else {
                     return Err(self
                         .context

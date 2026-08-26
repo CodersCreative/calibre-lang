@@ -326,18 +326,16 @@ pub fn parse_program_with_source(
                                             index: Box::new(node),
                                         },
                                     )
+                                } else if let NodeType::Identifier(ident) = node.node_type {
+                                    Node::new(
+                                        Span::new_from_spans(current.span, node.span),
+                                        NodeType::FieldAccess {
+                                            base: Box::new(current),
+                                            field: ident.into(),
+                                        },
+                                    )
                                 } else {
-                                    if let NodeType::Identifier(ident) = node.node_type {
-                                        Node::new(
-                                            Span::new_from_spans(current.span, node.span),
-                                            NodeType::FieldAccess {
-                                                base: Box::new(current),
-                                                field: ident.into(),
-                                            },
-                                        )
-                                    } else {
-                                        current
-                                    }
+                                    current
                                 }
                             })
                         }
