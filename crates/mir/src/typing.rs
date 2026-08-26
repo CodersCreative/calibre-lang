@@ -49,6 +49,7 @@ impl Typing {
             }
             ParserInnerType::Ptr(x) => vec![&**x],
             ParserInnerType::List(x) => vec![&**x],
+            ParserInnerType::Gen(x) => vec![&**x],
             _ => Vec::new(),
         }
         .into_iter()

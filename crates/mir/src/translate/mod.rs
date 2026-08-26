@@ -1269,7 +1269,7 @@ impl MiddleEnvironment {
                 failure_mode,
             } => {
                 let target =
-                    self.resolve_data_type(scope, &data_type, ResolutionOptions::default())?;
+                    self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?;
                 if self
                     .handle_as_overload_exists(scope, *value.clone(), target.clone())
                     .unwrap_or_default()
@@ -1333,7 +1333,7 @@ impl MiddleEnvironment {
                     data_type: self.resolve_data_type(
                         scope,
                         &data_type,
-                        ResolutionOptions::default(),
+                        ResolutionOptions::typing(),
                     )?,
                 },
                 span: node.span,
@@ -1470,7 +1470,7 @@ impl MiddleEnvironment {
                         return Err(self.context.err_at_current(MiddleErr::InferImpossible));
                     }
                 } else {
-                    self.resolve_data_type(scope, &data_type, ResolutionOptions::default())?
+                    self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?
                 };
 
                 let lst = x
@@ -1505,7 +1505,7 @@ impl MiddleEnvironment {
                     self.resolve_type_from_node(scope, &value)
                         .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?
                 } else {
-                    self.resolve_data_type(scope, &data_type, ResolutionOptions::default())?
+                    self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?
                 };
 
                 let item = self.evaluate(scope, *value);
@@ -1781,7 +1781,7 @@ impl MiddleEnvironment {
                 variables,
             } => {
                 let resolved = self
-                    .resolve_data_type(scope, &target, ResolutionOptions::default())?
+                    .resolve_data_type(scope, &target, ResolutionOptions::typing())?
                     .unwrap_all_refs();
                 let self_name = resolved.impl_name();
 
@@ -1924,7 +1924,7 @@ impl MiddleEnvironment {
                                         self.resolve_data_type(
                                             scope,
                                             param,
-                                            ResolutionOptions::default(),
+                                            ResolutionOptions::typing(),
                                         )
                                         .ok()
                                         .map(|x| x.unwrap_all_refs())
@@ -2076,7 +2076,7 @@ impl MiddleEnvironment {
                 let resolved_trait = self.resolve(scope, &trait_ident, ResolutionOptions::all())?;
 
                 let resolved_target = self
-                    .resolve_data_type(scope, &target, ResolutionOptions::default())?
+                    .resolve_data_type(scope, &target, ResolutionOptions::typing())?
                     .unwrap_all_refs();
                 let self_name = resolved_target.impl_name();
 

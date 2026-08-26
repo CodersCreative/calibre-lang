@@ -184,6 +184,7 @@ impl MiddleEnvironment {
             .resolve_data_type(scope, base, ResolutionOptions::typing())
             .ok()?
             .unwrap_all_refs();
+
         let out = match &resolved.data_type {
             ParserInnerType::Struct(struct_name) => self
                 .typing
@@ -238,8 +239,11 @@ impl MiddleEnvironment {
             _ => None,
         };
 
-        if out.is_some() {
-            return out;
+        if let Some(out) = out {
+            return Some(
+                self.resolve_data_type(scope, &out, ResolutionOptions::typing())
+                    .unwrap_or(out),
+            );
         }
 
         if let Some(imp) = self.typing.find_impl_for_type(&resolved)
