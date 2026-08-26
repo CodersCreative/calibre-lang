@@ -204,7 +204,7 @@ impl NativeFunction for AssertFn {
                 let msg = args.first().map(panic_message_arg);
                 Err(RuntimeError::Panic(msg))
             }
-            other => Err(RuntimeError::UnexpectedType(other.clone())),
+            other => Err(RuntimeError::UnexpectedType(Box::new(other.clone()))),
         }
     }
 }
@@ -231,7 +231,7 @@ impl NativeFunction for Len {
                 RuntimeValue::Int(x) => x as u64,
                 RuntimeValue::UInt(x) => x,
                 RuntimeValue::Float(x) => x as u64,
-                other => return Err(RuntimeError::UnexpectedType(other)),
+                other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
             },
         ))
     }
@@ -270,7 +270,7 @@ impl NativeFunction for Trim {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
                 s.lock().unwrap().trim().to_string(),
             )))),
-            other => Err(RuntimeError::UnexpectedType(other)),
+            other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
 }
@@ -289,7 +289,7 @@ impl NativeFunction for TrimStart {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
                 s.lock().unwrap().trim_start().to_string(),
             )))),
-            other => Err(RuntimeError::UnexpectedType(other)),
+            other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
 }
@@ -308,7 +308,7 @@ impl NativeFunction for TrimEnd {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
                 s.lock().unwrap().trim_end().to_string(),
             )))),
-            other => Err(RuntimeError::UnexpectedType(other)),
+            other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
 }
@@ -327,7 +327,7 @@ impl NativeFunction for IsWhitespace {
                 s.lock().unwrap().chars().all(|c| c.is_whitespace()),
             )),
             RuntimeValue::Char(c) => Ok(RuntimeValue::Bool(c.is_whitespace())),
-            other => Err(RuntimeError::UnexpectedType(other)),
+            other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
 }

@@ -376,7 +376,7 @@ impl VM {
                     callsite_tag.saturating_sub(1),
                 )
             }
-            other => Err(RuntimeError::InvalidFunctionCallValue(other)),
+            other => Err(RuntimeError::InvalidFunctionCallValue(Box::new(other))),
         }
     }
 

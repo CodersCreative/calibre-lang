@@ -41,7 +41,7 @@ impl NativeFunction for ChannelSend {
             match (first, second) {
                 (RuntimeValue::Channel(ch), value) => (ch, value),
                 (value, RuntimeValue::Channel(ch)) => (ch, value),
-                (left, _) => return Err(RuntimeError::UnexpectedType(left)),
+                (left, _) => return Err(RuntimeError::UnexpectedType(Box::new(left))),
             }
         };
 
@@ -77,7 +77,7 @@ impl NativeFunction for ChannelTrySend {
             match (first, second) {
                 (RuntimeValue::Channel(ch), value) => (ch, value),
                 (value, RuntimeValue::Channel(ch)) => (ch, value),
-                (left, _) => return Err(RuntimeError::UnexpectedType(left)),
+                (left, _) => return Err(RuntimeError::UnexpectedType(Box::new(left))),
             }
         };
 
@@ -111,7 +111,7 @@ impl NativeFunction for ChannelGet {
         let mut guard = ch
             .queue
             .lock()
-            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+            .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
 
         loop {
             if let Some(value) = guard.pop_front() {
@@ -125,7 +125,7 @@ impl NativeFunction for ChannelGet {
             guard = ch
                 .cvar
                 .wait(guard)
-                .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
         }
     }
 }
@@ -145,7 +145,7 @@ impl NativeFunction for ChannelTryGet {
         let mut guard = ch
             .queue
             .lock()
-            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+            .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
 
         if let Some(value) = guard.pop_front() {
             return Ok(RuntimeValue::Option(Some(dumpster::sync::Gc::new(value))));
@@ -265,7 +265,7 @@ impl NativeFunction for WaitGroupJoin {
         let mut joined = outer
             .joined
             .lock()
-            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+            .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
 
         if joined.iter().all(|existing| !Arc::ptr_eq(existing, &inner)) {
             joined.push(inner);

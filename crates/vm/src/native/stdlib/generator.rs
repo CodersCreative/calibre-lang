@@ -32,7 +32,7 @@ impl NativeFunction for GeneratorResumeFn {
         let mut state = self
             .state
             .lock()
-            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+            .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
 
         if state.completed {
             return Ok(RuntimeValue::Option(None));

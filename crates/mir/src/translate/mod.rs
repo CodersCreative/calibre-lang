@@ -1603,9 +1603,7 @@ impl MiddleEnvironment {
                 until,
                 label,
                 else_body,
-            } => self.evaluate_loop_statement(
-                scope, node.span, *loop_type, *body, until, label, else_body,
-            ),
+            } => self.evaluate_loop_statement(scope, *loop_type, *body, until, label, else_body),
             NodeType::TestDeclaration { identifier, body } => {
                 let func_identifier = format!(
                     "test::{}",
@@ -2461,7 +2459,6 @@ impl MiddleEnvironment {
                 define,
             } => self.evaluate_scope_declaration(
                 scope,
-                node.span,
                 body,
                 named,
                 create_new_scope,
@@ -2599,7 +2596,6 @@ impl MiddleEnvironment {
                 symbol,
             } => self.evaluate_extern_function(
                 scope,
-                node.span,
                 abi,
                 identifier,
                 parameters,

@@ -45,7 +45,7 @@ impl Display for PotentialGenericTypeIdentifier {
                     txt.push_str(&format!(", {}", typ));
                 }
 
-                txt.push_str(">");
+                txt.push('>');
 
                 write!(f, "{}", txt)
             }
@@ -55,7 +55,7 @@ impl Display for PotentialGenericTypeIdentifier {
 
 impl PotentialGenericTypeIdentifier {
     pub fn new(span: Span, text: impl ToString) -> Self {
-        return Self::Identifier(ParserText::new(span, text).into());
+        Self::Identifier(PotentialDollarIdentifier::new(span, text))
     }
 }
 

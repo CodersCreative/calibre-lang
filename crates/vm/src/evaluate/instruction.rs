@@ -53,7 +53,7 @@ impl VM {
 
         match value {
             RuntimeValue::Bool(v) => Ok(v),
-            other => Err(RuntimeError::UnexpectedType(other)),
+            other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
 
@@ -406,7 +406,7 @@ impl VM {
                 let value = func.call(self, self.collect_call_args_vec(args))?;
                 self.set_reg_value(dst, value);
             }
-            other => return Err(RuntimeError::InvalidFunctionCallValue(other)),
+            other => return Err(RuntimeError::InvalidFunctionCallValue(Box::new(other))),
         }
 
         let frame_idx = self.frames.len().saturating_sub(1);
@@ -746,7 +746,7 @@ impl VM {
                         RuntimeValue::Aggregate(_, v) => Ok(v.as_ref().0.0.len() as i64),
                         RuntimeValue::Str(v) => Ok(v.lock().unwrap().len() as i64),
                         RuntimeValue::Range(from, to) => Ok((to - from).max(0)),
-                        other => Err(RuntimeError::UnexpectedType(other)),
+                        other => Err(RuntimeError::UnexpectedType(Box::new(other))),
                     }
                 };
                 let from = as_range_bound(from)?;
@@ -927,7 +927,7 @@ impl VM {
                         Ok(vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, value))
                     } else {
                         Err(RuntimeError::MissingMember {
-                            target: value,
+                            target: Box::new(value),
                             member: name.to_string(),
                         })
                     }
@@ -953,15 +953,15 @@ impl VM {
                             }))
                         }
                         "index" => {
-                            let guard = state
-                                .lock()
-                                .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                            let guard = state.lock().map_err(|_| {
+                                RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
+                            })?;
                             RuntimeValue::Int(guard.index)
                         }
                         "done" => {
-                            let guard = state
-                                .lock()
-                                .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                            let guard = state.lock().map_err(|_| {
+                                RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
+                            })?;
                             RuntimeValue::Bool(guard.completed)
                         }
                         _ => match self.resolve_associated_member_value(
@@ -972,7 +972,7 @@ impl VM {
                             Some(value) => value,
                             None => {
                                 return Err(RuntimeError::MissingMember {
-                                    target: RuntimeValue::Generator { type_name, state },
+                                    target: Box::new(RuntimeValue::Generator { type_name, state }),
                                     member: name.to_string(),
                                 });
                             }
@@ -1018,24 +1018,24 @@ impl VM {
                             x.0
                         } else {
                             return Err(RuntimeError::MissingMember {
-                                target: RuntimeValue::DynObject {
+                                target: Box::new(RuntimeValue::DynObject {
                                     type_name,
                                     constraints,
                                     value,
                                     vtable,
-                                },
+                                }),
                                 member: name.to_string(),
                             });
                         }
                     }
                     RuntimeValue::Aggregate(None, map) => {
-                        let idx =
-                            tuple_index.ok_or(RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                        let idx = tuple_index
+                            .ok_or(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
                         if let Some((_, value)) = map.as_ref().0.0.get(idx) {
                             value.clone()
                         } else {
                             return Err(RuntimeError::MissingMember {
-                                target: RuntimeValue::Aggregate(None, map),
+                                target: Box::new(RuntimeValue::Aggregate(None, map)),
                                 member: name.to_string(),
                             });
                         }
@@ -1075,7 +1075,10 @@ impl VM {
                                     wrapped.clone()
                                 else {
                                     return Err(RuntimeError::MissingMember {
-                                        target: RuntimeValue::Aggregate(Some(type_name), map),
+                                        target: Box::new(RuntimeValue::Aggregate(
+                                            Some(type_name),
+                                            map,
+                                        )),
                                         member: name.to_string(),
                                     });
                                 };
@@ -1086,7 +1089,10 @@ impl VM {
                                     inner_map.0.0[idx].1.clone()
                                 } else {
                                     return Err(RuntimeError::MissingMember {
-                                        target: RuntimeValue::Aggregate(Some(type_name), map),
+                                        target: Box::new(RuntimeValue::Aggregate(
+                                            Some(type_name),
+                                            map,
+                                        )),
                                         member: name.to_string(),
                                     });
                                 }
@@ -1111,7 +1117,10 @@ impl VM {
                                 }
                                 None => {
                                     return Err(RuntimeError::MissingMember {
-                                        target: RuntimeValue::Aggregate(Some(type_name), map),
+                                        target: Box::new(RuntimeValue::Aggregate(
+                                            Some(type_name),
+                                            map,
+                                        )),
                                         member: name.to_string(),
                                     });
                                 }
@@ -1171,14 +1180,16 @@ impl VM {
                                         )
                                     } else {
                                         return Err(RuntimeError::MissingMember {
-                                            target: RuntimeValue::Option(Some(inner)),
+                                            target: Box::new(RuntimeValue::Option(Some(inner))),
                                             member: name.to_string(),
                                         });
                                     }
                                 }
                                 other => {
                                     return Err(RuntimeError::MissingMember {
-                                        target: RuntimeValue::Option(Some(Gc::new(other))),
+                                        target: Box::new(RuntimeValue::Option(Some(Gc::new(
+                                            other,
+                                        )))),
                                         member: name.to_string(),
                                     });
                                 }
@@ -1200,7 +1211,7 @@ impl VM {
                             )
                         } else {
                             return Err(RuntimeError::MissingMember {
-                                target: option,
+                                target: Box::new(option),
                                 member: name.to_string(),
                             });
                         }
@@ -1223,7 +1234,7 @@ impl VM {
                             )
                         } else {
                             return Err(RuntimeError::MissingMember {
-                                target: result,
+                                target: Box::new(result),
                                 member: name.to_string(),
                             });
                         }
@@ -1259,7 +1270,7 @@ impl VM {
                     }
                     RuntimeValue::Null => {
                         return Err(RuntimeError::MissingMember {
-                            target: RuntimeValue::Null,
+                            target: Box::new(RuntimeValue::Null),
                             member: name.to_string(),
                         });
                     }
@@ -1267,7 +1278,7 @@ impl VM {
                         if let Some(type_name) = self.concrete_runtime_type_name(&other) {
                             bind_assoc(self, type_name.as_str(), other)?
                         } else {
-                            return Err(RuntimeError::UnexpectedType(other));
+                            return Err(RuntimeError::UnexpectedType(Box::new(other)));
                         }
                     }
                 };
@@ -1322,39 +1333,47 @@ impl VM {
                                     return Err(RuntimeError::StackUnderflow);
                                 }
                             }
-                            _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                            _ => {
+                                return Err(RuntimeError::UnexpectedType(Box::new(
+                                    RuntimeValue::Null,
+                                )));
+                            }
                         }
                         Ok(map)
                     };
                 let update_generator =
                     |generator_value: RuntimeValue| -> Result<RuntimeValue, RuntimeError> {
                         let RuntimeValue::Generator { type_name, state } = generator_value else {
-                            return Err(RuntimeError::UnexpectedType(generator_value));
+                            return Err(RuntimeError::UnexpectedType(Box::new(generator_value)));
                         };
 
                         let member_key = short_name.unwrap_or(name);
                         if !matches!(member_key, "done" | "index") {
                             return Err(RuntimeError::MissingMember {
-                                target: RuntimeValue::Generator { type_name, state },
+                                target: Box::new(RuntimeValue::Generator { type_name, state }),
                                 member: name.to_string(),
                             });
                         }
 
-                        let mut guard = state
-                            .lock()
-                            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                        let mut guard = state.lock().map_err(|_| {
+                            RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
+                        })?;
                         match member_key {
                             "index" => match &value {
                                 RuntimeValue::Int(x) => guard.index = (*x).max(0),
                                 RuntimeValue::UInt(x) => guard.index = *x as i64,
                                 other => {
-                                    return Err(RuntimeError::UnexpectedType((*other).clone()));
+                                    return Err(RuntimeError::UnexpectedType(Box::new(
+                                        (*other).clone(),
+                                    )));
                                 }
                             },
                             "done" => match &value {
                                 RuntimeValue::Bool(x) => guard.completed = *x,
                                 other => {
-                                    return Err(RuntimeError::UnexpectedType((*other).clone()));
+                                    return Err(RuntimeError::UnexpectedType(Box::new(
+                                        (*other).clone(),
+                                    )));
                                 }
                             },
                             _ => {}
@@ -1394,7 +1413,7 @@ impl VM {
                                 RuntimeValue::Generator { .. } => {
                                     self.variables.insert(&ref_name, update_generator(current)?);
                                 }
-                                other => return Err(RuntimeError::UnexpectedType(other)),
+                                other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
                             }
                             handled = true;
                             break;
@@ -1425,7 +1444,7 @@ impl VM {
                                     let _ =
                                         self.variables.set_by_id(id, update_generator(current)?);
                                 }
-                                other => return Err(RuntimeError::UnexpectedType(other)),
+                                other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
                             }
                             handled = true;
                             break;
@@ -1480,7 +1499,7 @@ impl VM {
                                         update_generator(current)?,
                                     );
                                 }
-                                other => return Err(RuntimeError::UnexpectedType(other)),
+                                other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
                             }
                             handled = true;
                             break;
@@ -1521,7 +1540,7 @@ impl VM {
                             handled = true;
                             break;
                         }
-                        other => return Err(RuntimeError::UnexpectedType(other)),
+                        other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
                     }
                 }
 
@@ -1577,7 +1596,7 @@ impl VM {
                             let slice = list.as_ref().0[s..e].to_vec();
                             Ok(RuntimeValue::List(Gc::new(GcVec(slice))))
                         }
-                        _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                        _ => Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))),
                     }
                 };
 
@@ -1588,7 +1607,7 @@ impl VM {
                     let key = crate::value::HashKey::try_from(index_val.clone())?;
                     let guard = map
                         .lock()
-                        .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                        .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
                     Ok(guard.get(&key).cloned().unwrap_or(RuntimeValue::Null))
                 };
 
@@ -1616,7 +1635,9 @@ impl VM {
                             let (s, e) = Self::resolve_slice_range(len, *slice_start, *slice_end);
                             RuntimeValue::Range(start + s as i64, start + e as i64)
                         }
-                        _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                        _ => {
+                            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+                        }
                     },
                     RuntimeValue::Aggregate(None, tuple) => match &index_val {
                         RuntimeValue::Int(index) => {
@@ -1640,7 +1661,9 @@ impl VM {
                                 Gc::new(crate::value::GcMap(ObjectMap(slice))),
                             )
                         }
-                        _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                        _ => {
+                            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+                        }
                     },
                     RuntimeValue::Aggregate(Some(_), tuple) => match &index_val {
                         RuntimeValue::Int(0) | RuntimeValue::UInt(0)
@@ -1668,7 +1691,9 @@ impl VM {
                             .get(*index as usize)
                             .map(|(_, v)| v.clone())
                             .unwrap_or_else(|| RuntimeValue::Null),
-                        _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                        _ => {
+                            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+                        }
                     },
                     RuntimeValue::Str(s) => match &index_val {
                         RuntimeValue::Int(index) => {
@@ -1696,13 +1721,15 @@ impl VM {
                             let slice: String = v[s..e].iter().collect();
                             RuntimeValue::Str(Arc::new(Mutex::new(slice)))
                         }
-                        _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                        _ => {
+                            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+                        }
                     },
                     RuntimeValue::Enum(_, _, Some(x)) => x.as_ref().clone(),
                     RuntimeValue::Option(Some(x)) => x.as_ref().clone(),
                     RuntimeValue::Result(Ok(x)) => x.as_ref().clone(),
                     RuntimeValue::Result(Err(x)) => x.as_ref().clone(),
-                    other => return Err(RuntimeError::UnexpectedType(other)),
+                    other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
                 };
 
                 self.set_reg_value(*dst, val);
@@ -1725,7 +1752,7 @@ impl VM {
                 let numeric_index = || match index_val.clone() {
                     RuntimeValue::Int(index) => Ok(index),
                     RuntimeValue::UInt(index) => Ok(index as i64),
-                    _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                    _ => Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))),
                 };
 
                 let hash_index = || crate::value::HashKey::try_from(index_val.clone());
@@ -1751,9 +1778,9 @@ impl VM {
                                 RuntimeValue::List(mut list) => {
                                     let index = numeric_index()?;
                                     if index < 0 {
-                                        return Err(RuntimeError::UnexpectedType(
+                                        return Err(RuntimeError::UnexpectedType(Box::new(
                                             RuntimeValue::Null,
-                                        ));
+                                        )));
                                     }
 
                                     let vec = &mut Gc::make_mut(&mut list).0;
@@ -1770,12 +1797,16 @@ impl VM {
                                     let key = hash_index()?;
 
                                     let mut guard = map.lock().map_err(|_| {
-                                        RuntimeError::UnexpectedType(RuntimeValue::Null)
+                                        RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
                                     })?;
 
                                     guard.insert(key, value);
                                 }
-                                _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                                _ => {
+                                    return Err(RuntimeError::UnexpectedType(Box::new(
+                                        RuntimeValue::Null,
+                                    )));
+                                }
                             }
                             handled = true;
                             break;
@@ -1796,9 +1827,9 @@ impl VM {
                                 RuntimeValue::List(mut list) => {
                                     let index = numeric_index()?;
                                     if index < 0 {
-                                        return Err(RuntimeError::UnexpectedType(
+                                        return Err(RuntimeError::UnexpectedType(Box::new(
                                             RuntimeValue::Null,
-                                        ));
+                                        )));
                                     }
 
                                     let vec = &mut Gc::make_mut(&mut list).0;
@@ -1815,12 +1846,16 @@ impl VM {
                                     let key = hash_index()?;
 
                                     let mut guard = map.lock().map_err(|_| {
-                                        RuntimeError::UnexpectedType(RuntimeValue::Null)
+                                        RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
                                     })?;
 
                                     guard.insert(key, value);
                                 }
-                                _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                                _ => {
+                                    return Err(RuntimeError::UnexpectedType(Box::new(
+                                        RuntimeValue::Null,
+                                    )));
+                                }
                             }
                             handled = true;
                             break;
@@ -1838,9 +1873,9 @@ impl VM {
                                     let index = numeric_index()?;
 
                                     if index < 0 {
-                                        return Err(RuntimeError::UnexpectedType(
+                                        return Err(RuntimeError::UnexpectedType(Box::new(
                                             RuntimeValue::Null,
-                                        ));
+                                        )));
                                     }
 
                                     let vec = &mut Gc::make_mut(&mut list).0;
@@ -1870,12 +1905,16 @@ impl VM {
                                 RuntimeValue::HashMap(map) => {
                                     let key = hash_index()?;
                                     let guard = map.lock().map_err(|_| {
-                                        RuntimeError::UnexpectedType(RuntimeValue::Null)
+                                        RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
                                     })?;
                                     let mut guard = guard;
                                     guard.insert(key, value);
                                 }
-                                _ => return Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+                                _ => {
+                                    return Err(RuntimeError::UnexpectedType(Box::new(
+                                        RuntimeValue::Null,
+                                    )));
+                                }
                             }
                             handled = true;
                             break;
@@ -1884,7 +1923,9 @@ impl VM {
                             let index = numeric_index()?;
 
                             if index < 0 {
-                                return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+                                return Err(RuntimeError::UnexpectedType(Box::new(
+                                    RuntimeValue::Null,
+                                )));
                             }
 
                             let vec = &mut Gc::make_mut(&mut list).0;
@@ -1912,15 +1953,15 @@ impl VM {
                         RuntimeValue::HashMap(map) => {
                             let key = hash_index()?;
 
-                            let mut guard = map
-                                .lock()
-                                .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                            let mut guard = map.lock().map_err(|_| {
+                                RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
+                            })?;
 
                             guard.insert(key, value);
                             handled = true;
                             break;
                         }
-                        other => return Err(RuntimeError::UnexpectedType(other)),
+                        other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
                     }
                 }
                 if !handled {

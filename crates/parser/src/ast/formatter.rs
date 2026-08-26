@@ -327,7 +327,7 @@ impl Formatter {
         for node in nodes {
             let leading = self.get_potential_comment(&node.span);
             let trailing = self.get_trailing_comment(&node.span);
-            let formatted = handle_comment!(leading, self.format(&node));
+            let formatted = handle_comment!(leading, self.format(node));
             let formatted = formatted.trim_end().trim_end_matches(';').to_string();
             let formatted = if let Some(trailing) = trailing {
                 format!("{}; {}", formatted, trailing)
@@ -390,10 +390,10 @@ impl Formatter {
 
                 let mut txt = format!("{prefix} {{");
                 if items.is_empty() {
-                    txt.push_str("}");
+                    txt.push('}');
                     return txt;
                 }
-                txt.push_str("\n");
+                txt.push('\n');
 
                 for item in items {
                     let temp =
@@ -511,11 +511,11 @@ impl Formatter {
                 };
 
                 if let Some(alias) = alias {
-                    txt.push_str(&get_module(&module));
+                    txt.push_str(&get_module(module));
                     txt.push_str(&format!(" as {}", alias));
                 } else {
                     if values.len() == 1 && &values[0].to_string() == "*" {
-                        txt.push_str("*");
+                        txt.push('*');
                     } else if values.len() == 1 {
                         txt.push_str(&values[0].to_string());
                     } else if !values.is_empty() {
@@ -528,11 +528,11 @@ impl Formatter {
                                 .join(", ")
                         ));
                     } else {
-                        txt.push_str(&get_module(&module));
+                        txt.push_str(&get_module(module));
                         return txt;
                     }
 
-                    txt.push_str(&format!(" from {}", get_module(&module)));
+                    txt.push_str(&format!(" from {}", get_module(module)));
                 }
 
                 if !self.should_wrap(&txt) {
@@ -563,7 +563,7 @@ impl Formatter {
                 then,
                 otherwise,
             } => {
-                let cmp = self.format(&*comparison);
+                let cmp = self.format(comparison);
                 let cmp = if cmp.starts_with('(') && cmp.ends_with(')') {
                     cmp
                 } else {
@@ -572,8 +572,8 @@ impl Formatter {
                 format!(
                     "{} ? {} : {}",
                     cmp,
-                    self.format(&*then),
-                    self.format(&*otherwise)
+                    self.format(then),
+                    self.format(otherwise)
                 )
             }
             NodeType::BooleanExpression {
@@ -606,7 +606,7 @@ impl Formatter {
                     for var in variables {
                         let temp = handle_comment!(
                             self.get_potential_comment(&var.span),
-                            self.format(&var)
+                            self.format(var)
                         );
                         txt.push_str(&format!("\n{};\n", self.fmt_txt_with_tab(&temp, 1, true)));
                     }
@@ -615,7 +615,7 @@ impl Formatter {
 
                     txt.push_str("\n}");
                 } else {
-                    txt.push_str("}");
+                    txt.push('}');
                 }
 
                 txt
@@ -637,7 +637,7 @@ impl Formatter {
                     for var in variables {
                         let temp = handle_comment!(
                             self.get_potential_comment(&var.span),
-                            self.format(&var)
+                            self.format(var)
                         );
                         txt.push_str(&format!("\n{};\n", self.fmt_txt_with_tab(&temp, 1, true)));
                     }
@@ -646,7 +646,7 @@ impl Formatter {
 
                     txt.push_str("\n}");
                 } else {
-                    txt.push_str("}");
+                    txt.push('}');
                 }
 
                 txt
@@ -700,18 +700,18 @@ impl Formatter {
                     txt = txt.trim().to_string();
                     txt.push_str("\n}");
                 } else {
-                    txt.push_str("}");
+                    txt.push('}');
                 }
 
                 txt
             }
-            NodeType::NegExpression { value } => format!("-{}", self.format(&*value)),
-            NodeType::NotExpression { value } => format!("!{}", self.format(&*value)),
+            NodeType::NegExpression { value } => format!("-{}", self.format(value)),
+            NodeType::NotExpression { value } => format!("!{}", self.format(value)),
             NodeType::TestDeclaration { identifier, body } => {
                 format!("test {:?} {}", identifier.text, self.format(body))
             }
             NodeType::Try { value, catch } => {
-                let mut txt = format!("try {}", self.format(&*value));
+                let mut txt = format!("try {}", self.format(value));
                 if let Some(catch) = catch {
                     if let Some(name) = &catch.name {
                         txt.push_str(&format!(" : {}", name));
@@ -733,9 +733,9 @@ impl Formatter {
                     operator,
                 } if left.node_type == identifier.node_type => format!(
                     "{} {}= {}",
-                    self.format(&*identifier),
+                    self.format(identifier),
                     operator,
-                    self.format(&*right)
+                    self.format(right)
                 ),
                 NodeType::BooleanExpression {
                     left,
@@ -745,7 +745,7 @@ impl Formatter {
                     "{} {}= {}",
                     self.format(identifier),
                     operator,
-                    self.format(&right)
+                    self.format(right)
                 ),
                 _ => {
                     let lhs = self.format(identifier);
@@ -807,7 +807,7 @@ impl Formatter {
                 args,
                 reverse_args,
             } => {
-                let mut txt = format!("{}", self.format(caller));
+                let mut txt = self.format(caller);
 
                 if !generic_types.is_empty() {
                     txt.push_str(&format!(
@@ -1194,10 +1194,10 @@ impl Formatter {
                     }
                 }
 
-                txt.push_str(&format!(" {}", self.format(&then)));
+                txt.push_str(&format!(" {}", self.format(then)));
 
                 if let Some(otherwise) = otherwise {
-                    txt.push_str(&format!(" else {}", self.format(&*otherwise)));
+                    txt.push_str(&format!(" else {}", self.format(otherwise)));
                 }
 
                 txt
@@ -1362,7 +1362,7 @@ impl Formatter {
                             txt.push_str(&format!("${} := {}, ", &arg.0, self.format(&arg.1)));
                         }
                         txt = txt.trim_end().trim_end_matches(",").to_string();
-                        txt.push_str("]");
+                        txt.push(']');
                     }
                 }
 
@@ -1378,13 +1378,13 @@ impl Formatter {
                         {
                             txt.push_str(&format!("{};\n", comment));
                         }
-                        let lines = self.get_scope_lines(&body);
+                        let lines = self.get_scope_lines(body);
                         for line in lines {
                             txt.push_str(&line);
                         }
                         txt = self.fmt_txt_with_tab(&txt, 1, false).trim_end().to_string();
-                        txt.push_str("\n");
-                        txt.push_str("}");
+                        txt.push('\n');
+                        txt.push('}');
                     } else if body.len() == 1 {
                         txt.push_str(&format!(" {}", self.format(&body[0])));
                     } else {
@@ -1395,7 +1395,7 @@ impl Formatter {
                         {
                             txt.push_str(&format!("{};\n", comment));
                         }
-                        let lines = self.get_scope_lines(&body);
+                        let lines = self.get_scope_lines(body);
                         for line in lines {
                             txt.push_str(&line);
                         }
@@ -1418,7 +1418,7 @@ impl Formatter {
                 let Some(body) = body else { return txt };
 
                 if !body.is_empty() {
-                    let lines = self.get_scope_lines(&body);
+                    let lines = self.get_scope_lines(body);
 
                     for line in lines {
                         txt.push_str(&line);
@@ -1426,7 +1426,7 @@ impl Formatter {
 
                     txt = self.fmt_txt_with_tab(&txt, 0, false).trim_end().to_string();
 
-                    txt.push_str("\n");
+                    txt.push('\n');
                 }
 
                 while !self.comments.is_empty() {
@@ -1474,7 +1474,7 @@ impl Formatter {
 
                 self.wrap_if_wide_or_if(single, &multi, values.len() > self.max_values)
             }
-            NodeType::ParenExpression { value } => format!("({})", self.format(&*value)),
+            NodeType::ParenExpression { value } => format!("({})", self.format(value)),
             NodeType::TypeDeclaration {
                 identifier,
                 object,
@@ -1483,8 +1483,8 @@ impl Formatter {
                 format!(
                     "type {} := {}{}",
                     identifier,
-                    self.fmt_type_def_type(&object),
-                    self.fmt_overloads(&overloads)
+                    self.fmt_type_def_type(object),
+                    self.fmt_overloads(overloads)
                 )
             }
         }
@@ -1546,7 +1546,7 @@ impl Formatter {
     pub fn fmt_match_body(&mut self, body: &[(MatchArmType, Vec<Node>, Box<Node>)]) -> String {
         let mut txt = String::from("{\n");
 
-        let mut adjusted_body = body.get(0).map(|x| vec![vec![x]]).unwrap_or(Vec::new());
+        let mut adjusted_body = body.first().map(|x| vec![vec![x]]).unwrap_or_default();
 
         for arm in body.iter().skip(1) {
             let should_group = adjusted_body
@@ -1566,7 +1566,7 @@ impl Formatter {
         }
 
         for arm in adjusted_body {
-            let temp = handle_comment!(self.get_potential_comment(&arm[0].0.span()), {
+            let temp = handle_comment!(self.get_potential_comment(arm[0].0.span()), {
                 let mut txt = self.fmt_match_arm(&arm[0].0, false);
                 for node in arm.iter().skip(1) {
                     txt.push_str(&format!(" | {}", self.fmt_match_arm(&node.0, false)));
@@ -1598,7 +1598,7 @@ impl Formatter {
                     } else {
                         format!(" {}", self.fmt_conditionals(&arm[0].1))
                     },
-                    self.format(&*arm[0].2)
+                    self.format(&arm[0].2)
                 )
             });
             txt.push_str(&format!("{},\n", &self.fmt_txt_with_tab(&temp, 1, true)));
@@ -2443,7 +2443,7 @@ impl Formatter {
             return single_values.join(", ");
         }
 
-        let single = format!("{}", single_values.join(", "));
+        let single = single_values.join(", ");
         let multi = format!(
             "\n{}",
             self.fmt_txt_with_tab(&single_values.join(",\n"), 1, true)

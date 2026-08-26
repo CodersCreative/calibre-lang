@@ -75,20 +75,22 @@ pub enum ParserFfiInnerType {
     ULongLong,
 }
 
-impl Into<ParserInnerType> for ParserFfiInnerType {
-    fn into(self) -> ParserInnerType {
-        match self {
-            Self::F32 | Self::F64 | Self::LongDouble => ParserInnerType::Float,
-            Self::SChar | Self::UChar => ParserInnerType::Char,
-            Self::U16
-            | Self::U8
-            | Self::U32
-            | Self::U64
-            | Self::USize
-            | Self::UInt
-            | Self::UShort
-            | Self::ULong
-            | Self::ULongLong => ParserInnerType::UInt,
+impl From<ParserFfiInnerType> for ParserInnerType {
+    fn from(val: ParserFfiInnerType) -> ParserInnerType {
+        match val {
+            ParserFfiInnerType::F32 | ParserFfiInnerType::F64 | ParserFfiInnerType::LongDouble => {
+                ParserInnerType::Float
+            }
+            ParserFfiInnerType::SChar | ParserFfiInnerType::UChar => ParserInnerType::Char,
+            ParserFfiInnerType::U16
+            | ParserFfiInnerType::U8
+            | ParserFfiInnerType::U32
+            | ParserFfiInnerType::U64
+            | ParserFfiInnerType::USize
+            | ParserFfiInnerType::UInt
+            | ParserFfiInnerType::UShort
+            | ParserFfiInnerType::ULong
+            | ParserFfiInnerType::ULongLong => ParserInnerType::UInt,
             _ => ParserInnerType::Int,
         }
     }

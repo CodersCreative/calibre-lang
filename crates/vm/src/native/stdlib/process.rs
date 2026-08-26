@@ -30,7 +30,7 @@ fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<String>, RuntimeErro
         let value = env.resolve_value_for_op_ref(value)?;
         match value {
             RuntimeValue::Str(v) => out.push(v.lock().unwrap().clone()),
-            other => return Err(RuntimeError::UnexpectedType(other)),
+            other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
 
@@ -59,7 +59,7 @@ fn required_str_field(env: &VM, map: &Gc<GcMap>, key: &str) -> Result<String, Ru
     };
     match value {
         RuntimeValue::Str(v) => Ok(v.lock().unwrap().clone()),
-        other => Err(RuntimeError::UnexpectedType(other)),
+        other => Err(RuntimeError::UnexpectedType(Box::new(other))),
     }
 }
 
@@ -68,10 +68,10 @@ fn parse_optional_string(value: RuntimeValue) -> Result<Option<String>, RuntimeE
         RuntimeValue::Option(None) => Ok(None),
         RuntimeValue::Option(Some(v)) => match v.as_ref() {
             RuntimeValue::Str(v) => Ok(Some(v.lock().unwrap().clone())),
-            other => Err(RuntimeError::UnexpectedType(other.clone())),
+            other => Err(RuntimeError::UnexpectedType(Box::new(other.clone()))),
         },
         RuntimeValue::Str(v) => Ok(Some(v.lock().unwrap().clone())),
-        other => Err(RuntimeError::UnexpectedType(other)),
+        other => Err(RuntimeError::UnexpectedType(Box::new(other))),
     }
 }
 
@@ -94,7 +94,7 @@ fn parse_options(env: &VM, options: RuntimeValue) -> Result<RawExecOptions, Runt
 
     let shell = match resolve_field(env, &map, "shell")? {
         Some(RuntimeValue::Bool(v)) => v,
-        Some(other) => return Err(RuntimeError::UnexpectedType(other)),
+        Some(other) => return Err(RuntimeError::UnexpectedType(Box::new(other))),
         None => false,
     };
 
@@ -105,7 +105,7 @@ fn parse_options(env: &VM, options: RuntimeValue) -> Result<RawExecOptions, Runt
 
     let check = match resolve_field(env, &map, "check")? {
         Some(RuntimeValue::Bool(v)) => v,
-        Some(other) => return Err(RuntimeError::UnexpectedType(other)),
+        Some(other) => return Err(RuntimeError::UnexpectedType(Box::new(other))),
         None => false,
     };
 

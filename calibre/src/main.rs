@@ -1,16 +1,19 @@
-mod cli;
-mod commands;
-mod config;
-
+use crate::commands::{
+    bench::BenchmarksBuilder, clear::Clear, new::NewBuilder, repl::Repl, run::RunBuilder,
+    test::TestingBuilder,
+};
 use clap::Parser;
 use cli::{Args, Commands};
-use commands::{bench, clear, new, repl, run, test};
 use std::error::Error;
 use std::path::PathBuf;
 use std::str::FromStr;
 use tracing::info;
 use tracing_flame::FlameLayer;
 use tracing_subscriber::{EnvFilter, Registry, fmt, layer::SubscriberExt};
+
+mod cli;
+mod commands;
+mod config;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
@@ -71,7 +74,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     run_with_large_stack(move || {
         smol::block_on(async move {
             match args.command {
-                Some(Commands::New { path, no_std }) => new::execute(path, no_std).await,
+                Some(Commands::New { path, no_std }) => {
+                    NewBuilder::default()
+                        .path(path)
+                        .no_std(no_std)
+                        .build()?
+                        .execute()
+                        .await
+                }
                 Some(Commands::Run {
                     path,
                     example,
@@ -79,8 +89,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                     no_std,
                     program_args,
                     no_cache,
-                }) => run::execute(path, example, verbosity, no_std, program_args, !no_cache).await,
-                Some(Commands::Clear) => clear::execute(),
+                }) => {
+                    RunBuilder::default()
+                        .path(path)
+                        .example(example)
+                        .verbosity(verbosity)
+                        .no_std(no_std)
+                        .program_args(program_args)
+                        .cache_enabled(!no_cache)
+                        .build()?
+                        .execute()
+                        .await
+                }
+                Some(Commands::Clear) => Clear::default().execute(),
                 Some(Commands::Test {
                     path,
                     example,
@@ -88,7 +109,18 @@ fn main() -> Result<(), Box<dyn Error>> {
                     verbose,
                     tests,
                     suites,
-                }) => test::execute(&tests, &suites, path, example, recursive, verbose).await,
+                }) => {
+                    TestingBuilder::default()
+                        .wanted(&tests)
+                        .suites(&suites)
+                        .path(path)
+                        .example(example)
+                        .recursive(recursive)
+                        .verbose(verbose)
+                        .build()?
+                        .execute()
+                        .await
+                }
                 Some(Commands::Bench {
                     path,
                     example,
@@ -101,22 +133,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                     benchmarks,
                     suites,
                 }) => {
-                    bench::execute(
-                        &benchmarks,
-                        &suites,
-                        path,
-                        example,
-                        recursive,
-                        warmup,
-                        min_runs,
-                        max_runs,
-                        time_limit_ms,
-                        verbose,
-                    )
-                    .await
+                    BenchmarksBuilder::default()
+                        .wanted(&benchmarks)
+                        .suites(&suites)
+                        .path(path)
+                        .example(example)
+                        .recursive(recursive)
+                        .warmup(warmup)
+                        .min_runs(min_runs)
+                        .max_runs(max_runs)
+                        .time_limit_ms(time_limit_ms)
+                        .verbose(verbose)
+                        .build()?
+                        .execute()
+                        .await
                 }
                 Some(Commands::External(cmd)) => commands::utils::run_external_subcommand(&cmd),
-                None => repl::execute(Vec::new()).await,
+                None => Repl::default().execute().await,
             }
         })
         .map_err(|e| e.to_string())

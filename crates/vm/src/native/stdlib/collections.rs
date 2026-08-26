@@ -19,16 +19,16 @@ fn tuple_pair(value: RuntimeValue) -> Result<(RuntimeValue, RuntimeValue), Runti
                 .0
                 .get("0")
                 .cloned()
-                .ok_or(RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                .ok_or(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
             let right = map
                 .as_ref()
                 .0
                 .get("1")
                 .cloned()
-                .ok_or(RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                .ok_or(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
             Ok((left, right))
         }
-        other => Err(RuntimeError::UnexpectedType(other)),
+        other => Err(RuntimeError::UnexpectedType(Box::new(other))),
     }
 }
 
@@ -48,7 +48,7 @@ impl NativeFunction for HashMapNew {
         let mut map: FxHashMap<HashKey, RuntimeValue> = FxHashMap::default();
 
         let RuntimeValue::List(list) = env.resolve_value_for_op_ref(&entries)? else {
-            return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
         };
 
         for item in list.as_ref().0.iter().cloned() {
@@ -287,7 +287,7 @@ impl NativeFunction for HashSetNew {
         let mut set: FxHashSet<HashKey> = FxHashSet::default();
 
         let RuntimeValue::List(list) = env.resolve_value_for_op_ref(&entries)? else {
-            return Err(RuntimeError::UnexpectedType(RuntimeValue::Null));
+            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
         };
 
         for item in list.as_ref().0.iter() {

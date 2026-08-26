@@ -102,8 +102,8 @@ pub fn comparison(
                 ))
             }
             _ => Err(RuntimeError::Comparison(
-                RuntimeValue::Option(a),
-                RuntimeValue::Option(b),
+                Box::new(RuntimeValue::Option(a)),
+                Box::new(RuntimeValue::Option(b)),
                 *op,
             )),
         },
@@ -116,8 +116,8 @@ pub fn comparison(
                     Ok(RuntimeValue::Bool(a_name != b_name || a_idx != b_idx))
                 }
                 _ => Err(RuntimeError::Comparison(
-                    RuntimeValue::Enum(a_name, a_idx, None),
-                    RuntimeValue::Enum(b_name, b_idx, None),
+                    Box::new(RuntimeValue::Enum(a_name, a_idx, None)),
+                    Box::new(RuntimeValue::Enum(b_name, b_idx, None)),
                     *op,
                 )),
             }
@@ -138,8 +138,8 @@ pub fn comparison(
                         .any(|(left, right)| !eq_value(left, right).unwrap_or(false)),
             )),
             _ => Err(RuntimeError::Comparison(
-                RuntimeValue::List(a),
-                RuntimeValue::List(b),
+                Box::new(RuntimeValue::List(a)),
+                Box::new(RuntimeValue::List(b)),
                 *op,
             )),
         },
@@ -150,7 +150,11 @@ pub fn comparison(
             ComparisonOperator::NotEqual => {
                 Ok(RuntimeValue::Bool(!matches!(other, RuntimeValue::List(_))))
             }
-            _ => Err(RuntimeError::Comparison(RuntimeValue::List(a), other, *op)),
+            _ => Err(RuntimeError::Comparison(
+                Box::new(RuntimeValue::List(a)),
+                Box::new(other),
+                *op,
+            )),
         },
         (RuntimeValue::Big(x), RuntimeValue::Big(y), op) => {
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
@@ -238,7 +242,11 @@ pub fn comparison(
             eq_value(&left, &right),
             Some(true)
         ))),
-        (left, right, op) => Err(RuntimeError::Comparison(left, right, *op)),
+        (left, right, op) => Err(RuntimeError::Comparison(
+            Box::new(left),
+            Box::new(right),
+            *op,
+        )),
     }
 }
 
@@ -254,7 +262,7 @@ pub fn boolean(
         (RuntimeValue::Bool(x), RuntimeValue::Bool(y), BooleanOperator::Or) => {
             Ok(RuntimeValue::Bool(x || y))
         }
-        (left, right, op) => Err(RuntimeError::Boolean(left, right, *op)),
+        (left, right, op) => Err(RuntimeError::Boolean(Box::new(left), Box::new(right), *op)),
     }
 }
 
@@ -359,7 +367,11 @@ impl RuntimeValue {
         rhs: &Self,
         operator: &BinaryOperator,
     ) -> Result<RuntimeValue, RuntimeError> {
-        Err(RuntimeError::Binary(self.clone(), rhs.clone(), *operator))
+        Err(RuntimeError::Binary(
+            Box::new(self.clone()),
+            Box::new(rhs.clone()),
+            *operator,
+        ))
     }
 }
 

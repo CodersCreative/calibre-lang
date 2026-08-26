@@ -724,7 +724,7 @@ impl From<MiddleNodeType> for NodeType {
                 } else {
                     NodeType::StructLiteral {
                         identifier: identifier
-                            .unwrap_or_else(|| ParserText::new(Default::default(), "map").into())
+                            .unwrap_or_else(|| ParserText::new(Default::default(), "map"))
                             .into(),
                         value: ObjectType::Map(
                             value.0.into_iter().map(|x| (x.0, x.1.into())).collect(),

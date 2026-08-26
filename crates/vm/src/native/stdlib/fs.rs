@@ -51,7 +51,7 @@ impl NativeFunction for FsPathAsStr {
             path.lock()
                 .unwrap()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .to_string_lossy()
                 .to_string(),
         ))))
@@ -74,7 +74,7 @@ impl NativeFunction for FsPathExists {
             path.lock()
                 .unwrap()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .exists(),
         ))
     }
@@ -96,7 +96,7 @@ impl NativeFunction for FsPathIsFile {
             path.lock()
                 .unwrap()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_file(),
         ))
     }
@@ -118,7 +118,7 @@ impl NativeFunction for FsPathIsDir {
             path.lock()
                 .unwrap()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_dir(),
         ))
     }
@@ -140,7 +140,7 @@ impl NativeFunction for FsPathCanonicalize {
             .lock()
             .unwrap()
             .downcast_ref::<PathBuf>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .canonicalize()
         {
             Ok(canonical) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
@@ -169,7 +169,7 @@ impl NativeFunction for FsPathParent {
             .lock()
             .unwrap()
             .downcast_ref::<PathBuf>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .parent()
         {
             Some(parent) => Ok(RuntimeValue::Host(Arc::new(Mutex::new(
@@ -196,7 +196,7 @@ impl NativeFunction for FsPathFileName {
             .lock()
             .unwrap()
             .downcast_ref::<PathBuf>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .file_name()
         {
             Some(name) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
@@ -223,7 +223,7 @@ impl NativeFunction for FsPathExtension {
             .lock()
             .unwrap()
             .downcast_ref::<PathBuf>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .extension()
         {
             Some(ext) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
@@ -250,7 +250,7 @@ impl NativeFunction for FsPathStem {
             .lock()
             .unwrap()
             .downcast_ref::<PathBuf>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .file_stem()
         {
             Some(stem) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
@@ -277,7 +277,7 @@ impl NativeFunction for FsPathJoin {
         path.lock()
             .unwrap()
             .downcast_mut::<PathBuf>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .push(other.lock().unwrap().as_str());
         Ok(RuntimeValue::Null)
     }
@@ -300,7 +300,7 @@ impl NativeFunction for FsPathWithExtension {
             path.lock()
                 .unwrap()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .with_extension(other.lock().unwrap().as_str()),
         ))))
     }
@@ -323,7 +323,7 @@ impl NativeFunction for FsPathWithFileName {
             path.lock()
                 .unwrap()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .with_file_name(other.lock().unwrap().as_str()),
         ))))
     }
@@ -345,7 +345,7 @@ impl NativeFunction for FsPathReadDir {
             path.lock()
                 .unwrap()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?,
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?,
         ) {
             Ok(entries) => {
                 let mut out = Vec::new();
@@ -391,7 +391,7 @@ impl NativeFunction for FsDirEntryPath {
                 .lock()
                 .unwrap()
                 .downcast_ref::<DirEntry>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .path(),
         ))))
     }
@@ -414,7 +414,7 @@ impl NativeFunction for FsDirEntryFileName {
                 .lock()
                 .unwrap()
                 .downcast_ref::<DirEntry>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .file_name()
                 .to_string_lossy()
                 .to_string(),
@@ -438,7 +438,7 @@ impl NativeFunction for FsDirEntryFileType {
             .lock()
             .unwrap()
             .downcast_ref::<DirEntry>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .file_type()
         {
             Ok(ft) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
@@ -467,7 +467,7 @@ impl NativeFunction for FsDirEntryMetadata {
             .lock()
             .unwrap()
             .downcast_ref::<DirEntry>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .metadata()
         {
             Ok(meta) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
@@ -498,7 +498,7 @@ impl NativeFunction for FsFileTypeIsFile {
             ft.lock()
                 .unwrap()
                 .downcast_ref::<FileType>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_file(),
         ))
     }
@@ -520,7 +520,7 @@ impl NativeFunction for FsFileTypeIsDir {
             ft.lock()
                 .unwrap()
                 .downcast_ref::<FileType>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_dir(),
         ))
     }
@@ -542,7 +542,7 @@ impl NativeFunction for FsFileTypeIsSymlink {
             ft.lock()
                 .unwrap()
                 .downcast_ref::<FileType>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_symlink(),
         ))
     }
@@ -566,7 +566,7 @@ impl NativeFunction for FsMetadataIsFile {
             meta.lock()
                 .unwrap()
                 .downcast_ref::<Metadata>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_file(),
         ))
     }
@@ -588,7 +588,7 @@ impl NativeFunction for FsMetadataIsDir {
             meta.lock()
                 .unwrap()
                 .downcast_ref::<Metadata>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_dir(),
         ))
     }
@@ -610,7 +610,7 @@ impl NativeFunction for FsMetadataLen {
             meta.lock()
                 .unwrap()
                 .downcast_ref::<Metadata>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .len(),
         ))
     }
@@ -632,7 +632,7 @@ impl NativeFunction for FsMetadataModified {
             .lock()
             .unwrap()
             .downcast_ref::<Metadata>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .modified()
         {
             Ok(time) => {
@@ -666,7 +666,7 @@ impl NativeFunction for FsMetadataCreated {
             .lock()
             .unwrap()
             .downcast_ref::<Metadata>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .created()
         {
             Ok(time) => {
@@ -700,7 +700,7 @@ impl NativeFunction for FsMetadataAccessed {
             .lock()
             .unwrap()
             .downcast_ref::<Metadata>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .accessed()
         {
             Ok(time) => {
@@ -734,7 +734,7 @@ impl NativeFunction for FsMetadataIsReadOnly {
             meta.lock()
                 .unwrap()
                 .downcast_ref::<Metadata>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .permissions()
                 .readonly(),
         ))
@@ -775,7 +775,7 @@ impl NativeFunction for FsFileOpen {
             path.lock()
                 .unwrap()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?,
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?,
         ) {
             Ok(file) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
                 Arc::new(Mutex::new(file)),
@@ -803,7 +803,7 @@ impl NativeFunction for FsFileClose {
             .lock()
             .unwrap()
             .downcast_mut::<File>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .flush()
         {
             Ok(_) => (),
@@ -834,7 +834,7 @@ impl NativeFunction for FsFileWrite {
             .lock()
             .unwrap()
             .downcast_mut::<File>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .write_all(content.lock().unwrap().as_bytes())
         {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
@@ -862,7 +862,7 @@ impl NativeFunction for FsFileWriteLine {
             file.lock()
                 .unwrap()
                 .downcast_mut::<File>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?,
+                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?,
             "{}",
             content.lock().unwrap().as_str()
         ) {
@@ -892,7 +892,7 @@ impl NativeFunction for FsFileReadAll {
             .lock()
             .unwrap()
             .downcast_mut::<File>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .read_to_string(&mut content)
         {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Str(
@@ -921,7 +921,7 @@ impl NativeFunction for FsFileFlush {
             .lock()
             .unwrap()
             .downcast_mut::<File>()
-            .ok_or_else(|| RuntimeError::UnexpectedType(RuntimeValue::Null))?
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .flush()
         {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),

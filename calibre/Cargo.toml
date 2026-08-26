@@ -28,6 +28,7 @@ tracing-subscriber = { workspace = true }
 tracing-flame = { workspace = true }
 tracing-appender = { workspace = true }
 smol = { workspace = true }
+derive_builder = { workspace = true }
 
 bincode = "1"
 blake3 = "1.6.1"

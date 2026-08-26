@@ -51,7 +51,7 @@ impl TryFrom<HashKey> for i64 {
         match value {
             HashKey::Int(n) => Ok(n),
             HashKey::UInt(n) if n <= i64::MAX as u64 => Ok(n as i64),
-            _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))),
         }
     }
 }
@@ -63,7 +63,7 @@ impl TryFrom<HashKey> for u64 {
         match value {
             HashKey::UInt(n) => Ok(n),
             HashKey::Int(n) if n >= 0 => Ok(n as u64),
-            _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))),
         }
     }
 }
@@ -74,7 +74,7 @@ impl TryFrom<HashKey> for bool {
     fn try_from(value: HashKey) -> Result<Self, Self::Error> {
         match value {
             HashKey::Bool(b) => Ok(b),
-            _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))),
         }
     }
 }
@@ -85,7 +85,7 @@ impl TryFrom<HashKey> for char {
     fn try_from(value: HashKey) -> Result<Self, Self::Error> {
         match value {
             HashKey::Char(c) => Ok(c),
-            _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))),
         }
     }
 }
@@ -96,7 +96,7 @@ impl TryFrom<HashKey> for String {
     fn try_from(value: HashKey) -> Result<Self, Self::Error> {
         match value {
             HashKey::Str(s) => Ok(s),
-            _ => Err(RuntimeError::UnexpectedType(RuntimeValue::Null)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))),
         }
     }
 }
@@ -253,7 +253,7 @@ impl TryFrom<RuntimeValue> for i8 {
             RuntimeValue::Int(n) if n >= i8::MIN as i64 && n <= i8::MAX as i64 => Ok(n as i8),
             RuntimeValue::UInt(n) if n <= i8::MAX as u64 => Ok(n as i8),
             RuntimeValue::Byte(n) if n <= i8::MAX as u8 => Ok(n as i8),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -266,7 +266,7 @@ impl TryFrom<RuntimeValue> for i16 {
             RuntimeValue::Int(n) if n >= i16::MIN as i64 && n <= i16::MAX as i64 => Ok(n as i16),
             RuntimeValue::UInt(n) if n <= i16::MAX as u64 => Ok(n as i16),
             RuntimeValue::Byte(n) => Ok(n as i16),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -279,7 +279,7 @@ impl TryFrom<RuntimeValue> for i32 {
             RuntimeValue::Int(n) if n >= i32::MIN as i64 && n <= i32::MAX as i64 => Ok(n as i32),
             RuntimeValue::UInt(n) if n <= i32::MAX as u64 => Ok(n as i32),
             RuntimeValue::Byte(n) => Ok(n as i32),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -293,7 +293,7 @@ impl TryFrom<RuntimeValue> for i64 {
             RuntimeValue::UInt(n) if n <= i64::MAX as u64 => Ok(n as i64),
             RuntimeValue::Byte(n) => Ok(n as i64),
             RuntimeValue::Float(f) => Ok(f as i64),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -307,7 +307,7 @@ impl TryFrom<RuntimeValue> for i128 {
             RuntimeValue::UInt(n) => Ok(n as i128),
             RuntimeValue::Byte(n) => Ok(n as i128),
             RuntimeValue::Float(f) => Ok(f as i128),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -320,7 +320,7 @@ impl TryFrom<RuntimeValue> for u8 {
             RuntimeValue::Byte(n) => Ok(n),
             RuntimeValue::UInt(n) if n <= u8::MAX as u64 => Ok(n as u8),
             RuntimeValue::Int(n) if n >= 0 && n <= u8::MAX as i64 => Ok(n as u8),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -333,7 +333,7 @@ impl TryFrom<RuntimeValue> for u16 {
             RuntimeValue::Byte(n) => Ok(n as u16),
             RuntimeValue::UInt(n) if n <= u16::MAX as u64 => Ok(n as u16),
             RuntimeValue::Int(n) if n >= 0 && n <= u16::MAX as i64 => Ok(n as u16),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -346,7 +346,7 @@ impl TryFrom<RuntimeValue> for u32 {
             RuntimeValue::Byte(n) => Ok(n as u32),
             RuntimeValue::UInt(n) if n <= u32::MAX as u64 => Ok(n as u32),
             RuntimeValue::Int(n) if n >= 0 && n <= u32::MAX as i64 => Ok(n as u32),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -360,7 +360,7 @@ impl TryFrom<RuntimeValue> for u64 {
             RuntimeValue::Byte(n) => Ok(n as u64),
             RuntimeValue::Int(n) if n >= 0 => Ok(n as u64),
             RuntimeValue::Float(f) => Ok(f as u64),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -374,7 +374,7 @@ impl TryFrom<RuntimeValue> for u128 {
             RuntimeValue::Byte(n) => Ok(n as u128),
             RuntimeValue::Int(n) if n >= 0 => Ok(n as u128),
             RuntimeValue::Float(f) => Ok(f as u128),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -388,7 +388,7 @@ impl TryFrom<RuntimeValue> for f32 {
             RuntimeValue::Int(n) => Ok(n as f32),
             RuntimeValue::UInt(n) => Ok(n as f32),
             RuntimeValue::Byte(n) => Ok(n as f32),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -402,7 +402,7 @@ impl TryFrom<RuntimeValue> for f64 {
             RuntimeValue::Int(n) => Ok(n as f64),
             RuntimeValue::UInt(n) => Ok(n as f64),
             RuntimeValue::Byte(n) => Ok(n as f64),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -413,7 +413,7 @@ impl TryFrom<RuntimeValue> for bool {
     fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
         match value {
             RuntimeValue::Bool(b) => Ok(b),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -425,7 +425,7 @@ impl TryFrom<RuntimeValue> for char {
         match value {
             RuntimeValue::Char(c) => Ok(c),
             RuntimeValue::Byte(n) if n <= 0x7F => Ok(n as char),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -437,7 +437,7 @@ impl TryFrom<RuntimeValue> for String {
         match value {
             RuntimeValue::Str(s) => Ok(s.lock().unwrap().clone()),
             RuntimeValue::Char(c) => Ok(c.to_string()),
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -451,7 +451,7 @@ impl<T: TryFrom<RuntimeValue, Error = RuntimeError>> TryFrom<RuntimeValue> for V
                 let vec = gc_vec.as_ref();
                 vec.0.iter().cloned().map(|v| T::try_from(v)).collect()
             }
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -471,7 +471,7 @@ impl<
                     .map(|(k, v)| Ok((K::try_from(k.clone())?, V::try_from(v.clone())?)))
                     .collect()
             }
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -487,7 +487,7 @@ impl<K: TryFrom<HashKey, Error = RuntimeError> + std::hash::Hash + Eq> TryFrom<R
                 let set = arc_set.lock().unwrap();
                 set.iter().cloned().map(|k| K::try_from(k)).collect()
             }
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -501,7 +501,7 @@ impl<T: TryFrom<RuntimeValue, Error = RuntimeError>> TryFrom<RuntimeValue> for O
                 Some(gc_val) => Ok(Some(T::try_from(gc_val.as_ref().clone())?)),
                 None => Ok(None),
             },
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }
@@ -517,7 +517,7 @@ impl<T: TryFrom<RuntimeValue, Error = RuntimeError>, E: TryFrom<RuntimeValue, Er
                 Ok(gc_val) => Ok(Ok(T::try_from(gc_val.as_ref().clone())?)),
                 Err(gc_val) => Ok(Err(E::try_from(gc_val.as_ref().clone())?)),
             },
-            _ => Err(RuntimeError::UnexpectedType(value)),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
     }
 }

@@ -377,7 +377,7 @@ impl ParserInnerType {
 
     pub fn unwrap_one_result(&self) -> Option<&ParserDataType> {
         match self {
-            ParserInnerType::Result { ok, err: _ } => Some(&ok),
+            ParserInnerType::Result { ok, err: _ } => Some(ok),
             _ => None,
         }
     }

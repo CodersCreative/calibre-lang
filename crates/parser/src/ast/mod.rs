@@ -202,7 +202,7 @@ impl<T: PartialEq + ToString> Display for ObjectType<T> {
                     txt.push_str(&format!("{k} : {}, ", v.to_string()));
                 }
 
-                write!(f, "{}}}", txt.trim_end().trim_end_matches(",").to_string())
+                write!(f, "{}}}", txt.trim_end().trim_end_matches(","))
             }
             ObjectType::Tuple(data) => {
                 let lst: Vec<&T> = data.iter().collect();
@@ -247,7 +247,7 @@ impl<T: PartialEq + ToString> Display for ObjectMap<T> {
             txt.push_str(&format!("{k} : {}, ", v.to_string()));
         }
 
-        write!(f, "{}}}", txt.trim_end().trim_end_matches(",").to_string())
+        write!(f, "{}}}", txt.trim_end().trim_end_matches(","))
     }
 }
 

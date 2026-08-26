@@ -30,15 +30,15 @@ pub enum CalibreError {
     #[error("compile failed : {error}")]
     Middle {
         path: PathBuf,
-        ast_artifacts: Option<Node>,
+        ast_artifacts: Option<Box<Node>>,
         contents: String,
-        error: MiddleErr,
+        error: Box<MiddleErr>,
     },
     #[error("runtime failed : {error}")]
     Runtime {
         path: PathBuf,
         contents: String,
-        error: RuntimeError,
+        error: Box<RuntimeError>,
     },
     #[error("missing entry point : {0}")]
     MissingEntryPoint(String),

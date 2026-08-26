@@ -423,7 +423,6 @@ impl MiddleEnvironment {
     pub(crate) fn evaluate_extern_function(
         &mut self,
         scope: &u64,
-        span: Span,
         abi: String,
         identifier: PotentialDollarIdentifier,
         parameters: Vec<ParserDataType>,
@@ -431,6 +430,7 @@ impl MiddleEnvironment {
         library: String,
         symbol: Option<String>,
     ) -> Result<MiddleNode, MiddleErr> {
+        let span = self.context.current_span();
         let ident = self.resolve(
             scope,
             &identifier,

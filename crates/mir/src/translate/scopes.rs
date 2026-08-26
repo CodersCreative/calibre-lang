@@ -90,13 +90,13 @@ impl MiddleEnvironment {
     pub fn evaluate_scope_declaration(
         &mut self,
         scope: &u64,
-        span: Span,
         mut body: Option<Vec<Node>>,
         named: Option<NamedScope>,
         create_new_scope: Option<bool>,
         define: bool,
         is_temp: bool,
     ) -> Result<MiddleNode, MiddleErr> {
+        let span = self.context.current_span();
         let mut stmts = Vec::new();
         let mut og_create_new_scope = create_new_scope;
         let mut create_new_scope = create_new_scope.unwrap_or(true);
@@ -151,7 +151,7 @@ impl MiddleEnvironment {
                 let last = body_nodes.pop();
                 let break_value = last.map(Box::new);
                 body_nodes.push(Node::new(
-                    self.context.current_span(),
+                    span,
                     NodeType::Break {
                         label: Some(named.name.clone()),
                         value: break_value,
@@ -163,15 +163,11 @@ impl MiddleEnvironment {
 
                 return self.evaluate_loop_statement(
                     scope,
-                    span,
                     LoopType::Loop,
                     loop_body,
                     None,
                     Some(named.name),
-                    Some(Box::new(Node::new(
-                        self.context.current_span(),
-                        NodeType::Null,
-                    ))),
+                    Some(Box::new(Node::new(span, NodeType::Null))),
                 );
             }
             let mut added = Vec::new();

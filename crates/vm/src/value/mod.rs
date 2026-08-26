@@ -71,7 +71,7 @@ impl TryFrom<RuntimeValue> for HashKey {
             RuntimeValue::Bool(x) => Ok(Self::Bool(x)),
             RuntimeValue::Char(x) => Ok(Self::Char(x)),
             RuntimeValue::Str(x) => Ok(Self::Str(x.lock().unwrap().clone())),
-            other => Err(RuntimeError::UnexpectedType(other)),
+            other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
 }
@@ -115,18 +115,18 @@ impl WaitGroupInner {
         let mut guard = self
             .mutex
             .lock()
-            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+            .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
         while self.count.load(Ordering::Acquire) > 0 {
             guard = self
                 .cvar
                 .wait(guard)
-                .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+                .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
         }
         drop(guard);
         let joined = self
             .joined
             .lock()
-            .map_err(|_| RuntimeError::UnexpectedType(RuntimeValue::Null))?;
+            .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
         for inner in joined.iter() {
             inner.wait()?;
         }

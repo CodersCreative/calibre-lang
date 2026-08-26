@@ -164,7 +164,10 @@ impl RuntimeValue {
             }
             (RuntimeValue::Str(x), ParserInnerType::Char) => {
                 let ch = x.lock().unwrap().chars().next().ok_or_else(|| {
-                    RuntimeError::CantConvert(RuntimeValue::Str(x.clone()), ParserInnerType::Char)
+                    RuntimeError::CantConvert(
+                        Box::new(RuntimeValue::Str(x.clone())),
+                        ParserInnerType::Char,
+                    )
                 })?;
                 Ok(RuntimeValue::Char(ch))
             }
@@ -256,9 +259,12 @@ impl RuntimeValue {
                 if let Some(value) = env.ptr_heap.get(&id).cloned() {
                     return value.convert(env, t);
                 }
-                Err(RuntimeError::CantConvert(RuntimeValue::Ptr(id), t.clone()))
+                Err(RuntimeError::CantConvert(
+                    Box::new(RuntimeValue::Ptr(id)),
+                    t.clone(),
+                ))
             }
-            (x, t) => Err(RuntimeError::CantConvert(x, t.clone())),
+            (x, t) => Err(RuntimeError::CantConvert(Box::new(x), t.clone())),
         }
     }
 }

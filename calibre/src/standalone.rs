@@ -112,7 +112,7 @@ impl CalibreStandalone for CalibreEngine {
                 CalibreError::Runtime {
                     path: error_path,
                     contents: error_contents,
-                    error,
+                    error: Box::new(error),
                 }
             })?,
             vm,
@@ -342,9 +342,9 @@ impl CalibreStandalone for CalibreEngine {
         if !mir_errors.is_empty() {
             return Err(CalibreError::Middle {
                 path,
-                ast_artifacts: Some(ast),
+                ast_artifacts: Some(Box::new(ast)),
                 contents: full_source,
-                error: MiddleErr::Multiple(mir_errors),
+                error: Box::new(MiddleErr::Multiple(mir_errors)),
             });
         }
 
