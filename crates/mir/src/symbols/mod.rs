@@ -1,4 +1,4 @@
-use crate::ast::MiddleNode;
+use crate::{ast::MiddleNode, scoping::ScopeId};
 use calibre_parser::{
     Location,
     ast::{
@@ -23,7 +23,7 @@ pub struct Symbols {
     pub generic_fn_templates: FxHashMap<String, (Vec<String>, FunctionHeader, AstNode)>,
     pub function_param_defaults: FxHashMap<String, Vec<FunctionParamDefault>>,
     pub fn_specializations: FxHashMap<String, String>,
-    pub specialization_decls_by_scope: FxHashMap<u64, Vec<MiddleNode>>,
+    pub specialization_decls_by_scope: FxHashMap<ScopeId, Vec<MiddleNode>>,
     pub func_defers: Vec<AstNode>,
 }
 

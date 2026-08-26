@@ -15,7 +15,7 @@ use calibre_parser::{
 use rustc_hash::FxHashMap;
 use std::fmt::Display;
 
-use crate::errors::MiddleErr;
+use crate::{errors::MiddleErr, scoping::ScopeId};
 
 pub mod identifiers;
 pub mod renaming;
@@ -272,13 +272,13 @@ pub enum MiddleNodeType {
         body: Vec<MiddleNode>,
         create_new_scope: bool,
         is_temp: bool,
-        scope_id: u64,
+        scope_id: ScopeId,
     },
     FunctionDeclaration {
         parameters: Vec<(ParserText, ParserDataType, Option<Box<MiddleNode>>)>,
         body: Box<MiddleNode>,
         return_type: ParserDataType,
-        scope_id: u64,
+        scope_id: ScopeId,
     },
     ExternFunction {
         abi: String,
@@ -318,7 +318,7 @@ pub enum MiddleNodeType {
     LoopDeclaration {
         state: Option<Box<MiddleNode>>,
         body: Box<MiddleNode>,
-        scope_id: u64,
+        scope_id: ScopeId,
         label: Option<ParserText>,
     },
     Return {

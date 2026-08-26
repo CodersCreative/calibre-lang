@@ -20,6 +20,7 @@ rustyline = { workspace = true }
 thiserror = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
+indextree = { workspace = true }
 dumpster = "2.0.0"
 libloading = "0.9"
 libffi = "4"

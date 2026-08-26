@@ -472,6 +472,7 @@ dependencies = [
  "errno",
  "fastrand",
  "hex",
+ "indextree",
  "libffi",
  "libloading",
  "regex",
@@ -1207,6 +1208,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "050868c48f48408228ede6af91c160cf93f6bf7ca68c7bce87feb1eca1db94b4"
 dependencies = [
  "indextree-macros",
+ "serde",
 ]
 
 [[package]]

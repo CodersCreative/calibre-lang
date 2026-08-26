@@ -1,16 +1,16 @@
 use super::*;
-use calibre_mir::{ast::MiddleNodeType, symbols::resolve::ResolutionOptions};
+use calibre_mir::{ast::MiddleNodeType, scoping::ScopeId, symbols::resolve::ResolutionOptions};
 
 impl CalibreLanguageServer {
     pub(super) fn find_scope_at_with(
         ast: &calibre_mir::ast::MiddleNode,
-        default_scope: u64,
+        default_scope: ScopeId,
         pos: Position,
-    ) -> u64 {
+    ) -> ScopeId {
         fn traverse(
             node: &calibre_mir::ast::MiddleNode,
             pos: Position,
-            current_scope: &mut u64,
+            current_scope: &mut ScopeId,
             smallest_span: &mut u32,
         ) {
             let range = CalibreLanguageServer::lsp_range(node.span);
@@ -168,8 +168,8 @@ impl CalibreLanguageServer {
             let position_scope = Self::find_scope_at_with(&middle_ast, scope, position);
 
             let resolved = env
-                .resolve(&position_scope, &word, ResolutionOptions::all())
-                .or_else(|_| env.resolve(&scope, &word, ResolutionOptions::all()));
+                .resolve(position_scope, &word, ResolutionOptions::all())
+                .or_else(|_| env.resolve(scope, &word, ResolutionOptions::all()));
 
             if let Ok(resolved) = resolved {
                 if let Some(var) = env.symbols.variables.get(&resolved)
@@ -343,8 +343,8 @@ impl CalibreLanguageServer {
         let (env, scope, middle_ast) = MiddleEnvironment::new_and_evaluate(ast, path, false);
 
         let position_scope = Self::find_scope_at_with(&middle_ast, scope, position);
-        env.resolve(&position_scope, &word, ResolutionOptions::all())
-            .or_else(|_| env.resolve(&scope, &word, ResolutionOptions::all()))
+        env.resolve(position_scope, &word, ResolutionOptions::all())
+            .or_else(|_| env.resolve(scope, &word, ResolutionOptions::all()))
             .ok()
     }
 
@@ -363,17 +363,23 @@ impl CalibreLanguageServer {
         let (env, scope, middle_ast) = MiddleEnvironment::new_and_evaluate(ast, path, false);
 
         let mut out = Vec::new();
-        for (visible_name, mapped_canonical) in
-            env.scoping.scopes.values().flat_map(|s| s.mappings.iter())
+        for (visible_name, mapped_canonical) in env
+            .scoping
+            .scopes
+            .iter()
+            .flat_map(|s| s.get().mappings.iter())
         {
             if mapped_canonical != canonical {
                 continue;
             }
 
             for range in Self::find_word_occurrences(text, visible_name) {
-                let scope_at_occurrence = Self::find_scope_at_with(&middle_ast, scope, range.start);
                 if env
-                    .resolve(&scope_at_occurrence, visible_name, ResolutionOptions::all())
+                    .resolve(
+                        Self::find_scope_at_with(&middle_ast, scope, range.start),
+                        visible_name,
+                        ResolutionOptions::all(),
+                    )
                     .ok()
                     .as_deref()
                     == Some(canonical)

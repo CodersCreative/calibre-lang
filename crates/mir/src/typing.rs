@@ -1,4 +1,6 @@
-use crate::{environment::MiddleEnvironment, symbols::resolve::ResolutionOptions};
+use crate::{
+    environment::MiddleEnvironment, scoping::ScopeId, symbols::resolve::ResolutionOptions,
+};
 use calibre_parser::{
     Location,
     ast::{
@@ -388,7 +390,7 @@ impl Display for MiddleTypeDefType {
 impl MiddleTypeDefType {
     pub fn from_type_def_type(
         env: &mut MiddleEnvironment,
-        scope: &u64,
+        scope: ScopeId,
         value: TypeDefType,
     ) -> Self {
         match value {

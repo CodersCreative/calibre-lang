@@ -349,10 +349,10 @@ impl CalibreStandalone for CalibreEngine {
         }
 
         calibre_mir::inline::inline_small_calls(&mut mir, 20);
-        debug!(scope, "MIR construction completed");
+        debug!("MIR construction completed");
 
         let entry_name = env
-            .resolve(&scope, &self.entry_name, ResolutionOptions::all())
+            .resolve(scope, &self.entry_name, ResolutionOptions::all())
             .unwrap_or_else(|_| self.entry_name.clone());
 
         let mut init_functions = std::mem::take(&mut env.tagging.init_functions);

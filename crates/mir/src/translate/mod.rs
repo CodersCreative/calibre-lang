@@ -2,6 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
     tags::TagInfo,
     typing::{
@@ -37,8 +38,8 @@ pub mod scopes;
 pub mod statements;
 
 impl MiddleEnvironment {
-    #[instrument(skip_all, fields(scope = scope))]
-    pub fn evaluate(&mut self, scope: &u64, node: AstNode) -> MiddleNode {
+    #[instrument(skip_all)]
+    pub fn evaluate(&mut self, scope: ScopeId, node: AstNode) -> MiddleNode {
         let span = node.span;
         match self.evaluate_inner(scope, node) {
             Ok(node) => node,
@@ -50,8 +51,12 @@ impl MiddleEnvironment {
         }
     }
 
-    #[instrument(skip_all, fields(scope = scope))]
-    pub fn evaluate_inner(&mut self, scope: &u64, node: AstNode) -> Result<MiddleNode, MiddleErr> {
+    #[instrument(skip_all)]
+    pub fn evaluate_inner(
+        &mut self,
+        scope: ScopeId,
+        node: AstNode,
+    ) -> Result<MiddleNode, MiddleErr> {
         self.context.current_location = self.scoping.get_location(scope, node.span);
         trace!(location = ?self.context.current_location, "evaluating node");
 
@@ -65,10 +70,7 @@ impl MiddleEnvironment {
                 if function {
                     self.symbols.func_defers.push(*value);
                 } else {
-                    let err = self.context.err_at_current(MiddleErr::Internal(format!(
-                        "missing scope {scope} for defer"
-                    )));
-                    let scope_data = self.scoping.scopes.get_mut(scope).ok_or(err)?;
+                    let scope_data = self.scoping.scope_mut_or_err(scope)?;
                     scope_data.defers.push(*value);
                 }
                 Ok(MiddleNode {
@@ -921,7 +923,7 @@ impl MiddleEnvironment {
                         for x in chain_defers {
                             lst.push(self.evaluate(scope, x));
                         }
-                    } else if let Some(s) = self.scoping.scopes.get(scope) {
+                    } else if let Ok(s) = self.scoping.scope_or_err(scope) {
                         for x in s.defers.clone() {
                             lst.push(self.evaluate(scope, x));
                         }
@@ -945,7 +947,7 @@ impl MiddleEnvironment {
                         body: lst,
                         create_new_scope: false,
                         is_temp: true,
-                        scope_id: *scope,
+                        scope_id: scope,
                     }
                 },
                 span: node.span,
@@ -985,7 +987,7 @@ impl MiddleEnvironment {
                         for x in chain_defers {
                             lst.push(self.evaluate(scope, x));
                         }
-                    } else if let Some(s) = self.scoping.scopes.get(scope) {
+                    } else if let Ok(s) = self.scoping.scope_or_err(scope) {
                         for x in s.defers.clone() {
                             lst.push(self.evaluate(scope, x));
                         }
@@ -1014,7 +1016,7 @@ impl MiddleEnvironment {
                         body: lst,
                         create_new_scope: false,
                         is_temp: true,
-                        scope_id: *scope,
+                        scope_id: scope,
                     }
                 },
                 span: node.span,
@@ -1086,7 +1088,7 @@ impl MiddleEnvironment {
                                     body: lst,
                                     create_new_scope: false,
                                     is_temp: true,
-                                    scope_id: *scope,
+                                    scope_id: scope,
                                 },
                                 node.span,
                             )))
@@ -1622,9 +1624,13 @@ impl MiddleEnvironment {
                     "test::{}",
                     ParserText::temp_name_with_suffix(identifier.text.trim(), node.span).text
                 );
-                let file_path = self.scoping.scopes.get(scope).map(|s| s.path.clone());
+                let file_path = self
+                    .scoping
+                    .scope_or_err(scope)
+                    .map(|s| s.path.clone())
+                    .ok();
 
-                self.register_test(identifier.text, func_identifier.clone(), *scope, file_path);
+                self.register_test(identifier.text, func_identifier.clone(), scope, file_path);
 
                 self.evaluate_inner(
                     scope,
@@ -1797,7 +1803,7 @@ impl MiddleEnvironment {
                 let self_name = resolved.impl_name();
 
                 let mut prev_generics = Vec::new();
-                if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
+                if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
                     for generic in generics.0.iter() {
                         let name = generic.identifier.to_string();
                         prev_generics.push((name.clone(), scope_ref.mappings.get(&name).cloned()));
@@ -1899,12 +1905,7 @@ impl MiddleEnvironment {
                 }
 
                 let previous_self_type = {
-                    let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
-                        MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                        )
-                    })?;
+                    let scope = self.scoping.scope_mut_or_err(scope)?;
 
                     scope
                         .type_mappings
@@ -2023,12 +2024,7 @@ impl MiddleEnvironment {
                 }
 
                 {
-                    let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
-                        MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                        )
-                    })?;
+                    let scope = self.scoping.scope_mut_or_err(scope)?;
 
                     if let Some(prev) = previous_self_type {
                         scope.type_mappings.insert(String::from("Self"), prev);
@@ -2052,7 +2048,7 @@ impl MiddleEnvironment {
                         body: statements,
                         create_new_scope: false,
                         is_temp: false,
-                        scope_id: *scope,
+                        scope_id: scope,
                     },
                     span: node.span,
                 })
@@ -2064,7 +2060,7 @@ impl MiddleEnvironment {
                 variables,
             } => {
                 let mut prev_generics = Vec::new();
-                if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
+                if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
                     for generic in generics.0.iter() {
                         let name = generic.identifier.to_string();
                         prev_generics.push((name.clone(), scope_ref.mappings.get(&name).cloned()));
@@ -2132,12 +2128,7 @@ impl MiddleEnvironment {
                 }
 
                 let (previous_self, previous_self_type) = {
-                    let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
-                        MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                        )
-                    })?;
+                    let scope = self.scoping.scope_mut_or_err(scope)?;
 
                     (
                         scope
@@ -2316,12 +2307,7 @@ impl MiddleEnvironment {
                 }
 
                 {
-                    let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
-                        MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                        )
-                    })?;
+                    let scope = self.scoping.scope_mut_or_err(scope)?;
 
                     if let Some(prev) = previous_self {
                         scope.mappings.insert(String::from("Self"), prev);
@@ -2349,7 +2335,7 @@ impl MiddleEnvironment {
                         body: statements,
                         create_new_scope: false,
                         is_temp: false,
-                        scope_id: *scope,
+                        scope_id: scope,
                     },
                     span: node.span,
                 })
@@ -2391,12 +2377,10 @@ impl MiddleEnvironment {
                     },
                 );
 
-                if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
-                    scope_ref.mappings.insert(base_name, new_name.clone());
-                }
-
                 let mut prev_generics = Vec::new();
-                if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
+                if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
+                    scope_ref.mappings.insert(base_name, new_name.clone());
+
                     for name in &generic_names {
                         prev_generics.push((name.clone(), scope_ref.mappings.get(name).cloned()));
                         scope_ref.mappings.insert(name.clone(), name.clone());
@@ -2449,7 +2433,7 @@ impl MiddleEnvironment {
                     },
                 );
 
-                if let Some(scope_ref) = self.scoping.scopes.get_mut(scope) {
+                if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
                     for (name, prev) in prev_generics {
                         if let Some(prev) = prev {
                             scope_ref.mappings.insert(name, prev);
@@ -2660,17 +2644,12 @@ impl MiddleEnvironment {
                             span: node.span,
                         });
                     }
+
                     let (new_scope_id, build_node) =
-                        self.import_scope_list(*scope, module_path.clone())?;
+                        self.import_scope_list(scope, module_path.clone())?;
+
                     self.scoping
-                        .scopes
-                        .get_mut(scope)
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                            )
-                        })?
+                        .scope_mut_or_err(scope)?
                         .children
                         .insert(alias.to_string(), new_scope_id);
 
@@ -2680,10 +2659,10 @@ impl MiddleEnvironment {
                     }));
                 } else if !values.is_empty() {
                     let (new_scope_id, build_node) =
-                        self.import_scope_list(*scope, module_path.clone())?;
+                        self.import_scope_list(scope, module_path.clone())?;
                     (new_scope_id, build_node)
                 } else {
-                    let (_, n) = self.import_scope_list(*scope, module_path)?;
+                    let (_, n) = self.import_scope_list(scope, module_path)?;
                     return Ok(if let Some(x) = n {
                         x
                     } else {
@@ -2695,21 +2674,13 @@ impl MiddleEnvironment {
                 };
 
                 let (ident_map, type_map) = {
-                    let scope = self.scoping.scopes.get(&new_scope).ok_or_else(|| {
-                        MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Internal(format!("missing scope {new_scope}"))),
-                        )
-                    })?;
+                    let scope = self.scoping.scope_or_err(new_scope)?;
 
                     (scope.mappings.clone(), scope.type_mappings.clone())
                 };
 
                 if &values[0].text == "*" {
-                    let scope = self.scoping.scopes.get_mut(scope).ok_or(MiddleErr::At(
-                        node.span,
-                        Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                    ))?;
+                    let scope = self.scoping.scope_mut_or_err(scope)?;
 
                     for (key, value) in ident_map {
                         scope.mappings.entry(key).or_insert(value);
@@ -2719,10 +2690,7 @@ impl MiddleEnvironment {
                         scope.type_mappings.entry(key).or_insert(value);
                     }
                 } else {
-                    let scope = self.scoping.scopes.get_mut(scope).ok_or(MiddleErr::At(
-                        node.span,
-                        Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                    ))?;
+                    let scope = self.scoping.scope_mut_or_err(scope)?;
 
                     for key in values {
                         if let Some(value) = ident_map.get(&key.text).cloned() {

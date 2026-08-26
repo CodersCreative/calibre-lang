@@ -1,7 +1,7 @@
 use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    scoping::{MiddleScope, Scoping},
+    scoping::{MiddleScope, ScopeId, Scoping},
 };
 use calibre_parser::{
     Parser,
@@ -14,25 +14,24 @@ use std::{eprintln, fs, path::PathBuf};
 impl Scoping {
     pub fn new_root_scope_no_std(
         &mut self,
-        parent: Option<u64>,
+        parent: Option<ScopeId>,
         path: PathBuf,
         namespace: Option<&str>,
-    ) -> u64 {
-        let scope = 0;
-        let counter = self.scope_counter;
-
-        self.add_scope(MiddleScope {
-            id: 0,
-            macros: FxHashMap::default(),
-            macro_args: FxHashMap::default(),
-            namespace: namespace.unwrap_or(&counter.to_string()).to_string(),
+    ) -> ScopeId {
+        let scope = self.add_scope(
+            MiddleScope {
+                macros: FxHashMap::default(),
+                macro_args: FxHashMap::default(),
+                namespace: namespace.unwrap_or_default().to_string(),
+                path: path.clone(),
+                mappings: FxHashMap::default(),
+                type_mappings: FxHashMap::default(),
+                children: FxHashMap::default(),
+                defers: Vec::new(),
+                built: false,
+            },
             parent,
-            children: FxHashMap::default(),
-            path: path.clone(),
-            mappings: FxHashMap::default(),
-            type_mappings: FxHashMap::default(),
-            defers: Vec::new(),
-        });
+        );
 
         self.new_scope(Some(scope), path, Some("root"))
     }
@@ -41,28 +40,27 @@ impl Scoping {
 impl MiddleEnvironment {
     pub fn new_root_scope_with_std(
         &mut self,
-        parent: Option<u64>,
+        parent: Option<ScopeId>,
         path: PathBuf,
         namespace: Option<&str>,
-    ) -> u64 {
+    ) -> ScopeId {
         self.register_tag_handlers();
-        let scope = 0;
-        let counter = self.scoping.scope_counter;
-
-        self.scoping.add_scope(MiddleScope {
-            id: 0,
-            macros: FxHashMap::default(),
-            macro_args: FxHashMap::default(),
-            namespace: namespace.unwrap_or(&counter.to_string()).to_string(),
+        let scope = self.scoping.add_scope(
+            MiddleScope {
+                macros: FxHashMap::default(),
+                macro_args: FxHashMap::default(),
+                namespace: namespace.unwrap_or_default().to_string(),
+                path: path.clone(),
+                mappings: FxHashMap::default(),
+                type_mappings: FxHashMap::default(),
+                children: FxHashMap::default(),
+                defers: Vec::new(),
+                built: false,
+            },
             parent,
-            children: FxHashMap::default(),
-            path: path.clone(),
-            mappings: FxHashMap::default(),
-            type_mappings: FxHashMap::default(),
-            defers: Vec::new(),
-        });
+        );
 
-        self.setup_global(&scope);
+        self.setup_global(scope);
         self.context.stdlib_nodes.clear();
         let mut parser = Parser::default();
         let global_path = get_globals_path();
@@ -74,7 +72,7 @@ impl MiddleEnvironment {
             }
 
             let error_count_before = self.context.errors.len();
-            let middle = self.evaluate(&scope, program);
+            let middle = self.evaluate(scope, program);
 
             if self.context.errors.len() > error_count_before {
                 let new_errors: Vec<_> = self.context.errors.drain(error_count_before..).collect();
@@ -94,12 +92,12 @@ impl MiddleEnvironment {
             .scoping
             .new_scope(Some(scope), get_stdlib_path(), Some("std"));
 
-        self.setup_std(&std);
+        self.setup_std(std);
 
         self.scoping.new_scope(Some(scope), path, Some("root"))
     }
 
-    pub fn setup_global(&mut self, scope: &u64) {
+    pub fn setup_global(&mut self, scope: ScopeId) {
         let mut funcs = ParserDataType::natives()
             .iter()
             .filter(|x| !x.0.contains("."))
@@ -124,10 +122,10 @@ impl MiddleEnvironment {
         }
     }
 
-    pub fn setup_std(&mut self, scope: &u64) {
+    pub fn setup_std(&mut self, scope: ScopeId) {
         let mut parser = Parser::default();
 
-        if let Some(scope_ref) = self.scoping.scopes.get(scope)
+        if let Ok(scope_ref) = self.scoping.scope_or_err(scope)
             && let Ok(stdlib) = fs::read_to_string(&scope_ref.path)
         {
             let scope_path = scope_ref.path.clone();
@@ -140,7 +138,10 @@ impl MiddleEnvironment {
             let error_count_before = self.context.errors.len();
             let middle = self.evaluate(scope, program);
             self.context.stdlib_nodes.push(middle);
-            self.scoping.loaded_scopes.insert(*scope);
+
+            if let Ok(x) = self.scoping.scope_mut_or_err(scope) {
+                x.built = true
+            };
 
             if self.context.errors.len() > error_count_before {
                 let new_errors: Vec<_> = self.context.errors.drain(error_count_before..).collect();
@@ -179,11 +180,11 @@ impl MiddleEnvironment {
         add("json", false);
     }
 
-    pub fn setup_std_module(&mut self, parent: &u64, name: &str, load_source: bool) {
+    pub fn setup_std_module(&mut self, parent: ScopeId, name: &str, load_source: bool) {
         let scope_path = get_stdlib_module_path(name);
         let scope = self
             .scoping
-            .new_scope(Some(*parent), scope_path.clone(), Some(name));
+            .new_scope(Some(parent), scope_path.clone(), Some(name));
 
         let funcs: Vec<(&String, &ParserDataType)> = ParserDataType::natives()
             .iter()
@@ -201,7 +202,7 @@ impl MiddleEnvironment {
             let name = ParserText::temp_name_with_suffix(&short_name, var.span).text;
 
             let _ = self.register_variable(
-                &scope,
+                scope,
                 short_name,
                 name.clone(),
                 var.clone(),
@@ -229,10 +230,12 @@ impl MiddleEnvironment {
                 }
 
                 let error_count_before = self.context.errors.len();
-                let middle = self.evaluate(&scope, program);
+                let middle = self.evaluate(scope, program);
 
                 self.context.stdlib_nodes.push(middle);
-                self.scoping.loaded_scopes.insert(scope);
+                if let Ok(x) = self.scoping.scope_mut_or_err(scope) {
+                    x.built = true
+                };
 
                 if self.context.errors.len() > error_count_before {
                     let new_errors: Vec<_> =

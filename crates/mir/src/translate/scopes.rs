@@ -2,7 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    scoping::ScopeMacro,
+    scoping::{ScopeId, ScopeMacro},
     symbols::resolve::ResolutionOptions,
 };
 use calibre_parser::{
@@ -28,7 +28,7 @@ impl MiddleEnvironment {
 
     pub fn evaluate_scope_alias(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         identifier: PotentialDollarIdentifier,
         value: NamedScope,
@@ -89,7 +89,7 @@ impl MiddleEnvironment {
 
     pub fn evaluate_scope_declaration(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         mut body: Option<Vec<AstNode>>,
         named: Option<NamedScope>,
         create_new_scope: Option<bool>,
@@ -206,13 +206,13 @@ impl MiddleEnvironment {
         }
 
         let new_scope = if create_new_scope && !define {
-            self.scoping.new_scope_from_parent_shallow(*scope)
+            self.scoping.new_scope_from_parent_shallow(scope)
         } else {
-            *scope
+            scope
         };
 
         if !macro_args_to_insert.is_empty() {
-            let scope_data = self.scoping.scope_mut_or_err(&new_scope)?;
+            let scope_data = self.scoping.scope_mut_or_err(new_scope)?;
             for (key, value) in macro_args_to_insert {
                 scope_data.macro_args.insert(key, value);
             }
@@ -226,13 +226,13 @@ impl MiddleEnvironment {
                     && matches!(value.node_type, AstNodeType::FunctionDeclaration { .. })
                 {
                     let ident = self.resolve(
-                        &new_scope,
+                        new_scope,
                         identifier,
                         ResolutionOptions::default().with_dollar(),
                     )?;
                     let new_name = ParserText::temp_name_with_suffix(ident.trim(), span).text;
                     self.scoping
-                        .scope_mut_or_err(&new_scope)?
+                        .scope_mut_or_err(new_scope)?
                         .mappings
                         .entry(ident.clone())
                         .or_insert(new_name);
@@ -242,14 +242,14 @@ impl MiddleEnvironment {
             if is_temp {
                 let last = body.pop();
                 for statement in body.into_iter() {
-                    stmts.push(self.evaluate(&new_scope, statement));
+                    stmts.push(self.evaluate(new_scope, statement));
                 }
 
-                let last = last.map(|x| self.evaluate(&new_scope, x));
+                let last = last.map(|x| self.evaluate(new_scope, x));
 
                 if !last.as_ref().is_some_and(Self::ends_in_control_flow) {
-                    for x in self.scoping.scope_or_err(&new_scope)?.defers.clone() {
-                        stmts.push(self.evaluate(&new_scope, x));
+                    for x in self.scoping.scope_or_err(new_scope)?.defers.clone() {
+                        stmts.push(self.evaluate(new_scope, x));
                     }
                 }
 
@@ -258,16 +258,16 @@ impl MiddleEnvironment {
                 }
             } else {
                 for statement in body.into_iter() {
-                    if let Ok(x) = self.evaluate_inner(&new_scope, statement.clone()) {
+                    if let Ok(x) = self.evaluate_inner(new_scope, statement.clone()) {
                         stmts.push(x);
                     }
                 }
             }
         }
 
-        if &new_scope != scope && !og_create_new_scope.unwrap_or(create_new_scope) {
+        if new_scope != scope && !og_create_new_scope.unwrap_or(create_new_scope) {
             let (mappings, macros) = {
-                let scope = self.scoping.scope_or_err(&new_scope)?;
+                let scope = self.scoping.scope_or_err(new_scope)?;
                 (scope.mappings.clone(), scope.macros.clone())
             };
 

@@ -7,16 +7,16 @@ use calibre_parser::{
         types::ParserInnerType,
     },
 };
+use indextree::{Arena, Node, NodeId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::PathBuf;
 
 pub mod resolve;
+pub type ScopeId = NodeId;
 
 #[derive(Debug, Clone, Default)]
 pub struct Scoping {
-    pub scope_counter: u64,
-    pub scopes: FxHashMap<u64, MiddleScope>,
-    pub loaded_scopes: FxHashSet<u64>,
+    pub scopes: Arena<MiddleScope>,
     pub loop_stack: Vec<LoopContext>,
     pub return_type_stack: Vec<ParserInnerType>,
     pub generic_param_stack: Vec<Vec<String>>,
@@ -24,27 +24,34 @@ pub struct Scoping {
 }
 
 impl Scoping {
-    pub fn scope_or_err(&self, scope: &u64) -> Result<&MiddleScope, MiddleErr> {
+    #[inline(always)]
+    pub fn scope_or_err(&self, scope: ScopeId) -> Result<&MiddleScope, MiddleErr> {
         self.scopes
             .get(scope)
+            .map(|x| x.get())
             .ok_or_else(|| MiddleErr::Internal(format!("missing scope {scope}")))
     }
 
-    pub fn scope_mut_or_err(&mut self, scope: &u64) -> Result<&mut MiddleScope, MiddleErr> {
+    #[inline(always)]
+    pub fn scope_mut_or_err(&mut self, scope: ScopeId) -> Result<&mut MiddleScope, MiddleErr> {
         self.scopes
             .get_mut(scope)
+            .map(|x| x.get_mut())
             .ok_or_else(|| MiddleErr::Internal(format!("missing scope {scope}")))
     }
 
+    #[inline(always)]
     pub fn push_generic_params(&mut self, params: Vec<String>) {
         self.all_time_generics.extend(params.clone());
         self.generic_param_stack.push(params);
     }
 
+    #[inline(always)]
     pub fn pop_generic_params(&mut self) {
         self.generic_param_stack.pop();
     }
 
+    #[inline(always)]
     pub fn is_generic_param(&self, ident: &str) -> bool {
         for params in self.generic_param_stack.iter().rev() {
             if params.contains(&ident.to_string()) {
@@ -54,147 +61,131 @@ impl Scoping {
         false
     }
 
-    pub fn get_location(&self, scope: &u64, span: Span) -> Option<Location> {
-        self.scopes.get(scope).map(|s| Location {
+    #[inline(always)]
+    pub fn get_location(&self, scope: ScopeId, span: Span) -> Option<Location> {
+        self.scope_or_err(scope).ok().map(|s| Location {
             path: s.path.clone(),
             span,
         })
     }
 
-    pub fn resolve_macro_arg(&self, scope: &u64, iden: &str) -> Option<&AstNode> {
-        let scope = self.scopes.get(scope)?;
-
-        if let Some(x) = scope.macro_args.get(iden) {
-            Some(x)
-        } else if let Some(parent) = scope.parent.as_ref() {
-            self.resolve_macro_arg(parent, iden)
-        } else {
-            None
-        }
+    #[inline(always)]
+    pub fn resolve_macro_arg(&self, scope: ScopeId, iden: &str) -> Option<&AstNode> {
+        scope.descendants(&self.scopes).find_map(|x| {
+            self.scope_or_err(x.clone())
+                .ok()
+                .and_then(|x| x.macro_args.get(iden))
+        })
     }
 
-    pub fn resolve_macro(&self, scope: &u64, iden: &str) -> Option<&ScopeMacro> {
-        let scope = self.scopes.get(scope)?;
-
-        if let Some(x) = scope.macros.get(iden) {
-            Some(x)
-        } else if let Some(parent) = scope.parent.as_ref() {
-            self.resolve_macro(parent, iden)
-        } else {
-            None
-        }
+    #[inline(always)]
+    pub fn resolve_macro(&self, scope: ScopeId, iden: &str) -> Option<&ScopeMacro> {
+        scope.descendants(&self.scopes).find_map(|x| {
+            self.scope_or_err(x.clone())
+                .ok()
+                .and_then(|x| x.macros.get(iden))
+        })
     }
 
-    pub fn get_global_scope(&self) -> &MiddleScope {
-        self.scopes.get(&0).unwrap_or_else(|| empty_scope())
+    #[inline(always)]
+    pub fn get_global_scope(&self) -> Option<ScopeId> {
+        self.scopes.roots().next()
     }
 
-    pub fn get_root_scope(&self) -> &MiddleScope {
-        for i in 1..self.scope_counter {
-            if let Some(scope) = self.scopes.get(&i)
-                && scope.namespace == "root"
-                && scope.parent == Some(0)
-            {
-                return scope;
+    #[inline(always)]
+    pub fn get_parent(&self, scope: ScopeId) -> Option<ScopeId> {
+        scope.descendants(&self.scopes).nth(1)
+    }
+
+    pub fn get_id(&self, scope: &Node<MiddleScope>) -> Option<ScopeId> {
+        self.scopes.get_node_id(scope)
+    }
+
+    #[inline(always)]
+    pub fn get_root_scope(&self) -> Option<ScopeId> {
+        self.scopes.iter().find_map(|x| {
+            if x.get().namespace == "root" {
+                self.get_id(x)
+            } else {
+                None
             }
-        }
-
-        self.scopes.get(&0).unwrap_or_else(|| empty_scope())
+        })
     }
 
-    pub fn add_scope(&mut self, mut scope: MiddleScope) {
-        scope.id = self.scope_counter;
-        self.scopes.insert(scope.id, scope);
-        self.scope_counter += 1;
+    #[inline(always)]
+    pub fn add_scope(&mut self, scope: MiddleScope, parent: Option<ScopeId>) -> ScopeId {
+        let scope = self.scopes.new_node(scope);
+
+        if let Some(parent) = parent {
+            parent.append(scope, &mut self.scopes);
+        }
+
+        scope
     }
 
     pub fn new_scope(
         &mut self,
-        parent: Option<u64>,
+        parent: Option<ScopeId>,
         path: PathBuf,
         namespace: Option<&str>,
-    ) -> u64 {
+    ) -> ScopeId {
         if let (Some(parent_id), Some(ns)) = (parent, namespace) {
-            let existing = self.scopes.values().find_map(|scope| {
-                if scope.namespace != ns {
+            let existing = self.scopes.iter().find_map(|scope| {
+                let scope_ref = scope.get();
+                if scope_ref.namespace != ns {
                     return None;
                 }
-                if scope.path == path {
-                    return Some(scope.id);
+
+                if scope_ref.path == path {
+                    return Some(self.get_id(scope)?);
                 }
-                let left = std::fs::canonicalize(&scope.path).ok();
+
+                let left = std::fs::canonicalize(&scope_ref.path).ok();
                 let right = std::fs::canonicalize(&path).ok();
                 if left.is_some() && left == right {
-                    Some(scope.id)
+                    Some(self.get_id(scope)?)
                 } else {
                     None
                 }
             });
+
             if let Some(existing_id) = existing {
-                if let Some(parent_scope) = self.scopes.get_mut(&parent_id) {
-                    parent_scope.children.insert(ns.to_string(), existing_id);
-                }
+                parent_id.append(existing_id, &mut self.scopes);
                 return existing_id;
             }
         }
 
-        if let Some(parent) = parent {
-            let scope = MiddleScope {
+        let id = self.add_scope(
+            MiddleScope {
                 macros: FxHashMap::default(),
                 macro_args: FxHashMap::default(),
-                id: self.scope_counter,
-                namespace: namespace
-                    .unwrap_or(&self.scope_counter.to_string())
-                    .to_string(),
-                parent: Some(parent),
-                children: FxHashMap::default(),
+                namespace: namespace.unwrap_or_default().to_string(),
                 mappings: FxHashMap::default(),
                 type_mappings: FxHashMap::default(),
-                defers: Vec::new(),
-                path,
-            };
-
-            self.add_scope(scope);
-
-            if let Some(scope_ref) = self.scopes.get_mut(&parent) {
-                scope_ref.children.insert(
-                    namespace
-                        .map(String::from)
-                        .unwrap_or((self.scope_counter - 1).to_string()),
-                    self.scope_counter - 1,
-                );
-            }
-
-            self.scope_counter - 1
-        } else {
-            let scope = MiddleScope {
-                macros: FxHashMap::default(),
-                macro_args: FxHashMap::default(),
-                id: self.scope_counter,
-                namespace: namespace
-                    .unwrap_or(&self.scope_counter.to_string())
-                    .to_string(),
-                parent: None,
                 children: FxHashMap::default(),
-                mappings: FxHashMap::default(),
-                type_mappings: FxHashMap::default(),
                 defers: Vec::new(),
                 path,
-            };
-            self.add_scope(scope);
-            self.scope_counter - 1
-        }
+                built: false,
+            },
+            parent,
+        );
+
+        id
     }
 
-    pub fn new_scope_from_parent_shallow(&mut self, parent: u64) -> u64 {
-        let Some(path) = self.scopes.get(&parent).map(|s| s.path.clone()) else {
+    pub fn new_scope_from_parent_shallow(&mut self, parent: ScopeId) -> ScopeId {
+        let Ok(path) = self.scope_or_err(parent).map(|s| s.path.clone()) else {
             return parent;
         };
         self.new_scope(Some(parent), path, None)
     }
 
-    pub fn new_build_scope_from_parent(&mut self, parent: u64, namespace: &str) -> Option<u64> {
-        let path = self.scopes.get(&parent)?.path.clone();
+    pub fn new_build_scope_from_parent(
+        &mut self,
+        parent: ScopeId,
+        namespace: &str,
+    ) -> Option<ScopeId> {
+        let path = self.scope_or_err(parent).ok()?.path.clone();
         let parent_name = path.file_name()?;
         let folder = path.parent()?.to_path_buf();
 
@@ -219,17 +210,16 @@ impl Scoping {
     pub fn get_scope_from_path(
         &self,
         path: &[String],
-        mut parent: Option<u64>,
-    ) -> Result<u64, MiddleErr> {
+        mut parent: Option<ScopeId>,
+    ) -> Result<ScopeId, MiddleErr> {
         let mut skip = 0;
 
         if parent.is_none() {
             parent = self
                 .scopes
                 .iter()
-                .find(|(_, v)| v.namespace == path[0])
-                .map(|x| x.0)
-                .cloned();
+                .find(|v| v.get().namespace == path[0])
+                .and_then(|x| self.get_id(x));
 
             if parent.is_none() {
                 return Err(MiddleErr::Scope(path[0].clone()));
@@ -240,48 +230,50 @@ impl Scoping {
 
         for name in path.iter().skip(skip) {
             if let Some(p) = parent {
-                parent = Some(self.get_scope_from_parent(p, name)?);
+                parent = Some(self.get_scope_from_children(p, name)?);
             }
         }
 
         parent.ok_or_else(|| MiddleErr::Scope(path.join("::")))
     }
 
-    pub fn get_scope_from_parent(&self, parent: u64, namespace: &str) -> Result<u64, MiddleErr> {
-        let parent_scope = self
-            .scopes
-            .get(&parent)
-            .ok_or_else(|| MiddleErr::Internal(format!("missing scope {parent}")))?;
-
-        for (_, child) in parent_scope.children.iter() {
-            if let Some(x) = self.scopes.get(child)
-                && x.namespace == namespace
-            {
-                return Ok(x.id);
-            }
+    #[inline(always)]
+    pub fn get_scope_from_children(
+        &self,
+        parent: ScopeId,
+        namespace: &str,
+    ) -> Result<ScopeId, MiddleErr> {
+        if let Some(x) = parent.children(&self.scopes).find(|child| {
+            self.scope_or_err(*child)
+                .is_ok_and(|x| x.namespace == namespace)
+        }) {
+            Ok(x)
+        } else if let Some(x) = self
+            .scope_or_err(parent)
+            .ok()
+            .and_then(|x| x.children.get(namespace))
+        {
+            Ok(*x)
+        } else {
+            Err(MiddleErr::Scope(namespace.to_string()))
         }
-
-        Err(MiddleErr::Scope(namespace.to_string()))
     }
 
     pub fn new_scope_from_parent(
         &mut self,
-        parent: u64,
+        parent: ScopeId,
         namespace: &str,
-    ) -> Result<u64, MiddleErr> {
-        if let Ok(scope) = self.get_scope_from_parent(parent, namespace) {
+    ) -> Result<ScopeId, MiddleErr> {
+        if let Ok(scope) = self.get_scope_from_children(parent, namespace) {
             return Ok(scope);
         }
 
-        let path = self
-            .scopes
-            .get(&parent)
-            .ok_or_else(|| MiddleErr::Internal(format!("missing parent scope {parent}")))?
-            .path
-            .clone();
+        let path = self.scope_or_err(parent)?.path.clone();
+
         let parent_name = path.file_name().ok_or_else(|| {
             MiddleErr::Internal(format!("missing parent filename for scope {parent}"))
         })?;
+
         let folder = path.parent().ok_or_else(|| {
             MiddleErr::Internal(format!("missing parent directory for scope {parent}"))
         })?;
@@ -322,46 +314,34 @@ impl Scoping {
         )))
     }
 
-    pub fn collect_defers_until(&self, scope: &u64, stop_scope: Option<u64>) -> Vec<AstNode> {
+    #[inline(always)]
+    pub fn collect_defers_until(
+        &self,
+        scope: ScopeId,
+        stop_scope: Option<ScopeId>,
+    ) -> Vec<AstNode> {
         let mut out = Vec::new();
-        let mut current = Some(*scope);
-        while let Some(id) = current {
-            let Some(s) = self.scopes.get(&id) else {
-                break;
-            };
-            if stop_scope.is_some_and(|stop| stop == id) {
-                break;
-            }
-            out.extend(s.defers.clone());
-            current = s.parent;
-        }
+
+        scope
+            .descendants(&self.scopes)
+            .take_while(|id| !stop_scope.is_some_and(|stop| &stop == id))
+            .for_each(|x| {
+                if let Ok(s) = self.scope_or_err(x) {
+                    out.extend(s.defers.clone());
+                }
+            });
+
         out
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct LoopContext {
     pub label: Option<String>,
     pub result_target: Option<ParserText>,
     pub broke_target: Option<ParserText>,
     pub continue_inject: Option<AstNode>,
-    pub scope_id: u64,
-}
-
-fn empty_scope() -> &'static MiddleScope {
-    static EMPTY: std::sync::OnceLock<MiddleScope> = std::sync::OnceLock::new();
-    EMPTY.get_or_init(|| MiddleScope {
-        id: 0,
-        parent: None,
-        type_mappings: FxHashMap::default(),
-        mappings: FxHashMap::default(),
-        macros: FxHashMap::default(),
-        macro_args: FxHashMap::default(),
-        children: FxHashMap::default(),
-        namespace: "empty".to_string(),
-        path: PathBuf::new(),
-        defers: Vec::new(),
-    })
+    pub scope_id: ScopeId,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -374,20 +354,19 @@ pub struct ScopeMacro {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleScope {
-    pub id: u64,
-    pub parent: Option<u64>,
     pub mappings: FxHashMap<String, String>,
     pub type_mappings: FxHashMap<String, ParserInnerType>,
     pub macros: FxHashMap<String, ScopeMacro>,
     pub macro_args: FxHashMap<String, AstNode>,
-    pub children: FxHashMap<String, u64>,
+    pub children: FxHashMap<String, NodeId>,
     pub namespace: String,
     pub path: PathBuf,
     pub defers: Vec<AstNode>,
+    pub built: bool,
 }
 
 impl MiddleScope {
-    #[inline]
+    #[inline(always)]
     pub fn path_or_fallback(&self) -> String {
         let file = self.path.to_string_lossy().to_string();
         if file.is_empty() {

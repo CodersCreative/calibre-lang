@@ -1,5 +1,6 @@
 use crate::{
-    environment::MiddleEnvironment, symbols::resolve::ResolutionOptions, typing::MiddleTypeDefType,
+    environment::MiddleEnvironment, scoping::ScopeId, symbols::resolve::ResolutionOptions,
+    typing::MiddleTypeDefType,
 };
 use calibre_parser::ast::{
     Operator,
@@ -11,7 +12,7 @@ use calibre_parser::ast::{
 impl MiddleEnvironment {
     pub fn resolve_emit_type_from_node(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         node: &AstNode,
     ) -> Option<ParserDataType> {
         let typ = match &node.node_type {
@@ -30,7 +31,7 @@ impl MiddleEnvironment {
 
     pub fn resolve_type_from_node(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         node: &AstNode,
     ) -> Option<ParserDataType> {
         let typ = match &node.node_type {
@@ -490,11 +491,11 @@ impl MiddleEnvironment {
                         .unwrap_or_else(|_| field.text().clone());
 
                     if let Ok(member_scope) = self
-                        .get_scope_list(*scope, module_path.clone())
-                        .or_else(|_| self.import_scope_list(*scope, module_path).map(|x| x.0))
+                        .get_scope_list(scope, module_path.clone())
+                        .or_else(|_| self.import_scope_list(scope, module_path).map(|x| x.0))
                     {
                         let resolved = self
-                            .resolve(&member_scope, field, ResolutionOptions::all())
+                            .resolve(member_scope, field, ResolutionOptions::all())
                             .unwrap_or(member);
                         return self
                             .symbols

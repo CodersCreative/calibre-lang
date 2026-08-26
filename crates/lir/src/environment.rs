@@ -1,4 +1,4 @@
-use calibre_mir::environment::MiddleEnvironment;
+use calibre_mir::{environment::MiddleEnvironment, scoping::ScopeId};
 use calibre_parser::ast::types::ParserDataType;
 use rustc_hash::FxHashMap;
 use std::fmt::Display;
@@ -16,7 +16,7 @@ pub struct LirRegistry {
     pub globals: FxHashMap<String, LirGlobal>,
     pub natives: FxHashMap<String, String>,
     pub dyn_vtables: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>>,
-    pub scope_to_file: FxHashMap<u64, String>,
+    pub scope_to_file: FxHashMap<ScopeId, String>,
 }
 
 impl LirRegistry {
@@ -112,11 +112,15 @@ impl<'a> LirEnvironment<'a> {
         debug!("creating LIR environment");
         let entry_id = BlockId(0);
 
-        let scope_to_file: FxHashMap<u64, String> = env
+        let scope_to_file: FxHashMap<ScopeId, String> = env
             .scoping
             .scopes
             .iter()
-            .map(|(id, scope)| (*id, scope.path.to_string_lossy().to_string()))
+            .filter_map(|x| {
+                env.scoping
+                    .get_id(x)
+                    .map(|id| (id, x.get().path.to_string_lossy().to_string()))
+            })
             .collect();
 
         debug!(

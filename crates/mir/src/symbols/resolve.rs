@@ -1,6 +1,7 @@
 use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr::{self},
+    scoping::ScopeId,
     typing::{MiddleTrait, MiddleTypeDefType},
 };
 use calibre_parser::{
@@ -138,7 +139,7 @@ impl MiddleEnvironment {
 
     pub fn resolve_member_field_type(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         base: &ParserDataType,
         member: &str,
         span: Span,
@@ -281,7 +282,7 @@ impl MiddleEnvironment {
 
     pub fn resolve<'a>(
         &'a self,
-        scope: &'a u64,
+        scope: ScopeId,
         ident: impl Into<IdentifierType<'a>>,
         options: ResolutionOptions,
     ) -> Result<String, MiddleErr> {
@@ -303,7 +304,7 @@ impl MiddleEnvironment {
     #[instrument(skip_all)]
     fn resolve_inner<'a>(
         &'a self,
-        scope: &'a u64,
+        scope: ScopeId,
         ident: impl Into<IdentifierType<'a>>,
         options: ResolutionOptions,
     ) -> Result<String, MiddleErr> {
@@ -363,12 +364,9 @@ impl MiddleEnvironment {
                 return Ok(ident);
             }
 
-            let scope_ref = self.scoping.scopes.get(scope).ok_or_else(|| {
-                self.context
-                    .err_at_current(MiddleErr::Scope(scope.to_string()))
-            })?;
-
             let ty = ParserDataType::from(ParserInnerType::from_str(&ident).unwrap());
+
+            let scope_ref = self.scoping.scope_or_err(scope)?;
 
             if let Some(x) = scope_ref.type_mappings.get(&ty.impl_name()).cloned() {
                 return Ok(ParserDataType::from(x).impl_name());
@@ -384,8 +382,8 @@ impl MiddleEnvironment {
                 }
             }
 
-            if let Some(x) = scope_ref.parent {
-                return self.resolve_inner(&x, &ident, options);
+            if let Some(x) = self.scoping.get_parent(scope) {
+                return self.resolve_inner(x, &ident, options);
             }
 
             for key in self.typing.trait_defs.keys() {
@@ -423,17 +421,14 @@ impl MiddleEnvironment {
             return Ok(ident);
         }
 
-        let scope_ref = self.scoping.scopes.get(scope).ok_or_else(|| {
-            self.context
-                .err_at_current(MiddleErr::Scope(scope.to_string()))
-        })?;
+        let scope_ref = self.scoping.scope_or_err(scope)?;
 
         if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
             return Ok(x);
         }
 
-        if let Some(x) = scope_ref.parent {
-            return self.resolve_inner(&x, &ident, options);
+        if let Some(x) = self.scoping.get_parent(scope) {
+            return self.resolve_inner(x, &ident, options);
         }
 
         for key in self.symbols.variables.keys() {
@@ -448,7 +443,7 @@ impl MiddleEnvironment {
     #[instrument(skip_all)]
     pub fn resolve_to_data_type<'a>(
         &'a mut self,
-        scope: &'a u64,
+        scope: ScopeId,
         ident: impl Into<IdentifierType<'a>>,
     ) -> Result<ParserDataType, MiddleErr> {
         let ident = ident.into();
@@ -558,7 +553,7 @@ impl MiddleEnvironment {
     #[instrument(skip_all)]
     pub fn resolve_data_type<'a>(
         &'a self,
-        scope: &'a u64,
+        scope: ScopeId,
         data_type: impl Into<&'a ParserInnerType>,
         options: ResolutionOptions,
     ) -> Result<ParserDataType, MiddleErr> {

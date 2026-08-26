@@ -2,7 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    scoping::LoopContext,
+    scoping::{LoopContext, ScopeId},
     symbols::resolve::ResolutionOptions,
     traversal::NodeVisitor,
 };
@@ -84,7 +84,7 @@ impl MiddleEnvironment {
 
     fn eval_loop_body_with_ctx(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         label_text: Option<String>,
         result_target: Option<ParserText>,
         broke_target: Option<ParserText>,
@@ -96,7 +96,7 @@ impl MiddleEnvironment {
             result_target,
             broke_target,
             continue_inject,
-            scope_id: *scope,
+            scope_id: scope,
         };
         self.scoping.loop_stack.push(ctx);
         let out = self.evaluate_inner(scope, body_node);
@@ -107,7 +107,7 @@ impl MiddleEnvironment {
     fn finish_loop_with_else(
         &mut self,
         loop_node: MiddleNode,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         else_body: Option<Box<AstNode>>,
         result_raw: Option<String>,
@@ -157,16 +157,16 @@ impl MiddleEnvironment {
                 body: stmts,
                 create_new_scope: true,
                 is_temp: true,
-                scope_id: *scope,
+                scope_id: scope,
             },
             span,
         })
     }
 
-    #[instrument(skip_all, fields(scope))]
+    #[instrument(skip_all)]
     pub fn evaluate_iter_expression(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         data_type: ParserDataType,
         map: Box<AstNode>,
         spawned: bool,
@@ -668,10 +668,10 @@ impl MiddleEnvironment {
         )
     }
 
-    #[instrument(skip_all, fields(scope))]
+    #[instrument(skip_all)]
     pub fn evaluate_loop_statement(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         loop_type: LoopType,
         mut body: AstNode,
         until: Option<Box<AstNode>>,
@@ -702,9 +702,9 @@ impl MiddleEnvironment {
             );
         }
 
-        let scope = self.scoping.new_scope_from_parent_shallow(*scope);
+        let scope = self.scoping.new_scope_from_parent_shallow(scope);
         let label_text = label.as_ref().map(|l| {
-            self.resolve(&scope, l, ResolutionOptions::default().with_dollar())
+            self.resolve(scope, l, ResolutionOptions::default().with_dollar())
                 .unwrap_or_else(|_| l.to_string())
         });
 
@@ -717,7 +717,7 @@ impl MiddleEnvironment {
             let result = ParserText::temp_name_with_suffix("loop_result", span).to_string();
             let broke = ParserText::temp_name_with_suffix("loop_broke", span).to_string();
 
-            if let Some(scope_data) = self.scoping.scopes.get_mut(&scope) {
+            if let Ok(scope_data) = self.scoping.scope_mut_or_err(scope) {
                 scope_data.mappings.insert(result.clone(), result.clone());
                 scope_data.mappings.insert(broke.clone(), broke.clone());
             }
@@ -734,7 +734,7 @@ impl MiddleEnvironment {
         match loop_type {
             LoopType::Loop => {
                 let body = self.eval_loop_body_with_ctx(
-                    &scope,
+                    scope,
                     label_text.clone(),
                     result_ident.clone(),
                     broke_ident.clone(),
@@ -750,9 +750,7 @@ impl MiddleEnvironment {
                     },
                     span,
                 };
-                self.finish_loop_with_else(
-                    loop_node, &scope, span, else_body, result_raw, broke_raw,
-                )
+                self.finish_loop_with_else(loop_node, scope, span, else_body, result_raw, broke_raw)
             }
             LoopType::While(condition) => {
                 let break_if_not = AstNode::new(
@@ -777,7 +775,7 @@ impl MiddleEnvironment {
 
                 let wrapped = self.wrap_loop_body(body, break_if_not, true);
                 let body = self.eval_loop_body_with_ctx(
-                    &scope,
+                    scope,
                     label_text.clone(),
                     result_ident.clone(),
                     broke_ident.clone(),
@@ -793,15 +791,13 @@ impl MiddleEnvironment {
                     },
                     span,
                 };
-                self.finish_loop_with_else(
-                    loop_node, &scope, span, else_body, result_raw, broke_raw,
-                )
+                self.finish_loop_with_else(loop_node, scope, span, else_body, result_raw, broke_raw)
             }
 
             LoopType::Let { value, pattern } => {
                 if matches!(value.node_type, AstNodeType::ListLiteral(_, _))
                     || self
-                        .resolve_type_from_node(&scope, &value)
+                        .resolve_type_from_node(scope, &value)
                         .is_some_and(|dt| {
                             matches!(dt.unwrap_all_refs().data_type, ParserInnerType::List(_))
                         })
@@ -821,7 +817,7 @@ impl MiddleEnvironment {
                         },
                     );
                     return self.evaluate_loop_statement(
-                        &scope,
+                        scope,
                         LoopType::For(item_ident, value),
                         filtered_body,
                         None,
@@ -831,7 +827,7 @@ impl MiddleEnvironment {
                 }
 
                 let body = self.eval_loop_body_with_ctx(
-                    &scope,
+                    scope,
                     label_text.clone(),
                     result_ident.clone(),
                     broke_ident.clone(),
@@ -860,9 +856,7 @@ impl MiddleEnvironment {
                     },
                     span,
                 };
-                self.finish_loop_with_else(
-                    loop_node, &scope, span, else_body, result_raw, broke_raw,
-                )
+                self.finish_loop_with_else(loop_node, scope, span, else_body, result_raw, broke_raw)
             }
 
             LoopType::For(name, range) => {
@@ -885,7 +879,7 @@ impl MiddleEnvironment {
                     None
                 };
 
-                let range_dt = self.resolve_type_from_node(&scope, &range);
+                let range_dt = self.resolve_type_from_node(scope, &range);
 
                 let explicit_range = match &range.node_type {
                     AstNodeType::RangeDeclaration {
@@ -959,7 +953,7 @@ impl MiddleEnvironment {
                 let mut state_nodes = Vec::new();
 
                 let iter_decl = self.evaluate(
-                    &scope,
+                    scope,
                     AstNode::new(
                         span,
                         AstNodeType::VariableDeclaration {
@@ -976,7 +970,7 @@ impl MiddleEnvironment {
                 );
 
                 self.register_variable(
-                    &scope,
+                    scope,
                     iter_id.to_string(),
                     iter_id.to_string(),
                     ParserDataType::auto(span),
@@ -991,7 +985,7 @@ impl MiddleEnvironment {
 
                 if is_indexable_loop {
                     let idx_decl = self.evaluate(
-                        &scope,
+                        scope,
                         AstNode::new(
                             span,
                             AstNodeType::VariableDeclaration {
@@ -1004,7 +998,7 @@ impl MiddleEnvironment {
                     );
 
                     self.register_variable(
-                        &scope,
+                        scope,
                         idx_id.to_string(),
                         idx_id.to_string(),
                         ParserDataType::new(span, ParserInnerType::Int),
@@ -1014,7 +1008,7 @@ impl MiddleEnvironment {
                     state_nodes.push(idx_decl);
                 } else {
                     let next_decl = self.evaluate(
-                        &scope,
+                        scope,
                         AstNode::new(
                             span,
                             AstNodeType::VariableDeclaration {
@@ -1027,7 +1021,7 @@ impl MiddleEnvironment {
                     );
 
                     self.register_variable(
-                        &scope,
+                        scope,
                         next_id.to_string(),
                         next_id.to_string(),
                         ParserDataType::auto(span),
@@ -1192,7 +1186,7 @@ impl MiddleEnvironment {
                 let final_body = AstNode::new_temp_scope(instructions);
 
                 let body = self.eval_loop_body_with_ctx(
-                    &scope,
+                    scope,
                     label_text.clone(),
                     result_ident.clone(),
                     broke_ident.clone(),
@@ -1214,9 +1208,7 @@ impl MiddleEnvironment {
                     span,
                 };
 
-                self.finish_loop_with_else(
-                    loop_node, &scope, span, else_body, result_raw, broke_raw,
-                )
+                self.finish_loop_with_else(loop_node, scope, span, else_body, result_raw, broke_raw)
             }
         }
     }

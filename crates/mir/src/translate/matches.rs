@@ -2,6 +2,7 @@ use crate::{
     ast::MiddleNode,
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
     traversal::{NodeAnalyzer, NodeVisitor},
     typing::MiddleTypeDefType,
@@ -428,7 +429,7 @@ impl MiddleEnvironment {
 
     fn apply_recursive_node_pattern(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         expected: &AstNode,
         actual: AstNode,
         cond: &mut AstNode,
@@ -516,7 +517,7 @@ impl MiddleEnvironment {
 
     fn emit_payload_bindings_from_pattern(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         payload_pattern: Option<&MatchArmType>,
         payload_value: AstNode,
         body_nodes: &mut Vec<AstNode>,
@@ -694,7 +695,7 @@ impl MiddleEnvironment {
 
     fn enum_variant_index_from_value(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         value_node: &AstNode,
         variant_name: &str,
     ) -> Option<i64> {
@@ -760,7 +761,7 @@ impl MiddleEnvironment {
 
     pub fn evaluate_match_statement(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         value: Option<Box<AstNode>>,
         body: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)>,

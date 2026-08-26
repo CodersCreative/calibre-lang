@@ -1,8 +1,8 @@
 use std::format;
 
 use crate::{
-    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, tags::TagInfo,
-    typing::MiddleTypeDefType,
+    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+    tags::TagInfo, typing::MiddleTypeDefType,
 };
 use calibre_parser::{
     Span,
@@ -18,7 +18,7 @@ use calibre_parser::{
 impl MiddleEnvironment {
     pub fn generate_builder(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         identifier: ParserText,
         object_type: MiddleTypeDefType,

@@ -1,5 +1,6 @@
 use crate::{
-    environment::MiddleEnvironment, errors::MiddleErr, symbols::resolve::ResolutionOptions,
+    environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+    symbols::resolve::ResolutionOptions,
 };
 use calibre_parser::ast::{
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
@@ -10,7 +11,7 @@ use calibre_parser::ast::{
 impl MiddleEnvironment {
     pub fn predeclare_nodes(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         nodes: &mut [AstNode],
     ) -> Result<(), MiddleErr> {
         for node in nodes {
@@ -20,7 +21,7 @@ impl MiddleEnvironment {
         Ok(())
     }
 
-    fn predeclare_node(&mut self, scope: &u64, node: &mut AstNode) -> Result<(), MiddleErr> {
+    fn predeclare_node(&mut self, scope: ScopeId, node: &mut AstNode) -> Result<(), MiddleErr> {
         match &mut node.node_type {
             AstNodeType::Tag { node: inner, .. } => self.predeclare_node(scope, inner.as_mut()),
             AstNodeType::TypeDeclaration {

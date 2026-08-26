@@ -2,6 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    scoping::ScopeId,
     symbols::MiddleOverload,
 };
 use calibre_parser::{
@@ -17,7 +18,7 @@ impl MiddleEnvironment {
     #[inline]
     pub fn resolve_operator_or_bool(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         left: &AstNode,
         right: &AstNode,
         operator: Operator,
@@ -30,7 +31,7 @@ impl MiddleEnvironment {
 
     pub fn handle_operator_overloads(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         left: AstNode,
         right: AstNode,
@@ -78,7 +79,7 @@ impl MiddleEnvironment {
 
     pub fn handle_as_overload(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         value: AstNode,
         target: ParserDataType,
@@ -121,7 +122,7 @@ impl MiddleEnvironment {
 
     pub fn handle_as_overload_exists(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         value: AstNode,
         target: ParserDataType,
     ) -> Result<bool, MiddleErr> {
@@ -152,7 +153,7 @@ impl MiddleEnvironment {
 
     pub fn handle_index_assign_overload(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         base: AstNode,
         index: AstNode,
@@ -204,7 +205,7 @@ impl MiddleEnvironment {
 
     pub fn get_operator_overload(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         left: &AstNode,
         right: &AstNode,
         operator: &Operator,

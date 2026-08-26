@@ -2,6 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    scoping::ScopeId,
     symbols::{FunctionParamDefault, resolve::ResolutionOptions},
     tags::TagInfo,
     typing::{MiddleObject, MiddleTypeDefType},
@@ -21,7 +22,7 @@ impl MiddleEnvironment {
     #[instrument(skip_all, fields(scope, identifier))]
     pub fn evaluate_var_declaration(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         var_type: VarType,
         identifier: PotentialDollarIdentifier,
@@ -176,7 +177,7 @@ impl MiddleEnvironment {
                 var_type,
             )?;
 
-            let new_scope = self.scoping.new_scope_from_parent_shallow(*scope);
+            let new_scope = self.scoping.new_scope_from_parent_shallow(scope);
 
             for param in header.parameters.iter() {
                 let og_name =
@@ -194,7 +195,7 @@ impl MiddleEnvironment {
                 };
 
                 self.register_variable(
-                    &new_scope,
+                    new_scope,
                     &og_name,
                     new_name.text.clone(),
                     data_type.clone(),
@@ -202,7 +203,7 @@ impl MiddleEnvironment {
                 )?;
             }
 
-            self.evaluate(&new_scope, value)
+            self.evaluate(new_scope, value)
         } else {
             self.evaluate(scope, value)
         };
@@ -248,7 +249,7 @@ impl MiddleEnvironment {
     #[instrument(skip_all, fields(scope, identifier))]
     pub fn evaluate_type_declaration(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         identifier: PotentialGenericTypeIdentifier,
         object: TypeDefType,
@@ -305,12 +306,7 @@ impl MiddleEnvironment {
             };
 
             {
-                let scope_ref = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
-                    MiddleErr::At(
-                        span,
-                        Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                    )
-                })?;
+                let scope_ref = self.scoping.scope_mut_or_err(scope)?;
 
                 scope_ref
                     .type_mappings
@@ -403,12 +399,7 @@ impl MiddleEnvironment {
         );
 
         let previous_self_type = {
-            let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
-                MiddleErr::At(
-                    span,
-                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                )
-            })?;
+            let scope = self.scoping.scope_mut_or_err(scope)?;
 
             scope
                 .type_mappings
@@ -452,12 +443,7 @@ impl MiddleEnvironment {
         }
 
         {
-            let scope = self.scoping.scopes.get_mut(scope).ok_or_else(|| {
-                MiddleErr::At(
-                    span,
-                    Box::new(MiddleErr::Internal(format!("missing scope {scope}"))),
-                )
-            })?;
+            let scope = self.scoping.scope_mut_or_err(scope)?;
 
             if let Some(prev) = previous_self_type {
                 scope.type_mappings.insert(String::from("Self"), prev);
@@ -475,7 +461,7 @@ impl MiddleEnvironment {
                     body: vec![nodes.0, nodes.1],
                     create_new_scope: false,
                     is_temp: false,
-                    scope_id: *scope,
+                    scope_id: scope,
                 },
                 span,
             }),
@@ -484,7 +470,7 @@ impl MiddleEnvironment {
                     body: vec![node, nodes.0, nodes.1],
                     create_new_scope: false,
                     is_temp: false,
-                    scope_id: *scope,
+                    scope_id: scope,
                 },
                 span,
             }),

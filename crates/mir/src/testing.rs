@@ -1,4 +1,4 @@
-use crate::{environment::MiddleEnvironment, tags::TagInfo};
+use crate::{environment::MiddleEnvironment, scoping::ScopeId, tags::TagInfo};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, Default)]
@@ -22,7 +22,7 @@ pub struct Test {
     pub panics: bool,
     pub todo: bool,
     pub todo_reason: Option<String>,
-    pub scope_id: u64,
+    pub scope_id: ScopeId,
     pub file_path: Option<PathBuf>,
     pub suites: Vec<String>,
 }
@@ -80,7 +80,7 @@ impl MiddleEnvironment {
         &mut self,
         name: String,
         function_name: String,
-        scope_id: u64,
+        scope_id: ScopeId,
         file_path: Option<PathBuf>,
     ) {
         let (skip, skip_reason) = self

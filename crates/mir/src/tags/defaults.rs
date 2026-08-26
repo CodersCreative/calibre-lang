@@ -1,4 +1,5 @@
 use crate::environment::MiddleEnvironment;
+use crate::scoping::ScopeId;
 use crate::symbols::resolve::ResolutionOptions;
 use crate::{ast::MiddleNode, errors::MiddleErr, typing::MiddleTypeDefType};
 use calibre_parser::ast::idents::{
@@ -14,7 +15,7 @@ use calibre_parser::{
 impl MiddleEnvironment {
     pub fn generate_default_impl(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         identifier: ParserText,
         object_type: MiddleTypeDefType,

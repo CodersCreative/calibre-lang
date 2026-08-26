@@ -1,4 +1,4 @@
-use crate::{ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr};
+use crate::{ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId};
 use calibre_parser::ast::{
     idents::ParserText,
     nodes::{AstNode, AstNodeType},
@@ -17,7 +17,7 @@ pub type TagHandlerFn = Arc<
     Mutex<
         dyn Fn(
                 &mut MiddleEnvironment,
-                &u64,
+                ScopeId,
                 AstNode,
                 ParserText,
                 Vec<AstNode>,
@@ -68,7 +68,7 @@ impl MiddleEnvironment {
     pub fn register_tag_handlers(&mut self) {
         let init_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              args: Vec<AstNode>| {
@@ -97,7 +97,7 @@ impl MiddleEnvironment {
 
         let fin_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              args: Vec<AstNode>| {
@@ -126,7 +126,7 @@ impl MiddleEnvironment {
 
         let default_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              _args: Vec<AstNode>| {
@@ -146,7 +146,7 @@ impl MiddleEnvironment {
 
         let builder_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              _args: Vec<AstNode>| {
@@ -166,7 +166,7 @@ impl MiddleEnvironment {
 
         let panics_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              _args: Vec<AstNode>| {
@@ -186,7 +186,7 @@ impl MiddleEnvironment {
 
         let todo_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              args: Vec<AstNode>| {
@@ -213,7 +213,7 @@ impl MiddleEnvironment {
 
         let deprecated_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              args: Vec<AstNode>| {
@@ -240,7 +240,7 @@ impl MiddleEnvironment {
 
         let skip_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              args: Vec<AstNode>| {
@@ -267,7 +267,7 @@ impl MiddleEnvironment {
 
         let bench_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              _args: Vec<AstNode>| {
@@ -287,7 +287,7 @@ impl MiddleEnvironment {
 
         let suite_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              args: Vec<AstNode>| {
@@ -314,7 +314,7 @@ impl MiddleEnvironment {
 
         let package_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              _args: Vec<AstNode>| {
@@ -332,7 +332,7 @@ impl MiddleEnvironment {
 
         let caller_context_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              _args: Vec<AstNode>| {
@@ -352,7 +352,7 @@ impl MiddleEnvironment {
 
         let ignore_invalid_return_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              _args: Vec<AstNode>| {
@@ -372,7 +372,7 @@ impl MiddleEnvironment {
 
         let ignore_invalid_let_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              _args: Vec<AstNode>| {
@@ -392,7 +392,7 @@ impl MiddleEnvironment {
 
         let current_context_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
-             scope: &u64,
+             scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
              _args: Vec<AstNode>| {

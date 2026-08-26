@@ -10,6 +10,7 @@ use calibre_parser::ast::{
     nodes::AsFailureMode,
     types::ParserDataType,
 };
+use indextree::NodeId;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -30,7 +31,7 @@ pub struct VMRegistry {
     #[serde(default)]
     pub dyn_vtables: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>>,
     #[serde(default)]
-    pub scope_to_file: FxHashMap<u64, String>,
+    pub scope_to_file: FxHashMap<NodeId, String>,
 }
 
 impl Display for VMRegistry {

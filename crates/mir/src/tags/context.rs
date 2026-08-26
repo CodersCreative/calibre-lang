@@ -1,5 +1,8 @@
 use crate::{
-    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::MiddleScope,
+    ast::MiddleNode,
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    scoping::{MiddleScope, ScopeId},
 };
 use calibre_parser::ast::{
     ObjectType,
@@ -66,15 +69,15 @@ impl MiddleEnvironment {
 
     pub fn evaluate_with_package_injection(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         node: AstNode,
     ) -> Result<MiddleNode, MiddleErr> {
-        let Some(scope_ref) = self.scoping.scopes.get(scope).cloned() else {
+        let Ok(scope_ref) = self.scoping.scope_or_err(scope) else {
             return self.evaluate_inner(scope, node);
         };
 
         let sp = node.span;
-        let meta = self.package_metadata_for_scope(&scope_ref);
+        let meta = self.package_metadata_for_scope(scope_ref);
         let value =
             |v: String| AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, v)));
 
@@ -126,10 +129,10 @@ impl MiddleEnvironment {
 
     pub fn evaluate_with_current_context_injection(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         node: AstNode,
     ) -> Result<MiddleNode, MiddleErr> {
-        let Some(scope_ref) = self.scoping.scopes.get(scope).cloned() else {
+        let Ok(scope_ref) = self.scoping.scope_or_err(scope) else {
             return self.evaluate_inner(scope, node);
         };
 
@@ -157,7 +160,10 @@ impl MiddleEnvironment {
                         identifier: PotentialGenericTypeIdentifier::new(sp, "ExecContext"),
                         value: ObjectType::Map(vec![
                             ("function_name".to_string(), value(function_name)),
-                            ("module_name".to_string(), value(scope_ref.namespace)),
+                            (
+                                "module_name".to_string(),
+                                value(scope_ref.namespace.clone()),
+                            ),
                             (
                                 "path".to_string(),
                                 value(

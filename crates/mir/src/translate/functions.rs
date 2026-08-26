@@ -2,6 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
     tags::TagInfo,
     traversal::NodeVisitor,
@@ -90,7 +91,7 @@ impl MiddleEnvironment {
 
     pub(crate) fn lower_defaulted_call_args(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         caller: &AstNode,
         data_type: &Option<ParserInnerType>,
@@ -268,7 +269,7 @@ impl MiddleEnvironment {
     #[inline]
     fn aggregate_from_call_nodes(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         identifier: Option<ParserText>,
         args: Vec<CallArg>,
@@ -429,7 +430,7 @@ impl MiddleEnvironment {
 
     pub(crate) fn evaluate_extern_function(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         abi: String,
         identifier: PotentialDollarIdentifier,
         parameters: Vec<ParserDataType>,
@@ -503,7 +504,7 @@ impl MiddleEnvironment {
 
     pub(crate) fn evaluate_function_declaration(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         header: FunctionHeader,
         mut body: AstNode,
@@ -511,7 +512,7 @@ impl MiddleEnvironment {
         let mut params = Vec::with_capacity(header.parameters.len());
         let mut param_idents = Vec::with_capacity(header.parameters.len());
         let mut old_func_defers = std::mem::take(&mut self.symbols.func_defers);
-        let new_scope = self.scoping.new_scope_from_parent_shallow(*scope);
+        let new_scope = self.scoping.new_scope_from_parent_shallow(scope);
 
         let generic_params: Vec<String> = header
             .generics
@@ -542,7 +543,7 @@ impl MiddleEnvironment {
             };
 
             self.register_variable(
-                &new_scope,
+                new_scope,
                 &og_name,
                 new_name.clone(),
                 data_type.clone(),
@@ -563,7 +564,7 @@ impl MiddleEnvironment {
                 ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
 
             self.register_variable(
-                &new_scope,
+                new_scope,
                 "caller_context",
                 caller_context_name.clone(),
                 caller_context_type.clone(),
@@ -578,7 +579,7 @@ impl MiddleEnvironment {
         }
 
         let return_type =
-            self.resolve_data_type(&new_scope, &header.return_type, ResolutionOptions::typing())?;
+            self.resolve_data_type(new_scope, &header.return_type, ResolutionOptions::typing())?;
 
         self.scoping.return_type_stack.push(return_type.key());
 
@@ -625,7 +626,7 @@ impl MiddleEnvironment {
             body = Self::wrap_generator_body(body, elem_type, span);
         }
 
-        let body = self.evaluate_inner(&new_scope, body)?;
+        let body = self.evaluate_inner(new_scope, body)?;
         let mut func_defers = Vec::new();
         func_defers.append(&mut self.symbols.func_defers);
 
@@ -638,7 +639,7 @@ impl MiddleEnvironment {
         {
             let mut last = scope_body.pop();
             for defer in func_defers {
-                scope_body.push(self.evaluate_inner(&scope_id, defer)?);
+                scope_body.push(self.evaluate_inner(scope_id, defer)?);
             }
 
             if return_type.data_type != ParserInnerType::Null
@@ -743,13 +744,8 @@ impl MiddleEnvironment {
         for (p_name, _, _) in params.iter() {
             let full = p_name.text.clone();
             if let Some(short) = ParserText::get_temp_name_suffix(&full) {
-                let err = self
-                    .context
-                    .err_at_current(MiddleErr::Scope(new_scope.to_string()));
                 self.scoping
-                    .scopes
-                    .get_mut(&new_scope)
-                    .ok_or(err)?
+                    .scope_mut_or_err(new_scope)?
                     .mappings
                     .insert(short, full);
             }
@@ -758,8 +754,8 @@ impl MiddleEnvironment {
         Ok(fn_node)
     }
 
-    pub fn get_caller_context(&self, scope: &u64, span: Span) -> Option<AstNode> {
-        let scope_ref = self.scoping.scopes.get(scope)?;
+    pub fn get_caller_context(&self, scope: ScopeId, span: Span) -> Option<AstNode> {
+        let scope_ref = self.scoping.scope_or_err(scope).ok()?;
 
         let value =
             |v: String| AstNode::new(span, AstNodeType::StringLiteral(ParserText::new(span, v)));
@@ -811,7 +807,7 @@ impl MiddleEnvironment {
     #[allow(clippy::only_used_in_recursion)]
     pub(crate) fn evaluate_call_expression(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         caller: AstNode,
         generic_types: Vec<ParserDataType>,

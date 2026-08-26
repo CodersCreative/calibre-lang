@@ -2,6 +2,7 @@ use crate::{
     ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
+    scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
     typing::MiddleTypeDefType,
 };
@@ -33,7 +34,7 @@ impl MiddleEnvironment {
 
     pub(crate) fn evaluate_field_access(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         base: AstNode,
         field: PotentialDollarIdentifier,
@@ -90,7 +91,7 @@ impl MiddleEnvironment {
 
     pub(crate) fn evaluate_scope_access(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         base: AstNode,
         field: PotentialDollarIdentifier,
@@ -100,12 +101,12 @@ impl MiddleEnvironment {
         let mut module_path = Vec::new();
         if base.scope_access_path(&mut module_path)
             && let Ok(new_scope) = self
-                .get_scope_list(*scope, module_path.clone())
-                .or_else(|_| self.import_scope_list(*scope, module_path).map(|x| x.0))
+                .get_scope_list(scope, module_path.clone())
+                .or_else(|_| self.import_scope_list(scope, module_path).map(|x| x.0))
         {
-            let resolved = self.resolve(&new_scope, &field, ResolutionOptions::all())?;
+            let resolved = self.resolve(new_scope, &field, ResolutionOptions::all())?;
 
-            return Ok(self.evaluate(&new_scope, AstNode::identifier(span, &resolved)));
+            return Ok(self.evaluate(new_scope, AstNode::identifier(span, &resolved)));
         }
 
         Ok(MiddleNode::new(
@@ -119,7 +120,7 @@ impl MiddleEnvironment {
 
     pub(crate) fn evaluate_index_access(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         span: Span,
         base: AstNode,
         index: AstNode,
@@ -146,7 +147,7 @@ impl MiddleEnvironment {
     #[inline]
     pub(crate) fn lower_call_args(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         args: Vec<CallArg>,
         reverse_args: Vec<AstNode>,
     ) -> Vec<MiddleNode> {
@@ -165,7 +166,7 @@ impl MiddleEnvironment {
 
     pub fn resolve_impl_member(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         data_type: &ParserDataType,
         member: &impl ToString,
     ) -> Option<String> {

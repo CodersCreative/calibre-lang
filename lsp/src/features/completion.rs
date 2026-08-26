@@ -1,4 +1,4 @@
-use calibre_mir::{symbols::resolve::ResolutionOptions, typing::MiddleObject};
+use calibre_mir::{scoping::ScopeId, symbols::resolve::ResolutionOptions, typing::MiddleObject};
 use calibre_parser::ast::idents::ParserText;
 
 use super::*;
@@ -65,7 +65,7 @@ impl CalibreLanguageServer {
 
     pub(super) fn base_type_from_expr(
         env: &mut MiddleEnvironment,
-        scope: u64,
+        scope: ScopeId,
         base_expr: &str,
     ) -> Option<ParserDataType> {
         let cleaned = Self::clean_base_expr(base_expr);
@@ -84,7 +84,7 @@ impl CalibreLanguageServer {
 
         let first = parts[0];
         let canonical_first = env
-            .resolve(&scope, &first, ResolutionOptions::all())
+            .resolve(scope, &first, ResolutionOptions::all())
             .unwrap_or_else(|_| first.to_string());
         let mut current = if let Some(var) = env.symbols.variables.get(&canonical_first) {
             var.data_type.clone()
@@ -103,7 +103,7 @@ impl CalibreLanguageServer {
                 continue;
             }
             if let Some(field_ty) =
-                env.resolve_member_field_type(&scope, &current, member, CalSpan::default())
+                env.resolve_member_field_type(scope, &current, member, CalSpan::default())
             {
                 current = field_ty;
                 continue;
@@ -371,8 +371,8 @@ impl CalibreLanguageServer {
             let current_scope = Self::find_scope_at_with(&middle_ast, scope, position);
 
             if let Ok(canonical) = env
-                .resolve(&current_scope, &callee, ResolutionOptions::all())
-                .or_else(|_| env.resolve(&scope, &callee, ResolutionOptions::all()))
+                .resolve(current_scope, &callee, ResolutionOptions::all())
+                .or_else(|_| env.resolve(scope, &callee, ResolutionOptions::all()))
                 && let Some(var) = env.symbols.variables.get(&canonical)
                 && let Some(sig) =
                     Self::signature_information_for_data_type(&callee, &var.data_type)
@@ -557,33 +557,32 @@ impl CalibreLanguageServer {
         }
     }
 
+    #[inline(always)]
     pub(super) fn collect_global_semantic_completions(
         env: &MiddleEnvironment,
-        current_scope: u64,
+        current_scope: ScopeId,
         prefix: &str,
         out: &mut HashMap<String, CompletionItem>,
     ) {
-        let mut cursor = Some(current_scope);
-        while let Some(scope_id) = cursor {
-            if let Some(scope_ref) = env.scoping.scopes.get(&scope_id) {
-                for (visible, canonical) in &scope_ref.mappings {
-                    if !prefix.is_empty() && !visible.starts_with(prefix) {
-                        continue;
+        current_scope
+            .descendants(&env.scoping.scopes)
+            .for_each(|x| {
+                if let Ok(scope_ref) = env.scoping.scope_or_err(x) {
+                    for (visible, canonical) in &scope_ref.mappings {
+                        if !prefix.is_empty() && !visible.starts_with(prefix) {
+                            continue;
+                        }
+                        out.entry(visible.clone()).or_insert_with(|| {
+                            Self::global_semantic_completion_item(env, visible, canonical)
+                        });
                     }
-                    out.entry(visible.clone()).or_insert_with(|| {
-                        Self::global_semantic_completion_item(env, visible, canonical)
-                    });
                 }
-                cursor = scope_ref.parent;
-            } else {
-                break;
-            }
-        }
+            });
     }
 
     pub(super) fn collect_member_semantic_completions(
         env: &mut MiddleEnvironment,
-        current_scope: u64,
+        current_scope: ScopeId,
         base_expr: &str,
         prefix: &str,
         out: &mut HashMap<String, CompletionItem>,

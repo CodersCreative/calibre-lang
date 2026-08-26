@@ -1,7 +1,7 @@
 use crate::ast::{MiddleNode, MiddleNodeType};
 use crate::context::MiddleContext;
 use crate::errors::MiddleErr;
-use crate::scoping::Scoping;
+use crate::scoping::{ScopeId, Scoping};
 use crate::symbols::resolve::ResolutionOptions;
 use crate::symbols::{MiddleOverload, MiddleVariable, Symbols};
 use crate::tags::Tagging;
@@ -32,10 +32,10 @@ pub struct MiddleEnvironment {
 }
 
 impl MiddleEnvironment {
-    #[instrument(skip_all, fields(operator = %overload.operator.text, scope = scope))]
+    #[instrument(skip_all, fields(operator = %overload.operator.text))]
     pub fn process_overload(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         overload: Overload,
         generic_params: Vec<String>,
         target_name: Option<String>,
@@ -91,10 +91,10 @@ impl MiddleEnvironment {
         }))
     }
 
-    #[instrument(skip_all, fields(scope = scope, original_name = %original_name.to_string(), new_name = %new_name))]
+    #[instrument(skip_all, fields(original_name = %original_name.to_string(), new_name = %new_name))]
     pub fn register_variable(
         &mut self,
-        scope: &u64,
+        scope: ScopeId,
         original_name: impl ToString,
         new_name: String,
         data_type: ParserDataType,
@@ -130,7 +130,7 @@ impl MiddleEnvironment {
         path: PathBuf,
         package_metadata: Option<PackageMetadata>,
         no_std: bool,
-    ) -> (Self, u64, MiddleNode) {
+    ) -> (Self, ScopeId, MiddleNode) {
         debug!("creating MIR environment with package metadata");
         let mut env = Self {
             context: MiddleContext {
@@ -149,7 +149,7 @@ impl MiddleEnvironment {
         };
         debug!(index = %scope, "root scope created");
 
-        let wrap = |env: &MiddleEnvironment, scope: u64, span: Span, inner: MiddleNode| {
+        let wrap = |env: &MiddleEnvironment, scope: ScopeId, span: Span, inner: MiddleNode| {
             if env.context.stdlib_nodes.is_empty() {
                 inner
             } else {
@@ -172,13 +172,13 @@ impl MiddleEnvironment {
         } = &mut node.node_type
         {
             debug!("predeclaring nodes");
-            let _ = env.predeclare_nodes(&scope, body).map_err(|err| {
+            let _ = env.predeclare_nodes(scope, body).map_err(|err| {
                 env.context.push_error(err);
             });
         }
 
         debug!("translating AST to MIR");
-        let inner = env.evaluate(&scope, node.clone());
+        let inner = env.evaluate(scope, node.clone());
         let mut middle = wrap(&env, scope, node.span, inner);
 
         if let Some(mut decls) = env.symbols.specialization_decls_by_scope.remove(&scope)
@@ -218,7 +218,11 @@ impl MiddleEnvironment {
     }
 
     #[instrument(skip_all, fields(path = ?path, no_std = no_std))]
-    pub fn new_and_evaluate(node: AstNode, path: PathBuf, no_std: bool) -> (Self, u64, MiddleNode) {
+    pub fn new_and_evaluate(
+        node: AstNode,
+        path: PathBuf,
+        no_std: bool,
+    ) -> (Self, ScopeId, MiddleNode) {
         debug!("starting MIR construction");
         Self::new_and_evaluate_with_package(node, path, None, no_std)
     }
