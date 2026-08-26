@@ -12,7 +12,7 @@ use calibre_parser::{
     Span,
     ast::{
         Operator,
-        nodes::{Node, NodeType, Overload, VarType},
+        nodes::{AstNode, AstNodeType, Overload, VarType},
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -126,7 +126,7 @@ impl MiddleEnvironment {
 
     #[instrument(skip_all, fields(path = ?path, no_std = no_std))]
     pub fn new_and_evaluate_with_package(
-        mut node: Node,
+        mut node: AstNode,
         path: PathBuf,
         package_metadata: Option<PackageMetadata>,
         no_std: bool,
@@ -167,7 +167,7 @@ impl MiddleEnvironment {
             }
         };
 
-        if let NodeType::ScopeDeclaration {
+        if let AstNodeType::ScopeDeclaration {
             body: Some(body), ..
         } = &mut node.node_type
         {
@@ -218,7 +218,7 @@ impl MiddleEnvironment {
     }
 
     #[instrument(skip_all, fields(path = ?path, no_std = no_std))]
-    pub fn new_and_evaluate(node: Node, path: PathBuf, no_std: bool) -> (Self, u64, MiddleNode) {
+    pub fn new_and_evaluate(node: AstNode, path: PathBuf, no_std: bool) -> (Self, u64, MiddleNode) {
         debug!("starting MIR construction");
         Self::new_and_evaluate_with_package(node, path, None, no_std)
     }

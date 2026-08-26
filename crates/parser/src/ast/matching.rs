@@ -2,7 +2,7 @@ use crate::{
     Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{DestructurePattern, Node, VarType},
+        nodes::{AstNode, DestructurePattern, VarType},
         types::ParserDataType,
     },
 };
@@ -12,9 +12,9 @@ use crate::{
 pub enum MatchTupleItem {
     Rest(Span),
     Wildcard(Span),
-    Value(Node),
+    Value(AstNode),
     IsType(ParserDataType),
-    In(Node),
+    In(AstNode),
     At {
         var_type: VarType,
         name: PotentialDollarIdentifier,
@@ -38,7 +38,7 @@ pub enum MatchTupleItem {
 pub enum MatchStructFieldPattern {
     Value {
         field: String,
-        value: Node,
+        value: AstNode,
     },
     Binding {
         field: String,
@@ -65,7 +65,7 @@ pub enum MatchArmType {
         name: PotentialDollarIdentifier,
         pattern: Box<MatchArmType>,
     },
-    In(Node),
+    In(AstNode),
     StringPattern(Vec<MatchStringPatternPart>),
     Enum {
         value: PotentialDollarIdentifier,
@@ -81,7 +81,7 @@ pub enum MatchArmType {
         var_type: VarType,
         name: PotentialDollarIdentifier,
     },
-    Value(Node),
+    Value(AstNode),
     IsType(ParserDataType),
     Wildcard(Span),
 }
@@ -216,7 +216,7 @@ impl MatchArmType {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TryCatch {
     pub name: Option<PotentialDollarIdentifier>,
-    pub body: Box<Node>,
+    pub body: Box<AstNode>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -228,7 +228,7 @@ pub enum SelectArmKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectArm {
-    pub patterns: Vec<(SelectArmKind, Option<Node>, Option<Node>)>,
-    pub conditionals: Vec<Node>,
-    pub body: Node,
+    pub patterns: Vec<(SelectArmKind, Option<AstNode>, Option<AstNode>)>,
+    pub conditionals: Vec<AstNode>,
+    pub body: AstNode,
 }

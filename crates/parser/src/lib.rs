@@ -1,5 +1,5 @@
 use crate::{
-    ast::nodes::{Node, NodeType},
+    ast::nodes::{AstNode, AstNodeType},
     parse::parse_program_with_source,
 };
 use serde::{Deserialize, Serialize};
@@ -107,10 +107,10 @@ pub struct Parser {
 }
 
 #[inline]
-fn empty_scope_node() -> Node {
-    Node::new(
+fn empty_scope_node() -> AstNode {
+    AstNode::new(
         Span::default(),
-        NodeType::ScopeDeclaration {
+        AstNodeType::ScopeDeclaration {
             body: Some(Vec::new()),
             is_temp: false,
             define: false,
@@ -126,7 +126,7 @@ impl Parser {
     }
 
     #[instrument(skip_all, fields(bytes = source.len(), path = ?self.source_path))]
-    pub fn produce_ast(&mut self, source: &str) -> Node {
+    pub fn produce_ast(&mut self, source: &str) -> AstNode {
         debug!(lines = source.lines().count(), "starting parse");
         match parse_program_with_source(source, self.source_path.as_deref()) {
             Ok(ast) => {

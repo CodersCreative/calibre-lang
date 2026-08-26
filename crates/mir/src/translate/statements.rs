@@ -10,7 +10,7 @@ use calibre_parser::{
     Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{AsFailureMode, Node, NodeType, Overload, TypeDefType, VarType},
+        nodes::{AsFailureMode, AstNode, AstNodeType, Overload, TypeDefType, VarType},
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -25,7 +25,7 @@ impl MiddleEnvironment {
         span: Span,
         var_type: VarType,
         identifier: PotentialDollarIdentifier,
-        mut value: Node,
+        mut value: AstNode,
         data_type: ParserDataType,
     ) -> Result<MiddleNode, MiddleErr> {
         let identifier = self.resolve(
@@ -36,20 +36,20 @@ impl MiddleEnvironment {
 
         let new_name = ParserText::temp_name_with_suffix(identifier.trim(), span).text;
 
-        if let NodeType::CallExpression {
+        if let AstNodeType::CallExpression {
             caller,
             generic_types,
             args,
             reverse_args,
             ..
         } = value.clone().node_type
-            && let NodeType::Identifier(callee_ident) = &caller.node_type
+            && let AstNodeType::Identifier(callee_ident) = &caller.node_type
             && callee_ident.to_string() == identifier
-            && let Some(first_arg) = args.first().cloned().map(|a| -> Node { a.into() })
+            && let Some(first_arg) = args.first().cloned().map(|a| -> AstNode { a.into() })
         {
             let first_ty = self.resolve_type_from_node(scope, &first_arg).or_else(|| {
                 match &first_arg.node_type {
-                    NodeType::RefStatement { value, .. } => {
+                    AstNodeType::RefStatement { value, .. } => {
                         self.resolve_type_from_node(scope, value.as_ref())
                     }
                     _ => None,
@@ -61,11 +61,11 @@ impl MiddleEnvironment {
                     .resolve_member_fn_name(&first_ty.unwrap_all_refs(), &callee_ident.to_string())
                 && mapped_name != callee_ident.to_string()
             {
-                value = Node::new(
+                value = AstNode::new(
                     value.span,
-                    NodeType::CallExpression {
+                    AstNodeType::CallExpression {
                         string_fn: None,
-                        caller: Box::new(Node::identifier(value.span, mapped_name)),
+                        caller: Box::new(AstNode::identifier(value.span, mapped_name)),
                         generic_types,
                         args,
                         reverse_args,
@@ -77,7 +77,7 @@ impl MiddleEnvironment {
         let original_value_node = value.clone();
 
         let function_decl = match &original_value_node.node_type {
-            NodeType::FunctionDeclaration { header, body, .. } => Some((header, body)),
+            AstNodeType::FunctionDeclaration { header, body, .. } => Some((header, body)),
             _ => None,
         };
 
@@ -220,7 +220,7 @@ impl MiddleEnvironment {
 
         if !matches!(
             original_value_node.node_type,
-            NodeType::FunctionDeclaration { .. }
+            AstNodeType::FunctionDeclaration { .. }
         ) {
             self.register_variable(
                 scope,

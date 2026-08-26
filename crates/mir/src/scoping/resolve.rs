@@ -5,7 +5,7 @@ use crate::{
 };
 use calibre_parser::{
     Parser,
-    ast::nodes::{Node, NodeType},
+    ast::nodes::{AstNode, AstNodeType},
 };
 use std::fs;
 use tracing::{debug, instrument};
@@ -123,8 +123,8 @@ impl MiddleEnvironment {
                 }
 
                 let mut program = match program.node_type {
-                    NodeType::ScopeDeclaration { body, .. } => Node {
-                        node_type: NodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration { body, .. } => AstNode {
+                        node_type: AstNodeType::ScopeDeclaration {
                             body,
                             named: None,
                             is_temp: false,
@@ -136,7 +136,7 @@ impl MiddleEnvironment {
                     _ => program,
                 };
 
-                if let NodeType::ScopeDeclaration {
+                if let AstNodeType::ScopeDeclaration {
                     body: Some(body), ..
                 } = &mut program.node_type
                 {
@@ -186,7 +186,7 @@ impl MiddleEnvironment {
             });
         }
 
-        if let NodeType::ScopeDeclaration {
+        if let AstNodeType::ScopeDeclaration {
             body: Some(body), ..
         } = &mut program.node_type
         {

@@ -3,7 +3,7 @@ use crate::Span;
 use crate::ast::RefMutability;
 use crate::ast::ffi::ParserFfiInnerType;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
-use crate::ast::nodes::{Node, NodeType};
+use crate::ast::nodes::{AstNode, AstNodeType};
 use crate::ast::types::{GenericType, GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{is_keyword, lex, span, unescape_char_literal, unescape_string};
 use chumsky::error::Rich;
@@ -28,11 +28,11 @@ pub struct ParserPrelude<'a> {
     pub named_ident: StrParser<'a, PotentialDollarIdentifier>,
     pub generic_params: StrParser<'a, GenericTypes>,
     pub string_text: StrParser<'a, String>,
-    pub string_lit: StrParser<'a, Node>,
-    pub char_lit: StrParser<'a, Node>,
-    pub int_lit: StrParser<'a, Node>,
-    pub float_lit: StrParser<'a, Node>,
-    pub null_lit: StrParser<'a, Node>,
+    pub string_lit: StrParser<'a, AstNode>,
+    pub char_lit: StrParser<'a, AstNode>,
+    pub int_lit: StrParser<'a, AstNode>,
+    pub float_lit: StrParser<'a, AstNode>,
+    pub null_lit: StrParser<'a, AstNode>,
     pub type_name: StrParser<'a, ParserDataType>,
 }
 
@@ -165,7 +165,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
             let ls = line_starts.clone();
             move |text: String, r| {
                 let sp = span(ls.as_ref(), r);
-                Node::new(sp, NodeType::StringLiteral(ParserText::new(sp, text)))
+                AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, text)))
             }
         })
         .boxed();
@@ -189,7 +189,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
         move |parts: Vec<String>, parser_sp| {
             let sp = span(ls.as_ref(), parser_sp.into_range());
             match unescape_char_literal(&parts.concat()) {
-                Some(ch) => Ok(Node::new(sp, NodeType::CharLiteral(ch))),
+                Some(ch) => Ok(AstNode::new(sp, AstNodeType::CharLiteral(ch))),
                 None => Err(Rich::custom(
                     parser_sp,
                     "invalid char literal escape sequence",
@@ -248,7 +248,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
         let ls = line_starts.clone();
         move |number: String, r| {
             let sp = span(ls.as_ref(), r);
-            Node::new(sp, NodeType::IntLiteral(ParserText::new(sp, number)))
+            AstNode::new(sp, AstNodeType::IntLiteral(ParserText::new(sp, number)))
         }
     })
     .boxed();
@@ -282,12 +282,12 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
         let ls = line_starts.clone();
         move |(number, typ), r| {
             let sp = span(ls.as_ref(), r);
-            Node::new(
+            AstNode::new(
                 sp,
                 if typ == Some('g') {
-                    NodeType::BigLiteral(ParserText::new(sp, number.replace('_', "")))
+                    AstNodeType::BigLiteral(ParserText::new(sp, number.replace('_', "")))
                 } else {
-                    NodeType::FloatLiteral(
+                    AstNodeType::FloatLiteral(
                         number.replace('_', "").parse::<f64>().unwrap_or_default(),
                     )
                 },
@@ -299,7 +299,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
     let null_lit = lex(pad.clone(), just("null"))
         .map_with_span({
             let ls = line_starts.clone();
-            move |_, r| Node::null(span(ls.as_ref(), r))
+            move |_, r| AstNode::null(span(ls.as_ref(), r))
         })
         .boxed();
 

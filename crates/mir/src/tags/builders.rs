@@ -10,7 +10,7 @@ use calibre_parser::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::TryCatch,
-        nodes::{CallArg, FunctionHeader, Node, NodeType, TypeDefType, VarType},
+        nodes::{AstNode, AstNodeType, CallArg, FunctionHeader, TypeDefType, VarType},
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
@@ -43,9 +43,9 @@ impl MiddleEnvironment {
                     (
                         ParserDataType::new(span, ParserInnerType::Option(Box::new(ty.clone()))),
                         node.clone().map(|x| {
-                            Node::call(
+                            AstNode::call(
                                 span,
-                                Node::identifier(span, "some"),
+                                AstNode::identifier(span, "some"),
                                 vec![CallArg::Value(*x)],
                             )
                         }),
@@ -54,9 +54,9 @@ impl MiddleEnvironment {
             })
             .collect();
 
-        let builder = Node::new(
+        let builder = AstNode::new(
             span,
-            NodeType::TypeDeclaration {
+            AstNodeType::TypeDeclaration {
                 identifier: PotentialGenericTypeIdentifier::new(span, &builder_name),
                 object: TypeDefType::Struct {
                     fields: ObjectType::Map(optional_fields),
@@ -67,39 +67,39 @@ impl MiddleEnvironment {
 
         let self_ty = ParserDataType::object(span, &builder_name);
         let target_ty = ParserDataType::object(span, &identifier.text);
-        let self_id = Node::identifier(span, "self");
-        let target_default_id = Node::identifier(span, "target");
+        let self_id = AstNode::identifier(span, "self");
+        let target_default_id = AstNode::identifier(span, "target");
         let mut methods = Vec::new();
 
         for (field, (ty, _)) in fields.iter() {
-            let value_id = Node::identifier(span, "value");
+            let value_id = AstNode::identifier(span, "value");
             let setter_fields = fields
                 .iter()
                 .map(|(other, _)| {
                     (
                         other.clone(),
                         if other == field {
-                            Node::call(
+                            AstNode::call(
                                 span,
-                                Node::identifier(span, "some"),
+                                AstNode::identifier(span, "some"),
                                 vec![CallArg::Value(value_id.clone())],
                             )
                         } else {
-                            Node::member(span, self_id.clone(), other)
+                            AstNode::member(span, self_id.clone(), other)
                         },
                     )
                 })
                 .collect();
 
-            let setter = Node::new(
+            let setter = AstNode::new(
                 span,
-                NodeType::VariableDeclaration {
+                AstNodeType::VariableDeclaration {
                     var_type: VarType::Constant,
                     identifier: PotentialDollarIdentifier::new(span, field),
                     data_type: ParserDataType::auto(span),
-                    value: Box::new(Node::new(
+                    value: Box::new(AstNode::new(
                         span,
-                        NodeType::FunctionDeclaration {
+                        AstNodeType::FunctionDeclaration {
                             header: FunctionHeader {
                                 generics: GenericTypes::default(),
                                 parameters: vec![
@@ -117,16 +117,18 @@ impl MiddleEnvironment {
                                 return_type: self_ty.clone(),
                                 param_destructures: vec![],
                             },
-                            body: Box::new(Node::new_temp_scope(vec![Node::ret(Node::new(
-                                span,
-                                NodeType::StructLiteral {
-                                    identifier: PotentialGenericTypeIdentifier::new(
-                                        span,
-                                        &builder_name,
-                                    ),
-                                    value: ObjectType::Map(setter_fields),
-                                },
-                            ))])),
+                            body: Box::new(AstNode::new_temp_scope(vec![AstNode::ret(
+                                AstNode::new(
+                                    span,
+                                    AstNodeType::StructLiteral {
+                                        identifier: PotentialGenericTypeIdentifier::new(
+                                            span,
+                                            &builder_name,
+                                        ),
+                                        value: ObjectType::Map(setter_fields),
+                                    },
+                                ),
+                            )])),
                         },
                     )),
                 },
@@ -139,21 +141,25 @@ impl MiddleEnvironment {
             .map(|(field, _)| {
                 (
                     field.clone(),
-                    Node::new(
+                    AstNode::new(
                         span,
-                        NodeType::Try {
-                            value: Box::new(Node::member(span, self_id.clone(), field)),
+                        AstNodeType::Try {
+                            value: Box::new(AstNode::member(span, self_id.clone(), field)),
                             catch: Some(TryCatch {
                                 name: None,
                                 body: if has_default {
-                                    Box::new(Node::member(span, target_default_id.clone(), field))
-                                } else {
-                                    Box::new(Node::ret(Node::call(
+                                    Box::new(AstNode::member(
                                         span,
-                                        Node::identifier(span, "err"),
-                                        vec![CallArg::Value(Node::new(
+                                        target_default_id.clone(),
+                                        field,
+                                    ))
+                                } else {
+                                    Box::new(AstNode::ret(AstNode::call(
+                                        span,
+                                        AstNode::identifier(span, "err"),
+                                        vec![CallArg::Value(AstNode::new(
                                             span,
-                                            NodeType::StringLiteral(ParserText::new(
+                                            AstNodeType::StringLiteral(ParserText::new(
                                                 span,
                                                 format!(
                                                     "Unable to build {}, field {} was None",
@@ -170,15 +176,15 @@ impl MiddleEnvironment {
             })
             .collect();
 
-        methods.push(Node::new(
+        methods.push(AstNode::new(
             span,
-            NodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::new(span, "build"),
                 data_type: ParserDataType::auto(span),
-                value: Box::new(Node::new(
+                value: Box::new(AstNode::new(
                     span,
-                    NodeType::FunctionDeclaration {
+                    AstNodeType::FunctionDeclaration {
                         header: FunctionHeader {
                             generics: GenericTypes::default(),
                             parameters: vec![(
@@ -195,22 +201,22 @@ impl MiddleEnvironment {
                             ),
                             param_destructures: vec![],
                         },
-                        body: Box::new(Node::new_temp_scope(vec![
+                        body: Box::new(AstNode::new_temp_scope(vec![
                             if has_default {
-                                Node::new(
+                                AstNode::new(
                                     span,
-                                    NodeType::VariableDeclaration {
+                                    AstNodeType::VariableDeclaration {
                                         var_type: VarType::Constant,
                                         identifier: PotentialDollarIdentifier::new(
                                             span,
                                             &target_default_id,
                                         ),
                                         data_type: target_ty,
-                                        value: Box::new(Node::call(
+                                        value: Box::new(AstNode::call(
                                             span,
-                                            Node::member(
+                                            AstNode::member(
                                                 span,
-                                                Node::identifier(span, &identifier.text),
+                                                AstNode::identifier(span, &identifier.text),
                                                 "default",
                                             ),
                                             Vec::new(),
@@ -218,14 +224,14 @@ impl MiddleEnvironment {
                                     },
                                 )
                             } else {
-                                Node::null(span)
+                                AstNode::null(span)
                             },
-                            Node::ret(Node::call(
+                            AstNode::ret(AstNode::call(
                                 span,
-                                Node::identifier(span, "ok"),
-                                vec![CallArg::Value(Node::new(
+                                AstNode::identifier(span, "ok"),
+                                vec![CallArg::Value(AstNode::new(
                                     span,
-                                    NodeType::StructLiteral {
+                                    AstNodeType::StructLiteral {
                                         identifier: identifier.clone().into(),
                                         value: ObjectType::Map(built_fields),
                                     },
@@ -246,9 +252,9 @@ impl MiddleEnvironment {
             builder,
             self.evaluate(
                 scope,
-                Node::new(
+                AstNode::new(
                     span,
-                    NodeType::ImplDeclaration {
+                    AstNodeType::ImplDeclaration {
                         generics: GenericTypes::default(),
                         target: ParserDataType::object(span, &builder_name),
                         variables: methods,

@@ -20,8 +20,8 @@ use calibre_parser::{
         },
         matching::{MatchArmType, SelectArmKind, TryCatch},
         nodes::{
-            AsFailureMode, CallArg, EmitType, FunctionHeader, IfComparisonType, LoopType, Node,
-            NodeType, PipeSegment, TypeDefType, VarType,
+            AsFailureMode, AstNode, AstNodeType, CallArg, EmitType, FunctionHeader,
+            IfComparisonType, LoopType, PipeSegment, TypeDefType, VarType,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -38,7 +38,7 @@ pub mod statements;
 
 impl MiddleEnvironment {
     #[instrument(skip_all, fields(scope = scope))]
-    pub fn evaluate(&mut self, scope: &u64, node: Node) -> MiddleNode {
+    pub fn evaluate(&mut self, scope: &u64, node: AstNode) -> MiddleNode {
         let span = node.span;
         match self.evaluate_inner(scope, node) {
             Ok(node) => node,
@@ -51,17 +51,17 @@ impl MiddleEnvironment {
     }
 
     #[instrument(skip_all, fields(scope = scope))]
-    pub fn evaluate_inner(&mut self, scope: &u64, node: Node) -> Result<MiddleNode, MiddleErr> {
+    pub fn evaluate_inner(&mut self, scope: &u64, node: AstNode) -> Result<MiddleNode, MiddleErr> {
         self.context.current_location = self.scoping.get_location(scope, node.span);
         trace!(location = ?self.context.current_location, "evaluating node");
 
         match node.node_type {
-            NodeType::DataType { .. } => unreachable!(),
-            NodeType::Null => Ok(MiddleNode {
+            AstNodeType::DataType { .. } => unreachable!(),
+            AstNodeType::Null => Ok(MiddleNode {
                 node_type: MiddleNodeType::Null,
                 span: node.span,
             }),
-            NodeType::Defer { value, function } => {
+            AstNodeType::Defer { value, function } => {
                 if function {
                     self.symbols.func_defers.push(*value);
                 } else {
@@ -76,7 +76,7 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::Identifier(x) => Ok(MiddleNode {
+            AstNodeType::Identifier(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::Identifier(
                     if let Ok(x) = self.resolve(scope, &x, ResolutionOptions::all()) {
                         ParserText::new(node.span, x)
@@ -126,7 +126,7 @@ impl MiddleEnvironment {
                 ),
                 span: node.span,
             }),
-            NodeType::IntLiteral(text) => Ok(MiddleNode {
+            AstNodeType::IntLiteral(text) => Ok(MiddleNode {
                 node_type: MiddleNodeType::IntLiteral(
                     ParsedIntLiteral::parse(text.clone()).ok_or_else(|| {
                         MiddleErr::At(
@@ -139,7 +139,7 @@ impl MiddleEnvironment {
                 ),
                 span: node.span,
             }),
-            NodeType::BigLiteral(x) => Ok(MiddleNode {
+            AstNodeType::BigLiteral(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::BigLiteral(ParserText {
                     text: x
                         .text
@@ -150,19 +150,19 @@ impl MiddleEnvironment {
                 }),
                 span: node.span,
             }),
-            NodeType::FloatLiteral(x) => Ok(MiddleNode {
+            AstNodeType::FloatLiteral(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::FloatLiteral(x),
                 span: node.span,
             }),
-            NodeType::StringLiteral(x) => Ok(MiddleNode {
+            AstNodeType::StringLiteral(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::StringLiteral(x),
                 span: node.span,
             }),
-            NodeType::CharLiteral(x) => Ok(MiddleNode {
+            AstNodeType::CharLiteral(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::CharLiteral(x),
                 span: node.span,
             }),
-            NodeType::RangeDeclaration {
+            AstNodeType::RangeDeclaration {
                 from,
                 to,
                 inclusive,
@@ -174,45 +174,45 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::Emit(EmitType::Channel { channel, value }) => self.evaluate_inner(
+            AstNodeType::Emit(EmitType::Channel { channel, value }) => self.evaluate_inner(
                 scope,
-                Node::call(
+                AstNode::call(
                     node.span,
-                    Node::member(node.span, *channel, "send"),
+                    AstNode::member(node.span, *channel, "send"),
                     vec![CallArg::Value(*value)],
                 ),
             ),
-            NodeType::Emit(EmitType::Scope(value)) => Ok(MiddleNode::new(
+            AstNodeType::Emit(EmitType::Scope(value)) => Ok(MiddleNode::new(
                 MiddleNodeType::Emit {
                     value: Box::new(self.evaluate(scope, *value)),
                 },
                 node.span,
             )),
-            NodeType::FieldAccess { base, field } => {
+            AstNodeType::FieldAccess { base, field } => {
                 self.evaluate_field_access(scope, node.span, *base, field)
             }
-            NodeType::ScopeAccess { base, field } => {
+            AstNodeType::ScopeAccess { base, field } => {
                 self.evaluate_scope_access(scope, node.span, *base, field)
             }
-            NodeType::IndexAccess { base, index } => {
+            AstNodeType::IndexAccess { base, index } => {
                 self.evaluate_index_access(scope, node.span, *base, *index)
             }
-            NodeType::Spawn {
+            AstNodeType::Spawn {
                 mut items,
                 auto_wait,
             } if items.len() == 1 => {
                 let value = items.remove(0);
                 let original_value = value.clone();
                 let inner = match value.node_type {
-                    NodeType::ScopeDeclaration { .. } => {
+                    AstNodeType::ScopeDeclaration { .. } => {
                         return self.evaluate_inner(
                             scope,
-                            Node::new(
+                            AstNode::new(
                                 node.span,
-                                NodeType::Spawn {
-                                    items: vec![Node::new(
+                                AstNodeType::Spawn {
+                                    items: vec![AstNode::new(
                                         node.span,
-                                        NodeType::FunctionDeclaration {
+                                        AstNodeType::FunctionDeclaration {
                                             header: FunctionHeader {
                                                 generics: GenericTypes::default(),
                                                 parameters: Vec::new(),
@@ -227,26 +227,26 @@ impl MiddleEnvironment {
                             ),
                         );
                     }
-                    NodeType::CallExpression {
+                    AstNodeType::CallExpression {
                         string_fn: _,
                         caller,
                         generic_types,
                         mut args,
                         mut reverse_args,
                     } => {
-                        let mut body: Vec<Node> = Vec::new();
+                        let mut body: Vec<AstNode> = Vec::new();
                         let mut captured_args: Vec<CallArg> = Vec::new();
                         let mut idx = 0usize;
 
-                        let mut push_capture = |arg: Node| {
+                        let mut push_capture = |arg: AstNode| {
                             let name = format!("spawn_capture_{idx}");
                             idx += 1;
                             let ident: PotentialDollarIdentifier =
                                 ParserText::from(name.clone()).into();
 
-                            body.push(Node::new(
+                            body.push(AstNode::new(
                                 self.context.current_span(),
-                                NodeType::VariableDeclaration {
+                                AstNodeType::VariableDeclaration {
                                     var_type: VarType::Immutable,
                                     identifier: ident.clone(),
                                     data_type: ParserDataType::auto(self.context.current_span()),
@@ -254,7 +254,7 @@ impl MiddleEnvironment {
                                 },
                             ));
 
-                            CallArg::Value(Node::identifier(self.context.current_span(), ident))
+                            CallArg::Value(AstNode::identifier(self.context.current_span(), ident))
                         };
 
                         for arg in args.drain(..) {
@@ -273,16 +273,16 @@ impl MiddleEnvironment {
                             captured_args.push(push_capture(node));
                         }
 
-                        let func_decl = Node::new(
+                        let func_decl = AstNode::new(
                             self.context.current_span(),
-                            NodeType::FunctionDeclaration {
+                            AstNodeType::FunctionDeclaration {
                                 header: FunctionHeader {
                                     generics: GenericTypes::default(),
                                     parameters: Vec::new(),
                                     return_type: ParserDataType::auto(self.context.current_span()),
                                     param_destructures: Vec::new(),
                                 },
-                                body: Box::new(Node::call_full(
+                                body: Box::new(AstNode::call_full(
                                     self.context.current_span(),
                                     *caller,
                                     generic_types,
@@ -296,9 +296,9 @@ impl MiddleEnvironment {
                         let fn_ident: PotentialDollarIdentifier =
                             ParserText::temp_name_with_suffix("spawn_fn", node.span).into();
 
-                        body.push(Node::new(
+                        body.push(AstNode::new(
                             self.context.current_span(),
-                            NodeType::VariableDeclaration {
+                            AstNodeType::VariableDeclaration {
                                 var_type: VarType::Immutable,
                                 identifier: fn_ident.clone(),
                                 data_type: ParserDataType::auto(self.context.current_span()),
@@ -306,11 +306,11 @@ impl MiddleEnvironment {
                             },
                         ));
 
-                        body.push(Node::identifier(self.context.current_span(), fn_ident));
+                        body.push(AstNode::identifier(self.context.current_span(), fn_ident));
 
-                        let scope_node = Node::new(
+                        let scope_node = AstNode::new(
                             self.context.current_span(),
-                            NodeType::ScopeDeclaration {
+                            AstNodeType::ScopeDeclaration {
                                 body: Some(body),
                                 named: None,
                                 is_temp: true,
@@ -321,7 +321,7 @@ impl MiddleEnvironment {
 
                         self.evaluate(scope, scope_node)
                     }
-                    NodeType::LoopDeclaration {
+                    AstNodeType::LoopDeclaration {
                         loop_type,
                         body,
                         until,
@@ -335,61 +335,61 @@ impl MiddleEnvironment {
                             ParserText::temp_name_with_suffix("spawn_start", node.span);
                         let start_ident: PotentialDollarIdentifier = start_name.clone().into();
 
-                        let wg_ident_node = Node::identifier(node.span, wg_ident.clone());
-                        let start_ident_node = Node::identifier(node.span, start_ident.clone());
-                        let wg_new = Node::call(
+                        let wg_ident_node = AstNode::identifier(node.span, wg_ident.clone());
+                        let start_ident_node = AstNode::identifier(node.span, start_ident.clone());
+                        let wg_new = AstNode::call(
                             node.span,
-                            Node::member(
+                            AstNode::member(
                                 node.span,
-                                Node::identifier(node.span, "WaitGroup"),
+                                AstNode::identifier(node.span, "WaitGroup"),
                                 "new",
                             ),
                             Vec::new(),
                         );
 
-                        let wg_decl = Node::new(
+                        let wg_decl = AstNode::new(
                             node.span,
-                            NodeType::VariableDeclaration {
+                            AstNodeType::VariableDeclaration {
                                 var_type: VarType::Mutable,
                                 identifier: wg_ident.clone(),
                                 data_type: ParserDataType::auto(node.span),
                                 value: Box::new(wg_new.clone()),
                             },
                         );
-                        let start_decl = Node::new(
+                        let start_decl = AstNode::new(
                             node.span,
-                            NodeType::VariableDeclaration {
+                            AstNodeType::VariableDeclaration {
                                 var_type: VarType::Mutable,
                                 identifier: start_ident.clone(),
                                 data_type: ParserDataType::auto(node.span),
                                 value: Box::new(wg_new),
                             },
                         );
-                        let start_add = Node::call(
+                        let start_add = AstNode::call(
                             node.span,
-                            Node::member(node.span, start_ident_node.clone(), "raw_add"),
-                            vec![CallArg::Value(Node::int(node.span, 1))],
+                            AstNode::member(node.span, start_ident_node.clone(), "raw_add"),
+                            vec![CallArg::Value(AstNode::int(node.span, 1))],
                         );
-                        let start_done = Node::call(
+                        let start_done = AstNode::call(
                             node.span,
-                            Node::member(node.span, start_ident_node.clone(), "raw_done"),
+                            AstNode::member(node.span, start_ident_node.clone(), "raw_done"),
                             Vec::new(),
                         );
 
                         let spawn_inner = match &*loop_type {
                             LoopType::For(name, _range) => {
-                                let loop_ident_node = Node::identifier(node.span, name);
+                                let loop_ident_node = AstNode::identifier(node.span, name);
 
                                 let body_node = (*body).clone();
                                 let mut body_nodes = Vec::new();
-                                body_nodes.push(Node::call(
+                                body_nodes.push(AstNode::call(
                                     node.span,
-                                    Node::member(node.span, start_ident_node.clone(), "wait"),
+                                    AstNode::member(node.span, start_ident_node.clone(), "wait"),
                                     Vec::new(),
                                 ));
-                                body_nodes.push(Node::new(
+                                body_nodes.push(AstNode::new(
                                     node.span,
-                                    NodeType::VariableDeclaration {
+                                    AstNodeType::VariableDeclaration {
                                         var_type: VarType::Mutable,
                                         identifier: name.clone(),
                                         data_type: ParserDataType::auto(node.span),
@@ -398,36 +398,36 @@ impl MiddleEnvironment {
                                 ));
                                 body_nodes.extend(body_node.nodes());
 
-                                let scope_body = Node::new_temp_scope(body_nodes);
-                                Node::new(
+                                let scope_body = AstNode::new_temp_scope(body_nodes);
+                                AstNode::new(
                                     node.span,
-                                    NodeType::Spawn {
+                                    AstNodeType::Spawn {
                                         items: vec![scope_body],
                                         auto_wait: false,
                                     },
                                 )
                             }
-                            _ => Node::new(
+                            _ => AstNode::new(
                                 node.span,
-                                NodeType::Spawn {
+                                AstNodeType::Spawn {
                                     items: vec![*body],
                                     auto_wait: false,
                                 },
                             ),
                         };
 
-                        let join_call = Node::call(
+                        let join_call = AstNode::call(
                             node.span,
-                            Node::member(node.span, wg_ident_node.clone(), "join"),
+                            AstNode::member(node.span, wg_ident_node.clone(), "join"),
                             vec![CallArg::Value(spawn_inner)],
                         );
 
                         let loop_body =
-                            Node::new_temp_scope_with_create(vec![join_call], Some(false));
+                            AstNode::new_temp_scope_with_create(vec![join_call], Some(false));
 
-                        let loop_node = Node::new(
+                        let loop_node = AstNode::new(
                             node.span,
-                            NodeType::LoopDeclaration {
+                            AstNodeType::LoopDeclaration {
                                 loop_type,
                                 body: Box::new(loop_body),
                                 until,
@@ -436,7 +436,7 @@ impl MiddleEnvironment {
                             },
                         );
 
-                        let scope_node = Node::new_temp_scope(vec![
+                        let scope_node = AstNode::new_temp_scope(vec![
                             wg_decl,
                             start_decl,
                             start_add,
@@ -447,36 +447,39 @@ impl MiddleEnvironment {
 
                         return Ok(self.evaluate(scope, scope_node));
                     }
-                    NodeType::FunctionDeclaration { header, body } => {
+                    AstNodeType::FunctionDeclaration { header, body } => {
                         let fn_ident: PotentialDollarIdentifier =
                             ParserText::temp_name_with_suffix("spawn_fn", body.span).into();
 
-                        let scope_node = Node::call(
+                        let scope_node = AstNode::call(
                             node.span,
-                            Node::member(
+                            AstNode::member(
                                 node.span,
-                                Node::identifier(node.span, "WaitGroup"),
+                                AstNode::identifier(node.span, "WaitGroup"),
                                 "raw_new",
                             ),
-                            vec![CallArg::Value(Node::new(
+                            vec![CallArg::Value(AstNode::new(
                                 self.context.current_span(),
-                                NodeType::ScopeDeclaration {
+                                AstNodeType::ScopeDeclaration {
                                     body: Some(vec![
-                                        Node::new(
+                                        AstNode::new(
                                             self.context.current_span(),
-                                            NodeType::VariableDeclaration {
+                                            AstNodeType::VariableDeclaration {
                                                 var_type: VarType::Immutable,
                                                 identifier: fn_ident.clone(),
                                                 data_type: ParserDataType::auto(
                                                     self.context.current_span(),
                                                 ),
-                                                value: Box::new(Node::new(
+                                                value: Box::new(AstNode::new(
                                                     self.context.current_span(),
-                                                    NodeType::FunctionDeclaration { header, body },
+                                                    AstNodeType::FunctionDeclaration {
+                                                        header,
+                                                        body,
+                                                    },
                                                 )),
                                             },
                                         ),
-                                        Node::identifier(self.context.current_span(), fn_ident),
+                                        AstNode::identifier(self.context.current_span(), fn_ident),
                                     ]),
                                     named: None,
                                     is_temp: true,
@@ -488,34 +491,34 @@ impl MiddleEnvironment {
 
                         self.evaluate(scope, scope_node)
                     }
-                    other => self.evaluate(scope, Node::new(value.span, other)),
+                    other => self.evaluate(scope, AstNode::new(value.span, other)),
                 };
 
                 if auto_wait {
                     let wg_ident: PotentialDollarIdentifier =
                         ParserText::temp_name_with_suffix("spawn_wait_wg", node.span).into();
-                    let wait_scope = Node::new_temp_scope_with_create(
+                    let wait_scope = AstNode::new_temp_scope_with_create(
                         vec![
-                            Node::new(
+                            AstNode::new(
                                 node.span,
-                                NodeType::VariableDeclaration {
+                                AstNodeType::VariableDeclaration {
                                     var_type: VarType::Immutable,
                                     identifier: wg_ident.clone(),
                                     data_type: ParserDataType::object(node.span, "WaitGroup"),
-                                    value: Box::new(Node::new(
+                                    value: Box::new(AstNode::new(
                                         node.span,
-                                        NodeType::Spawn {
+                                        AstNodeType::Spawn {
                                             items: vec![original_value],
                                             auto_wait: false,
                                         },
                                     )),
                                 },
                             ),
-                            Node::call(
+                            AstNode::call(
                                 node.span,
-                                Node::member(
+                                AstNode::member(
                                     node.span,
-                                    Node::identifier(node.span, wg_ident),
+                                    AstNode::identifier(node.span, wg_ident),
                                     "wait",
                                 ),
                                 Vec::new(),
@@ -533,26 +536,26 @@ impl MiddleEnvironment {
                     ))
                 }
             }
-            NodeType::Spawn { items, auto_wait } => {
+            AstNodeType::Spawn { items, auto_wait } => {
                 let span = node.span;
                 let wg_ident: PotentialDollarIdentifier =
                     ParserText::temp_name_with_suffix("spawn_wg", span).into();
-                let wg_ident_node = Node::new(
+                let wg_ident_node = AstNode::new(
                     span,
-                    NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                    AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
                         wg_ident.clone(),
                     )),
                 );
 
-                let wg_new = Node::call(
+                let wg_new = AstNode::call(
                     span,
-                    Node::member(span, Node::identifier(span, "WaitGroup"), "new"),
+                    AstNode::member(span, AstNode::identifier(span, "WaitGroup"), "new"),
                     Vec::new(),
                 );
 
-                let wg_decl = Node::new(
+                let wg_decl = AstNode::new(
                     span,
-                    NodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration {
                         var_type: VarType::Mutable,
                         identifier: wg_ident.clone(),
                         data_type: ParserDataType::object(span, "WaitGroup"),
@@ -565,23 +568,23 @@ impl MiddleEnvironment {
 
                 for item in items {
                     let item = match item.node_type {
-                        NodeType::Spawn { .. } => item,
-                        other => Node::new(
+                        AstNodeType::Spawn { .. } => item,
+                        other => AstNode::new(
                             item.span,
-                            NodeType::Spawn {
-                                items: vec![Node::new(item.span, other)],
+                            AstNodeType::Spawn {
+                                items: vec![AstNode::new(item.span, other)],
                                 auto_wait: false,
                             },
                         ),
                     };
 
-                    let join_call = Node::call(
+                    let join_call = AstNode::call(
                         span,
-                        Node::member(span, Node::identifier(span, "WaitGroup"), "join"),
+                        AstNode::member(span, AstNode::identifier(span, "WaitGroup"), "join"),
                         vec![
-                            CallArg::Value(Node::new(
+                            CallArg::Value(AstNode::new(
                                 span,
-                                NodeType::RefStatement {
+                                AstNodeType::RefStatement {
                                     mutability: RefMutability::MutRef,
                                     value: Box::new(wg_ident_node.clone()),
                                 },
@@ -594,9 +597,9 @@ impl MiddleEnvironment {
 
                 body_nodes.push(wg_ident_node);
 
-                let scope_node = Node::new(
+                let scope_node = AstNode::new(
                     span,
-                    NodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration {
                         body: Some(body_nodes),
                         named: None,
                         is_temp: true,
@@ -606,20 +609,20 @@ impl MiddleEnvironment {
                 );
 
                 if auto_wait {
-                    let wait_scope = Node::new_temp_scope_with_create(
+                    let wait_scope = AstNode::new_temp_scope_with_create(
                         vec![
-                            Node::new(
+                            AstNode::new(
                                 span,
-                                NodeType::VariableDeclaration {
+                                AstNodeType::VariableDeclaration {
                                     var_type: VarType::Immutable,
                                     identifier: wg_ident.clone(),
                                     data_type: ParserDataType::object(span, "WaitGroup"),
                                     value: Box::new(scope_node),
                                 },
                             ),
-                            Node::call(
+                            AstNode::call(
                                 span,
-                                Node::member(span, Node::identifier(span, wg_ident), "wait"),
+                                AstNode::member(span, AstNode::identifier(span, wg_ident), "wait"),
                                 Vec::new(),
                             ),
                         ],
@@ -630,14 +633,14 @@ impl MiddleEnvironment {
                     Ok(self.evaluate(scope, scope_node))
                 }
             }
-            NodeType::Ternary {
+            AstNodeType::Ternary {
                 comparison,
                 then,
                 otherwise,
             } => self.evaluate_inner(
                 scope,
-                Node {
-                    node_type: NodeType::IfStatement {
+                AstNode {
+                    node_type: AstNodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(*comparison)),
                         then,
                         otherwise: Some(otherwise),
@@ -645,136 +648,142 @@ impl MiddleEnvironment {
                     span: node.span,
                 },
             ),
-            NodeType::MoveExpression { value } => match value.node_type {
-                NodeType::Identifier(x) => Ok(MiddleNode {
+            AstNodeType::MoveExpression { value } => match value.node_type {
+                AstNodeType::Identifier(x) => Ok(MiddleNode {
                     node_type: MiddleNodeType::Move(ParserText::new(
                         node.span,
                         self.resolve(scope, &x, ResolutionOptions::all())?,
                     )),
                     span: node.span,
                 }),
-                NodeType::FieldAccess { base, field } => {
+                AstNodeType::FieldAccess { base, field } => {
                     let tmp_ident: PotentialDollarIdentifier =
                         ParserText::temp_name_with_suffix("move", node.span).into();
 
-                    let tmp_decl = Node::new(
+                    let tmp_decl = AstNode::new(
                         node.span,
-                        NodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration {
                             var_type: VarType::Immutable,
                             identifier: tmp_ident.clone(),
                             data_type: ParserDataType::auto(node.span),
-                            value: Box::new(Node::new(
+                            value: Box::new(AstNode::new(
                                 node.span,
-                                NodeType::MoveExpression {
+                                AstNodeType::MoveExpression {
                                     value: Box::new(*base),
                                 },
                             )),
                         },
                     );
 
-                    let moved_base = Node::new(
+                    let moved_base = AstNode::new(
                         node.span,
-                        NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(tmp_ident)),
+                        AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                            tmp_ident,
+                        )),
                     );
-                    let member = Node::new(
+                    let member = AstNode::new(
                         node.span,
-                        NodeType::FieldAccess {
+                        AstNodeType::FieldAccess {
                             base: Box::new(moved_base),
                             field,
                         },
                     );
 
-                    self.evaluate_inner(scope, Node::new_temp_scope(vec![tmp_decl, member]))
+                    self.evaluate_inner(scope, AstNode::new_temp_scope(vec![tmp_decl, member]))
                 }
-                NodeType::ScopeAccess { base, field } => {
+                AstNodeType::ScopeAccess { base, field } => {
                     let tmp_ident: PotentialDollarIdentifier =
                         ParserText::temp_name_with_suffix("move", node.span).into();
 
-                    let tmp_decl = Node::new(
+                    let tmp_decl = AstNode::new(
                         node.span,
-                        NodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration {
                             var_type: VarType::Immutable,
                             identifier: tmp_ident.clone(),
                             data_type: ParserDataType::auto(node.span),
-                            value: Box::new(Node::new(
+                            value: Box::new(AstNode::new(
                                 node.span,
-                                NodeType::MoveExpression {
+                                AstNodeType::MoveExpression {
                                     value: Box::new(*base),
                                 },
                             )),
                         },
                     );
 
-                    let moved_base = Node::new(
+                    let moved_base = AstNode::new(
                         node.span,
-                        NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(tmp_ident)),
+                        AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                            tmp_ident,
+                        )),
                     );
-                    let member = Node::new(
+                    let member = AstNode::new(
                         node.span,
-                        NodeType::ScopeAccess {
+                        AstNodeType::ScopeAccess {
                             base: Box::new(moved_base),
                             field,
                         },
                     );
 
-                    self.evaluate_inner(scope, Node::new_temp_scope(vec![tmp_decl, member]))
+                    self.evaluate_inner(scope, AstNode::new_temp_scope(vec![tmp_decl, member]))
                 }
-                NodeType::IndexAccess { base, index } => {
+                AstNodeType::IndexAccess { base, index } => {
                     let tmp_ident: PotentialDollarIdentifier =
                         ParserText::temp_name_with_suffix("move", node.span).into();
 
-                    let tmp_decl = Node::new(
+                    let tmp_decl = AstNode::new(
                         node.span,
-                        NodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration {
                             var_type: VarType::Immutable,
                             identifier: tmp_ident.clone(),
                             data_type: ParserDataType::auto(node.span),
-                            value: Box::new(Node::new(
+                            value: Box::new(AstNode::new(
                                 node.span,
-                                NodeType::MoveExpression {
+                                AstNodeType::MoveExpression {
                                     value: Box::new(*base),
                                 },
                             )),
                         },
                     );
 
-                    let moved_base = Node::new(
+                    let moved_base = AstNode::new(
                         node.span,
-                        NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(tmp_ident)),
+                        AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                            tmp_ident,
+                        )),
                     );
-                    let member = Node::new(
+                    let member = AstNode::new(
                         node.span,
-                        NodeType::IndexAccess {
+                        AstNodeType::IndexAccess {
                             base: Box::new(moved_base),
                             index,
                         },
                     );
 
-                    self.evaluate_inner(scope, Node::new_temp_scope(vec![tmp_decl, member]))
+                    self.evaluate_inner(scope, AstNode::new_temp_scope(vec![tmp_decl, member]))
                 }
                 _ => self.evaluate_inner(scope, *value),
             },
-            NodeType::TupleLiteral { values } => {
+            AstNodeType::TupleLiteral { values } => {
                 let span = node.span;
 
                 self.evaluate_inner(
                     scope,
-                    Node::call(
+                    AstNode::call(
                         span,
-                        Node::identifier(span, "tuple"),
+                        AstNode::identifier(span, "tuple"),
                         values.into_iter().map(CallArg::Value).collect(),
                     ),
                 )
             }
 
-            NodeType::Drop(x) => Ok(MiddleNode {
+            AstNodeType::Drop(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::Drop(ParserText::new(
                     node.span,
                     self.resolve(scope, &x, ResolutionOptions::all())?,
                 )),
                 span: node.span,
             }),
-            NodeType::IfStatement {
+            AstNodeType::IfStatement {
                 comparison,
                 then,
                 otherwise,
@@ -789,22 +798,23 @@ impl MiddleEnvironment {
                 }),
                 IfComparisonType::IfLet { value, pattern } => self.evaluate_inner(
                     scope,
-                    Node {
-                        node_type: NodeType::MatchStatement {
+                    AstNode {
+                        node_type: AstNodeType::MatchStatement {
                             value: Some(Box::new(value)),
                             body: {
-                                let mut lst: Vec<(MatchArmType, Vec<Node>, Box<Node>)> = pattern
-                                    .0
-                                    .clone()
-                                    .into_iter()
-                                    .map(|x| (x, pattern.1.clone(), then.clone()))
-                                    .collect();
+                                let mut lst: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)> =
+                                    pattern
+                                        .0
+                                        .clone()
+                                        .into_iter()
+                                        .map(|x| (x, pattern.1.clone(), then.clone()))
+                                        .collect();
 
                                 lst.push((
                                     MatchArmType::Wildcard(Span::default()),
                                     Vec::new(),
-                                    otherwise.unwrap_or(Box::new(Node {
-                                        node_type: NodeType::EmptyLine,
+                                    otherwise.unwrap_or(Box::new(AstNode {
+                                        node_type: AstNodeType::EmptyLine,
                                         span: Span::default(),
                                     })),
                                 ));
@@ -816,13 +826,13 @@ impl MiddleEnvironment {
                     },
                 ),
             },
-            NodeType::Until { condition } => self.evaluate_inner(
+            AstNodeType::Until { condition } => self.evaluate_inner(
                 scope,
-                Node {
-                    node_type: NodeType::IfStatement {
+                AstNode {
+                    node_type: AstNodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(*condition)),
-                        then: Box::new(Node {
-                            node_type: NodeType::Break {
+                        then: Box::new(AstNode {
+                            node_type: AstNodeType::Break {
                                 label: None,
                                 value: None,
                             },
@@ -833,7 +843,7 @@ impl MiddleEnvironment {
                     span: node.span,
                 },
             ),
-            NodeType::Break { label, value } => Ok(MiddleNode {
+            AstNodeType::Break { label, value } => Ok(MiddleNode {
                 node_type: {
                     let mut lst = Vec::new();
 
@@ -940,7 +950,7 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::Continue { label } => Ok(MiddleNode {
+            AstNodeType::Continue { label } => Ok(MiddleNode {
                 node_type: {
                     let mut lst = Vec::new();
 
@@ -1009,11 +1019,11 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::EmptyLine => Ok(MiddleNode {
+            AstNodeType::EmptyLine => Ok(MiddleNode {
                 node_type: MiddleNodeType::EmptyLine,
                 span: node.span,
             }),
-            NodeType::Return { value } => Ok(MiddleNode {
+            AstNodeType::Return { value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::Return {
                     value: {
                         let mut lst = Vec::new();
@@ -1085,21 +1095,21 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::RefStatement { mutability, value } => Ok(MiddleNode {
+            AstNodeType::RefStatement { mutability, value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::RefStatement {
                     mutability,
                     value: Box::new(self.evaluate_inner(scope, *value)?),
                 },
                 span: node.span,
             }),
-            NodeType::DerefStatement { value } => Ok(MiddleNode {
+            AstNodeType::DerefStatement { value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::DerefStatement {
                     value: Box::new(self.evaluate_inner(scope, *value)?),
                 },
                 span: node.span,
             }),
-            NodeType::ParenExpression { value } => self.evaluate_inner(scope, *value),
-            NodeType::DestructureDeclaration {
+            AstNodeType::ParenExpression { value } => self.evaluate_inner(scope, *value),
+            AstNodeType::DestructureDeclaration {
                 var_type: _,
                 pattern,
                 value,
@@ -1107,9 +1117,9 @@ impl MiddleEnvironment {
                 let tmp_ident: PotentialDollarIdentifier =
                     ParserText::temp_name_with_suffix("destructure_tmp", node.span).into();
 
-                let tmp_decl = Node::new(
+                let tmp_decl = AstNode::new(
                     node.span,
-                    NodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration {
                         var_type: VarType::Immutable,
                         identifier: tmp_ident.clone(),
                         data_type: ParserDataType::auto(node.span),
@@ -1125,9 +1135,9 @@ impl MiddleEnvironment {
 
                 self.evaluate_inner(
                     scope,
-                    Node::new(
+                    AstNode::new(
                         node.span,
-                        NodeType::ScopeDeclaration {
+                        AstNodeType::ScopeDeclaration {
                             body: Some(body),
                             named: None,
                             is_temp: true,
@@ -1137,13 +1147,13 @@ impl MiddleEnvironment {
                     ),
                 )
             }
-            NodeType::DestructureAssignment { pattern, value } => {
+            AstNodeType::DestructureAssignment { pattern, value } => {
                 let tmp_ident: PotentialDollarIdentifier =
                     ParserText::temp_name_with_suffix("destructure_tmp", node.span).into();
 
-                let tmp_decl = Node::new(
+                let tmp_decl = AstNode::new(
                     node.span,
-                    NodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration {
                         var_type: VarType::Immutable,
                         identifier: tmp_ident.clone(),
                         data_type: ParserDataType::auto(node.span),
@@ -1156,9 +1166,12 @@ impl MiddleEnvironment {
                     self.emit_destructure_statements(&tmp_ident, &pattern, node.span, false),
                 );
 
-                self.evaluate_inner(scope, Node::new_temp_scope_with_create(body, Some(false)))
+                self.evaluate_inner(
+                    scope,
+                    AstNode::new_temp_scope_with_create(body, Some(false)),
+                )
             }
-            NodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration {
                 var_type,
                 identifier,
                 value,
@@ -1166,12 +1179,12 @@ impl MiddleEnvironment {
             } => self.evaluate_var_declaration(
                 scope, node.span, var_type, identifier, *value, data_type,
             ),
-            NodeType::TypeDeclaration {
+            AstNodeType::TypeDeclaration {
                 identifier,
                 object,
                 overloads,
             } => self.evaluate_type_declaration(scope, node.span, identifier, object, overloads),
-            NodeType::BooleanExpression {
+            AstNodeType::BooleanExpression {
                 left,
                 right,
                 operator,
@@ -1195,7 +1208,7 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::ComparisonExpression {
+            AstNodeType::ComparisonExpression {
                 left,
                 right,
                 operator,
@@ -1219,7 +1232,7 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::BinaryExpression {
+            AstNodeType::BinaryExpression {
                 left,
                 right,
                 operator,
@@ -1243,24 +1256,24 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::NotExpression { value } => self.evaluate_inner(
+            AstNodeType::NotExpression { value } => self.evaluate_inner(
                 scope,
-                Node {
-                    node_type: NodeType::ComparisonExpression {
+                AstNode {
+                    node_type: AstNodeType::ComparisonExpression {
                         left: value,
-                        right: Box::new(Node::bool(self.context.current_span(), false)),
+                        right: Box::new(AstNode::bool(self.context.current_span(), false)),
                         operator: ComparisonOperator::Equal,
                     },
                     span: node.span,
                 },
             ),
-            NodeType::NegExpression { value } => Ok(MiddleNode {
+            AstNodeType::NegExpression { value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::NegExpression {
                     value: Box::new(self.evaluate_inner(scope, *value)?),
                 },
                 span: node.span,
             }),
-            NodeType::AsExpression {
+            AstNodeType::AsExpression {
                 value,
                 data_type,
                 failure_mode,
@@ -1277,10 +1290,10 @@ impl MiddleEnvironment {
                             let temp_ident = ParserText::temp_name_with_suffix("as_res", node.span);
                             return self.evaluate_inner(
                                 scope,
-                                Node {
-                                    node_type: NodeType::Try {
-                                        value: Box::new(Node {
-                                            node_type: NodeType::AsExpression {
+                                AstNode {
+                                    node_type: AstNodeType::Try {
+                                        value: Box::new(AstNode {
+                                            node_type: AstNodeType::AsExpression {
                                                 value,
                                                 data_type,
                                                 failure_mode: AsFailureMode::Result,
@@ -1292,10 +1305,10 @@ impl MiddleEnvironment {
                                                 node.span,
                                                 temp_ident.clone(),
                                             )),
-                                            body: Box::new(Node::call(
+                                            body: Box::new(AstNode::call(
                                                 node.span,
-                                                Node::identifier(node.span, "panic"),
-                                                vec![CallArg::Value(Node::identifier(
+                                                AstNode::identifier(node.span, "panic"),
+                                                vec![CallArg::Value(AstNode::identifier(
                                                     node.span,
                                                     &temp_ident,
                                                 ))],
@@ -1324,7 +1337,7 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::IsExpression { value, data_type } => Ok(MiddleNode {
+            AstNodeType::IsExpression { value, data_type } => Ok(MiddleNode {
                 node_type: MiddleNodeType::IsExpression {
                     value: Box::new(self.evaluate_inner(scope, *value)?),
                     data_type: self.resolve_data_type(
@@ -1335,7 +1348,7 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::InDeclaration { identifier, value } => {
+            AstNodeType::InDeclaration { identifier, value } => {
                 if let Some(x) = self.handle_operator_overloads(
                     scope,
                     node.span,
@@ -1346,24 +1359,24 @@ impl MiddleEnvironment {
                     return Ok(x);
                 }
 
-                if let NodeType::RangeDeclaration {
+                if let AstNodeType::RangeDeclaration {
                     from,
                     to,
                     inclusive,
                 } = value.node_type.clone()
                 {
-                    let lower = Node::new(
+                    let lower = AstNode::new(
                         self.context.current_span(),
-                        NodeType::ComparisonExpression {
+                        AstNodeType::ComparisonExpression {
                             left: Box::new(*identifier.clone()),
                             right: from,
                             operator: ComparisonOperator::GreaterEqual,
                         },
                     );
 
-                    let upper = Node::new(
+                    let upper = AstNode::new(
                         self.context.current_span(),
-                        NodeType::ComparisonExpression {
+                        AstNodeType::ComparisonExpression {
                             left: Box::new(*identifier.clone()),
                             right: to,
                             operator: if inclusive {
@@ -1376,9 +1389,9 @@ impl MiddleEnvironment {
 
                     return self.evaluate_inner(
                         scope,
-                        Node::new(
+                        AstNode::new(
                             self.context.current_span(),
-                            NodeType::BooleanExpression {
+                            AstNodeType::BooleanExpression {
                                 left: Box::new(lower),
                                 right: Box::new(upper),
                                 operator: BooleanOperator::And,
@@ -1387,11 +1400,11 @@ impl MiddleEnvironment {
                     );
                 }
 
-                if let NodeType::ListLiteral(_, values) = value.node_type.clone() {
+                if let AstNodeType::ListLiteral(_, values) = value.node_type.clone() {
                     let mut comparisons = values.into_iter().map(|item| {
-                        Node::new(
+                        AstNode::new(
                             self.context.current_span(),
-                            NodeType::ComparisonExpression {
+                            AstNodeType::ComparisonExpression {
                                 left: Box::new(*identifier.clone()),
                                 right: Box::new(item),
                                 operator: ComparisonOperator::Equal,
@@ -1401,9 +1414,9 @@ impl MiddleEnvironment {
 
                     if let Some(first) = comparisons.next() {
                         let cond = comparisons.fold(first, |acc, cmp| {
-                            Node::new(
+                            AstNode::new(
                                 self.context.current_span(),
-                                NodeType::BooleanExpression {
+                                AstNodeType::BooleanExpression {
                                     left: Box::new(acc),
                                     right: Box::new(cmp),
                                     operator: BooleanOperator::Or,
@@ -1420,9 +1433,9 @@ impl MiddleEnvironment {
                         ParserInnerType::List(_) | ParserInnerType::Str
                     )
                 {
-                    let member = Node::new(
+                    let member = AstNode::new(
                         self.context.current_span(),
-                        NodeType::FieldAccess {
+                        AstNodeType::FieldAccess {
                             base: Box::new(*value.clone()),
                             field: PotentialDollarIdentifier::new(
                                 self.context.current_span(),
@@ -1433,7 +1446,7 @@ impl MiddleEnvironment {
 
                     return self.evaluate_inner(
                         scope,
-                        Node::call(
+                        AstNode::call(
                             self.context.current_span(),
                             member,
                             vec![CallArg::Value(*identifier)],
@@ -1443,21 +1456,21 @@ impl MiddleEnvironment {
 
                 self.evaluate_inner(
                     scope,
-                    Node::call(
+                    AstNode::call(
                         self.context.current_span(),
-                        Node::identifier(self.context.current_span(), "contains"),
+                        AstNode::identifier(self.context.current_span(), "contains"),
                         vec![CallArg::Value(*value), CallArg::Value(*identifier)],
                     ),
                 )
             }
-            NodeType::DebugExpression { value } => Ok(MiddleNode {
+            AstNodeType::DebugExpression { value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::DebugExpression {
                     pretty_printed_str: value.to_string(),
                     value: Box::new(self.evaluate_inner(scope, *value)?),
                 },
                 span: node.span,
             }),
-            NodeType::ListLiteral(data_type, x) => {
+            AstNodeType::ListLiteral(data_type, x) => {
                 let data_type = if data_type.is_auto() && !x.is_empty() {
                     if let Some(first) = x.first() {
                         self.resolve_type_from_node(scope, first).ok_or_else(|| {
@@ -1480,7 +1493,7 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::ListRepeatLiteral {
+            AstNodeType::ListRepeatLiteral {
                 data_type,
                 value,
                 count,
@@ -1515,7 +1528,7 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::Try { value, catch } => {
+            AstNodeType::Try { value, catch } => {
                 let resolved_type = self.resolve_type_from_node(scope, &value);
                 let is_option_try = matches!(
                     resolved_type.as_ref().map(|t| t.key()),
@@ -1537,12 +1550,12 @@ impl MiddleEnvironment {
                 };
 
                 let return_call = |name: &str, args: Vec<CallArg>| {
-                    Node::new(
+                    AstNode::new(
                         Span::default(),
-                        NodeType::Return {
-                            value: Some(Box::new(Node::call(
+                        AstNodeType::Return {
+                            value: Some(Box::new(AstNode::call(
                                 self.context.current_span(),
-                                Node::identifier(self.context.current_span(), name),
+                                AstNode::identifier(self.context.current_span(), name),
                                 args,
                             ))),
                         },
@@ -1551,15 +1564,15 @@ impl MiddleEnvironment {
 
                 self.evaluate_inner(
                     scope,
-                    Node {
-                        node_type: NodeType::MatchStatement {
+                    AstNode {
+                        node_type: AstNodeType::MatchStatement {
                             value: Some(value),
                             body: if is_option_try {
                                 let ok_name = "anon_ok_value";
                                 let ok_arm = enum_arm(
                                     "Some",
                                     Some(ParserText::from(ok_name.to_string()).into()),
-                                    Node::identifier(self.context.current_span(), ok_name),
+                                    AstNode::identifier(self.context.current_span(), ok_name),
                                 );
                                 let err_arm = if let Some(catch) = catch {
                                     enum_arm("None", catch.name, *catch.body)
@@ -1572,7 +1585,7 @@ impl MiddleEnvironment {
                                 let ok_arm = enum_arm(
                                     "Ok",
                                     Some(ParserText::from(ok_name.to_string()).into()),
-                                    Node::identifier(self.context.current_span(), ok_name),
+                                    AstNode::identifier(self.context.current_span(), ok_name),
                                 );
                                 let err_arm = if let Some(catch) = catch {
                                     enum_arm("Err", catch.name, *catch.body)
@@ -1583,7 +1596,7 @@ impl MiddleEnvironment {
                                         Some(ParserText::from(err_name.to_string()).into()),
                                         return_call(
                                             "err",
-                                            vec![CallArg::Value(Node::identifier(
+                                            vec![CallArg::Value(AstNode::identifier(
                                                 self.context.current_span(),
                                                 err_name,
                                             ))],
@@ -1597,14 +1610,14 @@ impl MiddleEnvironment {
                     },
                 )
             }
-            NodeType::LoopDeclaration {
+            AstNodeType::LoopDeclaration {
                 loop_type,
                 body,
                 until,
                 label,
                 else_body,
             } => self.evaluate_loop_statement(scope, *loop_type, *body, until, label, else_body),
-            NodeType::TestDeclaration { identifier, body } => {
+            AstNodeType::TestDeclaration { identifier, body } => {
                 let func_identifier = format!(
                     "test::{}",
                     ParserText::temp_name_with_suffix(identifier.text.trim(), node.span).text
@@ -1615,18 +1628,18 @@ impl MiddleEnvironment {
 
                 self.evaluate_inner(
                     scope,
-                    Node::new(
+                    AstNode::new(
                         node.span,
-                        NodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration {
                             var_type: VarType::Constant,
                             identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                                 node.span,
                                 func_identifier,
                             )),
                             data_type: ParserDataType::auto(node.span),
-                            value: Box::new(Node::new(
+                            value: Box::new(AstNode::new(
                                 node.span,
-                                NodeType::FunctionDeclaration {
+                                AstNodeType::FunctionDeclaration {
                                     header: FunctionHeader {
                                         generics: GenericTypes::default(),
                                         parameters: Vec::new(),
@@ -1640,7 +1653,7 @@ impl MiddleEnvironment {
                     ),
                 )
             }
-            NodeType::IterExpression {
+            AstNodeType::IterExpression {
                 data_type,
                 map,
                 spawned,
@@ -1656,7 +1669,7 @@ impl MiddleEnvironment {
                 conditionals,
                 until,
             ),
-            NodeType::InlineGenerator {
+            AstNodeType::InlineGenerator {
                 map,
                 data_type,
                 loop_type,
@@ -1673,27 +1686,27 @@ impl MiddleEnvironment {
                     data_type.unwrap_or(ParserDataType::auto(node.span)),
                 ),
             ),
-            NodeType::AssignmentExpression { identifier, value } => {
+            AstNodeType::AssignmentExpression { identifier, value } => {
                 match identifier.node_type.clone() {
-                    NodeType::Ternary {
+                    AstNodeType::Ternary {
                         comparison,
                         then,
                         otherwise,
                     } => self.evaluate_inner(
                         scope,
-                        Node {
-                            node_type: NodeType::IfStatement {
+                        AstNode {
+                            node_type: AstNodeType::IfStatement {
                                 comparison: Box::new(IfComparisonType::If(*comparison)),
-                                then: Box::new(Node::new(
+                                then: Box::new(AstNode::new(
                                     self.context.current_span(),
-                                    NodeType::AssignmentExpression {
+                                    AstNodeType::AssignmentExpression {
                                         identifier: then,
                                         value: value.clone(),
                                     },
                                 )),
-                                otherwise: Some(Box::new(Node::new(
+                                otherwise: Some(Box::new(AstNode::new(
                                     self.context.current_span(),
-                                    NodeType::AssignmentExpression {
+                                    AstNodeType::AssignmentExpression {
                                         identifier: otherwise,
                                         value,
                                     },
@@ -1702,15 +1715,15 @@ impl MiddleEnvironment {
                             span: node.span,
                         },
                     ),
-                    NodeType::DerefStatement {
+                    AstNodeType::DerefStatement {
                         value: deref_target,
                     } => Ok(MiddleNode {
                         node_type: MiddleNodeType::AssignmentExpression {
                             identifier: Box::new(self.evaluate(
                                 scope,
-                                Node::new(
+                                AstNode::new(
                                     node.span,
-                                    NodeType::DerefStatement {
+                                    AstNodeType::DerefStatement {
                                         value: deref_target,
                                     },
                                 ),
@@ -1719,27 +1732,27 @@ impl MiddleEnvironment {
                         },
                         span: node.span,
                     }),
-                    NodeType::FieldAccess { base, field } => Ok(MiddleNode {
+                    AstNodeType::FieldAccess { base, field } => Ok(MiddleNode {
                         node_type: MiddleNodeType::AssignmentExpression {
                             identifier: Box::new(self.evaluate(
                                 scope,
-                                Node::new(node.span, NodeType::FieldAccess { base, field }),
+                                AstNode::new(node.span, AstNodeType::FieldAccess { base, field }),
                             )),
                             value: Box::new(self.evaluate(scope, *value)),
                         },
                         span: node.span,
                     }),
-                    NodeType::ScopeAccess { base, field } => Ok(MiddleNode {
+                    AstNodeType::ScopeAccess { base, field } => Ok(MiddleNode {
                         node_type: MiddleNodeType::AssignmentExpression {
                             identifier: Box::new(self.evaluate(
                                 scope,
-                                Node::new(node.span, NodeType::ScopeAccess { base, field }),
+                                AstNode::new(node.span, AstNodeType::ScopeAccess { base, field }),
                             )),
                             value: Box::new(self.evaluate(scope, *value)),
                         },
                         span: node.span,
                     }),
-                    NodeType::IndexAccess { base, index } => {
+                    AstNodeType::IndexAccess { base, index } => {
                         if let Some(overloaded) = self.handle_index_assign_overload(
                             scope,
                             node.span,
@@ -1754,7 +1767,10 @@ impl MiddleEnvironment {
                             node_type: MiddleNodeType::AssignmentExpression {
                                 identifier: Box::new(self.evaluate(
                                     scope,
-                                    Node::new(node.span, NodeType::IndexAccess { base, index }),
+                                    AstNode::new(
+                                        node.span,
+                                        AstNodeType::IndexAccess { base, index },
+                                    ),
                                 )),
                                 value: Box::new(self.evaluate(scope, *value)),
                             },
@@ -1770,7 +1786,7 @@ impl MiddleEnvironment {
                     }),
                 }
             }
-            NodeType::ImplDeclaration {
+            AstNodeType::ImplDeclaration {
                 generics,
                 target,
                 variables,
@@ -1814,7 +1830,8 @@ impl MiddleEnvironment {
                     let placeholders = variables
                         .iter()
                         .filter_map(|var| {
-                            if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type
+                            if let AstNodeType::VariableDeclaration { identifier, .. } =
+                                &var.node_type
                             {
                                 let identifier = self
                                     .resolve(
@@ -1835,7 +1852,7 @@ impl MiddleEnvironment {
                     let type_defs = variables
                         .iter()
                         .filter_map(|var| {
-                            if let NodeType::TypeDeclaration {
+                            if let AstNodeType::TypeDeclaration {
                                 identifier, object, ..
                             } = &var.node_type
                             {
@@ -1898,7 +1915,7 @@ impl MiddleEnvironment {
 
                 for var in variables {
                     let (dec, iden, dependant) = match var.node_type {
-                        NodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration {
                             var_type,
                             identifier,
                             value,
@@ -1912,7 +1929,7 @@ impl MiddleEnvironment {
                             let resolved_iden = format!("{}.{}", self_name, identifier);
 
                             let dependant = match &value.node_type {
-                                NodeType::FunctionDeclaration { header, .. } => {
+                                AstNodeType::FunctionDeclaration { header, .. } => {
                                     let param_type = if let Some(Some(param)) =
                                         header.parameters.first().map(|x| &x.1)
                                     {
@@ -1944,9 +1961,9 @@ impl MiddleEnvironment {
                             };
 
                             (
-                                Node {
+                                AstNode {
                                     span: var.span,
-                                    node_type: NodeType::VariableDeclaration {
+                                    node_type: AstNodeType::VariableDeclaration {
                                         var_type,
                                         identifier: PotentialDollarIdentifier::Identifier(
                                             ParserText::from(resolved_iden),
@@ -1959,7 +1976,7 @@ impl MiddleEnvironment {
                                 dependant,
                             )
                         }
-                        NodeType::TypeDeclaration { .. } => {
+                        AstNodeType::TypeDeclaration { .. } => {
                             continue;
                         }
                         _ => {
@@ -2040,7 +2057,7 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::ImplTraitDeclaration {
+            AstNodeType::ImplTraitDeclaration {
                 generics,
                 trait_ident,
                 target,
@@ -2079,10 +2096,10 @@ impl MiddleEnvironment {
                 let mut assoc_types = Vec::new();
                 for var in &variables {
                     match &var.node_type {
-                        NodeType::VariableDeclaration { identifier, .. } => {
+                        AstNodeType::VariableDeclaration { identifier, .. } => {
                             provided.insert(identifier.to_string());
                         }
-                        NodeType::TypeDeclaration {
+                        AstNodeType::TypeDeclaration {
                             identifier, object, ..
                         } => {
                             assoc_types.push((identifier.clone(), object.clone()));
@@ -2101,9 +2118,9 @@ impl MiddleEnvironment {
                         continue;
                     }
                     let default = member.default.unwrap();
-                    all_vars.push(Node::new(
+                    all_vars.push(AstNode::new(
                         default.span,
-                        NodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration {
                             var_type: VarType::Constant,
                             identifier: PotentialDollarIdentifier::Identifier(ParserText::from(
                                 name.clone(),
@@ -2168,7 +2185,8 @@ impl MiddleEnvironment {
                         )
                     })?;
                     for var in &all_vars {
-                        if let NodeType::VariableDeclaration { identifier, .. } = &var.node_type {
+                        if let AstNodeType::VariableDeclaration { identifier, .. } = &var.node_type
+                        {
                             let resolved_iden = format!("{}.{}", self_name, identifier);
                             impl_ref.insert_member_placeholder(
                                 &identifier.to_string(),
@@ -2183,7 +2201,7 @@ impl MiddleEnvironment {
 
                 for var in all_vars {
                     let (dec, iden, dependant) = match var.node_type {
-                        NodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration {
                             var_type,
                             identifier,
                             value,
@@ -2193,7 +2211,7 @@ impl MiddleEnvironment {
                             let resolved_iden = format!("{}.{}", self_name, identifier);
 
                             let dependant = match &value.node_type {
-                                NodeType::FunctionDeclaration { header, .. } => {
+                                AstNodeType::FunctionDeclaration { header, .. } => {
                                     let param_type = if let Some(Some(param)) =
                                         header.parameters.first().map(|x| &x.1)
                                     {
@@ -2226,9 +2244,9 @@ impl MiddleEnvironment {
                             };
 
                             (
-                                Node {
+                                AstNode {
                                     span: var.span,
-                                    node_type: NodeType::VariableDeclaration {
+                                    node_type: AstNodeType::VariableDeclaration {
                                         var_type,
                                         identifier: PotentialDollarIdentifier::Identifier(
                                             ParserText::from(resolved_iden),
@@ -2241,7 +2259,7 @@ impl MiddleEnvironment {
                                 dependant,
                             )
                         }
-                        NodeType::TypeDeclaration { .. } => {
+                        AstNodeType::TypeDeclaration { .. } => {
                             continue;
                         }
                         _ => {
@@ -2336,7 +2354,7 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::TraitDeclaration {
+            AstNodeType::TraitDeclaration {
                 identifier,
                 implied_traits,
                 members,
@@ -2446,12 +2464,12 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::ScopeAlias {
+            AstNodeType::ScopeAlias {
                 identifier,
                 value,
                 create_new_scope,
             } => self.evaluate_scope_alias(scope, node.span, identifier, value, create_new_scope),
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body,
                 named,
                 is_temp,
@@ -2466,7 +2484,7 @@ impl MiddleEnvironment {
                 is_temp,
             ),
             // TODO Handle generics
-            NodeType::StructLiteral { identifier, value } => Ok(MiddleNode {
+            AstNodeType::StructLiteral { identifier, value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::AggregateExpression {
                     identifier: Some(ParserText::new(
                         node.span,
@@ -2496,7 +2514,7 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::EnumExpression {
+            AstNodeType::EnumExpression {
                 identifier,
                 value,
                 data,
@@ -2537,21 +2555,21 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            NodeType::MatchStatement { value, body } => {
+            AstNodeType::MatchStatement { value, body } => {
                 self.evaluate_match_statement(scope, node.span, value, body)
             }
-            NodeType::FnMatchDeclaration { header, body } => self.evaluate_inner(
+            AstNodeType::FnMatchDeclaration { header, body } => self.evaluate_inner(
                 scope,
-                Node::new(
+                AstNode::new(
                     self.context.current_span(),
-                    NodeType::FunctionDeclaration {
-                        body: Box::new(Node::new(
+                    AstNodeType::FunctionDeclaration {
+                        body: Box::new(AstNode::new(
                             self.context.current_span(),
-                            NodeType::ScopeDeclaration {
-                                body: Some(vec![Node::new(
+                            AstNodeType::ScopeDeclaration {
+                                body: Some(vec![AstNode::new(
                                     self.context.current_span(),
-                                    NodeType::MatchStatement {
-                                        value: Some(Box::new(Node::identifier(
+                                    AstNodeType::MatchStatement {
+                                        value: Some(Box::new(AstNode::identifier(
                                             self.context.current_span(),
                                             header.parameters[0].0.clone(),
                                         ))),
@@ -2571,10 +2589,10 @@ impl MiddleEnvironment {
                     },
                 ),
             ),
-            NodeType::FunctionDeclaration { header, body } => {
+            AstNodeType::FunctionDeclaration { header, body } => {
                 self.evaluate_function_declaration(scope, node.span, header, *body)
             }
-            NodeType::Tag {
+            AstNodeType::Tag {
                 node,
                 tag,
                 arguments,
@@ -2587,7 +2605,7 @@ impl MiddleEnvironment {
                     self.evaluate_inner(scope, *node)
                 }
             }
-            NodeType::ExternFunctionDeclaration {
+            AstNodeType::ExternFunctionDeclaration {
                 abi,
                 identifier,
                 parameters,
@@ -2603,7 +2621,7 @@ impl MiddleEnvironment {
                 library,
                 symbol,
             ),
-            NodeType::CallExpression {
+            AstNodeType::CallExpression {
                 string_fn: _,
                 caller,
                 generic_types,
@@ -2617,7 +2635,7 @@ impl MiddleEnvironment {
                 args,
                 reverse_args,
             ),
-            NodeType::ImportStatement {
+            AstNodeType::ImportStatement {
                 module,
                 alias,
                 values,
@@ -2728,29 +2746,29 @@ impl MiddleEnvironment {
                     span: node.span,
                 }))
             }
-            NodeType::SelectStatement { arms } => {
+            AstNodeType::SelectStatement { arms } => {
                 let done_ident: PotentialDollarIdentifier =
                     ParserText::temp_name_with_suffix("select_done", node.span).into();
 
-                let done_decl = Node::new(
+                let done_decl = AstNode::new(
                     node.span,
-                    NodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration {
                         var_type: VarType::Mutable,
                         identifier: done_ident.clone(),
                         data_type: ParserDataType::new(node.span, ParserInnerType::Bool),
-                        value: Box::new(Node::bool(node.span, false)),
+                        value: Box::new(AstNode::bool(node.span, false)),
                     },
                 );
 
                 let mut loop_body = Vec::new();
                 let mut has_default = false;
 
-                let done_ident_node = || Node::identifier(node.span, done_ident.clone());
+                let done_ident_node = || AstNode::identifier(node.span, done_ident.clone());
 
                 let break_node = || {
-                    Node::new(
+                    AstNode::new(
                         node.span,
-                        NodeType::Break {
+                        AstNodeType::Break {
                             label: None,
                             value: None,
                         },
@@ -2758,21 +2776,21 @@ impl MiddleEnvironment {
                 };
 
                 let set_done_node = || {
-                    Node::new(
+                    AstNode::new(
                         node.span,
-                        NodeType::AssignmentExpression {
+                        AstNodeType::AssignmentExpression {
                             identifier: Box::new(done_ident_node()),
-                            value: Box::new(Node::bool(node.span, true)),
+                            value: Box::new(AstNode::bool(node.span, true)),
                         },
                     )
                 };
 
-                let fold_guards = |initial: Node, guards: &[Node]| -> Node {
+                let fold_guards = |initial: AstNode, guards: &[AstNode]| -> AstNode {
                     let mut cond = initial;
                     for guard in guards {
-                        cond = Node::new(
+                        cond = AstNode::new(
                             node.span,
-                            NodeType::BooleanExpression {
+                            AstNodeType::BooleanExpression {
                                 left: Box::new(cond),
                                 right: Box::new(guard.clone()),
                                 operator: BooleanOperator::And,
@@ -2792,15 +2810,15 @@ impl MiddleEnvironment {
                                     ParserText::temp_name_with_suffix("select", node.span),
                                 );
 
-                                let try_get_call = Node::call(
+                                let try_get_call = AstNode::call(
                                     node.span,
-                                    Node::member(node.span, right, "try_get"),
+                                    AstNode::member(node.span, right, "try_get"),
                                     vec![],
                                 );
 
-                                loop_body.push(Node::new(
+                                loop_body.push(AstNode::new(
                                     node.span,
-                                    NodeType::VariableDeclaration {
+                                    AstNodeType::VariableDeclaration {
                                         var_type: VarType::Immutable,
                                         identifier: tmp_ident.clone(),
                                         data_type: ParserDataType::auto(node.span),
@@ -2808,42 +2826,42 @@ impl MiddleEnvironment {
                                     },
                                 ));
 
-                                let cond = Node::new(
+                                let cond = AstNode::new(
                                     node.span,
-                                    NodeType::ComparisonExpression {
-                                        left: Box::new(Node::new(
+                                    AstNodeType::ComparisonExpression {
+                                        left: Box::new(AstNode::new(
                                             node.span,
-                                            NodeType::Identifier(tmp_ident.clone().into()),
+                                            AstNodeType::Identifier(tmp_ident.clone().into()),
                                         )),
-                                        right: Box::new(Node::none(node.span)),
+                                        right: Box::new(AstNode::none(node.span)),
                                         operator: ComparisonOperator::NotEqual,
                                     },
                                 );
 
-                                let extracted = Node::new(
+                                let extracted = AstNode::new(
                                     node.span,
-                                    NodeType::FieldAccess {
-                                        base: Box::new(Node::new(
+                                    AstNodeType::FieldAccess {
+                                        base: Box::new(AstNode::new(
                                             node.span,
-                                            NodeType::Identifier(tmp_ident.clone().into()),
+                                            AstNodeType::Identifier(tmp_ident.clone().into()),
                                         )),
                                         field: PotentialDollarIdentifier::new(node.span, "next"),
                                     },
                                 );
 
                                 let bind_node = match left.node_type {
-                                    NodeType::Identifier(ident) => Node::new(
+                                    AstNodeType::Identifier(ident) => AstNode::new(
                                         node.span,
-                                        NodeType::VariableDeclaration {
+                                        AstNodeType::VariableDeclaration {
                                             var_type: VarType::Immutable,
                                             identifier: ident.into(),
                                             data_type: ParserDataType::auto(node.span),
                                             value: Box::new(extracted),
                                         },
                                     ),
-                                    _ => Node::new(
+                                    _ => AstNode::new(
                                         node.span,
-                                        NodeType::AssignmentExpression {
+                                        AstNodeType::AssignmentExpression {
                                             identifier: Box::new(left),
                                             value: Box::new(extracted),
                                         },
@@ -2851,9 +2869,9 @@ impl MiddleEnvironment {
                                 };
 
                                 let mut body_items = vec![bind_node];
-                                let done_and_arm = Node::new(
+                                let done_and_arm = AstNode::new(
                                     node.span,
-                                    NodeType::ScopeDeclaration {
+                                    AstNodeType::ScopeDeclaration {
                                         body: Some(vec![
                                             set_done_node(),
                                             arm.body.clone(),
@@ -2870,18 +2888,18 @@ impl MiddleEnvironment {
                                 } else {
                                     let mut guard_cond = arm.conditionals[0].clone();
                                     for guard in arm.conditionals.iter().skip(1) {
-                                        guard_cond = Node::new(
+                                        guard_cond = AstNode::new(
                                             node.span,
-                                            NodeType::BooleanExpression {
+                                            AstNodeType::BooleanExpression {
                                                 left: Box::new(guard_cond),
                                                 right: Box::new(guard.clone()),
                                                 operator: BooleanOperator::And,
                                             },
                                         );
                                     }
-                                    body_items.push(Node::new(
+                                    body_items.push(AstNode::new(
                                         node.span,
-                                        NodeType::IfStatement {
+                                        AstNodeType::IfStatement {
                                             comparison: Box::new(IfComparisonType::If(guard_cond)),
                                             then: Box::new(done_and_arm),
                                             otherwise: None,
@@ -2889,9 +2907,9 @@ impl MiddleEnvironment {
                                     ));
                                 }
 
-                                let body = Node::new(
+                                let body = AstNode::new(
                                     node.span,
-                                    NodeType::ScopeDeclaration {
+                                    AstNodeType::ScopeDeclaration {
                                         body: Some(body_items),
                                         named: None,
                                         is_temp: true,
@@ -2900,9 +2918,9 @@ impl MiddleEnvironment {
                                     },
                                 );
 
-                                loop_body.push(Node::new(
+                                loop_body.push(AstNode::new(
                                     node.span,
-                                    NodeType::IfStatement {
+                                    AstNodeType::IfStatement {
                                         comparison: Box::new(IfComparisonType::If(cond)),
                                         then: Box::new(body),
                                         otherwise: None,
@@ -2914,17 +2932,17 @@ impl MiddleEnvironment {
                                 let Some(right) = right.clone() else { continue };
 
                                 let cond = fold_guards(
-                                    Node::call(
+                                    AstNode::call(
                                         node.span,
-                                        Node::member(node.span, left, "try_send"),
+                                        AstNode::member(node.span, left, "try_send"),
                                         vec![CallArg::Value(right)],
                                     ),
                                     &arm.conditionals,
                                 );
 
-                                let body = Node::new(
+                                let body = AstNode::new(
                                     node.span,
-                                    NodeType::ScopeDeclaration {
+                                    AstNodeType::ScopeDeclaration {
                                         body: Some(vec![
                                             set_done_node(),
                                             arm.body.clone(),
@@ -2937,9 +2955,9 @@ impl MiddleEnvironment {
                                     },
                                 );
 
-                                loop_body.push(Node::new(
+                                loop_body.push(AstNode::new(
                                     node.span,
-                                    NodeType::IfStatement {
+                                    AstNodeType::IfStatement {
                                         comparison: Box::new(IfComparisonType::If(cond)),
                                         then: Box::new(body),
                                         otherwise: None,
@@ -2948,18 +2966,18 @@ impl MiddleEnvironment {
                             }
                             SelectArmKind::Default => {
                                 has_default = true;
-                                let mut body_items = vec![Node::new(
+                                let mut body_items = vec![AstNode::new(
                                     node.span,
-                                    NodeType::AssignmentExpression {
+                                    AstNodeType::AssignmentExpression {
                                         identifier: Box::new(done_ident_node()),
-                                        value: Box::new(Node::bool(node.span, true)),
+                                        value: Box::new(AstNode::bool(node.span, true)),
                                     },
                                 )];
                                 body_items.push(arm.body.clone());
                                 body_items.push(break_node());
-                                let default_body = Node::new(
+                                let default_body = AstNode::new(
                                     node.span,
-                                    NodeType::ScopeDeclaration {
+                                    AstNodeType::ScopeDeclaration {
                                         body: Some(body_items),
                                         named: None,
                                         is_temp: true,
@@ -2968,17 +2986,17 @@ impl MiddleEnvironment {
                                     },
                                 );
                                 let cond = fold_guards(
-                                    Node::new(
+                                    AstNode::new(
                                         node.span,
-                                        NodeType::NotExpression {
+                                        AstNodeType::NotExpression {
                                             value: Box::new(done_ident_node()),
                                         },
                                     ),
                                     &arm.conditionals,
                                 );
-                                loop_body.push(Node::new(
+                                loop_body.push(AstNode::new(
                                     node.span,
-                                    NodeType::IfStatement {
+                                    AstNodeType::IfStatement {
                                         comparison: Box::new(IfComparisonType::If(cond)),
                                         then: Box::new(default_body),
                                         otherwise: None,
@@ -2989,9 +3007,9 @@ impl MiddleEnvironment {
                     }
                 }
 
-                loop_body.push(Node::new(
+                loop_body.push(AstNode::new(
                     node.span,
-                    NodeType::IfStatement {
+                    AstNodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(done_ident_node())),
                         then: Box::new(break_node()),
                         otherwise: None,
@@ -2999,28 +3017,28 @@ impl MiddleEnvironment {
                 ));
 
                 if !has_default {
-                    loop_body.push(Node::new(
+                    loop_body.push(AstNode::new(
                         node.span,
-                        NodeType::IfStatement {
-                            comparison: Box::new(IfComparisonType::If(Node::new(
+                        AstNodeType::IfStatement {
+                            comparison: Box::new(IfComparisonType::If(AstNode::new(
                                 node.span,
-                                NodeType::NotExpression {
+                                AstNodeType::NotExpression {
                                     value: Box::new(done_ident_node()),
                                 },
                             ))),
                             then: Box::new(Self::scope_member_call(
                                 node.span,
                                 &["std", "thread", "wait"],
-                                vec![CallArg::Value(Node::int(node.span, 1))],
+                                vec![CallArg::Value(AstNode::int(node.span, 1))],
                             )),
                             otherwise: None,
                         },
                     ));
                 }
 
-                let loop_body = Node::new(
+                let loop_body = AstNode::new(
                     node.span,
-                    NodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration {
                         body: Some(loop_body),
                         named: None,
                         is_temp: true,
@@ -3029,9 +3047,9 @@ impl MiddleEnvironment {
                     },
                 );
 
-                let select_loop = Node::new(
+                let select_loop = AstNode::new(
                     node.span,
-                    NodeType::LoopDeclaration {
+                    AstNodeType::LoopDeclaration {
                         loop_type: Box::new(LoopType::Loop),
                         body: Box::new(loop_body),
                         until: None,
@@ -3042,9 +3060,9 @@ impl MiddleEnvironment {
 
                 self.evaluate_inner(
                     scope,
-                    Node::new(
+                    AstNode::new(
                         node.span,
-                        NodeType::ScopeDeclaration {
+                        AstNodeType::ScopeDeclaration {
                             body: Some(vec![done_decl, select_loop]),
                             named: None,
                             is_temp: true,
@@ -3054,12 +3072,12 @@ impl MiddleEnvironment {
                     ),
                 )
             }
-            NodeType::PipeExpression(mut path) if !path.is_empty() => {
+            AstNodeType::PipeExpression(mut path) if !path.is_empty() => {
                 let mut value = path.remove(0).into();
                 let mut prior_mappings = FxHashMap::default();
 
                 let is_callable_point = |env: &mut Self, point: &PipeSegment| {
-                    if let NodeType::Identifier(id) = &point.get_node().node_type
+                    if let AstNodeType::Identifier(id) = &point.get_node().node_type
                         && let Ok(resolved) = env.resolve(scope, id, ResolutionOptions::all())
                         && env
                             .symbols
@@ -3106,7 +3124,7 @@ impl MiddleEnvironment {
                     let next_point = path.get(idx + 1).cloned();
                     let point_callable = is_callable_point(self, &point);
                     let point_is_identifier =
-                        matches!(point.get_node().node_type, NodeType::Identifier(_));
+                        matches!(point.get_node().node_type, AstNodeType::Identifier(_));
 
                     if !point.is_named()
                         && !point.get_node().node_type.is_call()
@@ -3116,7 +3134,7 @@ impl MiddleEnvironment {
                         && !next.get_node().node_type.is_call()
                         && is_callable_point(self, &next)
                     {
-                        value = Node::call(
+                        value = AstNode::call(
                             self.context.current_span(),
                             next.into(),
                             vec![CallArg::Value(value), CallArg::Value(point.into())],
@@ -3127,7 +3145,7 @@ impl MiddleEnvironment {
 
                     match point_callable || point_is_identifier {
                         true if !point.is_named() && !point.get_node().node_type.is_call() => {
-                            value = Node::call(
+                            value = AstNode::call(
                                 self.context.current_span(),
                                 point.into(),
                                 vec![CallArg::Value(value)],
@@ -3146,9 +3164,9 @@ impl MiddleEnvironment {
                                     prior_mappings
                                         .insert(ident.clone(), get_mapping(self, &ident)?);
 
-                                    Node::new(
+                                    AstNode::new(
                                         self.context.current_span(),
-                                        NodeType::VariableDeclaration {
+                                        AstNodeType::VariableDeclaration {
                                             var_type: VarType::Mutable,
                                             identifier: PotentialDollarIdentifier::new(
                                                 node.span, ident,
@@ -3160,9 +3178,9 @@ impl MiddleEnvironment {
                                         },
                                     )
                                 }
-                                _ => Node::new(
+                                _ => AstNode::new(
                                     self.context.current_span(),
-                                    NodeType::VariableDeclaration {
+                                    AstNodeType::VariableDeclaration {
                                         var_type: VarType::Mutable,
                                         identifier: ParserText::from("$".to_string()).into(),
                                         value: Box::new(value),
@@ -3173,9 +3191,9 @@ impl MiddleEnvironment {
                                 ),
                             };
 
-                            let point: Node = point.into();
+                            let point: AstNode = point.into();
                             value = match point.node_type {
-                                NodeType::ScopeDeclaration {
+                                AstNodeType::ScopeDeclaration {
                                     body: Some(mut body),
                                     named: None,
                                     is_temp,
@@ -3184,8 +3202,8 @@ impl MiddleEnvironment {
                                 } => {
                                     body.insert(0, var_dec);
 
-                                    Node {
-                                        node_type: NodeType::ScopeDeclaration {
+                                    AstNode {
+                                        node_type: AstNodeType::ScopeDeclaration {
                                             body: Some(body),
                                             named: None,
                                             is_temp,
@@ -3195,9 +3213,9 @@ impl MiddleEnvironment {
                                         ..point
                                     }
                                 }
-                                _ => Node::new(
+                                _ => AstNode::new(
                                     self.context.current_span(),
-                                    NodeType::ScopeDeclaration {
+                                    AstNodeType::ScopeDeclaration {
                                         body: Some(vec![var_dec, point]),
                                         named: None,
                                         is_temp: true,
@@ -3217,7 +3235,7 @@ impl MiddleEnvironment {
 
                 self.evaluate_inner(scope, value)
             }
-            NodeType::PipeExpression(_) => Ok(MiddleNode::new(
+            AstNodeType::PipeExpression(_) => Ok(MiddleNode::new(
                 MiddleNodeType::EmptyLine,
                 self.context.current_span(),
             )),

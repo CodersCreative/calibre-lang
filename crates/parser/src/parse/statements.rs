@@ -6,7 +6,7 @@ use crate::ast::generics::{TraitMember, TraitMemberKind};
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier};
 use crate::ast::matching::{SelectArm, SelectArmKind};
 use crate::ast::nodes::{
-    DestructurePattern, NamedScope, Node, NodeType, Overload, TypeDefType, VarType,
+    AstNode, AstNodeType, DestructurePattern, NamedScope, Overload, TypeDefType, VarType,
 };
 use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{
@@ -39,15 +39,15 @@ pub struct StatementParsers<'a> {
     pub generic_params: StrParser<'a, GenericTypes>,
     pub string_text: StrParser<'a, String>,
     pub type_name: StrParser<'a, ParserDataType>,
-    pub statement: StrParser<'a, Node>,
-    pub expr: StrParser<'a, Node>,
+    pub statement: StrParser<'a, AstNode>,
+    pub expr: StrParser<'a, AstNode>,
 }
 
 pub fn build_statement_parser<'a>(
     parts: StatementParsers<'a>,
     line_starts: Arc<Vec<usize>>,
     source_path: Option<&'a Path>,
-) -> StrParser<'a, Node> {
+) -> StrParser<'a, AstNode> {
     let StatementParsers {
         pad,
         pad_with_newline,
@@ -140,9 +140,9 @@ pub fn build_statement_parser<'a>(
         .map_with_span({
             let ls = line_starts.clone();
             move |(values, module, alias), r| {
-                Node::new(
+                AstNode::new(
                     span(ls.as_ref(), r),
-                    NodeType::ImportStatement {
+                    AstNodeType::ImportStatement {
                         module,
                         alias,
                         values,
@@ -323,7 +323,7 @@ pub fn build_statement_parser<'a>(
                         .then_ignore(lex(pad.clone(), just(":=")))
                         .then(expr.clone())
                         .try_map(|(operator, value), sp| match value.node_type {
-                            NodeType::FunctionDeclaration { header, body } => Ok(Overload {
+                            AstNodeType::FunctionDeclaration { header, body } => Ok(Overload {
                                 operator,
                                 body,
                                 header,
@@ -356,9 +356,9 @@ pub fn build_statement_parser<'a>(
                 ))
             };
 
-            Node::new(
+            AstNode::new(
                 sp,
-                NodeType::TypeDeclaration {
+                AstNodeType::TypeDeclaration {
                     identifier,
                     object,
                     overloads,
@@ -409,9 +409,9 @@ pub fn build_statement_parser<'a>(
         )
         .then_ignore(lex(pad.clone(), just('}')))
         .map(|((name, sp), members)| {
-            Node::new(
+            AstNode::new(
                 sp,
-                NodeType::TraitDeclaration {
+                AstNodeType::TraitDeclaration {
                     identifier: PotentialGenericTypeIdentifier::Identifier(
                         PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
                     ),
@@ -469,9 +469,9 @@ pub fn build_statement_parser<'a>(
                             ));
                         }
                     };
-                    Ok(Node::new(
+                    Ok(AstNode::new(
                         *trait_ident.span(),
-                        NodeType::ImplTraitDeclaration {
+                        AstNodeType::ImplTraitDeclaration {
                             generics,
                             trait_ident,
                             target: dt,
@@ -487,9 +487,9 @@ pub fn build_statement_parser<'a>(
                         target.span
                     };
 
-                    Ok(Node::new(
+                    Ok(AstNode::new(
                         sp,
-                        NodeType::ImplDeclaration {
+                        AstNodeType::ImplDeclaration {
                             generics,
                             target,
                             variables: vars,
@@ -509,9 +509,9 @@ pub fn build_statement_parser<'a>(
         .then_ignore(delim.clone().repeated())
         .then(expr.clone())
         .map(|(fields, value)| {
-            Node::new(
+            AstNode::new(
                 value.span,
-                NodeType::DestructureDeclaration {
+                AstNodeType::DestructureDeclaration {
                     var_type: VarType::Immutable,
                     pattern: DestructurePattern::Struct(fields),
                     value: Box::new(value),
@@ -566,11 +566,11 @@ pub fn build_statement_parser<'a>(
                 );
                 let mut values = vec![first_value];
                 values.extend(rest_values);
-                Node::new(sp, NodeType::TupleLiteral { values })
+                AstNode::new(sp, AstNodeType::TupleLiteral { values })
             };
-            Node::new(
+            AstNode::new(
                 value.span,
-                NodeType::DestructureDeclaration {
+                AstNodeType::DestructureDeclaration {
                     var_type: VarType::Immutable,
                     pattern: DestructurePattern::Tuple(items),
                     value: Box::new(value),
@@ -641,15 +641,15 @@ pub fn build_statement_parser<'a>(
                 );
 
                 match first_value.node_type {
-                    NodeType::EnumExpression {
+                    AstNodeType::EnumExpression {
                         identifier,
                         value,
                         data,
                     } => {
                         let mut payload_values = if let Some(existing) = data {
                             match existing.node_type {
-                                NodeType::TupleLiteral { values } => values,
-                                other => vec![Node::new(existing.span, other)],
+                                AstNodeType::TupleLiteral { values } => values,
+                                other => vec![AstNode::new(existing.span, other)],
                             }
                         } else {
                             Vec::new()
@@ -659,20 +659,20 @@ pub fn build_statement_parser<'a>(
                         let payload = if payload_values.len() == 1 {
                             payload_values.into_iter().next()
                         } else {
-                            Some(Node::new(
+                            Some(AstNode::new(
                                 Span::new_from_spans(
                                     payload_values.first().map(|n| n.span).unwrap_or(tuple_span),
                                     payload_values.last().map(|n| n.span).unwrap_or(tuple_span),
                                 ),
-                                NodeType::TupleLiteral {
+                                AstNodeType::TupleLiteral {
                                     values: payload_values,
                                 },
                             ))
                         };
 
-                        Node::new(
+                        AstNode::new(
                             tuple_span,
-                            NodeType::EnumExpression {
+                            AstNodeType::EnumExpression {
                                 identifier,
                                 value,
                                 data: payload.map(Box::new),
@@ -680,17 +680,17 @@ pub fn build_statement_parser<'a>(
                         )
                     }
                     other => {
-                        let mut values = vec![Node::new(first_span, other)];
+                        let mut values = vec![AstNode::new(first_span, other)];
                         values.extend(rest_values);
-                        Node::new(tuple_span, NodeType::TupleLiteral { values })
+                        AstNode::new(tuple_span, AstNodeType::TupleLiteral { values })
                     }
                 }
             };
 
             let value_span = value.span;
-            Ok(Node::new(
+            Ok(AstNode::new(
                 Span::new_from_spans(*name.span(), value_span),
-                NodeType::VariableDeclaration {
+                AstNodeType::VariableDeclaration {
                     var_type,
                     identifier: name,
                     value: Box::new(value),
@@ -706,9 +706,9 @@ pub fn build_statement_parser<'a>(
         .map_with_span({
             let ls = line_starts.clone();
             move |((tag, args, _), node), r| {
-                Node::new(
+                AstNode::new(
                     span(ls.as_ref(), r),
-                    NodeType::Tag {
+                    AstNodeType::Tag {
                         node: Box::new(node),
                         tag,
                         arguments: args,
@@ -762,9 +762,9 @@ pub fn build_statement_parser<'a>(
                 let tagged_statements = statements
                     .into_iter()
                     .map(|stmt| {
-                        Node::new(
+                        AstNode::new(
                             Span::new_from_spans(tag_span, stmt.span),
-                            NodeType::Tag {
+                            AstNodeType::Tag {
                                 node: Box::new(stmt),
                                 tag: tag.clone(),
                                 arguments: args.clone(),
@@ -773,9 +773,9 @@ pub fn build_statement_parser<'a>(
                     })
                     .collect::<Vec<_>>();
 
-                Node::new(
+                AstNode::new(
                     span(ls.as_ref(), r),
-                    NodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration {
                         body: Some(tagged_statements),
                         named: None,
                         is_temp: false,
@@ -803,7 +803,7 @@ pub fn build_statement_parser<'a>(
                         .ignore_then(lex(pad.clone(), just(':')))
                         .ignore_then(type_name.clone())
                         .map(|data_type| {
-                            Node::new(data_type.span, NodeType::DataType { data_type })
+                            AstNode::new(data_type.span, AstNodeType::DataType { data_type })
                         })
                         .or(expr.clone()),
                 )
@@ -856,9 +856,9 @@ pub fn build_statement_parser<'a>(
         .map_with_span({
             let ls = line_starts.clone();
             move |(named, (body, create_new_scope)), r| {
-                Node::new(
+                AstNode::new(
                     span(ls.as_ref(), r),
-                    NodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration {
                         body,
                         named,
                         is_temp: true,
@@ -891,9 +891,9 @@ pub fn build_statement_parser<'a>(
         .map_with_span({
             let ls = line_starts.clone();
             move |(((identifier, name), args), create_new_scope), r| {
-                Node::new(
+                AstNode::new(
                     span(ls.as_ref(), r),
-                    NodeType::ScopeAlias {
+                    AstNodeType::ScopeAlias {
                         identifier,
                         value: NamedScope { name, args },
                         create_new_scope,
@@ -911,9 +911,9 @@ pub fn build_statement_parser<'a>(
         .map_with_span({
             let ls = line_starts.clone();
             move |(named, (body, create_new_scope)), r| {
-                Node::new(
+                AstNode::new(
                     span(ls.as_ref(), r),
-                    NodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration {
                         body,
                         named,
                         is_temp: true,
@@ -930,9 +930,9 @@ pub fn build_statement_parser<'a>(
         .map_with_span({
             let ls = line_starts.clone();
             move |value, r| {
-                Node::new(
+                AstNode::new(
                     span(ls.as_ref(), r),
-                    NodeType::Return {
+                    AstNodeType::Return {
                         value: value.map(Box::new),
                     },
                 )
@@ -970,9 +970,9 @@ pub fn build_statement_parser<'a>(
             let ls = line_starts.clone();
             move |(name, body), sp| {
                 let sp = span(ls.as_ref(), sp);
-                Node::new(
+                AstNode::new(
                     sp,
-                    NodeType::TestDeclaration {
+                    AstNodeType::TestDeclaration {
                         identifier: ParserText::new(sp, name),
                         body: Box::new(body),
                     },
@@ -1046,9 +1046,9 @@ pub fn build_statement_parser<'a>(
                     }
                 }
 
-                Node::new(
+                AstNode::new(
                     sp,
-                    NodeType::ExternFunctionDeclaration {
+                    AstNodeType::ExternFunctionDeclaration {
                         abi,
                         identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                             sp, name,
@@ -1074,7 +1074,7 @@ pub fn build_statement_parser<'a>(
             }),
         ident
             .clone()
-            .map(|(n, sp)| Node::identifier(sp, &n))
+            .map(|(n, sp)| AstNode::identifier(sp, &n))
             .then_ignore(left_arrow.clone())
             .then(expr.clone())
             .then(arrow_body_expr.clone())
@@ -1106,7 +1106,7 @@ pub fn build_statement_parser<'a>(
         .then_ignore(lex(pad.clone(), just('}')))
         .map_with_span({
             let ls = line_starts.clone();
-            move |arms, r| Node::new(span(ls.as_ref(), r), NodeType::SelectStatement { arms })
+            move |arms, r| AstNode::new(span(ls.as_ref(), r), AstNodeType::SelectStatement { arms })
         })
         .boxed();
 
@@ -1146,7 +1146,7 @@ pub fn build_statement_parser<'a>(
             } else {
                 parser_span
             };
-            Node::new(sp, NodeType::Spawn { items, auto_wait })
+            AstNode::new(sp, AstNodeType::Spawn { items, auto_wait })
         }
     })
     .boxed();
@@ -1177,9 +1177,9 @@ pub fn build_statement_parser<'a>(
                     })
                     .collect(),
             );
-            Node::new(
+            AstNode::new(
                 value.span,
-                NodeType::DestructureAssignment {
+                AstNodeType::DestructureAssignment {
                     pattern,
                     value: Box::new(value),
                 },

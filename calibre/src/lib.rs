@@ -4,7 +4,7 @@ use calibre_mir::{
 };
 use calibre_parser::{
     ParserError,
-    ast::{idents::ParserText, nodes::Node},
+    ast::{idents::ParserText, nodes::AstNode},
 };
 use calibre_vm::{
     VM, config::VMConfig, conversion::VMRegistry, error::RuntimeError, value::RuntimeValue,
@@ -30,7 +30,7 @@ pub enum CalibreError {
     #[error("compile failed : {error}")]
     Middle {
         path: PathBuf,
-        ast_artifacts: Option<Box<Node>>,
+        ast_artifacts: Option<Box<AstNode>>,
         contents: String,
         error: Box<MiddleErr>,
     },
@@ -46,7 +46,7 @@ pub enum CalibreError {
 
 #[derive(Clone, Debug)]
 pub struct CalibreArtifacts {
-    pub ast: Option<Node>,
+    pub ast: Option<AstNode>,
     pub mir: Option<MiddleNode>,
     pub lir: Option<LirRegistry>,
     pub registry: VMRegistry,

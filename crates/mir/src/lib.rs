@@ -4,7 +4,7 @@ use calibre_parser::{
     ast::{
         binary::BinaryOperator,
         idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{DestructurePattern, Node, NodeType, VarType},
+        nodes::{AstNode, AstNodeType, DestructurePattern, VarType},
         types::ParserDataType,
     },
 };
@@ -32,7 +32,7 @@ impl MiddleEnvironment {
         pattern: &DestructurePattern,
         span: Span,
         is_declaration: bool,
-    ) -> Vec<Node> {
+    ) -> Vec<AstNode> {
         let estimated = match pattern {
             DestructurePattern::Tuple(bindings) => bindings.iter().flatten().count(),
             DestructurePattern::Struct(fields) => fields.len(),
@@ -40,22 +40,22 @@ impl MiddleEnvironment {
         let mut out = Vec::with_capacity(estimated);
 
         let tmp_member_base = || {
-            Node::new(
+            AstNode::new(
                 span,
-                NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
                     tmp_ident.clone(),
                 )),
             )
         };
 
-        let push_binding = |out: &mut Vec<Node>,
+        let push_binding = |out: &mut Vec<AstNode>,
                             var_type: &VarType,
                             name: &PotentialDollarIdentifier,
-                            member: Node| {
+                            member: AstNode| {
             if is_declaration {
-                out.push(Node::new(
+                out.push(AstNode::new(
                     span,
-                    NodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration {
                         var_type: *var_type,
                         identifier: name.clone(),
                         data_type: ParserDataType::auto(span),
@@ -63,12 +63,12 @@ impl MiddleEnvironment {
                     },
                 ));
             } else {
-                out.push(Node::new(
+                out.push(AstNode::new(
                     span,
-                    NodeType::AssignmentExpression {
-                        identifier: Box::new(Node::new(
+                    AstNodeType::AssignmentExpression {
+                        identifier: Box::new(AstNode::new(
                             span,
-                            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+                            AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
                                 name.clone(),
                             )),
                         )),
@@ -100,10 +100,10 @@ impl MiddleEnvironment {
                 for (idx, entry) in head.into_iter().enumerate() {
                     if let Some((var_type, name)) = entry {
                         push_binding(&mut out, var_type, name, {
-                            let index_node = Node::int(span, idx);
-                            Node::new(
+                            let index_node = AstNode::int(span, idx);
+                            AstNode::new(
                                 span,
-                                NodeType::IndexAccess {
+                                AstNodeType::IndexAccess {
                                     base: Box::new(tmp_member_base()),
                                     index: Box::new(index_node),
                                 },
@@ -114,21 +114,21 @@ impl MiddleEnvironment {
 
                 for (i, entry) in tail.into_iter().enumerate() {
                     if let Some((var_type, name)) = entry {
-                        let index_expr = Node::new(
+                        let index_expr = AstNode::new(
                             span,
-                            NodeType::BinaryExpression {
-                                left: Box::new(Node::len(
+                            AstNodeType::BinaryExpression {
+                                left: Box::new(AstNode::len(
                                     span,
-                                    Node::new(
+                                    AstNode::new(
                                         span,
-                                        NodeType::Identifier(
+                                        AstNodeType::Identifier(
                                             PotentialGenericTypeIdentifier::Identifier(
                                                 tmp_ident.clone(),
                                             ),
                                         ),
                                     ),
                                 )),
-                                right: Box::new(Node::int(span, total_tail - i as i64)),
+                                right: Box::new(AstNode::int(span, total_tail - i as i64)),
                                 operator: BinaryOperator::Sub,
                             },
                         );
@@ -137,9 +137,9 @@ impl MiddleEnvironment {
                             &mut out,
                             var_type,
                             name,
-                            Node::new(
+                            AstNode::new(
                                 span,
-                                NodeType::IndexAccess {
+                                AstNodeType::IndexAccess {
                                     base: Box::new(tmp_member_base()),
                                     index: Box::new(index_expr),
                                 },
@@ -154,9 +154,9 @@ impl MiddleEnvironment {
                         &mut out,
                         var_type,
                         name,
-                        Node::new(
+                        AstNode::new(
                             span,
-                            NodeType::FieldAccess {
+                            AstNodeType::FieldAccess {
                                 base: Box::new(tmp_member_base()),
                                 field: PotentialDollarIdentifier::new(span, field),
                             },

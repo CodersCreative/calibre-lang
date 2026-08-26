@@ -4,7 +4,7 @@ use crate::{
         RefMutability,
         ffi::ParserFfiInnerType,
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{CallArg, Node, NodeType},
+        nodes::{AstNode, AstNodeType, CallArg},
     },
 };
 use rustc_hash::FxHashMap;
@@ -279,43 +279,43 @@ impl ParserDataType {
         }
     }
 
-    pub fn default_node(&self) -> Option<Node> {
+    pub fn default_node(&self) -> Option<AstNode> {
         match &self.data_type {
-            ParserInnerType::Int => Some(Node::int(self.span, 0)),
-            ParserInnerType::UInt => Some(Node::int(self.span, "0u")),
-            ParserInnerType::Byte => Some(Node::int(self.span, "0b")),
-            ParserInnerType::Str => Some(Node::new(
+            ParserInnerType::Int => Some(AstNode::int(self.span, 0)),
+            ParserInnerType::UInt => Some(AstNode::int(self.span, "0u")),
+            ParserInnerType::Byte => Some(AstNode::int(self.span, "0b")),
+            ParserInnerType::Str => Some(AstNode::new(
                 self.span,
-                NodeType::StringLiteral(ParserText::new(self.span, "")),
+                AstNodeType::StringLiteral(ParserText::new(self.span, "")),
             )),
-            ParserInnerType::Char => Some(Node::new(self.span, NodeType::CharLiteral('\0'))),
-            ParserInnerType::Float => Some(Node::new(self.span, NodeType::FloatLiteral(0.0))),
-            ParserInnerType::Auto(_) => Some(Node::new(self.span, NodeType::Null)),
-            ParserInnerType::Dynamic => Some(Node::new(self.span, NodeType::Null)),
-            ParserInnerType::Null => Some(Node::new(self.span, NodeType::Null)),
-            ParserInnerType::List(t) => Some(Node::new(
+            ParserInnerType::Char => Some(AstNode::new(self.span, AstNodeType::CharLiteral('\0'))),
+            ParserInnerType::Float => Some(AstNode::new(self.span, AstNodeType::FloatLiteral(0.0))),
+            ParserInnerType::Auto(_) => Some(AstNode::new(self.span, AstNodeType::Null)),
+            ParserInnerType::Dynamic => Some(AstNode::new(self.span, AstNodeType::Null)),
+            ParserInnerType::Null => Some(AstNode::new(self.span, AstNodeType::Null)),
+            ParserInnerType::List(t) => Some(AstNode::new(
                 self.span,
-                NodeType::ListLiteral(*t.clone(), Vec::new()),
+                AstNodeType::ListLiteral(*t.clone(), Vec::new()),
             )),
-            ParserInnerType::Range => Some(Node::new(
+            ParserInnerType::Range => Some(AstNode::new(
                 self.span,
-                NodeType::RangeDeclaration {
-                    from: Box::new(Node::int(self.span, 0)),
-                    to: Box::new(Node::int(self.span, 0)),
+                AstNodeType::RangeDeclaration {
+                    from: Box::new(AstNode::int(self.span, 0)),
+                    to: Box::new(AstNode::int(self.span, 0)),
                     inclusive: true,
                 },
             )),
-            ParserInnerType::Bool => Some(Node::bool(self.span, false)),
-            ParserInnerType::Tuple(values) => Some(Node::new(
+            ParserInnerType::Bool => Some(AstNode::bool(self.span, false)),
+            ParserInnerType::Tuple(values) => Some(AstNode::new(
                 self.span,
-                NodeType::TupleLiteral {
+                AstNodeType::TupleLiteral {
                     values: values.iter().filter_map(|x| x.default_node()).collect(),
                 },
             )),
-            ParserInnerType::Option(_) => Some(Node::none(self.span)),
-            ParserInnerType::Result { ok, .. } => Some(Node::call(
+            ParserInnerType::Option(_) => Some(AstNode::none(self.span)),
+            ParserInnerType::Result { ok, .. } => Some(AstNode::call(
                 self.span,
-                Node::identifier(self.span, "ok"),
+                AstNode::identifier(self.span, "ok"),
                 vec![CallArg::Value(ok.default_node()?)],
             )),
             _ => None,

@@ -4,7 +4,7 @@ use crate::{
         idents::{
             ParsedIntLiteral, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
         },
-        nodes::{NamedScope, Node, NodeType, VarType},
+        nodes::{AstNode, AstNodeType, NamedScope, VarType},
     },
 };
 use chumsky::prelude::*;
@@ -39,9 +39,9 @@ pub(super) fn scope_node_parser<'a, P>(
     statement: P,
     delim: impl Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
     pad: impl Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
-) -> impl Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a
+) -> impl Parser<'a, &'a str, AstNode, extra::Err<Rich<'a, char>>> + Clone + 'a
 where
-    P: Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a,
+    P: Parser<'a, &'a str, AstNode, extra::Err<Rich<'a, char>>> + Clone + 'a,
 {
     let body_items = statement
         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
@@ -50,16 +50,16 @@ where
         .or_not()
         .map(|x| x.unwrap_or_default());
 
-    let mk_scope = |items: Vec<Node>, create_new_scope: bool| {
+    let mk_scope = |items: Vec<AstNode>, create_new_scope: bool| {
         let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
             Span::new_from_spans(a.span, b.span)
         } else {
             Span::default()
         };
 
-        Node::new(
+        AstNode::new(
             sp,
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body: Some(items),
                 named: None,
                 is_temp: true,
@@ -92,11 +92,11 @@ pub(super) fn labelled_scope_parser<'a, PPad, PIdent, PScope>(
     pad: PPad,
     ident: PIdent,
     scope: PScope,
-) -> impl Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone
+) -> impl Parser<'a, &'a str, AstNode, extra::Err<Rich<'a, char>>> + Clone
 where
     PPad: Parser<'a, &'a str, (), extra::Err<Rich<'a, char>>> + Clone + 'a,
     PIdent: Parser<'a, &'a str, (String, Span), extra::Err<Rich<'a, char>>> + Clone + 'a,
-    PScope: Parser<'a, &'a str, Node, extra::Err<Rich<'a, char>>> + Clone + 'a,
+    PScope: Parser<'a, &'a str, AstNode, extra::Err<Rich<'a, char>>> + Clone + 'a,
 {
     lex(pad.clone(), just('@'))
         .ignore_then(ident.clone())
@@ -104,9 +104,9 @@ where
         .then(scope.or_not())
         .map(|(((name, sp), _), body)| {
             with_named_scope(
-                body.unwrap_or(Node::new(
+                body.unwrap_or(AstNode::new(
                     sp,
-                    NodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration {
                         body: None,
                         named: None,
                         is_temp: true,
@@ -172,7 +172,7 @@ where
         .then_ignore(lex(pad, just('}')))
 }
 
-pub(super) fn span_from_nodes_or(first: &Node, last: Option<&Node>, fallback: Span) -> Span {
+pub(super) fn span_from_nodes_or(first: &AstNode, last: Option<&AstNode>, fallback: Span) -> Span {
     let sp = last.map_or(first.span, |node| {
         Span::new_from_spans(first.span, node.span)
     });
@@ -232,7 +232,7 @@ pub(super) fn parse_splits(input: &str) -> (Vec<String>, Vec<String>) {
 }
 
 #[instrument(skip_all, fields(txt_len = txt.len()))]
-pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<Node, String> {
+pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<AstNode, String> {
     trace!("parsing embedded expression");
     let trimmed = txt.trim();
     if trimmed.is_empty() {
@@ -253,9 +253,9 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<Node
 
     if is_ident(trimmed) {
         debug!(ident = %trimmed, "parsed as identifier");
-        return Ok(Node::new(
+        return Ok(AstNode::new(
             fallback_span,
-            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+            AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
                 ParserText::from(trimmed.to_string()).into(),
             )),
         ));
@@ -268,17 +268,17 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<Node
         let sp = fallback_span;
         let parts: Vec<&str> = trimmed.split('.').collect();
 
-        let mut current = Node::new(
+        let mut current = AstNode::new(
             sp,
-            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+            AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
                 ParserText::from(parts[0].to_string()).into(),
             )),
         );
 
         for part in parts.iter().skip(1) {
-            current = Node::new(
+            current = AstNode::new(
                 sp,
-                NodeType::FieldAccess {
+                AstNodeType::FieldAccess {
                     base: Box::new(current),
                     field: PotentialDollarIdentifier::new(sp, part),
                 },
@@ -289,15 +289,15 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<Node
     }
 
     if ParsedIntLiteral::parse(trimmed).is_some() {
-        return Ok(Node::new(
+        return Ok(AstNode::new(
             fallback_span,
-            NodeType::IntLiteral(ParserText::from(trimmed.to_string())),
+            AstNodeType::IntLiteral(ParserText::from(trimmed.to_string())),
         ));
     }
 
     match super::parse_program_with_source(trimmed, None) {
         Ok(node) => match node.node_type {
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body: Some(mut body),
                 ..
             } if !body.is_empty() => Ok(body.remove(0)),
@@ -311,15 +311,15 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<Node
     }
 }
 
-pub(super) fn scope_node(items: Vec<Node>, is_temp: bool, define: bool) -> Node {
+pub(super) fn scope_node(items: Vec<AstNode>, is_temp: bool, define: bool) -> AstNode {
     let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
         Span::new_from_spans(a.span, b.span)
     } else {
         Span::default()
     };
-    Node::new(
+    AstNode::new(
         sp,
-        NodeType::ScopeDeclaration {
+        AstNodeType::ScopeDeclaration {
             body: Some(items),
             named: None,
             is_temp,
@@ -329,35 +329,35 @@ pub(super) fn scope_node(items: Vec<Node>, is_temp: bool, define: bool) -> Node 
     )
 }
 
-pub(super) fn ensure_scope_node(node: Node, is_temp: bool, define: bool) -> Node {
-    if matches!(&node.node_type, NodeType::ScopeDeclaration { .. }) {
+pub(super) fn ensure_scope_node(node: AstNode, is_temp: bool, define: bool) -> AstNode {
+    if matches!(&node.node_type, AstNodeType::ScopeDeclaration { .. }) {
         node
     } else {
         scope_node(vec![node], is_temp, define)
     }
 }
 
-pub(super) fn scope_body_or_single(node: Node) -> Option<Vec<Node>> {
+pub(super) fn scope_body_or_single(node: AstNode) -> Option<Vec<AstNode>> {
     match node.node_type {
-        NodeType::ScopeDeclaration { body, .. } => body,
+        AstNodeType::ScopeDeclaration { body, .. } => body,
         _ => Some(vec![node]),
     }
 }
 
-pub(super) fn with_named_scope(node: Node, named: NamedScope) -> Node {
+pub(super) fn with_named_scope(node: AstNode, named: NamedScope) -> AstNode {
     match node.node_type {
-        NodeType::ScopeDeclaration {
+        AstNodeType::ScopeDeclaration {
             body,
             is_temp,
             create_new_scope,
             define,
             ..
-        } => Node::new(
+        } => AstNode::new(
             body.as_ref()
                 .and_then(|b| b.first().zip(b.last()))
                 .map(|(a, b)| Span::new_from_spans(a.span, b.span))
                 .unwrap_or(Span::default()),
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body,
                 named: Some(named),
                 is_temp,

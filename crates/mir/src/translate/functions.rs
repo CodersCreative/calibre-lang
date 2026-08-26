@@ -12,7 +12,9 @@ use calibre_parser::{
         ObjectType,
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{CallArg, FunctionHeader, IfComparisonType, LoopType, Node, NodeType, VarType},
+        nodes::{
+            AstNode, AstNodeType, CallArg, FunctionHeader, IfComparisonType, LoopType, VarType,
+        },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
@@ -20,23 +22,23 @@ use calibre_parser::{
 struct GeneratorReturnsRewriter;
 
 impl NodeVisitor for GeneratorReturnsRewriter {
-    fn visit(&mut self, node: Node) -> Node {
+    fn visit(&mut self, node: AstNode) -> AstNode {
         let span = node.span;
         match node.node_type {
-            NodeType::Return { value: Some(value) } => Node::call(
+            AstNodeType::Return { value: Some(value) } => AstNode::call(
                 span,
-                Node::identifier(span, "gen_suspend"),
+                AstNode::identifier(span, "gen_suspend"),
                 vec![CallArg::Value(*value)],
             ),
-            NodeType::Return { value: None } => Node::new(
+            AstNodeType::Return { value: None } => AstNode::new(
                 span,
-                NodeType::Return {
-                    value: Some(Box::new(Node::identifier(span, "none"))),
+                AstNodeType::Return {
+                    value: Some(Box::new(AstNode::identifier(span, "none"))),
                 },
             ),
             _ => {
                 let node_type = self.visit_children(node.node_type);
-                Node::new(span, node_type)
+                AstNode::new(span, node_type)
             }
         }
     }
@@ -44,22 +46,22 @@ impl NodeVisitor for GeneratorReturnsRewriter {
 
 impl MiddleEnvironment {
     #[inline]
-    fn unwrap_option_or_default_expr(span: Span, value: Node, default: Node) -> Node {
-        Node::new(
+    fn unwrap_option_or_default_expr(span: Span, value: AstNode, default: AstNode) -> AstNode {
+        AstNode::new(
             span,
-            NodeType::Ternary {
-                comparison: Box::new(Node::new(
+            AstNodeType::Ternary {
+                comparison: Box::new(AstNode::new(
                     span,
-                    NodeType::ComparisonExpression {
+                    AstNodeType::ComparisonExpression {
                         left: Box::new(value.clone()),
-                        right: Box::new(Node::none(span)),
+                        right: Box::new(AstNode::none(span)),
                         operator: ComparisonOperator::Equal,
                     },
                 )),
                 then: Box::new(default),
-                otherwise: Box::new(Node::new(
+                otherwise: Box::new(AstNode::new(
                     span,
-                    NodeType::FieldAccess {
+                    AstNodeType::FieldAccess {
                         base: Box::new(value),
                         field: PotentialDollarIdentifier::new(span, "next"),
                     },
@@ -90,12 +92,12 @@ impl MiddleEnvironment {
         &mut self,
         scope: &u64,
         span: Span,
-        caller: &Node,
+        caller: &AstNode,
         data_type: &Option<ParserInnerType>,
         args: Vec<CallArg>,
-        reverse_args: Vec<Node>,
+        reverse_args: Vec<AstNode>,
     ) -> Option<Vec<MiddleNode>> {
-        let NodeType::Identifier(name) = &caller.node_type else {
+        let AstNodeType::Identifier(name) = &caller.node_type else {
             return None;
         };
 
@@ -151,7 +153,7 @@ impl MiddleEnvironment {
             return None;
         }
 
-        let mut slots: Vec<Option<Node>> = vec![None; param_len];
+        let mut slots: Vec<Option<AstNode>> = vec![None; param_len];
         let mut wrap_with_some = vec![false; param_len];
         let reverse_len = reverse_args.len().min(param_len);
 
@@ -190,7 +192,7 @@ impl MiddleEnvironment {
                 if let Some(default) = &meta.explicit_default {
                     slots[i] = Some(default.clone().into());
                 } else if meta.implicit_none {
-                    slots[i] = Some(Node::none(span));
+                    slots[i] = Some(AstNode::none(span));
                 }
                 continue;
             }
@@ -257,8 +259,8 @@ impl MiddleEnvironment {
     }
 
     #[inline]
-    fn collect_call_nodes(args: Vec<CallArg>, mut reverse_args: Vec<Node>) -> Vec<Node> {
-        let mut nodes: Vec<Node> = args.into_iter().map(Into::into).collect();
+    fn collect_call_nodes(args: Vec<CallArg>, mut reverse_args: Vec<AstNode>) -> Vec<AstNode> {
+        let mut nodes: Vec<AstNode> = args.into_iter().map(Into::into).collect();
         nodes.append(&mut reverse_args);
         nodes
     }
@@ -270,7 +272,7 @@ impl MiddleEnvironment {
         span: Span,
         identifier: Option<ParserText>,
         args: Vec<CallArg>,
-        reverse_args: Vec<Node>,
+        reverse_args: Vec<AstNode>,
     ) -> MiddleNode {
         let value = Self::collect_call_nodes(args, reverse_args)
             .into_iter()
@@ -285,31 +287,36 @@ impl MiddleEnvironment {
         }
     }
 
-    fn rewrite_generator_returns(node: Node) -> Node {
+    fn rewrite_generator_returns(node: AstNode) -> AstNode {
         let mut rewriter = GeneratorReturnsRewriter;
         rewriter.visit(node)
     }
 
-    pub(crate) fn wrap_generator_body(body: Node, elem_type: ParserDataType, span: Span) -> Node {
+    pub(crate) fn wrap_generator_body(
+        body: AstNode,
+        elem_type: ParserDataType,
+        span: Span,
+    ) -> AstNode {
         let next_name = ParserText::temp_name_with_suffix("gen_next", span);
         let rewritten = Self::rewrite_generator_returns(body);
 
         let next_body = match rewritten.node_type {
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body: Some(mut items),
                 ..
             } => {
-                items.push(Node::identifier(span, "none"));
-                Node::new_temp_scope(items)
+                items.push(AstNode::identifier(span, "none"));
+                AstNode::new_temp_scope(items)
             }
-            other => {
-                Node::new_temp_scope(vec![Node::new(span, other), Node::identifier(span, "none")])
-            }
+            other => AstNode::new_temp_scope(vec![
+                AstNode::new(span, other),
+                AstNode::identifier(span, "none"),
+            ]),
         };
 
-        let next_decl = Node::new(
+        let next_decl = AstNode::new(
             span,
-            NodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration {
                 var_type: VarType::Immutable,
                 identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                     span,
@@ -320,9 +327,9 @@ impl MiddleEnvironment {
                     vec![],
                     ParserDataType::new(span, ParserInnerType::Option(Box::new(elem_type.clone()))),
                 ),
-                value: Box::new(Node::new(
+                value: Box::new(AstNode::new(
                     span,
-                    NodeType::FunctionDeclaration {
+                    AstNodeType::FunctionDeclaration {
                         header: FunctionHeader {
                             generics: GenericTypes::default(),
                             parameters: vec![],
@@ -338,9 +345,9 @@ impl MiddleEnvironment {
             },
         );
 
-        let gen_value = Node::new(
+        let gen_value = AstNode::new(
             span,
-            NodeType::StructLiteral {
+            AstNodeType::StructLiteral {
                 identifier: PotentialGenericTypeIdentifier::Generic {
                     identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                         span,
@@ -349,28 +356,28 @@ impl MiddleEnvironment {
                     generic_types: vec![elem_type],
                 },
                 value: ObjectType::Map(vec![
-                    (String::from("data"), Node::identifier(span, &next_name)),
-                    (String::from("index"), Node::int(span, 0)),
-                    (String::from("done"), Node::identifier(span, "false")),
+                    (String::from("data"), AstNode::identifier(span, &next_name)),
+                    (String::from("index"), AstNode::int(span, 0)),
+                    (String::from("done"), AstNode::identifier(span, "false")),
                 ]),
             },
         );
 
-        Node::new_temp_scope_with_create(vec![next_decl, gen_value], Some(false))
+        AstNode::new_temp_scope_with_create(vec![next_decl, gen_value], Some(false))
     }
 
     pub(crate) fn wrap_inline_generator(
         span: Span,
-        map: Node,
+        map: AstNode,
         loop_type: LoopType,
-        conditionals: Vec<Node>,
-        until: Option<Box<Node>>,
+        conditionals: Vec<AstNode>,
+        until: Option<Box<AstNode>>,
         elem_type: ParserDataType,
-    ) -> Node {
+    ) -> AstNode {
         let guard = conditionals.into_iter().reduce(|left, right| {
-            Node::new(
+            AstNode::new(
                 span,
-                NodeType::BooleanExpression {
+                AstNodeType::BooleanExpression {
                     left: Box::new(left),
                     right: Box::new(right),
                     operator: BooleanOperator::And,
@@ -379,22 +386,22 @@ impl MiddleEnvironment {
         });
 
         let mut loop_body_items = Vec::new();
-        let yield_node = Node::new(
+        let yield_node = AstNode::new(
             span,
-            NodeType::Return {
+            AstNodeType::Return {
                 value: Some(Box::new(map)),
             },
         );
 
         if let Some(guard) = guard {
-            loop_body_items.push(Node::new(
+            loop_body_items.push(AstNode::new(
                 span,
-                NodeType::IfStatement {
+                AstNodeType::IfStatement {
                     comparison: Box::new(IfComparisonType::If(guard)),
                     then: Box::new(yield_node),
-                    otherwise: Some(Box::new(Node::new(
+                    otherwise: Some(Box::new(AstNode::new(
                         span,
-                        NodeType::Continue { label: None },
+                        AstNodeType::Continue { label: None },
                     ))),
                 },
             ));
@@ -402,11 +409,11 @@ impl MiddleEnvironment {
             loop_body_items.push(yield_node);
         }
 
-        let loop_node = Node::new(
+        let loop_node = AstNode::new(
             span,
-            NodeType::LoopDeclaration {
+            AstNodeType::LoopDeclaration {
                 loop_type: Box::new(loop_type),
-                body: Box::new(Node::new_temp_scope(loop_body_items)),
+                body: Box::new(AstNode::new_temp_scope(loop_body_items)),
                 until,
                 label: None,
                 else_body: None,
@@ -414,7 +421,7 @@ impl MiddleEnvironment {
         );
 
         Self::wrap_generator_body(
-            Node::new_temp_scope_with_create(vec![loop_node], Some(false)),
+            AstNode::new_temp_scope_with_create(vec![loop_node], Some(false)),
             elem_type,
             span,
         )
@@ -499,7 +506,7 @@ impl MiddleEnvironment {
         scope: &u64,
         span: Span,
         header: FunctionHeader,
-        mut body: Node,
+        mut body: AstNode,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut params = Vec::with_capacity(header.parameters.len());
         let mut param_idents = Vec::with_capacity(header.parameters.len());
@@ -586,7 +593,7 @@ impl MiddleEnvironment {
                 }
             }
             body = match body.node_type {
-                NodeType::ScopeDeclaration {
+                AstNodeType::ScopeDeclaration {
                     body: Some(mut inner),
                     named,
                     is_temp,
@@ -595,9 +602,9 @@ impl MiddleEnvironment {
                 } => {
                     let mut new_body = destructures;
                     new_body.append(&mut inner);
-                    Node::new(
+                    AstNode::new(
                         body.span,
-                        NodeType::ScopeDeclaration {
+                        AstNodeType::ScopeDeclaration {
                             body: Some(new_body),
                             named,
                             is_temp,
@@ -609,7 +616,7 @@ impl MiddleEnvironment {
                 _ => {
                     let mut new_body = destructures;
                     new_body.push(body);
-                    Node::new_temp_scope_with_create(new_body, Some(false))
+                    AstNode::new_temp_scope_with_create(new_body, Some(false))
                 }
             };
         }
@@ -751,10 +758,11 @@ impl MiddleEnvironment {
         Ok(fn_node)
     }
 
-    pub fn get_caller_context(&self, scope: &u64, span: Span) -> Option<Node> {
+    pub fn get_caller_context(&self, scope: &u64, span: Span) -> Option<AstNode> {
         let scope_ref = self.scoping.scopes.get(scope)?;
 
-        let value = |v: String| Node::new(span, NodeType::StringLiteral(ParserText::new(span, v)));
+        let value =
+            |v: String| AstNode::new(span, AstNodeType::StringLiteral(ParserText::new(span, v)));
 
         let current_function_name = if scope_ref.namespace.parse::<u64>().is_ok() {
             "main".to_string()
@@ -768,9 +776,9 @@ impl MiddleEnvironment {
             "unknown".to_string()
         };
 
-        Some(Node::new(
+        Some(AstNode::new(
             span,
-            NodeType::StructLiteral {
+            AstNodeType::StructLiteral {
                 identifier: PotentialGenericTypeIdentifier::new(span, "ExecContext"),
                 value: ObjectType::Map(vec![
                     ("function_name".to_string(), value(current_function_name)),
@@ -788,11 +796,11 @@ impl MiddleEnvironment {
                     ),
                     (
                         "line".to_string(),
-                        Node::int(span, format!("{}u", span.from.line)),
+                        AstNode::int(span, format!("{}u", span.from.line)),
                     ),
                     (
                         "col".to_string(),
-                        Node::int(span, format!("{}u", span.from.col)),
+                        AstNode::int(span, format!("{}u", span.from.col)),
                     ),
                 ]),
             },
@@ -805,13 +813,13 @@ impl MiddleEnvironment {
         &mut self,
         scope: &u64,
         span: Span,
-        caller: Node,
+        caller: AstNode,
         generic_types: Vec<ParserDataType>,
         mut args: Vec<CallArg>,
-        mut reverse_args: Vec<Node>,
+        mut reverse_args: Vec<AstNode>,
     ) -> Result<MiddleNode, MiddleErr> {
         match caller.node_type.clone() {
-            NodeType::FieldAccess { base, field } => {
+            AstNodeType::FieldAccess { base, field } => {
                 let field_name = self
                     .resolve(scope, &field, ResolutionOptions::default().with_dollar())
                     .unwrap_or(field.text().clone());
@@ -826,7 +834,7 @@ impl MiddleEnvironment {
                     return self.evaluate_call_expression(
                         scope,
                         span,
-                        Node::identifier(caller.span, x),
+                        AstNode::identifier(caller.span, x),
                         generic_types,
                         args,
                         reverse_args,
@@ -840,14 +848,14 @@ impl MiddleEnvironment {
                     return self.evaluate_call_expression(
                         scope,
                         span,
-                        Node::identifier(caller.span, symbol),
+                        AstNode::identifier(caller.span, symbol),
                         generic_types,
                         args,
                         reverse_args,
                     );
                 }
             }
-            NodeType::Identifier(caller_ident) => {
+            AstNodeType::Identifier(caller_ident) => {
                 if "tuple" == &caller_ident.to_string() {
                     return Ok(self.aggregate_from_call_nodes(
                         scope,
@@ -877,7 +885,7 @@ impl MiddleEnvironment {
             .resolve_type_from_node(scope, &caller)
             .map(|x| x.unwrap_all_refs().data_type);
 
-        let caller_name = if let NodeType::Identifier(ident) = &caller.node_type {
+        let caller_name = if let AstNodeType::Identifier(ident) = &caller.node_type {
             self.resolve(scope, ident, ResolutionOptions::default().with_dollar())?
         } else {
             String::new()
@@ -935,18 +943,18 @@ impl MiddleEnvironment {
                                     .collect();
 
                             let list_arg = if args.len() == 1 {
-                                let arg: Node = args.remove(0).into();
+                                let arg: AstNode = args.remove(0).into();
                                 let is_already_list =
-                                    matches!(arg.node_type, NodeType::ListLiteral(_, _))
+                                    matches!(arg.node_type, AstNodeType::ListLiteral(_, _))
                                         || self
                                             .resolve_type_from_node(scope, &arg)
                                             .is_some_and(|dt| dt.is_list());
                                 if is_already_list {
                                     arg
                                 } else {
-                                    Node::new(
+                                    AstNode::new(
                                         self.context.current_span(),
-                                        NodeType::ListLiteral(
+                                        AstNodeType::ListLiteral(
                                             match parameters
                                                 .last()
                                                 .cloned()
@@ -962,9 +970,9 @@ impl MiddleEnvironment {
                                     )
                                 }
                             } else {
-                                Node::new(
+                                AstNode::new(
                                     self.context.current_span(),
-                                    NodeType::ListLiteral(
+                                    AstNodeType::ListLiteral(
                                         match parameters
                                             .last()
                                             .cloned()

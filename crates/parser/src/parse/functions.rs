@@ -1,7 +1,7 @@
 use super::{LegacySpanMapExt, setup::StrParser};
 use crate::Span;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
-use crate::ast::nodes::{DestructurePattern, FunctionHeader, Node, NodeType, VarType};
+use crate::ast::nodes::{AstNode, AstNodeType, DestructurePattern, FunctionHeader, VarType};
 use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{
     ensure_scope_node, labelled_scope_parser, lex, scope_node_parser, span,
@@ -16,13 +16,13 @@ enum FnParamGroup {
         Vec<(
             PotentialDollarIdentifier,
             Option<ParserDataType>,
-            Option<Box<Node>>,
+            Option<Box<AstNode>>,
         )>,
     ),
     Destructure {
         pattern: DestructurePattern,
         data_type: Option<ParserDataType>,
-        default: Option<Box<Node>>,
+        default: Option<Box<AstNode>>,
         span: Span,
     },
 }
@@ -38,14 +38,14 @@ pub struct FunctionParsers<'a> {
     pub ident: StrParser<'a, (String, Span)>,
     pub generic_params: StrParser<'a, GenericTypes>,
     pub type_name: StrParser<'a, ParserDataType>,
-    pub expr: StrParser<'a, Node>,
-    pub statement: StrParser<'a, Node>,
+    pub expr: StrParser<'a, AstNode>,
+    pub statement: StrParser<'a, AstNode>,
 }
 
 pub struct FunctionBuilt<'a> {
-    pub scope_block: StrParser<'a, Node>,
-    pub spawn_item_expr: StrParser<'a, Node>,
-    pub fn_standard_expr: StrParser<'a, Node>,
+    pub scope_block: StrParser<'a, AstNode>,
+    pub spawn_item_expr: StrParser<'a, AstNode>,
+    pub fn_standard_expr: StrParser<'a, AstNode>,
 }
 
 pub fn build_function_parsers<'a>(
@@ -260,17 +260,17 @@ pub fn build_function_parsers<'a>(
                 }
             }
             let body = match body.node_type {
-                NodeType::ScopeDeclaration {
+                AstNodeType::ScopeDeclaration {
                     body,
                     named,
                     create_new_scope,
                     ..
-                } => Node::new(
+                } => AstNode::new(
                     body.as_ref()
                         .and_then(|b| b.first().zip(b.last()))
                         .map(|(a, b)| Span::new_from_spans(a.span, b.span))
                         .unwrap_or(Span::default()),
-                    NodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration {
                         body,
                         named,
                         is_temp: true,
@@ -280,9 +280,9 @@ pub fn build_function_parsers<'a>(
                 ),
                 _ => ensure_scope_node(body, true, false),
             };
-            Node::new(
+            AstNode::new(
                 body.span,
-                NodeType::FunctionDeclaration {
+                AstNodeType::FunctionDeclaration {
                     header: FunctionHeader {
                         generics,
                         parameters,

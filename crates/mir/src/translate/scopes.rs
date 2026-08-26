@@ -9,7 +9,7 @@ use calibre_parser::{
     Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{LoopType, NamedScope, Node, NodeType},
+        nodes::{AstNode, AstNodeType, LoopType, NamedScope},
     },
 };
 
@@ -90,7 +90,7 @@ impl MiddleEnvironment {
     pub fn evaluate_scope_declaration(
         &mut self,
         scope: &u64,
-        mut body: Option<Vec<Node>>,
+        mut body: Option<Vec<AstNode>>,
         named: Option<NamedScope>,
         create_new_scope: Option<bool>,
         define: bool,
@@ -100,7 +100,7 @@ impl MiddleEnvironment {
         let mut stmts = Vec::new();
         let mut og_create_new_scope = create_new_scope;
         let mut create_new_scope = create_new_scope.unwrap_or(true);
-        let mut macro_args_to_insert: Vec<(String, Node)> = Vec::new();
+        let mut macro_args_to_insert: Vec<(String, AstNode)> = Vec::new();
 
         if let Some(named) = named {
             if define {
@@ -150,16 +150,16 @@ impl MiddleEnvironment {
                 let mut body_nodes = body.unwrap_or_default();
                 let last = body_nodes.pop();
                 let break_value = last.map(Box::new);
-                body_nodes.push(Node::new(
+                body_nodes.push(AstNode::new(
                     span,
-                    NodeType::Break {
+                    AstNodeType::Break {
                         label: Some(named.name.clone()),
                         value: break_value,
                     },
                 ));
 
                 let loop_body =
-                    Node::new_temp_scope_with_create(body_nodes, Some(create_new_scope));
+                    AstNode::new_temp_scope_with_create(body_nodes, Some(create_new_scope));
 
                 return self.evaluate_loop_statement(
                     scope,
@@ -167,12 +167,12 @@ impl MiddleEnvironment {
                     loop_body,
                     None,
                     Some(named.name),
-                    Some(Box::new(Node::new(span, NodeType::Null))),
+                    Some(Box::new(AstNode::new(span, AstNodeType::Null))),
                 );
             }
             let mut added = Vec::new();
 
-            let scope_macro_args: Vec<(PotentialDollarIdentifier, Node)> = {
+            let scope_macro_args: Vec<(PotentialDollarIdentifier, AstNode)> = {
                 let scope_macro = self
                     .scoping
                     .resolve_macro(scope, &name)
@@ -220,10 +220,10 @@ impl MiddleEnvironment {
 
         if let Some(mut body) = body {
             for stmt in body.iter() {
-                if let NodeType::VariableDeclaration {
+                if let AstNodeType::VariableDeclaration {
                     identifier, value, ..
                 } = &stmt.node_type
-                    && matches!(value.node_type, NodeType::FunctionDeclaration { .. })
+                    && matches!(value.node_type, AstNodeType::FunctionDeclaration { .. })
                 {
                     let ident = self.resolve(
                         &new_scope,

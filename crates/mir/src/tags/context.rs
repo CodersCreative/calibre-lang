@@ -4,7 +4,7 @@ use crate::{
 use calibre_parser::ast::{
     ObjectType,
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-    nodes::{Node, NodeType, VarType},
+    nodes::{AstNode, AstNodeType, VarType},
     types::ParserDataType,
 };
 
@@ -67,7 +67,7 @@ impl MiddleEnvironment {
     pub fn evaluate_with_package_injection(
         &mut self,
         scope: &u64,
-        node: Node,
+        node: AstNode,
     ) -> Result<MiddleNode, MiddleErr> {
         let Some(scope_ref) = self.scoping.scopes.get(scope).cloned() else {
             return self.evaluate_inner(scope, node);
@@ -75,17 +75,18 @@ impl MiddleEnvironment {
 
         let sp = node.span;
         let meta = self.package_metadata_for_scope(&scope_ref);
-        let value = |v: String| Node::new(sp, NodeType::StringLiteral(ParserText::new(sp, v)));
+        let value =
+            |v: String| AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, v)));
 
-        let mut prefix = vec![Node::new(
+        let mut prefix = vec![AstNode::new(
             sp,
-            NodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::new(sp, "package"),
                 data_type: ParserDataType::object(sp, "Package"),
-                value: Box::new(Node::new(
+                value: Box::new(AstNode::new(
                     sp,
-                    NodeType::StructLiteral {
+                    AstNodeType::StructLiteral {
                         identifier: PotentialGenericTypeIdentifier::new(sp, "Package"),
                         value: ObjectType::Map(vec![
                             ("name".to_string(), value(meta.name)),
@@ -103,16 +104,16 @@ impl MiddleEnvironment {
         )];
 
         let mut body = match node.node_type {
-            NodeType::ScopeDeclaration { body, .. } => body.unwrap_or_default(),
+            AstNodeType::ScopeDeclaration { body, .. } => body.unwrap_or_default(),
             _ => vec![node],
         };
         prefix.append(&mut body);
 
         self.evaluate_inner(
             scope,
-            Node::new(
+            AstNode::new(
                 sp,
-                NodeType::ScopeDeclaration {
+                AstNodeType::ScopeDeclaration {
                     body: Some(prefix),
                     named: None,
                     is_temp: false,
@@ -126,32 +127,33 @@ impl MiddleEnvironment {
     pub fn evaluate_with_current_context_injection(
         &mut self,
         scope: &u64,
-        node: Node,
+        node: AstNode,
     ) -> Result<MiddleNode, MiddleErr> {
         let Some(scope_ref) = self.scoping.scopes.get(scope).cloned() else {
             return self.evaluate_inner(scope, node);
         };
 
         let sp = node.span;
-        let value = |v: String| Node::new(sp, NodeType::StringLiteral(ParserText::new(sp, v)));
+        let value =
+            |v: String| AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, v)));
 
         let function_name = match &node.node_type {
-            NodeType::VariableDeclaration { identifier, .. } => match identifier {
+            AstNodeType::VariableDeclaration { identifier, .. } => match identifier {
                 PotentialDollarIdentifier::Identifier(text) => text.text.clone(),
                 PotentialDollarIdentifier::DollarIdentifier(text) => text.text.clone(),
             },
             _ => scope_ref.namespace.clone(),
         };
 
-        let mut nodes = vec![Node::new(
+        let mut nodes = vec![AstNode::new(
             sp,
-            NodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::new(sp, "current_context"),
                 data_type: ParserDataType::object(sp, "ExecContext"),
-                value: Box::new(Node::new(
+                value: Box::new(AstNode::new(
                     sp,
-                    NodeType::StructLiteral {
+                    AstNodeType::StructLiteral {
                         identifier: PotentialGenericTypeIdentifier::new(sp, "ExecContext"),
                         value: ObjectType::Map(vec![
                             ("function_name".to_string(), value(function_name)),
@@ -169,11 +171,11 @@ impl MiddleEnvironment {
                             ),
                             (
                                 "line".to_string(),
-                                Node::int(sp, format!("{}u", sp.from.line)),
+                                AstNode::int(sp, format!("{}u", sp.from.line)),
                             ),
                             (
                                 "col".to_string(),
-                                Node::int(sp, format!("{}u", sp.from.col)),
+                                AstNode::int(sp, format!("{}u", sp.from.col)),
                             ),
                         ]),
                     },
@@ -182,16 +184,16 @@ impl MiddleEnvironment {
         )];
 
         let mut body = match node.node_type {
-            NodeType::ScopeDeclaration { body, .. } => body.unwrap_or_default(),
+            AstNodeType::ScopeDeclaration { body, .. } => body.unwrap_or_default(),
             _ => vec![node],
         };
         nodes.append(&mut body);
 
         self.evaluate_inner(
             scope,
-            Node::new(
+            AstNode::new(
                 sp,
-                NodeType::ScopeDeclaration {
+                AstNodeType::ScopeDeclaration {
                     body: Some(nodes),
                     named: None,
                     is_temp: false,

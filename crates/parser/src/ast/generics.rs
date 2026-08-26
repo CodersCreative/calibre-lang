@@ -1,4 +1,4 @@
-use crate::ast::{idents::PotentialDollarIdentifier, nodes::Node, types::ParserDataType};
+use crate::ast::{idents::PotentialDollarIdentifier, nodes::AstNode, types::ParserDataType};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TraitMemberKind {
@@ -11,5 +11,5 @@ pub struct TraitMember {
     pub kind: TraitMemberKind,
     pub identifier: PotentialDollarIdentifier,
     pub data_type: ParserDataType,
-    pub value: Option<Box<Node>>,
+    pub value: Option<Box<AstNode>>,
 }

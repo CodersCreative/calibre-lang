@@ -4,7 +4,7 @@ use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::matching::{
     MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem,
 };
-use crate::ast::nodes::{DestructurePattern, FunctionHeader, Node, NodeType, VarType};
+use crate::ast::nodes::{AstNode, AstNodeType, DestructurePattern, FunctionHeader, VarType};
 use crate::ast::types::{GenericTypes, ParserDataType};
 use crate::parse::util::{lex, span, struct_destructure_fields_parser};
 use chumsky::prelude::*;
@@ -17,16 +17,16 @@ pub struct MatchParsers<'a> {
     pub arrow: StrParser<'a, ()>,
     pub ident: StrParser<'a, (String, Span)>,
     pub generic_params: StrParser<'a, GenericTypes>,
-    pub string_lit: StrParser<'a, Node>,
+    pub string_lit: StrParser<'a, AstNode>,
     pub type_name: StrParser<'a, ParserDataType>,
-    pub expr: StrParser<'a, Node>,
-    pub scope_block: StrParser<'a, Node>,
+    pub expr: StrParser<'a, AstNode>,
+    pub scope_block: StrParser<'a, AstNode>,
 }
 
 pub struct MatchBuilt<'a> {
     pub let_pattern_list: StrParser<'a, Vec<MatchArmType>>,
-    pub fn_match_expr: StrParser<'a, Node>,
-    pub match_expr: StrParser<'a, Node>,
+    pub fn_match_expr: StrParser<'a, AstNode>,
+    pub match_expr: StrParser<'a, AstNode>,
 }
 
 pub fn build_match_parsers<'a>(
@@ -69,7 +69,7 @@ pub fn build_match_parsers<'a>(
     let match_string_literal_part = string_lit
         .clone()
         .try_map(|node, sp| match node.node_type {
-            NodeType::StringLiteral(text) => Ok(MatchStringPatternPart::Literal(text)),
+            AstNodeType::StringLiteral(text) => Ok(MatchStringPatternPart::Literal(text)),
             _ => Err(Rich::custom(
                 sp,
                 "internal parser error: expected string literal",
@@ -659,9 +659,9 @@ pub fn build_match_parsers<'a>(
                     param_destructures: Vec::new(),
                 };
 
-                Node::new(
+                AstNode::new(
                     sp,
-                    NodeType::FnMatchDeclaration {
+                    AstNodeType::FnMatchDeclaration {
                         header,
                         body: body.into_iter().flatten().collect(),
                     },
@@ -687,7 +687,7 @@ pub fn build_match_parsers<'a>(
                 let mut values = Vec::with_capacity(rest.len() + 1);
                 values.push(first);
                 values.extend(rest);
-                Node::new(span, NodeType::TupleLiteral { values })
+                AstNode::new(span, AstNodeType::TupleLiteral { values })
             }
         })
         .boxed();
@@ -715,9 +715,9 @@ pub fn build_match_parsers<'a>(
         .map_with_span({
             let ls = line_starts.clone();
             move |(value, arms), r| {
-                Node::new(
+                AstNode::new(
                     span(ls.as_ref(), r),
-                    NodeType::MatchStatement {
+                    AstNodeType::MatchStatement {
                         value: value.map(Box::new),
                         body: arms.into_iter().flatten().collect(),
                     },

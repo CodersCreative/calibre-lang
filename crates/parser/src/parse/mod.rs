@@ -3,7 +3,7 @@ use crate::{
     ast::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{CallArg, EmitType, Node, NodeType},
+        nodes::{AstNode, AstNodeType, CallArg, EmitType},
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -61,7 +61,7 @@ where
 pub fn parse_program_with_source(
     source: &str,
     source_path: Option<&std::path::Path>,
-) -> Result<Node, Vec<ParserError>> {
+) -> Result<AstNode, Vec<ParserError>> {
     let source = strip_block_comments_keep_layout(source);
     let source = source.as_str();
     let line_starts: Arc<Vec<usize>> = Arc::new(
@@ -165,7 +165,8 @@ pub fn parse_program_with_source(
                                         .or_not(),
                                 )
                                 .map(|((k, sp), value)| {
-                                    let value = value.unwrap_or_else(|| Node::identifier(sp, &k));
+                                    let value =
+                                        value.unwrap_or_else(|| AstNode::identifier(sp, &k));
                                     (k, value)
                                 })
                                 .separated_by(lex(pad_with_newline.clone(), just(',')))
@@ -178,9 +179,9 @@ pub fn parse_program_with_source(
                 )
                 .map(|(identifier, fields)| {
                     let sp = *identifier.span();
-                    Node::new(
+                    AstNode::new(
                         sp,
-                        NodeType::StructLiteral {
+                        AstNodeType::StructLiteral {
                             identifier,
                             value: ObjectType::Map(fields),
                         },
@@ -218,11 +219,11 @@ pub fn parse_program_with_source(
                     .then(expr.clone().or_not())
                     .map_with_span({
                         let ls = line_starts.clone();
-                        move |args: (Node, Option<Node>), r| {
+                        move |args: (AstNode, Option<AstNode>), r| {
                             let sp = span(ls.as_ref(), r);
-                            Node::new(
+                            AstNode::new(
                                 sp,
-                                NodeType::Emit(if let Some(value) = args.1 {
+                                AstNodeType::Emit(if let Some(value) = args.1 {
                                     EmitType::Channel {
                                         channel: Box::new(args.0),
                                         value: Box::new(value),
@@ -275,10 +276,10 @@ pub fn parse_program_with_source(
                                         .or_not(),
                                 )
                                 .map(|((name, sp), args)| {
-                                    let member = Node::identifier(sp, &name);
+                                    let member = AstNode::identifier(sp, &name);
                                     if let Some(args) = args {
                                         (
-                                            Node::call_full(
+                                            AstNode::call_full(
                                                 member.span,
                                                 member,
                                                 Vec::new(),
@@ -305,31 +306,31 @@ pub fn parse_program_with_source(
                         move |(((_open_ty, _open_br), values), tails), r| {
                             let sp = span(ls.as_ref(), r);
                             let list = if let Some((value, count)) = values.0 {
-                                Node::new(
+                                AstNode::new(
                                     sp,
-                                    NodeType::ListRepeatLiteral {
+                                    AstNodeType::ListRepeatLiteral {
                                         data_type: _open_ty,
                                         value: Box::new(value),
                                         count: Box::new(count),
                                     },
                                 )
                             } else {
-                                Node::new(sp, NodeType::ListLiteral(_open_ty, values.1))
+                                AstNode::new(sp, AstNodeType::ListLiteral(_open_ty, values.1))
                             };
 
                             tails.into_iter().fold(list, |current, (node, is_index)| {
                                 if is_index {
-                                    Node::new(
+                                    AstNode::new(
                                         Span::new_from_spans(current.span, node.span),
-                                        NodeType::IndexAccess {
+                                        AstNodeType::IndexAccess {
                                             base: Box::new(current),
                                             index: Box::new(node),
                                         },
                                     )
-                                } else if let NodeType::Identifier(ident) = node.node_type {
-                                    Node::new(
+                                } else if let AstNodeType::Identifier(ident) = node.node_type {
+                                    AstNode::new(
                                         Span::new_from_spans(current.span, node.span),
-                                        NodeType::FieldAccess {
+                                        AstNodeType::FieldAccess {
                                             base: Box::new(current),
                                             field: ident.into(),
                                         },
@@ -347,9 +348,9 @@ pub fn parse_program_with_source(
                 null_lit.clone(),
                 dollar_ident.clone().map(|id| {
                     let sp = *id.span();
-                    Node::new(
+                    AstNode::new(
                         sp,
-                        NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(id)),
+                        AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(id)),
                     )
                 }),
                 lex(pad.clone(), just("$("))
@@ -366,9 +367,9 @@ pub fn parse_program_with_source(
                         let ls = line_starts.clone();
                         move |args, r| {
                             let sp = span(ls.as_ref(), r);
-                            Node::call_full(
+                            AstNode::call_full(
                                 sp,
-                                Node::identifier(sp, "$"),
+                                AstNode::identifier(sp, "$"),
                                 Vec::new(),
                                 args.into_iter().map(CallArg::Value).collect(),
                                 Vec::new(),
@@ -378,18 +379,18 @@ pub fn parse_program_with_source(
                     }),
                 ident
                     .clone()
-                    .map(|(n, sp)| Node::identifier(sp, &n))
+                    .map(|(n, sp)| AstNode::identifier(sp, &n))
                     .then(
                         lex(pad_with_newline.clone(), just('.'))
-                            .ignore_then(ident.clone().map(|(n, sp)| Node::identifier(sp, &n))),
+                            .ignore_then(ident.clone().map(|(n, sp)| AstNode::identifier(sp, &n))),
                     )
                     .map(|(base, field)| {
-                        Node::new(
+                        AstNode::new(
                             Span::new_from_spans(base.span, field.span),
-                            NodeType::FieldAccess {
+                            AstNodeType::FieldAccess {
                                 base: Box::new(base),
                                 field: match field.node_type {
-                                    NodeType::Identifier(identifier) => identifier.into(),
+                                    AstNodeType::Identifier(identifier) => identifier.into(),
                                     _ => unreachable!(),
                                 },
                             },
@@ -412,12 +413,12 @@ pub fn parse_program_with_source(
                         let mut module: Vec<PotentialDollarIdentifier> = vec![first.clone().into()];
                         module.extend(segments.clone().into_iter().map(|segment| segment.into()));
 
-                        let mut current = Node::identifier(first.span, &first);
+                        let mut current = AstNode::identifier(first.span, &first);
 
                         for segment in segments {
-                            current = Node::new(
+                            current = AstNode::new(
                                 Span::new_from_spans(current.span, segment.span),
-                                NodeType::ScopeAccess {
+                                AstNodeType::ScopeAccess {
                                     base: Box::new(current),
                                     field: segment.into(),
                                 },
@@ -425,9 +426,9 @@ pub fn parse_program_with_source(
                         }
 
                         let sp = Span::new_from_spans(current.span, value_span);
-                        Node::new(
+                        AstNode::new(
                             sp,
-                            NodeType::ScopeAccess {
+                            AstNodeType::ScopeAccess {
                                 base: Box::new(current),
                                 field: value_text.into(),
                             },
@@ -438,22 +439,25 @@ pub fn parse_program_with_source(
                     .clone()
                     .then(
                         lex(pad_with_newline.clone(), just('.'))
-                            .ignore_then(ident.clone().map(|(n, sp)| Node::identifier(sp, &n))),
+                            .ignore_then(ident.clone().map(|(n, sp)| AstNode::identifier(sp, &n))),
                     )
                     .map(|(base, field)| {
-                        Node::new(
+                        AstNode::new(
                             Span::new_from_spans(*base.span(), field.span),
-                            NodeType::FieldAccess {
-                                base: Box::new(Node::new(*base.span(), NodeType::Identifier(base))),
+                            AstNodeType::FieldAccess {
+                                base: Box::new(AstNode::new(
+                                    *base.span(),
+                                    AstNodeType::Identifier(base),
+                                )),
                                 field: match field.node_type {
-                                    NodeType::Identifier(identifier) => identifier.into(),
+                                    AstNodeType::Identifier(identifier) => identifier.into(),
                                     _ => unreachable!(),
                                 },
                             },
                         )
                     }),
                 generic_ident.map(|identifier| {
-                    Node::new(*identifier.span(), NodeType::Identifier(identifier))
+                    AstNode::new(*identifier.span(), AstNodeType::Identifier(identifier))
                 }),
                 lex(pad.clone(), just('('))
                     .ignore_then(
@@ -473,13 +477,13 @@ pub fn parse_program_with_source(
                                 values
                                     .first()
                                     .cloned()
-                                    .unwrap_or_else(|| Node::new(sp, NodeType::EmptyLine))
+                                    .unwrap_or_else(|| AstNode::new(sp, AstNodeType::EmptyLine))
                             } else {
-                                Node::new(sp, NodeType::TupleLiteral { values })
+                                AstNode::new(sp, AstNodeType::TupleLiteral { values })
                             };
-                            Node::new(
+                            AstNode::new(
                                 sp,
-                                NodeType::ParenExpression {
+                                AstNodeType::ParenExpression {
                                     value: Box::new(inner),
                                 },
                             )
@@ -560,9 +564,9 @@ pub fn parse_program_with_source(
         } else {
             Span::default()
         };
-        return Ok(Node::new(
+        return Ok(AstNode::new(
             sp,
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body: Some(items),
                 named: None,
                 is_temp: false,

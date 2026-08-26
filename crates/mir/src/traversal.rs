@@ -1,61 +1,61 @@
 use calibre_parser::ast::{
     ObjectType,
-    nodes::{CallArg, IfComparisonType, LoopType, Node, NodeType, PipeSegment},
+    nodes::{AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, PipeSegment},
 };
 
 pub trait NodeVisitor {
-    fn visit(&mut self, node: Node) -> Node {
+    fn visit(&mut self, node: AstNode) -> AstNode {
         let span = node.span;
         let node_type = self.visit_node_type(node.node_type);
-        Node::new(span, node_type)
+        AstNode::new(span, node_type)
     }
 
-    fn visit_node_type(&mut self, node_type: NodeType) -> NodeType {
+    fn visit_node_type(&mut self, node_type: AstNodeType) -> AstNodeType {
         self.visit_children(node_type)
     }
 
-    fn visit_children(&mut self, node_type: NodeType) -> NodeType {
+    fn visit_children(&mut self, node_type: AstNodeType) -> AstNodeType {
         match node_type {
-            NodeType::BinaryExpression {
+            AstNodeType::BinaryExpression {
                 left,
                 right,
                 operator,
-            } => NodeType::BinaryExpression {
+            } => AstNodeType::BinaryExpression {
                 left: Box::new(self.visit(*left)),
                 right: Box::new(self.visit(*right)),
                 operator,
             },
-            NodeType::BooleanExpression {
+            AstNodeType::BooleanExpression {
                 left,
                 right,
                 operator,
-            } => NodeType::BooleanExpression {
+            } => AstNodeType::BooleanExpression {
                 left: Box::new(self.visit(*left)),
                 right: Box::new(self.visit(*right)),
                 operator,
             },
-            NodeType::ComparisonExpression {
+            AstNodeType::ComparisonExpression {
                 left,
                 right,
                 operator,
-            } => NodeType::ComparisonExpression {
+            } => AstNodeType::ComparisonExpression {
                 left: Box::new(self.visit(*left)),
                 right: Box::new(self.visit(*right)),
                 operator,
             },
-            NodeType::AssignmentExpression { identifier, value } => {
-                NodeType::AssignmentExpression {
+            AstNodeType::AssignmentExpression { identifier, value } => {
+                AstNodeType::AssignmentExpression {
                     identifier: Box::new(self.visit(*identifier)),
                     value: Box::new(self.visit(*value)),
                 }
             }
-            NodeType::CallExpression {
+            AstNodeType::CallExpression {
                 string_fn,
                 caller,
                 generic_types,
                 args,
                 reverse_args,
-            } => NodeType::CallExpression {
+            } => AstNodeType::CallExpression {
                 string_fn,
                 caller: Box::new(self.visit(*caller)),
                 generic_types,
@@ -68,11 +68,11 @@ pub trait NodeVisitor {
                     .collect(),
                 reverse_args: reverse_args.into_iter().map(|n| self.visit(n)).collect(),
             },
-            NodeType::IfStatement {
+            AstNodeType::IfStatement {
                 comparison,
                 then,
                 otherwise,
-            } => NodeType::IfStatement {
+            } => AstNodeType::IfStatement {
                 comparison: Box::new(match *comparison {
                     IfComparisonType::If(n) => IfComparisonType::If(self.visit(n)),
                     IfComparisonType::IfLet { value, pattern } => IfComparisonType::IfLet {
@@ -83,48 +83,48 @@ pub trait NodeVisitor {
                 then: Box::new(self.visit(*then)),
                 otherwise: otherwise.map(|n| Box::new(self.visit(*n))),
             },
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body,
                 named,
                 is_temp,
                 create_new_scope,
                 define,
-            } => NodeType::ScopeDeclaration {
+            } => AstNodeType::ScopeDeclaration {
                 body: body.map(|items| items.into_iter().map(|n| self.visit(n)).collect()),
                 named,
                 is_temp,
                 create_new_scope,
                 define,
             },
-            NodeType::ParenExpression { value } => NodeType::ParenExpression {
+            AstNodeType::ParenExpression { value } => AstNodeType::ParenExpression {
                 value: Box::new(self.visit(*value)),
             },
-            NodeType::NotExpression { value } => NodeType::NotExpression {
+            AstNodeType::NotExpression { value } => AstNodeType::NotExpression {
                 value: Box::new(self.visit(*value)),
             },
-            NodeType::NegExpression { value } => NodeType::NegExpression {
+            AstNodeType::NegExpression { value } => AstNodeType::NegExpression {
                 value: Box::new(self.visit(*value)),
             },
-            NodeType::DebugExpression { value } => NodeType::DebugExpression {
+            AstNodeType::DebugExpression { value } => AstNodeType::DebugExpression {
                 value: Box::new(self.visit(*value)),
             },
-            NodeType::AsExpression {
+            AstNodeType::AsExpression {
                 value,
                 data_type,
                 failure_mode,
-            } => NodeType::AsExpression {
+            } => AstNodeType::AsExpression {
                 value: Box::new(self.visit(*value)),
                 data_type,
                 failure_mode,
             },
-            NodeType::IsExpression { value, data_type } => NodeType::IsExpression {
+            AstNodeType::IsExpression { value, data_type } => AstNodeType::IsExpression {
                 value: Box::new(self.visit(*value)),
                 data_type,
             },
-            NodeType::TupleLiteral { values } => NodeType::TupleLiteral {
+            AstNodeType::TupleLiteral { values } => AstNodeType::TupleLiteral {
                 values: values.into_iter().map(|n| self.visit(n)).collect(),
             },
-            NodeType::StructLiteral { identifier, value } => NodeType::StructLiteral {
+            AstNodeType::StructLiteral { identifier, value } => AstNodeType::StructLiteral {
                 identifier,
                 value: match value {
                     ObjectType::Map(fields) => ObjectType::Map(
@@ -138,51 +138,51 @@ pub trait NodeVisitor {
                     }
                 },
             },
-            NodeType::ListLiteral(data_type, values) => NodeType::ListLiteral(
+            AstNodeType::ListLiteral(data_type, values) => AstNodeType::ListLiteral(
                 data_type,
                 values.into_iter().map(|n| self.visit(n)).collect(),
             ),
-            NodeType::DerefStatement { value } => NodeType::DerefStatement {
+            AstNodeType::DerefStatement { value } => AstNodeType::DerefStatement {
                 value: Box::new(self.visit(*value)),
             },
-            NodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration {
                 var_type,
                 identifier,
                 data_type,
                 value,
-            } => NodeType::VariableDeclaration {
+            } => AstNodeType::VariableDeclaration {
                 var_type,
                 identifier,
                 data_type,
                 value: Box::new(self.visit(*value)),
             },
-            NodeType::TypeDeclaration {
+            AstNodeType::TypeDeclaration {
                 identifier,
                 object,
                 overloads,
-            } => NodeType::TypeDeclaration {
+            } => AstNodeType::TypeDeclaration {
                 identifier,
                 object,
                 overloads,
             },
-            NodeType::FunctionDeclaration { header, body } => NodeType::FunctionDeclaration {
+            AstNodeType::FunctionDeclaration { header, body } => AstNodeType::FunctionDeclaration {
                 header,
                 body: Box::new(self.visit(*body)),
             },
-            NodeType::LoopDeclaration {
+            AstNodeType::LoopDeclaration {
                 loop_type,
                 body,
                 until,
                 label,
                 else_body,
-            } => NodeType::LoopDeclaration {
+            } => AstNodeType::LoopDeclaration {
                 loop_type: Box::new(self.visit_loop_type(*loop_type)),
                 body: Box::new(self.visit(*body)),
                 until: until.map(|n| Box::new(self.visit(*n))),
                 label,
                 else_body: else_body.map(|n| Box::new(self.visit(*n))),
             },
-            NodeType::MatchStatement { value, body } => NodeType::MatchStatement {
+            AstNodeType::MatchStatement { value, body } => AstNodeType::MatchStatement {
                 value: value.map(|n| Box::new(self.visit(*n))),
                 body: body
                     .into_iter()
@@ -195,59 +195,61 @@ pub trait NodeVisitor {
                     })
                     .collect(),
             },
-            NodeType::Ternary {
+            AstNodeType::Ternary {
                 comparison,
                 then,
                 otherwise,
-            } => NodeType::Ternary {
+            } => AstNodeType::Ternary {
                 comparison: Box::new(self.visit(*comparison)),
                 then: Box::new(self.visit(*then)),
                 otherwise: Box::new(self.visit(*otherwise)),
             },
-            NodeType::FieldAccess { base, field } => NodeType::FieldAccess {
+            AstNodeType::FieldAccess { base, field } => AstNodeType::FieldAccess {
                 base: Box::new(self.visit(*base)),
                 field,
             },
-            NodeType::ScopeAccess { base, field } => NodeType::ScopeAccess {
+            AstNodeType::ScopeAccess { base, field } => AstNodeType::ScopeAccess {
                 base: Box::new(self.visit(*base)),
                 field,
             },
-            NodeType::IndexAccess { base, index } => NodeType::IndexAccess {
+            AstNodeType::IndexAccess { base, index } => AstNodeType::IndexAccess {
                 base: Box::new(self.visit(*base)),
                 index: Box::new(self.visit(*index)),
             },
-            NodeType::DestructureDeclaration {
+            AstNodeType::DestructureDeclaration {
                 var_type,
                 pattern,
                 value,
-            } => NodeType::DestructureDeclaration {
+            } => AstNodeType::DestructureDeclaration {
                 var_type,
                 pattern,
                 value: Box::new(self.visit(*value)),
             },
-            NodeType::DestructureAssignment { pattern, value } => NodeType::DestructureAssignment {
-                pattern,
-                value: Box::new(self.visit(*value)),
-            },
-            NodeType::Spawn { items, auto_wait } => NodeType::Spawn {
+            AstNodeType::DestructureAssignment { pattern, value } => {
+                AstNodeType::DestructureAssignment {
+                    pattern,
+                    value: Box::new(self.visit(*value)),
+                }
+            }
+            AstNodeType::Spawn { items, auto_wait } => AstNodeType::Spawn {
                 items: items.into_iter().map(|n| self.visit(n)).collect(),
                 auto_wait,
             },
-            NodeType::MoveExpression { value } => NodeType::MoveExpression {
+            AstNodeType::MoveExpression { value } => AstNodeType::MoveExpression {
                 value: Box::new(self.visit(*value)),
             },
-            NodeType::InDeclaration { identifier, value } => NodeType::InDeclaration {
+            AstNodeType::InDeclaration { identifier, value } => AstNodeType::InDeclaration {
                 identifier: Box::new(self.visit(*identifier)),
                 value: Box::new(self.visit(*value)),
             },
-            NodeType::ExternFunctionDeclaration {
+            AstNodeType::ExternFunctionDeclaration {
                 abi,
                 identifier,
                 parameters,
                 return_type,
                 library,
                 symbol,
-            } => NodeType::ExternFunctionDeclaration {
+            } => AstNodeType::ExternFunctionDeclaration {
                 abi,
                 identifier,
                 parameters,
@@ -255,82 +257,82 @@ pub trait NodeVisitor {
                 library,
                 symbol,
             },
-            NodeType::Return { value } => NodeType::Return {
+            AstNodeType::Return { value } => AstNodeType::Return {
                 value: value.map(|n| Box::new(self.visit(*n))),
             },
-            NodeType::Break { label, value } => NodeType::Break {
+            AstNodeType::Break { label, value } => AstNodeType::Break {
                 label,
                 value: value.map(|n| Box::new(self.visit(*n))),
             },
-            NodeType::Continue { label } => NodeType::Continue { label },
-            NodeType::EmptyLine => NodeType::EmptyLine,
-            NodeType::Null => NodeType::Null,
-            NodeType::Identifier(_)
-            | NodeType::StringLiteral(_)
-            | NodeType::IntLiteral(_)
-            | NodeType::BigLiteral(_)
-            | NodeType::FloatLiteral(_)
-            | NodeType::CharLiteral(_) => node_type,
-            NodeType::SelectStatement { arms } => NodeType::SelectStatement { arms },
-            NodeType::Emit(emit_type) => NodeType::Emit(emit_type),
-            NodeType::RefStatement { mutability, value } => NodeType::RefStatement {
+            AstNodeType::Continue { label } => AstNodeType::Continue { label },
+            AstNodeType::EmptyLine => AstNodeType::EmptyLine,
+            AstNodeType::Null => AstNodeType::Null,
+            AstNodeType::Identifier(_)
+            | AstNodeType::StringLiteral(_)
+            | AstNodeType::IntLiteral(_)
+            | AstNodeType::BigLiteral(_)
+            | AstNodeType::FloatLiteral(_)
+            | AstNodeType::CharLiteral(_) => node_type,
+            AstNodeType::SelectStatement { arms } => AstNodeType::SelectStatement { arms },
+            AstNodeType::Emit(emit_type) => AstNodeType::Emit(emit_type),
+            AstNodeType::RefStatement { mutability, value } => AstNodeType::RefStatement {
                 mutability,
                 value: Box::new(self.visit(*value)),
             },
-            NodeType::DataType { data_type } => NodeType::DataType { data_type },
-            NodeType::Drop(identifier) => NodeType::Drop(identifier),
-            NodeType::Defer { value, function } => NodeType::Defer {
+            AstNodeType::DataType { data_type } => AstNodeType::DataType { data_type },
+            AstNodeType::Drop(identifier) => AstNodeType::Drop(identifier),
+            AstNodeType::Defer { value, function } => AstNodeType::Defer {
                 value: Box::new(self.visit(*value)),
                 function,
             },
-            NodeType::ImplDeclaration {
+            AstNodeType::ImplDeclaration {
                 generics,
                 target,
                 variables,
-            } => NodeType::ImplDeclaration {
+            } => AstNodeType::ImplDeclaration {
                 generics,
                 target,
                 variables: variables.into_iter().map(|n| self.visit(n)).collect(),
             },
-            NodeType::ImplTraitDeclaration {
+            AstNodeType::ImplTraitDeclaration {
                 generics,
                 trait_ident,
                 target,
                 variables,
-            } => NodeType::ImplTraitDeclaration {
+            } => AstNodeType::ImplTraitDeclaration {
                 generics,
                 trait_ident,
                 target,
                 variables: variables.into_iter().map(|n| self.visit(n)).collect(),
             },
-            NodeType::TraitDeclaration {
+            AstNodeType::TraitDeclaration {
                 identifier,
                 implied_traits,
                 members,
-            } => NodeType::TraitDeclaration {
+            } => AstNodeType::TraitDeclaration {
                 identifier,
                 implied_traits,
                 members,
             },
-            NodeType::EnumExpression {
+            AstNodeType::EnumExpression {
                 identifier,
                 value,
                 data,
-            } => NodeType::EnumExpression {
+            } => AstNodeType::EnumExpression {
                 identifier,
                 value,
                 data: data.map(|n| Box::new(self.visit(*n))),
             },
-            NodeType::ScopeAlias {
+            AstNodeType::ScopeAlias {
                 identifier,
                 value,
                 create_new_scope,
-            } => NodeType::ScopeAlias {
+            } => AstNodeType::ScopeAlias {
                 identifier,
                 value,
                 create_new_scope,
             },
-            NodeType::FnMatchDeclaration { header, body } => NodeType::FnMatchDeclaration {
+            AstNodeType::FnMatchDeclaration { header, body } => AstNodeType::FnMatchDeclaration {
                 header,
                 body: body
                     .into_iter()
@@ -343,23 +345,23 @@ pub trait NodeVisitor {
                     })
                     .collect(),
             },
-            NodeType::RangeDeclaration {
+            AstNodeType::RangeDeclaration {
                 from,
                 to,
                 inclusive,
-            } => NodeType::RangeDeclaration {
+            } => AstNodeType::RangeDeclaration {
                 from: Box::new(self.visit(*from)),
                 to: Box::new(self.visit(*to)),
                 inclusive,
             },
-            NodeType::IterExpression {
+            AstNodeType::IterExpression {
                 data_type,
                 map,
                 spawned,
                 loop_type,
                 conditionals,
                 until,
-            } => NodeType::IterExpression {
+            } => AstNodeType::IterExpression {
                 data_type,
                 map: Box::new(self.visit(*map)),
                 spawned,
@@ -367,40 +369,40 @@ pub trait NodeVisitor {
                 conditionals: conditionals.into_iter().map(|n| self.visit(n)).collect(),
                 until: until.map(|n| Box::new(self.visit(*n))),
             },
-            NodeType::InlineGenerator {
+            AstNodeType::InlineGenerator {
                 map,
                 data_type,
                 loop_type,
                 conditionals,
                 until,
-            } => NodeType::InlineGenerator {
+            } => AstNodeType::InlineGenerator {
                 map: Box::new(self.visit(*map)),
                 data_type,
                 loop_type: Box::new(self.visit_loop_type(*loop_type)),
                 conditionals: conditionals.into_iter().map(|n| self.visit(n)).collect(),
                 until: until.map(|n| Box::new(self.visit(*n))),
             },
-            NodeType::TestDeclaration { identifier, body } => NodeType::TestDeclaration {
+            AstNodeType::TestDeclaration { identifier, body } => AstNodeType::TestDeclaration {
                 identifier,
                 body: Box::new(self.visit(*body)),
             },
-            NodeType::Try { value, catch } => NodeType::Try {
+            AstNodeType::Try { value, catch } => AstNodeType::Try {
                 value: Box::new(self.visit(*value)),
                 catch,
             },
-            NodeType::Until { condition } => NodeType::Until {
+            AstNodeType::Until { condition } => AstNodeType::Until {
                 condition: Box::new(self.visit(*condition)),
             },
-            NodeType::ListRepeatLiteral {
+            AstNodeType::ListRepeatLiteral {
                 data_type,
                 value,
                 count,
-            } => NodeType::ListRepeatLiteral {
+            } => AstNodeType::ListRepeatLiteral {
                 data_type,
                 value: Box::new(self.visit(*value)),
                 count: Box::new(self.visit(*count)),
             },
-            NodeType::PipeExpression(segments) => NodeType::PipeExpression(
+            AstNodeType::PipeExpression(segments) => AstNodeType::PipeExpression(
                 segments
                     .into_iter()
                     .map(|s| match s {
@@ -412,20 +414,20 @@ pub trait NodeVisitor {
                     })
                     .collect(),
             ),
-            NodeType::ImportStatement {
+            AstNodeType::ImportStatement {
                 module,
                 alias,
                 values,
-            } => NodeType::ImportStatement {
+            } => AstNodeType::ImportStatement {
                 module,
                 alias,
                 values,
             },
-            NodeType::Tag {
+            AstNodeType::Tag {
                 node,
                 tag,
                 arguments,
-            } => NodeType::Tag {
+            } => AstNodeType::Tag {
                 node: Box::new(self.visit(*node)),
                 tag,
                 arguments: arguments.into_iter().map(|n| self.visit(n)).collect(),
@@ -447,32 +449,32 @@ pub trait NodeVisitor {
 }
 
 pub trait NodeAnalyzer {
-    fn analyze(&mut self, node: &Node) -> bool {
+    fn analyze(&mut self, node: &AstNode) -> bool {
         self.analyze_node_type(&node.node_type)
     }
 
-    fn analyze_node_type(&mut self, node_type: &NodeType) -> bool {
+    fn analyze_node_type(&mut self, node_type: &AstNodeType) -> bool {
         self.analyze_children(node_type)
     }
 
-    fn analyze_children(&mut self, node_type: &NodeType) -> bool {
+    fn analyze_children(&mut self, node_type: &AstNodeType) -> bool {
         match node_type {
-            NodeType::BinaryExpression { left, right, .. }
-            | NodeType::BooleanExpression { left, right, .. }
-            | NodeType::AssignmentExpression {
+            AstNodeType::BinaryExpression { left, right, .. }
+            | AstNodeType::BooleanExpression { left, right, .. }
+            | AstNodeType::AssignmentExpression {
                 identifier: left,
                 value: right,
             }
-            | NodeType::ComparisonExpression { left, right, .. }
-            | NodeType::IndexAccess {
+            | AstNodeType::ComparisonExpression { left, right, .. }
+            | AstNodeType::IndexAccess {
                 base: left,
                 index: right,
             }
-            | NodeType::InDeclaration {
+            | AstNodeType::InDeclaration {
                 identifier: left,
                 value: right,
             } => self.analyze(left) && self.analyze(right),
-            NodeType::CallExpression {
+            AstNodeType::CallExpression {
                 caller,
                 args,
                 reverse_args,
@@ -485,7 +487,7 @@ pub trait NodeAnalyzer {
                     })
                     && reverse_args.iter().all(|n| self.analyze(n))
             }
-            NodeType::IfStatement {
+            AstNodeType::IfStatement {
                 comparison,
                 then,
                 otherwise,
@@ -496,30 +498,30 @@ pub trait NodeAnalyzer {
                 };
                 comp_ok && self.analyze(then) && otherwise.as_ref().is_none_or(|n| self.analyze(n))
             }
-            NodeType::ScopeDeclaration { body, .. } => body
+            AstNodeType::ScopeDeclaration { body, .. } => body
                 .as_ref()
                 .is_none_or(|items| items.iter().all(|n| self.analyze(n))),
-            NodeType::ParenExpression { value }
-            | NodeType::NotExpression { value }
-            | NodeType::NegExpression { value }
-            | NodeType::DebugExpression { value }
-            | NodeType::AsExpression { value, .. }
-            | NodeType::IsExpression { value, .. }
-            | NodeType::FieldAccess { base: value, .. }
-            | NodeType::ScopeAccess { base: value, .. }
-            | NodeType::DerefStatement { value }
-            | NodeType::DestructureDeclaration { value, .. }
-            | NodeType::DestructureAssignment { value, .. }
-            | NodeType::MoveExpression { value } => self.analyze(value),
-            NodeType::TupleLiteral { values } => values.iter().all(|n| self.analyze(n)),
-            NodeType::StructLiteral { value, .. } => match value {
+            AstNodeType::ParenExpression { value }
+            | AstNodeType::NotExpression { value }
+            | AstNodeType::NegExpression { value }
+            | AstNodeType::DebugExpression { value }
+            | AstNodeType::AsExpression { value, .. }
+            | AstNodeType::IsExpression { value, .. }
+            | AstNodeType::FieldAccess { base: value, .. }
+            | AstNodeType::ScopeAccess { base: value, .. }
+            | AstNodeType::DerefStatement { value }
+            | AstNodeType::DestructureDeclaration { value, .. }
+            | AstNodeType::DestructureAssignment { value, .. }
+            | AstNodeType::MoveExpression { value } => self.analyze(value),
+            AstNodeType::TupleLiteral { values } => values.iter().all(|n| self.analyze(n)),
+            AstNodeType::StructLiteral { value, .. } => match value {
                 ObjectType::Map(fields) => fields.iter().all(|(_, n)| self.analyze(n)),
                 ObjectType::Tuple(values) => values.iter().all(|n| self.analyze(n)),
             },
-            NodeType::ListLiteral(_, values) => values.iter().all(|n| self.analyze(n)),
-            NodeType::VariableDeclaration { value, .. } => self.analyze(value),
-            NodeType::FunctionDeclaration { body, .. } => self.analyze(body),
-            NodeType::LoopDeclaration {
+            AstNodeType::ListLiteral(_, values) => values.iter().all(|n| self.analyze(n)),
+            AstNodeType::VariableDeclaration { value, .. } => self.analyze(value),
+            AstNodeType::FunctionDeclaration { body, .. } => self.analyze(body),
+            AstNodeType::LoopDeclaration {
                 loop_type,
                 body,
                 until,
@@ -537,20 +539,20 @@ pub trait NodeAnalyzer {
                     && until.as_ref().is_none_or(|n| self.analyze(n))
                     && else_body.as_ref().is_none_or(|n| self.analyze(n))
             }
-            NodeType::MatchStatement { value, body } => {
+            AstNodeType::MatchStatement { value, body } => {
                 let value_ok = value.as_ref().is_none_or(|n| self.analyze(n));
                 let body_ok = body.iter().all(|(_arm, guards, body)| {
                     guards.iter().all(|n| self.analyze(n)) && self.analyze(body)
                 });
                 value_ok && body_ok
             }
-            NodeType::Ternary {
+            AstNodeType::Ternary {
                 comparison,
                 then,
                 otherwise,
             } => self.analyze(comparison) && self.analyze(then) && self.analyze(otherwise),
-            NodeType::Spawn { items, .. } => items.iter().all(|n| self.analyze(n)),
-            NodeType::Return { value } | NodeType::Break { value, .. } => {
+            AstNodeType::Spawn { items, .. } => items.iter().all(|n| self.analyze(n)),
+            AstNodeType::Return { value } | AstNodeType::Break { value, .. } => {
                 value.as_ref().is_none_or(|n| self.analyze(n))
             }
             _ => true,

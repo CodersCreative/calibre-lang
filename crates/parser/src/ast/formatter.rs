@@ -9,8 +9,8 @@ use crate::{
             SelectArmKind,
         },
         nodes::{
-            AsFailureMode, CallArg, DestructurePattern, EmitType, IfComparisonType, LoopType, Node,
-            NodeType, Overload, PipeSegment, TypeDefType, VarType,
+            AsFailureMode, AstNode, AstNodeType, CallArg, DestructurePattern, EmitType,
+            IfComparisonType, LoopType, Overload, PipeSegment, TypeDefType, VarType,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -111,9 +111,10 @@ impl Formatter {
         }
     }
 
-    pub fn get_imports(&self, contents: &str) -> Result<Vec<Node>, Box<dyn Error>> {
+    pub fn get_imports(&self, contents: &str) -> Result<Vec<AstNode>, Box<dyn Error>> {
         let mut parser = Parser::default();
-        let NodeType::ScopeDeclaration { body, .. } = parser.produce_ast(contents).node_type else {
+        let AstNodeType::ScopeDeclaration { body, .. } = parser.produce_ast(contents).node_type
+        else {
             return Err("Expected scope declaration".into());
         };
 
@@ -123,7 +124,7 @@ impl Formatter {
 
         Ok(body
             .into_iter()
-            .filter(|x| matches!(x.node_type, NodeType::ImportStatement { .. }))
+            .filter(|x| matches!(x.node_type, AstNodeType::ImportStatement { .. }))
             .collect())
     }
 }
@@ -320,7 +321,7 @@ impl Formatter {
         }
     }
 
-    pub(crate) fn get_scope_lines(&mut self, nodes: &[Node]) -> Vec<String> {
+    pub(crate) fn get_scope_lines(&mut self, nodes: &[AstNode]) -> Vec<String> {
         let mut last_line: Option<u32> = None;
         let mut lines = Vec::new();
 
@@ -351,10 +352,10 @@ impl Formatter {
         lines
     }
 
-    pub fn format(&mut self, node: &Node) -> String {
+    pub fn format(&mut self, node: &AstNode) -> String {
         match &node.node_type {
-            NodeType::Null => String::from("null"),
-            NodeType::Break { label, value } => {
+            AstNodeType::Null => String::from("null"),
+            AstNodeType::Break { label, value } => {
                 let mut txt = String::from("break");
                 if let Some(label) = label {
                     txt.push_str(&format!(" @{}", label));
@@ -365,24 +366,24 @@ impl Formatter {
                 }
                 txt
             }
-            NodeType::Emit(EmitType::Scope(x)) => format!("emit {}", self.format(x)),
-            NodeType::Emit(EmitType::Channel { channel, value }) => {
+            AstNodeType::Emit(EmitType::Scope(x)) => format!("emit {}", self.format(x)),
+            AstNodeType::Emit(EmitType::Channel { channel, value }) => {
                 format!("emit {} {}", self.format(channel), self.format(value))
             }
-            NodeType::Continue { label } => {
+            AstNodeType::Continue { label } => {
                 let mut txt = String::from("continue");
                 if let Some(label) = label {
                     txt.push_str(&format!(" @{}", label));
                 }
                 txt
             }
-            NodeType::EmptyLine => String::new(),
-            NodeType::Defer { value, function } => format!(
+            AstNodeType::EmptyLine => String::new(),
+            AstNodeType::Defer { value, function } => format!(
                 "defer {}{}",
                 if *function { "return " } else { "" },
                 self.format(value)
             ),
-            NodeType::Spawn { items, auto_wait } => {
+            AstNodeType::Spawn { items, auto_wait } => {
                 let prefix = if *auto_wait { "spawn@" } else { "spawn" };
                 if items.len() == 1 {
                     return format!("{prefix} {}", self.format(&items[0]));
@@ -405,7 +406,7 @@ impl Formatter {
                 txt.push_str("\n}");
                 txt
             }
-            NodeType::SelectStatement { arms } => {
+            AstNodeType::SelectStatement { arms } => {
                 let mut txt = String::from("select {\n");
                 for arm in arms {
                     let temp = handle_comment!(self.get_potential_comment(&arm.body.span), {
@@ -493,9 +494,9 @@ impl Formatter {
                 txt.push_str("\n}");
                 txt
             }
-            NodeType::Drop(x) => format!("drop {}", x),
-            NodeType::MoveExpression { value } => format!("move {}", self.format(value)),
-            NodeType::ImportStatement {
+            AstNodeType::Drop(x) => format!("drop {}", x),
+            AstNodeType::MoveExpression { value } => format!("move {}", self.format(value)),
+            AstNodeType::ImportStatement {
                 module,
                 alias,
                 values,
@@ -558,7 +559,7 @@ impl Formatter {
                     get_module(module)
                 )
             }
-            NodeType::Ternary {
+            AstNodeType::Ternary {
                 comparison,
                 then,
                 otherwise,
@@ -576,26 +577,26 @@ impl Formatter {
                     self.format(otherwise)
                 )
             }
-            NodeType::BooleanExpression {
+            AstNodeType::BooleanExpression {
                 left,
                 right,
                 operator,
             } => self.fmt_infix_expr(left, operator, right),
-            NodeType::ComparisonExpression {
+            AstNodeType::ComparisonExpression {
                 left,
                 right,
                 operator,
             } => self.fmt_infix_expr(left, operator, right),
-            NodeType::BinaryExpression {
+            AstNodeType::BinaryExpression {
                 left,
                 right,
                 operator,
             } => self.fmt_infix_expr(left, operator, right),
-            NodeType::RefStatement { mutability, value } => {
+            AstNodeType::RefStatement { mutability, value } => {
                 format!("{}.{}", self.format(value), mutability)
             }
-            NodeType::DerefStatement { value } => format!("{}.*", self.format(value)),
-            NodeType::ImplDeclaration {
+            AstNodeType::DerefStatement { value } => format!("{}.*", self.format(value)),
+            AstNodeType::ImplDeclaration {
                 generics,
                 target,
                 variables,
@@ -620,7 +621,7 @@ impl Formatter {
 
                 txt
             }
-            NodeType::ImplTraitDeclaration {
+            AstNodeType::ImplTraitDeclaration {
                 generics,
                 trait_ident,
                 target,
@@ -651,7 +652,7 @@ impl Formatter {
 
                 txt
             }
-            NodeType::TraitDeclaration {
+            AstNodeType::TraitDeclaration {
                 identifier,
                 implied_traits,
                 members,
@@ -705,12 +706,12 @@ impl Formatter {
 
                 txt
             }
-            NodeType::NegExpression { value } => format!("-{}", self.format(value)),
-            NodeType::NotExpression { value } => format!("!{}", self.format(value)),
-            NodeType::TestDeclaration { identifier, body } => {
+            AstNodeType::NegExpression { value } => format!("-{}", self.format(value)),
+            AstNodeType::NotExpression { value } => format!("!{}", self.format(value)),
+            AstNodeType::TestDeclaration { identifier, body } => {
                 format!("test {:?} {}", identifier.text, self.format(body))
             }
-            NodeType::Try { value, catch } => {
+            AstNodeType::Try { value, catch } => {
                 let mut txt = format!("try {}", self.format(value));
                 if let Some(catch) = catch {
                     if let Some(name) = &catch.name {
@@ -722,12 +723,12 @@ impl Formatter {
 
                 txt
             }
-            NodeType::DebugExpression { value } => format!("debug {{{}}}", self.format(value)),
-            NodeType::Until { condition } => format!("until {}", self.format(condition)),
-            NodeType::Return { value: Some(value) } => format!("return {}", self.format(value)),
-            NodeType::Return { value: _ } => String::from("return"),
-            NodeType::AssignmentExpression { identifier, value } => match &value.node_type {
-                NodeType::BinaryExpression {
+            AstNodeType::DebugExpression { value } => format!("debug {{{}}}", self.format(value)),
+            AstNodeType::Until { condition } => format!("until {}", self.format(condition)),
+            AstNodeType::Return { value: Some(value) } => format!("return {}", self.format(value)),
+            AstNodeType::Return { value: _ } => String::from("return"),
+            AstNodeType::AssignmentExpression { identifier, value } => match &value.node_type {
+                AstNodeType::BinaryExpression {
                     left,
                     right,
                     operator,
@@ -737,7 +738,7 @@ impl Formatter {
                     operator,
                     self.format(right)
                 ),
-                NodeType::BooleanExpression {
+                AstNodeType::BooleanExpression {
                     left,
                     right,
                     operator,
@@ -755,7 +756,7 @@ impl Formatter {
                     self.wrap_if_wide(single, &multi)
                 }
             },
-            NodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration {
                 var_type,
                 identifier,
                 value,
@@ -778,7 +779,7 @@ impl Formatter {
                 );
                 self.wrap_if_wide(single, &multi)
             }
-            NodeType::AsExpression {
+            AstNodeType::AsExpression {
                 value,
                 data_type,
                 failure_mode,
@@ -794,13 +795,13 @@ impl Formatter {
                     data_type
                 )
             }
-            NodeType::IsExpression { value, data_type } => {
+            AstNodeType::IsExpression { value, data_type } => {
                 format!("{} is {}", self.format(value), data_type)
             }
-            NodeType::InDeclaration { identifier, value } => {
+            AstNodeType::InDeclaration { identifier, value } => {
                 format!("{} in {}", self.format(identifier), self.format(value))
             }
-            NodeType::CallExpression {
+            AstNodeType::CallExpression {
                 string_fn,
                 caller,
                 generic_types,
@@ -857,10 +858,10 @@ impl Formatter {
 
                 txt
             }
-            NodeType::StructLiteral { identifier, value } => {
+            AstNodeType::StructLiteral { identifier, value } => {
                 format!("{} {}", identifier, self.fmt_struct_literal(value))
             }
-            NodeType::Tag {
+            AstNodeType::Tag {
                 node,
                 tag,
                 arguments,
@@ -882,20 +883,20 @@ impl Formatter {
                 let multi_line = format!("@{}{}\n{}", tag, args_str, node_formatted);
                 self.wrap_if_wide(single_line, &multi_line)
             }
-            NodeType::EnumExpression {
+            AstNodeType::EnumExpression {
                 identifier,
                 value,
                 data: Some(data),
             } => {
                 format!("{}.{} : {}", identifier, value, data)
             }
-            NodeType::EnumExpression {
+            AstNodeType::EnumExpression {
                 identifier, value, ..
             } => {
                 format!("{}.{}", identifier, value)
             }
-            NodeType::TupleLiteral { values } => self.fmt_tuple_literal(values, false),
-            NodeType::RangeDeclaration {
+            AstNodeType::TupleLiteral { values } => self.fmt_tuple_literal(values, false),
+            AstNodeType::RangeDeclaration {
                 from,
                 to,
                 inclusive,
@@ -907,7 +908,7 @@ impl Formatter {
                     self.format(to)
                 )
             }
-            NodeType::IterExpression {
+            AstNodeType::IterExpression {
                 data_type,
                 map,
                 spawned,
@@ -944,7 +945,7 @@ impl Formatter {
 
                 txt
             }
-            NodeType::InlineGenerator {
+            AstNodeType::InlineGenerator {
                 map,
                 data_type,
                 loop_type,
@@ -970,7 +971,7 @@ impl Formatter {
                 txt
             }
 
-            NodeType::FunctionDeclaration { header, body } => {
+            AstNodeType::FunctionDeclaration { header, body } => {
                 let mut txt = String::from("fn");
 
                 if !header.generics.0.is_empty() {
@@ -1087,7 +1088,7 @@ impl Formatter {
 
                 txt
             }
-            NodeType::ExternFunctionDeclaration {
+            AstNodeType::ExternFunctionDeclaration {
                 abi,
                 identifier,
                 parameters,
@@ -1114,7 +1115,7 @@ impl Formatter {
                 }
                 txt
             }
-            NodeType::DestructureDeclaration {
+            AstNodeType::DestructureDeclaration {
                 var_type,
                 pattern,
                 value,
@@ -1126,13 +1127,13 @@ impl Formatter {
                 txt.push_str(&self.fmt_value_preserving_bare_tuple(value));
                 txt
             }
-            NodeType::DestructureAssignment { pattern, value } => {
+            AstNodeType::DestructureAssignment { pattern, value } => {
                 let mut txt = self.fmt_destructure_pattern(pattern, false);
                 txt.push_str(" := ");
                 txt.push_str(&self.fmt_value_preserving_bare_tuple(value));
                 txt
             }
-            NodeType::LoopDeclaration {
+            AstNodeType::LoopDeclaration {
                 loop_type,
                 body,
                 until,
@@ -1151,7 +1152,7 @@ impl Formatter {
 
                 txt
             }
-            NodeType::IfStatement {
+            AstNodeType::IfStatement {
                 comparison,
                 then,
                 otherwise,
@@ -1202,7 +1203,7 @@ impl Formatter {
 
                 txt
             }
-            NodeType::MatchStatement { value, body } => {
+            AstNodeType::MatchStatement { value, body } => {
                 format!(
                     "match {}{}",
                     if let Some(value) = value {
@@ -1213,7 +1214,7 @@ impl Formatter {
                     self.fmt_match_body(body)
                 )
             }
-            NodeType::FnMatchDeclaration { header, body } => {
+            AstNodeType::FnMatchDeclaration { header, body } => {
                 let mut txt = String::from("fn match");
 
                 if !header.generics.0.is_empty() {
@@ -1236,19 +1237,19 @@ impl Formatter {
 
                 txt
             }
-            NodeType::FieldAccess { base, field } => {
+            AstNodeType::FieldAccess { base, field } => {
                 format!("{}.{}", self.format(base), field)
             }
-            NodeType::ScopeAccess { base, field } => {
+            AstNodeType::ScopeAccess { base, field } => {
                 format!("{}::{}", self.format(base), field)
             }
-            NodeType::IndexAccess { base, index } => {
+            AstNodeType::IndexAccess { base, index } => {
                 format!("{}[{}]", self.format(base), self.format(index))
             }
-            NodeType::Identifier(x) => x.to_string(),
-            NodeType::IntLiteral(x) => x.to_string(),
-            NodeType::BigLiteral(x) => format!("{}g", x),
-            NodeType::FloatLiteral(x) => {
+            AstNodeType::Identifier(x) => x.to_string(),
+            AstNodeType::IntLiteral(x) => x.to_string(),
+            AstNodeType::BigLiteral(x) => format!("{}g", x),
+            AstNodeType::FloatLiteral(x) => {
                 let mut temp = x.to_string();
                 if temp.contains(".") {
                     temp
@@ -1257,11 +1258,11 @@ impl Formatter {
                     temp
                 }
             }
-            NodeType::CharLiteral(x) => format!("'{}'", self.escape_char_literal(x)),
-            NodeType::StringLiteral(x) => {
+            AstNodeType::CharLiteral(x) => format!("'{}'", self.escape_char_literal(x)),
+            AstNodeType::StringLiteral(x) => {
                 format!("\"{}\"", self.escape_string_literal(&x.to_string()))
             }
-            NodeType::ListLiteral(data_type, values) => {
+            AstNodeType::ListLiteral(data_type, values) => {
                 let prefix = if !data_type.is_auto() {
                     format!("list:<{}>[", data_type)
                 } else {
@@ -1302,7 +1303,7 @@ impl Formatter {
                 );
                 self.wrap_if_wide_or_if(single, &multi, values.len() > self.max_values)
             }
-            NodeType::ListRepeatLiteral {
+            AstNodeType::ListRepeatLiteral {
                 data_type,
                 value,
                 count,
@@ -1314,10 +1315,10 @@ impl Formatter {
                 };
                 format!("{}{}; {}]", prefix, self.format(value), self.format(count))
             }
-            NodeType::DataType { data_type } => {
+            AstNodeType::DataType { data_type } => {
                 format!("type : {}", data_type)
             }
-            NodeType::ScopeAlias {
+            AstNodeType::ScopeAlias {
                 identifier,
                 value,
                 create_new_scope,
@@ -1340,7 +1341,7 @@ impl Formatter {
 
                 txt
             }
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body,
                 is_temp: true,
                 create_new_scope,
@@ -1413,7 +1414,7 @@ impl Formatter {
                 txt
             }
 
-            NodeType::ScopeDeclaration { body, .. } => {
+            AstNodeType::ScopeDeclaration { body, .. } => {
                 let mut txt = String::new();
                 let Some(body) = body else { return txt };
 
@@ -1440,7 +1441,7 @@ impl Formatter {
                 txt.trim_end().trim_end_matches("\n").to_string()
             }
 
-            NodeType::PipeExpression(values) => {
+            AstNodeType::PipeExpression(values) => {
                 let mut single = self.format(values[0].get_node());
                 let mut multi_lines = vec![self.format(values[0].get_node())];
 
@@ -1474,8 +1475,8 @@ impl Formatter {
 
                 self.wrap_if_wide_or_if(single, &multi, values.len() > self.max_values)
             }
-            NodeType::ParenExpression { value } => format!("({})", self.format(value)),
-            NodeType::TypeDeclaration {
+            AstNodeType::ParenExpression { value } => format!("({})", self.format(value)),
+            AstNodeType::TypeDeclaration {
                 identifier,
                 object,
                 overloads,
@@ -1543,7 +1544,10 @@ impl Formatter {
         }
     }
 
-    pub fn fmt_match_body(&mut self, body: &[(MatchArmType, Vec<Node>, Box<Node>)]) -> String {
+    pub fn fmt_match_body(
+        &mut self,
+        body: &[(MatchArmType, Vec<AstNode>, Box<AstNode>)],
+    ) -> String {
         let mut txt = String::from("{\n");
 
         let mut adjusted_body = body.first().map(|x| vec![vec![x]]).unwrap_or_default();
@@ -2114,14 +2118,14 @@ impl Formatter {
         txt
     }
 
-    fn fmt_struct_literal(&mut self, object_type: &ObjectType<Node>) -> String {
+    fn fmt_struct_literal(&mut self, object_type: &ObjectType<AstNode>) -> String {
         let allow_new_line = false;
         match object_type {
             ObjectType::Map(map) => {
                 let mut single = String::from("{ ");
                 let mut entries = Vec::new();
                 for (key, value) in map.iter() {
-                    if let NodeType::Identifier(x) = &value.node_type
+                    if let AstNodeType::Identifier(x) = &value.node_type
                         && &x.to_string() == key
                     {
                         single.push_str(&format!("{}, ", key));
@@ -2411,7 +2415,7 @@ impl Formatter {
         }
     }
 
-    fn fmt_conditionals(&mut self, conditionals: &[Node]) -> String {
+    fn fmt_conditionals(&mut self, conditionals: &[AstNode]) -> String {
         let mut txt = String::new();
 
         for node in conditionals {
@@ -2423,9 +2427,9 @@ impl Formatter {
 
     fn fmt_infix_expr<T: std::fmt::Display>(
         &mut self,
-        left: &Node,
+        left: &AstNode,
         operator: T,
-        right: &Node,
+        right: &AstNode,
     ) -> String {
         let lhs = self.format(left);
         let rhs = self.format(right);
@@ -2433,7 +2437,7 @@ impl Formatter {
         format!("{} {} {}", lhs, op, rhs)
     }
 
-    fn fmt_tuple_literal(&mut self, values: &[Node], bare: bool) -> String {
+    fn fmt_tuple_literal(&mut self, values: &[AstNode], bare: bool) -> String {
         let mut single_values = Vec::new();
         for value in values {
             single_values.push(self.format(value));
@@ -2451,9 +2455,9 @@ impl Formatter {
         self.wrap_if_wide_or_if(single, &multi, values.len() > self.max_values)
     }
 
-    fn fmt_value_preserving_bare_tuple(&mut self, value: &Node) -> String {
+    fn fmt_value_preserving_bare_tuple(&mut self, value: &AstNode) -> String {
         match &value.node_type {
-            NodeType::TupleLiteral { values } => self.fmt_tuple_literal(values, true),
+            AstNodeType::TupleLiteral { values } => self.fmt_tuple_literal(values, true),
             _ => self.format(value),
         }
     }
@@ -2499,7 +2503,7 @@ impl Formatter {
 
     fn fmt_loop_body_with_label(
         &mut self,
-        body: &Node,
+        body: &AstNode,
         label: &Option<PotentialDollarIdentifier>,
     ) -> String {
         let formatted = self.format(body);

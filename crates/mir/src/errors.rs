@@ -1,6 +1,6 @@
 use calibre_parser::{
     ParserError, Span,
-    ast::{nodes::NodeType, types::ParserDataType},
+    ast::{nodes::AstNodeType, types::ParserDataType},
 };
 use std::path::PathBuf;
 use thiserror::Error;
@@ -26,7 +26,7 @@ pub enum MiddleErr {
     #[error("No associated enum item : {1:?} in enum {0:?}")]
     UnexpectedEnumItem(String, String),
     #[error("Setters can only have one argument, {0:?}")]
-    SetterArgs(Vec<(NodeType, Option<NodeType>)>),
+    SetterArgs(Vec<(AstNodeType, Option<AstNodeType>)>),
     #[error("Property not found, {0:?}")]
     PropertyNotFound(String),
     #[error("Unable to import {0:?}")]

@@ -10,37 +10,37 @@ use calibre_parser::{
     ast::{
         Operator,
         idents::PotentialDollarIdentifier,
-        nodes::{CallArg, Node, NodeType},
+        nodes::{AstNode, AstNodeType, CallArg},
         types::ParserDataType,
     },
 };
 
 impl MiddleEnvironment {
-    pub(crate) fn scope_member_call(span: Span, path: &[&str], args: Vec<CallArg>) -> Node {
-        let mut result = Node::identifier(span, path.first().unwrap());
+    pub(crate) fn scope_member_call(span: Span, path: &[&str], args: Vec<CallArg>) -> AstNode {
+        let mut result = AstNode::identifier(span, path.first().unwrap());
         for segment in path.iter().skip(1) {
-            result = Node::new(
+            result = AstNode::new(
                 span,
-                NodeType::ScopeAccess {
+                AstNodeType::ScopeAccess {
                     base: Box::new(result),
                     field: PotentialDollarIdentifier::new(span, segment),
                 },
             );
         }
 
-        Node::call_full(span, result, vec![], args, vec![], None)
+        AstNode::call_full(span, result, vec![], args, vec![], None)
     }
 
     pub(crate) fn evaluate_field_access(
         &mut self,
         scope: &u64,
         span: Span,
-        base: Node,
+        base: AstNode,
         field: PotentialDollarIdentifier,
     ) -> Result<MiddleNode, MiddleErr> {
         let field_name = self.resolve(scope, &field, ResolutionOptions::default().with_dollar())?;
 
-        if let NodeType::Identifier(ident) = &base.node_type
+        if let AstNodeType::Identifier(ident) = &base.node_type
             && let Ok(ty) = self.resolve_to_data_type(scope, ident)
         {
             if let Some(member) = self.typing.find_impl_member(&ty, &field_name) {
@@ -58,9 +58,9 @@ impl MiddleEnvironment {
             {
                 return self.evaluate_inner(
                     scope,
-                    Node::new(
+                    AstNode::new(
                         span,
-                        NodeType::EnumExpression {
+                        AstNodeType::EnumExpression {
                             identifier: ident.clone(),
                             value: PotentialDollarIdentifier::new(span, field_name),
                             data: None,
@@ -92,7 +92,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: &u64,
         span: Span,
-        base: Node,
+        base: AstNode,
         field: PotentialDollarIdentifier,
     ) -> Result<MiddleNode, MiddleErr> {
         let field_name = self.resolve(scope, &field, ResolutionOptions::default().with_dollar())?;
@@ -105,7 +105,7 @@ impl MiddleEnvironment {
         {
             let resolved = self.resolve(&new_scope, &field, ResolutionOptions::all())?;
 
-            return Ok(self.evaluate(&new_scope, Node::identifier(span, &resolved)));
+            return Ok(self.evaluate(&new_scope, AstNode::identifier(span, &resolved)));
         }
 
         Ok(MiddleNode::new(
@@ -121,8 +121,8 @@ impl MiddleEnvironment {
         &mut self,
         scope: &u64,
         span: Span,
-        base: Node,
-        index: Node,
+        base: AstNode,
+        index: AstNode,
     ) -> Result<MiddleNode, MiddleErr> {
         if let Some(overloaded) = self.handle_operator_overloads(
             scope,
@@ -148,7 +148,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: &u64,
         args: Vec<CallArg>,
-        reverse_args: Vec<Node>,
+        reverse_args: Vec<AstNode>,
     ) -> Vec<MiddleNode> {
         let mut lowered = Vec::with_capacity(args.len() + reverse_args.len());
 

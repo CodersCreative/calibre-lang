@@ -8,7 +8,7 @@ use calibre_parser::{
     Span,
     ast::{
         Operator,
-        nodes::Node,
+        nodes::AstNode,
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -18,8 +18,8 @@ impl MiddleEnvironment {
     pub fn resolve_operator_or_bool(
         &mut self,
         scope: &u64,
-        left: &Node,
-        right: &Node,
+        left: &AstNode,
+        right: &AstNode,
         operator: Operator,
         span: Span,
     ) -> Option<ParserDataType> {
@@ -32,8 +32,8 @@ impl MiddleEnvironment {
         &mut self,
         scope: &u64,
         span: Span,
-        left: Node,
-        right: Node,
+        left: AstNode,
+        right: AstNode,
         operator: Operator,
     ) -> Result<Option<MiddleNode>, MiddleErr> {
         if matches!(operator, Operator::As) {
@@ -80,7 +80,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: &u64,
         span: Span,
-        value: Node,
+        value: AstNode,
         target: ParserDataType,
     ) -> Result<Option<MiddleNode>, MiddleErr> {
         let Some(left_ty) = self.resolve_type_from_node(scope, &value) else {
@@ -122,7 +122,7 @@ impl MiddleEnvironment {
     pub fn handle_as_overload_exists(
         &mut self,
         scope: &u64,
-        value: Node,
+        value: AstNode,
         target: ParserDataType,
     ) -> Result<bool, MiddleErr> {
         let Some(left_ty) = self.resolve_type_from_node(scope, &value) else {
@@ -154,9 +154,9 @@ impl MiddleEnvironment {
         &mut self,
         scope: &u64,
         span: Span,
-        base: Node,
-        index: Node,
-        value: Node,
+        base: AstNode,
+        index: AstNode,
+        value: AstNode,
     ) -> Result<Option<MiddleNode>, MiddleErr> {
         let (Some(base_ty), Some(index_ty), Some(value_ty)) = (
             self.resolve_type_from_node(scope, &base),
@@ -205,8 +205,8 @@ impl MiddleEnvironment {
     pub fn get_operator_overload(
         &mut self,
         scope: &u64,
-        left: &Node,
-        right: &Node,
+        left: &AstNode,
+        right: &AstNode,
         operator: &Operator,
     ) -> Option<&MiddleOverload> {
         if let (Some(left_ty), Some(right_ty)) = (

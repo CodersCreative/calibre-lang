@@ -3,7 +3,7 @@ use calibre_parser::{
     Location, Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::Node,
+        nodes::AstNode,
         types::ParserInnerType,
     },
 };
@@ -61,7 +61,7 @@ impl Scoping {
         })
     }
 
-    pub fn resolve_macro_arg(&self, scope: &u64, iden: &str) -> Option<&Node> {
+    pub fn resolve_macro_arg(&self, scope: &u64, iden: &str) -> Option<&AstNode> {
         let scope = self.scopes.get(scope)?;
 
         if let Some(x) = scope.macro_args.get(iden) {
@@ -322,7 +322,7 @@ impl Scoping {
         )))
     }
 
-    pub fn collect_defers_until(&self, scope: &u64, stop_scope: Option<u64>) -> Vec<Node> {
+    pub fn collect_defers_until(&self, scope: &u64, stop_scope: Option<u64>) -> Vec<AstNode> {
         let mut out = Vec::new();
         let mut current = Some(*scope);
         while let Some(id) = current {
@@ -344,7 +344,7 @@ pub struct LoopContext {
     pub label: Option<String>,
     pub result_target: Option<ParserText>,
     pub broke_target: Option<ParserText>,
-    pub continue_inject: Option<Node>,
+    pub continue_inject: Option<AstNode>,
     pub scope_id: u64,
 }
 
@@ -367,8 +367,8 @@ fn empty_scope() -> &'static MiddleScope {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScopeMacro {
     pub name: String,
-    pub args: Vec<(PotentialDollarIdentifier, Node)>,
-    pub body: Vec<Node>,
+    pub args: Vec<(PotentialDollarIdentifier, AstNode)>,
+    pub body: Vec<AstNode>,
     pub create_new_scope: bool,
 }
 
@@ -379,11 +379,11 @@ pub struct MiddleScope {
     pub mappings: FxHashMap<String, String>,
     pub type_mappings: FxHashMap<String, ParserInnerType>,
     pub macros: FxHashMap<String, ScopeMacro>,
-    pub macro_args: FxHashMap<String, Node>,
+    pub macro_args: FxHashMap<String, AstNode>,
     pub children: FxHashMap<String, u64>,
     pub namespace: String,
     pub path: PathBuf,
-    pub defers: Vec<Node>,
+    pub defers: Vec<AstNode>,
 }
 
 impl MiddleScope {

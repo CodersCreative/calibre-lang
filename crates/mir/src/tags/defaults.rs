@@ -4,7 +4,7 @@ use crate::{ast::MiddleNode, errors::MiddleErr, typing::MiddleTypeDefType};
 use calibre_parser::ast::idents::{
     ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
 };
-use calibre_parser::ast::nodes::{FunctionHeader, Node, NodeType, VarType};
+use calibre_parser::ast::nodes::{AstNode, AstNodeType, FunctionHeader, VarType};
 use calibre_parser::ast::types::{GenericTypes, ParserDataType};
 use calibre_parser::{
     Span,
@@ -27,17 +27,17 @@ impl MiddleEnvironment {
             } => {
                 if let Some(i) = default_variant {
                     if let Some((default_variant_name, _)) = variants.get(*i) {
-                        Node::new(
+                        AstNode::new(
                             span,
-                            NodeType::VariableDeclaration {
+                            AstNodeType::VariableDeclaration {
                                 var_type: VarType::Constant,
                                 identifier: PotentialDollarIdentifier::Identifier(
                                     ParserText::from("default".to_string()),
                                 ),
                                 data_type: ParserDataType::auto(span),
-                                value: Box::new(Node::new(
+                                value: Box::new(AstNode::new(
                                     span,
-                                    NodeType::FunctionDeclaration {
+                                    AstNodeType::FunctionDeclaration {
                                         header: FunctionHeader {
                                             generics: GenericTypes::default(),
                                             parameters: Vec::new(),
@@ -48,16 +48,16 @@ impl MiddleEnvironment {
 
                                             param_destructures: Vec::new(),
                                         },
-                                        body: Box::new(Node::new_temp_scope(vec![Node::ret(
-                                            Node::new(
+                                        body: Box::new(AstNode::new_temp_scope(vec![
+                                            AstNode::ret(AstNode::new(
                                                 span,
-                                                NodeType::EnumExpression {
+                                                AstNodeType::EnumExpression {
                                                     identifier: identifier.clone().into(),
                                                     value: default_variant_name.clone().into(),
                                                     data: default_value.clone(),
                                                 },
-                                            ),
-                                        )])),
+                                            )),
+                                        ])),
                                     },
                                 )),
                             },
@@ -94,40 +94,46 @@ impl MiddleEnvironment {
                             let type_name = resolved.impl_name();
                             (
                                 field_name.clone(),
-                                Node::member(
+                                AstNode::member(
                                     span,
-                                    Node::identifier(span, type_name),
-                                    Node::call(span, Node::identifier(span, "default"), Vec::new()),
+                                    AstNode::identifier(span, type_name),
+                                    AstNode::call(
+                                        span,
+                                        AstNode::identifier(span, "default"),
+                                        Vec::new(),
+                                    ),
                                 ),
                             )
                         }
                     })
                     .collect();
 
-                Node::new(
+                AstNode::new(
                     span,
-                    NodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration {
                         var_type: VarType::Constant,
                         identifier: PotentialDollarIdentifier::Identifier(ParserText::from(
                             "default".to_string(),
                         )),
                         data_type: ParserDataType::auto(span),
-                        value: Box::new(Node::new(
+                        value: Box::new(AstNode::new(
                             span,
-                            NodeType::FunctionDeclaration {
+                            AstNodeType::FunctionDeclaration {
                                 header: FunctionHeader {
                                     generics: GenericTypes::default(),
                                     parameters: Vec::new(),
                                     return_type: ParserDataType::object(span, &identifier.text),
                                     param_destructures: Vec::new(),
                                 },
-                                body: Box::new(Node::new_temp_scope(vec![Node::ret(Node::new(
-                                    span,
-                                    NodeType::StructLiteral {
-                                        identifier: identifier.clone().into(),
-                                        value: ObjectType::Map(fields),
-                                    },
-                                ))])),
+                                body: Box::new(AstNode::new_temp_scope(vec![AstNode::ret(
+                                    AstNode::new(
+                                        span,
+                                        AstNodeType::StructLiteral {
+                                            identifier: identifier.clone().into(),
+                                            value: ObjectType::Map(fields),
+                                        },
+                                    ),
+                                )])),
                             },
                         )),
                     },
@@ -145,9 +151,9 @@ impl MiddleEnvironment {
 
         Ok(self.evaluate(
             scope,
-            Node::new(
+            AstNode::new(
                 span,
-                NodeType::ImplTraitDeclaration {
+                AstNodeType::ImplTraitDeclaration {
                     generics: GenericTypes::default(),
                     trait_ident: PotentialGenericTypeIdentifier::new(Span::default(), "Default"),
                     target: ParserDataType::object(span, &identifier.text),

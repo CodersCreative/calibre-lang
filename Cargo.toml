@@ -44,6 +44,7 @@ tracing-flame = "0.2"
 tracing-appender = "0.2"
 smol = "2.0.2"
 derive_builder = "0.20.2"
+indextree = "4.9.0"
 
 [workspace.lints.clippy]
 # Don't Panic - prevent panics from unwraps and unsafe slicing or indexing

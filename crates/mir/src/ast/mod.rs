@@ -6,8 +6,8 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{IntLiteralType, ParsedIntLiteral, ParserText},
         nodes::{
-            AsFailureMode, CallArg, EmitType, FunctionHeader, IfComparisonType, LoopType, Node,
-            NodeType, VarType,
+            AsFailureMode, AstNode, AstNodeType, CallArg, EmitType, FunctionHeader,
+            IfComparisonType, LoopType, VarType,
         },
         types::{GenericTypes, ParserDataType},
     },
@@ -403,48 +403,48 @@ impl Display for MiddleNode {
 
 impl Display for MiddleNodeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let converted: NodeType = self.clone().into();
+        let converted: AstNodeType = self.clone().into();
         write!(f, "{}", converted)
     }
 }
 
-impl From<MiddleNode> for Node {
-    fn from(val: MiddleNode) -> Node {
-        Node {
+impl From<MiddleNode> for AstNode {
+    fn from(val: MiddleNode) -> AstNode {
+        AstNode {
             node_type: val.node_type.into(),
             span: val.span,
         }
     }
 }
 
-impl From<MiddleNodeType> for NodeType {
+impl From<MiddleNodeType> for AstNodeType {
     fn from(val: MiddleNodeType) -> Self {
         match val {
             MiddleNodeType::Emit { value } => {
-                NodeType::Emit(EmitType::Scope(Box::new((*value).into())))
+                AstNodeType::Emit(EmitType::Scope(Box::new((*value).into())))
             }
-            MiddleNodeType::Spawn { value } => NodeType::Spawn {
+            MiddleNodeType::Spawn { value } => AstNodeType::Spawn {
                 items: vec![(*value).into()],
                 auto_wait: false,
             },
-            MiddleNodeType::Drop(x) => NodeType::Drop(x.into()),
-            MiddleNodeType::Move(x) => NodeType::MoveExpression {
-                value: Box::new(Node::new(x.span, NodeType::Identifier(x.into()))),
+            MiddleNodeType::Drop(x) => AstNodeType::Drop(x.into()),
+            MiddleNodeType::Move(x) => AstNodeType::MoveExpression {
+                value: Box::new(AstNode::new(x.span, AstNodeType::Identifier(x.into()))),
             },
-            MiddleNodeType::Break { label, value } => NodeType::Break {
+            MiddleNodeType::Break { label, value } => AstNodeType::Break {
                 label: label.map(Into::into),
                 value: value.map(|v| Box::new((*v).into())),
             },
-            MiddleNodeType::Continue { label } => NodeType::Continue {
+            MiddleNodeType::Continue { label } => AstNodeType::Continue {
                 label: label.map(Into::into),
             },
-            MiddleNodeType::EmptyLine => NodeType::EmptyLine,
-            MiddleNodeType::Null => NodeType::Null,
-            MiddleNodeType::RefStatement { mutability, value } => NodeType::RefStatement {
+            MiddleNodeType::EmptyLine => AstNodeType::EmptyLine,
+            MiddleNodeType::Null => AstNodeType::Null,
+            MiddleNodeType::RefStatement { mutability, value } => AstNodeType::RefStatement {
                 mutability,
                 value: Box::new((*value).into()),
             },
-            MiddleNodeType::DerefStatement { value } => NodeType::DerefStatement {
+            MiddleNodeType::DerefStatement { value } => AstNodeType::DerefStatement {
                 value: Box::new((*value).into()),
             },
             MiddleNodeType::VariableDeclaration {
@@ -452,7 +452,7 @@ impl From<MiddleNodeType> for NodeType {
                 identifier,
                 value,
                 data_type,
-            } => NodeType::VariableDeclaration {
+            } => AstNodeType::VariableDeclaration {
                 var_type,
                 identifier: identifier.into(),
                 value: Box::new((*value).into()),
@@ -462,7 +462,7 @@ impl From<MiddleNodeType> for NodeType {
                 identifier,
                 value,
                 data,
-            } => NodeType::EnumExpression {
+            } => AstNodeType::EnumExpression {
                 identifier: identifier.into(),
                 value: value.into(),
                 data: data.map(|data| Box::new((*data).into())),
@@ -472,7 +472,7 @@ impl From<MiddleNodeType> for NodeType {
                 create_new_scope,
                 is_temp,
                 scope_id: _,
-            } => NodeType::ScopeDeclaration {
+            } => AstNodeType::ScopeDeclaration {
                 body: {
                     let mut lst = Vec::new();
 
@@ -492,7 +492,7 @@ impl From<MiddleNodeType> for NodeType {
                 body,
                 return_type,
                 scope_id: _,
-            } => NodeType::FunctionDeclaration {
+            } => AstNodeType::FunctionDeclaration {
                 header: FunctionHeader {
                     generics: GenericTypes::default(),
                     parameters: {
@@ -518,7 +518,7 @@ impl From<MiddleNodeType> for NodeType {
                 symbol,
                 parameters,
                 return_type,
-            } => NodeType::ExternFunctionDeclaration {
+            } => AstNodeType::ExternFunctionDeclaration {
                 abi,
                 identifier: ParserText::from(symbol).into(),
                 parameters,
@@ -527,7 +527,7 @@ impl From<MiddleNodeType> for NodeType {
                 symbol: None,
             },
             MiddleNodeType::AssignmentExpression { identifier, value } => {
-                NodeType::AssignmentExpression {
+                AstNodeType::AssignmentExpression {
                     identifier: Box::new((*identifier).into()),
                     value: Box::new((*value).into()),
                 }
@@ -535,22 +535,22 @@ impl From<MiddleNodeType> for NodeType {
             MiddleNodeType::DebugExpression {
                 pretty_printed_str: _,
                 value,
-            } => NodeType::DebugExpression {
+            } => AstNodeType::DebugExpression {
                 value: Box::new((*value).into()),
             },
-            MiddleNodeType::NegExpression { value } => NodeType::NotExpression {
+            MiddleNodeType::NegExpression { value } => AstNodeType::NotExpression {
                 value: Box::new((*value).into()),
             },
             MiddleNodeType::AsExpression {
                 value,
                 data_type,
                 failure_mode,
-            } => NodeType::AsExpression {
+            } => AstNodeType::AsExpression {
                 value: Box::new((*value).into()),
                 data_type,
                 failure_mode,
             },
-            MiddleNodeType::IsExpression { value, data_type } => NodeType::IsExpression {
+            MiddleNodeType::IsExpression { value, data_type } => AstNodeType::IsExpression {
                 value: Box::new((*value).into()),
                 data_type,
             },
@@ -558,7 +558,7 @@ impl From<MiddleNodeType> for NodeType {
                 comparison,
                 then,
                 otherwise,
-            } => NodeType::IfStatement {
+            } => AstNodeType::IfStatement {
                 comparison: Box::new(IfComparisonType::If((*comparison).into())),
                 then: Box::new((*then).into()),
                 otherwise: otherwise.map(|otherwise| Box::new((*otherwise).into())),
@@ -567,7 +567,7 @@ impl From<MiddleNodeType> for NodeType {
                 from,
                 to,
                 inclusive,
-            } => NodeType::RangeDeclaration {
+            } => AstNodeType::RangeDeclaration {
                 from: Box::new((*from).into()),
                 to: Box::new((*to).into()),
                 inclusive,
@@ -577,7 +577,7 @@ impl From<MiddleNodeType> for NodeType {
                 body,
                 scope_id: _,
                 label,
-            } => NodeType::ScopeDeclaration {
+            } => AstNodeType::ScopeDeclaration {
                 body: {
                     let mut lst = Vec::new();
 
@@ -585,9 +585,9 @@ impl From<MiddleNodeType> for NodeType {
                         lst.push((*state).into());
                     }
 
-                    lst.push(Node::new(
+                    lst.push(AstNode::new(
                         body.span,
-                        NodeType::LoopDeclaration {
+                        AstNodeType::LoopDeclaration {
                             loop_type: Box::new(LoopType::Loop),
                             body: Box::new((*body).into()),
                             until: None,
@@ -603,13 +603,13 @@ impl From<MiddleNodeType> for NodeType {
                 create_new_scope: Some(false),
                 define: false,
             },
-            MiddleNodeType::Return { value: Some(value) } => NodeType::Return {
+            MiddleNodeType::Return { value: Some(value) } => AstNodeType::Return {
                 value: Some(Box::new((*value).into())),
             },
-            MiddleNodeType::Return { value: None } => NodeType::Return { value: None },
-            MiddleNodeType::Identifier(x) => NodeType::Identifier(x.into()),
-            MiddleNodeType::StringLiteral(x) => NodeType::StringLiteral(x),
-            MiddleNodeType::ListLiteral(typ, data) => NodeType::ListLiteral(typ, {
+            MiddleNodeType::Return { value: None } => AstNodeType::Return { value: None },
+            MiddleNodeType::Identifier(x) => AstNodeType::Identifier(x.into()),
+            MiddleNodeType::StringLiteral(x) => AstNodeType::StringLiteral(x),
+            MiddleNodeType::ListLiteral(typ, data) => AstNodeType::ListLiteral(typ, {
                 let mut lst = Vec::new();
 
                 for node in data {
@@ -618,9 +618,9 @@ impl From<MiddleNodeType> for NodeType {
 
                 lst
             }),
-            MiddleNodeType::CharLiteral(x) => NodeType::CharLiteral(x),
-            MiddleNodeType::FloatLiteral(x) => NodeType::FloatLiteral(x),
-            MiddleNodeType::BigLiteral(x) => NodeType::BigLiteral(x),
+            MiddleNodeType::CharLiteral(x) => AstNodeType::CharLiteral(x),
+            MiddleNodeType::FloatLiteral(x) => AstNodeType::FloatLiteral(x),
+            MiddleNodeType::BigLiteral(x) => AstNodeType::BigLiteral(x),
             MiddleNodeType::IntLiteral(x) => {
                 let mut out = x.value.to_string();
                 match x.int_type {
@@ -628,21 +628,21 @@ impl From<MiddleNodeType> for NodeType {
                     IntLiteralType::UInt => out.push('u'),
                     IntLiteralType::Byte => out.push('b'),
                 }
-                NodeType::IntLiteral(ParserText::from(out))
+                AstNodeType::IntLiteral(ParserText::from(out))
             }
-            MiddleNodeType::FieldAccess { base, field } => NodeType::FieldAccess {
+            MiddleNodeType::FieldAccess { base, field } => AstNodeType::FieldAccess {
                 base: Box::new((*base).into()),
                 field: field.into(),
             },
-            MiddleNodeType::ScopeAccess { base, field } => NodeType::ScopeAccess {
+            MiddleNodeType::ScopeAccess { base, field } => AstNodeType::ScopeAccess {
                 base: Box::new((*base).into()),
                 field: field.into(),
             },
-            MiddleNodeType::IndexAccess { base, index } => NodeType::IndexAccess {
+            MiddleNodeType::IndexAccess { base, index } => AstNodeType::IndexAccess {
                 base: Box::new((*base).into()),
                 index: Box::new((*index).into()),
             },
-            MiddleNodeType::CallExpression { caller, args } => NodeType::CallExpression {
+            MiddleNodeType::CallExpression { caller, args } => AstNodeType::CallExpression {
                 string_fn: None,
                 generic_types: Vec::new(),
                 caller: Box::new((*caller).into()),
@@ -660,7 +660,7 @@ impl From<MiddleNodeType> for NodeType {
                 left,
                 right,
                 operator,
-            } => NodeType::BinaryExpression {
+            } => AstNodeType::BinaryExpression {
                 left: Box::new((*left).into()),
                 right: Box::new((*right).into()),
                 operator,
@@ -669,7 +669,7 @@ impl From<MiddleNodeType> for NodeType {
                 left,
                 right,
                 operator,
-            } => NodeType::ComparisonExpression {
+            } => AstNodeType::ComparisonExpression {
                 left: Box::new((*left).into()),
                 right: Box::new((*right).into()),
                 operator,
@@ -678,7 +678,7 @@ impl From<MiddleNodeType> for NodeType {
                 left,
                 right,
                 operator,
-            } => NodeType::BooleanExpression {
+            } => AstNodeType::BooleanExpression {
                 left: Box::new((*left).into()),
                 right: Box::new((*right).into()),
                 operator,
@@ -695,12 +695,12 @@ impl From<MiddleNodeType> for NodeType {
                         .map(|id| id.span)
                         .or_else(|| value.0.first().map(|(_, node)| node.span))
                         .unwrap_or_default();
-                    NodeType::CallExpression {
+                    AstNodeType::CallExpression {
                         string_fn: None,
                         generic_types: Vec::new(),
-                        caller: Box::new(Node::new(
+                        caller: Box::new(AstNode::new(
                             caller_span,
-                            NodeType::Identifier(
+                            AstNodeType::Identifier(
                                 if let Some(identifier) = identifier {
                                     identifier
                                 } else {
@@ -722,7 +722,7 @@ impl From<MiddleNodeType> for NodeType {
                         reverse_args: Vec::new(),
                     }
                 } else {
-                    NodeType::StructLiteral {
+                    AstNodeType::StructLiteral {
                         identifier: identifier
                             .unwrap_or_else(|| ParserText::new(Default::default(), "map"))
                             .into(),

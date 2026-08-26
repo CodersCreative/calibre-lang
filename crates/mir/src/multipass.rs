@@ -3,12 +3,16 @@ use crate::{
 };
 use calibre_parser::ast::{
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-    nodes::{Node, NodeType, VarType},
+    nodes::{AstNode, AstNodeType, VarType},
     types::ParserDataType,
 };
 
 impl MiddleEnvironment {
-    pub fn predeclare_nodes(&mut self, scope: &u64, nodes: &mut [Node]) -> Result<(), MiddleErr> {
+    pub fn predeclare_nodes(
+        &mut self,
+        scope: &u64,
+        nodes: &mut [AstNode],
+    ) -> Result<(), MiddleErr> {
         for node in nodes {
             self.predeclare_node(scope, node)?;
         }
@@ -16,10 +20,10 @@ impl MiddleEnvironment {
         Ok(())
     }
 
-    fn predeclare_node(&mut self, scope: &u64, node: &mut Node) -> Result<(), MiddleErr> {
+    fn predeclare_node(&mut self, scope: &u64, node: &mut AstNode) -> Result<(), MiddleErr> {
         match &mut node.node_type {
-            NodeType::Tag { node: inner, .. } => self.predeclare_node(scope, inner.as_mut()),
-            NodeType::TypeDeclaration {
+            AstNodeType::Tag { node: inner, .. } => self.predeclare_node(scope, inner.as_mut()),
+            AstNodeType::TypeDeclaration {
                 identifier:
                     PotentialGenericTypeIdentifier::Identifier(PotentialDollarIdentifier::Identifier(_)),
                 ..
@@ -28,7 +32,7 @@ impl MiddleEnvironment {
 
                 Ok(())
             }
-            NodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration {
                 var_type,
                 identifier: PotentialDollarIdentifier::Identifier(ident),
                 value,
@@ -59,7 +63,7 @@ impl MiddleEnvironment {
 
                 Ok(())
             }
-            NodeType::ExternFunctionDeclaration {
+            AstNodeType::ExternFunctionDeclaration {
                 identifier: PotentialDollarIdentifier::Identifier(ident),
                 parameters,
                 return_type,

@@ -3,7 +3,7 @@ use crate::ast::RefMutability;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::matching::{MatchArmType, TryCatch};
 use crate::ast::nodes::{
-    AsFailureMode, CallArg, IfComparisonType, LoopType, Node, NodeType, PipeSegment,
+    AsFailureMode, AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, PipeSegment,
 };
 use crate::ast::types::{ParserDataType, ParserInnerType};
 use crate::parse::util::{
@@ -30,23 +30,23 @@ pub struct TailExpressionParsers<'a> {
     pub fat_arrow: StrParser<'a, ()>,
     pub left_arrow: StrParser<'a, ()>,
     pub ident: StrParser<'a, (String, Span)>,
-    pub int_lit: StrParser<'a, Node>,
+    pub int_lit: StrParser<'a, AstNode>,
     pub named_ident: StrParser<'a, PotentialDollarIdentifier>,
     pub type_name: StrParser<'a, ParserDataType>,
-    pub expr: StrParser<'a, Node>,
-    pub statement: StrParser<'a, Node>,
-    pub atom: StrParser<'a, Node>,
-    pub fn_standard_expr: StrParser<'a, Node>,
-    pub fn_match_expr: StrParser<'a, Node>,
-    pub scope_block: StrParser<'a, Node>,
-    pub spawn_item_expr: StrParser<'a, Node>,
+    pub expr: StrParser<'a, AstNode>,
+    pub statement: StrParser<'a, AstNode>,
+    pub atom: StrParser<'a, AstNode>,
+    pub fn_standard_expr: StrParser<'a, AstNode>,
+    pub fn_match_expr: StrParser<'a, AstNode>,
+    pub scope_block: StrParser<'a, AstNode>,
+    pub spawn_item_expr: StrParser<'a, AstNode>,
     pub let_pattern_list: StrParser<'a, Vec<MatchArmType>>,
 }
 
 pub fn build_tail_expression_parser<'a>(
     parts: TailExpressionParsers<'a>,
     line_starts: Arc<Vec<usize>>,
-) -> StrParser<'a, Node> {
+) -> StrParser<'a, AstNode> {
     let TailExpressionParsers {
         pad,
         pad_with_newline,
@@ -91,12 +91,12 @@ pub fn build_tail_expression_parser<'a>(
 
             let text_nodes = texts
                 .into_iter()
-                .map(|txt| Node::new(sp, NodeType::StringLiteral(ParserText::new(sp, txt))))
+                .map(|txt| AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, txt))))
                 .collect::<Vec<_>>();
 
-            let mut call_args = vec![CallArg::Value(Node::new(
+            let mut call_args = vec![CallArg::Value(AstNode::new(
                 sp,
-                NodeType::ListLiteral(ParserDataType::new(sp, ParserInnerType::Str), text_nodes),
+                AstNodeType::ListLiteral(ParserDataType::new(sp, ParserInnerType::Str), text_nodes),
             ))];
 
             for arg in args {
@@ -120,9 +120,9 @@ pub fn build_tail_expression_parser<'a>(
         )
         .map(|(head, indexes)| {
             indexes.into_iter().fold(head, |current, index| {
-                Node::new(
+                AstNode::new(
                     Span::new_from_spans(current.span, index.span),
-                    NodeType::IndexAccess {
+                    AstNodeType::IndexAccess {
                         base: Box::new(current),
                         index: Box::new(index),
                     },
@@ -165,9 +165,9 @@ pub fn build_tail_expression_parser<'a>(
                 )
                 .map(|(head, indexes)| {
                     indexes.into_iter().fold(head, |current, index| {
-                        Node::new(
+                        AstNode::new(
                             Span::new_from_spans(current.span, index.span),
-                            NodeType::IndexAccess {
+                            AstNodeType::IndexAccess {
                                 base: Box::new(current),
                                 index: Box::new(index),
                             },
@@ -178,14 +178,14 @@ pub fn build_tail_expression_parser<'a>(
                 .allow_trailing()
                 .collect::<Vec<_>>()
                 .or_not()
-                .map(|x: Option<Vec<Node>>| x.unwrap_or_default()),
+                .map(|x: Option<Vec<AstNode>>| x.unwrap_or_default()),
         )
         .then_ignore(lex(pad_with_newline.clone(), just(')')))
         .boxed();
 
     #[derive(Clone)]
     enum PostfixSuffix {
-        Member(Box<Node>, bool),
+        Member(Box<AstNode>, bool),
         Ref(RefMutability),
         Deref,
     }
@@ -196,13 +196,13 @@ pub fn build_tail_expression_parser<'a>(
         lex(pad.clone(), just(".*")).to(PostfixSuffix::Deref),
         lex(pad.clone(), just('.'))
             .ignore_then(choice((
-                ident.clone().map(|(n, sp)| Node::identifier(sp, &n)),
+                ident.clone().map(|(n, sp)| AstNode::identifier(sp, &n)),
                 int_lit.clone(),
             )))
             .then(call_args.clone().repeated().collect::<Vec<_>>())
             .map(|(m, calls)| {
                 let node = calls.into_iter().fold(m, |c, args| {
-                    Node::call_full(c.span, c, Vec::new(), args, Vec::new(), None)
+                    AstNode::call_full(c.span, c, Vec::new(), args, Vec::new(), None)
                 });
                 PostfixSuffix::Member(Box::new(node), false)
             }),
@@ -225,63 +225,64 @@ pub fn build_tail_expression_parser<'a>(
     ))
     .boxed();
 
-    let apply_calls = |head: Node, calls: Vec<(Option<ParserText>, Vec<CallArg>, Vec<Node>)>| {
-        calls
-            .into_iter()
-            .fold(head, |c, (string_fn, args, reverse_args)| {
-                Node::call_full(c.span, c, Vec::new(), args, reverse_args, string_fn)
-            })
-    };
+    let apply_calls =
+        |head: AstNode, calls: Vec<(Option<ParserText>, Vec<CallArg>, Vec<AstNode>)>| {
+            calls
+                .into_iter()
+                .fold(head, |c, (string_fn, args, reverse_args)| {
+                    AstNode::call_full(c.span, c, Vec::new(), args, reverse_args, string_fn)
+                })
+        };
 
-    let apply_postfix_suffixes = |head: Node, rest: Vec<PostfixSuffix>| {
+    let apply_postfix_suffixes = |head: AstNode, rest: Vec<PostfixSuffix>| {
         let mut current = head;
 
         for suffix in rest {
             match suffix {
                 PostfixSuffix::Member(node, is_index) => {
                     if is_index {
-                        current = Node::new(
+                        current = AstNode::new(
                             Span::new_from_spans(current.span, node.span),
-                            NodeType::IndexAccess {
+                            AstNodeType::IndexAccess {
                                 base: Box::new(current),
                                 index: node,
                             },
                         );
-                    } else if let NodeType::Identifier(ident) = node.node_type {
-                        current = Node::new(
+                    } else if let AstNodeType::Identifier(ident) = node.node_type {
+                        current = AstNode::new(
                             Span::new_from_spans(current.span, node.span),
-                            NodeType::FieldAccess {
+                            AstNodeType::FieldAccess {
                                 base: Box::new(current),
                                 field: ident.into(),
                             },
                         );
-                    } else if let NodeType::IntLiteral(value) = node.node_type {
-                        current = Node::new(
+                    } else if let AstNodeType::IntLiteral(value) = node.node_type {
+                        current = AstNode::new(
                             Span::new_from_spans(current.span, value.span),
-                            NodeType::FieldAccess {
+                            AstNodeType::FieldAccess {
                                 base: Box::new(current),
                                 field: value.into(),
                             },
                         );
-                    } else if let NodeType::CallExpression {
+                    } else if let AstNodeType::CallExpression {
                         caller,
                         string_fn,
                         generic_types,
                         args,
                         reverse_args,
                     } = &node.node_type
-                        && let NodeType::Identifier(ident) = &caller.node_type
+                        && let AstNodeType::Identifier(ident) = &caller.node_type
                     {
-                        current = Node::new(
+                        current = AstNode::new(
                             Span::new_from_spans(current.span, node.span),
-                            NodeType::FieldAccess {
+                            AstNodeType::FieldAccess {
                                 base: Box::new(current),
                                 field: ident.clone().into(),
                             },
                         );
-                        current = Node::new(
+                        current = AstNode::new(
                             Span::new_from_spans(current.span, node.span),
-                            NodeType::CallExpression {
+                            AstNodeType::CallExpression {
                                 caller: Box::new(current),
                                 string_fn: string_fn.clone(),
                                 generic_types: generic_types.clone(),
@@ -294,18 +295,18 @@ pub fn build_tail_expression_parser<'a>(
                     }
                 }
                 PostfixSuffix::Ref(mutability) => {
-                    current = Node::new(
+                    current = AstNode::new(
                         current.span,
-                        NodeType::RefStatement {
+                        AstNodeType::RefStatement {
                             mutability,
                             value: Box::new(current),
                         },
                     );
                 }
                 PostfixSuffix::Deref => {
-                    current = Node::new(
+                    current = AstNode::new(
                         current.span,
-                        NodeType::DerefStatement {
+                        AstNodeType::DerefStatement {
                             value: Box::new(current),
                         },
                     );
@@ -344,9 +345,9 @@ pub fn build_tail_expression_parser<'a>(
         .then(expr.clone())
         .map(|((identifier, value), data)| {
             let ident = identifier;
-            Node::new(
+            AstNode::new(
                 Span::new_from_spans(*ident.span(), data.span),
-                NodeType::EnumExpression {
+                AstNodeType::EnumExpression {
                     identifier: ident.into(),
                     value,
                     data: Some(Box::new(data)),
@@ -388,16 +389,16 @@ pub fn build_tail_expression_parser<'a>(
                 let data_type = _open_ty;
                 let sp = span(ls.as_ref(), r);
                 let list = if let Some((value, count)) = values.0 {
-                    Node::new(
+                    AstNode::new(
                         sp,
-                        NodeType::ListRepeatLiteral {
+                        AstNodeType::ListRepeatLiteral {
                             data_type,
                             value: Box::new(value),
                             count: Box::new(count),
                         },
                     )
                 } else {
-                    Node::new(sp, NodeType::ListLiteral(data_type, values.1))
+                    AstNode::new(sp, AstNodeType::ListLiteral(data_type, values.1))
                 };
                 apply_postfix_suffixes(list, tails)
             }
@@ -446,9 +447,9 @@ pub fn build_tail_expression_parser<'a>(
         .map(|parts| {
             let (((((open_ty, _open_br), map), spawned), loop_type), conditionals) = parts.0;
             let until = parts.1;
-            Node::new(
+            AstNode::new(
                 map.span,
-                NodeType::IterExpression {
+                AstNodeType::IterExpression {
                     data_type: open_ty,
                     map: Box::new(map),
                     spawned,
@@ -491,9 +492,9 @@ pub fn build_tail_expression_parser<'a>(
                     .next()
                     .expect("power-expression operand list is never empty");
                 for left in iter {
-                    right = Node::new(
+                    right = AstNode::new(
                         Span::new_from_spans(left.span, right.span),
-                        NodeType::BinaryExpression {
+                        AstNodeType::BinaryExpression {
                             left: Box::new(left),
                             right: Box::new(right),
                             operator: BinaryOperator::Pow,
@@ -506,9 +507,9 @@ pub fn build_tail_expression_parser<'a>(
     .map(|(ops, node)| {
         ops.into_iter().fold(node, |n, op| {
             if op == BinaryOperator::Sub {
-                Node::new(n.span, NodeType::NegExpression { value: Box::new(n) })
+                AstNode::new(n.span, AstNodeType::NegExpression { value: Box::new(n) })
             } else {
-                Node::new(n.span, NodeType::NotExpression { value: Box::new(n) })
+                AstNode::new(n.span, AstNodeType::NotExpression { value: Box::new(n) })
             }
         })
     })
@@ -531,9 +532,9 @@ pub fn build_tail_expression_parser<'a>(
         .then(mul_op.then(unary.clone()).repeated().collect::<Vec<_>>())
         .map(|(h, t)| {
             t.into_iter().fold(h, |l, (op, r)| {
-                Node::new(
+                AstNode::new(
                     Span::new_from_spans(l.span, r.span),
-                    NodeType::BinaryExpression {
+                    AstNodeType::BinaryExpression {
                         left: Box::new(l),
                         right: Box::new(r),
                         operator: op,
@@ -548,9 +549,9 @@ pub fn build_tail_expression_parser<'a>(
         .then(add_op.then(product.clone()).repeated().collect::<Vec<_>>())
         .map(|(h, t)| {
             t.into_iter().fold(h, |l, (op, r)| {
-                Node::new(
+                AstNode::new(
                     Span::new_from_spans(l.span, r.span),
-                    NodeType::BinaryExpression {
+                    AstNodeType::BinaryExpression {
                         left: Box::new(l),
                         right: Box::new(r),
                         operator: op,
@@ -574,9 +575,9 @@ pub fn build_tail_expression_parser<'a>(
         .then(bit_op.then(sum.clone()).repeated().collect::<Vec<_>>())
         .map(|(h, t)| {
             t.into_iter().fold(h, |l, (op, r)| {
-                Node::new(
+                AstNode::new(
                     Span::new_from_spans(l.span, r.span),
-                    NodeType::BinaryExpression {
+                    AstNodeType::BinaryExpression {
                         left: Box::new(l),
                         right: Box::new(r),
                         operator: op,
@@ -601,9 +602,9 @@ pub fn build_tail_expression_parser<'a>(
         .then(cmp_op.then(bitwise.clone()).repeated().collect::<Vec<_>>())
         .map(|(h, t)| {
             t.into_iter().fold(h, |l, (op, r)| {
-                Node::new(
+                AstNode::new(
                     Span::new_from_spans(l.span, r.span),
-                    NodeType::ComparisonExpression {
+                    AstNodeType::ComparisonExpression {
                         left: Box::new(l),
                         right: Box::new(r),
                         operator: op,
@@ -629,9 +630,9 @@ pub fn build_tail_expression_parser<'a>(
         )
         .map(|(h, t)| {
             t.into_iter().fold(h, |l, (op, r)| {
-                Node::new(
+                AstNode::new(
                     Span::new_from_spans(l.span, r.span),
-                    NodeType::BooleanExpression {
+                    AstNodeType::BooleanExpression {
                         left: Box::new(l),
                         right: Box::new(r),
                         operator: op,
@@ -651,9 +652,9 @@ pub fn build_tail_expression_parser<'a>(
         )
         .map(|(from, tail)| {
             if let Some((inc, to)) = tail {
-                Node::new(
+                AstNode::new(
                     Span::new_from_spans(from.span, to.span),
-                    NodeType::RangeDeclaration {
+                    AstNodeType::RangeDeclaration {
                         from: Box::new(from),
                         to: Box::new(to),
                         inclusive: inc.is_some(),
@@ -679,9 +680,9 @@ pub fn build_tail_expression_parser<'a>(
             casts
                 .into_iter()
                 .fold(head, |value, ((_, suffix), data_type)| {
-                    Node::new(
+                    AstNode::new(
                         value.span,
-                        NodeType::AsExpression {
+                        AstNodeType::AsExpression {
                             value: Box::new(value),
                             data_type,
                             failure_mode: match suffix {
@@ -705,9 +706,9 @@ pub fn build_tail_expression_parser<'a>(
         )
         .map(|(head, checks)| {
             checks.into_iter().fold(head, |value, data_type| {
-                Node::new(
+                AstNode::new(
                     value.span,
-                    NodeType::IsExpression {
+                    AstNodeType::IsExpression {
                         value: Box::new(value),
                         data_type,
                     },
@@ -726,9 +727,9 @@ pub fn build_tail_expression_parser<'a>(
         )
         .map(|(h, t)| {
             t.into_iter().fold(h, |l, r| {
-                Node::new(
+                AstNode::new(
                     Span::new_from_spans(l.span, r.span),
-                    NodeType::InDeclaration {
+                    AstNodeType::InDeclaration {
                         identifier: Box::new(l),
                         value: Box::new(r),
                     },
@@ -749,9 +750,9 @@ pub fn build_tail_expression_parser<'a>(
             )
             .map(|(comparison, then_otherwise)| {
                 if let Some((then, otherwise)) = then_otherwise {
-                    Node::new(
+                    AstNode::new(
                         Span::new_from_spans(comparison.span, otherwise.span),
-                        NodeType::Ternary {
+                        AstNodeType::Ternary {
                             comparison: Box::new(comparison),
                             then: Box::new(then),
                             otherwise: Box::new(otherwise),
@@ -790,14 +791,14 @@ pub fn build_tail_expression_parser<'a>(
             for seg in rest {
                 match seg {
                     PipeSegment::Unnamed(node) => {
-                        if let NodeType::PipeExpression(mut nested) = node.node_type {
+                        if let AstNodeType::PipeExpression(mut nested) = node.node_type {
                             items.append(&mut nested);
                         } else {
                             items.push(PipeSegment::Unnamed(node));
                         }
                     }
                     PipeSegment::Named { identifier, node } => {
-                        if let NodeType::PipeExpression(mut nested) = node.node_type {
+                        if let AstNodeType::PipeExpression(mut nested) = node.node_type {
                             if let Some(first) = nested.first_mut() {
                                 *first = PipeSegment::Named {
                                     identifier,
@@ -817,7 +818,7 @@ pub fn build_tail_expression_parser<'a>(
                 items.last().map(|seg| seg.get_node()),
                 head_span,
             );
-            Node::new(sp, NodeType::PipeExpression(items))
+            AstNode::new(sp, AstNodeType::PipeExpression(items))
         })
         .boxed();
 
@@ -873,9 +874,9 @@ pub fn build_tail_expression_parser<'a>(
         .map_with_span({
             let ls = line_starts.clone();
             move |(map_expr, loop_type, conditionals, until, data_type), r| {
-                Node::new(
+                AstNode::new(
                     span(ls.as_ref(), r),
-                    NodeType::InlineGenerator {
+                    AstNodeType::InlineGenerator {
                         map: Box::new(map_expr),
                         data_type,
                         loop_type: Box::new(loop_type),
@@ -914,9 +915,9 @@ pub fn build_tail_expression_parser<'a>(
             .or_not(),
         )
         .map(|(value, catch)| {
-            Node::new(
+            AstNode::new(
                 value.span,
-                NodeType::Try {
+                AstNodeType::Try {
                     value: Box::new(value),
                     catch,
                 },
@@ -933,9 +934,9 @@ pub fn build_tail_expression_parser<'a>(
         )
         .then(statement.clone())
         .map(|(function, value)| {
-            Node::new(
+            AstNode::new(
                 value.span,
-                NodeType::Defer {
+                AstNodeType::Defer {
                     value: Box::new(value),
                     function,
                 },
@@ -945,9 +946,9 @@ pub fn build_tail_expression_parser<'a>(
     let move_expr = lex(pad.clone(), just("move"))
         .ignore_then(expr.clone())
         .map(|value| {
-            Node::new(
+            AstNode::new(
                 value.span,
-                NodeType::MoveExpression {
+                AstNodeType::MoveExpression {
                     value: Box::new(value),
                 },
             )
@@ -965,9 +966,9 @@ pub fn build_tail_expression_parser<'a>(
         .map_with_span({
             let ls = line_starts.clone();
             move |(label, value), r| {
-                Node::new(
+                AstNode::new(
                     span(ls.as_ref(), r),
-                    NodeType::Break {
+                    AstNodeType::Break {
                         label,
                         value: value.map(Box::new),
                     },
@@ -985,7 +986,7 @@ pub fn build_tail_expression_parser<'a>(
         )
         .map_with_span({
             let ls = line_starts.clone();
-            move |label, r| Node::new(span(ls.as_ref(), r), NodeType::Continue { label })
+            move |label, r| AstNode::new(span(ls.as_ref(), r), AstNodeType::Continue { label })
         })
         .boxed();
 
@@ -1018,9 +1019,9 @@ pub fn build_tail_expression_parser<'a>(
             .map_with_span({
                 let ls = line_starts.clone();
                 move |items, r| {
-                    Node::new(
+                    AstNode::new(
                         span(ls.as_ref(), r),
-                        NodeType::Spawn {
+                        AstNodeType::Spawn {
                             items,
                             auto_wait: false,
                         },
@@ -1044,9 +1045,9 @@ pub fn build_tail_expression_parser<'a>(
             .then(scope_block.clone())
             .map(|(lt, body)| {
                 let body = ensure_scope_node(body, true, false);
-                Node::new(
+                AstNode::new(
                     body.span,
-                    NodeType::LoopDeclaration {
+                    AstNodeType::LoopDeclaration {
                         loop_type: Box::new(lt),
                         body: Box::new(body),
                         until: None,
@@ -1058,7 +1059,7 @@ pub fn build_tail_expression_parser<'a>(
         expr.clone(),
     )))
     .map(|(auto_wait, mut item)| {
-        if let NodeType::Spawn {
+        if let AstNodeType::Spawn {
             auto_wait: item_auto_wait,
             ..
         } = &mut item.node_type
@@ -1066,9 +1067,9 @@ pub fn build_tail_expression_parser<'a>(
             *item_auto_wait = auto_wait;
             item
         } else {
-            Node::new(
+            AstNode::new(
                 item.span,
-                NodeType::Spawn {
+                AstNodeType::Spawn {
                     items: vec![item],
                     auto_wait,
                 },
@@ -1130,9 +1131,9 @@ pub fn build_tail_expression_parser<'a>(
         .map(|((((loop_type, label), body), else_body), until)| {
             let body = ensure_scope_node(body, true, false);
             let else_body = else_body.map(|body| Box::new(ensure_scope_node(body, true, false)));
-            Node::new(
+            AstNode::new(
                 body.span,
-                NodeType::LoopDeclaration {
+                AstNodeType::LoopDeclaration {
                     loop_type: Box::new(loop_type),
                     body: Box::new(body),
                     until: until.map(Box::new),
@@ -1168,19 +1169,19 @@ pub fn build_tail_expression_parser<'a>(
             )
             .map(|((cond, then_b), otherwise)| {
                 let then_node = match then_b.node_type {
-                    NodeType::ScopeDeclaration { .. } => then_b,
+                    AstNodeType::ScopeDeclaration { .. } => then_b,
                     _ => ensure_scope_node(then_b, true, false),
                 };
                 let cond_span = match &cond {
                     IfComparisonType::If(node) => node.span,
                     IfComparisonType::IfLet { value, .. } => value.span,
                 };
-                Node::new(
+                AstNode::new(
                     Span::new_from_spans(
                         cond_span,
                         otherwise.as_ref().map(|x| x.span).unwrap_or(then_node.span),
                     ),
-                    NodeType::IfStatement {
+                    AstNodeType::IfStatement {
                         comparison: Box::new(cond),
                         then: Box::new(then_node),
                         otherwise: otherwise.map(Box::new),
@@ -1215,9 +1216,9 @@ pub fn build_tail_expression_parser<'a>(
         .then(choice((ternary_expr, postfix.clone())))
         .map(|(stars, node)| {
             stars.into_iter().rev().fold(node, |value, _| {
-                Node::new(
+                AstNode::new(
                     value.span,
-                    NodeType::DerefStatement {
+                    AstNodeType::DerefStatement {
                         value: Box::new(value),
                     },
                 )
@@ -1244,9 +1245,9 @@ pub fn build_tail_expression_parser<'a>(
         .then(expr.clone())
         .map(|((identifier, op), value)| {
             let rhs = if let Some(op) = op {
-                Node::new(
+                AstNode::new(
                     Span::new_from_spans(identifier.span, value.span),
-                    NodeType::BinaryExpression {
+                    AstNodeType::BinaryExpression {
                         left: Box::new(identifier.clone()),
                         right: Box::new(value),
                         operator: op,
@@ -1255,9 +1256,9 @@ pub fn build_tail_expression_parser<'a>(
             } else {
                 value
             };
-            Node::new(
+            AstNode::new(
                 Span::new_from_spans(identifier.span, rhs.span),
-                NodeType::AssignmentExpression {
+                AstNodeType::AssignmentExpression {
                     identifier: Box::new(identifier),
                     value: Box::new(rhs),
                 },

@@ -26,11 +26,11 @@ pub enum AsFailureMode {
 #[derive(Debug, Clone, PartialEq)]
 pub enum LoopType {
     Let {
-        value: Node,
-        pattern: (Vec<MatchArmType>, Vec<Node>),
+        value: AstNode,
+        pattern: (Vec<MatchArmType>, Vec<AstNode>),
     },
-    While(Node),
-    For(PotentialDollarIdentifier, Node),
+    While(AstNode),
+    For(PotentialDollarIdentifier, AstNode),
     Loop,
 }
 
@@ -74,10 +74,10 @@ pub enum TypeDefType {
     Enum {
         variants: Vec<(PotentialDollarIdentifier, Option<ParserDataType>)>,
         default_variant: Option<usize>,
-        default_value: Option<Box<Node>>,
+        default_value: Option<Box<AstNode>>,
     },
     Struct {
-        fields: ObjectType<(ParserDataType, Option<Node>)>,
+        fields: ObjectType<(ParserDataType, Option<AstNode>)>,
     },
     NewType(Box<ParserDataType>),
 }
@@ -146,30 +146,30 @@ impl IdentifiersUsed for TypeDefType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Node {
-    pub node_type: NodeType,
+pub struct AstNode {
+    pub node_type: AstNodeType,
     pub span: Span,
 }
 
-impl Node {
-    pub fn new(span: Span, node_type: NodeType) -> Self {
+impl AstNode {
+    pub fn new(span: Span, node_type: AstNodeType) -> Self {
         Self { node_type, span }
     }
 
     pub fn none(span: Span) -> Self {
-        Node::identifier(span, "none")
+        AstNode::identifier(span, "none")
     }
 
     pub fn int(span: Span, value: impl ToString) -> Self {
-        Node::new(
+        AstNode::new(
             span,
-            NodeType::IntLiteral(ParserText::new(span, value.to_string())),
+            AstNodeType::IntLiteral(ParserText::new(span, value.to_string())),
         )
     }
 
-    pub fn nodes(self) -> Vec<Node> {
+    pub fn nodes(self) -> Vec<AstNode> {
         match self.node_type {
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body: Some(items), ..
             } => items,
             _ => vec![self],
@@ -178,11 +178,11 @@ impl Node {
 
     pub fn scope_access_path(&self, path: &mut Vec<String>) -> bool {
         match &self.node_type {
-            NodeType::Identifier(identifier) => {
+            AstNodeType::Identifier(identifier) => {
                 path.push(identifier.get_ident().text().clone());
                 true
             }
-            NodeType::ScopeAccess { base, field } => {
+            AstNodeType::ScopeAccess { base, field } => {
                 if !base.scope_access_path(path) {
                     return false;
                 }
@@ -193,15 +193,15 @@ impl Node {
         }
     }
 
-    pub fn new_temp_scope(body: Vec<Node>) -> Node {
+    pub fn new_temp_scope(body: Vec<AstNode>) -> AstNode {
         Self::new_temp_scope_with_create(body, Some(true))
     }
 
-    pub fn new_temp_scope_with_create(body: Vec<Node>, create_new_scope: Option<bool>) -> Self {
+    pub fn new_temp_scope_with_create(body: Vec<AstNode>, create_new_scope: Option<bool>) -> Self {
         if body.is_empty() {
             return Self::new(
                 Span::default(),
-                NodeType::ScopeDeclaration {
+                AstNodeType::ScopeDeclaration {
                     body: Some(Vec::new()),
                     named: None,
                     is_temp: true,
@@ -214,7 +214,7 @@ impl Node {
 
         Self::new(
             span,
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body: Some(body),
                 named: None,
                 is_temp: true,
@@ -224,17 +224,17 @@ impl Node {
         )
     }
 
-    pub fn ret(node: Node) -> Self {
+    pub fn ret(node: AstNode) -> Self {
         Self::new(
             node.span,
-            NodeType::Return {
+            AstNodeType::Return {
                 value: Some(Box::new(node)),
             },
         )
     }
 
     pub fn null(span: Span) -> Self {
-        Node::new(span, NodeType::Null)
+        AstNode::new(span, AstNodeType::Null)
     }
 
     pub fn bool(span: Span, value: bool) -> Self {
@@ -244,11 +244,11 @@ impl Node {
     #[inline]
     pub fn is_raw_option_value(&self) -> bool {
         match &self.node_type {
-            NodeType::CallExpression { caller, .. } => matches!(
+            AstNodeType::CallExpression { caller, .. } => matches!(
                 &caller.node_type,
-                NodeType::Identifier(x) if x.to_string() == "some"
+                AstNodeType::Identifier(x) if x.to_string() == "some"
             ),
-            NodeType::Identifier(x) => x.to_string() == "none",
+            AstNodeType::Identifier(x) => x.to_string() == "none",
             _ => false,
         }
     }
@@ -256,7 +256,7 @@ impl Node {
     pub fn identifier(span: Span, text: impl ToString) -> Self {
         Self::new(
             span,
-            NodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
+            AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
                 ParserText::from(text.to_string()).into(),
             )),
         )
@@ -265,17 +265,17 @@ impl Node {
     pub fn member(span: Span, base: Self, member: impl ToString) -> Self {
         Self::new(
             span,
-            NodeType::FieldAccess {
+            AstNodeType::FieldAccess {
                 base: Box::new(base),
                 field: PotentialDollarIdentifier::new(span, member),
             },
         )
     }
 
-    pub fn call(span: Span, caller: Node, args: Vec<CallArg>) -> Self {
+    pub fn call(span: Span, caller: AstNode, args: Vec<CallArg>) -> Self {
         Self::new(
             span,
-            NodeType::CallExpression {
+            AstNodeType::CallExpression {
                 string_fn: None,
                 caller: Box::new(caller),
                 generic_types: Vec::new(),
@@ -287,13 +287,13 @@ impl Node {
 
     pub fn call_with_generics(
         span: Span,
-        caller: Node,
+        caller: AstNode,
         generic_types: Vec<ParserDataType>,
         args: Vec<CallArg>,
     ) -> Self {
         Self::new(
             span,
-            NodeType::CallExpression {
+            AstNodeType::CallExpression {
                 string_fn: None,
                 caller: Box::new(caller),
                 generic_types,
@@ -305,15 +305,15 @@ impl Node {
 
     pub fn call_full(
         span: Span,
-        caller: Node,
+        caller: AstNode,
         generic_types: Vec<ParserDataType>,
         args: Vec<CallArg>,
-        reverse_args: Vec<Node>,
+        reverse_args: Vec<AstNode>,
         string_fn: Option<ParserText>,
     ) -> Self {
         Self::new(
             span,
-            NodeType::CallExpression {
+            AstNodeType::CallExpression {
                 string_fn,
                 caller: Box::new(caller),
                 generic_types,
@@ -323,7 +323,7 @@ impl Node {
         )
     }
 
-    pub fn len(span: Span, node: Node) -> Self {
+    pub fn len(span: Span, node: AstNode) -> Self {
         Self::call(
             span,
             Self::identifier(span, "len"),
@@ -334,25 +334,25 @@ impl Node {
     pub fn is_none(&self) -> bool {
         matches!(
             &self.node_type,
-            NodeType::Identifier(id) if id.to_string() == "none"
+            AstNodeType::Identifier(id) if id.to_string() == "none"
         )
     }
 
     pub fn rewrite_main_emits_to_returns(self) -> Self {
         match self.node_type {
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body: Some(body),
                 create_new_scope,
                 is_temp,
                 named,
                 define,
-            } => Node {
-                node_type: NodeType::ScopeDeclaration {
+            } => AstNode {
+                node_type: AstNodeType::ScopeDeclaration {
                     body: Some(
                         body.into_iter()
                             .map(|x| match x.node_type {
-                                NodeType::Emit(EmitType::Scope(value)) => Node {
-                                    node_type: NodeType::Return { value: Some(value) },
+                                AstNodeType::Emit(EmitType::Scope(value)) => AstNode {
+                                    node_type: AstNodeType::Return { value: Some(value) },
                                     span: self.span,
                                 },
                                 _ => x,
@@ -366,8 +366,8 @@ impl Node {
                 },
                 span: self.span,
             },
-            NodeType::Emit(EmitType::Scope(value)) => Node {
-                node_type: NodeType::Return { value: Some(value) },
+            AstNodeType::Emit(EmitType::Scope(value)) => AstNode {
+                node_type: AstNodeType::Return { value: Some(value) },
                 span: self.span,
             },
             _ => self,
@@ -375,24 +375,24 @@ impl Node {
     }
 }
 
-impl IdentifiersUsed for Node {
+impl IdentifiersUsed for AstNode {
     fn identifiers_used(&self) -> Vec<&String> {
         let mut names = Vec::new();
         match &self.node_type {
-            NodeType::Identifier(text) => {
+            AstNodeType::Identifier(text) => {
                 names.push(text.get_ident().text());
             }
-            NodeType::FieldAccess { base, .. } => {
+            AstNodeType::FieldAccess { base, .. } => {
                 names.extend(base.identifiers_used());
             }
-            NodeType::ScopeAccess { base, .. } => {
+            AstNodeType::ScopeAccess { base, .. } => {
                 names.extend(base.identifiers_used());
             }
-            NodeType::IndexAccess { base, index } => {
+            AstNodeType::IndexAccess { base, index } => {
                 names.extend(base.identifiers_used());
                 names.extend(index.identifiers_used());
             }
-            NodeType::CallExpression { args, .. } => {
+            AstNodeType::CallExpression { args, .. } => {
                 for arg in args {
                     match arg {
                         CallArg::Value(node) => {
@@ -404,7 +404,7 @@ impl IdentifiersUsed for Node {
                     }
                 }
             }
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body: Some(body), ..
             } => {
                 for stmt in body {
@@ -420,21 +420,21 @@ impl IdentifiersUsed for Node {
 #[derive(Clone, Debug, PartialEq)]
 pub struct NamedScope {
     pub name: PotentialDollarIdentifier,
-    pub args: Vec<(PotentialDollarIdentifier, Node)>,
+    pub args: Vec<(PotentialDollarIdentifier, AstNode)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Overload {
     pub operator: ParserText,
-    pub body: Box<Node>,
+    pub body: Box<AstNode>,
     pub header: FunctionHeader,
 }
 
-impl From<Overload> for Node {
-    fn from(val: Overload) -> Node {
-        Node::new(
+impl From<Overload> for AstNode {
+    fn from(val: Overload) -> AstNode {
+        AstNode::new(
             val.operator.span,
-            NodeType::FunctionDeclaration {
+            AstNodeType::FunctionDeclaration {
                 header: val.header,
                 body: val.body,
             },
@@ -485,7 +485,7 @@ pub struct FunctionHeader {
     pub parameters: Vec<(
         PotentialDollarIdentifier,
         Option<ParserDataType>,
-        Option<Box<Node>>,
+        Option<Box<AstNode>>,
     )>,
     pub return_type: ParserDataType,
     pub param_destructures: Vec<(usize, DestructurePattern)>,
@@ -493,11 +493,11 @@ pub struct FunctionHeader {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum CallArg {
-    Value(Node),
-    Named(PotentialDollarIdentifier, Node),
+    Value(AstNode),
+    Named(PotentialDollarIdentifier, AstNode),
 }
 
-impl From<CallArg> for Node {
+impl From<CallArg> for AstNode {
     fn from(value: CallArg) -> Self {
         match value {
             CallArg::Value(x) => x,
@@ -506,7 +506,7 @@ impl From<CallArg> for Node {
     }
 }
 
-impl<'a> From<&'a CallArg> for &'a Node {
+impl<'a> From<&'a CallArg> for &'a AstNode {
     fn from(value: &'a CallArg) -> Self {
         match value {
             CallArg::Value(x) => x,
@@ -517,19 +517,19 @@ impl<'a> From<&'a CallArg> for &'a Node {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum EmitType {
-    Scope(Box<Node>),
+    Scope(Box<AstNode>),
     Channel {
-        channel: Box<Node>,
-        value: Box<Node>,
+        channel: Box<AstNode>,
+        value: Box<AstNode>,
     },
 }
 
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
-pub enum NodeType {
+pub enum AstNodeType {
     Break {
         label: Option<PotentialDollarIdentifier>,
-        value: Option<Box<Node>>,
+        value: Option<Box<AstNode>>,
     },
     Continue {
         label: Option<PotentialDollarIdentifier>,
@@ -537,7 +537,7 @@ pub enum NodeType {
     EmptyLine,
     Null,
     Spawn {
-        items: Vec<Node>,
+        items: Vec<AstNode>,
         auto_wait: bool,
     },
     SelectStatement {
@@ -546,42 +546,42 @@ pub enum NodeType {
     Emit(EmitType),
     RefStatement {
         mutability: RefMutability,
-        value: Box<Node>,
+        value: Box<AstNode>,
     },
     Identifier(PotentialGenericTypeIdentifier),
     DataType {
         data_type: ParserDataType,
     },
     DerefStatement {
-        value: Box<Node>,
+        value: Box<AstNode>,
     },
     Drop(PotentialDollarIdentifier),
     MoveExpression {
-        value: Box<Node>,
+        value: Box<AstNode>,
     },
     Defer {
-        value: Box<Node>,
+        value: Box<AstNode>,
         function: bool,
     },
     ParenExpression {
-        value: Box<Node>,
+        value: Box<AstNode>,
     },
     VariableDeclaration {
         var_type: VarType,
         identifier: PotentialDollarIdentifier,
-        value: Box<Node>,
+        value: Box<AstNode>,
         data_type: ParserDataType,
     },
     ImplDeclaration {
         generics: GenericTypes,
         target: ParserDataType,
-        variables: Vec<Node>,
+        variables: Vec<AstNode>,
     },
     ImplTraitDeclaration {
         generics: GenericTypes,
         trait_ident: PotentialGenericTypeIdentifier,
         target: ParserDataType,
-        variables: Vec<Node>,
+        variables: Vec<AstNode>,
     },
     TraitDeclaration {
         identifier: PotentialGenericTypeIdentifier,
@@ -596,10 +596,10 @@ pub enum NodeType {
     EnumExpression {
         identifier: PotentialGenericTypeIdentifier,
         value: PotentialDollarIdentifier,
-        data: Option<Box<Node>>,
+        data: Option<Box<AstNode>>,
     },
     TupleLiteral {
-        values: Vec<Node>,
+        values: Vec<AstNode>,
     },
     ScopeAlias {
         identifier: PotentialDollarIdentifier,
@@ -607,23 +607,23 @@ pub enum NodeType {
         create_new_scope: Option<bool>,
     },
     ScopeDeclaration {
-        body: Option<Vec<Node>>,
+        body: Option<Vec<AstNode>>,
         named: Option<NamedScope>,
         is_temp: bool,
         create_new_scope: Option<bool>,
         define: bool,
     },
     MatchStatement {
-        value: Option<Box<Node>>,
-        body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
+        value: Option<Box<AstNode>>,
+        body: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)>,
     },
     FnMatchDeclaration {
         header: FunctionHeader,
-        body: Vec<(MatchArmType, Vec<Node>, Box<Node>)>,
+        body: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)>,
     },
     FunctionDeclaration {
         header: FunctionHeader,
-        body: Box<Node>,
+        body: Box<AstNode>,
     },
     ExternFunctionDeclaration {
         abi: String,
@@ -634,136 +634,136 @@ pub enum NodeType {
         symbol: Option<String>,
     },
     AssignmentExpression {
-        identifier: Box<Node>,
-        value: Box<Node>,
+        identifier: Box<AstNode>,
+        value: Box<AstNode>,
     },
     DestructureDeclaration {
         var_type: VarType,
         pattern: DestructurePattern,
-        value: Box<Node>,
+        value: Box<AstNode>,
     },
     DestructureAssignment {
         pattern: DestructurePattern,
-        value: Box<Node>,
+        value: Box<AstNode>,
     },
     NotExpression {
-        value: Box<Node>,
+        value: Box<AstNode>,
     },
     NegExpression {
-        value: Box<Node>,
+        value: Box<AstNode>,
     },
     DebugExpression {
-        value: Box<Node>,
+        value: Box<AstNode>,
     },
     AsExpression {
-        value: Box<Node>,
+        value: Box<AstNode>,
         data_type: ParserDataType,
         failure_mode: AsFailureMode,
     },
     IsExpression {
-        value: Box<Node>,
+        value: Box<AstNode>,
         data_type: ParserDataType,
     },
     InDeclaration {
-        identifier: Box<Node>,
-        value: Box<Node>,
+        identifier: Box<AstNode>,
+        value: Box<AstNode>,
     },
     RangeDeclaration {
-        from: Box<Node>,
-        to: Box<Node>,
+        from: Box<AstNode>,
+        to: Box<AstNode>,
         inclusive: bool,
     },
     IterExpression {
         data_type: ParserDataType,
-        map: Box<Node>,
+        map: Box<AstNode>,
         spawned: bool,
         loop_type: Box<LoopType>,
-        conditionals: Vec<Node>,
-        until: Option<Box<Node>>,
+        conditionals: Vec<AstNode>,
+        until: Option<Box<AstNode>>,
     },
     InlineGenerator {
-        map: Box<Node>,
+        map: Box<AstNode>,
         data_type: Option<ParserDataType>,
         loop_type: Box<LoopType>,
-        conditionals: Vec<Node>,
-        until: Option<Box<Node>>,
+        conditionals: Vec<AstNode>,
+        until: Option<Box<AstNode>>,
     },
     LoopDeclaration {
         loop_type: Box<LoopType>,
-        body: Box<Node>,
-        until: Option<Box<Node>>,
+        body: Box<AstNode>,
+        until: Option<Box<AstNode>>,
         label: Option<PotentialDollarIdentifier>,
-        else_body: Option<Box<Node>>,
+        else_body: Option<Box<AstNode>>,
     },
     TestDeclaration {
         identifier: ParserText,
-        body: Box<Node>,
+        body: Box<AstNode>,
     },
     Try {
-        value: Box<Node>,
+        value: Box<AstNode>,
         catch: Option<TryCatch>,
     },
     Return {
-        value: Option<Box<Node>>,
+        value: Option<Box<AstNode>>,
     },
     Until {
-        condition: Box<Node>,
+        condition: Box<AstNode>,
     },
     StringLiteral(ParserText),
-    ListLiteral(ParserDataType, Vec<Node>),
+    ListLiteral(ParserDataType, Vec<AstNode>),
     ListRepeatLiteral {
         data_type: ParserDataType,
-        value: Box<Node>,
-        count: Box<Node>,
+        value: Box<AstNode>,
+        count: Box<AstNode>,
     },
     CharLiteral(char),
     FloatLiteral(f64),
     IntLiteral(ParserText),
     BigLiteral(ParserText),
     FieldAccess {
-        base: Box<Node>,
+        base: Box<AstNode>,
         field: PotentialDollarIdentifier,
     },
     ScopeAccess {
-        base: Box<Node>,
+        base: Box<AstNode>,
         field: PotentialDollarIdentifier,
     },
     IndexAccess {
-        base: Box<Node>,
-        index: Box<Node>,
+        base: Box<AstNode>,
+        index: Box<AstNode>,
     },
     CallExpression {
         string_fn: Option<ParserText>,
-        caller: Box<Node>,
+        caller: Box<AstNode>,
         generic_types: Vec<ParserDataType>,
         args: Vec<CallArg>,
-        reverse_args: Vec<Node>,
+        reverse_args: Vec<AstNode>,
     },
     BinaryExpression {
-        left: Box<Node>,
-        right: Box<Node>,
+        left: Box<AstNode>,
+        right: Box<AstNode>,
         operator: BinaryOperator,
     },
     ComparisonExpression {
-        left: Box<Node>,
-        right: Box<Node>,
+        left: Box<AstNode>,
+        right: Box<AstNode>,
         operator: ComparisonOperator,
     },
     PipeExpression(Vec<PipeSegment>),
     BooleanExpression {
-        left: Box<Node>,
-        right: Box<Node>,
+        left: Box<AstNode>,
+        right: Box<AstNode>,
         operator: BooleanOperator,
     },
     IfStatement {
         comparison: Box<IfComparisonType>,
-        then: Box<Node>,
-        otherwise: Option<Box<Node>>,
+        then: Box<AstNode>,
+        otherwise: Option<Box<AstNode>>,
     },
     Ternary {
-        comparison: Box<Node>,
-        then: Box<Node>,
-        otherwise: Box<Node>,
+        comparison: Box<AstNode>,
+        then: Box<AstNode>,
+        otherwise: Box<AstNode>,
     },
     ImportStatement {
         module: Vec<PotentialDollarIdentifier>,
@@ -772,21 +772,21 @@ pub enum NodeType {
     },
     StructLiteral {
         identifier: PotentialGenericTypeIdentifier,
-        value: ObjectType<Node>,
+        value: ObjectType<AstNode>,
     },
     Tag {
-        node: Box<Node>,
+        node: Box<AstNode>,
         tag: ParserText,
-        arguments: Vec<Node>,
+        arguments: Vec<AstNode>,
     },
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum PipeSegment {
-    Unnamed(Node),
+    Unnamed(AstNode),
     Named {
         identifier: PotentialDollarIdentifier,
-        node: Node,
+        node: AstNode,
     },
 }
 
@@ -805,7 +805,7 @@ impl PipeSegment {
         }
     }
 
-    pub fn get_node(&self) -> &Node {
+    pub fn get_node(&self) -> &AstNode {
         match self {
             Self::Unnamed(x) => x,
             Self::Named {
@@ -816,8 +816,8 @@ impl PipeSegment {
     }
 }
 
-impl From<PipeSegment> for Node {
-    fn from(val: PipeSegment) -> Node {
+impl From<PipeSegment> for AstNode {
+    fn from(val: PipeSegment) -> AstNode {
         match val {
             PipeSegment::Unnamed(x) => x,
             PipeSegment::Named {
@@ -828,8 +828,8 @@ impl From<PipeSegment> for Node {
     }
 }
 
-impl NodeType {
-    pub fn unwrap(self) -> NodeType {
+impl AstNodeType {
+    pub fn unwrap(self) -> AstNodeType {
         self
     }
 
@@ -845,10 +845,10 @@ impl NodeType {
     }
 }
 
-impl Display for NodeType {
+impl Display for AstNodeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut formatter = Formatter::default();
-        let fake_node = Node {
+        let fake_node = AstNode {
             node_type: self.clone(),
             span: Span::default(),
         };
@@ -856,7 +856,7 @@ impl Display for NodeType {
     }
 }
 
-impl Display for Node {
+impl Display for AstNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut formatter = Formatter::default();
         write!(f, "{}", formatter.format(self))
@@ -873,8 +873,8 @@ impl Display for LoopType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum IfComparisonType {
     IfLet {
-        value: Node,
-        pattern: (Vec<MatchArmType>, Vec<Node>),
+        value: AstNode,
+        pattern: (Vec<MatchArmType>, Vec<AstNode>),
     },
-    If(Node),
+    If(AstNode),
 }

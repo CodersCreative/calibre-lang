@@ -1,7 +1,7 @@
 use crate::{ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr};
 use calibre_parser::ast::{
     idents::ParserText,
-    nodes::{Node, NodeType},
+    nodes::{AstNode, AstNodeType},
 };
 use rustc_hash::FxHashMap;
 use std::{
@@ -18,9 +18,9 @@ pub type TagHandlerFn = Arc<
         dyn Fn(
                 &mut MiddleEnvironment,
                 &u64,
-                Node,
+                AstNode,
                 ParserText,
-                Vec<Node>,
+                Vec<AstNode>,
             ) -> Result<MiddleNode, MiddleErr>
             + Send
             + Sync,
@@ -69,15 +69,16 @@ impl MiddleEnvironment {
         let init_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             args: Vec<Node>| {
-                let priority =
-                    if let Some(NodeType::IntLiteral(val)) = args.first().map(|x| &x.node_type) {
-                        val.parse::<i32>().unwrap_or(100)
-                    } else {
-                        100
-                    };
+             args: Vec<AstNode>| {
+                let priority = if let Some(AstNodeType::IntLiteral(val)) =
+                    args.first().map(|x| &x.node_type)
+                {
+                    val.parse::<i32>().unwrap_or(100)
+                } else {
+                    100
+                };
 
                 env.tagging.tag_info.push(TagInfo::Init(priority));
                 let middle = env.evaluate_inner(scope, node)?;
@@ -97,15 +98,16 @@ impl MiddleEnvironment {
         let fin_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             args: Vec<Node>| {
-                let priority =
-                    if let Some(NodeType::IntLiteral(val)) = args.first().map(|x| &x.node_type) {
-                        val.parse::<i32>().unwrap_or(100)
-                    } else {
-                        100
-                    };
+             args: Vec<AstNode>| {
+                let priority = if let Some(AstNodeType::IntLiteral(val)) =
+                    args.first().map(|x| &x.node_type)
+                {
+                    val.parse::<i32>().unwrap_or(100)
+                } else {
+                    100
+                };
 
                 env.tagging.tag_info.push(TagInfo::Fin(priority));
                 let middle = env.evaluate_inner(scope, node)?;
@@ -125,9 +127,9 @@ impl MiddleEnvironment {
         let default_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             _args: Vec<Node>| {
+             _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Default);
                 let middle = env.evaluate_inner(scope, node)?;
                 let _ = env.tagging.tag_info.pop();
@@ -145,9 +147,9 @@ impl MiddleEnvironment {
         let builder_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             _args: Vec<Node>| {
+             _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Builder);
                 let middle = env.evaluate_inner(scope, node)?;
                 let _ = env.tagging.tag_info.pop();
@@ -165,9 +167,9 @@ impl MiddleEnvironment {
         let panics_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             _args: Vec<Node>| {
+             _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Panics);
                 let middle = env.evaluate_inner(scope, node)?;
                 let _ = env.tagging.tag_info.pop();
@@ -185,14 +187,14 @@ impl MiddleEnvironment {
         let todo_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             args: Vec<Node>| {
+             args: Vec<AstNode>| {
                 env.tagging
                     .tag_info
                     .push(TagInfo::Todo(args.first().and_then(
                         |x| match &x.node_type {
-                            NodeType::StringLiteral(x) => Some(x.text.clone()),
+                            AstNodeType::StringLiteral(x) => Some(x.text.clone()),
                             _ => None,
                         },
                     )));
@@ -212,14 +214,14 @@ impl MiddleEnvironment {
         let deprecated_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             args: Vec<Node>| {
+             args: Vec<AstNode>| {
                 env.tagging
                     .tag_info
                     .push(TagInfo::Deprecated(args.first().and_then(
                         |x| match &x.node_type {
-                            NodeType::StringLiteral(x) => Some(x.text.clone()),
+                            AstNodeType::StringLiteral(x) => Some(x.text.clone()),
                             _ => None,
                         },
                     )));
@@ -239,14 +241,14 @@ impl MiddleEnvironment {
         let skip_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             args: Vec<Node>| {
+             args: Vec<AstNode>| {
                 env.tagging
                     .tag_info
                     .push(TagInfo::Skip(args.first().and_then(
                         |x| match &x.node_type {
-                            NodeType::StringLiteral(x) => Some(x.text.clone()),
+                            AstNodeType::StringLiteral(x) => Some(x.text.clone()),
                             _ => None,
                         },
                     )));
@@ -266,9 +268,9 @@ impl MiddleEnvironment {
         let bench_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             _args: Vec<Node>| {
+             _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Bench);
                 let middle = env.evaluate_inner(scope, node)?;
                 let _ = env.tagging.tag_info.pop();
@@ -286,13 +288,13 @@ impl MiddleEnvironment {
         let suite_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             args: Vec<Node>| {
+             args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Suite(
                     args.first()
                         .map(|x| match &x.node_type {
-                            NodeType::StringLiteral(x) => x.text.clone(),
+                            AstNodeType::StringLiteral(x) => x.text.clone(),
                             _ => String::new(),
                         })
                         .unwrap_or_default(),
@@ -313,9 +315,9 @@ impl MiddleEnvironment {
         let package_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             _args: Vec<Node>| {
+             _args: Vec<AstNode>| {
                 let middle = env.evaluate_with_package_injection(scope, node)?;
                 Ok(middle)
             },
@@ -331,9 +333,9 @@ impl MiddleEnvironment {
         let caller_context_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             _args: Vec<Node>| {
+             _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::CallerContext);
                 let middle = env.evaluate_inner(scope, node)?;
                 let _ = env.tagging.tag_info.pop();
@@ -351,9 +353,9 @@ impl MiddleEnvironment {
         let ignore_invalid_return_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             _args: Vec<Node>| {
+             _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::IgnoreInvalidReturn);
                 let middle = env.evaluate_inner(scope, node)?;
                 let _ = env.tagging.tag_info.pop();
@@ -371,9 +373,9 @@ impl MiddleEnvironment {
         let ignore_invalid_let_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             _args: Vec<Node>| {
+             _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::IgnoreInvalidLet);
                 let middle = env.evaluate_inner(scope, node)?;
                 let _ = env.tagging.tag_info.pop();
@@ -391,9 +393,9 @@ impl MiddleEnvironment {
         let current_context_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: &u64,
-             node: Node,
+             node: AstNode,
              _tag: ParserText,
-             _args: Vec<Node>| {
+             _args: Vec<AstNode>| {
                 let middle = env.evaluate_with_current_context_injection(scope, node)?;
                 Ok(middle)
             },

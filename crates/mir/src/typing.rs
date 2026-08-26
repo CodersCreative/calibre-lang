@@ -4,7 +4,7 @@ use calibre_parser::{
     ast::{
         ObjectMap, ObjectType,
         idents::ParserText,
-        nodes::{Node, Overload, TypeDefType},
+        nodes::{AstNode, Overload, TypeDefType},
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -289,7 +289,7 @@ impl MiddleImpl {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleTraitMember {
     pub data_type: ParserDataType,
-    pub default: Option<Node>,
+    pub default: Option<AstNode>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -304,9 +304,9 @@ pub enum MiddleTypeDefType {
     Enum {
         variants: Vec<(ParserText, Option<ParserDataType>)>,
         default_variant: Option<usize>,
-        default_value: Option<Box<Node>>,
+        default_value: Option<Box<AstNode>>,
     },
-    Struct(ObjectMap<(ParserDataType, Option<Box<Node>>)>),
+    Struct(ObjectMap<(ParserDataType, Option<Box<AstNode>>)>),
     NewType(ParserDataType),
     Trait,
 }

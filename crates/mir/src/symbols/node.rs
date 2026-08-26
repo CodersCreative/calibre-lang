@@ -4,7 +4,7 @@ use crate::{
 use calibre_parser::ast::{
     Operator,
     idents::ParsedIntLiteral,
-    nodes::{AsFailureMode, EmitType, Node, NodeType},
+    nodes::{AsFailureMode, AstNode, AstNodeType, EmitType},
     types::{ParserDataType, ParserInnerType},
 };
 
@@ -12,13 +12,13 @@ impl MiddleEnvironment {
     pub fn resolve_emit_type_from_node(
         &mut self,
         scope: &u64,
-        node: &Node,
+        node: &AstNode,
     ) -> Option<ParserDataType> {
         let typ = match &node.node_type {
-            NodeType::IfStatement { .. } | NodeType::MatchStatement { .. } => {
+            AstNodeType::IfStatement { .. } | AstNodeType::MatchStatement { .. } => {
                 self.resolve_type_from_node(scope, node)
             }
-            NodeType::Emit(EmitType::Scope(x)) => self.resolve_type_from_node(scope, x),
+            AstNodeType::Emit(EmitType::Scope(x)) => self.resolve_type_from_node(scope, x),
             _ => None,
         };
 
@@ -28,33 +28,37 @@ impl MiddleEnvironment {
         })
     }
 
-    pub fn resolve_type_from_node(&mut self, scope: &u64, node: &Node) -> Option<ParserDataType> {
+    pub fn resolve_type_from_node(
+        &mut self,
+        scope: &u64,
+        node: &AstNode,
+    ) -> Option<ParserDataType> {
         let typ = match &node.node_type {
-            NodeType::Break { .. }
-            | NodeType::Continue { .. }
-            | NodeType::VariableDeclaration { .. }
-            | NodeType::ImplDeclaration { .. }
-            | NodeType::ImplTraitDeclaration { .. }
-            | NodeType::TraitDeclaration { .. }
-            | NodeType::TypeDeclaration { .. }
-            | NodeType::ExternFunctionDeclaration { .. }
-            | NodeType::Return { .. }
-            | NodeType::ImportStatement { .. }
-            | NodeType::AssignmentExpression { .. }
-            | NodeType::DestructureDeclaration { .. }
-            | NodeType::DestructureAssignment { .. }
-            | NodeType::LoopDeclaration {
+            AstNodeType::Break { .. }
+            | AstNodeType::Continue { .. }
+            | AstNodeType::VariableDeclaration { .. }
+            | AstNodeType::ImplDeclaration { .. }
+            | AstNodeType::ImplTraitDeclaration { .. }
+            | AstNodeType::TraitDeclaration { .. }
+            | AstNodeType::TypeDeclaration { .. }
+            | AstNodeType::ExternFunctionDeclaration { .. }
+            | AstNodeType::Return { .. }
+            | AstNodeType::ImportStatement { .. }
+            | AstNodeType::AssignmentExpression { .. }
+            | AstNodeType::DestructureDeclaration { .. }
+            | AstNodeType::DestructureAssignment { .. }
+            | AstNodeType::LoopDeclaration {
                 else_body: None, ..
             }
-            | NodeType::TestDeclaration { .. }
-            | NodeType::ScopeDeclaration { define: true, .. }
-            | NodeType::ScopeAlias { .. }
-            | NodeType::DataType { .. }
-            | NodeType::Until { .. }
-            | NodeType::SelectStatement { .. }
-            | NodeType::Emit(EmitType::Scope(_)) => None,
-            NodeType::Emit(_) => Some(ParserDataType::new(node.span, ParserInnerType::Bool)),
-            NodeType::Spawn { auto_wait, .. } => Some(ParserDataType::new(
+            | AstNodeType::TestDeclaration { .. }
+            | AstNodeType::ScopeDeclaration { define: true, .. }
+            | AstNodeType::ScopeAlias { .. }
+            | AstNodeType::DataType { .. }
+            | AstNodeType::Until { .. }
+            | AstNodeType::SelectStatement { .. }
+            | AstNodeType::Emit(EmitType::Scope(_)) => None,
+            AstNodeType::Emit(_) => Some(ParserDataType::new(node.span, ParserInnerType::Bool)),
+            AstNodeType::Spawn { auto_wait, .. } => Some(ParserDataType::new(
                 node.span,
                 if *auto_wait {
                     ParserInnerType::Null
@@ -62,7 +66,7 @@ impl MiddleEnvironment {
                     ParserInnerType::Struct(String::from("WaitGroup"))
                 },
             )),
-            NodeType::InlineGenerator { map, data_type, .. } => {
+            AstNodeType::InlineGenerator { map, data_type, .. } => {
                 let elem = match data_type {
                     Some(dt) => dt.clone(),
                     _ => self
@@ -75,13 +79,14 @@ impl MiddleEnvironment {
                     ParserInnerType::Gen(Box::new(elem)),
                 ))
             }
-            NodeType::Null | NodeType::Defer { .. } | NodeType::Drop(_) | NodeType::EmptyLine => {
-                Some(ParserDataType::new(node.span, ParserInnerType::Null))
-            }
-            NodeType::MoveExpression { value } | NodeType::ParenExpression { value } => self
+            AstNodeType::Null
+            | AstNodeType::Defer { .. }
+            | AstNodeType::Drop(_)
+            | AstNodeType::EmptyLine => Some(ParserDataType::new(node.span, ParserInnerType::Null)),
+            AstNodeType::MoveExpression { value } | AstNodeType::ParenExpression { value } => self
                 .resolve_type_from_node(scope, value)
                 .map(|x| x.unwrap_all_refs()),
-            NodeType::TupleLiteral { values } => {
+            AstNodeType::TupleLiteral { values } => {
                 let mut types = Vec::new();
                 for value in values {
                     types.push(
@@ -97,14 +102,14 @@ impl MiddleEnvironment {
                     ParserInnerType::Tuple(types),
                 ))
             }
-            NodeType::RefStatement { mutability, value } => Some(ParserDataType {
+            AstNodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
                     Box::new(self.resolve_type_from_node(scope, value)?.unwrap_all_refs()),
                     *mutability,
                 ),
                 span: node.span,
             }),
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 body: Some(body), ..
             } => {
                 let mut typ = None;
@@ -118,7 +123,7 @@ impl MiddleEnvironment {
 
                 typ
             }
-            NodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration {
                 named: Some(named), ..
             } => {
                 let name = self
@@ -136,18 +141,19 @@ impl MiddleEnvironment {
                     .clone();
                 self.resolve_type_from_node(scope, &resolved)
             }
-            NodeType::IfStatement {
+            AstNodeType::IfStatement {
                 comparison: _,
                 then,
                 otherwise,
             } => {
                 if let Some(otherwise) = otherwise {
-                    let otherwise =
-                        if let NodeType::IfStatement { then: then2, .. } = &otherwise.node_type {
-                            then2.clone()
-                        } else {
-                            otherwise.clone()
-                        };
+                    let otherwise = if let AstNodeType::IfStatement { then: then2, .. } =
+                        &otherwise.node_type
+                    {
+                        then2.clone()
+                    } else {
+                        otherwise.clone()
+                    };
 
                     let then_ty = self.resolve_type_from_node(scope, then);
                     let else_ty = self.resolve_type_from_node(scope, &otherwise);
@@ -162,23 +168,23 @@ impl MiddleEnvironment {
                 }
             }
 
-            NodeType::LoopDeclaration {
+            AstNodeType::LoopDeclaration {
                 else_body: Some(body),
                 ..
             } => self.resolve_type_from_node(scope, body),
-            NodeType::MatchStatement { value: _, body } => {
+            AstNodeType::MatchStatement { value: _, body } => {
                 if let Some((_arm_type, _guards, arm_body)) = body.first() {
                     self.resolve_type_from_node(scope, arm_body)
                 } else {
                     None
                 }
             }
-            NodeType::EnumExpression { identifier, .. }
-            | NodeType::StructLiteral { identifier, .. } => {
+            AstNodeType::EnumExpression { identifier, .. }
+            | AstNodeType::StructLiteral { identifier, .. } => {
                 self.resolve_to_data_type(scope, identifier).ok()
             }
-            NodeType::FunctionDeclaration { header, .. }
-            | NodeType::FnMatchDeclaration { header, .. } => {
+            AstNodeType::FunctionDeclaration { header, .. }
+            | AstNodeType::FnMatchDeclaration { header, .. } => {
                 let generic_params: Vec<String> = header
                     .generics
                     .0
@@ -221,14 +227,14 @@ impl MiddleEnvironment {
                 })
             }
 
-            NodeType::NotExpression { .. } => Some(ParserDataType {
+            AstNodeType::NotExpression { .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Bool,
                 span: node.span,
             }),
-            NodeType::InDeclaration { identifier, value } => {
+            AstNodeType::InDeclaration { identifier, value } => {
                 self.resolve_operator_or_bool(scope, identifier, value, Operator::In, node.span)
             }
-            NodeType::ComparisonExpression {
+            AstNodeType::ComparisonExpression {
                 left,
                 right,
                 operator,
@@ -239,7 +245,7 @@ impl MiddleEnvironment {
                 Operator::Comparison(*operator),
                 node.span,
             ),
-            NodeType::BooleanExpression {
+            AstNodeType::BooleanExpression {
                 left,
                 right,
                 operator,
@@ -250,7 +256,7 @@ impl MiddleEnvironment {
                 Operator::Boolean(*operator),
                 node.span,
             ),
-            NodeType::BinaryExpression {
+            AstNodeType::BinaryExpression {
                 left,
                 right,
                 operator,
@@ -264,7 +270,7 @@ impl MiddleEnvironment {
                         .or_else(|| self.resolve_type_from_node(scope, right))
                 }
             }
-            NodeType::IterExpression {
+            AstNodeType::IterExpression {
                 data_type, spawned, ..
             } => {
                 let list_type = ParserDataType {
@@ -286,19 +292,18 @@ impl MiddleEnvironment {
                     Some(list_type)
                 }
             }
-            NodeType::ListLiteral(data_type, _) | NodeType::ListRepeatLiteral { data_type, .. } => {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::List(Box::new(
-                        self.resolve_data_type(scope, data_type, ResolutionOptions::typing())
-                            .ok()?,
-                    )),
-                    span: node.span,
-                })
-            }
-            NodeType::NegExpression { value }
-            | NodeType::DebugExpression { value }
-            | NodeType::Ternary { then: value, .. } => self.resolve_type_from_node(scope, value),
-            NodeType::AsExpression {
+            AstNodeType::ListLiteral(data_type, _)
+            | AstNodeType::ListRepeatLiteral { data_type, .. } => Some(ParserDataType {
+                data_type: ParserInnerType::List(Box::new(
+                    self.resolve_data_type(scope, data_type, ResolutionOptions::typing())
+                        .ok()?,
+                )),
+                span: node.span,
+            }),
+            AstNodeType::NegExpression { value }
+            | AstNodeType::DebugExpression { value }
+            | AstNodeType::Ternary { then: value, .. } => self.resolve_type_from_node(scope, value),
+            AstNodeType::AsExpression {
                 value: _,
                 data_type,
                 failure_mode,
@@ -321,15 +326,15 @@ impl MiddleEnvironment {
                     }),
                 }
             }
-            NodeType::IsExpression { .. } => Some(ParserDataType {
+            AstNodeType::IsExpression { .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Bool,
                 span: node.span,
             }),
-            NodeType::RangeDeclaration { .. } => Some(ParserDataType {
+            AstNodeType::RangeDeclaration { .. } => Some(ParserDataType {
                 data_type: ParserInnerType::Range,
                 span: node.span,
             }),
-            NodeType::IntLiteral(number) => Some(ParserDataType {
+            AstNodeType::IntLiteral(number) => Some(ParserDataType {
                 data_type: if number.ends_with('b') {
                     ParserInnerType::Byte
                 } else if number.ends_with('u') {
@@ -339,23 +344,23 @@ impl MiddleEnvironment {
                 },
                 span: node.span,
             }),
-            NodeType::CharLiteral(_) => Some(ParserDataType {
+            AstNodeType::CharLiteral(_) => Some(ParserDataType {
                 data_type: ParserInnerType::Char,
                 span: node.span,
             }),
-            NodeType::BigLiteral(_) => Some(ParserDataType {
+            AstNodeType::BigLiteral(_) => Some(ParserDataType {
                 data_type: ParserInnerType::Big,
                 span: node.span,
             }),
-            NodeType::StringLiteral(_) => Some(ParserDataType {
+            AstNodeType::StringLiteral(_) => Some(ParserDataType {
                 data_type: ParserInnerType::Str,
                 span: node.span,
             }),
-            NodeType::FloatLiteral(_) => Some(ParserDataType {
+            AstNodeType::FloatLiteral(_) => Some(ParserDataType {
                 data_type: ParserInnerType::Float,
                 span: node.span,
             }),
-            NodeType::Try { value, .. } => match self.resolve_type_from_node(scope, value) {
+            AstNodeType::Try { value, .. } => match self.resolve_type_from_node(scope, value) {
                 Some(ParserDataType {
                     data_type: ParserInnerType::Result { ok: x, err: _ },
                     ..
@@ -366,20 +371,20 @@ impl MiddleEnvironment {
                 }) => Some(*x),
                 x => x,
             },
-            NodeType::CallExpression {
+            AstNodeType::CallExpression {
                 caller,
                 generic_types: _generic_types,
                 args,
                 ..
             } => {
-                if let NodeType::FieldAccess { base, field } = &caller.node_type {
+                if let AstNodeType::FieldAccess { base, field } = &caller.node_type {
                     let member_name = self
                         .resolve(scope, field, ResolutionOptions::default().with_dollar())
                         .unwrap_or(field.text().clone());
 
                     if !member_name.is_empty() {
                         if let Some(ty) = &self.resolve_type_from_node(scope, base).or_else(|| {
-                            if let NodeType::Identifier(id) = &base.node_type {
+                            if let AstNodeType::Identifier(id) = &base.node_type {
                                 self.resolve_to_data_type(scope, id).ok()
                             } else {
                                 None
@@ -394,7 +399,7 @@ impl MiddleEnvironment {
                 }
 
                 let mut caller_type = None;
-                if let NodeType::Identifier(caller) = &caller.node_type {
+                if let AstNodeType::Identifier(caller) = &caller.node_type {
                     if &caller.to_string() == "tuple" {
                         let mut lst = Vec::new();
 
@@ -441,7 +446,7 @@ impl MiddleEnvironment {
 
                 caller_type?.data_type.apply_callable()
             }
-            NodeType::Identifier(x) => {
+            AstNodeType::Identifier(x) => {
                 if let Ok(iden) = self.resolve(scope, x, ResolutionOptions::all())
                     && let Some(x) = self.symbols.variables.get(&iden)
                 {
@@ -450,9 +455,9 @@ impl MiddleEnvironment {
                     None
                 }
             }
-            NodeType::FieldAccess { base, field } => {
+            AstNodeType::FieldAccess { base, field } => {
                 let ty = self.resolve_type_from_node(scope, base).or_else(|| {
-                    if let NodeType::Identifier(id) = &base.node_type {
+                    if let AstNodeType::Identifier(id) = &base.node_type {
                         self.resolve_to_data_type(scope, id).ok()
                     } else {
                         None
@@ -477,7 +482,7 @@ impl MiddleEnvironment {
 
                 self.resolve_member_field_type(scope, &ty, &member, node.span)
             }
-            NodeType::ScopeAccess { base, field } => {
+            AstNodeType::ScopeAccess { base, field } => {
                 let mut module_path = Vec::new();
                 if base.scope_access_path(&mut module_path) {
                     let member = self
@@ -501,9 +506,9 @@ impl MiddleEnvironment {
 
                 None
             }
-            NodeType::IndexAccess { base, index } => {
+            AstNodeType::IndexAccess { base, index } => {
                 let base_type = self.resolve_type_from_node(scope, base).or_else(|| {
-                    if let NodeType::Identifier(id) = &base.node_type {
+                    if let AstNodeType::Identifier(id) = &base.node_type {
                         self.resolve_to_data_type(scope, id).ok()
                     } else {
                         None
@@ -525,7 +530,7 @@ impl MiddleEnvironment {
                         | ParserInnerType::Option(inner)
                         | ParserInnerType::Ptr(inner) => *inner,
                         ParserInnerType::Tuple(values) => match &index.node_type {
-                            NodeType::IntLiteral(i) => ParsedIntLiteral::parse(i)
+                            AstNodeType::IntLiteral(i) => ParsedIntLiteral::parse(i)
                                 .and_then(|idx| values.get(idx.value as usize).cloned())
                                 .unwrap_or_else(|| {
                                     ParserDataType::new(node.span, ParserInnerType::Auto(None))
@@ -546,7 +551,7 @@ impl MiddleEnvironment {
                     Some(ParserDataType::auto(node.span))
                 }
             }
-            NodeType::PipeExpression(path) => {
+            AstNodeType::PipeExpression(path) => {
                 let mut iter = path.iter();
                 let first = iter.next()?;
                 let mut current = self.resolve_type_from_node(scope, first.get_node())?;
@@ -591,11 +596,11 @@ impl MiddleEnvironment {
 
                 Some(current)
             }
-            NodeType::DerefStatement { value } => self
+            AstNodeType::DerefStatement { value } => self
                 .resolve_type_from_node(scope, value)
                 .map(|x| x.unwrap_all_refs()),
-            NodeType::ScopeDeclaration { .. } => unreachable!(),
-            NodeType::Tag { .. } => {
+            AstNodeType::ScopeDeclaration { .. } => unreachable!(),
+            AstNodeType::Tag { .. } => {
                 Some(ParserDataType::new(node.span, ParserInnerType::Auto(None)))
             }
         };

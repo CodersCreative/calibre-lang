@@ -1,6 +1,6 @@
 use calibre_parser::{
     Parser, ParserError,
-    ast::{formatter::Formatter, nodes::NodeType},
+    ast::{formatter::Formatter, nodes::AstNodeType},
 };
 use std::{
     error::Error,
@@ -140,7 +140,7 @@ pub fn format_all(formatter: &mut Formatter, path: &PathBuf) -> Result<(), Box<d
     };
 
     for import in imports {
-        let NodeType::ImportStatement {
+        let AstNodeType::ImportStatement {
             module,
             alias: _,
             values: _,

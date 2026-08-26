@@ -19,3 +19,4 @@ calibre-std = { workspace = true }
 rustc-hash = { workspace = true }
 fastrand = { workspace = true }
 serde = { workspace = true }
+indextree = { workspace = true }

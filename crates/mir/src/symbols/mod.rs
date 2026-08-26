@@ -3,7 +3,7 @@ use calibre_parser::{
     Location,
     ast::{
         Operator,
-        nodes::{FunctionHeader, Node, VarType},
+        nodes::{AstNode, FunctionHeader, VarType},
         types::ParserDataType,
     },
 };
@@ -20,11 +20,11 @@ pub struct Symbols {
     pub native_mappings: FxHashMap<String, String>,
     pub resolved_variables: Vec<String>,
     pub overloads: Vec<MiddleOverload>,
-    pub generic_fn_templates: FxHashMap<String, (Vec<String>, FunctionHeader, Node)>,
+    pub generic_fn_templates: FxHashMap<String, (Vec<String>, FunctionHeader, AstNode)>,
     pub function_param_defaults: FxHashMap<String, Vec<FunctionParamDefault>>,
     pub fn_specializations: FxHashMap<String, String>,
     pub specialization_decls_by_scope: FxHashMap<u64, Vec<MiddleNode>>,
-    pub func_defers: Vec<Node>,
+    pub func_defers: Vec<AstNode>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,6 +46,6 @@ pub struct MiddleOverload {
     pub operator: Operator,
     pub parameters: Vec<ParserDataType>,
     pub return_type: ParserDataType,
-    pub func: Node,
+    pub func: AstNode,
     pub generic_params: Vec<String>,
 }
