@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, MirScopeDecl},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -187,25 +187,27 @@ impl MiddleEnvironment {
         self.scoping.scope_mut_or_err(scope)?.built = true;
 
         let node = match (node.node_type.clone(), build_node) {
-            (MiddleNodeType::ScopeDeclaration { mut body, .. }, Some(build_node)) => MiddleNode {
-                node_type: MiddleNodeType::ScopeDeclaration {
-                    body: {
-                        body.insert(0, build_node);
-                        body
-                    },
-                    create_new_scope: true,
-                    is_temp: false,
-                    scope_id: scope,
-                },
-                ..node
-            },
+            (MiddleNodeType::ScopeDeclaration(MirScopeDecl { mut body, .. }), Some(build_node)) => {
+                MiddleNode {
+                    node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                        body: {
+                            body.insert(0, build_node);
+                            body
+                        },
+                        create_new_scope: true,
+                        is_temp: false,
+                        scope_id: scope,
+                    }),
+                    ..node
+                }
+            }
             (_, Some(build_node)) => MiddleNode::new(
-                MiddleNodeType::ScopeDeclaration {
+                MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                     body: vec![node, build_node],
                     create_new_scope: false,
                     is_temp: false,
                     scope_id: scope,
-                },
+                }),
                 self.context.current_span(),
             ),
             _ => node,

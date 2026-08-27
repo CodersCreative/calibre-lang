@@ -1,5 +1,8 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirConditional, MirReturn},
+    ast::{
+        MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirConditional, MirExtern, MirFunction,
+        MirReturn, MirScopeDecl, MirVarDecl,
+    },
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -483,21 +486,21 @@ impl MiddleEnvironment {
         )?;
 
         Ok(MiddleNode {
-            node_type: MiddleNodeType::VariableDeclaration {
+            node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: VarType::Constant,
                 identifier: ParserText::from(new_name),
                 value: Box::new(MiddleNode::new(
-                    MiddleNodeType::ExternFunction {
+                    MiddleNodeType::ExternFunction(MirExtern {
                         abi,
                         library,
                         symbol: symbol.unwrap_or_else(|| ident.clone()),
                         parameters: params,
                         return_type,
-                    },
+                    }),
                     self.context.current_span(),
                 )),
                 data_type: fn_type,
-            },
+            }),
             span,
         })
     }
@@ -630,12 +633,12 @@ impl MiddleEnvironment {
         let mut func_defers = Vec::new();
         func_defers.append(&mut self.symbols.func_defers);
 
-        let body = if let MiddleNodeType::ScopeDeclaration {
+        let body = if let MiddleNodeType::ScopeDeclaration(MirScopeDecl {
             body: mut scope_body,
             create_new_scope,
             is_temp: _,
             scope_id,
-        } = body.node_type
+        }) = body.node_type
         {
             let mut last = scope_body.pop();
             for defer in func_defers {
@@ -713,12 +716,12 @@ impl MiddleEnvironment {
 
             MiddleNode {
                 span: body.span,
-                node_type: MiddleNodeType::ScopeDeclaration {
+                node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                     body: scope_body,
                     create_new_scope,
                     is_temp: false,
                     scope_id,
-                },
+                }),
             }
         } else {
             body
@@ -726,12 +729,12 @@ impl MiddleEnvironment {
         self.symbols.func_defers.append(&mut old_func_defers);
 
         let fn_node = MiddleNode {
-            node_type: MiddleNodeType::FunctionDeclaration {
+            node_type: MiddleNodeType::FunctionDeclaration(MirFunction {
                 parameters: params.clone(),
                 body: Box::new(body.clone()),
                 return_type: return_type.clone(),
                 scope_id: new_scope,
-            },
+            }),
             span,
         };
         let _ = self.scoping.return_type_stack.pop();

@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirAs},
+    ast::{MiddleNode, MiddleNodeType, MirAs, MirScopeDecl, MirVarDecl},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -233,7 +233,7 @@ impl MiddleEnvironment {
         }
 
         Ok(MiddleNode {
-            node_type: MiddleNodeType::VariableDeclaration {
+            node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type,
                 identifier: ParserText {
                     text: new_name,
@@ -241,7 +241,7 @@ impl MiddleEnvironment {
                 },
                 value: Box::new(value),
                 data_type,
-            },
+            }),
             span,
         })
     }
@@ -457,21 +457,21 @@ impl MiddleEnvironment {
                 span,
             }),
             (None, Some(nodes)) => Ok(MiddleNode {
-                node_type: MiddleNodeType::ScopeDeclaration {
+                node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                     body: vec![nodes.0, nodes.1],
                     create_new_scope: false,
                     is_temp: false,
                     scope_id: scope,
-                },
+                }),
                 span,
             }),
             (Some(node), Some(nodes)) => Ok(MiddleNode {
-                node_type: MiddleNodeType::ScopeDeclaration {
+                node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                     body: vec![node, nodes.0, nodes.1],
                     create_new_scope: false,
                     is_temp: false,
                     scope_id: scope,
-                },
+                }),
                 span,
             }),
         }

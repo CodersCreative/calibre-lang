@@ -3,8 +3,8 @@ use crate::{
     ast::{
         MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirBreak, MirCall,
         MirComparison, MirConditional, MirDebug, MirDeref, MirDrop, MirEmit, MirEnum, MirField,
-        MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
-        MirReturn, MirScope, MirSpawn,
+        MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange,
+        MirRef, MirReturn, MirScope, MirScopeDecl, MirSpawn, MirVarDecl,
     },
 };
 use calibre_parser::IdentifiersUsed;
@@ -24,7 +24,7 @@ impl IdentifiersUsed for MiddleNode {
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::BigLiteral(_)
             | MiddleNodeType::CharLiteral(_)
-            | MiddleNodeType::IntLiteral { .. }
+            | MiddleNodeType::IntLiteral(_)
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::Return(MirReturn { value: None }) => Vec::new(),
             MiddleNodeType::Identifier(MirIdentifier { identifier })
@@ -41,12 +41,12 @@ impl IdentifiersUsed for MiddleNode {
             })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::Spawn(MirSpawn { value })
-            | MiddleNodeType::VariableDeclaration {
+            | MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: _,
                 identifier: _,
                 value,
                 data_type: _,
-            }
+            })
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::AsExpression(MirAs {
                 value,
@@ -105,7 +105,7 @@ impl IdentifiersUsed for MiddleNode {
 
                 amt
             }
-            MiddleNodeType::ScopeDeclaration { body, .. }
+            MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. })
             | MiddleNodeType::ListLiteral(MirList {
                 data_type: _,
                 values: body,
@@ -137,12 +137,12 @@ impl IdentifiersUsed for MiddleNode {
                 amt.append(&mut index.identifiers_used());
                 amt
             }
-            MiddleNodeType::FunctionDeclaration {
+            MiddleNodeType::FunctionDeclaration(MirFunction {
                 parameters: _,
                 body,
                 return_type: _,
                 ..
-            } => {
+            }) => {
                 let _ = body;
                 Vec::new()
             }
@@ -228,12 +228,12 @@ impl MiddleNode {
             })
             | MiddleNodeType::Emit(MirEmit { value }) => value.identifiers_declared(),
 
-            MiddleNodeType::VariableDeclaration {
+            MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: _,
                 identifier,
                 value,
                 data_type: _,
-            } => {
+            }) => {
                 let mut amt = vec![&identifier.text];
                 amt.append(&mut value.identifiers_declared());
                 amt
@@ -280,7 +280,7 @@ impl MiddleNode {
 
                 amt
             }
-            MiddleNodeType::ScopeDeclaration { body, .. }
+            MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. })
             | MiddleNodeType::ListLiteral(MirList {
                 data_type: _,
                 values: body,
@@ -305,12 +305,12 @@ impl MiddleNode {
 
                 amt
             }
-            MiddleNodeType::FunctionDeclaration {
+            MiddleNodeType::FunctionDeclaration(MirFunction {
                 parameters: _,
                 body: _,
                 return_type: _,
                 ..
-            } => Vec::new(),
+            }) => Vec::new(),
             MiddleNodeType::Conditional(MirConditional {
                 comparison,
                 then,

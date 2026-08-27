@@ -3,8 +3,8 @@ use crate::{
     ast::{
         MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirBreak, MirCall,
         MirComparison, MirConditional, MirDebug, MirDeref, MirDrop, MirEmit, MirEnum, MirField,
-        MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
-        MirReturn, MirScope, MirSpawn,
+        MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange,
+        MirRef, MirReturn, MirScope, MirScopeDecl, MirSpawn, MirVarDecl,
     },
 };
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
@@ -76,16 +76,16 @@ impl MiddleNodeType {
             MiddleNodeType::Move(MirMove { identifier }) => MiddleNodeType::Move(MirMove {
                 identifier: mapped_name_or_original(state, identifier.text).into(),
             }),
-            MiddleNodeType::VariableDeclaration {
+            MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type,
                 identifier,
                 value,
                 data_type,
-            } => {
+            }) => {
                 let new_name = format!("{}->{}", identifier.text, fastrand::u32(0..u32::MAX));
                 state.data.insert(identifier.text, new_name.clone());
 
-                MiddleNodeType::VariableDeclaration {
+                MiddleNodeType::VariableDeclaration(MirVarDecl {
                     var_type,
                     identifier: ParserText {
                         text: new_name,
@@ -93,7 +93,7 @@ impl MiddleNodeType {
                     },
                     value: Box::new(value.rename(state)),
                     data_type,
-                }
+                })
             }
             MiddleNodeType::EnumExpression(MirEnum {
                 identifier,
@@ -104,23 +104,23 @@ impl MiddleNodeType {
                 value,
                 data: Some(Box::new(data.rename(state))),
             }),
-            MiddleNodeType::ScopeDeclaration {
+            MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                 body,
                 create_new_scope,
                 is_temp,
                 scope_id,
-            } => MiddleNodeType::ScopeDeclaration {
+            }) => MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                 body: body.into_iter().map(|x| x.rename(state)).collect(),
                 create_new_scope,
                 is_temp,
                 scope_id,
-            },
-            MiddleNodeType::FunctionDeclaration {
+            }),
+            MiddleNodeType::FunctionDeclaration(MirFunction {
                 parameters,
                 body,
                 return_type,
                 scope_id,
-            } => MiddleNodeType::FunctionDeclaration {
+            }) => MiddleNodeType::FunctionDeclaration(MirFunction {
                 parameters: parameters
                     .into_iter()
                     .map(|x| {
@@ -140,7 +140,7 @@ impl MiddleNodeType {
                 body: Box::new(body.rename(state)),
                 return_type,
                 scope_id,
-            },
+            }),
             MiddleNodeType::AssignmentExpression(MirAssignment { identifier, value }) => {
                 MiddleNodeType::AssignmentExpression(MirAssignment {
                     identifier: Box::new(identifier.rename(state)),

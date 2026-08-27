@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirLoop},
+    ast::{MiddleNode, MiddleNodeType, MirLoop, MirScopeDecl},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{LoopContext, ScopeId},
@@ -153,12 +153,12 @@ impl MiddleEnvironment {
         ];
 
         Ok(MiddleNode {
-            node_type: MiddleNodeType::ScopeDeclaration {
+            node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                 body: stmts,
                 create_new_scope: true,
                 is_temp: true,
                 scope_id: scope,
-            },
+            }),
             span,
         })
     }
@@ -1032,12 +1032,12 @@ impl MiddleEnvironment {
                 }
 
                 let state = Some(Box::new(MiddleNode {
-                    node_type: MiddleNodeType::ScopeDeclaration {
+                    node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                         body: state_nodes,
                         create_new_scope: false,
                         is_temp: true,
                         scope_id: scope,
-                    },
+                    }),
                     span,
                 }));
 

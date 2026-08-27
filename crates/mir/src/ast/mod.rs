@@ -98,12 +98,12 @@ impl MiddleNode {
             | MiddleNodeType::EnumExpression(MirEnum {
                 data: Some(value), ..
             })
-            | MiddleNodeType::VariableDeclaration { value, .. } => count += value.len(),
+            | MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. }) => count += value.len(),
             MiddleNodeType::ListLiteral(MirList {
                 data_type: _,
                 values,
             })
-            | MiddleNodeType::ScopeDeclaration { body: values, .. } => {
+            | MiddleNodeType::ScopeDeclaration(MirScopeDecl { body: values, .. }) => {
                 for v in values {
                     count += v.len();
                 }
@@ -130,8 +130,8 @@ impl MiddleNode {
                     *self = replacement.clone();
                 }
             }
-            MiddleNodeType::FunctionDeclaration { .. } => {}
-            MiddleNodeType::ScopeDeclaration { body, .. } => {
+            MiddleNodeType::FunctionDeclaration(_) => {}
+            MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
                 for stmt in body {
                     stmt.substitute(repl);
                 }
@@ -168,7 +168,9 @@ impl MiddleNode {
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::DebugExpression(MirDebug { value, .. })
-            | MiddleNodeType::VariableDeclaration { value, .. } => value.substitute(repl),
+            | MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. }) => {
+                value.substitute(repl)
+            }
             MiddleNodeType::ListLiteral(MirList {
                 data_type: _,
                 values,
@@ -209,8 +211,8 @@ impl MiddleNode {
                 }
                 args.iter().any(|a| a.calls_self(name))
             }
-            MiddleNodeType::FunctionDeclaration { .. } => false,
-            MiddleNodeType::ScopeDeclaration { body, .. } => {
+            MiddleNodeType::FunctionDeclaration(_) => false,
+            MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
                 body.iter().any(|n| n.calls_self(name))
             }
             MiddleNodeType::Return(MirReturn { value }) => {
@@ -233,7 +235,9 @@ impl MiddleNode {
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::DebugExpression(MirDebug { value, .. })
-            | MiddleNodeType::VariableDeclaration { value, .. } => value.calls_self(name),
+            | MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. }) => {
+                value.calls_self(name)
+            }
             MiddleNodeType::ListLiteral(MirList {
                 data_type: _,
                 values,
@@ -450,6 +454,39 @@ pub struct MirEnum {
     pub data: Option<Box<MiddleNode>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirVarDecl {
+    pub var_type: VarType,
+    pub identifier: ParserText,
+    pub value: Box<MiddleNode>,
+    pub data_type: ParserDataType,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirScopeDecl {
+    pub body: Vec<MiddleNode>,
+    pub create_new_scope: bool,
+    pub is_temp: bool,
+    pub scope_id: ScopeId,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirFunction {
+    pub parameters: Vec<(ParserText, ParserDataType, Option<Box<MiddleNode>>)>,
+    pub body: Box<MiddleNode>,
+    pub return_type: ParserDataType,
+    pub scope_id: ScopeId,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirExtern {
+    pub abi: String,
+    pub library: String,
+    pub symbol: String,
+    pub parameters: Vec<ParserDataType>,
+    pub return_type: ParserDataType,
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
@@ -495,31 +532,10 @@ pub enum MiddleNodeType {
     AggregateExpression(MirAggregate),
     EnumExpression(MirEnum),
 
-    VariableDeclaration {
-        var_type: VarType,
-        identifier: ParserText,
-        value: Box<MiddleNode>,
-        data_type: ParserDataType,
-    },
-    ScopeDeclaration {
-        body: Vec<MiddleNode>,
-        create_new_scope: bool,
-        is_temp: bool,
-        scope_id: ScopeId,
-    },
-    FunctionDeclaration {
-        parameters: Vec<(ParserText, ParserDataType, Option<Box<MiddleNode>>)>,
-        body: Box<MiddleNode>,
-        return_type: ParserDataType,
-        scope_id: ScopeId,
-    },
-    ExternFunction {
-        abi: String,
-        library: String,
-        symbol: String,
-        parameters: Vec<ParserDataType>,
-        return_type: ParserDataType,
-    },
+    VariableDeclaration(MirVarDecl),
+    ScopeDeclaration(MirScopeDecl),
+    FunctionDeclaration(MirFunction),
+    ExternFunction(MirExtern),
 }
 
 impl MiddleNodeType {
@@ -599,54 +615,39 @@ impl From<MiddleNodeType> for AstNodeType {
             MiddleNodeType::DerefStatement(value) => AstNodeType::DerefStatement {
                 value: Box::new((*value.value).into()),
             },
-            MiddleNodeType::VariableDeclaration {
-                var_type,
-                identifier,
-                value,
-                data_type,
-            } => AstNodeType::VariableDeclaration {
-                var_type,
-                identifier: identifier.into(),
-                value: Box::new((*value).into()),
-                data_type,
+            MiddleNodeType::VariableDeclaration(value) => AstNodeType::VariableDeclaration {
+                var_type: value.var_type,
+                identifier: value.identifier.into(),
+                value: Box::new((*value.value).into()),
+                data_type: value.data_type,
             },
             MiddleNodeType::EnumExpression(value) => AstNodeType::EnumExpression {
                 identifier: value.identifier.into(),
                 value: value.value.into(),
                 data: value.data.map(|data| Box::new((*data).into())),
             },
-            MiddleNodeType::ScopeDeclaration {
-                body,
-                create_new_scope,
-                is_temp,
-                scope_id: _,
-            } => AstNodeType::ScopeDeclaration {
+            MiddleNodeType::ScopeDeclaration(value) => AstNodeType::ScopeDeclaration {
                 body: {
                     let mut lst = Vec::new();
 
-                    for node in body {
+                    for node in value.body {
                         lst.push(node.into());
                     }
 
                     Some(lst)
                 },
                 named: None,
-                is_temp,
-                create_new_scope: Some(create_new_scope),
+                is_temp: value.is_temp,
+                create_new_scope: Some(value.create_new_scope),
                 define: false,
             },
-            MiddleNodeType::FunctionDeclaration {
-                parameters,
-                body,
-                return_type,
-                scope_id: _,
-            } => AstNodeType::FunctionDeclaration {
+            MiddleNodeType::FunctionDeclaration(value) => AstNodeType::FunctionDeclaration {
                 header: FunctionHeader {
                     generics: GenericTypes::default(),
                     parameters: {
                         let mut lst = Vec::new();
 
-                        for param in parameters {
+                        for param in value.parameters {
                             lst.push((
                                 param.0.into(),
                                 Some(param.1),
@@ -655,23 +656,17 @@ impl From<MiddleNodeType> for AstNodeType {
                         }
                         lst
                     },
-                    return_type,
+                    return_type: value.return_type,
                     param_destructures: Vec::new(),
                 },
-                body: Box::new((*body).into()),
+                body: Box::new((*value.body).into()),
             },
-            MiddleNodeType::ExternFunction {
-                abi,
-                library,
-                symbol,
-                parameters,
-                return_type,
-            } => AstNodeType::ExternFunctionDeclaration {
-                abi,
-                identifier: ParserText::from(symbol).into(),
-                parameters,
-                return_type,
-                library,
+            MiddleNodeType::ExternFunction(value) => AstNodeType::ExternFunctionDeclaration {
+                abi: value.abi,
+                identifier: ParserText::from(value.symbol).into(),
+                parameters: value.parameters,
+                return_type: value.return_type,
+                library: value.library,
                 symbol: None,
             },
             MiddleNodeType::AssignmentExpression(value) => AstNodeType::AssignmentExpression {

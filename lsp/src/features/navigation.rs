@@ -2,8 +2,8 @@ use super::*;
 use calibre_mir::{
     ast::{
         MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirCall,
-        MirComparison, MirConditional, MirDebug, MirDeref, MirEnum, MirField, MirIndex, MirList,
-        MirLoop, MirNeg, MirRange, MirRef, MirReturn,
+        MirComparison, MirConditional, MirDebug, MirDeref, MirEnum, MirField, MirFunction,
+        MirIndex, MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
     },
     scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
@@ -30,8 +30,10 @@ impl CalibreLanguageServer {
                 + range.end.character.saturating_sub(range.start.character);
 
             let new_scope = match &node.node_type {
-                MiddleNodeType::FunctionDeclaration { scope_id, .. } => Some(*scope_id),
-                MiddleNodeType::ScopeDeclaration { scope_id, .. } => Some(*scope_id),
+                MiddleNodeType::FunctionDeclaration(MirFunction { scope_id, .. }) => {
+                    Some(*scope_id)
+                }
+                MiddleNodeType::ScopeDeclaration(MirScopeDecl { scope_id, .. }) => Some(*scope_id),
                 MiddleNodeType::LoopDeclaration(MirLoop { scope_id, .. }) => Some(*scope_id),
                 _ => None,
             };
@@ -46,21 +48,21 @@ impl CalibreLanguageServer {
             match &node.node_type {
                 MiddleNodeType::RefStatement(MirRef { value, .. })
                 | MiddleNodeType::DerefStatement(MirDeref { value, .. })
-                | MiddleNodeType::VariableDeclaration { value, .. }
+                | MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. })
                 | MiddleNodeType::EnumExpression(MirEnum {
                     data: Some(value), ..
                 })
                 | MiddleNodeType::DebugExpression(MirDebug { value, .. })
                 | MiddleNodeType::NegExpression(MirNeg { value, .. })
                 | MiddleNodeType::AsExpression(MirAs { value, .. })
-                | MiddleNodeType::FunctionDeclaration { body: value, .. }
+                | MiddleNodeType::FunctionDeclaration(MirFunction { body: value, .. })
                 | MiddleNodeType::Return(MirReturn {
                     value: Some(value), ..
                 })
                 | MiddleNodeType::FieldAccess(MirField { base: value, .. }) => {
                     traverse(value, pos, current_scope, smallest_span);
                 }
-                MiddleNodeType::ScopeDeclaration { body, .. } => {
+                MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
                     for stmt in body {
                         traverse(stmt, pos, current_scope, smallest_span);
                     }

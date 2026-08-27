@@ -1,4 +1,4 @@
-use crate::ast::{MiddleNode, MiddleNodeType};
+use crate::ast::{MiddleNode, MiddleNodeType, MirScopeDecl};
 use crate::context::MiddleContext;
 use crate::errors::MiddleErr;
 use crate::scoping::{ScopeId, Scoping};
@@ -167,12 +167,12 @@ impl MiddleEnvironment {
                 let mut body = env.context.stdlib_nodes.clone();
                 body.push(inner);
                 MiddleNode {
-                    node_type: MiddleNodeType::ScopeDeclaration {
+                    node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                         body,
                         create_new_scope: false,
                         is_temp: false,
                         scope_id: scope,
-                    },
+                    }),
                     span,
                 }
             }
@@ -200,7 +200,7 @@ impl MiddleEnvironment {
                 "adding specialization declarations"
             );
             match &mut middle.node_type {
-                MiddleNodeType::ScopeDeclaration { body, .. } => {
+                MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
                     let mut new_body = Vec::new();
                     new_body.append(&mut decls);
                     new_body.append(body);
@@ -212,12 +212,12 @@ impl MiddleEnvironment {
                     let middle_span = middle.span;
                     body.push(middle);
                     middle = MiddleNode::new(
-                        MiddleNodeType::ScopeDeclaration {
+                        MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                             body,
                             create_new_scope: false,
                             is_temp: false,
                             scope_id: scope,
-                        },
+                        }),
                         middle_span,
                     );
                 }

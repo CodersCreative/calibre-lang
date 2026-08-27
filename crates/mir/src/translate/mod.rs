@@ -3,7 +3,7 @@ use crate::{
         MiddleNode, MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBig, MirBinary,
         MirBoolean, MirBreak, MirChar, MirComparison, MirConditional, MirContinue, MirDebug,
         MirDeref, MirDrop, MirEmit, MirEnum, MirFloat, MirInt, MirIs, MirListBuilder, MirMove,
-        MirNeg, MirRange, MirRef, MirReturn, MirSpawn, MirString,
+        MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirString, MirVarDecl,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -951,12 +951,12 @@ impl MiddleEnvironment {
 
                     lst.push(break_node);
 
-                    MiddleNodeType::ScopeDeclaration {
+                    MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                         body: lst,
                         create_new_scope: false,
                         is_temp: true,
                         scope_id: scope,
-                    }
+                    })
                 },
                 span: node.span,
             }),
@@ -1020,12 +1020,12 @@ impl MiddleEnvironment {
 
                     lst.push(cont_node);
 
-                    MiddleNodeType::ScopeDeclaration {
+                    MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                         body: lst,
                         create_new_scope: false,
                         is_temp: true,
                         scope_id: scope,
-                    }
+                    })
                 },
                 span: node.span,
             }),
@@ -1092,12 +1092,12 @@ impl MiddleEnvironment {
                             }
 
                             Some(Box::new(MiddleNode::new(
-                                MiddleNodeType::ScopeDeclaration {
+                                MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                                     body: lst,
                                     create_new_scope: false,
                                     is_temp: true,
                                     scope_id: scope,
-                                },
+                                }),
                                 node.span,
                             )))
                         }
@@ -2005,7 +2005,7 @@ impl MiddleEnvironment {
                     let dec = self.evaluate(scope, dec);
 
                     let new_name = match &dec.node_type {
-                        MiddleNodeType::VariableDeclaration { identifier, .. } => {
+                        MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => {
                             identifier.text.clone()
                         }
                         _ => {
@@ -2056,12 +2056,12 @@ impl MiddleEnvironment {
                 }
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::ScopeDeclaration {
+                    node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                         body: statements,
                         create_new_scope: false,
                         is_temp: false,
                         scope_id: scope,
-                    },
+                    }),
                     span: node.span,
                 })
             }
@@ -2278,7 +2278,7 @@ impl MiddleEnvironment {
                     let dec = self.evaluate(scope, dec);
 
                     let new_name = match &dec.node_type {
-                        MiddleNodeType::VariableDeclaration { identifier, .. } => {
+                        MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => {
                             identifier.text.clone()
                         }
                         _ => {
@@ -2343,12 +2343,12 @@ impl MiddleEnvironment {
                 }
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::ScopeDeclaration {
+                    node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                         body: statements,
                         create_new_scope: false,
                         is_temp: false,
                         scope_id: scope,
-                    },
+                    }),
                     span: node.span,
                 })
             }

@@ -1,9 +1,9 @@
 use crate::{
     ast::{BlockId, LirLValue, LirNode, LirNodeType, LirTerminator},
-    environment::{LirEnvironment, LirFunction, LirGlobal, LirRegistry},
+    environment::{LirEnvironment, LirGlobal, LirRegistry},
 };
 use calibre_mir::{
-    ast::{MiddleNode, MiddleNodeType, MirReturn},
+    ast::{MiddleNode, MiddleNodeType},
     environment::MiddleEnvironment,
     typing::{MiddleImpl, MiddleTrait},
 };
@@ -14,7 +14,7 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use tracing::{debug, info, instrument, trace};
 
 pub mod access;
@@ -243,229 +243,13 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::Drop(x) => x.lower(self, span),
             MiddleNodeType::Move(x) => x.lower(self, span),
             MiddleNodeType::Identifier(x) => x.lower(self, span),
-            MiddleNodeType::VariableDeclaration {
-                identifier,
-                value,
-                data_type,
-                ..
-            } => {
-                if let MiddleNodeType::FunctionDeclaration { .. } = value.node_type {
-                    self.last_ident = Some(identifier.to_string());
-                } else {
-                    self.last_ident = None;
-                }
-
-                let val = self.lower_node(*value);
-
-                self.add_instr(LirNode::new(
-                    identifier.span,
-                    LirNodeType::Declare {
-                        dest: identifier.to_string().into_boxed_str(),
-                        data_type,
-                        value: Box::new(val),
-                    },
-                ));
-
-                LirNodeType::null()
-            }
+            MiddleNodeType::VariableDeclaration(x) => x.lower(self, span),
 
             MiddleNodeType::AssignmentExpression(x) => x.lower(self, span),
-            MiddleNodeType::FunctionDeclaration {
-                parameters,
-                body,
-                return_type,
-                ..
-            } => {
-                let param_names: FxHashSet<String> = parameters
-                    .iter()
-                    .map(|(name, _, _)| name.text.clone())
-                    .collect();
-
-                let captures: Vec<(String, ParserDataType)> = body
-                    .captured()
-                    .into_iter()
-                    .filter(|x| !param_names.contains(x.as_str()))
-                    .map(|cap| {
-                        (
-                            cap.clone(),
-                            self.env
-                                .symbols
-                                .variables
-                                .get(cap)
-                                .map(|v| v.data_type.clone())
-                                .unwrap_or_else(|| {
-                                    ParserDataType::new(Span::default(), ParserInnerType::Dynamic)
-                                }),
-                        )
-                    })
-                    .collect();
-
-                let internal_name = self.next_function_label();
-                let mut sub_lowerer = LirEnvironment::new_with_hoist(self.env, false);
-
-                let body_span = body.span;
-                let is_temp_body = matches!(
-                    body.node_type,
-                    MiddleNodeType::ScopeDeclaration { is_temp: true, .. }
-                );
-                let fallback_expr = match &body.node_type {
-                    MiddleNodeType::ScopeDeclaration { body, .. } => body.last().cloned(),
-                    _ => None,
-                };
-
-                let (mut has_body_value, mut body_val) =
-                    if let MiddleNodeType::Conditional { .. } = &body.node_type {
-                        let _ = MirReturn {
-                            value: Some(body.clone()),
-                        }
-                        .lower(self, span);
-                        (false, LirNodeType::null())
-                    } else {
-                        let body = sub_lowerer.lower_node(*body);
-                        if is_temp_body {
-                            (false, LirNodeType::null())
-                        } else {
-                            (!body.is_null(), body)
-                        }
-                    };
-
-                if !has_body_value && let Some(expr) = fallback_expr {
-                    if expr.node_type.is_simple_function_fallback() {
-                        body_val = sub_lowerer.lower_node(expr);
-                        has_body_value = true;
-                    } else if is_temp_body {
-                        sub_lowerer.lower_and_add_node(expr);
-                    }
-                }
-
-                if sub_lowerer
-                    .blocks
-                    .last()
-                    .map(|b| b.terminator.is_none())
-                    .unwrap_or(false)
-                    && has_body_value
-                {
-                    sub_lowerer.emit_return_value(body_span, Some(body_val));
-                }
-
-                self.registry.append(sub_lowerer.registry);
-
-                let mut capture_names = Vec::with_capacity(captures.len());
-                let mut captures_for_func = Vec::with_capacity(captures.len());
-
-                for (n, t) in captures.into_iter() {
-                    capture_names.push(n.clone().into_boxed_str());
-                    captures_for_func.push((n.into_boxed_str(), t));
-                }
-
-                self.registry.functions.insert(
-                    internal_name.clone(),
-                    LirFunction {
-                        name: internal_name.clone().into_boxed_str(),
-                        params: parameters
-                            .into_iter()
-                            .map(|x| (x.0.text.into_boxed_str(), x.1))
-                            .collect::<Vec<_>>()
-                            .into_boxed_slice(),
-                        captures: captures_for_func.into_boxed_slice(),
-                        return_type,
-                        blocks: sub_lowerer.blocks.into_boxed_slice(),
-                    },
-                );
-
-                LirNodeType::Closure {
-                    label: internal_name.into_boxed_str(),
-                    captures: capture_names,
-                }
-            }
-            MiddleNodeType::ExternFunction {
-                abi,
-                library,
-                symbol,
-                parameters,
-                return_type,
-            } => LirNodeType::ExternFunction {
-                abi: abi.into_boxed_str(),
-                library: library.into_boxed_str(),
-                symbol: symbol.into_boxed_str(),
-                parameters,
-                return_type,
-            },
+            MiddleNodeType::FunctionDeclaration(x) => x.lower(self, span),
+            MiddleNodeType::ExternFunction(x) => x.lower(self, span),
             MiddleNodeType::EnumExpression(x) => x.lower(self, span),
-            MiddleNodeType::ScopeDeclaration {
-                body,
-                is_temp: false,
-                ..
-            } => {
-                if !self.allow_global_hoist {
-                    self.lower_scope_items(body);
-                    return LirNodeType::null();
-                }
-
-                for stmt in body {
-                    if let MiddleNodeType::VariableDeclaration {
-                        identifier,
-                        data_type,
-                        ..
-                    } = &stmt.node_type
-                    {
-                        let global_name = identifier.to_string();
-                        let global_type = data_type.clone();
-                        let mut sub_lowerer = LirEnvironment::new_with_hoist(self.env, false);
-
-                        let _ = sub_lowerer.lower_node(stmt);
-
-                        self.registry.append(sub_lowerer.registry);
-
-                        self.registry.globals.insert(
-                            global_name.clone(),
-                            LirGlobal {
-                                name: global_name.into_boxed_str(),
-                                data_type: global_type,
-                                blocks: sub_lowerer.blocks.into_boxed_slice(),
-                            },
-                        );
-                    } else {
-                        self.lower_and_add_node(stmt);
-                    }
-                }
-
-                LirNodeType::null()
-            }
-            MiddleNodeType::ScopeDeclaration {
-                mut body, is_temp, ..
-            } => {
-                let last = body.pop();
-                self.lower_scope_items(body);
-
-                let Some(last) = last else {
-                    return LirNodeType::null();
-                };
-
-                if is_temp {
-                    let temp = self.get_temp();
-                    let lowered = self.lower_node(last.clone());
-
-                    if lowered.is_null() {
-                        self.lower_and_add_node(last);
-                        return LirNodeType::null();
-                    }
-
-                    self.add_instr(LirNode::new(
-                        span,
-                        LirNodeType::Declare {
-                            dest: temp.clone().into_boxed_str(),
-                            data_type: ParserDataType::auto(span),
-                            value: Box::new(lowered),
-                        },
-                    ));
-
-                    LirNodeType::Load(temp.into_boxed_str())
-                } else {
-                    self.lower_and_add_node(last);
-                    LirNodeType::null()
-                }
-            }
+            MiddleNodeType::ScopeDeclaration(x) => x.lower(self, span),
             MiddleNodeType::Conditional(x) => x.lower(self, span),
             MiddleNodeType::LoopDeclaration(x) => x.lower(self, span),
             MiddleNodeType::Return(x) => x.lower(self, span),

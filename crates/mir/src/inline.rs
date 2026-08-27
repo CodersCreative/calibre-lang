@@ -1,7 +1,7 @@
 use crate::ast::{
     MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBinary, MirBoolean, MirCall,
-    MirComparison, MirDebug, MirDeref, MirEnum, MirField, MirIdentifier, MirIndex, MirIs, MirList,
-    MirLoop, MirNeg, MirRange, MirRef, MirReturn,
+    MirComparison, MirDebug, MirDeref, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex,
+    MirIs, MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
 };
 use rustc_hash::FxHashMap;
 
@@ -18,17 +18,17 @@ pub fn inline_small_calls(root: &mut MiddleNode, max_nodes: usize) {
 
 fn collect_inlineable(node: &MiddleNode, map: &mut FxHashMap<String, InlineFn>, max_nodes: usize) {
     match &node.node_type {
-        MiddleNodeType::ScopeDeclaration { body, .. } => {
+        MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
             for stmt in body {
                 collect_inlineable(stmt, map, max_nodes);
             }
         }
-        MiddleNodeType::VariableDeclaration {
+        MiddleNodeType::VariableDeclaration(MirVarDecl {
             identifier, value, ..
-        } => {
-            if let MiddleNodeType::FunctionDeclaration {
+        }) => {
+            if let MiddleNodeType::FunctionDeclaration(MirFunction {
                 parameters, body, ..
-            } = &value.node_type
+            }) = &value.node_type
                 && let Some(expr) = extract_single_return_expr(body)
                 && !&expr.calls_self(&identifier.text)
                 && expr.len() <= max_nodes
@@ -43,7 +43,7 @@ fn collect_inlineable(node: &MiddleNode, map: &mut FxHashMap<String, InlineFn>, 
 
 fn extract_single_return_expr(body: &MiddleNode) -> Option<MiddleNode> {
     match &body.node_type {
-        MiddleNodeType::ScopeDeclaration { body, .. } => {
+        MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
             if body.len() != 1 {
                 return None;
             }
@@ -108,14 +108,14 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
         | MiddleNodeType::NegExpression(MirNeg { value })
         | MiddleNodeType::RefStatement(MirRef { value, .. })
         | MiddleNodeType::DerefStatement(MirDeref { value })
-        | MiddleNodeType::VariableDeclaration { value, .. }
+        | MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. })
         | MiddleNodeType::DebugExpression(MirDebug { value, .. })
         | MiddleNodeType::FieldAccess(MirField { base: value, .. }) => inline_in_node(value, map),
         MiddleNodeType::ListLiteral(MirList {
             data_type: _,
             values,
         })
-        | MiddleNodeType::ScopeDeclaration { body: values, .. } => {
+        | MiddleNodeType::ScopeDeclaration(MirScopeDecl { body: values, .. }) => {
             for v in values {
                 inline_in_node(v, map);
             }

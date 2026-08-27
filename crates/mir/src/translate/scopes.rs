@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, MirScopeDecl},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{ScopeId, ScopeMacro},
@@ -19,7 +19,7 @@ impl MiddleEnvironment {
             MiddleNodeType::Break { .. }
             | MiddleNodeType::Continue { .. }
             | MiddleNodeType::Return { .. } => true,
-            MiddleNodeType::ScopeDeclaration { body, .. } => {
+            MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
                 body.last().is_some_and(Self::ends_in_control_flow)
             }
             _ => false,
@@ -287,7 +287,7 @@ impl MiddleEnvironment {
         }
 
         Ok(MiddleNode {
-            node_type: MiddleNodeType::ScopeDeclaration {
+            node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                 body: {
                     stmts
                         .into_iter()
@@ -297,7 +297,7 @@ impl MiddleEnvironment {
                 is_temp,
                 create_new_scope: og_create_new_scope.unwrap_or(create_new_scope),
                 scope_id: new_scope,
-            },
+            }),
             span,
         })
     }
