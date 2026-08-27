@@ -1,9 +1,9 @@
 use crate::{
     MiddleNode, MiddleNodeType,
     ast::{
-        MirAs, MirBinary, MirBoolean, MirBreak, MirComparison, MirConditional, MirDeref, MirDrop,
-        MirEmit, MirIdentifier, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
-        MirReturn, MirSpawn,
+        MirAs, MirBinary, MirBoolean, MirBreak, MirCall, MirComparison, MirConditional, MirDeref,
+        MirDrop, MirEmit, MirField, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove,
+        MirNeg, MirRange, MirRef, MirReturn, MirScope, MirSpawn,
     },
 };
 use calibre_parser::IdentifiersUsed;
@@ -95,7 +95,7 @@ impl IdentifiersUsed for MiddleNode {
                 left.append(&mut right.identifiers_used());
                 left
             }
-            MiddleNodeType::CallExpression { caller, args } => {
+            MiddleNodeType::CallExpression(MirCall { caller, args }) => {
                 let mut amt = caller.identifiers_used();
 
                 for n in args {
@@ -129,9 +129,9 @@ impl IdentifiersUsed for MiddleNode {
 
                 amt
             }
-            MiddleNodeType::FieldAccess { base, .. } => base.identifiers_used(),
-            MiddleNodeType::ScopeAccess { base, .. } => base.identifiers_used(),
-            MiddleNodeType::IndexAccess { base, index } => {
+            MiddleNodeType::FieldAccess(MirField { base, .. }) => base.identifiers_used(),
+            MiddleNodeType::ScopeAccess(MirScope { base, .. }) => base.identifiers_used(),
+            MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
                 let mut amt = base.identifiers_used();
                 amt.append(&mut index.identifiers_used());
                 amt
@@ -202,8 +202,8 @@ impl MiddleNode {
                 mutability: _,
                 value,
             })
-            | MiddleNodeType::ScopeAccess { base: value, .. }
-            | MiddleNodeType::FieldAccess { base: value, .. }
+            | MiddleNodeType::ScopeAccess(MirScope { base: value, .. })
+            | MiddleNodeType::FieldAccess(MirField { base: value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::Spawn(MirSpawn { value })
@@ -256,10 +256,10 @@ impl MiddleNode {
                 identifier: left,
                 value: right,
             }
-            | MiddleNodeType::IndexAccess {
+            | MiddleNodeType::IndexAccess(MirIndex {
                 base: left,
                 index: right,
-            }
+            })
             | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,
                 to: right,
@@ -270,7 +270,7 @@ impl MiddleNode {
                 left.append(&mut right.identifiers_declared());
                 left
             }
-            MiddleNodeType::CallExpression { caller, args } => {
+            MiddleNodeType::CallExpression(MirCall { caller, args }) => {
                 let mut amt = caller.identifiers_declared();
 
                 for n in args {

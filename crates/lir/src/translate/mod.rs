@@ -3,7 +3,7 @@ use crate::{
     environment::{LirEnvironment, LirFunction, LirGlobal, LirRegistry},
 };
 use calibre_mir::{
-    ast::{MiddleNode, MiddleNodeType, MirDeref, MirIdentifier, MirReturn},
+    ast::{MiddleNode, MiddleNodeType, MirDeref, MirField, MirIdentifier, MirIndex, MirReturn},
     environment::MiddleEnvironment,
     typing::{MiddleImpl, MiddleTrait, MiddleTypeDefType},
 };
@@ -311,7 +311,7 @@ impl<'a> LirEnvironment<'a> {
                             Some(LirNodeType::Deref(Box::new(ptr_load))),
                         )
                     }
-                    MiddleNodeType::FieldAccess { base, field } => {
+                    MiddleNodeType::FieldAccess(MirField { base, field }) => {
                         let base_expr = self.lower_node(*base);
                         let base_tmp = self.get_temp();
                         self.add_instr(LirNode::new(
@@ -335,7 +335,7 @@ impl<'a> LirEnvironment<'a> {
                             )),
                         )
                     }
-                    MiddleNodeType::IndexAccess { base, index } => {
+                    MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
                         let base_expr = self.lower_node(*base);
                         let base_tmp = self.get_temp();
                         self.add_instr(LirNode::new(
@@ -619,57 +619,15 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::Return(x) => x.lower(self, span),
             MiddleNodeType::Break(x) => x.lower(self, span),
             MiddleNodeType::Continue(x) => x.lower(self, span),
-            MiddleNodeType::FieldAccess { base, field } => LirNodeType::Member(
-                Box::new(self.lower_node(*base)),
-                field.text.into_boxed_str(),
-            ),
-            MiddleNodeType::ScopeAccess { base, field } => LirNodeType::Member(
-                Box::new(self.lower_node(*base)),
-                field.text.into_boxed_str(),
-            ),
-            MiddleNodeType::IndexAccess { base, index } => LirNodeType::Index(
-                Box::new(self.lower_node(*base)),
-                Box::new(self.lower_node(*index)),
-            ),
+            MiddleNodeType::FieldAccess(x) => x.lower(self, span),
+            MiddleNodeType::ScopeAccess(x) => x.lower(self, span),
+            MiddleNodeType::IndexAccess(x) => x.lower(self, span),
             MiddleNodeType::DerefStatement(x) => x.lower(self, span),
             MiddleNodeType::RefStatement(x) => x.lower(self, span),
             MiddleNodeType::BinaryExpression(x) => x.lower(self, span),
             MiddleNodeType::BooleanExpression(x) => x.lower(self, span),
             MiddleNodeType::ComparisonExpression(x) => x.lower(self, span),
-            MiddleNodeType::CallExpression { caller, args } => {
-                let mut needs_ref_first_arg = false;
-
-                let l_caller = self.lower_node(*caller);
-                let mut l_args = self.lower_nodes(args);
-
-                if let LirNodeType::Load(name) | LirNodeType::Move(name) = &l_caller
-                    && let Some(var) = self.env.symbols.variables.get(name.as_ref())
-                    && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
-                {
-                    if let Some(first) = parameters.first() {
-                        needs_ref_first_arg = matches!(first.data_type, ParserInnerType::Ref(_, _))
-                    }
-                    let expected = parameters.len();
-                    while l_args.len() > expected {
-                        l_args.remove(0);
-                    }
-                }
-
-                if needs_ref_first_arg
-                    && let Some(first_arg) = l_args.get_mut(0)
-                    && matches!(first_arg, LirNodeType::Load(_))
-                {
-                    *first_arg = LirNodeType::Ref(Box::new(std::mem::replace(
-                        first_arg,
-                        LirNodeType::null(),
-                    )));
-                }
-
-                LirNodeType::Call {
-                    caller: Box::new(l_caller),
-                    args: l_args,
-                }
-            }
+            MiddleNodeType::CallExpression(x) => x.lower(self, span),
             MiddleNodeType::AsExpression(x) => x.lower(self, span),
             MiddleNodeType::IsExpression(x) => x.lower(self, span),
             MiddleNodeType::NegExpression(x) => x.lower(self, span),
@@ -682,24 +640,9 @@ impl<'a> LirEnvironment<'a> {
         match node.node_type {
             MiddleNodeType::Identifier(x) => x.lower_lvalue(self, node.span),
             MiddleNodeType::DerefStatement(x) => x.lower_lvalue(self, node.span),
-            MiddleNodeType::FieldAccess { base, field } => {
-                LirLValue::Ptr(Box::new(LirNodeType::Member(
-                    Box::new(self.lower_node(*base)),
-                    field.text.into_boxed_str(),
-                )))
-            }
-            MiddleNodeType::ScopeAccess { base, field } => {
-                LirLValue::Ptr(Box::new(LirNodeType::Member(
-                    Box::new(self.lower_node(*base)),
-                    field.text.into_boxed_str(),
-                )))
-            }
-            MiddleNodeType::IndexAccess { base, index } => {
-                LirLValue::Ptr(Box::new(LirNodeType::Index(
-                    Box::new(self.lower_node(*base)),
-                    Box::new(self.lower_node(*index)),
-                )))
-            }
+            MiddleNodeType::FieldAccess(x) => x.lower_lvalue(self, node.span),
+            MiddleNodeType::ScopeAccess(x) => x.lower_lvalue(self, node.span),
+            MiddleNodeType::IndexAccess(x) => x.lower_lvalue(self, node.span),
             _ => unreachable!(),
         }
     }

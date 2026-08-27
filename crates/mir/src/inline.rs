@@ -1,6 +1,7 @@
 use crate::ast::{
-    MiddleNode, MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirDeref,
-    MirIdentifier, MirIs, MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn,
+    MiddleNode, MiddleNodeType, MirAs, MirBinary, MirBoolean, MirCall, MirComparison, MirDeref,
+    MirField, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirNeg, MirRange, MirRef,
+    MirReturn,
 };
 use rustc_hash::FxHashMap;
 
@@ -59,7 +60,7 @@ fn extract_single_return_expr(body: &MiddleNode) -> Option<MiddleNode> {
 
 fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
     match &mut node.node_type {
-        MiddleNodeType::CallExpression { caller, args } => {
+        MiddleNodeType::CallExpression(MirCall { caller, args }) => {
             inline_in_node(caller, map);
             for a in args.iter_mut() {
                 inline_in_node(a, map);
@@ -88,10 +89,10 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
             identifier: left,
             value: right,
         }
-        | MiddleNodeType::IndexAccess {
+        | MiddleNodeType::IndexAccess(MirIndex {
             base: left,
             index: right,
-        }
+        })
         | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
         | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. })
         | MiddleNodeType::RangeDeclaration(MirRange {
@@ -109,7 +110,7 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
         | MiddleNodeType::DerefStatement(MirDeref { value })
         | MiddleNodeType::VariableDeclaration { value, .. }
         | MiddleNodeType::DebugExpression { value, .. }
-        | MiddleNodeType::FieldAccess { base: value, .. } => inline_in_node(value, map),
+        | MiddleNodeType::FieldAccess(MirField { base: value, .. }) => inline_in_node(value, map),
         MiddleNodeType::ListLiteral(MirList {
             data_type: _,
             values,

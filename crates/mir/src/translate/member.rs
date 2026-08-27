@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, MirField, MirIndex, MirScope},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -81,10 +81,10 @@ impl MiddleEnvironment {
         }
 
         Ok(MiddleNode::new(
-            MiddleNodeType::FieldAccess {
+            MiddleNodeType::FieldAccess(MirField {
                 base: Box::new(self.evaluate_inner(scope, base)?),
                 field: field_name.into(),
-            },
+            }),
             span,
         ))
     }
@@ -110,10 +110,10 @@ impl MiddleEnvironment {
         }
 
         Ok(MiddleNode::new(
-            MiddleNodeType::ScopeAccess {
+            MiddleNodeType::ScopeAccess(MirScope {
                 base: Box::new(self.evaluate(scope, base)),
                 field: field_name.into(),
-            },
+            }),
             span,
         ))
     }
@@ -136,10 +136,10 @@ impl MiddleEnvironment {
         }
 
         Ok(MiddleNode::new(
-            MiddleNodeType::IndexAccess {
+            MiddleNodeType::IndexAccess(MirIndex {
                 base: Box::new(self.evaluate(scope, base)),
                 index: Box::new(self.evaluate(scope, index)),
-            },
+            }),
             span,
         ))
     }

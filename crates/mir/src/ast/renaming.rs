@@ -1,9 +1,9 @@
 use crate::{
     MiddleNode, MiddleNodeType,
     ast::{
-        MirAs, MirBinary, MirBoolean, MirBreak, MirComparison, MirConditional, MirDeref, MirDrop,
-        MirEmit, MirIdentifier, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
-        MirReturn, MirSpawn,
+        MirAs, MirBinary, MirBoolean, MirBreak, MirCall, MirComparison, MirConditional, MirDeref,
+        MirDrop, MirEmit, MirField, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove,
+        MirNeg, MirRange, MirRef, MirReturn, MirScope, MirSpawn,
     },
 };
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
@@ -210,22 +210,30 @@ impl MiddleNodeType {
                     values: values.into_iter().map(|x| x.rename(state)).collect(),
                 })
             }
-            MiddleNodeType::FieldAccess { base, field } => MiddleNodeType::FieldAccess {
-                base: Box::new(base.rename(state)),
-                field,
-            },
-            MiddleNodeType::ScopeAccess { base, field } => MiddleNodeType::ScopeAccess {
-                base: Box::new(base.rename(state)),
-                field,
-            },
-            MiddleNodeType::IndexAccess { base, index } => MiddleNodeType::IndexAccess {
-                base: Box::new(base.rename(state)),
-                index: Box::new(index.rename(state)),
-            },
-            MiddleNodeType::CallExpression { caller, args } => MiddleNodeType::CallExpression {
-                caller: Box::new(caller.rename(state)),
-                args: args.into_iter().map(|x| x.rename(state)).collect(),
-            },
+            MiddleNodeType::FieldAccess(MirField { base, field }) => {
+                MiddleNodeType::FieldAccess(MirField {
+                    base: Box::new(base.rename(state)),
+                    field,
+                })
+            }
+            MiddleNodeType::ScopeAccess(MirScope { base, field }) => {
+                MiddleNodeType::ScopeAccess(MirScope {
+                    base: Box::new(base.rename(state)),
+                    field,
+                })
+            }
+            MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
+                MiddleNodeType::IndexAccess(MirIndex {
+                    base: Box::new(base.rename(state)),
+                    index: Box::new(index.rename(state)),
+                })
+            }
+            MiddleNodeType::CallExpression(MirCall { caller, args }) => {
+                MiddleNodeType::CallExpression(MirCall {
+                    caller: Box::new(caller.rename(state)),
+                    args: args.into_iter().map(|x| x.rename(state)).collect(),
+                })
+            }
             MiddleNodeType::BinaryExpression(MirBinary {
                 left,
                 right,

@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirConditional, MirReturn},
+    ast::{MiddleNode, MiddleNodeType, MirCall, MirConditional, MirReturn},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -246,10 +246,10 @@ impl MiddleEnvironment {
             let node = node?;
             if wrap_with_some.get(idx).copied().unwrap_or(false) {
                 lowered.push(MiddleNode::new(
-                    MiddleNodeType::CallExpression {
+                    MiddleNodeType::CallExpression(MirCall {
                         caller: Box::new(MiddleNode::identifier(span, "some")),
                         args: vec![self.evaluate(scope, node)],
-                    },
+                    }),
                     span,
                 ));
             } else {
@@ -916,7 +916,7 @@ impl MiddleEnvironment {
         );
 
         Ok(MiddleNode {
-            node_type: MiddleNodeType::CallExpression {
+            node_type: MiddleNodeType::CallExpression(MirCall {
                 args: if let Some(lowered) = lowered_args {
                     lowered
                 } else {
@@ -994,7 +994,7 @@ impl MiddleEnvironment {
                     }
                 },
                 caller: Box::new(self.evaluate_inner(scope, caller)?),
-            },
+            }),
             span,
         })
     }

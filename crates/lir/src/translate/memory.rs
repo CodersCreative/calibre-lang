@@ -7,16 +7,15 @@ RefStatement,
 Drop
 */
 
-use calibre_mir::ast::{
-    MiddleNodeType, MirDeref, MirDrop, MirIdentifier, MirMove, MirRef, MirSpawn,
-};
-use calibre_parser::Span;
-
 use crate::{
     ast::{LirLValue, LirNodeType},
     environment::LirEnvironment,
     translate::LirLowering,
 };
+use calibre_mir::ast::{
+    MiddleNodeType, MirDeref, MirDrop, MirIdentifier, MirMove, MirRef, MirSpawn,
+};
+use calibre_parser::Span;
 
 impl LirLowering for MirMove {
     #[inline(always)]

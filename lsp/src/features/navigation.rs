@@ -1,8 +1,8 @@
 use super::*;
 use calibre_mir::{
     ast::{
-        MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirConditional, MirDeref,
-        MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn,
+        MiddleNodeType, MirAs, MirBinary, MirBoolean, MirCall, MirComparison, MirConditional,
+        MirDeref, MirField, MirIndex, MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn,
     },
     scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
@@ -56,7 +56,7 @@ impl CalibreLanguageServer {
                 | MiddleNodeType::Return(MirReturn {
                     value: Some(value), ..
                 })
-                | MiddleNodeType::FieldAccess { base: value, .. } => {
+                | MiddleNodeType::FieldAccess(MirField { base: value, .. }) => {
                     traverse(value, pos, current_scope, smallest_span);
                 }
                 MiddleNodeType::ScopeDeclaration { body, .. } => {
@@ -79,7 +79,7 @@ impl CalibreLanguageServer {
                     }
                 }
 
-                MiddleNodeType::CallExpression { caller, args } => {
+                MiddleNodeType::CallExpression(MirCall { caller, args }) => {
                     traverse(caller, pos, current_scope, smallest_span);
                     for arg in args {
                         traverse(arg, pos, current_scope, smallest_span);
@@ -94,10 +94,10 @@ impl CalibreLanguageServer {
                     to: right,
                     ..
                 })
-                | MiddleNodeType::IndexAccess {
+                | MiddleNodeType::IndexAccess(MirIndex {
                     base: left,
                     index: right,
-                }
+                })
                 | MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
                 | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
                 | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. }) => {

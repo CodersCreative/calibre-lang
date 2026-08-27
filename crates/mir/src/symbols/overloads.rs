@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, MirCall},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -62,13 +62,13 @@ impl MiddleEnvironment {
                 .cloned()
             {
                 return Ok(Some(MiddleNode {
-                    node_type: MiddleNodeType::CallExpression {
+                    node_type: MiddleNodeType::CallExpression(MirCall {
                         caller: Box::new(self.evaluate_inner(scope, overload.func.clone())?),
                         args: vec![
                             self.evaluate_inner(scope, left)?,
                             self.evaluate_inner(scope, right)?,
                         ],
-                    },
+                    }),
                     span,
                 }));
             }
@@ -109,10 +109,10 @@ impl MiddleEnvironment {
 
         if let Some(overload) = overload {
             return Ok(Some(MiddleNode {
-                node_type: MiddleNodeType::CallExpression {
+                node_type: MiddleNodeType::CallExpression(MirCall {
                     caller: Box::new(self.evaluate_inner(scope, overload.func.clone())?),
                     args: vec![self.evaluate_inner(scope, value)?],
-                },
+                }),
                 span,
             }));
         }
@@ -188,14 +188,14 @@ impl MiddleEnvironment {
 
         if let Some(overload) = overload {
             return Ok(Some(MiddleNode {
-                node_type: MiddleNodeType::CallExpression {
+                node_type: MiddleNodeType::CallExpression(MirCall {
                     caller: Box::new(self.evaluate_inner(scope, overload.func.clone())?),
                     args: vec![
                         self.evaluate_inner(scope, base)?,
                         self.evaluate_inner(scope, index)?,
                         self.evaluate_inner(scope, value)?,
                     ],
-                },
+                }),
                 span,
             }));
         }

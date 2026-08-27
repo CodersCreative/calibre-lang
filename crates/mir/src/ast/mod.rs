@@ -65,7 +65,7 @@ impl MiddleNode {
                 count += identifier.len();
                 count += value.len();
             }
-            MiddleNodeType::CallExpression { caller, args } => {
+            MiddleNodeType::CallExpression(MirCall { caller, args }) => {
                 count += caller.len();
                 for a in args {
                     count += a.len();
@@ -74,10 +74,10 @@ impl MiddleNode {
             MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
             | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
             | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. })
-            | MiddleNodeType::IndexAccess {
+            | MiddleNodeType::IndexAccess(MirIndex {
                 base: left,
                 index: right,
-            }
+            })
             | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,
                 to: right,
@@ -87,8 +87,8 @@ impl MiddleNode {
                 count += right.len();
             }
             MiddleNodeType::AsExpression(MirAs { value, .. })
-            | MiddleNodeType::FieldAccess { base: value, .. }
-            | MiddleNodeType::ScopeAccess { base: value, .. }
+            | MiddleNodeType::FieldAccess(MirField { base: value, .. })
+            | MiddleNodeType::ScopeAccess(MirScope { base: value, .. })
             | MiddleNodeType::IsExpression(MirIs { value, .. })
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
@@ -140,7 +140,7 @@ impl MiddleNode {
                 identifier.substitute(repl);
                 value.substitute(repl);
             }
-            MiddleNodeType::CallExpression { caller, args } => {
+            MiddleNodeType::CallExpression(MirCall { caller, args }) => {
                 caller.substitute(repl);
                 for a in args.iter_mut() {
                     a.substitute(repl);
@@ -183,9 +183,9 @@ impl MiddleNode {
                 }
                 body.substitute(repl);
             }
-            MiddleNodeType::FieldAccess { base, .. } => base.substitute(repl),
-            MiddleNodeType::ScopeAccess { base, .. } => base.substitute(repl),
-            MiddleNodeType::IndexAccess { base, index } => {
+            MiddleNodeType::FieldAccess(MirField { base, .. }) => base.substitute(repl),
+            MiddleNodeType::ScopeAccess(MirScope { base, .. }) => base.substitute(repl),
+            MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
                 base.substitute(repl);
                 index.substitute(repl);
             }
@@ -203,7 +203,7 @@ impl MiddleNode {
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
                 identifier.text == name.to_string()
             }
-            MiddleNodeType::CallExpression { caller, args } => {
+            MiddleNodeType::CallExpression(MirCall { caller, args }) => {
                 if caller.calls_self(name) {
                     return true;
                 }
@@ -241,9 +241,9 @@ impl MiddleNode {
             MiddleNodeType::LoopDeclaration(MirLoop { state, body, .. }) => {
                 state.as_ref().is_some_and(|s| s.calls_self(name)) || body.calls_self(name)
             }
-            MiddleNodeType::FieldAccess { base, .. } => base.calls_self(name),
-            MiddleNodeType::ScopeAccess { base, .. } => base.calls_self(name),
-            MiddleNodeType::IndexAccess { base, index } => {
+            MiddleNodeType::FieldAccess(MirField { base, .. }) => base.calls_self(name),
+            MiddleNodeType::ScopeAccess(MirScope { base, .. }) => base.calls_self(name),
+            MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
                 base.calls_self(name) || index.calls_self(name)
             }
             MiddleNodeType::EnumExpression { data, .. } => {
@@ -401,6 +401,30 @@ pub struct MirEmit {
     pub value: Box<MiddleNode>,
 }
 
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirField {
+    pub base: Box<MiddleNode>,
+    pub field: ParserText,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirScope {
+    pub base: Box<MiddleNode>,
+    pub field: ParserText,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirIndex {
+    pub base: Box<MiddleNode>,
+    pub index: Box<MiddleNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirCall {
+    pub caller: Box<MiddleNode>,
+    pub args: Vec<MiddleNode>,
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
@@ -435,6 +459,11 @@ pub enum MiddleNodeType {
     NegExpression(MirNeg),
     AsExpression(MirAs),
     IsExpression(MirIs),
+
+    FieldAccess(MirField),
+    ScopeAccess(MirScope),
+    IndexAccess(MirIndex),
+    CallExpression(MirCall),
 
     VariableDeclaration {
         var_type: VarType,
@@ -473,22 +502,6 @@ pub enum MiddleNodeType {
     DebugExpression {
         pretty_printed_str: String,
         value: Box<MiddleNode>,
-    },
-    FieldAccess {
-        base: Box<MiddleNode>,
-        field: ParserText,
-    },
-    ScopeAccess {
-        base: Box<MiddleNode>,
-        field: ParserText,
-    },
-    IndexAccess {
-        base: Box<MiddleNode>,
-        index: Box<MiddleNode>,
-    },
-    CallExpression {
-        caller: Box<MiddleNode>,
-        args: Vec<MiddleNode>,
     },
     AggregateExpression {
         identifier: Option<ParserText>,
@@ -740,26 +753,26 @@ impl From<MiddleNodeType> for AstNodeType {
                 }
                 AstNodeType::IntLiteral(ParserText::from(out))
             }
-            MiddleNodeType::FieldAccess { base, field } => AstNodeType::FieldAccess {
-                base: Box::new((*base).into()),
-                field: field.into(),
+            MiddleNodeType::FieldAccess(value) => AstNodeType::FieldAccess {
+                base: Box::new((*value.base).into()),
+                field: value.field.into(),
             },
-            MiddleNodeType::ScopeAccess { base, field } => AstNodeType::ScopeAccess {
-                base: Box::new((*base).into()),
-                field: field.into(),
+            MiddleNodeType::ScopeAccess(value) => AstNodeType::ScopeAccess {
+                base: Box::new((*value.base).into()),
+                field: value.field.into(),
             },
-            MiddleNodeType::IndexAccess { base, index } => AstNodeType::IndexAccess {
-                base: Box::new((*base).into()),
-                index: Box::new((*index).into()),
+            MiddleNodeType::IndexAccess(value) => AstNodeType::IndexAccess {
+                base: Box::new((*value.base).into()),
+                index: Box::new((*value.index).into()),
             },
-            MiddleNodeType::CallExpression { caller, args } => AstNodeType::CallExpression {
+            MiddleNodeType::CallExpression(value) => AstNodeType::CallExpression {
                 string_fn: None,
                 generic_types: Vec::new(),
-                caller: Box::new((*caller).into()),
+                caller: Box::new((*value.caller).into()),
                 args: {
                     let mut lst = Vec::new();
 
-                    for arg in args {
+                    for arg in value.args {
                         lst.push(CallArg::Value(arg.into()));
                     }
                     lst
