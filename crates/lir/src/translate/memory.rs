@@ -7,7 +7,9 @@ RefStatement,
 Drop
 */
 
-use calibre_mir::ast::{MiddleNodeType, MirDeref, MirDrop, MirMove, MirRef, MirSpawn};
+use calibre_mir::ast::{
+    MiddleNodeType, MirDeref, MirDrop, MirIdentifier, MirMove, MirRef, MirSpawn,
+};
 use calibre_parser::Span;
 
 use crate::{
@@ -45,8 +47,8 @@ impl LirLowering for MirDeref {
 
 impl LirLowering for MirRef {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        if let MiddleNodeType::Identifier(name) = self.value.node_type {
-            LirNodeType::RefLoad(name.text.into_boxed_str())
+        if let MiddleNodeType::Identifier(MirIdentifier { identifier }) = self.value.node_type {
+            LirNodeType::RefLoad(identifier.text.into_boxed_str())
         } else {
             LirNodeType::Ref(Box::new(env.lower_node(*self.value)))
         }

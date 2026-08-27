@@ -844,7 +844,7 @@ impl MiddleEnvironment {
                     return self.evaluate_call_expression(
                         scope,
                         span,
-                        AstNode::identifier(caller.span, symbol),
+                        AstNode::identifier(caller.span, symbol.identifier),
                         generic_types,
                         args,
                         reverse_args,

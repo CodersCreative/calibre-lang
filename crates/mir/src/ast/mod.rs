@@ -35,18 +35,25 @@ impl MiddleNode {
 
     #[inline(always)]
     pub fn identifier(span: Span, text: impl ToString) -> Self {
-        Self::new(MiddleNodeType::Identifier(text.to_string().into()), span)
+        Self::new(
+            MiddleNodeType::Identifier(MirIdentifier {
+                identifier: text.to_string().into(),
+            }),
+            span,
+        )
     }
 
     pub fn member_field(&self) -> Result<Box<str>, MiddleErr> {
         Ok(match &self.node_type {
-            MiddleNodeType::Identifier(name) => name.text.clone().into_boxed_str(),
-            MiddleNodeType::IntLiteral(ParsedIntLiteral { value, int_type }) => match int_type {
+            MiddleNodeType::Identifier(name) => name.identifier.text.clone().into_boxed_str(),
+            MiddleNodeType::IntLiteral(MirInt {
+                value: ParsedIntLiteral { value, int_type },
+            }) => match int_type {
                 IntLiteralType::Int => value.to_string().into_boxed_str(),
                 IntLiteralType::UInt => format!("{value}u").into_boxed_str(),
                 IntLiteralType::Byte => format!("{value}b").into_boxed_str(),
             },
-            MiddleNodeType::FloatLiteral(x) => x.to_string().into_boxed_str(),
+            MiddleNodeType::FloatLiteral(x) => x.value.to_string().into_boxed_str(),
             _ => return Err(MiddleErr::InvalidMember),
         })
     }
@@ -92,7 +99,10 @@ impl MiddleNode {
                 data: Some(value), ..
             }
             | MiddleNodeType::VariableDeclaration { value, .. } => count += value.len(),
-            MiddleNodeType::ListLiteral(_, values)
+            MiddleNodeType::ListLiteral(MirList {
+                data_type: _,
+                values,
+            })
             | MiddleNodeType::ScopeDeclaration { body: values, .. } => {
                 for v in values {
                     count += v.len();
@@ -115,8 +125,8 @@ impl MiddleNode {
 
     pub fn substitute(&mut self, repl: &FxHashMap<String, MiddleNode>) {
         match &mut self.node_type {
-            MiddleNodeType::Identifier(id) => {
-                if let Some(replacement) = repl.get(&id.text) {
+            MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
+                if let Some(replacement) = repl.get(&identifier.text) {
                     *self = replacement.clone();
                 }
             }
@@ -159,7 +169,10 @@ impl MiddleNode {
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::DebugExpression { value, .. }
             | MiddleNodeType::VariableDeclaration { value, .. } => value.substitute(repl),
-            MiddleNodeType::ListLiteral(_, values) => {
+            MiddleNodeType::ListLiteral(MirList {
+                data_type: _,
+                values,
+            }) => {
                 for v in values {
                     v.substitute(repl);
                 }
@@ -187,7 +200,9 @@ impl MiddleNode {
 
     pub fn calls_self(&self, name: &impl ToString) -> bool {
         match &self.node_type {
-            MiddleNodeType::Identifier(id) => id.text == name.to_string(),
+            MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
+                identifier.text == name.to_string()
+            }
             MiddleNodeType::CallExpression { caller, args } => {
                 if caller.calls_self(name) {
                     return true;
@@ -217,7 +232,10 @@ impl MiddleNode {
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::DebugExpression { value, .. }
             | MiddleNodeType::VariableDeclaration { value, .. } => value.calls_self(name),
-            MiddleNodeType::ListLiteral(_, values) => values.iter().any(|v| v.calls_self(name)),
+            MiddleNodeType::ListLiteral(MirList {
+                data_type: _,
+                values,
+            }) => values.iter().any(|v| v.calls_self(name)),
             MiddleNodeType::LoopDeclaration { state, body, .. } => {
                 state.as_ref().is_some_and(|s| s.calls_self(name)) || body.calls_self(name)
             }
@@ -274,6 +292,42 @@ pub struct MirDeref {
     pub value: Box<MiddleNode>,
 }
 
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirIdentifier {
+    pub identifier: ParserText,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirString {
+    pub value: ParserText,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirList {
+    pub data_type: ParserDataType,
+    pub values: Vec<MiddleNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirChar {
+    pub value: char,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirFloat {
+    pub value: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirInt {
+    pub value: ParsedIntLiteral,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirBig {
+    pub value: ParserText,
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
@@ -285,10 +339,17 @@ pub enum MiddleNodeType {
 
     RefStatement(MirRef),
     Drop(MirDrop),
-
     Move(MirMove),
     Spawn(MirSpawn),
     DerefStatement(MirDeref),
+
+    Identifier(MirIdentifier),
+    StringLiteral(MirString),
+    ListLiteral(MirList),
+    CharLiteral(MirChar),
+    FloatLiteral(MirFloat),
+    IntLiteral(MirInt),
+    BigLiteral(MirBig),
 
     VariableDeclaration {
         var_type: VarType,
@@ -357,13 +418,6 @@ pub enum MiddleNodeType {
     Return {
         value: Option<Box<MiddleNode>>,
     },
-    Identifier(ParserText),
-    StringLiteral(ParserText),
-    ListLiteral(ParserDataType, Vec<MiddleNode>),
-    CharLiteral(char),
-    FloatLiteral(f64),
-    IntLiteral(ParsedIntLiteral),
-    BigLiteral(ParserText),
     FieldAccess {
         base: Box<MiddleNode>,
         field: ParserText,
@@ -422,7 +476,7 @@ impl MiddleNodeType {
                 | MiddleNodeType::ScopeAccess { .. }
                 | MiddleNodeType::IndexAccess { .. }
                 | MiddleNodeType::AggregateExpression { .. }
-                | MiddleNodeType::ListLiteral(_, _)
+                | MiddleNodeType::ListLiteral(_)
                 | MiddleNodeType::RangeDeclaration { .. }
         )
     }
@@ -643,23 +697,23 @@ impl From<MiddleNodeType> for AstNodeType {
                 value: Some(Box::new((*value).into())),
             },
             MiddleNodeType::Return { value: None } => AstNodeType::Return { value: None },
-            MiddleNodeType::Identifier(x) => AstNodeType::Identifier(x.into()),
-            MiddleNodeType::StringLiteral(x) => AstNodeType::StringLiteral(x),
-            MiddleNodeType::ListLiteral(typ, data) => AstNodeType::ListLiteral(typ, {
+            MiddleNodeType::Identifier(value) => AstNodeType::Identifier(value.identifier.into()),
+            MiddleNodeType::StringLiteral(value) => AstNodeType::StringLiteral(value.value),
+            MiddleNodeType::ListLiteral(value) => AstNodeType::ListLiteral(value.data_type, {
                 let mut lst = Vec::new();
 
-                for node in data {
+                for node in value.values {
                     lst.push(node.into());
                 }
 
                 lst
             }),
-            MiddleNodeType::CharLiteral(x) => AstNodeType::CharLiteral(x),
-            MiddleNodeType::FloatLiteral(x) => AstNodeType::FloatLiteral(x),
-            MiddleNodeType::BigLiteral(x) => AstNodeType::BigLiteral(x),
-            MiddleNodeType::IntLiteral(x) => {
-                let mut out = x.value.to_string();
-                match x.int_type {
+            MiddleNodeType::CharLiteral(value) => AstNodeType::CharLiteral(value.value),
+            MiddleNodeType::FloatLiteral(value) => AstNodeType::FloatLiteral(value.value),
+            MiddleNodeType::BigLiteral(value) => AstNodeType::BigLiteral(value.value),
+            MiddleNodeType::IntLiteral(value) => {
+                let mut out = value.value.value.to_string();
+                match value.value.int_type {
                     IntLiteralType::Int => {}
                     IntLiteralType::UInt => out.push('u'),
                     IntLiteralType::Byte => out.push('b'),

@@ -1,11 +1,9 @@
-use std::unreachable;
-
 use crate::{
     ast::{BlockId, LirLValue, LirLiteral, LirNode, LirNodeType, LirTerminator},
     environment::{LirEnvironment, LirFunction, LirGlobal, LirRegistry},
 };
 use calibre_mir::{
-    ast::{MiddleNode, MiddleNodeType, MirDeref},
+    ast::{MiddleNode, MiddleNodeType, MirDeref, MirIdentifier},
     environment::MiddleEnvironment,
     typing::{MiddleImpl, MiddleTrait, MiddleTypeDefType},
 };
@@ -15,7 +13,7 @@ use calibre_parser::{
         ObjectMap,
         binary::BinaryOperator,
         comparison::BooleanOperator,
-        idents::{IntLiteralType, ParsedIntLiteral, ParserText},
+        idents::ParserText,
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -33,6 +31,7 @@ pub mod statements;
 pub trait LirLowering {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType;
 
+    #[inline(always)]
     fn lower_lvalue<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirLValue
     where
         Self: Sized,
@@ -232,26 +231,17 @@ impl<'a> LirEnvironment<'a> {
         let span = node.span;
         trace!("lowering MIR node to LIR");
         match node.node_type {
+            MiddleNodeType::Null => LirNodeType::null(),
             MiddleNodeType::Emit { value } => {
                 // TODO Add emit support
                 self.lower_node(*value)
             }
-            MiddleNodeType::IntLiteral(ParsedIntLiteral { value, int_type }) => match int_type {
-                IntLiteralType::Int => LirNodeType::Literal(LirLiteral::Int(value)),
-                IntLiteralType::UInt => LirNodeType::Literal(LirLiteral::UInt(value as u64)),
-                IntLiteralType::Byte => LirNodeType::Literal(LirLiteral::Byte(value as u8)),
-            },
-            MiddleNodeType::FloatLiteral(f) => LirNodeType::Literal(LirLiteral::Float(f)),
-            MiddleNodeType::BigLiteral(x) => LirNodeType::Literal(LirLiteral::Big(x.text)),
-            MiddleNodeType::CharLiteral(c) => LirNodeType::Literal(LirLiteral::Char(c)),
-            MiddleNodeType::Null => LirNodeType::null(),
-            MiddleNodeType::StringLiteral(s) => {
-                LirNodeType::Literal(LirLiteral::String(s.to_string()))
-            }
-            MiddleNodeType::ListLiteral(data_type, elements) => LirNodeType::List {
-                elements: self.lower_nodes(elements),
-                data_type,
-            },
+            MiddleNodeType::IntLiteral(x) => x.lower(self, span),
+            MiddleNodeType::FloatLiteral(x) => x.lower(self, span),
+            MiddleNodeType::BigLiteral(x) => x.lower(self, span),
+            MiddleNodeType::CharLiteral(x) => x.lower(self, span),
+            MiddleNodeType::StringLiteral(x) => x.lower(self, span),
+            MiddleNodeType::ListLiteral(x) => x.lower(self, span),
             MiddleNodeType::AggregateExpression { identifier, value } => LirNodeType::Aggregate {
                 name: identifier.map(|i| i.to_string()),
                 fields: ObjectMap(
@@ -268,9 +258,7 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::Spawn(x) => x.lower(self, span),
             MiddleNodeType::Drop(x) => x.lower(self, span),
             MiddleNodeType::Move(x) => x.lower(self, span),
-            MiddleNodeType::Identifier(name) => {
-                LirNodeType::Load(name.to_string().into_boxed_str())
-            }
+            MiddleNodeType::Identifier(x) => x.lower(self, span),
             MiddleNodeType::VariableDeclaration {
                 identifier,
                 value,
@@ -302,8 +290,8 @@ impl<'a> LirEnvironment<'a> {
                 let ident_span = identifier.span;
 
                 let (lhs, old_expr) = match identifier.node_type {
-                    MiddleNodeType::Identifier(name) => {
-                        let name = name.to_string().into_boxed_str();
+                    MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
+                        let name = identifier.to_string().into_boxed_str();
                         (
                             Some(LirLValue::Var(name.clone())),
                             Some(LirNodeType::Load(name)),
@@ -921,7 +909,7 @@ impl<'a> LirEnvironment<'a> {
 
     pub fn lower_lvalue(&mut self, node: MiddleNode) -> LirLValue {
         match node.node_type {
-            MiddleNodeType::Identifier(name) => LirLValue::Var(name.to_string().into_boxed_str()),
+            MiddleNodeType::Identifier(x) => x.lower_lvalue(self, node.span),
             MiddleNodeType::DerefStatement(x) => x.lower_lvalue(self, node.span),
             MiddleNodeType::FieldAccess { base, field } => {
                 LirLValue::Ptr(Box::new(LirNodeType::Member(

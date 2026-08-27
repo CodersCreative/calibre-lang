@@ -1,4 +1,4 @@
-use crate::ast::{MiddleNode, MiddleNodeType, MirDeref, MirRef};
+use crate::ast::{MiddleNode, MiddleNodeType, MirDeref, MirIdentifier, MirList, MirRef};
 use rustc_hash::FxHashMap;
 
 struct InlineFn {
@@ -61,8 +61,8 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
             for a in args.iter_mut() {
                 inline_in_node(a, map);
             }
-            if let MiddleNodeType::Identifier(id) = &caller.node_type
-                && let Some(inline_fn) = map.get(&id.text)
+            if let MiddleNodeType::Identifier(MirIdentifier { identifier }) = &caller.node_type
+                && let Some(inline_fn) = map.get(&identifier.text)
                 && inline_fn.params.len() == args.len()
             {
                 let mut replacements: FxHashMap<String, MiddleNode> = FxHashMap::default();
@@ -106,7 +106,10 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
         | MiddleNodeType::VariableDeclaration { value, .. }
         | MiddleNodeType::DebugExpression { value, .. }
         | MiddleNodeType::FieldAccess { base: value, .. } => inline_in_node(value, map),
-        MiddleNodeType::ListLiteral(_, values)
+        MiddleNodeType::ListLiteral(MirList {
+            data_type: _,
+            values,
+        })
         | MiddleNodeType::ScopeDeclaration { body: values, .. } => {
             for v in values {
                 inline_in_node(v, map);

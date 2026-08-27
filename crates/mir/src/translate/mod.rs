@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirBreak, MirContinue, MirDeref, MirDrop, MirMove, MirRef,
-        MirSpawn,
+        MiddleNode, MiddleNodeType, MirBig, MirBreak, MirChar, MirContinue, MirDeref, MirDrop,
+        MirFloat, MirInt, MirListBuilder, MirMove, MirRef, MirSpawn, MirString,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -81,59 +81,54 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            AstNodeType::Identifier(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::Identifier(
-                    if let Ok(x) = self.resolve(scope, &x, ResolutionOptions::all()) {
-                        ParserText::new(node.span, x)
-                    } else if matches!(
-                        &x,
-                        PotentialGenericTypeIdentifier::Identifier(
-                            PotentialDollarIdentifier::Identifier(text)
-                        ) if ParserText::is_temp_name(&text.text)
-                    ) {
-                        ParserText::new(
-                            node.span,
-                            self.resolve(
-                                scope,
-                                x.get_ident(),
-                                ResolutionOptions::default().with_dollar(),
-                            )?,
-                        )
-                    } else if let PotentialDollarIdentifier::DollarIdentifier(x) = x.get_ident() {
-                        let val = self
-                            .scoping
-                            .resolve_macro_arg(scope, x)
-                            .cloned()
-                            .ok_or_else(|| {
-                                MiddleErr::At(
-                                    node.span,
-                                    Box::new(MiddleErr::Scope(format!("missing macro arg {x}"))),
-                                )
-                            })?;
-                        return self.evaluate_inner(scope, val);
-                    } else if let PotentialGenericTypeIdentifier::Generic { identifier, .. } = &x {
-                        if let Ok(base_resolved) =
-                            self.resolve(scope, identifier, ResolutionOptions::all())
-                        {
-                            ParserText::new(node.span, base_resolved)
-                        } else {
-                            return Err(MiddleErr::At(
+            AstNodeType::Identifier(x) => Ok(MiddleNode::identifier(
+                node.span,
+                if let Ok(x) = self.resolve(scope, &x, ResolutionOptions::all()) {
+                    x
+                } else if matches!(
+                    &x,
+                    PotentialGenericTypeIdentifier::Identifier(
+                        PotentialDollarIdentifier::Identifier(text)
+                    ) if ParserText::is_temp_name(&text.text)
+                ) {
+                    self.resolve(
+                        scope,
+                        x.get_ident(),
+                        ResolutionOptions::default().with_dollar(),
+                    )?
+                } else if let PotentialDollarIdentifier::DollarIdentifier(x) = x.get_ident() {
+                    let val = self
+                        .scoping
+                        .resolve_macro_arg(scope, x)
+                        .cloned()
+                        .ok_or_else(|| {
+                            MiddleErr::At(
                                 node.span,
-                                Box::new(MiddleErr::Variable(x.to_string())),
-                            ));
-                        }
+                                Box::new(MiddleErr::Scope(format!("missing macro arg {x}"))),
+                            )
+                        })?;
+                    return self.evaluate_inner(scope, val);
+                } else if let PotentialGenericTypeIdentifier::Generic { identifier, .. } = &x {
+                    if let Ok(base_resolved) =
+                        self.resolve(scope, identifier, ResolutionOptions::all())
+                    {
+                        base_resolved
                     } else {
                         return Err(MiddleErr::At(
                             node.span,
                             Box::new(MiddleErr::Variable(x.to_string())),
                         ));
-                    },
-                ),
-                span: node.span,
-            }),
+                    }
+                } else {
+                    return Err(MiddleErr::At(
+                        node.span,
+                        Box::new(MiddleErr::Variable(x.to_string())),
+                    ));
+                },
+            )),
             AstNodeType::IntLiteral(text) => Ok(MiddleNode {
-                node_type: MiddleNodeType::IntLiteral(
-                    ParsedIntLiteral::parse(text.clone()).ok_or_else(|| {
+                node_type: MiddleNodeType::IntLiteral(MirInt {
+                    value: ParsedIntLiteral::parse(text.clone()).ok_or_else(|| {
                         MiddleErr::At(
                             node.span,
                             Box::new(MiddleErr::Internal(format!(
@@ -141,30 +136,32 @@ impl MiddleEnvironment {
                             ))),
                         )
                     })?,
-                ),
+                }),
                 span: node.span,
             }),
             AstNodeType::BigLiteral(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::BigLiteral(ParserText {
-                    text: x
-                        .text
-                        .strip_suffix('g')
-                        .map(|x| x.to_string())
-                        .unwrap_or(x.text),
-                    ..x
+                node_type: MiddleNodeType::BigLiteral(MirBig {
+                    value: ParserText {
+                        text: x
+                            .text
+                            .strip_suffix('g')
+                            .map(|x| x.to_string())
+                            .unwrap_or(x.text),
+                        ..x
+                    },
                 }),
                 span: node.span,
             }),
             AstNodeType::FloatLiteral(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::FloatLiteral(x),
+                node_type: MiddleNodeType::FloatLiteral(MirFloat { value: x }),
                 span: node.span,
             }),
             AstNodeType::StringLiteral(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::StringLiteral(x),
+                node_type: MiddleNodeType::StringLiteral(MirString { value: x }),
                 span: node.span,
             }),
             AstNodeType::CharLiteral(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::CharLiteral(x),
+                node_type: MiddleNodeType::CharLiteral(MirChar { value: x }),
                 span: node.span,
             }),
             AstNodeType::RangeDeclaration {
@@ -887,9 +884,9 @@ impl MiddleEnvironment {
                     if has_break_value && let Some(result_target) = result_target {
                         let assign = MiddleNode::new(
                             MiddleNodeType::AssignmentExpression {
-                                identifier: Box::new(MiddleNode::new(
-                                    MiddleNodeType::Identifier(result_target.clone()),
+                                identifier: Box::new(MiddleNode::identifier(
                                     self.context.current_span(),
+                                    &result_target,
                                 )),
                                 value: Box::new(value_node.unwrap_or(MiddleNode::new(
                                     MiddleNodeType::Null,
@@ -906,14 +903,16 @@ impl MiddleEnvironment {
                     if has_break_value && let Some(broke_target) = broke_target {
                         let assign = MiddleNode::new(
                             MiddleNodeType::AssignmentExpression {
-                                identifier: Box::new(MiddleNode::new(
-                                    MiddleNodeType::Identifier(broke_target.clone()),
+                                identifier: Box::new(MiddleNode::identifier(
                                     self.context.current_span(),
+                                    &broke_target,
                                 )),
                                 value: Box::new(MiddleNode::new(
-                                    MiddleNodeType::IntLiteral(ParsedIntLiteral {
-                                        value: 1,
-                                        int_type: IntLiteralType::Int,
+                                    MiddleNodeType::IntLiteral(MirInt {
+                                        value: ParsedIntLiteral {
+                                            value: 1,
+                                            int_type: IntLiteralType::Int,
+                                        },
                                     }),
                                     self.context.current_span(),
                                 )),
@@ -1480,7 +1479,9 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             AstNodeType::ListLiteral(data_type, x) => {
-                let data_type = if data_type.is_auto() && !x.is_empty() {
+                let mut value = MirListBuilder::default();
+
+                value.data_type(if data_type.is_auto() && !x.is_empty() {
                     if let Some(first) = x.first() {
                         self.resolve_type_from_node(scope, first).ok_or_else(|| {
                             self.context.err_at_current(MiddleErr::InferImpossible)
@@ -1490,18 +1491,20 @@ impl MiddleEnvironment {
                     }
                 } else {
                     self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?
-                };
+                });
 
-                let lst = x
-                    .into_iter()
-                    .map(|item| self.evaluate(scope, item))
-                    .collect();
+                value.values(
+                    x.into_iter()
+                        .map(|item| self.evaluate(scope, item))
+                        .collect(),
+                );
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::ListLiteral(data_type, lst),
+                    node_type: MiddleNodeType::ListLiteral(value.build().unwrap()),
                     span: node.span,
                 })
             }
+            // TODO Give a dedicated instruction to this for optimisation
             AstNodeType::ListRepeatLiteral {
                 data_type,
                 value,
@@ -1509,7 +1512,7 @@ impl MiddleEnvironment {
             } => {
                 let count = self.evaluate(scope, *count);
                 let count = match count.node_type {
-                    MiddleNodeType::IntLiteral(value) => value.value as usize,
+                    MiddleNodeType::IntLiteral(value) => value.value.value as usize,
                     _ => {
                         return Err(MiddleErr::At(
                             count.span,
@@ -1520,20 +1523,20 @@ impl MiddleEnvironment {
                     }
                 };
 
-                let data_type = if data_type.is_auto() && count > 0 {
+                let mut lst = MirListBuilder::default();
+
+                lst.data_type(if data_type.is_auto() && count > 0 {
                     self.resolve_type_from_node(scope, &value)
                         .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?
                 } else {
                     self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?
-                };
+                });
 
                 let item = self.evaluate(scope, *value);
+                lst.values((0..count).map(|_| item.clone()).collect());
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::ListLiteral(
-                        data_type,
-                        (0..count).map(|_| item.clone()).collect(),
-                    ),
+                    node_type: MiddleNodeType::ListLiteral(lst.build().unwrap()),
                     span: node.span,
                 })
             }

@@ -1,6 +1,6 @@
 use crate::{
     MiddleNode, MiddleNodeType,
-    ast::{MirBreak, MirDeref, MirDrop, MirMove, MirRef, MirSpawn},
+    ast::{MirBreak, MirDeref, MirDrop, MirIdentifier, MirList, MirMove, MirRef, MirSpawn},
 };
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
 use rustc_hash::FxHashMap;
@@ -188,14 +188,20 @@ impl MiddleNodeType {
             MiddleNodeType::Return { value } => MiddleNodeType::Return {
                 value: value.map(|value| Box::new(value.rename(state))),
             },
-            MiddleNodeType::Identifier(x) => MiddleNodeType::Identifier(ParserText {
-                text: mapped_name_or_original(state, x.text),
-                span: x.span,
-            }),
-            MiddleNodeType::ListLiteral(data_type, x) => MiddleNodeType::ListLiteral(
-                data_type,
-                x.into_iter().map(|x| x.rename(state)).collect(),
-            ),
+            MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
+                MiddleNodeType::Identifier(MirIdentifier {
+                    identifier: ParserText {
+                        text: mapped_name_or_original(state, identifier.text),
+                        span: identifier.span,
+                    },
+                })
+            }
+            MiddleNodeType::ListLiteral(MirList { data_type, values }) => {
+                MiddleNodeType::ListLiteral(MirList {
+                    data_type,
+                    values: values.into_iter().map(|x| x.rename(state)).collect(),
+                })
+            }
             MiddleNodeType::FieldAccess { base, field } => MiddleNodeType::FieldAccess {
                 base: Box::new(base.rename(state)),
                 field,

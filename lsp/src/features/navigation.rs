@@ -1,6 +1,6 @@
 use super::*;
 use calibre_mir::{
-    ast::{MiddleNodeType, MirDeref, MirRef},
+    ast::{MiddleNodeType, MirDeref, MirList, MirRef},
     scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
 };
@@ -67,8 +67,11 @@ impl CalibreLanguageServer {
                     }
                     traverse(body, pos, current_scope, smallest_span);
                 }
-                MiddleNodeType::ListLiteral(_, body) => {
-                    for item in body {
+                MiddleNodeType::ListLiteral(MirList {
+                    data_type: _,
+                    values,
+                }) => {
+                    for item in values {
                         traverse(item, pos, current_scope, smallest_span);
                     }
                 }

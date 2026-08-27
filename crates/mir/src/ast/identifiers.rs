@@ -1,6 +1,6 @@
 use crate::{
     MiddleNode, MiddleNodeType,
-    ast::{MirBreak, MirDeref, MirDrop, MirMove, MirRef, MirSpawn},
+    ast::{MirBreak, MirDeref, MirDrop, MirIdentifier, MirList, MirMove, MirRef, MirSpawn},
 };
 use calibre_parser::IdentifiersUsed;
 
@@ -22,7 +22,7 @@ impl IdentifiersUsed for MiddleNode {
             | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::Return { value: None } => Vec::new(),
-            MiddleNodeType::Identifier(identifier)
+            MiddleNodeType::Identifier(MirIdentifier { identifier })
             | MiddleNodeType::Drop(MirDrop { identifier })
             | MiddleNodeType::Move(MirMove { identifier }) => {
                 vec![identifier]
@@ -101,7 +101,10 @@ impl IdentifiersUsed for MiddleNode {
                 amt
             }
             MiddleNodeType::ScopeDeclaration { body, .. }
-            | MiddleNodeType::ListLiteral(_, body) => {
+            | MiddleNodeType::ListLiteral(MirList {
+                data_type: _,
+                values: body,
+            }) => {
                 let mut amt = Vec::new();
 
                 for n in body {
@@ -271,7 +274,10 @@ impl MiddleNode {
                 amt
             }
             MiddleNodeType::ScopeDeclaration { body, .. }
-            | MiddleNodeType::ListLiteral(_, body) => {
+            | MiddleNodeType::ListLiteral(MirList {
+                data_type: _,
+                values: body,
+            }) => {
                 let mut amt = Vec::new();
 
                 for n in body {

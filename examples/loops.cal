@@ -1,0 +1,13 @@
+import range from std::random;
+
+const main := fn => {
+	let _ := [0; 30];
+	let u := 10;
+	let r := range(0, 100);
+	let mut a := 0;
+	
+	for i in 0..10000 => {
+		for j in 0..1000 => a += i + j;
+	};
+	print(a);
+};
