@@ -9,7 +9,10 @@ IsExpression
 */
 
 use crate::{
-    ast::{LirLiteral, LirNodeType, LirTerminator},
+    ast::{
+        LirAs, LirBinary, LirBoolean, LirComparison, LirIs, LirLiteral, LirLoad, LirNodeType,
+        LirTerminator,
+    },
     environment::LirEnvironment,
     translate::LirLowering,
 };
@@ -22,22 +25,22 @@ use calibre_parser::{
 impl LirLowering for MirBinary {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Binary {
+        LirNodeType::Binary(LirBinary {
             left: Box::new(env.lower_node(*self.left)),
             right: Box::new(env.lower_node(*self.right)),
             operator: self.operator,
-        }
+        })
     }
 }
 
 impl LirLowering for MirComparison {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Comparison {
+        LirNodeType::Comparison(LirComparison {
             left: Box::new(env.lower_node(*self.left)),
             right: Box::new(env.lower_node(*self.right)),
             operator: self.operator,
-        }
+        })
     }
 }
 
@@ -63,11 +66,11 @@ impl LirLowering for MirBoolean {
             BooleanOperator::And => {
                 env.switch_to(then_id);
                 let right_val = env.lower_node(*self.right);
-                let checked = LirNodeType::Boolean {
+                let checked = LirNodeType::Boolean(LirBoolean {
                     left: Box::new(right_val),
                     right: Box::new(LirNodeType::bool(true)),
                     operator: self.operator,
-                };
+                });
                 if env.current_block_open() {
                     env.assign_var(span, temp.as_str(), checked);
                     env.jump_if_open(span, merge_id);
@@ -88,11 +91,11 @@ impl LirLowering for MirBoolean {
 
                 env.switch_to(else_id);
                 let right_val = env.lower_node(*self.right);
-                let checked = LirNodeType::Boolean {
+                let checked = LirNodeType::Boolean(LirBoolean {
                     left: Box::new(right_val),
                     right: Box::new(LirNodeType::bool(false)),
                     operator: self.operator,
-                };
+                });
                 if env.current_block_open() {
                     env.assign_var(span, temp.as_str(), checked);
                     env.jump_if_open(span, merge_id);
@@ -101,35 +104,40 @@ impl LirLowering for MirBoolean {
         }
 
         env.switch_to(merge_id);
-        LirNodeType::Load(temp.into_boxed_str())
+        LirNodeType::Load(LirLoad {
+            value: temp.into_boxed_str(),
+        })
     }
 }
 
 impl LirLowering for MirNeg {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Binary {
+        LirNodeType::Binary(LirBinary {
             left: Box::new(LirNodeType::Literal(LirLiteral::Int(0))),
             right: Box::new(env.lower_node(*self.value)),
             operator: BinaryOperator::Sub,
-        }
+        })
     }
 }
 
 impl LirLowering for MirAs {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::As(
-            Box::new(env.lower_node(*self.value)),
-            self.data_type,
-            self.failure_mode,
-        )
+        LirNodeType::As(LirAs {
+            value: Box::new(env.lower_node(*self.value)),
+            data_type: self.data_type,
+            failure_mode: self.failure_mode,
+        })
     }
 }
 
 impl LirLowering for MirIs {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Is(Box::new(env.lower_node(*self.value)), self.data_type)
+        LirNodeType::Is(LirIs {
+            value: Box::new(env.lower_node(*self.value)),
+            data_type: self.data_type,
+        })
     }
 }

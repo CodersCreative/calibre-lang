@@ -406,6 +406,8 @@ version = "0.0.1"
 dependencies = [
  "calibre-mir",
  "calibre-parser",
+ "derive_builder",
+ "indextree",
  "rustc-hash",
  "serde",
  "tracing",

@@ -10,7 +10,7 @@ BigLiteral
 */
 
 use crate::{
-    ast::{LirLValue, LirLiteral, LirNodeType},
+    ast::{LirLValue, LirList, LirLiteral, LirLoad, LirNodeType},
     environment::LirEnvironment,
     translate::LirLowering,
 };
@@ -20,7 +20,9 @@ use calibre_parser::{Span, ast::idents::IntLiteralType};
 impl LirLowering for MirIdentifier {
     #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Load(self.identifier.to_string().into_boxed_str())
+        LirNodeType::Load(LirLoad {
+            value: self.identifier.to_string().into_boxed_str(),
+        })
     }
 
     #[inline(always)]
@@ -42,10 +44,10 @@ impl LirLowering for MirString {
 impl LirLowering for MirList {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::List {
-            elements: env.lower_nodes(self.values),
+        LirNodeType::List(LirList {
+            values: env.lower_nodes(self.values),
             data_type: self.data_type,
-        }
+        })
     }
 }
 

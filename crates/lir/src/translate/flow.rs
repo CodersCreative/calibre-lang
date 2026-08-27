@@ -10,7 +10,7 @@ Emit
 */
 
 use crate::{
-    ast::{LirNodeType, LirTerminator},
+    ast::{LirLoad, LirNodeType, LirRange, LirTerminator},
     environment::LirEnvironment,
     translate::LirLowering,
 };
@@ -116,7 +116,9 @@ impl LirLowering for MirConditional {
         }
 
         env.switch_to(merge_id);
-        LirNodeType::Load(temp.into_boxed_str())
+        LirNodeType::Load(LirLoad {
+            value: temp.into_boxed_str(),
+        })
     }
 }
 
@@ -164,11 +166,11 @@ impl LirLowering for MirRange {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         let from = env.lower_node(*self.from);
         let to = env.lower_node(*self.to);
-        LirNodeType::Range {
+        LirNodeType::Range(LirRange {
             from: Box::new(from),
             to: Box::new(to),
             inclusive: self.inclusive,
-        }
+        })
     }
 }
 

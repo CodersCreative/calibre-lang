@@ -115,141 +115,11 @@ impl<'a> BlockLoweringCtx<'a> {
     #[instrument(skip_all)]
     pub(super) fn lower_instr(&mut self, node: LirNode, assigned: Option<Reg>, set_ret: bool) {
         trace!("lowering LIR node to VM instruction");
+        let span = node.span;
         match node.node_type {
             LirNodeType::Noop => {}
-            LirNodeType::Declare { dest, value, .. } => {
-                let reg = self.lower_node(*value, node.span);
-                if !self.is_global {
-                    let target = assigned.unwrap_or(reg);
-                    if target != reg {
-                        self.emit(
-                            VMInstruction::Copy {
-                                dst: target,
-                                src: reg,
-                            },
-                            node.span,
-                        );
-                    }
-                    let name_idx = self.add_string(dest.to_string());
-                    self.map.insert(dest.to_string(), target);
-                    self.emit(
-                        VMInstruction::StoreVar {
-                            name: name_idx,
-                            src: target,
-                        },
-                        node.span,
-                    );
-                } else {
-                    let name = self.add_string(dest.to_string());
-                    self.emit(VMInstruction::StoreVar { name, src: reg }, node.span);
-                }
-            }
-            LirNodeType::Assign { dest, value } => match dest {
-                LirLValue::Var(dest) => {
-                    let reg = self.lower_node(*value, node.span);
-                    let name_idx = self.add_string(dest.to_string());
-                    if !self.is_global && self.map.contains_key(dest.as_ref()) {
-                        let target = assigned.unwrap_or(reg);
-                        if target != reg {
-                            self.emit(
-                                VMInstruction::Copy {
-                                    dst: target,
-                                    src: reg,
-                                },
-                                node.span,
-                            );
-                        }
-                        self.map.insert(dest.to_string(), target);
-                        self.emit(
-                            VMInstruction::StoreVar {
-                                name: name_idx,
-                                src: target,
-                            },
-                            node.span,
-                        );
-                    } else {
-                        self.emit(
-                            VMInstruction::StoreVar {
-                                name: name_idx,
-                                src: reg,
-                            },
-                            node.span,
-                        );
-                    }
-                }
-                LirLValue::Ptr(ptr) => {
-                    let value_reg = self.lower_node(*value, node.span);
-                    match *ptr {
-                        LirNodeType::Member(base, member) => {
-                            let base_reg = self.lower_node(*base, node.span);
-                            let member = self.add_string(member.to_string());
-                            self.emit(
-                                VMInstruction::SetMember {
-                                    target: base_reg,
-                                    member,
-                                    value: value_reg,
-                                },
-                                node.span,
-                            );
-                        }
-                        LirNodeType::Index(base, index) => {
-                            let index_reg = self.lower_node(*index, node.span);
-                            match *base {
-                                LirNodeType::Member(owner, member) => {
-                                    let owner_reg = self.lower_node(*owner, node.span);
-                                    let member_idx = self.add_string(member.to_string());
-                                    let member_val_reg = self.alloc_reg();
-                                    self.emit(
-                                        VMInstruction::LoadMember {
-                                            dst: member_val_reg,
-                                            value: owner_reg,
-                                            member: member_idx,
-                                        },
-                                        node.span,
-                                    );
-                                    self.emit(
-                                        VMInstruction::SetIndex {
-                                            target: member_val_reg,
-                                            index: index_reg,
-                                            value: value_reg,
-                                        },
-                                        node.span,
-                                    );
-                                    self.emit(
-                                        VMInstruction::SetMember {
-                                            target: owner_reg,
-                                            member: member_idx,
-                                            value: member_val_reg,
-                                        },
-                                        node.span,
-                                    );
-                                }
-                                other_base => {
-                                    let base_reg = self.lower_node(other_base, node.span);
-                                    self.emit(
-                                        VMInstruction::SetIndex {
-                                            target: base_reg,
-                                            index: index_reg,
-                                            value: value_reg,
-                                        },
-                                        node.span,
-                                    );
-                                }
-                            }
-                        }
-                        other => {
-                            let target_reg = self.lower_node(other, node.span);
-                            self.emit(
-                                VMInstruction::SetRef {
-                                    target: target_reg,
-                                    value: value_reg,
-                                },
-                                node.span,
-                            );
-                        }
-                    }
-                }
-            },
+            LirNodeType::Declare(x) => x.lower_instr(self, assigned, set_ret, span),
+            LirNodeType::Assign(x) => x.lower_instr(self, assigned, set_ret, span),
             other => {
                 let reg = self.lower_node(other, node.span);
                 if set_ret && reg != self.ret_reg {
@@ -270,308 +140,36 @@ impl<'a> BlockLoweringCtx<'a> {
         trace!("lowering LIR node to VM instruction");
         match node {
             LirNodeType::Noop => self.null_reg,
-            LirNodeType::Spawn { callee } => {
-                let callee = self.lower_node(*callee, span);
-                let dst = self.alloc_reg();
-                self.emit(VMInstruction::Spawn { dst, callee }, span);
-                dst
-            }
-            LirNodeType::Literal(x) => {
-                if let LirLiteral::Null = x {
-                    return self.null_reg;
-                }
-                let lit = VMLiteral::from_lir_literal(x, self.big_consts);
-                let lit = self.add_literal(lit);
-                let dst = self.alloc_reg();
-                self.emit(VMInstruction::LoadLiteral { dst, literal: lit }, span);
 
-                dst
-            }
-            LirNodeType::Call { caller, args } => {
-                let args = args
-                    .into_iter()
-                    .map(|arg| self.lower_node(arg, span))
-                    .collect();
-                let dst = self.alloc_reg();
+            LirNodeType::Spawn(x) => x.lower(self, span),
+            LirNodeType::Move(x) => x.lower(self, span),
+            LirNodeType::Drop(x) => x.lower(self, span),
+            LirNodeType::Load(x) => x.lower(self, span),
 
-                match *caller {
-                    LirNodeType::Load(name) | LirNodeType::Move(name)
-                        if name.as_ref() == self.current_fn_name.as_str() =>
-                    {
-                        self.emit(VMInstruction::CallSelf { dst, args }, span);
-                    }
-                    other => {
-                        let callee = self.lower_node(other, span);
-                        self.emit(VMInstruction::Call { dst, callee, args }, span);
-                    }
-                }
+            LirNodeType::Literal(x) => x.lower(self, span),
+            LirNodeType::List(x) => x.lower(self, span),
+            LirNodeType::Aggregate(x) => x.lower(self, span),
+            LirNodeType::Enum(x) => x.lower(self, span),
 
-                dst
-            }
-            LirNodeType::List { elements, .. } => {
-                let mut regs = Vec::with_capacity(elements.len());
-                for item in elements {
-                    regs.push(self.lower_node(item, span));
-                }
-                let dst = self.alloc_reg();
-                self.emit(VMInstruction::List { dst, items: regs }, span);
-                dst
-            }
-            LirNodeType::Move(name) => {
-                if self.captures.contains(name.as_ref()) || !self.map.contains_key(name.as_ref()) {
-                    let idx = self.add_string(name.to_string());
-                    let dst = self.alloc_reg();
-                    self.emit(VMInstruction::MoveVar { dst, name: idx }, span);
-                    dst
-                } else {
-                    self.map
-                        .insert(name.to_string(), self.null_reg)
-                        .unwrap_or(self.null_reg)
-                }
-            }
-            LirNodeType::Drop(name) => {
-                if self.captures.contains(name.as_ref()) || !self.map.contains_key(name.as_ref()) {
-                    let idx = self.add_string(name.to_string());
-                    self.emit(VMInstruction::DropVar { name: idx }, span);
-                } else {
-                    self.map.insert(name.to_string(), self.null_reg);
-                }
-                self.null_reg
-            }
-            LirNodeType::Load(name) => {
-                if let Some(reg) = self.map.get(name.as_ref())
-                    && reg != &self.null_reg
-                {
-                    *reg
-                } else {
-                    let idx = self.add_string(name.to_string());
-                    let dst = self.alloc_reg();
-                    self.emit(VMInstruction::LoadVar { dst, name: idx }, span);
-                    dst
-                }
-            }
-            LirNodeType::Aggregate { name, fields } => {
-                let mut layout = Vec::new();
-                let mut values = Vec::new();
+            LirNodeType::Range(x) => x.lower(self, span),
+            LirNodeType::Closure(x) => x.lower(self, span),
 
-                for (k, item) in fields.0 {
-                    values.push(self.lower_node(item, span));
-                    layout.push(k.to_string());
-                }
+            LirNodeType::Boolean(x) => x.lower(self, span),
+            LirNodeType::Comparison(x) => x.lower(self, span),
+            LirNodeType::Binary(x) => x.lower(self, span),
+            LirNodeType::As(x) => x.lower(self, span),
+            LirNodeType::Is(x) => x.lower(self, span),
 
-                self.block.aggregate_layouts.push(AggregateLayout {
-                    name,
-                    members: layout,
-                });
+            LirNodeType::Call(x) => x.lower(self, span),
+            LirNodeType::Deref(x) => x.lower(self, span),
+            LirNodeType::Ref(x) => x.lower(self, span),
+            LirNodeType::RefLoad(x) => x.lower(self, span),
+            LirNodeType::Index(x) => x.lower(self, span),
+            LirNodeType::Member(x) => x.lower(self, span),
 
-                let index = self.block.aggregate_layouts.len() - 1;
-                let dst = self.alloc_reg();
-
-                self.emit(
-                    VMInstruction::Aggregate {
-                        dst,
-                        layout: index as u16,
-                        fields: values,
-                    },
-                    span,
-                );
-
-                dst
-            }
-            LirNodeType::Boolean {
-                left,
-                right,
-                operator,
-            } => {
-                let left = self.lower_node(*left, span);
-                let right = self.lower_node(*right, span);
-                let dst = self.alloc_reg();
-
-                self.emit(
-                    VMInstruction::Boolean {
-                        dst,
-                        op: operator,
-                        left,
-                        right,
-                    },
-                    span,
-                );
-
-                dst
-            }
-            LirNodeType::Comparison {
-                left,
-                right,
-                operator,
-            } => {
-                let left = self.lower_node(*left, span);
-                let right = self.lower_node(*right, span);
-                let dst = self.alloc_reg();
-                self.emit(
-                    VMInstruction::Comparison {
-                        dst,
-                        op: operator,
-                        left,
-                        right,
-                    },
-                    span,
-                );
-                dst
-            }
-            LirNodeType::Binary {
-                left,
-                right,
-                operator,
-            } => {
-                let left = self.lower_node(*left, span);
-                let right = self.lower_node(*right, span);
-                let dst = self.alloc_reg();
-                self.emit(VMInstruction::AccLoad { src: left }, span);
-                self.emit(
-                    VMInstruction::AccBinary {
-                        op: operator,
-                        right,
-                    },
-                    span,
-                );
-                self.emit(VMInstruction::AccStore { dst }, span);
-                dst
-            }
-            LirNodeType::Range {
-                from,
-                to,
-                inclusive,
-            } => {
-                let from = self.lower_node(*from, span);
-                let to = self.lower_node(*to, span);
-                let dst = self.alloc_reg();
-                self.emit(
-                    VMInstruction::Range {
-                        dst,
-                        from,
-                        to,
-                        inclusive,
-                    },
-                    span,
-                );
-                dst
-            }
-            LirNodeType::Deref(x) => {
-                let value = self.lower_node(*x, span);
-                let dst = self.alloc_reg();
-                self.emit(VMInstruction::Deref { dst, value }, span);
-                dst
-            }
-            LirNodeType::Ref(x) => match *x {
-                LirNodeType::Load(name) => {
-                    let idx = self.add_string(name.to_string());
-                    let dst = self.alloc_reg();
-                    self.emit(VMInstruction::LoadVarRef { dst, name: idx }, span);
-                    dst
-                }
-                other => {
-                    let value = self.lower_node(other, span);
-                    let dst = self.alloc_reg();
-                    self.emit(VMInstruction::Ref { dst, value }, span);
-                    dst
-                }
-            },
-            LirNodeType::RefLoad(name) => {
-                let idx = self.add_string(name.to_string());
-                let dst = self.alloc_reg();
-                self.emit(VMInstruction::LoadVarRef { dst, name: idx }, span);
-                dst
-            }
-            LirNodeType::As(value, data_type, failure_mode) => {
-                let src = self.lower_node(*value, span);
-                let dst = self.alloc_reg();
-                self.emit(
-                    VMInstruction::As {
-                        dst,
-                        src,
-                        data_type,
-                        failure_mode,
-                    },
-                    span,
-                );
-                dst
-            }
-            LirNodeType::Is(value, data_type) => {
-                let src = self.lower_node(*value, span);
-                let dst = self.alloc_reg();
-                self.emit(
-                    VMInstruction::Is {
-                        dst,
-                        src,
-                        data_type,
-                    },
-                    span,
-                );
-                dst
-            }
-            LirNodeType::Enum {
-                name,
-                variant,
-                payload,
-            } => {
-                let payload = payload.map(|v| self.lower_node(*v, span));
-                let name = self.add_string(name.to_string());
-                let dst = self.alloc_reg();
-                self.emit(
-                    VMInstruction::Enum {
-                        dst,
-                        name,
-                        variant: variant as u16,
-                        payload,
-                    },
-                    span,
-                );
-                dst
-            }
-            LirNodeType::Index(value, index) => {
-                let index = self.lower_node(*index, span);
-                let value = self.lower_node(*value, span);
-                let dst = self.alloc_reg();
-                self.emit(VMInstruction::Index { dst, value, index }, span);
-                dst
-            }
-            LirNodeType::Member(value, member) => {
-                let value = self.lower_node(*value, span);
-                let member = self.add_string(member.to_string());
-                let dst = self.alloc_reg();
-                self.emit(VMInstruction::LoadMember { dst, value, member }, span);
-                dst
-            }
-            LirNodeType::Closure { label, captures } => {
-                self.block.local_literals.push(VMLiteral::Closure {
-                    label: label.to_string(),
-                    captures: captures.into_iter().map(|x| x.to_string()).collect(),
-                });
-                let lit = (self.block.local_literals.len() - 1) as u16;
-                let dst = self.alloc_reg();
-                self.emit(VMInstruction::LoadLiteral { dst, literal: lit }, span);
-                dst
-            }
-            LirNodeType::ExternFunction {
-                abi,
-                library,
-                symbol,
-                parameters,
-                return_type,
-            } => {
-                self.block.local_literals.push(VMLiteral::ExternFunction {
-                    abi: abi.to_string(),
-                    library: library.to_string(),
-                    symbol: symbol.to_string(),
-                    parameters,
-                    return_type,
-                });
-                let lit = (self.block.local_literals.len() - 1) as u16;
-                let dst = self.alloc_reg();
-                self.emit(VMInstruction::LoadLiteral { dst, literal: lit }, span);
-                dst
-            }
-            LirNodeType::Assign { .. } | LirNodeType::Declare { .. } => self.null_reg,
+            LirNodeType::ExternFunction(x) => x.lower(self, span),
+            LirNodeType::Assign(x) => x.lower(self, span),
+            LirNodeType::Declare(x) => x.lower(self, span),
         }
     }
 

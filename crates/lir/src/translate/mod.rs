@@ -1,5 +1,5 @@
 use crate::{
-    ast::{BlockId, LirLValue, LirNode, LirNodeType, LirTerminator},
+    ast::{BlockId, LirAssign, LirDeclare, LirLValue, LirNode, LirNodeType, LirTerminator},
     environment::{LirEnvironment, LirGlobal, LirRegistry},
 };
 use calibre_mir::{
@@ -48,21 +48,21 @@ impl<'a> LirEnvironment<'a> {
     fn assign_var(&mut self, span: Span, name: &str, value: LirNodeType) {
         self.add_instr(LirNode::new(
             span,
-            LirNodeType::Assign {
+            LirNodeType::Assign(LirAssign {
                 dest: LirLValue::Var(name.to_string().into_boxed_str()),
                 value: Box::new(value),
-            },
+            }),
         ));
     }
 
     fn declare_temp_null(&mut self, span: Span, temp: &str) {
         self.add_instr(LirNode::new(
             span,
-            LirNodeType::Declare {
+            LirNodeType::Declare(LirDeclare {
                 dest: temp.to_string().into_boxed_str(),
                 data_type: ParserDataType::null(span),
                 value: Box::new(LirNodeType::null()),
-            },
+            }),
         ));
     }
 

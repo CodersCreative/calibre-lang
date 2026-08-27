@@ -17,3 +17,5 @@ calibre-mir = { workspace = true }
 calibre-parser = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
+indextree = { workspace = true }
+derive_builder = { workspace = true }

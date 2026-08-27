@@ -8,6 +8,7 @@ use calibre_parser::{
         types::ParserDataType,
     },
 };
+use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
@@ -57,81 +58,181 @@ impl Display for LirLiteral {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirSpawn {
+    pub value: Box<LirNodeType>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirClosure {
+    pub label: Box<str>,
+    pub captures: Vec<Box<str>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirList {
+    pub values: Vec<LirNodeType>,
+    pub data_type: ParserDataType,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirAggregate {
+    pub name: Option<String>,
+    pub fields: ObjectMap<LirNodeType>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirRange {
+    pub from: Box<LirNodeType>,
+    pub to: Box<LirNodeType>,
+    pub inclusive: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirLoad {
+    pub value: Box<str>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirMove {
+    pub value: Box<str>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirDrop {
+    pub value: Box<str>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirBoolean {
+    pub left: Box<LirNodeType>,
+    pub right: Box<LirNodeType>,
+    pub operator: BooleanOperator,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirBinary {
+    pub left: Box<LirNodeType>,
+    pub right: Box<LirNodeType>,
+    pub operator: BinaryOperator,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirComparison {
+    pub left: Box<LirNodeType>,
+    pub right: Box<LirNodeType>,
+    pub operator: ComparisonOperator,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirCall {
+    pub caller: Box<LirNodeType>,
+    pub args: Vec<LirNodeType>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirDeref {
+    pub value: Box<LirNodeType>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirRef {
+    pub value: Box<LirNodeType>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirRefLoad {
+    pub value: Box<str>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirIndex {
+    pub base: Box<LirNodeType>,
+    pub index: Box<LirNodeType>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirMember {
+    pub base: Box<LirNodeType>,
+    pub field: Box<str>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirEnum {
+    pub name: Box<str>,
+    pub variant: u32,
+    pub payload: Option<Box<LirNodeType>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirAs {
+    pub value: Box<LirNodeType>,
+    pub data_type: ParserDataType,
+    pub failure_mode: AsFailureMode,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirIs {
+    pub value: Box<LirNodeType>,
+    pub data_type: ParserDataType,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirAssign {
+    pub dest: LirLValue,
+    pub value: Box<LirNodeType>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirDeclare {
+    pub dest: Box<str>,
+    pub value: Box<LirNodeType>,
+    pub data_type: ParserDataType,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct LirExtern {
+    pub abi: Box<str>,
+    pub library: Box<str>,
+    pub symbol: Box<str>,
+    pub parameters: Vec<ParserDataType>,
+    pub return_type: ParserDataType,
+}
+
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum LirNodeType {
     Noop,
-    Spawn {
-        callee: Box<LirNodeType>,
-    },
-    Closure {
-        label: Box<str>,
-        captures: Vec<Box<str>>,
-    },
-    List {
-        elements: Vec<LirNodeType>,
-        data_type: ParserDataType,
-    },
-    Aggregate {
-        name: Option<String>,
-        fields: ObjectMap<LirNodeType>,
-    },
-    Range {
-        from: Box<LirNodeType>,
-        to: Box<LirNodeType>,
-        inclusive: bool,
-    },
+
+    Call(LirCall),
+    Deref(LirDeref),
+    Ref(LirRef),
+    RefLoad(LirRefLoad),
+    Index(LirIndex),
+    Member(LirMember),
+
+    Boolean(LirBoolean),
+    Binary(LirBinary),
+    Comparison(LirComparison),
+    As(LirAs),
+    Is(LirIs),
+
+    Range(LirRange),
+    Closure(LirClosure),
+
+    List(LirList),
+    Aggregate(LirAggregate),
     Literal(LirLiteral),
-    Load(Box<str>),
-    Boolean {
-        left: Box<LirNodeType>,
-        right: Box<LirNodeType>,
-        operator: BooleanOperator,
-    },
-    Move(Box<str>),
-    Drop(Box<str>),
-    Binary {
-        left: Box<LirNodeType>,
-        right: Box<LirNodeType>,
-        operator: BinaryOperator,
-    },
-    Comparison {
-        left: Box<LirNodeType>,
-        right: Box<LirNodeType>,
-        operator: ComparisonOperator,
-    },
-    Call {
-        caller: Box<LirNodeType>,
-        args: Vec<LirNodeType>,
-    },
-    Deref(Box<LirNodeType>),
-    Ref(Box<LirNodeType>),
-    RefLoad(Box<str>),
-    Index(Box<LirNodeType>, Box<LirNodeType>),
-    Member(Box<LirNodeType>, Box<str>),
-    Enum {
-        name: Box<str>,
-        variant: u32,
-        payload: Option<Box<LirNodeType>>,
-    },
-    As(Box<LirNodeType>, ParserDataType, AsFailureMode),
-    Is(Box<LirNodeType>, ParserDataType),
-    Assign {
-        dest: LirLValue,
-        value: Box<LirNodeType>,
-    },
-    Declare {
-        dest: Box<str>,
-        value: Box<LirNodeType>,
-        data_type: ParserDataType,
-    },
-    ExternFunction {
-        abi: Box<str>,
-        library: Box<str>,
-        symbol: Box<str>,
-        parameters: Vec<ParserDataType>,
-        return_type: ParserDataType,
-    },
+    Enum(LirEnum),
+
+    Load(LirLoad),
+    Move(LirMove),
+    Drop(LirDrop),
+    Spawn(LirSpawn),
+
+    Assign(LirAssign),
+    Declare(LirDeclare),
+    ExternFunction(LirExtern),
 }
 
 impl LirNodeType {
@@ -141,11 +242,11 @@ impl LirNodeType {
 
     pub fn local_name(&self) -> Option<&str> {
         match self {
-            LirNodeType::Declare { dest, .. } => Some(dest.as_ref()),
-            LirNodeType::Assign {
+            LirNodeType::Declare(LirDeclare { dest, .. }) => Some(dest.as_ref()),
+            LirNodeType::Assign(LirAssign {
                 dest: LirLValue::Var(name),
                 ..
-            } => Some(name.as_ref()),
+            }) => Some(name.as_ref()),
             _ => None,
         }
     }
@@ -172,11 +273,11 @@ impl LirNodeType {
 
     #[inline]
     pub fn bool(value: bool) -> Self {
-        LirNodeType::Load(
-            if value { "true" } else { "false" }
+        LirNodeType::Load(LirLoad {
+            value: if value { "true" } else { "false" }
                 .to_string()
                 .into_boxed_str(),
-        )
+        })
     }
 
     #[inline]
@@ -192,22 +293,19 @@ impl Display for LirNodeType {
             "{}",
             match self {
                 Self::Noop => "noop".to_string(),
-                Self::Spawn { callee } => format!("spawn {}", callee),
-                Self::List {
-                    elements,
-                    data_type,
-                } => {
+                Self::Spawn(LirSpawn { value }) => format!("spawn {}", value),
+                Self::List(LirList { values, data_type }) => {
                     format!(
                         "list:<{}>[{}]",
                         data_type,
-                        elements
+                        values
                             .iter()
                             .map(|x| x.to_string())
                             .collect::<Vec<_>>()
                             .join(", ")
                     )
                 }
-                Self::Closure { label, captures } => {
+                Self::Closure(LirClosure { label, captures }) => {
                     format!(
                         "let {} = fn[{}]",
                         label,
@@ -218,32 +316,36 @@ impl Display for LirNodeType {
                             .join(", ")
                     )
                 }
-                Self::Aggregate { name, fields: _ } => {
+                Self::Aggregate(LirAggregate { name, fields: _ }) => {
                     name.as_ref().map(|x| x.to_string()).unwrap_or_default()
                 }
                 Self::Literal(x) => x.to_string(),
-                Self::As(node, data_type, failure_mode) => {
+                Self::As(LirAs {
+                    value,
+                    data_type,
+                    failure_mode,
+                }) => {
                     let suffix = match failure_mode {
                         AsFailureMode::Panic => "!",
                         AsFailureMode::Option => "?",
                         AsFailureMode::Result => "",
                     };
-                    format!("{} as{} {}", node, suffix, data_type)
+                    format!("{} as{} {}", value, suffix, data_type)
                 }
-                Self::Is(node, data_type) => format!("{node} is {data_type}"),
-                Self::Declare {
+                Self::Is(LirIs { value, data_type }) => format!("{value} is {data_type}"),
+                Self::Declare(LirDeclare {
                     dest,
-                    data_type,
                     value,
-                } => format!("let {} : {} = {}", dest, data_type, value),
-                Self::Assign { dest, value } => format!("{} := {}", dest, value),
-                Self::ExternFunction {
+                    data_type,
+                }) => format!("let {} : {} = {}", dest, data_type, value),
+                Self::Assign(LirAssign { dest, value }) => format!("{} := {}", dest, value),
+                Self::ExternFunction(LirExtern {
                     abi,
                     library,
                     symbol,
                     parameters,
                     return_type,
-                } => {
+                }) => {
                     format!(
                         "extern \"{}\" {}({}) -> {} from {}",
                         abi,
@@ -257,28 +359,28 @@ impl Display for LirNodeType {
                         library
                     )
                 }
-                Self::Range {
+                Self::Range(LirRange {
                     from,
                     to,
                     inclusive,
-                } => format!("{}..{}{}", from, if *inclusive { "=" } else { "" }, to),
-                Self::Boolean {
+                }) => format!("{}..{}{}", from, if *inclusive { "=" } else { "" }, to),
+                Self::Boolean(LirBoolean {
                     left,
                     right,
                     operator,
-                } => format!("{} {} {}", left, operator, right),
-                Self::Comparison {
+                }) => format!("{} {} {}", left, operator, right),
+                Self::Comparison(LirComparison {
                     left,
                     right,
                     operator,
-                } => format!("{} {} {}", left, operator, right),
-                Self::Binary {
+                }) => format!("{} {} {}", left, operator, right),
+                Self::Binary(LirBinary {
                     left,
                     right,
                     operator,
-                } => format!("{} {} {}", left, operator, right),
-                Self::Load(x) => format!("{}", x),
-                Self::Call { caller, args } => {
+                }) => format!("{} {} {}", left, operator, right),
+                Self::Load(LirLoad { value }) => format!("{}", value),
+                Self::Call(LirCall { caller, args }) => {
                     let mut txt = format!("{}(", caller);
                     for arg in args {
                         txt.push_str(&format!("{}, ", arg));
@@ -287,16 +389,16 @@ impl Display for LirNodeType {
                     txt.push(')');
                     txt
                 }
-                Self::Ref(x) => format!("&{}", x),
-                Self::RefLoad(name) => format!("&{}", name),
-                Self::Deref(x) => format!("*{}", x),
-                Self::Drop(x) => format!("drop {}", x),
-                Self::Move(x) => format!("move {}", x),
-                Self::Enum {
+                Self::Ref(LirRef { value }) => format!("&{}", value),
+                Self::RefLoad(LirRefLoad { value }) => format!("&{}", value),
+                Self::Deref(LirDeref { value }) => format!("*{}", value),
+                Self::Drop(LirDrop { value }) => format!("drop {}", value),
+                Self::Move(LirMove { value }) => format!("move {}", value),
+                Self::Enum(LirEnum {
                     name,
                     variant,
                     payload,
-                } => format!(
+                }) => format!(
                     "{}.{}{}",
                     name,
                     variant,
@@ -305,8 +407,8 @@ impl Display for LirNodeType {
                         None => String::new(),
                     }
                 ),
-                Self::Index(x, i) => format!("{}[{}]", x, i),
-                Self::Member(x, i) => format!("{}.{}", x, i),
+                Self::Index(LirIndex { base, index }) => format!("{}[{}]", base, index),
+                Self::Member(LirMember { base, field }) => format!("{}.{}", base, field),
             }
         )
     }

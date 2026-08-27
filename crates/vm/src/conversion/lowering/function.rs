@@ -1,4 +1,5 @@
 use super::*;
+use calibre_lir::ast::{LirAssign, LirDeclare};
 use tracing::{debug, instrument};
 
 impl VMFunction {
@@ -129,13 +130,13 @@ impl FunctionLowering {
             for block in &func.blocks {
                 for instr in &block.instructions {
                     match &instr.node_type {
-                        LirNodeType::Declare { dest, .. } => {
+                        LirNodeType::Declare(LirDeclare { dest, .. }) => {
                             locals.insert(dest.to_string());
                         }
-                        LirNodeType::Assign {
+                        LirNodeType::Assign(LirAssign {
                             dest: LirLValue::Var(name),
                             ..
-                        } => {
+                        }) => {
                             locals.insert(name.to_string());
                         }
                         _ => {}

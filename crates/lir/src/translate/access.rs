@@ -7,7 +7,7 @@ CallExpression
 */
 
 use crate::{
-    ast::{LirLValue, LirNodeType},
+    ast::{LirCall, LirIndex, LirLValue, LirLoad, LirMember, LirMove, LirNodeType, LirRef},
     environment::LirEnvironment,
     translate::LirLowering,
 };
@@ -17,10 +17,10 @@ use calibre_parser::{Span, ast::types::ParserInnerType};
 impl LirLowering for MirField {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Member(
-            Box::new(env.lower_node(*self.base)),
-            self.field.text.into_boxed_str(),
-        )
+        LirNodeType::Member(LirMember {
+            base: Box::new(env.lower_node(*self.base)),
+            field: self.field.text.into_boxed_str(),
+        })
     }
 
     #[inline(always)]
@@ -28,20 +28,20 @@ impl LirLowering for MirField {
     where
         Self: Sized,
     {
-        LirLValue::Ptr(Box::new(LirNodeType::Member(
-            Box::new(env.lower_node(*self.base)),
-            self.field.text.into_boxed_str(),
-        )))
+        LirLValue::Ptr(Box::new(LirNodeType::Member(LirMember {
+            base: Box::new(env.lower_node(*self.base)),
+            field: self.field.text.into_boxed_str(),
+        })))
     }
 }
 
 impl LirLowering for MirScope {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Member(
-            Box::new(env.lower_node(*self.base)),
-            self.field.text.into_boxed_str(),
-        )
+        LirNodeType::Member(LirMember {
+            base: Box::new(env.lower_node(*self.base)),
+            field: self.field.text.into_boxed_str(),
+        })
     }
 
     #[inline(always)]
@@ -49,20 +49,20 @@ impl LirLowering for MirScope {
     where
         Self: Sized,
     {
-        LirLValue::Ptr(Box::new(LirNodeType::Member(
-            Box::new(env.lower_node(*self.base)),
-            self.field.text.into_boxed_str(),
-        )))
+        LirLValue::Ptr(Box::new(LirNodeType::Member(LirMember {
+            base: Box::new(env.lower_node(*self.base)),
+            field: self.field.text.into_boxed_str(),
+        })))
     }
 }
 
 impl LirLowering for MirIndex {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Index(
-            Box::new(env.lower_node(*self.base)),
-            Box::new(env.lower_node(*self.index)),
-        )
+        LirNodeType::Index(LirIndex {
+            base: Box::new(env.lower_node(*self.base)),
+            index: Box::new(env.lower_node(*self.index)),
+        })
     }
 
     #[inline(always)]
@@ -70,10 +70,10 @@ impl LirLowering for MirIndex {
     where
         Self: Sized,
     {
-        LirLValue::Ptr(Box::new(LirNodeType::Index(
-            Box::new(env.lower_node(*self.base)),
-            Box::new(env.lower_node(*self.index)),
-        )))
+        LirLValue::Ptr(Box::new(LirNodeType::Index(LirIndex {
+            base: Box::new(env.lower_node(*self.base)),
+            index: Box::new(env.lower_node(*self.index)),
+        })))
     }
 }
 
@@ -85,8 +85,9 @@ impl LirLowering for MirCall {
         let l_caller = env.lower_node(*self.caller);
         let mut l_args = env.lower_nodes(self.args);
 
-        if let LirNodeType::Load(name) | LirNodeType::Move(name) = &l_caller
-            && let Some(var) = env.env.symbols.variables.get(name.as_ref())
+        if let LirNodeType::Load(LirLoad { value }) | LirNodeType::Move(LirMove { value }) =
+            &l_caller
+            && let Some(var) = env.env.symbols.variables.get(value.as_ref())
             && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
         {
             if let Some(first) = parameters.first() {
@@ -102,13 +103,14 @@ impl LirLowering for MirCall {
             && let Some(first_arg) = l_args.get_mut(0)
             && matches!(first_arg, LirNodeType::Load(_))
         {
-            *first_arg =
-                LirNodeType::Ref(Box::new(std::mem::replace(first_arg, LirNodeType::null())));
+            *first_arg = LirNodeType::Ref(LirRef {
+                value: Box::new(std::mem::replace(first_arg, LirNodeType::null())),
+            });
         }
 
-        LirNodeType::Call {
+        LirNodeType::Call(LirCall {
             caller: Box::new(l_caller),
             args: l_args,
-        }
+        })
     }
 }

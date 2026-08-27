@@ -1,5 +1,9 @@
 use crate::{
-    ast::{LirLValue, LirNodeType, LirTerminator},
+    ast::{
+        LirAggregate, LirAs, LirAssign, LirBinary, LirBoolean, LirCall, LirClosure, LirComparison,
+        LirDeclare, LirDeref, LirEnum, LirIndex, LirIs, LirLValue, LirList, LirLoad, LirMember,
+        LirMove, LirNodeType, LirRange, LirRef, LirRefLoad, LirSpawn, LirTerminator,
+    },
     environment::{LirFunction, LirGlobal, LirRegistry},
 };
 use rustc_hash::FxHashSet;
@@ -194,16 +198,18 @@ impl LirNodeType {
         worklist: &mut WorkList,
     ) {
         match self {
-            LirNodeType::Load(name) | LirNodeType::Move(name) | LirNodeType::RefLoad(name) => {
-                if registry.functions.contains_key(name.as_ref()) {
-                    if reachable_functions.insert(name.as_ref().to_string()) {
-                        worklist.push(name.as_ref().to_string());
+            LirNodeType::Load(LirLoad { value })
+            | LirNodeType::Move(LirMove { value })
+            | LirNodeType::RefLoad(LirRefLoad { value }) => {
+                if registry.functions.contains_key(value.as_ref()) {
+                    if reachable_functions.insert(value.as_ref().to_string()) {
+                        worklist.push(value.as_ref().to_string());
                     }
-                } else if registry.globals.contains_key(name.as_ref()) {
-                    reachable_globals.insert(name.as_ref().to_string());
+                } else if registry.globals.contains_key(value.as_ref()) {
+                    reachable_globals.insert(value.as_ref().to_string());
                 }
             }
-            LirNodeType::Call { caller, args } => {
+            LirNodeType::Call(LirCall { caller, args }) => {
                 caller.collect_references(
                     registry,
                     reachable_functions,
@@ -222,20 +228,17 @@ impl LirNodeType {
                     );
                 }
             }
-            LirNodeType::Closure { label, .. } => {
+            LirNodeType::Closure(LirClosure { label, .. }) => {
                 if registry.functions.contains_key(label.as_ref())
                     && reachable_functions.insert(label.as_ref().to_string())
                 {
                     worklist.push(label.as_ref().to_string());
                 }
             }
-            LirNodeType::List {
-                elements,
-                data_type,
-            } => {
+            LirNodeType::List(LirList { values, data_type }) => {
                 referenced_types.insert(data_type.impl_name());
 
-                for element in elements {
+                for element in values {
                     element.collect_references(
                         registry,
                         reachable_functions,
@@ -245,7 +248,7 @@ impl LirNodeType {
                     );
                 }
             }
-            LirNodeType::Aggregate { name, fields } => {
+            LirNodeType::Aggregate(LirAggregate { name, fields }) => {
                 if let Some(x) = name {
                     referenced_types.insert(x.to_string());
                 }
@@ -260,14 +263,14 @@ impl LirNodeType {
                     );
                 }
             }
-            LirNodeType::Range {
+            LirNodeType::Range(LirRange {
                 from: left,
                 to: right,
                 ..
-            }
-            | LirNodeType::Boolean { left, right, .. }
-            | LirNodeType::Comparison { left, right, .. }
-            | LirNodeType::Binary { left, right, .. } => {
+            })
+            | LirNodeType::Boolean(LirBoolean { left, right, .. })
+            | LirNodeType::Comparison(LirComparison { left, right, .. })
+            | LirNodeType::Binary(LirBinary { left, right, .. }) => {
                 left.collect_references(
                     registry,
                     reachable_functions,
@@ -284,7 +287,7 @@ impl LirNodeType {
                 );
             }
 
-            LirNodeType::Index(base, index) => {
+            LirNodeType::Index(LirIndex { base, index }) => {
                 base.collect_references(
                     registry,
                     reachable_functions,
@@ -300,7 +303,7 @@ impl LirNodeType {
                     worklist,
                 );
             }
-            LirNodeType::Enum { name, payload, .. } => {
+            LirNodeType::Enum(LirEnum { name, payload, .. }) => {
                 referenced_types.insert(name.as_ref().to_string());
                 if let Some(payload) = payload {
                     payload.collect_references(
@@ -312,11 +315,15 @@ impl LirNodeType {
                     );
                 }
             }
-            LirNodeType::As(value, data_type, _)
-            | LirNodeType::Declare {
+            LirNodeType::As(LirAs {
+                value,
+                data_type,
+                failure_mode: _,
+            })
+            | LirNodeType::Declare(LirDeclare {
                 value, data_type, ..
-            }
-            | LirNodeType::Is(value, data_type) => {
+            })
+            | LirNodeType::Is(LirIs { value, data_type }) => {
                 referenced_types.insert(data_type.impl_name());
                 value.collect_references(
                     registry,
@@ -326,10 +333,13 @@ impl LirNodeType {
                     worklist,
                 );
             }
-            LirNodeType::Spawn { callee: value }
-            | LirNodeType::Deref(value)
-            | LirNodeType::Ref(value)
-            | LirNodeType::Member(value, _) => {
+            LirNodeType::Spawn(LirSpawn { value })
+            | LirNodeType::Deref(LirDeref { value })
+            | LirNodeType::Ref(LirRef { value })
+            | LirNodeType::Member(LirMember {
+                base: value,
+                field: _,
+            }) => {
                 value.collect_references(
                     registry,
                     reachable_functions,
@@ -338,7 +348,7 @@ impl LirNodeType {
                     worklist,
                 );
             }
-            LirNodeType::Assign { dest, value } => {
+            LirNodeType::Assign(LirAssign { dest, value }) => {
                 value.collect_references(
                     registry,
                     reachable_functions,
@@ -359,7 +369,7 @@ impl LirNodeType {
             LirNodeType::Noop
             | LirNodeType::Literal(_)
             | LirNodeType::Drop(_)
-            | LirNodeType::ExternFunction { .. } => {}
+            | LirNodeType::ExternFunction(_) => {}
         }
     }
 }

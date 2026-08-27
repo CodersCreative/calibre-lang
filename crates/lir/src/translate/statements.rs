@@ -7,7 +7,10 @@ EnumExpression
 */
 
 use crate::{
-    ast::{LirLValue, LirNode, LirNodeType},
+    ast::{
+        LirAggregate, LirAssign, LirDeclare, LirDeref, LirEnum, LirIndex, LirLValue, LirLoad,
+        LirMember, LirNode, LirNodeType,
+    },
     environment::LirEnvironment,
     translate::LirLowering,
 };
@@ -30,10 +33,10 @@ impl LirLowering for MirAssignment {
 
         let (lhs, old_expr) = match self.identifier.node_type {
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
-                let name = identifier.to_string().into_boxed_str();
+                let value = identifier.to_string().into_boxed_str();
                 (
-                    Some(LirLValue::Var(name.clone())),
-                    Some(LirNodeType::Load(name)),
+                    Some(LirLValue::Var(value.clone())),
+                    Some(LirNodeType::Load(LirLoad { value })),
                 )
             }
             MiddleNodeType::DerefStatement(MirDeref { value }) => {
@@ -41,16 +44,20 @@ impl LirLowering for MirAssignment {
                 let ptr_tmp = env.get_temp();
                 env.add_instr(LirNode::new(
                     ident_span,
-                    LirNodeType::Declare {
+                    LirNodeType::Declare(LirDeclare {
                         dest: ptr_tmp.clone().into_boxed_str(),
                         data_type: ParserDataType::auto(ident_span),
                         value: Box::new(ptr_expr),
-                    },
+                    }),
                 ));
-                let ptr_load = LirNodeType::Load(ptr_tmp.into_boxed_str());
+                let ptr_load = LirNodeType::Load(LirLoad {
+                    value: ptr_tmp.into_boxed_str(),
+                });
                 (
                     Some(LirLValue::Ptr(Box::new(ptr_load.clone()))),
-                    Some(LirNodeType::Deref(Box::new(ptr_load))),
+                    Some(LirNodeType::Deref(LirDeref {
+                        value: Box::new(ptr_load),
+                    })),
                 )
             }
             MiddleNodeType::FieldAccess(MirField { base, field }) => {
@@ -58,23 +65,25 @@ impl LirLowering for MirAssignment {
                 let base_tmp = env.get_temp();
                 env.add_instr(LirNode::new(
                     ident_span,
-                    LirNodeType::Declare {
+                    LirNodeType::Declare(LirDeclare {
                         dest: base_tmp.clone().into_boxed_str(),
                         data_type: ParserDataType::auto(ident_span),
                         value: Box::new(base_expr),
-                    },
+                    }),
                 ));
-                let base_load = LirNodeType::Load(base_tmp.into_boxed_str());
+                let base_load = LirNodeType::Load(LirLoad {
+                    value: base_tmp.into_boxed_str(),
+                });
 
                 (
-                    Some(LirLValue::Ptr(Box::new(LirNodeType::Member(
-                        Box::new(base_load.clone()),
-                        field.text.clone().into_boxed_str(),
-                    )))),
-                    Some(LirNodeType::Member(
-                        Box::new(base_load),
-                        field.text.into_boxed_str(),
-                    )),
+                    Some(LirLValue::Ptr(Box::new(LirNodeType::Member(LirMember {
+                        base: Box::new(base_load.clone()),
+                        field: field.text.clone().into_boxed_str(),
+                    })))),
+                    Some(LirNodeType::Member(LirMember {
+                        base: Box::new(base_load),
+                        field: field.text.into_boxed_str(),
+                    })),
                 )
             }
             MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
@@ -82,36 +91,40 @@ impl LirLowering for MirAssignment {
                 let base_tmp = env.get_temp();
                 env.add_instr(LirNode::new(
                     ident_span,
-                    LirNodeType::Declare {
+                    LirNodeType::Declare(LirDeclare {
                         dest: base_tmp.clone().into_boxed_str(),
                         data_type: ParserDataType::auto(ident_span),
                         value: Box::new(base_expr),
-                    },
+                    }),
                 ));
-                let base_load = LirNodeType::Load(base_tmp.into_boxed_str());
+                let base_load = LirNodeType::Load(LirLoad {
+                    value: base_tmp.into_boxed_str(),
+                });
 
                 let index_expr = env.lower_node(*index);
                 let index_tmp = env.get_temp();
                 env.add_instr(LirNode::new(
                     ident_span,
-                    LirNodeType::Declare {
+                    LirNodeType::Declare(LirDeclare {
                         dest: index_tmp.clone().into_boxed_str(),
                         data_type: ParserDataType::auto(ident_span),
                         value: Box::new(index_expr),
-                    },
+                    }),
                 ));
 
-                let index_load = LirNodeType::Load(index_tmp.into_boxed_str());
+                let index_load = LirNodeType::Load(LirLoad {
+                    value: index_tmp.into_boxed_str(),
+                });
 
                 (
-                    Some(LirLValue::Ptr(Box::new(LirNodeType::Index(
-                        Box::new(base_load.clone()),
-                        Box::new(index_load.clone()),
-                    )))),
-                    Some(LirNodeType::Index(
-                        Box::new(base_load),
-                        Box::new(index_load),
-                    )),
+                    Some(LirLValue::Ptr(Box::new(LirNodeType::Index(LirIndex {
+                        base: Box::new(base_load.clone()),
+                        index: Box::new(index_load.clone()),
+                    })))),
+                    Some(LirNodeType::Index(LirIndex {
+                        base: Box::new(base_load),
+                        index: Box::new(index_load),
+                    })),
                 )
             }
             other => (
@@ -124,24 +137,26 @@ impl LirLowering for MirAssignment {
         let temp = env.get_temp();
         env.add_instr(LirNode::new(
             ident_span,
-            LirNodeType::Declare {
+            LirNodeType::Declare(LirDeclare {
                 dest: temp.clone().into_boxed_str(),
                 data_type: ParserDataType::auto(ident_span),
                 value: Box::new(old_expr),
-            },
+            }),
         ));
 
         if let Some(lhs) = lhs {
             env.add_instr(LirNode::new(
                 ident_span,
-                LirNodeType::Assign {
+                LirNodeType::Assign(LirAssign {
                     dest: lhs,
                     value: Box::new(rhs),
-                },
+                }),
             ));
         }
 
-        LirNodeType::Load(temp.into_boxed_str())
+        LirNodeType::Load(LirLoad {
+            value: temp.into_boxed_str(),
+        })
     }
 }
 
@@ -153,7 +168,7 @@ impl LirLowering for MirDebug {
 
 impl LirLowering for MirAggregate {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Aggregate {
+        LirNodeType::Aggregate(LirAggregate {
             name: self.identifier.map(|i| i.to_string()),
             fields: ObjectMap(
                 self.value
@@ -164,13 +179,13 @@ impl LirLowering for MirAggregate {
                     })
                     .collect(),
             ),
-        }
+        })
     }
 }
 
 impl LirLowering for MirEnum {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Enum {
+        LirNodeType::Enum(LirEnum {
             variant: if let Some(obj) = env.env.typing.objects.get(&self.identifier.to_string())
                 && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
             {
@@ -183,6 +198,6 @@ impl LirLowering for MirEnum {
             },
             name: self.identifier.text.into_boxed_str(),
             payload: self.data.map(|d| Box::new(env.lower_node(*d))),
-        }
+        })
     }
 }

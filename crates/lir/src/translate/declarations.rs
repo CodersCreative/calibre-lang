@@ -7,7 +7,7 @@ ExternFunction
 */
 
 use crate::{
-    ast::{LirNode, LirNodeType},
+    ast::{LirClosure, LirDeclare, LirExtern, LirLoad, LirNode, LirNodeType},
     environment::{LirEnvironment, LirFunction, LirGlobal},
     translate::LirLowering,
 };
@@ -33,11 +33,11 @@ impl LirLowering for MirVarDecl {
 
         env.add_instr(LirNode::new(
             self.identifier.span,
-            LirNodeType::Declare {
+            LirNodeType::Declare(LirDeclare {
                 dest: self.identifier.to_string().into_boxed_str(),
                 data_type: self.data_type,
                 value: Box::new(val),
-            },
+            }),
         ));
 
         LirNodeType::null()
@@ -100,14 +100,16 @@ impl LirLowering for MirScopeDecl {
 
             env.add_instr(LirNode::new(
                 span,
-                LirNodeType::Declare {
+                LirNodeType::Declare(LirDeclare {
                     dest: temp.clone().into_boxed_str(),
                     data_type: ParserDataType::auto(span),
                     value: Box::new(lowered),
-                },
+                }),
             ));
 
-            LirNodeType::Load(temp.into_boxed_str())
+            LirNodeType::Load(LirLoad {
+                value: temp.into_boxed_str(),
+            })
         }
     }
 }
@@ -215,22 +217,22 @@ impl LirLowering for MirFunction {
             },
         );
 
-        LirNodeType::Closure {
+        LirNodeType::Closure(LirClosure {
             label: internal_name.into_boxed_str(),
             captures: capture_names,
-        }
+        })
     }
 }
 
 impl LirLowering for MirExtern {
     #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::ExternFunction {
+        LirNodeType::ExternFunction(LirExtern {
             abi: self.abi.into_boxed_str(),
             library: self.library.into_boxed_str(),
             symbol: self.symbol.into_boxed_str(),
             parameters: self.parameters,
             return_type: self.return_type,
-        }
+        })
     }
 }

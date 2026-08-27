@@ -1,7 +1,7 @@
 use super::ir::*;
 use astro_float::Consts;
 use calibre_lir::{
-    ast::{BlockId, LirBlock, LirLValue, LirLiteral, LirNode, LirNodeType, LirTerminator},
+    ast::{BlockId, LirBlock, LirLValue, LirNode, LirNodeType, LirTerminator},
     environment::LirFunction,
 };
 use calibre_parser::Span;
