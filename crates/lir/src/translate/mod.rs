@@ -1,5 +1,6 @@
 use crate::{
-    ast::{BlockId, LirAssign, LirDeclare, LirLValue, LirNodeType, LirTerminator}, environment::{LirEnvironment, LirGlobal, LirId, LirRegistry},
+    ast::{BlockId, LirAssign, LirDeclare, LirLValue, LirNode, LirNodeType, LirTerminator},
+    environment::{LirEnvironment, LirGlobal, LirRegistry},
 };
 use calibre_mir::{
     ast::{MiddleNode, MiddleNodeType},
@@ -25,7 +26,7 @@ pub mod memory;
 pub mod statements;
 
 pub trait LirLowering {
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirId;
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType;
 
     #[inline(always)]
     fn lower_lvalue<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirLValue
@@ -37,32 +38,32 @@ pub trait LirLowering {
 }
 
 impl<'a> LirEnvironment<'a> {
-    fn lower_nodes(&mut self, nodes: Vec<MiddleNode>) -> Vec<LirId> {
+    fn lower_nodes(&mut self, nodes: Vec<MiddleNode>) -> Vec<LirNodeType> {
         nodes
             .into_iter()
             .map(|node| self.lower_node(node))
             .collect()
     }
 
-    fn assign_var(&mut self, span: Span, name: &str, value: LirId) {
-        let id = self.add(LirNodeType::Assign(LirAssign {
+    fn assign_var(&mut self, span: Span, name: &str, value: LirNodeType) {
+        self.add_instr(LirNode::new(
+            span,
+            LirNodeType::Assign(LirAssign {
                 dest: LirLValue::Var(name.to_string().into_boxed_str()),
-                value,
-            }), span);
-
-        self.add_instr(id);
+                value: Box::new(value),
+            }),
+        ));
     }
 
     fn declare_temp_null(&mut self, span: Span, temp: &str) {
-        let id = self.add(LirNodeType::Declare(LirDeclare {
+        self.add_instr(LirNode::new(
+            span,
+            LirNodeType::Declare(LirDeclare {
                 dest: temp.to_string().into_boxed_str(),
                 data_type: ParserDataType::null(span),
-                value: self.null(),
-            }), span);
-
-        self.add_instr(
-            id
-        );
+                value: Box::new(LirNodeType::null()),
+            }),
+        ));
     }
 
     fn jump_if_open(&mut self, span: Span, target: BlockId) {
@@ -74,7 +75,6 @@ impl<'a> LirEnvironment<'a> {
     #[inline]
     fn assign_temp_if_non_null(&mut self, span: Span, temp: &str, value: LirNodeType) {
         if !value.is_null() {
-            let value = self.add(value, span);
             self.assign_var(span, temp, value);
         }
     }
@@ -87,7 +87,7 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
-    fn emit_return_value(&mut self, span: Span, value: Option<LirId>) {
+    fn emit_return_value(&mut self, span: Span, value: Option<LirNodeType>) {
         self.set_terminator(LirTerminator::Return { span, value });
     }
 
@@ -213,32 +213,23 @@ impl<'a> LirEnvironment<'a> {
             return;
         }
 
+        let span = node.span;
         let value = self.lower_node(node);
 
-        
-        if let Some(value) = self.registry.nodes.get(value) && (value.is_noop() || value.is_null()) {
+        if value.is_noop() || value.is_null() {
             return;
         }
-        
 
-        self.add_instr(value);
-    }
-
-    pub fn null(&self) -> LirId {
-        self.registry.nodes.null
-    }
-
-    pub fn noop(&self) -> LirId {
-        self.registry.nodes.noop
+        self.add_instr(LirNode::new(span, value));
     }
 
     #[instrument(skip_all)]
-    pub fn lower_node(&mut self, node: MiddleNode) -> LirId {
+    pub fn lower_node(&mut self, node: MiddleNode) -> LirNodeType {
         let span = node.span;
         trace!("lowering MIR node to LIR");
         match node.node_type {
-            MiddleNodeType::Null => self.null(),
-            MiddleNodeType::EmptyLine => self.noop(),
+            MiddleNodeType::Null => LirNodeType::null(),
+            MiddleNodeType::EmptyLine => LirNodeType::noop(),
 
             MiddleNodeType::Emit(x) => x.lower(self, span),
             MiddleNodeType::IntLiteral(x) => x.lower(self, span),

@@ -1,25 +1,23 @@
 use calibre_mir::{environment::MiddleEnvironment, scoping::ScopeId};
-use calibre_parser::{Span, ast::types::ParserDataType};
-use indextree::{Arena, NodeId};
+use calibre_parser::ast::types::ParserDataType;
 use rustc_hash::FxHashMap;
 use std::fmt::Display;
 use std::sync::atomic::Ordering;
 use tracing::{debug, instrument};
 
 use crate::{
-    COUNTER, ast::{BlockId, LirBlock, LirLiteral, LirNode, LirNodeType, LirTerminator},
+    COUNTER,
+    ast::{BlockId, LirBlock, LirNode, LirTerminator},
 };
 
 #[derive(Debug, Clone, Default)]
 pub struct LirRegistry {
-    pub nodes : LirNodes,
     pub functions: FxHashMap<String, LirFunction>,
     pub globals: FxHashMap<String, LirGlobal>,
     pub natives: FxHashMap<String, String>,
     pub dyn_vtables: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>>,
     pub scope_to_file: FxHashMap<ScopeId, String>,
 }
-
 
 impl LirRegistry {
     pub fn append(&mut self, other: LirRegistry) {
@@ -44,61 +42,6 @@ impl Display for LirRegistry {
         }
 
         Ok(())
-    }
-}
-
-pub type LirId = NodeId;
-
-#[derive(Debug, Clone)]
-pub struct LirNodes {
-    nodes: Arena<LirNodeType>,
-    spans: FxHashMap<LirId, Span>,
-    pub null : LirId,
-    pub noop : LirId,
-}
-
-impl Default for LirNodes {
-    fn default() -> Self {
-        let mut nodes = Arena::default();
-        let null = nodes.new_node(LirNodeType::Literal(LirLiteral::Null));
-        let noop = nodes.new_node(LirNodeType::Noop);
-
-        let mut spans = FxHashMap::default();
-        spans.insert(null, Span::default());
-        spans.insert(noop, Span::default());
-
-        Self { nodes, spans, null, noop }
-    }
-}
-
-impl LirNodes {
-    pub fn add(&mut self, node : LirNodeType, span : Span) -> LirId {
-        let id = self.nodes.new_node(node);
-        self.spans.insert(id, span);
-        id
-    }
-
-    pub fn get(&self, id : LirId) -> Option<&LirNodeType> {
-        self.nodes.get(id).map(|x| x.get())
-    }
-
-    pub fn get_mut(&mut self, id : LirId) -> Option<&mut LirNodeType> {
-        self.nodes.get_mut(id).map(|x| x.get_mut())
-    }
-
-    pub fn add_with_parent(&mut self, node : LirNodeType, parent : LirId, span : Span) -> LirId {
-        let id = self.add(node, span);
-        parent.append(id, &mut self.nodes);
-        id
-    }
-
-    pub fn add_with_children(&mut self, node : LirNodeType, children : impl Iterator<Item = LirId>, span : Span) -> LirId {
-        let id = self.add(node, span);
-        for child in children {
-            id.append(child, &mut self.nodes);
-        }
-        
-        id
     }
 }
 
@@ -189,10 +132,11 @@ impl<'a> LirEnvironment<'a> {
             env,
             last_ident: None,
             registry: LirRegistry {
+                functions: FxHashMap::default(),
+                globals: FxHashMap::default(),
                 natives: env.symbols.native_mappings.clone(),
                 dyn_vtables: Self::build_dyn_vtables(env),
                 scope_to_file,
-                ..Default::default()
             },
             blocks: vec![LirBlock {
                 id: entry_id,
@@ -231,7 +175,7 @@ impl<'a> LirEnvironment<'a> {
             .map(|(header, exit, _)| if use_exit { *exit } else { *header })
     }
 
-    pub fn add_instr(&mut self, instr: LirId) {
+    pub fn add_instr(&mut self, instr: LirNode) {
         let idx = self.current_block.0 as usize;
         self.blocks[idx].instructions.push(instr);
     }
@@ -251,18 +195,6 @@ impl<'a> LirEnvironment<'a> {
             terminator: None,
         });
         id
-    }
-
-    pub fn add(&mut self, node : LirNodeType, span : Span) -> LirId {
-        self.registry.nodes.add(node, span)
-    }
-
-    pub fn add_with_parent(&mut self, node : LirNodeType, parent : LirId, span : Span) -> LirId {
-        self.registry.nodes.add_with_parent(node, parent, span)
-    }
-
-    pub fn add_with_children(&mut self, node : LirNodeType, children : impl Iterator<Item = LirId>, span : Span) -> LirId {
-        self.registry.nodes.add_with_children(node, children, span)
     }
 
     pub fn switch_to(&mut self, id: BlockId) {

@@ -11,7 +11,24 @@ use calibre_parser::{
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use crate::environment::LirId;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LirNode {
+    pub span: Span,
+    pub node_type: LirNodeType,
+}
+
+impl LirNode {
+    pub fn new(span: Span, node_type: LirNodeType) -> Self {
+        Self { span, node_type }
+    }
+}
+
+impl Display for LirNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.node_type)
+    }
+}
 
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq)]
@@ -43,7 +60,7 @@ impl Display for LirLiteral {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirSpawn {
-    pub value: Box<LirId>,
+    pub value: Box<LirNodeType>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -54,20 +71,20 @@ pub struct LirClosure {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirList {
-    pub values: Vec<LirId>,
+    pub values: Vec<LirNodeType>,
     pub data_type: ParserDataType,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirAggregate {
     pub name: Option<String>,
-    pub fields: ObjectMap<LirId>,
+    pub fields: ObjectMap<LirNodeType>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirRange {
-    pub from: LirId,
-    pub to: LirId,
+    pub from: Box<LirNodeType>,
+    pub to: Box<LirNodeType>,
     pub inclusive: bool,
 }
 
@@ -88,39 +105,39 @@ pub struct LirDrop {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirBoolean {
-    pub left: LirId,
-    pub right: LirId,
+    pub left: Box<LirNodeType>,
+    pub right: Box<LirNodeType>,
     pub operator: BooleanOperator,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirBinary {
-    pub left: LirId,
-    pub right: LirId,
+    pub left: Box<LirNodeType>,
+    pub right: Box<LirNodeType>,
     pub operator: BinaryOperator,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirComparison {
-    pub left: LirId,
-    pub right: LirId,
+    pub left: Box<LirNodeType>,
+    pub right: Box<LirNodeType>,
     pub operator: ComparisonOperator,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirCall {
-    pub caller: LirId,
-    pub args: Vec<LirId>,
+    pub caller: Box<LirNodeType>,
+    pub args: Vec<LirNodeType>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirDeref {
-    pub value: LirId,
+    pub value: Box<LirNodeType>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirRef {
-    pub value: LirId,
+    pub value: Box<LirNodeType>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -130,13 +147,13 @@ pub struct LirRefLoad {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirIndex {
-    pub base: LirId,
-    pub index: LirId,
+    pub base: Box<LirNodeType>,
+    pub index: Box<LirNodeType>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirMember {
-    pub base: LirId,
+    pub base: Box<LirNodeType>,
     pub field: Box<str>,
 }
 
@@ -144,32 +161,32 @@ pub struct LirMember {
 pub struct LirEnum {
     pub name: Box<str>,
     pub variant: u32,
-    pub payload: Option<LirId>,
+    pub payload: Option<Box<LirNodeType>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirAs {
-    pub value: LirId,
+    pub value: Box<LirNodeType>,
     pub data_type: ParserDataType,
     pub failure_mode: AsFailureMode,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirIs {
-    pub value: LirId,
+    pub value: Box<LirNodeType>,
     pub data_type: ParserDataType,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirAssign {
     pub dest: LirLValue,
-    pub value: LirId,
+    pub value: Box<LirNodeType>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirDeclare {
     pub dest: Box<str>,
-    pub value: LirId,
+    pub value: Box<LirNodeType>,
     pub data_type: ParserDataType,
 }
 
@@ -242,6 +259,11 @@ impl LirNodeType {
                 | LirNodeType::Drop(_)
                 | LirNodeType::Noop
         )
+    }
+
+    #[inline]
+    pub fn null() -> LirNodeType {
+        LirNodeType::Literal(LirLiteral::Null)
     }
 
     #[inline]
@@ -399,7 +421,7 @@ pub struct BlockId(pub u32);
 #[derive(Debug, Clone, PartialEq)]
 pub enum LirLValue {
     Var(Box<str>),
-    Ptr(LirId),
+    Ptr(Box<LirNodeType>),
 }
 
 impl Display for LirLValue {
@@ -420,13 +442,13 @@ pub enum LirTerminator {
     },
     Branch {
         span: Span,
-        condition: LirId,
+        condition: LirNodeType,
         then_block: BlockId,
         else_block: BlockId,
     },
     Return {
         span: Span,
-        value: Option<LirId>,
+        value: Option<LirNodeType>,
     },
 }
 
@@ -460,7 +482,7 @@ impl Display for LirTerminator {
 #[derive(Debug, Clone)]
 pub struct LirBlock {
     pub id: BlockId,
-    pub instructions: Vec<LirId>,
+    pub instructions: Vec<LirNode>,
     pub terminator: Option<LirTerminator>,
 }
 
