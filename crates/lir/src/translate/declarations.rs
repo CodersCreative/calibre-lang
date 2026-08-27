@@ -7,8 +7,8 @@ ExternFunction
 */
 
 use crate::{
-    ast::{LirClosure, LirDeclare, LirExtern, LirLoad, LirNodeType},
-    environment::{LirEnvironment, LirFunction, LirGlobal, LirId},
+    ast::{LirClosure, LirDeclare, LirExtern, LirLoad, LirNode, LirNodeType},
+    environment::{LirEnvironment, LirFunction, LirGlobal},
     translate::LirLowering,
 };
 use calibre_mir::ast::{
@@ -22,37 +22,35 @@ use rustc_hash::FxHashSet;
 
 impl LirLowering for MirVarDecl {
     #[inline(always)]
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirId {
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         if let MiddleNodeType::FunctionDeclaration { .. } = self.value.node_type {
             env.last_ident = Some(self.identifier.to_string());
         } else {
             env.last_ident = None;
         }
 
-        let value = env.lower_node(*self.value);
+        let val = env.lower_node(*self.value);
 
-        let node = env.add_with_children(
+        env.add_instr(LirNode::new(
+            self.identifier.span,
             LirNodeType::Declare(LirDeclare {
                 dest: self.identifier.to_string().into_boxed_str(),
                 data_type: self.data_type,
-                value,
+                value: Box::new(val),
             }),
-            std::iter::once(value),
-            self.identifier.span,
-        );
-        env.add_instr(node);
+        ));
 
-        env.null()
+        LirNodeType::null()
     }
 }
 
 impl LirLowering for MirScopeDecl {
     #[inline(always)]
-    fn lower<'a>(mut self, env: &mut LirEnvironment<'a>, span: Span) -> LirId {
+    fn lower<'a>(mut self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
         if !self.is_temp {
             if !env.allow_global_hoist {
                 env.lower_scope_items(self.body);
-                return env.null();
+                return LirNodeType::null();
             }
 
             for stmt in self.body {
@@ -62,19 +60,19 @@ impl LirLowering for MirScopeDecl {
                     ..
                 }) = &stmt.node_type
                 {
-                    let identifier = identifier.to_string();
-                    let data_type = data_type.clone();
-
+                    let global_name = identifier.to_string();
+                    let global_type = data_type.clone();
                     let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
+
                     let _ = sub_lowerer.lower_node(stmt);
 
                     env.registry.append(sub_lowerer.registry);
 
                     env.registry.globals.insert(
-                        identifier.clone(),
+                        global_name.clone(),
                         LirGlobal {
-                            name: identifier.into_boxed_str(),
-                            data_type,
+                            name: global_name.into_boxed_str(),
+                            data_type: global_type,
                             blocks: sub_lowerer.blocks.into_boxed_slice(),
                         },
                     );
@@ -83,47 +81,42 @@ impl LirLowering for MirScopeDecl {
                 }
             }
 
-            env.null()
+            LirNodeType::null()
         } else {
             let last = self.body.pop();
             env.lower_scope_items(self.body);
 
             let Some(last) = last else {
-                return env.null();
+                return LirNodeType::null();
             };
 
             let temp = env.get_temp();
-            let value = env.lower_node(last.clone());
+            let lowered = env.lower_node(last.clone());
 
-            if value == env.null() {
+            if lowered.is_null() {
                 env.lower_and_add_node(last);
-                return env.null();
+                return LirNodeType::null();
             }
 
-            let node = env.add_with_children(
+            env.add_instr(LirNode::new(
+                span,
                 LirNodeType::Declare(LirDeclare {
                     dest: temp.clone().into_boxed_str(),
                     data_type: ParserDataType::auto(span),
-                    value,
+                    value: Box::new(lowered),
                 }),
-                std::iter::once(value),
-                span,
-            );
-            env.add_instr(node);
+            ));
 
-            env.add(
-                LirNodeType::Load(LirLoad {
-                    value: temp.into_boxed_str(),
-                }),
-                span,
-            )
+            LirNodeType::Load(LirLoad {
+                value: temp.into_boxed_str(),
+            })
         }
     }
 }
 
 impl LirLowering for MirFunction {
     #[inline(always)]
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirId {
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
         let param_names: FxHashSet<String> = self
             .parameters
             .iter()
@@ -169,13 +162,13 @@ impl LirLowering for MirFunction {
                     value: Some(self.body.clone()),
                 }
                 .lower(env, span);
-                (false, env.null())
+                (false, LirNodeType::null())
             } else {
                 let body = sub_lowerer.lower_node(*self.body);
                 if is_temp_body {
-                    (false, env.null())
+                    (false, LirNodeType::null())
                 } else {
-                    (body != env.null(), body)
+                    (!body.is_null(), body)
                 }
             };
 
@@ -224,28 +217,22 @@ impl LirLowering for MirFunction {
             },
         );
 
-        env.add(
-            LirNodeType::Closure(LirClosure {
-                label: internal_name.into_boxed_str(),
-                captures: capture_names,
-            }),
-            span,
-        )
+        LirNodeType::Closure(LirClosure {
+            label: internal_name.into_boxed_str(),
+            captures: capture_names,
+        })
     }
 }
 
 impl LirLowering for MirExtern {
     #[inline(always)]
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirId {
-        env.add(
-            LirNodeType::ExternFunction(LirExtern {
-                abi: self.abi.into_boxed_str(),
-                library: self.library.into_boxed_str(),
-                symbol: self.symbol.into_boxed_str(),
-                parameters: self.parameters,
-                return_type: self.return_type,
-            }),
-            span,
-        )
+    fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
+        LirNodeType::ExternFunction(LirExtern {
+            abi: self.abi.into_boxed_str(),
+            library: self.library.into_boxed_str(),
+            symbol: self.symbol.into_boxed_str(),
+            parameters: self.parameters,
+            return_type: self.return_type,
+        })
     }
 }

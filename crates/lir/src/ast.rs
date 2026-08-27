@@ -1,4 +1,3 @@
-use crate::environment::LirId;
 use calibre_parser::{
     Span,
     ast::{
@@ -12,6 +11,7 @@ use calibre_parser::{
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use crate::environment::LirId;
 
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq)]
@@ -43,7 +43,7 @@ impl Display for LirLiteral {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirSpawn {
-    pub value: LirId,
+    pub value: Box<LirId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]

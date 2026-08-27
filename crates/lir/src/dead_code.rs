@@ -4,7 +4,7 @@ use crate::{
         LirDeclare, LirDeref, LirEnum, LirIndex, LirIs, LirLValue, LirList, LirLoad, LirMember,
         LirMove, LirNodeType, LirRange, LirRef, LirRefLoad, LirSpawn, LirTerminator,
     },
-    environment::{LirFunction, LirGlobal, LirId, LirRegistry},
+    environment::{LirFunction, LirGlobal, LirRegistry},
 };
 use rustc_hash::FxHashSet;
 
@@ -47,25 +47,6 @@ impl LirRegistry {
             .retain(|name, _| reachable_globals.contains(name));
 
         self
-    }
-
-    fn collect_references_from_id(
-        &self,
-        id: &LirId,
-        reachable_functions: &mut FxHashSet<String>,
-        reachable_globals: &mut FxHashSet<String>,
-        referenced_types: &mut FxHashSet<String>,
-        worklist: &mut WorkList,
-    ) {
-        if let Some(node_type) = self.nodes.get(*id) {
-            node_type.collect_references(
-                self,
-                reachable_functions,
-                reachable_globals,
-                referenced_types,
-                worklist,
-            );
-        }
     }
 
     fn collect_references(
@@ -152,8 +133,8 @@ impl LirFunction {
     ) {
         for block in &self.blocks {
             for instruction in &block.instructions {
-                registry.collect_references_from_id(
-                    instruction,
+                instruction.node_type.collect_references(
+                    registry,
                     reachable_functions,
                     reachable_globals,
                     referenced_types,
@@ -185,8 +166,8 @@ impl LirGlobal {
     ) {
         for block in &self.blocks {
             for instruction in &block.instructions {
-                registry.collect_references_from_id(
-                    instruction,
+                instruction.node_type.collect_references(
+                    registry,
                     reachable_functions,
                     reachable_globals,
                     referenced_types,
@@ -229,8 +210,8 @@ impl LirNodeType {
                 }
             }
             LirNodeType::Call(LirCall { caller, args }) => {
-                registry.collect_references_from_id(
-                    caller,
+                caller.collect_references(
+                    registry,
                     reachable_functions,
                     reachable_globals,
                     referenced_types,
@@ -238,8 +219,8 @@ impl LirNodeType {
                 );
 
                 for arg in args {
-                    registry.collect_references_from_id(
-                        arg,
+                    arg.collect_references(
+                        registry,
                         reachable_functions,
                         reachable_globals,
                         referenced_types,
@@ -258,8 +239,8 @@ impl LirNodeType {
                 referenced_types.insert(data_type.impl_name());
 
                 for element in values {
-                    registry.collect_references_from_id(
-                        element,
+                    element.collect_references(
+                        registry,
                         reachable_functions,
                         reachable_globals,
                         referenced_types,
@@ -273,8 +254,8 @@ impl LirNodeType {
                 }
 
                 for (_field_name, field) in &fields.0 {
-                    registry.collect_references_from_id(
-                        field,
+                    field.collect_references(
+                        registry,
                         reachable_functions,
                         reachable_globals,
                         referenced_types,
@@ -289,20 +270,16 @@ impl LirNodeType {
             })
             | LirNodeType::Boolean(LirBoolean { left, right, .. })
             | LirNodeType::Comparison(LirComparison { left, right, .. })
-            | LirNodeType::Binary(LirBinary { left, right, .. })
-            | LirNodeType::Index(LirIndex {
-                base: left,
-                index: right,
-            }) => {
-                registry.collect_references_from_id(
-                    left,
+            | LirNodeType::Binary(LirBinary { left, right, .. }) => {
+                left.collect_references(
+                    registry,
                     reachable_functions,
                     reachable_globals,
                     referenced_types,
                     worklist,
                 );
-                registry.collect_references_from_id(
-                    right,
+                right.collect_references(
+                    registry,
                     reachable_functions,
                     reachable_globals,
                     referenced_types,
@@ -310,11 +287,27 @@ impl LirNodeType {
                 );
             }
 
+            LirNodeType::Index(LirIndex { base, index }) => {
+                base.collect_references(
+                    registry,
+                    reachable_functions,
+                    reachable_globals,
+                    referenced_types,
+                    worklist,
+                );
+                index.collect_references(
+                    registry,
+                    reachable_functions,
+                    reachable_globals,
+                    referenced_types,
+                    worklist,
+                );
+            }
             LirNodeType::Enum(LirEnum { name, payload, .. }) => {
                 referenced_types.insert(name.as_ref().to_string());
                 if let Some(payload) = payload {
-                    registry.collect_references_from_id(
-                        payload,
+                    payload.collect_references(
+                        registry,
                         reachable_functions,
                         reachable_globals,
                         referenced_types,
@@ -332,8 +325,8 @@ impl LirNodeType {
             })
             | LirNodeType::Is(LirIs { value, data_type }) => {
                 referenced_types.insert(data_type.impl_name());
-                registry.collect_references_from_id(
-                    value,
+                value.collect_references(
+                    registry,
                     reachable_functions,
                     reachable_globals,
                     referenced_types,
@@ -347,8 +340,8 @@ impl LirNodeType {
                 base: value,
                 field: _,
             }) => {
-                registry.collect_references_from_id(
-                    value,
+                value.collect_references(
+                    registry,
                     reachable_functions,
                     reachable_globals,
                     referenced_types,
@@ -356,16 +349,16 @@ impl LirNodeType {
                 );
             }
             LirNodeType::Assign(LirAssign { dest, value }) => {
-                registry.collect_references_from_id(
-                    value,
+                value.collect_references(
+                    registry,
                     reachable_functions,
                     reachable_globals,
                     referenced_types,
                     worklist,
                 );
                 if let LirLValue::Ptr(ptr) = dest {
-                    registry.collect_references_from_id(
-                        ptr,
+                    ptr.collect_references(
+                        registry,
                         reachable_functions,
                         reachable_globals,
                         referenced_types,
@@ -393,8 +386,8 @@ impl LirTerminator {
         match self {
             LirTerminator::Jump { .. } => {}
             LirTerminator::Branch { condition, .. } => {
-                registry.collect_references_from_id(
-                    condition,
+                condition.collect_references(
+                    registry,
                     reachable_functions,
                     reachable_globals,
                     referenced_types,
@@ -403,8 +396,8 @@ impl LirTerminator {
             }
             LirTerminator::Return { value, .. } => {
                 if let Some(value) = value {
-                    registry.collect_references_from_id(
-                        value,
+                    value.collect_references(
+                        registry,
                         reachable_functions,
                         reachable_globals,
                         referenced_types,

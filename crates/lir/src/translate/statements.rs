@@ -9,9 +9,9 @@ EnumExpression
 use crate::{
     ast::{
         LirAggregate, LirAssign, LirDeclare, LirDeref, LirEnum, LirIndex, LirLValue, LirLoad,
-        LirMember, LirNodeType,
+        LirMember, LirNode, LirNodeType,
     },
-    environment::{LirEnvironment, LirId},
+    environment::LirEnvironment,
     translate::LirLowering,
 };
 use calibre_mir::{
@@ -27,8 +27,8 @@ use calibre_parser::{
 };
 
 impl LirLowering for MirAssignment {
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirId {
-        let rhs: LirId = env.lower_node(*self.value);
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
+        let rhs = env.lower_node(*self.value);
         let ident_span = self.identifier.span;
 
         let (lhs, old_expr) = match self.identifier.node_type {
@@ -36,224 +36,168 @@ impl LirLowering for MirAssignment {
                 let value = identifier.to_string().into_boxed_str();
                 (
                     Some(LirLValue::Var(value.clone())),
-                    Some(env.add(LirNodeType::Load(LirLoad { value }), ident_span)),
+                    Some(LirNodeType::Load(LirLoad { value })),
                 )
             }
             MiddleNodeType::DerefStatement(MirDeref { value }) => {
-                let value = env.lower_node(*value);
-                let dest = env.get_temp().into_boxed_str();
-
-                let node = env.add_with_children(
-                    LirNodeType::Declare(LirDeclare {
-                        dest: dest.clone(),
-                        data_type: ParserDataType::auto(ident_span),
-                        value,
-                    }),
-                    std::iter::once(value),
+                let ptr_expr = env.lower_node(*value);
+                let ptr_tmp = env.get_temp();
+                env.add_instr(LirNode::new(
                     ident_span,
-                );
-                env.add_instr(node);
-
-                let ptr_load = env.add(LirNodeType::Load(LirLoad { value: dest }), ident_span);
-
+                    LirNodeType::Declare(LirDeclare {
+                        dest: ptr_tmp.clone().into_boxed_str(),
+                        data_type: ParserDataType::auto(ident_span),
+                        value: Box::new(ptr_expr),
+                    }),
+                ));
+                let ptr_load = LirNodeType::Load(LirLoad {
+                    value: ptr_tmp.into_boxed_str(),
+                });
                 (
-                    Some(LirLValue::Ptr(ptr_load)),
-                    Some(env.add(LirNodeType::Deref(LirDeref { value: ptr_load }), ident_span)),
+                    Some(LirLValue::Ptr(Box::new(ptr_load.clone()))),
+                    Some(LirNodeType::Deref(LirDeref {
+                        value: Box::new(ptr_load),
+                    })),
                 )
             }
             MiddleNodeType::FieldAccess(MirField { base, field }) => {
-                let base = env.lower_node(*base);
-                let dest = env.get_temp();
-
-                let base = env.add_with_children(
+                let base_expr = env.lower_node(*base);
+                let base_tmp = env.get_temp();
+                env.add_instr(LirNode::new(
+                    ident_span,
                     LirNodeType::Declare(LirDeclare {
-                        dest: dest.clone().into_boxed_str(),
+                        dest: base_tmp.clone().into_boxed_str(),
                         data_type: ParserDataType::auto(ident_span),
-                        value: base,
+                        value: Box::new(base_expr),
                     }),
-                    std::iter::once(base),
-                    ident_span,
-                );
-
-                env.add_instr(base);
-                let base_load = env.add(
-                    LirNodeType::Load(LirLoad {
-                        value: dest.into_boxed_str(),
-                    }),
-                    ident_span,
-                );
+                ));
+                let base_load = LirNodeType::Load(LirLoad {
+                    value: base_tmp.into_boxed_str(),
+                });
 
                 (
-                    Some(LirLValue::Ptr(env.add(
-                        LirNodeType::Member(LirMember {
-                            base: base_load,
-                            field: field.text.clone().into_boxed_str(),
-                        }),
-                        ident_span,
-                    ))),
-                    Some(env.add(
-                        LirNodeType::Member(LirMember {
-                            base: base_load,
-                            field: field.text.into_boxed_str(),
-                        }),
-                        ident_span,
-                    )),
+                    Some(LirLValue::Ptr(Box::new(LirNodeType::Member(LirMember {
+                        base: Box::new(base_load.clone()),
+                        field: field.text.clone().into_boxed_str(),
+                    })))),
+                    Some(LirNodeType::Member(LirMember {
+                        base: Box::new(base_load),
+                        field: field.text.into_boxed_str(),
+                    })),
                 )
             }
             MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
-                let base = env.lower_node(*base);
-                let dest = env.get_temp().into_boxed_str();
-
-                let base = env.add_with_children(
+                let base_expr = env.lower_node(*base);
+                let base_tmp = env.get_temp();
+                env.add_instr(LirNode::new(
+                    ident_span,
                     LirNodeType::Declare(LirDeclare {
-                        dest: dest.clone(),
+                        dest: base_tmp.clone().into_boxed_str(),
                         data_type: ParserDataType::auto(ident_span),
-                        value: base,
+                        value: Box::new(base_expr),
                     }),
-                    std::iter::once(base),
+                ));
+                let base_load = LirNodeType::Load(LirLoad {
+                    value: base_tmp.into_boxed_str(),
+                });
+
+                let index_expr = env.lower_node(*index);
+                let index_tmp = env.get_temp();
+                env.add_instr(LirNode::new(
                     ident_span,
-                );
-
-                env.add_instr(base);
-                let base_load = env.add(LirNodeType::Load(LirLoad { value: dest }), ident_span);
-
-                let index = env.lower_node(*index);
-                let dest = env.get_temp();
-                let index = env.add_with_children(
                     LirNodeType::Declare(LirDeclare {
-                        dest: dest.clone().into_boxed_str(),
+                        dest: index_tmp.clone().into_boxed_str(),
                         data_type: ParserDataType::auto(ident_span),
-                        value: index,
+                        value: Box::new(index_expr),
                     }),
-                    std::iter::once(index),
-                    ident_span,
-                );
+                ));
 
-                env.add_instr(index);
-                let index_load = env.add(
-                    LirNodeType::Load(LirLoad {
-                        value: dest.into_boxed_str(),
-                    }),
-                    ident_span,
-                );
+                let index_load = LirNodeType::Load(LirLoad {
+                    value: index_tmp.into_boxed_str(),
+                });
 
                 (
-                    Some(LirLValue::Ptr(env.add(
-                        LirNodeType::Index(LirIndex {
-                            base: base_load,
-                            index: index_load,
-                        }),
-                        ident_span,
-                    ))),
-                    Some(env.add(
-                        LirNodeType::Index(LirIndex {
-                            base: base_load,
-                            index: index_load,
-                        }),
-                        ident_span,
-                    )),
+                    Some(LirLValue::Ptr(Box::new(LirNodeType::Index(LirIndex {
+                        base: Box::new(base_load.clone()),
+                        index: Box::new(index_load.clone()),
+                    })))),
+                    Some(LirNodeType::Index(LirIndex {
+                        base: Box::new(base_load),
+                        index: Box::new(index_load),
+                    })),
                 )
             }
             other => (
                 Some(env.lower_lvalue(MiddleNode::new(other, ident_span))),
-                Some(env.null()),
+                Some(LirNodeType::null()),
             ),
         };
 
-        let old_expr = old_expr.unwrap_or_else(|| env.null());
+        let old_expr = old_expr.unwrap_or_else(LirNodeType::null);
         let temp = env.get_temp();
-        let decl = env.add_with_children(
+        env.add_instr(LirNode::new(
+            ident_span,
             LirNodeType::Declare(LirDeclare {
                 dest: temp.clone().into_boxed_str(),
                 data_type: ParserDataType::auto(ident_span),
-                value: old_expr,
+                value: Box::new(old_expr),
             }),
-            std::iter::once(old_expr),
-            ident_span,
-        );
+        ));
 
-        env.add_instr(decl);
         if let Some(lhs) = lhs {
-            let assign_id = env.add_with_children(
+            env.add_instr(LirNode::new(
+                ident_span,
                 LirNodeType::Assign(LirAssign {
                     dest: lhs,
-                    value: rhs,
+                    value: Box::new(rhs),
                 }),
-                std::iter::once(rhs),
-                ident_span,
-            );
-            env.add_instr(assign_id);
+            ));
         }
 
-        env.add(
-            LirNodeType::Load(LirLoad {
-                value: temp.into_boxed_str(),
-            }),
-            span,
-        )
+        LirNodeType::Load(LirLoad {
+            value: temp.into_boxed_str(),
+        })
     }
 }
 
 impl LirLowering for MirDebug {
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirId {
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         env.lower_node(*self.value)
     }
 }
 
 impl LirLowering for MirAggregate {
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirId {
-        let fields: Vec<(String, LirId)> = self
-            .value
-            .0
-            .into_iter()
-            .map(|(field_name, field_node)| (field_name.to_string(), env.lower_node(field_node)))
-            .collect();
-
-        let children: Vec<LirId> = fields.iter().map(|(_, id)| *id).collect();
-
-        env.add_with_children(
-            LirNodeType::Aggregate(LirAggregate {
-                name: self.identifier.map(|i| i.to_string()),
-                fields: ObjectMap(fields.into_iter().collect()),
-            }),
-            children.into_iter(),
-            span,
-        )
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
+        LirNodeType::Aggregate(LirAggregate {
+            name: self.identifier.map(|i| i.to_string()),
+            fields: ObjectMap(
+                self.value
+                    .0
+                    .into_iter()
+                    .map(|(field_name, field_node)| {
+                        (field_name.to_string(), env.lower_node(field_node))
+                    })
+                    .collect(),
+            ),
+        })
     }
 }
 
 impl LirLowering for MirEnum {
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirId {
-        let variant = if let Some(obj) = env.env.typing.objects.get(&self.identifier.to_string())
-            && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
-        {
-            variants
-                .iter()
-                .position(|(name, _)| name.text == self.value.to_string())
-                .unwrap_or(0) as u32
-        } else {
-            0
-        };
-
-        if let Some(payload) = self.data.map(|d| env.lower_node(*d)) {
-            env.add_with_children(
-                LirNodeType::Enum(LirEnum {
-                    variant,
-                    name: self.identifier.text.into_boxed_str(),
-                    payload: Some(payload),
-                }),
-                std::iter::once(payload),
-                span,
-            )
-        } else {
-            env.add(
-                LirNodeType::Enum(LirEnum {
-                    variant,
-                    name: self.identifier.text.into_boxed_str(),
-                    payload: None,
-                }),
-                span,
-            )
-        }
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
+        LirNodeType::Enum(LirEnum {
+            variant: if let Some(obj) = env.env.typing.objects.get(&self.identifier.to_string())
+                && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
+            {
+                variants
+                    .iter()
+                    .position(|(name, _)| name.text == self.value.to_string())
+                    .unwrap_or(0) as u32
+            } else {
+                0
+            },
+            name: self.identifier.text.into_boxed_str(),
+            payload: self.data.map(|d| Box::new(env.lower_node(*d))),
+        })
     }
 }
