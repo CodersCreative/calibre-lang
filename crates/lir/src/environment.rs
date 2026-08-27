@@ -7,19 +7,19 @@ use std::sync::atomic::Ordering;
 use tracing::{debug, instrument};
 
 use crate::{
-    COUNTER, ast::{BlockId, LirBlock, LirLiteral, LirNode, LirNodeType, LirTerminator},
+    COUNTER,
+    ast::{BlockId, LirBlock, LirLiteral, LirNodeType, LirTerminator},
 };
 
 #[derive(Debug, Clone, Default)]
 pub struct LirRegistry {
-    pub nodes : LirNodes,
+    pub nodes: LirNodes,
     pub functions: FxHashMap<String, LirFunction>,
     pub globals: FxHashMap<String, LirGlobal>,
     pub natives: FxHashMap<String, String>,
     pub dyn_vtables: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>>,
     pub scope_to_file: FxHashMap<ScopeId, String>,
 }
-
 
 impl LirRegistry {
     pub fn append(&mut self, other: LirRegistry) {
@@ -53,8 +53,8 @@ pub type LirId = NodeId;
 pub struct LirNodes {
     nodes: Arena<LirNodeType>,
     spans: FxHashMap<LirId, Span>,
-    pub null : LirId,
-    pub noop : LirId,
+    pub null: LirId,
+    pub noop: LirId,
 }
 
 impl Default for LirNodes {
@@ -67,37 +67,47 @@ impl Default for LirNodes {
         spans.insert(null, Span::default());
         spans.insert(noop, Span::default());
 
-        Self { nodes, spans, null, noop }
+        Self {
+            nodes,
+            spans,
+            null,
+            noop,
+        }
     }
 }
 
 impl LirNodes {
-    pub fn add(&mut self, node : LirNodeType, span : Span) -> LirId {
+    pub fn add(&mut self, node: LirNodeType, span: Span) -> LirId {
         let id = self.nodes.new_node(node);
         self.spans.insert(id, span);
         id
     }
 
-    pub fn get(&self, id : LirId) -> Option<&LirNodeType> {
+    pub fn get(&self, id: LirId) -> Option<&LirNodeType> {
         self.nodes.get(id).map(|x| x.get())
     }
 
-    pub fn get_mut(&mut self, id : LirId) -> Option<&mut LirNodeType> {
+    pub fn get_mut(&mut self, id: LirId) -> Option<&mut LirNodeType> {
         self.nodes.get_mut(id).map(|x| x.get_mut())
     }
 
-    pub fn add_with_parent(&mut self, node : LirNodeType, parent : LirId, span : Span) -> LirId {
+    pub fn add_with_parent(&mut self, node: LirNodeType, parent: LirId, span: Span) -> LirId {
         let id = self.add(node, span);
         parent.append(id, &mut self.nodes);
         id
     }
 
-    pub fn add_with_children(&mut self, node : LirNodeType, children : impl Iterator<Item = LirId>, span : Span) -> LirId {
+    pub fn add_with_children(
+        &mut self,
+        node: LirNodeType,
+        children: impl Iterator<Item = LirId>,
+        span: Span,
+    ) -> LirId {
         let id = self.add(node, span);
         for child in children {
             id.append(child, &mut self.nodes);
         }
-        
+
         id
     }
 }
@@ -253,15 +263,20 @@ impl<'a> LirEnvironment<'a> {
         id
     }
 
-    pub fn add(&mut self, node : LirNodeType, span : Span) -> LirId {
+    pub fn add(&mut self, node: LirNodeType, span: Span) -> LirId {
         self.registry.nodes.add(node, span)
     }
 
-    pub fn add_with_parent(&mut self, node : LirNodeType, parent : LirId, span : Span) -> LirId {
+    pub fn add_with_parent(&mut self, node: LirNodeType, parent: LirId, span: Span) -> LirId {
         self.registry.nodes.add_with_parent(node, parent, span)
     }
 
-    pub fn add_with_children(&mut self, node : LirNodeType, children : impl Iterator<Item = LirId>, span : Span) -> LirId {
+    pub fn add_with_children(
+        &mut self,
+        node: LirNodeType,
+        children: impl Iterator<Item = LirId>,
+        span: Span,
+    ) -> LirId {
         self.registry.nodes.add_with_children(node, children, span)
     }
 

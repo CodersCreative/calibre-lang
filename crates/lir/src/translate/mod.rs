@@ -1,5 +1,6 @@
 use crate::{
-    ast::{BlockId, LirAssign, LirDeclare, LirLValue, LirNodeType, LirTerminator}, environment::{LirEnvironment, LirGlobal, LirId, LirRegistry},
+    ast::{BlockId, LirAssign, LirDeclare, LirLValue, LirNodeType, LirTerminator},
+    environment::{LirEnvironment, LirGlobal, LirId, LirRegistry},
 };
 use calibre_mir::{
     ast::{MiddleNode, MiddleNodeType},
@@ -45,24 +46,28 @@ impl<'a> LirEnvironment<'a> {
     }
 
     fn assign_var(&mut self, span: Span, name: &str, value: LirId) {
-        let id = self.add(LirNodeType::Assign(LirAssign {
+        let id = self.add(
+            LirNodeType::Assign(LirAssign {
                 dest: LirLValue::Var(name.to_string().into_boxed_str()),
                 value,
-            }), span);
+            }),
+            span,
+        );
 
         self.add_instr(id);
     }
 
     fn declare_temp_null(&mut self, span: Span, temp: &str) {
-        let id = self.add(LirNodeType::Declare(LirDeclare {
+        let id = self.add(
+            LirNodeType::Declare(LirDeclare {
                 dest: temp.to_string().into_boxed_str(),
                 data_type: ParserDataType::null(span),
                 value: self.null(),
-            }), span);
-
-        self.add_instr(
-            id
+            }),
+            span,
         );
+
+        self.add_instr(id);
     }
 
     fn jump_if_open(&mut self, span: Span, target: BlockId) {
@@ -72,9 +77,8 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
-    fn assign_temp_if_non_null(&mut self, span: Span, temp: &str, value: LirNodeType) {
-        if !value.is_null() {
-            let value = self.add(value, span);
+    fn assign_temp_if_non_null(&mut self, span: Span, temp: &str, value: LirId) {
+        if value != self.null() {
             self.assign_var(span, temp, value);
         }
     }
@@ -215,11 +219,11 @@ impl<'a> LirEnvironment<'a> {
 
         let value = self.lower_node(node);
 
-        
-        if let Some(value) = self.registry.nodes.get(value) && (value.is_noop() || value.is_null()) {
+        if let Some(value) = self.registry.nodes.get(value)
+            && (value.is_noop() || value.is_null())
+        {
             return;
         }
-        
 
         self.add_instr(value);
     }

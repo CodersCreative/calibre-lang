@@ -11,7 +11,7 @@ Emit
 
 use crate::{
     ast::{LirLoad, LirNodeType, LirRange, LirTerminator},
-    environment::LirEnvironment,
+    environment::{LirEnvironment, LirId},
     translate::LirLowering,
 };
 use calibre_mir::ast::{
@@ -21,23 +21,23 @@ use calibre_parser::Span;
 
 impl LirLowering for MirBreak {
     #[inline(always)]
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirId {
         env.jump_to_loop_target_if_present(span, LirEnvironment::loop_label(&self.label), true);
-        LirNodeType::null()
+        env.null()
     }
 }
 
 impl LirLowering for MirContinue {
     #[inline(always)]
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirId {
         env.jump_to_loop_target_if_present(span, LirEnvironment::loop_label(&self.label), false);
-        LirNodeType::null()
+        env.null()
     }
 }
 
 impl LirLowering for MirReturn {
     #[inline(always)]
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirId {
         if let Some(v) = self.value {
             if let MiddleNodeType::Conditional(MirConditional {
                 comparison,
@@ -64,23 +64,23 @@ impl LirLowering for MirReturn {
                 let _ = MirReturn { value: otherwise }.lower(env, span);
 
                 env.switch_to(merge_id);
-                return LirNodeType::null();
+                return env.null();
             }
 
             let value_span = v.span;
             let val = env.lower_node(*v);
             env.emit_return_value(value_span, Some(val));
-            LirNodeType::null()
+            env.null()
         } else {
             env.emit_return_value(span, None);
-            LirNodeType::null()
+            env.null()
         }
     }
 }
 
 impl LirLowering for MirConditional {
     #[inline(always)]
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirId {
         let then_id = env.create_block();
         let else_id = env.create_block();
         let merge_id = env.create_block();
@@ -107,7 +107,7 @@ impl LirLowering for MirConditional {
         let else_val = if let Some(alt) = self.otherwise {
             env.lower_node(*alt)
         } else {
-            LirNodeType::null()
+            env.null()
         };
 
         if env.current_block_open() {
@@ -116,15 +116,18 @@ impl LirLowering for MirConditional {
         }
 
         env.switch_to(merge_id);
-        LirNodeType::Load(LirLoad {
-            value: temp.into_boxed_str(),
-        })
+        env.add(
+            LirNodeType::Load(LirLoad {
+                value: temp.into_boxed_str(),
+            }),
+            span,
+        )
     }
 }
 
 impl LirLowering for MirLoop {
     #[inline(always)]
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirId {
         let header_id = env.create_block();
         let body_id = env.create_block();
         let exit_id = env.create_block();
@@ -157,26 +160,31 @@ impl LirLowering for MirLoop {
         env.loop_stack.pop();
 
         env.switch_to(exit_id);
-        LirNodeType::null()
+        env.null()
     }
 }
 
 impl LirLowering for MirRange {
     #[inline(always)]
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirId {
         let from = env.lower_node(*self.from);
         let to = env.lower_node(*self.to);
-        LirNodeType::Range(LirRange {
-            from: Box::new(from),
-            to: Box::new(to),
-            inclusive: self.inclusive,
-        })
+
+        env.add_with_children(
+            LirNodeType::Range(LirRange {
+                from,
+                to,
+                inclusive: self.inclusive,
+            }),
+            [from, to].into_iter(),
+            span,
+        )
     }
 }
 
 impl LirLowering for MirEmit {
     #[inline(always)]
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirId {
         // TODO Add emit support
         env.lower_node(*self.value)
     }
