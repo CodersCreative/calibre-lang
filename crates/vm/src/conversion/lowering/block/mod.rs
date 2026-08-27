@@ -1,6 +1,40 @@
 use super::*;
 use tracing::{instrument, trace};
 
+pub mod access;
+pub mod expressions;
+pub mod flow;
+pub mod literals;
+pub mod memory;
+pub mod statements;
+
+#[allow(unused)]
+pub trait VMLowering {
+    fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg;
+
+    #[inline(always)]
+    fn lower_instr<'a>(
+        self,
+        env: &mut BlockLoweringCtx<'a>,
+        _assigned: Option<Reg>,
+        set_ret: bool,
+        span: Span,
+    ) where
+        Self: Sized,
+    {
+        let reg = self.lower(env, span);
+        if set_ret && reg != env.ret_reg {
+            env.emit(
+                VMInstruction::Copy {
+                    dst: env.ret_reg,
+                    src: reg,
+                },
+                span,
+            );
+        }
+    }
+}
+
 impl<'a> BlockLoweringCtx<'a> {
     pub(super) fn alloc_reg(&mut self) -> Reg {
         let r = *self.reg_count;
