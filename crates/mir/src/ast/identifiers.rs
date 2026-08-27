@@ -1,8 +1,9 @@
 use crate::{
     MiddleNode, MiddleNodeType,
     ast::{
-        MirAs, MirBinary, MirBoolean, MirBreak, MirComparison, MirDeref, MirDrop, MirIdentifier,
-        MirIs, MirList, MirMove, MirNeg, MirRef, MirSpawn,
+        MirAs, MirBinary, MirBoolean, MirBreak, MirComparison, MirConditional, MirDeref, MirDrop,
+        MirEmit, MirIdentifier, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
+        MirReturn, MirSpawn,
     },
 };
 use calibre_parser::IdentifiersUsed;
@@ -24,7 +25,7 @@ impl IdentifiersUsed for MiddleNode {
             | MiddleNodeType::CharLiteral(_)
             | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::FloatLiteral(_)
-            | MiddleNodeType::Return { value: None } => Vec::new(),
+            | MiddleNodeType::Return(MirReturn { value: None }) => Vec::new(),
             MiddleNodeType::Identifier(MirIdentifier { identifier })
             | MiddleNodeType::Drop(MirDrop { identifier })
             | MiddleNodeType::Move(MirMove { identifier }) => {
@@ -59,11 +60,11 @@ impl IdentifiersUsed for MiddleNode {
                 pretty_printed_str: _,
                 value,
             }
-            | MiddleNodeType::Return { value: Some(value) }
+            | MiddleNodeType::Return(MirReturn { value: Some(value) })
             | MiddleNodeType::EnumExpression {
                 data: Some(value), ..
             }
-            | MiddleNodeType::Emit { value } => value.identifiers_used(),
+            | MiddleNodeType::Emit(MirEmit { value }) => value.identifiers_used(),
             MiddleNodeType::ExternFunction { .. } => Vec::new(),
             MiddleNodeType::BinaryExpression(MirBinary {
                 left,
@@ -84,11 +85,11 @@ impl IdentifiersUsed for MiddleNode {
                 identifier: left,
                 value: right,
             }
-            | MiddleNodeType::RangeDeclaration {
+            | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,
                 to: right,
                 inclusive: _,
-            } => {
+            }) => {
                 let mut left = left.identifiers_used();
 
                 left.append(&mut right.identifiers_used());
@@ -144,13 +145,13 @@ impl IdentifiersUsed for MiddleNode {
                 let _ = body;
                 Vec::new()
             }
-            MiddleNodeType::LoopDeclaration { body, .. } => body.identifiers_used(),
-            MiddleNodeType::Conditional {
+            MiddleNodeType::LoopDeclaration(MirLoop { body, .. }) => body.identifiers_used(),
+            MiddleNodeType::Conditional(MirConditional {
                 comparison,
                 then,
                 otherwise,
                 ..
-            } => {
+            }) => {
                 let mut amt = then.identifiers_used();
                 if let Some(otherwise) = otherwise {
                     amt.append(&mut otherwise.identifiers_used());
@@ -187,12 +188,13 @@ impl MiddleNode {
                 value: _,
                 data: None,
             }
+            | MiddleNodeType::ExternFunction { .. }
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::CharLiteral(_)
             | MiddleNodeType::BigLiteral(_)
             | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::FloatLiteral(_)
-            | MiddleNodeType::Return { value: None }
+            | MiddleNodeType::Return(MirReturn { value: None })
             | MiddleNodeType::Identifier(_)
             | MiddleNodeType::Drop(_)
             | MiddleNodeType::Move(_) => Vec::new(),
@@ -218,11 +220,12 @@ impl MiddleNode {
                 pretty_printed_str: _,
                 value,
             }
-            | MiddleNodeType::Return { value: Some(value) }
+            | MiddleNodeType::LoopDeclaration(MirLoop { body: value, .. })
+            | MiddleNodeType::Return(MirReturn { value: Some(value) })
             | MiddleNodeType::EnumExpression {
                 data: Some(value), ..
             }
-            | MiddleNodeType::Emit { value } => value.identifiers_declared(),
+            | MiddleNodeType::Emit(MirEmit { value }) => value.identifiers_declared(),
 
             MiddleNodeType::VariableDeclaration {
                 var_type: _,
@@ -257,11 +260,11 @@ impl MiddleNode {
                 base: left,
                 index: right,
             }
-            | MiddleNodeType::RangeDeclaration {
+            | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,
                 to: right,
                 inclusive: _,
-            } => {
+            }) => {
                 let mut left = left.identifiers_declared();
 
                 left.append(&mut right.identifiers_declared());
@@ -307,14 +310,12 @@ impl MiddleNode {
                 return_type: _,
                 ..
             } => Vec::new(),
-            MiddleNodeType::ExternFunction { .. } => Vec::new(),
-            MiddleNodeType::LoopDeclaration { body, .. } => body.identifiers_declared(),
-            MiddleNodeType::Conditional {
+            MiddleNodeType::Conditional(MirConditional {
                 comparison,
                 then,
                 otherwise,
                 ..
-            } => {
+            }) => {
                 let mut amt = then.identifiers_used();
                 if let Some(otherwise) = otherwise {
                     amt.append(&mut otherwise.identifiers_declared());

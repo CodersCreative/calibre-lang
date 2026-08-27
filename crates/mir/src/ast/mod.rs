@@ -78,11 +78,11 @@ impl MiddleNode {
                 base: left,
                 index: right,
             }
-            | MiddleNodeType::RangeDeclaration {
+            | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,
                 to: right,
                 ..
-            } => {
+            }) => {
                 count += left.len();
                 count += right.len();
             }
@@ -94,7 +94,7 @@ impl MiddleNode {
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::DebugExpression { value, .. }
-            | MiddleNodeType::Return { value: Some(value) }
+            | MiddleNodeType::Return(MirReturn { value: Some(value) })
             | MiddleNodeType::EnumExpression {
                 data: Some(value), ..
             }
@@ -108,7 +108,7 @@ impl MiddleNode {
                     count += v.len();
                 }
             }
-            MiddleNodeType::LoopDeclaration { state, body, .. } => {
+            MiddleNodeType::LoopDeclaration(MirLoop { state, body, .. }) => {
                 if let Some(s) = state.as_ref() {
                     count += s.len();
                 }
@@ -146,7 +146,7 @@ impl MiddleNode {
                     a.substitute(repl);
                 }
             }
-            MiddleNodeType::Return { value } => {
+            MiddleNodeType::Return(MirReturn { value }) => {
                 if let Some(v) = value.as_mut() {
                     v.substitute(repl);
                 }
@@ -154,11 +154,11 @@ impl MiddleNode {
             MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
             | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
             | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. })
-            | MiddleNodeType::RangeDeclaration {
+            | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,
                 to: right,
                 ..
-            } => {
+            }) => {
                 left.substitute(repl);
                 right.substitute(repl);
             }
@@ -177,7 +177,7 @@ impl MiddleNode {
                     v.substitute(repl);
                 }
             }
-            MiddleNodeType::LoopDeclaration { state, body, .. } => {
+            MiddleNodeType::LoopDeclaration(MirLoop { state, body, .. }) => {
                 if let Some(s) = state.as_mut() {
                     s.substitute(repl);
                 }
@@ -213,18 +213,20 @@ impl MiddleNode {
             MiddleNodeType::ScopeDeclaration { body, .. } => {
                 body.iter().any(|n| n.calls_self(name))
             }
-            MiddleNodeType::Return { value } => value.as_ref().is_some_and(|v| v.calls_self(name)),
+            MiddleNodeType::Return(MirReturn { value }) => {
+                value.as_ref().is_some_and(|v| v.calls_self(name))
+            }
             MiddleNodeType::AssignmentExpression { identifier, value } => {
                 identifier.calls_self(name) || value.calls_self(name)
             }
             MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
             | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
             | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. })
-            | MiddleNodeType::RangeDeclaration {
+            | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,
                 to: right,
                 ..
-            } => left.calls_self(name) || right.calls_self(name),
+            }) => left.calls_self(name) || right.calls_self(name),
             MiddleNodeType::AsExpression(MirAs { value, .. })
             | MiddleNodeType::IsExpression(MirIs { value, .. })
             | MiddleNodeType::NegExpression(MirNeg { value })
@@ -236,7 +238,7 @@ impl MiddleNode {
                 data_type: _,
                 values,
             }) => values.iter().any(|v| v.calls_self(name)),
-            MiddleNodeType::LoopDeclaration { state, body, .. } => {
+            MiddleNodeType::LoopDeclaration(MirLoop { state, body, .. }) => {
                 state.as_ref().is_some_and(|s| s.calls_self(name)) || body.calls_self(name)
             }
             MiddleNodeType::FieldAccess { base, .. } => base.calls_self(name),
@@ -367,6 +369,38 @@ pub struct MirIs {
     pub data_type: ParserDataType,
 }
 
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirConditional {
+    pub comparison: Box<MiddleNode>,
+    pub then: Box<MiddleNode>,
+    pub otherwise: Option<Box<MiddleNode>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirRange {
+    pub from: Box<MiddleNode>,
+    pub to: Box<MiddleNode>,
+    pub inclusive: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirLoop {
+    pub state: Option<Box<MiddleNode>>,
+    pub body: Box<MiddleNode>,
+    pub scope_id: ScopeId,
+    pub label: Option<ParserText>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirReturn {
+    pub value: Option<Box<MiddleNode>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirEmit {
+    pub value: Box<MiddleNode>,
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
@@ -375,6 +409,11 @@ pub enum MiddleNodeType {
 
     Break(MirBreak),
     Continue(MirContinue),
+    Conditional(MirConditional),
+    RangeDeclaration(MirRange),
+    LoopDeclaration(MirLoop),
+    Return(MirReturn),
+    Emit(MirEmit),
 
     RefStatement(MirRef),
     Drop(MirDrop),
@@ -435,23 +474,6 @@ pub enum MiddleNodeType {
         pretty_printed_str: String,
         value: Box<MiddleNode>,
     },
-    Emit {
-        value: Box<MiddleNode>,
-    },
-    RangeDeclaration {
-        from: Box<MiddleNode>,
-        to: Box<MiddleNode>,
-        inclusive: bool,
-    },
-    LoopDeclaration {
-        state: Option<Box<MiddleNode>>,
-        body: Box<MiddleNode>,
-        scope_id: ScopeId,
-        label: Option<ParserText>,
-    },
-    Return {
-        value: Option<Box<MiddleNode>>,
-    },
     FieldAccess {
         base: Box<MiddleNode>,
         field: ParserText,
@@ -471,11 +493,6 @@ pub enum MiddleNodeType {
     AggregateExpression {
         identifier: Option<ParserText>,
         value: ObjectMap<MiddleNode>,
-    },
-    Conditional {
-        comparison: Box<MiddleNode>,
-        then: Box<MiddleNode>,
-        otherwise: Option<Box<MiddleNode>>,
     },
 }
 
@@ -526,8 +543,8 @@ impl From<MiddleNode> for AstNode {
 impl From<MiddleNodeType> for AstNodeType {
     fn from(val: MiddleNodeType) -> Self {
         match val {
-            MiddleNodeType::Emit { value } => {
-                AstNodeType::Emit(EmitType::Scope(Box::new((*value).into())))
+            MiddleNodeType::Emit(value) => {
+                AstNodeType::Emit(EmitType::Scope(Box::new((*value.value).into())))
             }
             MiddleNodeType::Spawn(value) => AstNodeType::Spawn {
                 items: vec![(*value.value).into()],
@@ -659,44 +676,33 @@ impl From<MiddleNodeType> for AstNodeType {
                 value: Box::new((*value.value).into()),
                 data_type: value.data_type,
             },
-            MiddleNodeType::Conditional {
-                comparison,
-                then,
-                otherwise,
-            } => AstNodeType::IfStatement {
-                comparison: Box::new(IfComparisonType::If((*comparison).into())),
-                then: Box::new((*then).into()),
-                otherwise: otherwise.map(|otherwise| Box::new((*otherwise).into())),
+            MiddleNodeType::Conditional(value) => AstNodeType::IfStatement {
+                comparison: Box::new(IfComparisonType::If((*value.comparison).into())),
+                then: Box::new((*value.then).into()),
+                otherwise: value
+                    .otherwise
+                    .map(|otherwise| Box::new((*otherwise).into())),
             },
-            MiddleNodeType::RangeDeclaration {
-                from,
-                to,
-                inclusive,
-            } => AstNodeType::RangeDeclaration {
-                from: Box::new((*from).into()),
-                to: Box::new((*to).into()),
-                inclusive,
+            MiddleNodeType::RangeDeclaration(value) => AstNodeType::RangeDeclaration {
+                from: Box::new((*value.from).into()),
+                to: Box::new((*value.to).into()),
+                inclusive: value.inclusive,
             },
-            MiddleNodeType::LoopDeclaration {
-                state,
-                body,
-                scope_id: _,
-                label,
-            } => AstNodeType::ScopeDeclaration {
+            MiddleNodeType::LoopDeclaration(value) => AstNodeType::ScopeDeclaration {
                 body: {
                     let mut lst = Vec::new();
 
-                    if let Some(state) = state {
+                    if let Some(state) = value.state {
                         lst.push((*state).into());
                     }
 
                     lst.push(AstNode::new(
-                        body.span,
+                        value.body.span,
                         AstNodeType::LoopDeclaration {
                             loop_type: Box::new(LoopType::Loop),
-                            body: Box::new((*body).into()),
+                            body: Box::new((*value.body).into()),
                             until: None,
-                            label: label.map(Into::into),
+                            label: value.label.map(Into::into),
                             else_body: None,
                         },
                     ));
@@ -708,10 +714,9 @@ impl From<MiddleNodeType> for AstNodeType {
                 create_new_scope: Some(false),
                 define: false,
             },
-            MiddleNodeType::Return { value: Some(value) } => AstNodeType::Return {
-                value: Some(Box::new((*value).into())),
+            MiddleNodeType::Return(value) => AstNodeType::Return {
+                value: value.value.map(|x| Box::new((*x).into())),
             },
-            MiddleNodeType::Return { value: None } => AstNodeType::Return { value: None },
             MiddleNodeType::Identifier(value) => AstNodeType::Identifier(value.identifier.into()),
             MiddleNodeType::StringLiteral(value) => AstNodeType::StringLiteral(value.value),
             MiddleNodeType::ListLiteral(value) => AstNodeType::ListLiteral(value.data_type, {

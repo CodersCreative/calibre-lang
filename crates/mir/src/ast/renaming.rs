@@ -1,8 +1,9 @@
 use crate::{
     MiddleNode, MiddleNodeType,
     ast::{
-        MirAs, MirBinary, MirBoolean, MirBreak, MirComparison, MirDeref, MirDrop, MirIdentifier,
-        MirIs, MirList, MirMove, MirNeg, MirRef, MirSpawn,
+        MirAs, MirBinary, MirBoolean, MirBreak, MirComparison, MirConditional, MirDeref, MirDrop,
+        MirEmit, MirIdentifier, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
+        MirReturn, MirSpawn,
     },
 };
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
@@ -51,9 +52,9 @@ impl MiddleNodeType {
                 label,
                 value: Some(Box::new(value.rename(state))),
             }),
-            MiddleNodeType::Emit { value } => MiddleNodeType::Emit {
+            MiddleNodeType::Emit(MirEmit { value }) => MiddleNodeType::Emit(MirEmit {
                 value: Box::new(value.rename(state)),
-            },
+            }),
             MiddleNodeType::Spawn(MirSpawn { value }) => MiddleNodeType::Spawn(MirSpawn {
                 value: Box::new(value.rename(state)),
             }),
@@ -172,29 +173,29 @@ impl MiddleNodeType {
                     data_type,
                 })
             }
-            MiddleNodeType::RangeDeclaration {
+            MiddleNodeType::RangeDeclaration(MirRange {
                 from,
                 to,
                 inclusive,
-            } => MiddleNodeType::RangeDeclaration {
+            }) => MiddleNodeType::RangeDeclaration(MirRange {
                 from: Box::new(from.rename(state)),
                 to: Box::new(to.rename(state)),
                 inclusive,
-            },
-            MiddleNodeType::LoopDeclaration {
+            }),
+            MiddleNodeType::LoopDeclaration(MirLoop {
                 state: s,
                 body,
                 scope_id,
                 label,
-            } => MiddleNodeType::LoopDeclaration {
+            }) => MiddleNodeType::LoopDeclaration(MirLoop {
                 state: s.map(|value| Box::new(value.rename(state))),
                 body: Box::new(body.rename(state)),
                 scope_id,
                 label,
-            },
-            MiddleNodeType::Return { value } => MiddleNodeType::Return {
+            }),
+            MiddleNodeType::Return(MirReturn { value }) => MiddleNodeType::Return(MirReturn {
                 value: value.map(|value| Box::new(value.rename(state))),
-            },
+            }),
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
                 MiddleNodeType::Identifier(MirIdentifier {
                     identifier: ParserText {
@@ -264,15 +265,15 @@ impl MiddleNodeType {
                     ),
                 }
             }
-            MiddleNodeType::Conditional {
+            MiddleNodeType::Conditional(MirConditional {
                 comparison,
                 then,
                 otherwise,
-            } => MiddleNodeType::Conditional {
+            }) => MiddleNodeType::Conditional(MirConditional {
                 comparison: Box::new(comparison.rename(state)),
                 then: Box::new(then.rename(state)),
                 otherwise: otherwise.map(|value| Box::new(value.rename(state))),
-            },
+            }),
         }
     }
 }

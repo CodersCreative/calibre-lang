@@ -18,10 +18,12 @@ use calibre_mir::ast::{MirBig, MirChar, MirFloat, MirIdentifier, MirInt, MirList
 use calibre_parser::{Span, ast::idents::IntLiteralType};
 
 impl LirLowering for MirIdentifier {
+    #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Load(self.identifier.to_string().into_boxed_str())
     }
 
+    #[inline(always)]
     fn lower_lvalue<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirLValue
     where
         Self: Sized,
@@ -31,12 +33,14 @@ impl LirLowering for MirIdentifier {
 }
 
 impl LirLowering for MirString {
+    #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Literal(LirLiteral::String(self.value.to_string()))
     }
 }
 
 impl LirLowering for MirList {
+    #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::List {
             elements: env.lower_nodes(self.values),
@@ -46,18 +50,21 @@ impl LirLowering for MirList {
 }
 
 impl LirLowering for MirChar {
+    #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Literal(LirLiteral::Char(self.value))
     }
 }
 
 impl LirLowering for MirFloat {
+    #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Literal(LirLiteral::Float(self.value))
     }
 }
 
 impl LirLowering for MirInt {
+    #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         match self.value.int_type {
             IntLiteralType::Int => LirNodeType::Literal(LirLiteral::Int(self.value.value)),
@@ -68,6 +75,7 @@ impl LirLowering for MirInt {
 }
 
 impl LirLowering for MirBig {
+    #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Literal(LirLiteral::Big(self.value.text))
     }

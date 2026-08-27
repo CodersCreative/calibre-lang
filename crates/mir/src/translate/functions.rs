@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, MirConditional, MirReturn},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -661,24 +661,24 @@ impl MiddleEnvironment {
                     );
                     if simple_return {
                         last = Some(MiddleNode::new(
-                            MiddleNodeType::Return {
+                            MiddleNodeType::Return(MirReturn {
                                 value: Some(Box::new(last_node)),
-                            },
+                            }),
                             self.context.current_span(),
                         ));
                     } else {
                         let last_node = match last_node.node_type {
-                            MiddleNodeType::Conditional {
+                            MiddleNodeType::Conditional(MirConditional {
                                 comparison,
                                 then,
                                 otherwise,
-                            } => {
+                            }) => {
                                 let wrap = |node: Box<MiddleNode>| {
                                     if matches!(node.node_type, MiddleNodeType::Return { .. }) {
                                         node
                                     } else {
                                         Box::new(MiddleNode::new(
-                                            MiddleNodeType::Return { value: Some(node) },
+                                            MiddleNodeType::Return(MirReturn { value: Some(node) }),
                                             self.context.current_span(),
                                         ))
                                     }
@@ -687,17 +687,17 @@ impl MiddleEnvironment {
                                 let otherwise = match otherwise {
                                     Some(other) => Some(wrap(other)),
                                     None => Some(Box::new(MiddleNode::new(
-                                        MiddleNodeType::Return { value: None },
+                                        MiddleNodeType::Return(MirReturn { value: None }),
                                         self.context.current_span(),
                                     ))),
                                 };
                                 MiddleNode {
                                     span: last_node.span,
-                                    node_type: MiddleNodeType::Conditional {
+                                    node_type: MiddleNodeType::Conditional(MirConditional {
                                         comparison,
                                         then,
                                         otherwise,
-                                    },
+                                    }),
                                 }
                             }
                             _ => last_node,

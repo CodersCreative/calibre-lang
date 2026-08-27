@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, MirLoop},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{LoopContext, ScopeId},
@@ -742,12 +742,12 @@ impl MiddleEnvironment {
                     body,
                 )?;
                 let loop_node = MiddleNode {
-                    node_type: MiddleNodeType::LoopDeclaration {
+                    node_type: MiddleNodeType::LoopDeclaration(MirLoop {
                         state: None,
                         body: Box::new(body),
                         scope_id: scope,
                         label: label_text.clone().map(Into::into),
-                    },
+                    }),
                     span,
                 };
                 self.finish_loop_with_else(loop_node, scope, span, else_body, result_raw, broke_raw)
@@ -783,12 +783,12 @@ impl MiddleEnvironment {
                     wrapped,
                 )?;
                 let loop_node = MiddleNode {
-                    node_type: MiddleNodeType::LoopDeclaration {
+                    node_type: MiddleNodeType::LoopDeclaration(MirLoop {
                         state: None,
                         body: Box::new(body),
                         scope_id: scope,
                         label: label_text.clone().map(Into::into),
-                    },
+                    }),
                     span,
                 };
                 self.finish_loop_with_else(loop_node, scope, span, else_body, result_raw, broke_raw)
@@ -848,12 +848,12 @@ impl MiddleEnvironment {
                     ),
                 )?;
                 let loop_node = MiddleNode {
-                    node_type: MiddleNodeType::LoopDeclaration {
+                    node_type: MiddleNodeType::LoopDeclaration(MirLoop {
                         state: None,
                         body: Box::new(body),
                         scope_id: scope,
                         label: label_text.clone().map(Into::into),
-                    },
+                    }),
                     span,
                 };
                 self.finish_loop_with_else(loop_node, scope, span, else_body, result_raw, broke_raw)
@@ -1199,12 +1199,12 @@ impl MiddleEnvironment {
                 )?;
 
                 let loop_node = MiddleNode {
-                    node_type: MiddleNodeType::LoopDeclaration {
+                    node_type: MiddleNodeType::LoopDeclaration(MirLoop {
                         state,
                         body: Box::new(body),
                         scope_id: scope,
                         label: label_text.clone().map(Into::into),
-                    },
+                    }),
                     span,
                 };
 

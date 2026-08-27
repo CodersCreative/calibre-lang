@@ -1,6 +1,6 @@
 use crate::ast::{
     MiddleNode, MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirDeref,
-    MirIdentifier, MirIs, MirList, MirNeg, MirRef,
+    MirIdentifier, MirIs, MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn,
 };
 use rustc_hash::FxHashMap;
 
@@ -48,11 +48,11 @@ fn extract_single_return_expr(body: &MiddleNode) -> Option<MiddleNode> {
             }
 
             match &body[0].node_type {
-                MiddleNodeType::Return { value: Some(expr) } => Some((**expr).clone()),
+                MiddleNodeType::Return(MirReturn { value: Some(expr) }) => Some((**expr).clone()),
                 _ => None,
             }
         }
-        MiddleNodeType::Return { value: Some(expr) } => Some((**expr).clone()),
+        MiddleNodeType::Return(MirReturn { value: Some(expr) }) => Some((**expr).clone()),
         _ => None,
     }
 }
@@ -77,7 +77,8 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
                 *node = inlined;
             }
         }
-        MiddleNodeType::Return { value } | MiddleNodeType::EnumExpression { data: value, .. } => {
+        MiddleNodeType::Return(MirReturn { value })
+        | MiddleNodeType::EnumExpression { data: value, .. } => {
             if let Some(v) = value.as_mut() {
                 inline_in_node(v, map);
             }
@@ -93,11 +94,11 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
         }
         | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
         | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. })
-        | MiddleNodeType::RangeDeclaration {
+        | MiddleNodeType::RangeDeclaration(MirRange {
             from: left,
             to: right,
             ..
-        } => {
+        }) => {
             inline_in_node(left, map);
             inline_in_node(right, map);
         }
@@ -118,7 +119,7 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
                 inline_in_node(v, map);
             }
         }
-        MiddleNodeType::LoopDeclaration { state, body, .. } => {
+        MiddleNodeType::LoopDeclaration(MirLoop { state, body, .. }) => {
             if let Some(s) = state.as_mut() {
                 inline_in_node(s, map);
             }

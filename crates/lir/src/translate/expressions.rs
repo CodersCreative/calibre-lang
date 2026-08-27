@@ -20,6 +20,7 @@ use calibre_parser::{
 };
 
 impl LirLowering for MirBinary {
+    #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Binary {
             left: Box::new(env.lower_node(*self.left)),
@@ -30,6 +31,7 @@ impl LirLowering for MirBinary {
 }
 
 impl LirLowering for MirComparison {
+    #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Comparison {
             left: Box::new(env.lower_node(*self.left)),
@@ -40,6 +42,7 @@ impl LirLowering for MirComparison {
 }
 
 impl LirLowering for MirBoolean {
+    #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
         let then_id = env.create_block();
         let else_id = env.create_block();
@@ -103,6 +106,7 @@ impl LirLowering for MirBoolean {
 }
 
 impl LirLowering for MirNeg {
+    #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Binary {
             left: Box::new(LirNodeType::Literal(LirLiteral::Int(0))),
@@ -113,6 +117,7 @@ impl LirLowering for MirNeg {
 }
 
 impl LirLowering for MirAs {
+    #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::As(
             Box::new(env.lower_node(*self.value)),
@@ -123,6 +128,7 @@ impl LirLowering for MirAs {
 }
 
 impl LirLowering for MirIs {
+    #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Is(Box::new(env.lower_node(*self.value)), self.data_type)
     }

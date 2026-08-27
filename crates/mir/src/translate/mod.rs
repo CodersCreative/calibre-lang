@@ -1,8 +1,8 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAs, MirBig, MirBinary, MirBoolean, MirBreak, MirChar,
-        MirComparison, MirContinue, MirDeref, MirDrop, MirFloat, MirInt, MirIs, MirListBuilder,
-        MirMove, MirNeg, MirRef, MirSpawn, MirString,
+        MirComparison, MirConditional, MirContinue, MirDeref, MirDrop, MirEmit, MirFloat, MirInt,
+        MirIs, MirListBuilder, MirMove, MirNeg, MirRange, MirRef, MirReturn, MirSpawn, MirString,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -170,11 +170,11 @@ impl MiddleEnvironment {
                 to,
                 inclusive,
             } => Ok(MiddleNode {
-                node_type: MiddleNodeType::RangeDeclaration {
+                node_type: MiddleNodeType::RangeDeclaration(MirRange {
                     from: Box::new(self.evaluate(scope, *from)),
                     to: Box::new(self.evaluate(scope, *to)),
                     inclusive,
-                },
+                }),
                 span: node.span,
             }),
             AstNodeType::Emit(EmitType::Channel { channel, value }) => self.evaluate_inner(
@@ -186,9 +186,9 @@ impl MiddleEnvironment {
                 ),
             ),
             AstNodeType::Emit(EmitType::Scope(value)) => Ok(MiddleNode::new(
-                MiddleNodeType::Emit {
+                MiddleNodeType::Emit(MirEmit {
                     value: Box::new(self.evaluate(scope, *value)),
-                },
+                }),
                 node.span,
             )),
             AstNodeType::FieldAccess { base, field } => {
@@ -796,11 +796,11 @@ impl MiddleEnvironment {
                 otherwise,
             } => match *comparison {
                 IfComparisonType::If(x) => Ok(MiddleNode {
-                    node_type: MiddleNodeType::Conditional {
+                    node_type: MiddleNodeType::Conditional(MirConditional {
                         comparison: Box::new(self.evaluate(scope, x)),
                         then: Box::new(self.evaluate(scope, *then)),
                         otherwise: otherwise.map(|x| Box::new(self.evaluate(scope, *x))),
-                    },
+                    }),
                     span: node.span,
                 }),
                 IfComparisonType::IfLet { value, pattern } => self.evaluate_inner(
@@ -1033,7 +1033,7 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             AstNodeType::Return { value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::Return {
+                node_type: MiddleNodeType::Return(MirReturn {
                     value: {
                         let mut lst = Vec::new();
 
@@ -1101,7 +1101,7 @@ impl MiddleEnvironment {
                             )))
                         }
                     },
-                },
+                }),
                 span: node.span,
             }),
             AstNodeType::RefStatement { mutability, value } => Ok(MiddleNode {

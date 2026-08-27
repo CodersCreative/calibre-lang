@@ -1,8 +1,8 @@
 use super::*;
 use calibre_mir::{
     ast::{
-        MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirDeref, MirList, MirNeg,
-        MirRef,
+        MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirConditional, MirDeref,
+        MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn,
     },
     scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
@@ -31,7 +31,7 @@ impl CalibreLanguageServer {
             let new_scope = match &node.node_type {
                 MiddleNodeType::FunctionDeclaration { scope_id, .. } => Some(*scope_id),
                 MiddleNodeType::ScopeDeclaration { scope_id, .. } => Some(*scope_id),
-                MiddleNodeType::LoopDeclaration { scope_id, .. } => Some(*scope_id),
+                MiddleNodeType::LoopDeclaration(MirLoop { scope_id, .. }) => Some(*scope_id),
                 _ => None,
             };
 
@@ -53,9 +53,9 @@ impl CalibreLanguageServer {
                 | MiddleNodeType::NegExpression(MirNeg { value, .. })
                 | MiddleNodeType::AsExpression(MirAs { value, .. })
                 | MiddleNodeType::FunctionDeclaration { body: value, .. }
-                | MiddleNodeType::Return {
+                | MiddleNodeType::Return(MirReturn {
                     value: Some(value), ..
-                }
+                })
                 | MiddleNodeType::FieldAccess { base: value, .. } => {
                     traverse(value, pos, current_scope, smallest_span);
                 }
@@ -64,7 +64,7 @@ impl CalibreLanguageServer {
                         traverse(stmt, pos, current_scope, smallest_span);
                     }
                 }
-                MiddleNodeType::LoopDeclaration { state, body, .. } => {
+                MiddleNodeType::LoopDeclaration(MirLoop { state, body, .. }) => {
                     if let Some(state) = state {
                         traverse(state, pos, current_scope, smallest_span);
                     }
@@ -89,11 +89,11 @@ impl CalibreLanguageServer {
                     identifier: left,
                     value: right,
                 }
-                | MiddleNodeType::RangeDeclaration {
+                | MiddleNodeType::RangeDeclaration(MirRange {
                     from: left,
                     to: right,
                     ..
-                }
+                })
                 | MiddleNodeType::IndexAccess {
                     base: left,
                     index: right,
@@ -109,11 +109,11 @@ impl CalibreLanguageServer {
                         traverse(node, pos, current_scope, smallest_span);
                     }
                 }
-                MiddleNodeType::Conditional {
+                MiddleNodeType::Conditional(MirConditional {
                     comparison,
                     then,
                     otherwise,
-                } => {
+                }) => {
                     traverse(comparison, pos, current_scope, smallest_span);
                     traverse(then, pos, current_scope, smallest_span);
                     if let Some(otherwise) = otherwise {

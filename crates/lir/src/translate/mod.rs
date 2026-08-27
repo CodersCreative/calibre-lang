@@ -3,7 +3,7 @@ use crate::{
     environment::{LirEnvironment, LirFunction, LirGlobal, LirRegistry},
 };
 use calibre_mir::{
-    ast::{MiddleNode, MiddleNodeType, MirDeref, MirIdentifier},
+    ast::{MiddleNode, MiddleNodeType, MirDeref, MirIdentifier, MirReturn},
     environment::MiddleEnvironment,
     typing::{MiddleImpl, MiddleTrait, MiddleTypeDefType},
 };
@@ -232,10 +232,7 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::Null => LirNodeType::null(),
             MiddleNodeType::EmptyLine => LirNodeType::noop(),
 
-            MiddleNodeType::Emit { value } => {
-                // TODO Add emit support
-                self.lower_node(*value)
-            }
+            MiddleNodeType::Emit(x) => x.lower(self, span),
             MiddleNodeType::IntLiteral(x) => x.lower(self, span),
             MiddleNodeType::FloatLiteral(x) => x.lower(self, span),
             MiddleNodeType::BigLiteral(x) => x.lower(self, span),
@@ -449,13 +446,10 @@ impl<'a> LirEnvironment<'a> {
 
                 let (mut has_body_value, mut body_val) =
                     if let MiddleNodeType::Conditional { .. } = &body.node_type {
-                        let ret = MiddleNode::new(
-                            MiddleNodeType::Return {
-                                value: Some(body.clone()),
-                            },
-                            body_span,
-                        );
-                        let _ = sub_lowerer.lower_node(ret);
+                        let _ = MirReturn {
+                            value: Some(body.clone()),
+                        }
+                        .lower(self, span);
                         (false, LirNodeType::null())
                     } else {
                         let body = sub_lowerer.lower_node(*body);
@@ -620,127 +614,9 @@ impl<'a> LirEnvironment<'a> {
                     LirNodeType::null()
                 }
             }
-            MiddleNodeType::Conditional {
-                comparison,
-                then,
-                otherwise,
-            } => {
-                let then_id = self.create_block();
-                let else_id = self.create_block();
-                let merge_id = self.create_block();
-
-                let temp = self.get_temp();
-                self.declare_temp_null(span, temp.as_str());
-
-                let cond = self.lower_node(*comparison);
-                self.set_terminator(LirTerminator::Branch {
-                    span,
-                    condition: cond,
-                    then_block: then_id,
-                    else_block: else_id,
-                });
-
-                self.switch_to(then_id);
-                let then_val = self.lower_node(*then);
-                if self.current_block_open() {
-                    self.assign_temp_if_non_null(span, temp.as_str(), then_val);
-                    self.jump_if_open(span, merge_id);
-                }
-
-                self.switch_to(else_id);
-                let else_val = if let Some(alt) = otherwise {
-                    self.lower_node(*alt)
-                } else {
-                    LirNodeType::null()
-                };
-
-                if self.current_block_open() {
-                    self.assign_temp_if_non_null(span, temp.as_str(), else_val);
-                    self.jump_if_open(span, merge_id);
-                }
-
-                self.switch_to(merge_id);
-                LirNodeType::Load(temp.into_boxed_str())
-            }
-            MiddleNodeType::LoopDeclaration {
-                state, body, label, ..
-            } => {
-                let header_id = self.create_block();
-                let body_id = self.create_block();
-                let exit_id = self.create_block();
-
-                if let Some(s) = state {
-                    self.lower_and_add_node(*s);
-                }
-
-                self.set_terminator(LirTerminator::Jump {
-                    span,
-                    target: header_id,
-                });
-
-                self.switch_to(header_id);
-                self.set_terminator(LirTerminator::Jump {
-                    span,
-                    target: body_id,
-                });
-
-                self.loop_stack
-                    .push((header_id, exit_id, label.map(|l| l.text)));
-
-                self.switch_to(body_id);
-                self.lower_and_add_node(*body);
-                self.set_terminator(LirTerminator::Jump {
-                    span,
-                    target: header_id,
-                });
-
-                self.loop_stack.pop();
-
-                self.switch_to(exit_id);
-                LirNodeType::null()
-            }
-            MiddleNodeType::Return { value: None } => {
-                self.emit_return_value(span, None);
-                LirNodeType::null()
-            }
-            MiddleNodeType::Return { value: Some(v) } => {
-                if let MiddleNodeType::Conditional {
-                    comparison,
-                    then,
-                    otherwise,
-                } = v.node_type
-                {
-                    let then_id = self.create_block();
-                    let else_id = self.create_block();
-                    let merge_id = self.create_block();
-
-                    let cond = self.lower_node(*comparison);
-                    self.set_terminator(LirTerminator::Branch {
-                        span,
-                        condition: cond,
-                        then_block: then_id,
-                        else_block: else_id,
-                    });
-
-                    self.switch_to(then_id);
-                    let then_return =
-                        MiddleNode::new(MiddleNodeType::Return { value: Some(then) }, span);
-                    let _ = self.lower_node(then_return);
-
-                    self.switch_to(else_id);
-                    let else_return =
-                        MiddleNode::new(MiddleNodeType::Return { value: otherwise }, span);
-                    let _ = self.lower_node(else_return);
-
-                    self.switch_to(merge_id);
-                    return LirNodeType::null();
-                }
-
-                let value_span = v.span;
-                let val = self.lower_node(*v);
-                self.emit_return_value(value_span, Some(val));
-                LirNodeType::null()
-            }
+            MiddleNodeType::Conditional(x) => x.lower(self, span),
+            MiddleNodeType::LoopDeclaration(x) => x.lower(self, span),
+            MiddleNodeType::Return(x) => x.lower(self, span),
             MiddleNodeType::Break(x) => x.lower(self, span),
             MiddleNodeType::Continue(x) => x.lower(self, span),
             MiddleNodeType::FieldAccess { base, field } => LirNodeType::Member(
@@ -797,21 +673,8 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::AsExpression(x) => x.lower(self, span),
             MiddleNodeType::IsExpression(x) => x.lower(self, span),
             MiddleNodeType::NegExpression(x) => x.lower(self, span),
+            MiddleNodeType::RangeDeclaration(x) => x.lower(self, span),
             MiddleNodeType::DebugExpression { value, .. } => self.lower_node(*value),
-
-            MiddleNodeType::RangeDeclaration {
-                from,
-                to,
-                inclusive,
-            } => {
-                let from = self.lower_node(*from);
-                let to = self.lower_node(*to);
-                LirNodeType::Range {
-                    from: Box::new(from),
-                    to: Box::new(to),
-                    inclusive,
-                }
-            }
         }
     }
 
