@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirCall, MirConditional, MirReturn},
+    ast::{MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirConditional, MirReturn},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -283,7 +283,7 @@ impl MiddleEnvironment {
             .into();
 
         MiddleNode {
-            node_type: MiddleNodeType::AggregateExpression { identifier, value },
+            node_type: MiddleNodeType::AggregateExpression(MirAggregate { identifier, value }),
             span,
         }
     }

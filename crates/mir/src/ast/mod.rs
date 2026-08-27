@@ -61,7 +61,7 @@ impl MiddleNode {
     pub fn len(&self) -> usize {
         let mut count = 1;
         match &self.node_type {
-            MiddleNodeType::AssignmentExpression { identifier, value } => {
+            MiddleNodeType::AssignmentExpression(MirAssignment { identifier, value }) => {
                 count += identifier.len();
                 count += value.len();
             }
@@ -93,11 +93,11 @@ impl MiddleNode {
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
-            | MiddleNodeType::DebugExpression { value, .. }
+            | MiddleNodeType::DebugExpression(MirDebug { value, .. })
             | MiddleNodeType::Return(MirReturn { value: Some(value) })
-            | MiddleNodeType::EnumExpression {
+            | MiddleNodeType::EnumExpression(MirEnum {
                 data: Some(value), ..
-            }
+            })
             | MiddleNodeType::VariableDeclaration { value, .. } => count += value.len(),
             MiddleNodeType::ListLiteral(MirList {
                 data_type: _,
@@ -136,7 +136,7 @@ impl MiddleNode {
                     stmt.substitute(repl);
                 }
             }
-            MiddleNodeType::AssignmentExpression { identifier, value } => {
+            MiddleNodeType::AssignmentExpression(MirAssignment { identifier, value }) => {
                 identifier.substitute(repl);
                 value.substitute(repl);
             }
@@ -167,7 +167,7 @@ impl MiddleNode {
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
-            | MiddleNodeType::DebugExpression { value, .. }
+            | MiddleNodeType::DebugExpression(MirDebug { value, .. })
             | MiddleNodeType::VariableDeclaration { value, .. } => value.substitute(repl),
             MiddleNodeType::ListLiteral(MirList {
                 data_type: _,
@@ -189,7 +189,7 @@ impl MiddleNode {
                 base.substitute(repl);
                 index.substitute(repl);
             }
-            MiddleNodeType::EnumExpression { data, .. } => {
+            MiddleNodeType::EnumExpression(MirEnum { data, .. }) => {
                 if let Some(d) = data.as_mut() {
                     d.substitute(repl);
                 }
@@ -216,7 +216,7 @@ impl MiddleNode {
             MiddleNodeType::Return(MirReturn { value }) => {
                 value.as_ref().is_some_and(|v| v.calls_self(name))
             }
-            MiddleNodeType::AssignmentExpression { identifier, value } => {
+            MiddleNodeType::AssignmentExpression(MirAssignment { identifier, value }) => {
                 identifier.calls_self(name) || value.calls_self(name)
             }
             MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
@@ -232,7 +232,7 @@ impl MiddleNode {
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
-            | MiddleNodeType::DebugExpression { value, .. }
+            | MiddleNodeType::DebugExpression(MirDebug { value, .. })
             | MiddleNodeType::VariableDeclaration { value, .. } => value.calls_self(name),
             MiddleNodeType::ListLiteral(MirList {
                 data_type: _,
@@ -246,7 +246,7 @@ impl MiddleNode {
             MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
                 base.calls_self(name) || index.calls_self(name)
             }
-            MiddleNodeType::EnumExpression { data, .. } => {
+            MiddleNodeType::EnumExpression(MirEnum { data, .. }) => {
                 data.as_ref().is_some_and(|d| d.calls_self(name))
             }
             _ => false,
@@ -425,6 +425,31 @@ pub struct MirCall {
     pub args: Vec<MiddleNode>,
 }
 
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirAssignment {
+    pub identifier: Box<MiddleNode>,
+    pub value: Box<MiddleNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirDebug {
+    pub pretty_printed_str: String,
+    pub value: Box<MiddleNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirAggregate {
+    pub identifier: Option<ParserText>,
+    pub value: ObjectMap<MiddleNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirEnum {
+    pub identifier: ParserText,
+    pub value: ParserText,
+    pub data: Option<Box<MiddleNode>>,
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
@@ -465,16 +490,16 @@ pub enum MiddleNodeType {
     IndexAccess(MirIndex),
     CallExpression(MirCall),
 
+    AssignmentExpression(MirAssignment),
+    DebugExpression(MirDebug),
+    AggregateExpression(MirAggregate),
+    EnumExpression(MirEnum),
+
     VariableDeclaration {
         var_type: VarType,
         identifier: ParserText,
         value: Box<MiddleNode>,
         data_type: ParserDataType,
-    },
-    EnumExpression {
-        identifier: ParserText,
-        value: ParserText,
-        data: Option<Box<MiddleNode>>,
     },
     ScopeDeclaration {
         body: Vec<MiddleNode>,
@@ -494,18 +519,6 @@ pub enum MiddleNodeType {
         symbol: String,
         parameters: Vec<ParserDataType>,
         return_type: ParserDataType,
-    },
-    AssignmentExpression {
-        identifier: Box<MiddleNode>,
-        value: Box<MiddleNode>,
-    },
-    DebugExpression {
-        pretty_printed_str: String,
-        value: Box<MiddleNode>,
-    },
-    AggregateExpression {
-        identifier: Option<ParserText>,
-        value: ObjectMap<MiddleNode>,
     },
 }
 
@@ -597,14 +610,10 @@ impl From<MiddleNodeType> for AstNodeType {
                 value: Box::new((*value).into()),
                 data_type,
             },
-            MiddleNodeType::EnumExpression {
-                identifier,
-                value,
-                data,
-            } => AstNodeType::EnumExpression {
-                identifier: identifier.into(),
-                value: value.into(),
-                data: data.map(|data| Box::new((*data).into())),
+            MiddleNodeType::EnumExpression(value) => AstNodeType::EnumExpression {
+                identifier: value.identifier.into(),
+                value: value.value.into(),
+                data: value.data.map(|data| Box::new((*data).into())),
             },
             MiddleNodeType::ScopeDeclaration {
                 body,
@@ -665,17 +674,12 @@ impl From<MiddleNodeType> for AstNodeType {
                 library,
                 symbol: None,
             },
-            MiddleNodeType::AssignmentExpression { identifier, value } => {
-                AstNodeType::AssignmentExpression {
-                    identifier: Box::new((*identifier).into()),
-                    value: Box::new((*value).into()),
-                }
-            }
-            MiddleNodeType::DebugExpression {
-                pretty_printed_str: _,
-                value,
-            } => AstNodeType::DebugExpression {
-                value: Box::new((*value).into()),
+            MiddleNodeType::AssignmentExpression(value) => AstNodeType::AssignmentExpression {
+                identifier: Box::new((*value.identifier).into()),
+                value: Box::new((*value.value).into()),
+            },
+            MiddleNodeType::DebugExpression(value) => AstNodeType::DebugExpression {
+                value: Box::new((*value.value).into()),
             },
             MiddleNodeType::NegExpression(value) => AstNodeType::NotExpression {
                 value: Box::new((*value.value).into()),
@@ -794,25 +798,27 @@ impl From<MiddleNodeType> for AstNodeType {
                 right: Box::new((*value.right).into()),
                 operator: value.operator,
             },
-            MiddleNodeType::AggregateExpression { identifier, value } => {
-                let is_tuple = if value.is_empty() {
+            MiddleNodeType::AggregateExpression(value) => {
+                let is_tuple = if value.value.is_empty() {
                     true
                 } else {
-                    value.contains_key("0")
+                    value.value.contains_key("0")
                 };
                 if is_tuple {
-                    let caller_span = identifier
+                    let caller_span = value
+                        .identifier
                         .as_ref()
                         .map(|id| id.span)
-                        .or_else(|| value.0.first().map(|(_, node)| node.span))
+                        .or_else(|| value.value.0.first().map(|(_, node)| node.span))
                         .unwrap_or_default();
+
                     AstNodeType::CallExpression {
                         string_fn: None,
                         generic_types: Vec::new(),
                         caller: Box::new(AstNode::new(
                             caller_span,
                             AstNodeType::Identifier(
-                                if let Some(identifier) = identifier {
+                                if let Some(identifier) = value.identifier {
                                     identifier
                                 } else {
                                     ParserText::from(String::from("tuple"))
@@ -823,7 +829,7 @@ impl From<MiddleNodeType> for AstNodeType {
                         args: {
                             let mut lst = Vec::new();
                             let mut value: Vec<(String, MiddleNode)> =
-                                value.0.into_iter().collect();
+                                value.value.0.into_iter().collect();
                             value.sort_by(|a, b| a.0.cmp(&b.0));
                             for arg in value {
                                 lst.push(CallArg::Value(arg.1.into()));
@@ -834,11 +840,17 @@ impl From<MiddleNodeType> for AstNodeType {
                     }
                 } else {
                     AstNodeType::StructLiteral {
-                        identifier: identifier
+                        identifier: value
+                            .identifier
                             .unwrap_or_else(|| ParserText::new(Default::default(), "map"))
                             .into(),
                         value: ObjectType::Map(
-                            value.0.into_iter().map(|x| (x.0, x.1.into())).collect(),
+                            value
+                                .value
+                                .0
+                                .into_iter()
+                                .map(|x| (x.0, x.1.into()))
+                                .collect(),
                         ),
                     }
                 }

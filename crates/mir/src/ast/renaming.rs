@@ -1,9 +1,10 @@
 use crate::{
     MiddleNode, MiddleNodeType,
     ast::{
-        MirAs, MirBinary, MirBoolean, MirBreak, MirCall, MirComparison, MirConditional, MirDeref,
-        MirDrop, MirEmit, MirField, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove,
-        MirNeg, MirRange, MirRef, MirReturn, MirScope, MirSpawn,
+        MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirBreak, MirCall,
+        MirComparison, MirConditional, MirDebug, MirDeref, MirDrop, MirEmit, MirEnum, MirField,
+        MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
+        MirReturn, MirScope, MirSpawn,
     },
 };
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
@@ -38,7 +39,7 @@ impl MiddleNodeType {
             | MiddleNodeType::Continue(_)
             | MiddleNodeType::EmptyLine
             | MiddleNodeType::Null
-            | MiddleNodeType::EnumExpression { data: None, .. }
+            | MiddleNodeType::EnumExpression(MirEnum { data: None, .. })
             | MiddleNodeType::CharLiteral(_)
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::BigLiteral(_)
@@ -94,15 +95,15 @@ impl MiddleNodeType {
                     data_type,
                 }
             }
-            MiddleNodeType::EnumExpression {
+            MiddleNodeType::EnumExpression(MirEnum {
                 identifier,
                 value,
                 data: Some(data),
-            } => MiddleNodeType::EnumExpression {
+            }) => MiddleNodeType::EnumExpression(MirEnum {
                 identifier,
                 value,
                 data: Some(Box::new(data.rename(state))),
-            },
+            }),
             MiddleNodeType::ScopeDeclaration {
                 body,
                 create_new_scope,
@@ -140,24 +141,24 @@ impl MiddleNodeType {
                 return_type,
                 scope_id,
             },
-            MiddleNodeType::AssignmentExpression { identifier, value } => {
-                MiddleNodeType::AssignmentExpression {
+            MiddleNodeType::AssignmentExpression(MirAssignment { identifier, value }) => {
+                MiddleNodeType::AssignmentExpression(MirAssignment {
                     identifier: Box::new(identifier.rename(state)),
                     value: Box::new(value.rename(state)),
-                }
+                })
             }
             MiddleNodeType::NegExpression(MirNeg { value }) => {
                 MiddleNodeType::NegExpression(MirNeg {
                     value: Box::new(value.rename(state)),
                 })
             }
-            MiddleNodeType::DebugExpression {
+            MiddleNodeType::DebugExpression(MirDebug {
                 pretty_printed_str,
                 value,
-            } => MiddleNodeType::DebugExpression {
+            }) => MiddleNodeType::DebugExpression(MirDebug {
                 pretty_printed_str,
                 value: Box::new(value.rename(state)),
-            },
+            }),
             MiddleNodeType::AsExpression(MirAs {
                 value,
                 data_type,
@@ -261,8 +262,8 @@ impl MiddleNodeType {
                 right: Box::new(right.rename(state)),
                 operator,
             }),
-            MiddleNodeType::AggregateExpression { identifier, value } => {
-                MiddleNodeType::AggregateExpression {
+            MiddleNodeType::AggregateExpression(MirAggregate { identifier, value }) => {
+                MiddleNodeType::AggregateExpression(MirAggregate {
                     identifier,
                     value: ObjectMap(
                         value
@@ -271,7 +272,7 @@ impl MiddleNodeType {
                             .map(|x| (x.0, x.1.rename(state)))
                             .collect(),
                     ),
-                }
+                })
             }
             MiddleNodeType::Conditional(MirConditional {
                 comparison,

@@ -3,14 +3,13 @@ use crate::{
     environment::{LirEnvironment, LirFunction, LirGlobal, LirRegistry},
 };
 use calibre_mir::{
-    ast::{MiddleNode, MiddleNodeType, MirDeref, MirField, MirIdentifier, MirIndex, MirReturn},
+    ast::{MiddleNode, MiddleNodeType, MirReturn},
     environment::MiddleEnvironment,
-    typing::{MiddleImpl, MiddleTrait, MiddleTypeDefType},
+    typing::{MiddleImpl, MiddleTrait},
 };
 use calibre_parser::{
     Span,
     ast::{
-        ObjectMap,
         idents::ParserText,
         types::{ParserDataType, ParserInnerType},
     },
@@ -239,19 +238,7 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::CharLiteral(x) => x.lower(self, span),
             MiddleNodeType::StringLiteral(x) => x.lower(self, span),
             MiddleNodeType::ListLiteral(x) => x.lower(self, span),
-            MiddleNodeType::AggregateExpression { identifier, value } => LirNodeType::Aggregate {
-                name: identifier.map(|i| i.to_string()),
-                fields: ObjectMap(
-                    value
-                        .0
-                        .into_iter()
-                        .map(|(field_name, field_node)| {
-                            (field_name.to_string(), self.lower_node(field_node))
-                        })
-                        .collect(),
-                ),
-            },
-
+            MiddleNodeType::AggregateExpression(x) => x.lower(self, span),
             MiddleNodeType::Spawn(x) => x.lower(self, span),
             MiddleNodeType::Drop(x) => x.lower(self, span),
             MiddleNodeType::Move(x) => x.lower(self, span),
@@ -282,125 +269,7 @@ impl<'a> LirEnvironment<'a> {
                 LirNodeType::null()
             }
 
-            MiddleNodeType::AssignmentExpression { identifier, value } => {
-                let rhs = self.lower_node(*value);
-                let ident_span = identifier.span;
-
-                let (lhs, old_expr) = match identifier.node_type {
-                    MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
-                        let name = identifier.to_string().into_boxed_str();
-                        (
-                            Some(LirLValue::Var(name.clone())),
-                            Some(LirNodeType::Load(name)),
-                        )
-                    }
-                    MiddleNodeType::DerefStatement(MirDeref { value }) => {
-                        let ptr_expr = self.lower_node(*value);
-                        let ptr_tmp = self.get_temp();
-                        self.add_instr(LirNode::new(
-                            ident_span,
-                            LirNodeType::Declare {
-                                dest: ptr_tmp.clone().into_boxed_str(),
-                                data_type: ParserDataType::auto(ident_span),
-                                value: Box::new(ptr_expr),
-                            },
-                        ));
-                        let ptr_load = LirNodeType::Load(ptr_tmp.into_boxed_str());
-                        (
-                            Some(LirLValue::Ptr(Box::new(ptr_load.clone()))),
-                            Some(LirNodeType::Deref(Box::new(ptr_load))),
-                        )
-                    }
-                    MiddleNodeType::FieldAccess(MirField { base, field }) => {
-                        let base_expr = self.lower_node(*base);
-                        let base_tmp = self.get_temp();
-                        self.add_instr(LirNode::new(
-                            ident_span,
-                            LirNodeType::Declare {
-                                dest: base_tmp.clone().into_boxed_str(),
-                                data_type: ParserDataType::auto(ident_span),
-                                value: Box::new(base_expr),
-                            },
-                        ));
-                        let base_load = LirNodeType::Load(base_tmp.into_boxed_str());
-
-                        (
-                            Some(LirLValue::Ptr(Box::new(LirNodeType::Member(
-                                Box::new(base_load.clone()),
-                                field.text.clone().into_boxed_str(),
-                            )))),
-                            Some(LirNodeType::Member(
-                                Box::new(base_load),
-                                field.text.into_boxed_str(),
-                            )),
-                        )
-                    }
-                    MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
-                        let base_expr = self.lower_node(*base);
-                        let base_tmp = self.get_temp();
-                        self.add_instr(LirNode::new(
-                            ident_span,
-                            LirNodeType::Declare {
-                                dest: base_tmp.clone().into_boxed_str(),
-                                data_type: ParserDataType::auto(ident_span),
-                                value: Box::new(base_expr),
-                            },
-                        ));
-                        let base_load = LirNodeType::Load(base_tmp.into_boxed_str());
-
-                        let index_expr = self.lower_node(*index);
-                        let index_tmp = self.get_temp();
-                        self.add_instr(LirNode::new(
-                            ident_span,
-                            LirNodeType::Declare {
-                                dest: index_tmp.clone().into_boxed_str(),
-                                data_type: ParserDataType::auto(ident_span),
-                                value: Box::new(index_expr),
-                            },
-                        ));
-
-                        let index_load = LirNodeType::Load(index_tmp.into_boxed_str());
-
-                        (
-                            Some(LirLValue::Ptr(Box::new(LirNodeType::Index(
-                                Box::new(base_load.clone()),
-                                Box::new(index_load.clone()),
-                            )))),
-                            Some(LirNodeType::Index(
-                                Box::new(base_load),
-                                Box::new(index_load),
-                            )),
-                        )
-                    }
-                    other => (
-                        Some(self.lower_lvalue(MiddleNode::new(other, ident_span))),
-                        Some(LirNodeType::null()),
-                    ),
-                };
-
-                let old_expr = old_expr.unwrap_or_else(LirNodeType::null);
-                let temp = self.get_temp();
-                self.add_instr(LirNode::new(
-                    ident_span,
-                    LirNodeType::Declare {
-                        dest: temp.clone().into_boxed_str(),
-                        data_type: ParserDataType::auto(ident_span),
-                        value: Box::new(old_expr),
-                    },
-                ));
-
-                if let Some(lhs) = lhs {
-                    self.add_instr(LirNode::new(
-                        ident_span,
-                        LirNodeType::Assign {
-                            dest: lhs,
-                            value: Box::new(rhs),
-                        },
-                    ));
-                }
-
-                LirNodeType::Load(temp.into_boxed_str())
-            }
+            MiddleNodeType::AssignmentExpression(x) => x.lower(self, span),
             MiddleNodeType::FunctionDeclaration {
                 parameters,
                 body,
@@ -522,24 +391,7 @@ impl<'a> LirEnvironment<'a> {
                 parameters,
                 return_type,
             },
-            MiddleNodeType::EnumExpression {
-                identifier,
-                value,
-                data,
-            } => LirNodeType::Enum {
-                variant: if let Some(obj) = self.env.typing.objects.get(&identifier.to_string())
-                    && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
-                {
-                    variants
-                        .iter()
-                        .position(|(name, _)| name.text == value.to_string())
-                        .unwrap_or(0) as u32
-                } else {
-                    0
-                },
-                name: identifier.text.into_boxed_str(),
-                payload: data.map(|d| Box::new(self.lower_node(*d))),
-            },
+            MiddleNodeType::EnumExpression(x) => x.lower(self, span),
             MiddleNodeType::ScopeDeclaration {
                 body,
                 is_temp: false,
@@ -632,7 +484,7 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::IsExpression(x) => x.lower(self, span),
             MiddleNodeType::NegExpression(x) => x.lower(self, span),
             MiddleNodeType::RangeDeclaration(x) => x.lower(self, span),
-            MiddleNodeType::DebugExpression { value, .. } => self.lower_node(*value),
+            MiddleNodeType::DebugExpression(x) => x.lower(self, span),
         }
     }
 

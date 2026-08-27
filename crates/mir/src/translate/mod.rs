@@ -1,8 +1,9 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAs, MirBig, MirBinary, MirBoolean, MirBreak, MirChar,
-        MirComparison, MirConditional, MirContinue, MirDeref, MirDrop, MirEmit, MirFloat, MirInt,
-        MirIs, MirListBuilder, MirMove, MirNeg, MirRange, MirRef, MirReturn, MirSpawn, MirString,
+        MiddleNode, MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBig, MirBinary,
+        MirBoolean, MirBreak, MirChar, MirComparison, MirConditional, MirContinue, MirDebug,
+        MirDeref, MirDrop, MirEmit, MirEnum, MirFloat, MirInt, MirIs, MirListBuilder, MirMove,
+        MirNeg, MirRange, MirRef, MirReturn, MirSpawn, MirString,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -884,7 +885,7 @@ impl MiddleEnvironment {
 
                     if has_break_value && let Some(result_target) = result_target {
                         let assign = MiddleNode::new(
-                            MiddleNodeType::AssignmentExpression {
+                            MiddleNodeType::AssignmentExpression(MirAssignment {
                                 identifier: Box::new(MiddleNode::identifier(
                                     self.context.current_span(),
                                     &result_target,
@@ -893,7 +894,7 @@ impl MiddleEnvironment {
                                     MiddleNodeType::Null,
                                     self.context.current_span(),
                                 ))),
-                            },
+                            }),
                             self.context.current_span(),
                         );
                         lst.push(assign);
@@ -903,7 +904,7 @@ impl MiddleEnvironment {
 
                     if has_break_value && let Some(broke_target) = broke_target {
                         let assign = MiddleNode::new(
-                            MiddleNodeType::AssignmentExpression {
+                            MiddleNodeType::AssignmentExpression(MirAssignment {
                                 identifier: Box::new(MiddleNode::identifier(
                                     self.context.current_span(),
                                     &broke_target,
@@ -917,7 +918,7 @@ impl MiddleEnvironment {
                                     }),
                                     self.context.current_span(),
                                 )),
-                            },
+                            }),
                             self.context.current_span(),
                         );
                         lst.push(assign);
@@ -1473,10 +1474,10 @@ impl MiddleEnvironment {
                 )
             }
             AstNodeType::DebugExpression { value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::DebugExpression {
+                node_type: MiddleNodeType::DebugExpression(MirDebug {
                     pretty_printed_str: value.to_string(),
                     value: Box::new(self.evaluate_inner(scope, *value)?),
-                },
+                }),
                 span: node.span,
             }),
             AstNodeType::ListLiteral(data_type, x) => {
@@ -1735,7 +1736,7 @@ impl MiddleEnvironment {
                     AstNodeType::DerefStatement {
                         value: deref_target,
                     } => Ok(MiddleNode {
-                        node_type: MiddleNodeType::AssignmentExpression {
+                        node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
                             identifier: Box::new(self.evaluate(
                                 scope,
                                 AstNode::new(
@@ -1746,27 +1747,27 @@ impl MiddleEnvironment {
                                 ),
                             )),
                             value: Box::new(self.evaluate(scope, *value)),
-                        },
+                        }),
                         span: node.span,
                     }),
                     AstNodeType::FieldAccess { base, field } => Ok(MiddleNode {
-                        node_type: MiddleNodeType::AssignmentExpression {
+                        node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
                             identifier: Box::new(self.evaluate(
                                 scope,
                                 AstNode::new(node.span, AstNodeType::FieldAccess { base, field }),
                             )),
                             value: Box::new(self.evaluate(scope, *value)),
-                        },
+                        }),
                         span: node.span,
                     }),
                     AstNodeType::ScopeAccess { base, field } => Ok(MiddleNode {
-                        node_type: MiddleNodeType::AssignmentExpression {
+                        node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
                             identifier: Box::new(self.evaluate(
                                 scope,
                                 AstNode::new(node.span, AstNodeType::ScopeAccess { base, field }),
                             )),
                             value: Box::new(self.evaluate(scope, *value)),
-                        },
+                        }),
                         span: node.span,
                     }),
                     AstNodeType::IndexAccess { base, index } => {
@@ -1781,7 +1782,7 @@ impl MiddleEnvironment {
                         }
 
                         Ok(MiddleNode {
-                            node_type: MiddleNodeType::AssignmentExpression {
+                            node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
                                 identifier: Box::new(self.evaluate(
                                     scope,
                                     AstNode::new(
@@ -1790,15 +1791,15 @@ impl MiddleEnvironment {
                                     ),
                                 )),
                                 value: Box::new(self.evaluate(scope, *value)),
-                            },
+                            }),
                             span: node.span,
                         })
                     }
                     _ => Ok(MiddleNode {
-                        node_type: MiddleNodeType::AssignmentExpression {
+                        node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
                             identifier: Box::new(self.evaluate(scope, *identifier)),
                             value: Box::new(self.evaluate(scope, *value)),
-                        },
+                        }),
                         span: node.span,
                     }),
                 }
@@ -2480,7 +2481,7 @@ impl MiddleEnvironment {
             ),
             // TODO Handle generics
             AstNodeType::StructLiteral { identifier, value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::AggregateExpression {
+                node_type: MiddleNodeType::AggregateExpression(MirAggregate {
                     identifier: Some(ParserText::new(
                         node.span,
                         self.resolve(scope, &identifier, ResolutionOptions::all())
@@ -2506,7 +2507,7 @@ impl MiddleEnvironment {
                             map
                         }
                     }),
-                },
+                }),
                 span: node.span,
             }),
             AstNodeType::EnumExpression {
@@ -2538,7 +2539,7 @@ impl MiddleEnvironment {
                 };
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::EnumExpression {
+                    node_type: MiddleNodeType::EnumExpression(MirEnum {
                         identifier: ParserText::new(node.span, identifier),
                         value,
                         data: if let Some(data) = data {
@@ -2546,7 +2547,7 @@ impl MiddleEnvironment {
                         } else {
                             None
                         },
-                    },
+                    }),
                     span: node.span,
                 })
             }

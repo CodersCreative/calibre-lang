@@ -1,9 +1,10 @@
 use crate::{
     MiddleNode, MiddleNodeType,
     ast::{
-        MirAs, MirBinary, MirBoolean, MirBreak, MirCall, MirComparison, MirConditional, MirDeref,
-        MirDrop, MirEmit, MirField, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove,
-        MirNeg, MirRange, MirRef, MirReturn, MirScope, MirSpawn,
+        MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirBreak, MirCall,
+        MirComparison, MirConditional, MirDebug, MirDeref, MirDrop, MirEmit, MirEnum, MirField,
+        MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
+        MirReturn, MirScope, MirSpawn,
     },
 };
 use calibre_parser::IdentifiersUsed;
@@ -15,11 +16,11 @@ impl IdentifiersUsed for MiddleNode {
             | MiddleNodeType::EmptyLine
             | MiddleNodeType::Continue { .. }
             | MiddleNodeType::Null
-            | MiddleNodeType::EnumExpression {
+            | MiddleNodeType::EnumExpression(MirEnum {
                 identifier: _,
                 value: _,
                 data: None,
-            }
+            })
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::BigLiteral(_)
             | MiddleNodeType::CharLiteral(_)
@@ -56,14 +57,14 @@ impl IdentifiersUsed for MiddleNode {
                 value,
                 data_type: _,
             })
-            | MiddleNodeType::DebugExpression {
+            | MiddleNodeType::DebugExpression(MirDebug {
                 pretty_printed_str: _,
                 value,
-            }
+            })
             | MiddleNodeType::Return(MirReturn { value: Some(value) })
-            | MiddleNodeType::EnumExpression {
+            | MiddleNodeType::EnumExpression(MirEnum {
                 data: Some(value), ..
-            }
+            })
             | MiddleNodeType::Emit(MirEmit { value }) => value.identifiers_used(),
             MiddleNodeType::ExternFunction { .. } => Vec::new(),
             MiddleNodeType::BinaryExpression(MirBinary {
@@ -81,10 +82,10 @@ impl IdentifiersUsed for MiddleNode {
                 right,
                 operator: _,
             })
-            | MiddleNodeType::AssignmentExpression {
+            | MiddleNodeType::AssignmentExpression(MirAssignment {
                 identifier: left,
                 value: right,
-            }
+            })
             | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,
                 to: right,
@@ -117,10 +118,10 @@ impl IdentifiersUsed for MiddleNode {
 
                 amt
             }
-            MiddleNodeType::AggregateExpression {
+            MiddleNodeType::AggregateExpression(MirAggregate {
                 identifier: _,
                 value,
-            } => {
+            }) => {
                 let mut amt = Vec::new();
 
                 for n in value.iter() {
@@ -183,11 +184,11 @@ impl MiddleNode {
             | MiddleNodeType::EmptyLine
             | MiddleNodeType::Null
             | MiddleNodeType::Continue { .. }
-            | MiddleNodeType::EnumExpression {
+            | MiddleNodeType::EnumExpression(MirEnum {
                 identifier: _,
                 value: _,
                 data: None,
-            }
+            })
             | MiddleNodeType::ExternFunction { .. }
             | MiddleNodeType::StringLiteral(_)
             | MiddleNodeType::CharLiteral(_)
@@ -216,15 +217,15 @@ impl MiddleNode {
                 value,
                 data_type: _,
             })
-            | MiddleNodeType::DebugExpression {
+            | MiddleNodeType::DebugExpression(MirDebug {
                 pretty_printed_str: _,
                 value,
-            }
+            })
             | MiddleNodeType::LoopDeclaration(MirLoop { body: value, .. })
             | MiddleNodeType::Return(MirReturn { value: Some(value) })
-            | MiddleNodeType::EnumExpression {
+            | MiddleNodeType::EnumExpression(MirEnum {
                 data: Some(value), ..
-            }
+            })
             | MiddleNodeType::Emit(MirEmit { value }) => value.identifiers_declared(),
 
             MiddleNodeType::VariableDeclaration {
@@ -252,10 +253,10 @@ impl MiddleNode {
                 right,
                 operator: _,
             })
-            | MiddleNodeType::AssignmentExpression {
+            | MiddleNodeType::AssignmentExpression(MirAssignment {
                 identifier: left,
                 value: right,
-            }
+            })
             | MiddleNodeType::IndexAccess(MirIndex {
                 base: left,
                 index: right,
@@ -292,10 +293,10 @@ impl MiddleNode {
 
                 amt
             }
-            MiddleNodeType::AggregateExpression {
+            MiddleNodeType::AggregateExpression(MirAggregate {
                 identifier: _,
                 value,
-            } => {
+            }) => {
                 let mut amt = Vec::new();
 
                 for n in value.iter() {

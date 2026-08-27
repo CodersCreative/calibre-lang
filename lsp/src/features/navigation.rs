@@ -1,8 +1,9 @@
 use super::*;
 use calibre_mir::{
     ast::{
-        MiddleNodeType, MirAs, MirBinary, MirBoolean, MirCall, MirComparison, MirConditional,
-        MirDeref, MirField, MirIndex, MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn,
+        MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirCall,
+        MirComparison, MirConditional, MirDebug, MirDeref, MirEnum, MirField, MirIndex, MirList,
+        MirLoop, MirNeg, MirRange, MirRef, MirReturn,
     },
     scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
@@ -46,10 +47,10 @@ impl CalibreLanguageServer {
                 MiddleNodeType::RefStatement(MirRef { value, .. })
                 | MiddleNodeType::DerefStatement(MirDeref { value, .. })
                 | MiddleNodeType::VariableDeclaration { value, .. }
-                | MiddleNodeType::EnumExpression {
+                | MiddleNodeType::EnumExpression(MirEnum {
                     data: Some(value), ..
-                }
-                | MiddleNodeType::DebugExpression { value, .. }
+                })
+                | MiddleNodeType::DebugExpression(MirDebug { value, .. })
                 | MiddleNodeType::NegExpression(MirNeg { value, .. })
                 | MiddleNodeType::AsExpression(MirAs { value, .. })
                 | MiddleNodeType::FunctionDeclaration { body: value, .. }
@@ -85,10 +86,10 @@ impl CalibreLanguageServer {
                         traverse(arg, pos, current_scope, smallest_span);
                     }
                 }
-                MiddleNodeType::AssignmentExpression {
+                MiddleNodeType::AssignmentExpression(MirAssignment {
                     identifier: left,
                     value: right,
-                }
+                })
                 | MiddleNodeType::RangeDeclaration(MirRange {
                     from: left,
                     to: right,
@@ -104,7 +105,7 @@ impl CalibreLanguageServer {
                     traverse(left, pos, current_scope, smallest_span);
                     traverse(right, pos, current_scope, smallest_span);
                 }
-                MiddleNodeType::AggregateExpression { value, .. } => {
+                MiddleNodeType::AggregateExpression(MirAggregate { value, .. }) => {
                     for (_, node) in &value.0 {
                         traverse(node, pos, current_scope, smallest_span);
                     }

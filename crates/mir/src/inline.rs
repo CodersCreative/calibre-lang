@@ -1,7 +1,7 @@
 use crate::ast::{
-    MiddleNode, MiddleNodeType, MirAs, MirBinary, MirBoolean, MirCall, MirComparison, MirDeref,
-    MirField, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirNeg, MirRange, MirRef,
-    MirReturn,
+    MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBinary, MirBoolean, MirCall,
+    MirComparison, MirDebug, MirDeref, MirEnum, MirField, MirIdentifier, MirIndex, MirIs, MirList,
+    MirLoop, MirNeg, MirRange, MirRef, MirReturn,
 };
 use rustc_hash::FxHashMap;
 
@@ -79,16 +79,16 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
             }
         }
         MiddleNodeType::Return(MirReturn { value })
-        | MiddleNodeType::EnumExpression { data: value, .. } => {
+        | MiddleNodeType::EnumExpression(MirEnum { data: value, .. }) => {
             if let Some(v) = value.as_mut() {
                 inline_in_node(v, map);
             }
         }
         MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
-        | MiddleNodeType::AssignmentExpression {
+        | MiddleNodeType::AssignmentExpression(MirAssignment {
             identifier: left,
             value: right,
-        }
+        })
         | MiddleNodeType::IndexAccess(MirIndex {
             base: left,
             index: right,
@@ -109,7 +109,7 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
         | MiddleNodeType::RefStatement(MirRef { value, .. })
         | MiddleNodeType::DerefStatement(MirDeref { value })
         | MiddleNodeType::VariableDeclaration { value, .. }
-        | MiddleNodeType::DebugExpression { value, .. }
+        | MiddleNodeType::DebugExpression(MirDebug { value, .. })
         | MiddleNodeType::FieldAccess(MirField { base: value, .. }) => inline_in_node(value, map),
         MiddleNodeType::ListLiteral(MirList {
             data_type: _,
