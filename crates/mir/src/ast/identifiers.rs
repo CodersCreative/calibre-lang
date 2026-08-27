@@ -1,6 +1,9 @@
 use crate::{
     MiddleNode, MiddleNodeType,
-    ast::{MirBreak, MirDeref, MirDrop, MirIdentifier, MirList, MirMove, MirRef, MirSpawn},
+    ast::{
+        MirAs, MirBinary, MirBoolean, MirBreak, MirComparison, MirDeref, MirDrop, MirIdentifier,
+        MirIs, MirList, MirMove, MirNeg, MirRef, MirSpawn,
+    },
 };
 use calibre_parser::IdentifiersUsed;
 
@@ -42,16 +45,16 @@ impl IdentifiersUsed for MiddleNode {
                 value,
                 data_type: _,
             }
-            | MiddleNodeType::NegExpression { value }
-            | MiddleNodeType::AsExpression {
+            | MiddleNodeType::NegExpression(MirNeg { value })
+            | MiddleNodeType::AsExpression(MirAs {
                 value,
                 data_type: _,
                 failure_mode: _,
-            }
-            | MiddleNodeType::IsExpression {
+            })
+            | MiddleNodeType::IsExpression(MirIs {
                 value,
                 data_type: _,
-            }
+            })
             | MiddleNodeType::DebugExpression {
                 pretty_printed_str: _,
                 value,
@@ -62,21 +65,21 @@ impl IdentifiersUsed for MiddleNode {
             }
             | MiddleNodeType::Emit { value } => value.identifiers_used(),
             MiddleNodeType::ExternFunction { .. } => Vec::new(),
-            MiddleNodeType::BinaryExpression {
+            MiddleNodeType::BinaryExpression(MirBinary {
                 left,
                 right,
                 operator: _,
-            }
-            | MiddleNodeType::BooleanExpression {
+            })
+            | MiddleNodeType::BooleanExpression(MirBoolean {
                 left,
                 right,
                 operator: _,
-            }
-            | MiddleNodeType::ComparisonExpression {
+            })
+            | MiddleNodeType::ComparisonExpression(MirComparison {
                 left,
                 right,
                 operator: _,
-            }
+            })
             | MiddleNodeType::AssignmentExpression {
                 identifier: left,
                 value: right,
@@ -200,17 +203,17 @@ impl MiddleNode {
             | MiddleNodeType::ScopeAccess { base: value, .. }
             | MiddleNodeType::FieldAccess { base: value, .. }
             | MiddleNodeType::DerefStatement(MirDeref { value })
-            | MiddleNodeType::NegExpression { value }
+            | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::Spawn(MirSpawn { value })
-            | MiddleNodeType::AsExpression {
+            | MiddleNodeType::AsExpression(MirAs {
                 value,
                 data_type: _,
                 failure_mode: _,
-            }
-            | MiddleNodeType::IsExpression {
+            })
+            | MiddleNodeType::IsExpression(MirIs {
                 value,
                 data_type: _,
-            }
+            })
             | MiddleNodeType::DebugExpression {
                 pretty_printed_str: _,
                 value,
@@ -231,21 +234,21 @@ impl MiddleNode {
                 amt.append(&mut value.identifiers_declared());
                 amt
             }
-            MiddleNodeType::BinaryExpression {
+            MiddleNodeType::BinaryExpression(MirBinary {
                 left,
                 right,
                 operator: _,
-            }
-            | MiddleNodeType::BooleanExpression {
+            })
+            | MiddleNodeType::BooleanExpression(MirBoolean {
                 left,
                 right,
                 operator: _,
-            }
-            | MiddleNodeType::ComparisonExpression {
+            })
+            | MiddleNodeType::ComparisonExpression(MirComparison {
                 left,
                 right,
                 operator: _,
-            }
+            })
             | MiddleNodeType::AssignmentExpression {
                 identifier: left,
                 value: right,

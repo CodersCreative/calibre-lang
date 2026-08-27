@@ -1,4 +1,7 @@
-use crate::ast::{MiddleNode, MiddleNodeType, MirDeref, MirIdentifier, MirList, MirRef};
+use crate::ast::{
+    MiddleNode, MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirDeref,
+    MirIdentifier, MirIs, MirList, MirNeg, MirRef,
+};
 use rustc_hash::FxHashMap;
 
 struct InlineFn {
@@ -79,7 +82,7 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
                 inline_in_node(v, map);
             }
         }
-        MiddleNodeType::BinaryExpression { left, right, .. }
+        MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
         | MiddleNodeType::AssignmentExpression {
             identifier: left,
             value: right,
@@ -88,8 +91,8 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
             base: left,
             index: right,
         }
-        | MiddleNodeType::ComparisonExpression { left, right, .. }
-        | MiddleNodeType::BooleanExpression { left, right, .. }
+        | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
+        | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. })
         | MiddleNodeType::RangeDeclaration {
             from: left,
             to: right,
@@ -98,9 +101,9 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
             inline_in_node(left, map);
             inline_in_node(right, map);
         }
-        MiddleNodeType::AsExpression { value, .. }
-        | MiddleNodeType::IsExpression { value, .. }
-        | MiddleNodeType::NegExpression { value }
+        MiddleNodeType::AsExpression(MirAs { value, .. })
+        | MiddleNodeType::IsExpression(MirIs { value, .. })
+        | MiddleNodeType::NegExpression(MirNeg { value })
         | MiddleNodeType::RefStatement(MirRef { value, .. })
         | MiddleNodeType::DerefStatement(MirDeref { value })
         | MiddleNodeType::VariableDeclaration { value, .. }

@@ -1,6 +1,9 @@
 use super::*;
 use calibre_mir::{
-    ast::{MiddleNodeType, MirDeref, MirList, MirRef},
+    ast::{
+        MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirDeref, MirList, MirNeg,
+        MirRef,
+    },
     scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
 };
@@ -47,8 +50,8 @@ impl CalibreLanguageServer {
                     data: Some(value), ..
                 }
                 | MiddleNodeType::DebugExpression { value, .. }
-                | MiddleNodeType::NegExpression { value, .. }
-                | MiddleNodeType::AsExpression { value, .. }
+                | MiddleNodeType::NegExpression(MirNeg { value, .. })
+                | MiddleNodeType::AsExpression(MirAs { value, .. })
                 | MiddleNodeType::FunctionDeclaration { body: value, .. }
                 | MiddleNodeType::Return {
                     value: Some(value), ..
@@ -95,9 +98,9 @@ impl CalibreLanguageServer {
                     base: left,
                     index: right,
                 }
-                | MiddleNodeType::BinaryExpression { left, right, .. }
-                | MiddleNodeType::ComparisonExpression { left, right, .. }
-                | MiddleNodeType::BooleanExpression { left, right, .. } => {
+                | MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
+                | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
+                | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. }) => {
                     traverse(left, pos, current_scope, smallest_span);
                     traverse(right, pos, current_scope, smallest_span);
                 }

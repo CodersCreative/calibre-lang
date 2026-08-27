@@ -1,7 +1,8 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirBig, MirBreak, MirChar, MirContinue, MirDeref, MirDrop,
-        MirFloat, MirInt, MirListBuilder, MirMove, MirRef, MirSpawn, MirString,
+        MiddleNode, MiddleNodeType, MirAs, MirBig, MirBinary, MirBoolean, MirBreak, MirChar,
+        MirComparison, MirContinue, MirDeref, MirDrop, MirFloat, MirInt, MirIs, MirListBuilder,
+        MirMove, MirNeg, MirRef, MirSpawn, MirString,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -1208,11 +1209,11 @@ impl MiddleEnvironment {
                 }
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::BooleanExpression {
+                    node_type: MiddleNodeType::BooleanExpression(MirBoolean {
                         left: Box::new(self.evaluate(scope, *left)),
                         right: Box::new(self.evaluate(scope, *right)),
                         operator,
-                    },
+                    }),
                     span: node.span,
                 })
             }
@@ -1232,11 +1233,11 @@ impl MiddleEnvironment {
                 }
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::ComparisonExpression {
+                    node_type: MiddleNodeType::ComparisonExpression(MirComparison {
                         left: Box::new(self.evaluate(scope, *left)),
                         right: Box::new(self.evaluate(scope, *right)),
                         operator,
-                    },
+                    }),
                     span: node.span,
                 })
             }
@@ -1256,11 +1257,11 @@ impl MiddleEnvironment {
                 }
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::BinaryExpression {
+                    node_type: MiddleNodeType::BinaryExpression(MirBinary {
                         left: Box::new(self.evaluate(scope, *left)),
                         right: Box::new(self.evaluate(scope, *right)),
                         operator,
-                    },
+                    }),
                     span: node.span,
                 })
             }
@@ -1276,9 +1277,9 @@ impl MiddleEnvironment {
                 },
             ),
             AstNodeType::NegExpression { value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::NegExpression {
+                node_type: MiddleNodeType::NegExpression(MirNeg {
                     value: Box::new(self.evaluate_inner(scope, *value)?),
-                },
+                }),
                 span: node.span,
             }),
             AstNodeType::AsExpression {
@@ -1337,23 +1338,23 @@ impl MiddleEnvironment {
                 }
 
                 Ok(MiddleNode {
-                    node_type: MiddleNodeType::AsExpression {
+                    node_type: MiddleNodeType::AsExpression(MirAs {
                         value: Box::new(self.evaluate_inner(scope, *value)?),
                         data_type: target,
                         failure_mode,
-                    },
+                    }),
                     span: node.span,
                 })
             }
             AstNodeType::IsExpression { value, data_type } => Ok(MiddleNode {
-                node_type: MiddleNodeType::IsExpression {
+                node_type: MiddleNodeType::IsExpression(MirIs {
                     value: Box::new(self.evaluate_inner(scope, *value)?),
                     data_type: self.resolve_data_type(
                         scope,
                         &data_type,
                         ResolutionOptions::typing(),
                     )?,
-                },
+                }),
                 span: node.span,
             }),
             AstNodeType::InDeclaration { identifier, value } => {

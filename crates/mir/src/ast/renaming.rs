@@ -1,6 +1,9 @@
 use crate::{
     MiddleNode, MiddleNodeType,
-    ast::{MirBreak, MirDeref, MirDrop, MirIdentifier, MirList, MirMove, MirRef, MirSpawn},
+    ast::{
+        MirAs, MirBinary, MirBoolean, MirBreak, MirComparison, MirDeref, MirDrop, MirIdentifier,
+        MirIs, MirList, MirMove, MirNeg, MirRef, MirSpawn,
+    },
 };
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
 use rustc_hash::FxHashMap;
@@ -142,9 +145,11 @@ impl MiddleNodeType {
                     value: Box::new(value.rename(state)),
                 }
             }
-            MiddleNodeType::NegExpression { value } => MiddleNodeType::NegExpression {
-                value: Box::new(value.rename(state)),
-            },
+            MiddleNodeType::NegExpression(MirNeg { value }) => {
+                MiddleNodeType::NegExpression(MirNeg {
+                    value: Box::new(value.rename(state)),
+                })
+            }
             MiddleNodeType::DebugExpression {
                 pretty_printed_str,
                 value,
@@ -152,19 +157,21 @@ impl MiddleNodeType {
                 pretty_printed_str,
                 value: Box::new(value.rename(state)),
             },
-            MiddleNodeType::AsExpression {
+            MiddleNodeType::AsExpression(MirAs {
                 value,
                 data_type,
                 failure_mode,
-            } => MiddleNodeType::AsExpression {
+            }) => MiddleNodeType::AsExpression(MirAs {
                 value: Box::new(value.rename(state)),
                 data_type,
                 failure_mode,
-            },
-            MiddleNodeType::IsExpression { value, data_type } => MiddleNodeType::IsExpression {
-                value: Box::new(value.rename(state)),
-                data_type,
-            },
+            }),
+            MiddleNodeType::IsExpression(MirIs { value, data_type }) => {
+                MiddleNodeType::IsExpression(MirIs {
+                    value: Box::new(value.rename(state)),
+                    data_type,
+                })
+            }
             MiddleNodeType::RangeDeclaration {
                 from,
                 to,
@@ -218,33 +225,33 @@ impl MiddleNodeType {
                 caller: Box::new(caller.rename(state)),
                 args: args.into_iter().map(|x| x.rename(state)).collect(),
             },
-            MiddleNodeType::BinaryExpression {
+            MiddleNodeType::BinaryExpression(MirBinary {
                 left,
                 right,
                 operator,
-            } => MiddleNodeType::BinaryExpression {
+            }) => MiddleNodeType::BinaryExpression(MirBinary {
                 left: Box::new(left.rename(state)),
                 right: Box::new(right.rename(state)),
                 operator,
-            },
-            MiddleNodeType::ComparisonExpression {
+            }),
+            MiddleNodeType::ComparisonExpression(MirComparison {
                 left,
                 right,
                 operator,
-            } => MiddleNodeType::ComparisonExpression {
+            }) => MiddleNodeType::ComparisonExpression(MirComparison {
                 left: Box::new(left.rename(state)),
                 right: Box::new(right.rename(state)),
                 operator,
-            },
-            MiddleNodeType::BooleanExpression {
+            }),
+            MiddleNodeType::BooleanExpression(MirBoolean {
                 left,
                 right,
                 operator,
-            } => MiddleNodeType::BooleanExpression {
+            }) => MiddleNodeType::BooleanExpression(MirBoolean {
                 left: Box::new(left.rename(state)),
                 right: Box::new(right.rename(state)),
                 operator,
-            },
+            }),
             MiddleNodeType::AggregateExpression { identifier, value } => {
                 MiddleNodeType::AggregateExpression {
                     identifier,

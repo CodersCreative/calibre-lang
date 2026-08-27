@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, MirAs},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -210,11 +210,11 @@ impl MiddleEnvironment {
 
         if matches!(data_type.data_type, ParserInnerType::DynamicTraits(_)) {
             value = MiddleNode::new(
-                MiddleNodeType::AsExpression {
+                MiddleNodeType::AsExpression(MirAs {
                     value: Box::new(value),
                     data_type: data_type.clone(),
                     failure_mode: AsFailureMode::Panic,
-                },
+                }),
                 span,
             );
         }

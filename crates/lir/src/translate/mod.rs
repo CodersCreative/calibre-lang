@@ -1,5 +1,5 @@
 use crate::{
-    ast::{BlockId, LirLValue, LirLiteral, LirNode, LirNodeType, LirTerminator},
+    ast::{BlockId, LirLValue, LirNode, LirNodeType, LirTerminator},
     environment::{LirEnvironment, LirFunction, LirGlobal, LirRegistry},
 };
 use calibre_mir::{
@@ -11,8 +11,6 @@ use calibre_parser::{
     Span,
     ast::{
         ObjectMap,
-        binary::BinaryOperator,
-        comparison::BooleanOperator,
         idents::ParserText,
         types::{ParserDataType, ParserInnerType},
     },
@@ -232,6 +230,8 @@ impl<'a> LirEnvironment<'a> {
         trace!("lowering MIR node to LIR");
         match node.node_type {
             MiddleNodeType::Null => LirNodeType::null(),
+            MiddleNodeType::EmptyLine => LirNodeType::noop(),
+
             MiddleNodeType::Emit { value } => {
                 // TODO Add emit support
                 self.lower_node(*value)
@@ -254,7 +254,7 @@ impl<'a> LirEnvironment<'a> {
                         .collect(),
                 ),
             },
-            MiddleNodeType::EmptyLine => LirNodeType::noop(),
+
             MiddleNodeType::Spawn(x) => x.lower(self, span),
             MiddleNodeType::Drop(x) => x.lower(self, span),
             MiddleNodeType::Move(x) => x.lower(self, span),
@@ -757,88 +757,9 @@ impl<'a> LirEnvironment<'a> {
             ),
             MiddleNodeType::DerefStatement(x) => x.lower(self, span),
             MiddleNodeType::RefStatement(x) => x.lower(self, span),
-            MiddleNodeType::BinaryExpression {
-                left,
-                right,
-                operator,
-            } => LirNodeType::Binary {
-                left: Box::new(self.lower_node(*left)),
-                right: Box::new(self.lower_node(*right)),
-                operator,
-            },
-            MiddleNodeType::BooleanExpression {
-                left,
-                right,
-                operator,
-            } => {
-                let then_id = self.create_block();
-                let else_id = self.create_block();
-                let merge_id = self.create_block();
-
-                let temp = self.get_temp();
-                self.declare_temp_null(span, temp.as_str());
-
-                let cond = self.lower_node(*left);
-                self.set_terminator(LirTerminator::Branch {
-                    span,
-                    condition: cond,
-                    then_block: then_id,
-                    else_block: else_id,
-                });
-
-                match operator {
-                    BooleanOperator::And => {
-                        self.switch_to(then_id);
-                        let right_val = self.lower_node(*right);
-                        let checked = LirNodeType::Boolean {
-                            left: Box::new(right_val),
-                            right: Box::new(LirNodeType::bool(true)),
-                            operator,
-                        };
-                        if self.current_block_open() {
-                            self.assign_var(span, temp.as_str(), checked);
-                            self.jump_if_open(span, merge_id);
-                        }
-
-                        self.switch_to(else_id);
-                        if self.current_block_open() {
-                            self.assign_var(span, temp.as_str(), LirNodeType::bool(false));
-                            self.jump_if_open(span, merge_id);
-                        }
-                    }
-                    BooleanOperator::Or => {
-                        self.switch_to(then_id);
-                        if self.current_block_open() {
-                            self.assign_var(span, temp.as_str(), LirNodeType::bool(true));
-                            self.jump_if_open(span, merge_id);
-                        }
-
-                        self.switch_to(else_id);
-                        let right_val = self.lower_node(*right);
-                        let checked = LirNodeType::Boolean {
-                            left: Box::new(right_val),
-                            right: Box::new(LirNodeType::bool(false)),
-                            operator,
-                        };
-                        if self.current_block_open() {
-                            self.assign_var(span, temp.as_str(), checked);
-                            self.jump_if_open(span, merge_id);
-                        }
-                    }
-                }
-
-                self.switch_to(merge_id);
-                LirNodeType::Load(temp.into_boxed_str())
-            }
-            MiddleNodeType::ComparisonExpression {
-                left,
-                right,
-                operator,
-            } => LirNodeType::Comparison {
-                left: Box::new(self.lower_node(*left)),
-                right: Box::new(self.lower_node(*right)),
-                operator,
-            },
+            MiddleNodeType::BinaryExpression(x) => x.lower(self, span),
+            MiddleNodeType::BooleanExpression(x) => x.lower(self, span),
+            MiddleNodeType::ComparisonExpression(x) => x.lower(self, span),
             MiddleNodeType::CallExpression { caller, args } => {
                 let mut needs_ref_first_arg = false;
 
@@ -873,23 +794,10 @@ impl<'a> LirEnvironment<'a> {
                     args: l_args,
                 }
             }
-            MiddleNodeType::AsExpression {
-                value,
-                data_type,
-                failure_mode,
-            } => LirNodeType::As(Box::new(self.lower_node(*value)), data_type, failure_mode),
-            MiddleNodeType::IsExpression { value, data_type } => {
-                LirNodeType::Is(Box::new(self.lower_node(*value)), data_type)
-            }
+            MiddleNodeType::AsExpression(x) => x.lower(self, span),
+            MiddleNodeType::IsExpression(x) => x.lower(self, span),
+            MiddleNodeType::NegExpression(x) => x.lower(self, span),
             MiddleNodeType::DebugExpression { value, .. } => self.lower_node(*value),
-            MiddleNodeType::NegExpression { value } => {
-                let val = self.lower_node(*value);
-                LirNodeType::Binary {
-                    left: Box::new(LirNodeType::Literal(LirLiteral::Int(0))),
-                    right: Box::new(val),
-                    operator: BinaryOperator::Sub,
-                }
-            }
 
             MiddleNodeType::RangeDeclaration {
                 from,

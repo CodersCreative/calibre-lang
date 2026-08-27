@@ -72,5 +72,3 @@ impl LirLowering for MirBig {
         LirNodeType::Literal(LirLiteral::Big(self.value.text))
     }
 }
-
-

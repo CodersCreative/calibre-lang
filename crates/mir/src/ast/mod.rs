@@ -71,9 +71,9 @@ impl MiddleNode {
                     count += a.len();
                 }
             }
-            MiddleNodeType::BinaryExpression { left, right, .. }
-            | MiddleNodeType::ComparisonExpression { left, right, .. }
-            | MiddleNodeType::BooleanExpression { left, right, .. }
+            MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
+            | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
+            | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. })
             | MiddleNodeType::IndexAccess {
                 base: left,
                 index: right,
@@ -86,11 +86,11 @@ impl MiddleNode {
                 count += left.len();
                 count += right.len();
             }
-            MiddleNodeType::AsExpression { value, .. }
+            MiddleNodeType::AsExpression(MirAs { value, .. })
             | MiddleNodeType::FieldAccess { base: value, .. }
             | MiddleNodeType::ScopeAccess { base: value, .. }
-            | MiddleNodeType::IsExpression { value, .. }
-            | MiddleNodeType::NegExpression { value }
+            | MiddleNodeType::IsExpression(MirIs { value, .. })
+            | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::DebugExpression { value, .. }
@@ -151,9 +151,9 @@ impl MiddleNode {
                     v.substitute(repl);
                 }
             }
-            MiddleNodeType::BinaryExpression { left, right, .. }
-            | MiddleNodeType::ComparisonExpression { left, right, .. }
-            | MiddleNodeType::BooleanExpression { left, right, .. }
+            MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
+            | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
+            | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. })
             | MiddleNodeType::RangeDeclaration {
                 from: left,
                 to: right,
@@ -162,9 +162,9 @@ impl MiddleNode {
                 left.substitute(repl);
                 right.substitute(repl);
             }
-            MiddleNodeType::AsExpression { value, .. }
-            | MiddleNodeType::IsExpression { value, .. }
-            | MiddleNodeType::NegExpression { value }
+            MiddleNodeType::AsExpression(MirAs { value, .. })
+            | MiddleNodeType::IsExpression(MirIs { value, .. })
+            | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::DebugExpression { value, .. }
@@ -217,17 +217,17 @@ impl MiddleNode {
             MiddleNodeType::AssignmentExpression { identifier, value } => {
                 identifier.calls_self(name) || value.calls_self(name)
             }
-            MiddleNodeType::BinaryExpression { left, right, .. }
-            | MiddleNodeType::ComparisonExpression { left, right, .. }
-            | MiddleNodeType::BooleanExpression { left, right, .. }
+            MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
+            | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
+            | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. })
             | MiddleNodeType::RangeDeclaration {
                 from: left,
                 to: right,
                 ..
             } => left.calls_self(name) || right.calls_self(name),
-            MiddleNodeType::AsExpression { value, .. }
-            | MiddleNodeType::IsExpression { value, .. }
-            | MiddleNodeType::NegExpression { value }
+            MiddleNodeType::AsExpression(MirAs { value, .. })
+            | MiddleNodeType::IsExpression(MirIs { value, .. })
+            | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::DebugExpression { value, .. }
@@ -328,6 +328,45 @@ pub struct MirBig {
     pub value: ParserText,
 }
 
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirBinary {
+    pub left: Box<MiddleNode>,
+    pub right: Box<MiddleNode>,
+    pub operator: BinaryOperator,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirComparison {
+    pub left: Box<MiddleNode>,
+    pub right: Box<MiddleNode>,
+    pub operator: ComparisonOperator,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirBoolean {
+    pub left: Box<MiddleNode>,
+    pub right: Box<MiddleNode>,
+    pub operator: BooleanOperator,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirNeg {
+    pub value: Box<MiddleNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirAs {
+    pub value: Box<MiddleNode>,
+    pub data_type: ParserDataType,
+    pub failure_mode: AsFailureMode,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirIs {
+    pub value: Box<MiddleNode>,
+    pub data_type: ParserDataType,
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MiddleNodeType {
@@ -350,6 +389,13 @@ pub enum MiddleNodeType {
     FloatLiteral(MirFloat),
     IntLiteral(MirInt),
     BigLiteral(MirBig),
+
+    BinaryExpression(MirBinary),
+    ComparisonExpression(MirComparison),
+    BooleanExpression(MirBoolean),
+    NegExpression(MirNeg),
+    AsExpression(MirAs),
+    IsExpression(MirIs),
 
     VariableDeclaration {
         var_type: VarType,
@@ -392,18 +438,6 @@ pub enum MiddleNodeType {
     Emit {
         value: Box<MiddleNode>,
     },
-    NegExpression {
-        value: Box<MiddleNode>,
-    },
-    AsExpression {
-        value: Box<MiddleNode>,
-        data_type: ParserDataType,
-        failure_mode: AsFailureMode,
-    },
-    IsExpression {
-        value: Box<MiddleNode>,
-        data_type: ParserDataType,
-    },
     RangeDeclaration {
         from: Box<MiddleNode>,
         to: Box<MiddleNode>,
@@ -433,21 +467,6 @@ pub enum MiddleNodeType {
     CallExpression {
         caller: Box<MiddleNode>,
         args: Vec<MiddleNode>,
-    },
-    BinaryExpression {
-        left: Box<MiddleNode>,
-        right: Box<MiddleNode>,
-        operator: BinaryOperator,
-    },
-    ComparisonExpression {
-        left: Box<MiddleNode>,
-        right: Box<MiddleNode>,
-        operator: ComparisonOperator,
-    },
-    BooleanExpression {
-        left: Box<MiddleNode>,
-        right: Box<MiddleNode>,
-        operator: BooleanOperator,
     },
     AggregateExpression {
         identifier: Option<ParserText>,
@@ -628,21 +647,17 @@ impl From<MiddleNodeType> for AstNodeType {
             } => AstNodeType::DebugExpression {
                 value: Box::new((*value).into()),
             },
-            MiddleNodeType::NegExpression { value } => AstNodeType::NotExpression {
-                value: Box::new((*value).into()),
+            MiddleNodeType::NegExpression(value) => AstNodeType::NotExpression {
+                value: Box::new((*value.value).into()),
             },
-            MiddleNodeType::AsExpression {
-                value,
-                data_type,
-                failure_mode,
-            } => AstNodeType::AsExpression {
-                value: Box::new((*value).into()),
-                data_type,
-                failure_mode,
+            MiddleNodeType::AsExpression(value) => AstNodeType::AsExpression {
+                value: Box::new((*value.value).into()),
+                data_type: value.data_type,
+                failure_mode: value.failure_mode,
             },
-            MiddleNodeType::IsExpression { value, data_type } => AstNodeType::IsExpression {
-                value: Box::new((*value).into()),
-                data_type,
+            MiddleNodeType::IsExpression(value) => AstNodeType::IsExpression {
+                value: Box::new((*value.value).into()),
+                data_type: value.data_type,
             },
             MiddleNodeType::Conditional {
                 comparison,
@@ -746,32 +761,20 @@ impl From<MiddleNodeType> for AstNodeType {
                 },
                 reverse_args: Vec::new(),
             },
-            MiddleNodeType::BinaryExpression {
-                left,
-                right,
-                operator,
-            } => AstNodeType::BinaryExpression {
-                left: Box::new((*left).into()),
-                right: Box::new((*right).into()),
-                operator,
+            MiddleNodeType::BinaryExpression(value) => AstNodeType::BinaryExpression {
+                left: Box::new((*value.left).into()),
+                right: Box::new((*value.right).into()),
+                operator: value.operator,
             },
-            MiddleNodeType::ComparisonExpression {
-                left,
-                right,
-                operator,
-            } => AstNodeType::ComparisonExpression {
-                left: Box::new((*left).into()),
-                right: Box::new((*right).into()),
-                operator,
+            MiddleNodeType::ComparisonExpression(value) => AstNodeType::ComparisonExpression {
+                left: Box::new((*value.left).into()),
+                right: Box::new((*value.right).into()),
+                operator: value.operator,
             },
-            MiddleNodeType::BooleanExpression {
-                left,
-                right,
-                operator,
-            } => AstNodeType::BooleanExpression {
-                left: Box::new((*left).into()),
-                right: Box::new((*right).into()),
-                operator,
+            MiddleNodeType::BooleanExpression(value) => AstNodeType::BooleanExpression {
+                left: Box::new((*value.left).into()),
+                right: Box::new((*value.right).into()),
+                operator: value.operator,
             },
             MiddleNodeType::AggregateExpression { identifier, value } => {
                 let is_tuple = if value.is_empty() {
