@@ -991,7 +991,7 @@ impl Formatter {
                         let should_group = adjusted_params
                             .last()
                             .and_then(|v| v.first())
-                            .map(|last| last.1 == param.1)
+                            .map(|last| last.1 == param.1 && last.2 == param.2)
                             .unwrap_or(false);
                         if should_group {
                             if let Some(group) = adjusted_params.last_mut() {

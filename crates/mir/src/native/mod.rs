@@ -68,7 +68,12 @@ impl MiddleEnvironment {
             let program = parser.produce_ast(&globals);
 
             if !parser.errors.is_empty() {
-                eprintln!("WARNING STDLIB PARSER ERROR :\n{:?}", parser.errors);
+                let errors = std::mem::take(&mut parser.errors);
+                self.context.errors.push(MiddleErr::ParserErrors {
+                    path: global_path.clone(),
+                    contents: globals.clone(),
+                    errors,
+                });
             }
 
             let error_count_before = self.context.errors.len();
@@ -132,7 +137,12 @@ impl MiddleEnvironment {
             let program = parser.produce_ast(&stdlib);
 
             if !parser.errors.is_empty() {
-                eprintln!("WARNING STDLIB PARSER ERROR :\n{:?}", parser.errors);
+                let errors = std::mem::take(&mut parser.errors);
+                self.context.errors.push(MiddleErr::ParserErrors {
+                    path: scope_path.clone(),
+                    contents: stdlib.clone(),
+                    errors,
+                });
             }
 
             let error_count_before = self.context.errors.len();

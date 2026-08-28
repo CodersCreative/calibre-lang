@@ -192,7 +192,7 @@ impl float {
 
 	const clamp := fn (x lo hi : float) -> float => if x < lo => return lo else => if x > hi => return hi else => return x;
 
-	const approx_eq := fn (a b eps : float = EPSILON) -> bool => return float.abs(a - b) <= float.abs(eps);
+	const approx_eq := fn (a b : float, eps : float = EPSILON) -> bool => return float.abs(a - b) <= eps;
 
 	const trunc := fn (x : float) -> int => try x as int => return 0;
 

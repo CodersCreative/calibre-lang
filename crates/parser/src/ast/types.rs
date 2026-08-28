@@ -449,6 +449,13 @@ impl ParserInnerType {
             || other == self
     }
 
+    #[inline]
+    pub fn is_gen(&self) -> bool {
+        let short =
+            ParserText::get_temp_name_suffix(&self.impl_name()).unwrap_or_else(|| self.impl_name());
+        short == "gen" || short.starts_with("gen:<")
+    }
+
     pub fn verify(self) -> Self {
         match self {
             Self::Result { ok, err } => Self::Result {

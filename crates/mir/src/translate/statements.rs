@@ -155,7 +155,8 @@ impl MiddleEnvironment {
             (None, Some(x)) => x,
             (Some(x), Some(_)) if self.tagging.tag_info.contains(&TagInfo::IgnoreInvalidLet) => x,
             (Some(x), Some(y)) => {
-                if x.loose_eq(&y) {
+                // TODO Handle generics better
+                if x.loose_eq(&y) || self.scoping.all_time_generics.contains(&y.impl_name()) {
                     x
                 } else {
                     return Err(self.context.err_at_current(

@@ -43,7 +43,11 @@ const main := fn => {
 		3,
 		4,
 		5
-	].into_iter().map(fn (x : int) -> int => return x * x).collect();
+	].into_iter();
+	print(squares);
+	let squares := squares.map(fn (x : int) -> int => return x * x);
+	print(squares);
+	let squares := squares.collect();
 	print("squares => " & squares);
 	
 	let opt := some(10).map(fn (x : int) -> int => return x + 1).unwrap_or(0);

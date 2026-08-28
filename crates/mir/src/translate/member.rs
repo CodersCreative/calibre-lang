@@ -1,3 +1,5 @@
+use std::println;
+
 use crate::{
     ast::{MiddleNode, MiddleNodeType, MirField, MirIndex, MirScope},
     environment::MiddleEnvironment,

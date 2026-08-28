@@ -85,48 +85,7 @@ impl MiddleEnvironment {
             }
             AstNodeType::Identifier(x) => Ok(MiddleNode::identifier(
                 node.span,
-                if let Ok(x) = self.resolve(scope, &x, ResolutionOptions::all()) {
-                    x
-                } else if matches!(
-                    &x,
-                    PotentialGenericTypeIdentifier::Identifier(
-                        PotentialDollarIdentifier::Identifier(text)
-                    ) if ParserText::is_temp_name(&text.text)
-                ) {
-                    self.resolve(
-                        scope,
-                        x.get_ident(),
-                        ResolutionOptions::default().with_dollar(),
-                    )?
-                } else if let PotentialDollarIdentifier::DollarIdentifier(x) = x.get_ident() {
-                    let val = self
-                        .scoping
-                        .resolve_macro_arg(scope, x)
-                        .cloned()
-                        .ok_or_else(|| {
-                            MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::Scope(format!("missing macro arg {x}"))),
-                            )
-                        })?;
-                    return self.evaluate_inner(scope, val);
-                } else if let PotentialGenericTypeIdentifier::Generic { identifier, .. } = &x {
-                    if let Ok(base_resolved) =
-                        self.resolve(scope, identifier, ResolutionOptions::all())
-                    {
-                        base_resolved
-                    } else {
-                        return Err(MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::Variable(x.to_string())),
-                        ));
-                    }
-                } else {
-                    return Err(MiddleErr::At(
-                        node.span,
-                        Box::new(MiddleErr::Variable(x.to_string())),
-                    ));
-                },
+                self.resolve(scope, &x, ResolutionOptions::all())?,
             )),
             AstNodeType::IntLiteral(text) => Ok(MiddleNode {
                 node_type: MiddleNodeType::IntLiteral(MirInt {
@@ -1054,7 +1013,8 @@ impl MiddleEnvironment {
                                     ParserInnerType::Null
                                 };
 
-                                if !node_ty.loose_eq(&ret_ty) {
+                                // TODO Properly check for the generators inner type
+                                if !node_ty.loose_eq(&ret_ty) && !ret_ty.is_gen() {
                                     return Err(self.context.err_at_current(
                                         MiddleErr::InvalidReturnType {
                                             expected: Box::new(ParserDataType::new(
@@ -1838,11 +1798,10 @@ impl MiddleEnvironment {
                 let resolved = self
                     .resolve_data_type(scope, &target, ResolutionOptions::typing())?
                     .unwrap_all_refs();
-                let self_name = resolved.impl_name();
+                let impl_key = resolved.impl_name();
 
-                let impl_key = self
-                    .typing
-                    .get_or_create_impl(resolved.clone(), self.context.current_location.clone());
+                self.typing
+                    .get_or_create_impl(impl_key.clone(), self.context.current_location.clone());
 
                 {
                     let placeholders = variables
@@ -1858,7 +1817,7 @@ impl MiddleEnvironment {
                                         ResolutionOptions::default().with_dollar(),
                                     )
                                     .ok()?;
-                                let resolved_iden = format!("{}.{}", self_name, identifier);
+                                let resolved_iden = format!("{}.{}", impl_key, identifier);
                                 // TODO Unpack the dollar ident only without resolving
                                 Some((identifier, resolved_iden, generic_params.clone()))
                             } else {
@@ -1939,7 +1898,7 @@ impl MiddleEnvironment {
                                 &identifier,
                                 ResolutionOptions::default().with_dollar(),
                             )?;
-                            let resolved_iden = format!("{}.{}", self_name, identifier);
+                            let resolved_iden = format!("{}.{}", impl_key, identifier);
 
                             let dependant = match &value.node_type {
                                 AstNodeType::FunctionDeclaration { header, .. } => {
@@ -2098,7 +2057,7 @@ impl MiddleEnvironment {
                 let resolved_target = self
                     .resolve_data_type(scope, &target, ResolutionOptions::typing())?
                     .unwrap_all_refs();
-                let self_name = resolved_target.impl_name();
+                let impl_key = resolved_target.impl_name();
 
                 let mut provided = FxHashSet::default();
                 let mut assoc_types = Vec::new();
@@ -2145,17 +2104,15 @@ impl MiddleEnvironment {
                     (
                         scope
                             .mappings
-                            .insert(String::from("Self"), self_name.clone()),
+                            .insert(String::from("Self"), impl_key.clone()),
                         scope
                             .type_mappings
                             .insert(String::from("Self"), resolved_target.data_type.clone()),
                     )
                 };
 
-                let impl_key = self.typing.get_or_create_impl(
-                    resolved_target.clone(),
-                    self.context.current_location.clone(),
-                );
+                self.typing
+                    .get_or_create_impl(impl_key.clone(), self.context.current_location.clone());
 
                 for (identifier, object) in assoc_types {
                     if let TypeDefType::NewType(inner) = object {
@@ -2190,7 +2147,7 @@ impl MiddleEnvironment {
                     for var in &all_vars {
                         if let AstNodeType::VariableDeclaration { identifier, .. } = &var.node_type
                         {
-                            let resolved_iden = format!("{}.{}", self_name, identifier);
+                            let resolved_iden = format!("{}.{}", impl_key, identifier);
                             impl_ref.insert_member_placeholder(
                                 &identifier.to_string(),
                                 resolved_iden,
@@ -2210,8 +2167,9 @@ impl MiddleEnvironment {
                             value,
                             data_type,
                         } => {
+                            // TODO Deal with dollar ident
                             let iden = identifier.to_string();
-                            let resolved_iden = format!("{}.{}", self_name, identifier);
+                            let resolved_iden = format!("{}.{}", impl_key, identifier);
 
                             let dependant = match &value.node_type {
                                 AstNodeType::FunctionDeclaration { header, .. } => {

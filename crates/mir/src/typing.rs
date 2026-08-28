@@ -11,13 +11,13 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::fmt::Display;
+use std::{fmt::Display, println};
 use tracing::{debug, instrument, trace};
 
 #[derive(Debug, Clone, Default)]
 pub struct Typing {
     pub objects: FxHashMap<String, MiddleObject>,
-    pub impls: FxHashMap<ParserInnerType, MiddleImpl>,
+    pub impls: FxHashMap<String, MiddleImpl>,
     pub trait_defs: FxHashMap<String, MiddleTrait>,
     pub generic_type_templates: FxHashMap<String, (Vec<String>, TypeDefType, Vec<Overload>)>,
     pub type_specializations: FxHashMap<String, String>,
@@ -25,13 +25,10 @@ pub struct Typing {
 
 impl Typing {
     #[instrument(skip_all, fields(ty = %ty))]
-    pub fn find_impl_for_type(&self, ty: &ParserDataType) -> Option<&MiddleImpl> {
+    pub fn find_impl_for_type(&self, ty: &String) -> Option<&MiddleImpl> {
         trace!("finding impl for type");
-        if let Some(x) = self.impls.get(&ty.key()) {
+        if let Some(x) = self.impls.get(ty) {
             debug!("found impl by direct key");
-            Some(x)
-        } else if let Some(x) = self.impls.get(&ty.clone().unwrap_all_refs().key()) {
-            debug!("found impl by unwrapped refs");
             Some(x)
         } else {
             debug!("no impl found for type");
@@ -58,22 +55,14 @@ impl Typing {
         .map(|x| x.impl_name())
         .collect();
 
-        if let Some(implementation) = self.find_impl_for_type(ty) {
-            return implementation.get_member(member, &generic_params);
-        }
-
         let identifier = ty.impl_name();
 
-        if let Some(implementation) = self.find_impl_for_type(&ParserDataType {
-            data_type: ParserInnerType::Struct(identifier.clone()),
-            span: ty.span,
-        }) {
+        if let Some(implementation) = self.find_impl_for_type(&identifier) {
             return implementation.get_member(member, &generic_params);
         }
 
         // TODO Remove, its the worst case scenario
-        self.impls.values().find_map(|implementation| {
-            let name = &implementation.data_type.impl_name();
+        self.impls.iter().find_map(|(name, implementation)| {
             name.contains(&identifier)
                 .then(|| implementation.get_member(member, &generic_params))
                 .flatten()
@@ -141,7 +130,7 @@ impl Typing {
             return Some(assoc_type.clone());
         }
 
-        if let Some(imp) = self.find_impl_for_type(base) {
+        if let Some(imp) = self.find_impl_for_type(&base.impl_name()) {
             if let Some(assoc_type) = imp.assoc_types.get(name) {
                 return Some(assoc_type.clone());
             }
@@ -157,29 +146,14 @@ impl Typing {
         None
     }
 
-    #[instrument(skip_all, fields(ty = %ty))]
-    pub fn get_or_create_impl(
-        &mut self,
-        ty: ParserDataType,
-        location: Option<Location>,
-    ) -> ParserInnerType {
-        let key = ty.key();
-        if self.impls.contains_key(&key) {
-            return key;
-        }
-
-        self.impls.insert(
-            key.clone(),
-            MiddleImpl {
-                data_type: ty,
-                members: FxHashMap::default(),
-                traits: Vec::new(),
-                assoc_types: FxHashMap::default(),
-                location,
-            },
-        );
-
-        key
+    #[instrument(skip_all, fields(name = %name))]
+    pub fn get_or_create_impl(&mut self, name: String, location: Option<Location>) {
+        self.impls.entry(name).or_insert(MiddleImpl {
+            members: FxHashMap::default(),
+            traits: Vec::new(),
+            assoc_types: FxHashMap::default(),
+            location,
+        });
     }
 }
 
@@ -210,7 +184,6 @@ impl MiddleImplMember {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleImpl {
-    pub data_type: ParserDataType,
     members: FxHashMap<String, Vec<MiddleImplMember>>,
     pub traits: Vec<String>,
     pub assoc_types: FxHashMap<String, ParserDataType>,

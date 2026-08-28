@@ -247,7 +247,7 @@ impl MiddleEnvironment {
             );
         }
 
-        if let Some(imp) = self.typing.find_impl_for_type(&resolved)
+        if let Some(imp) = self.typing.find_impl_for_type(&resolved.impl_name())
             && let Some(mapped_member) = imp.get_member(&member, &[])
         {
             return self
@@ -352,9 +352,9 @@ impl MiddleEnvironment {
 
         for current_scope in scope.ancestors(&self.scoping.scopes) {
             if options.type_resolution {
-                if self.scoping.is_generic_param(&ident)
-                    || self.typing.objects.contains_key(&ident)
+                if self.typing.objects.contains_key(&ident)
                     || self.typing.trait_defs.contains_key(&ident)
+                    || self.typing.impls.contains_key(&ident)
                 {
                     return Ok(ident);
                 }
@@ -402,6 +402,12 @@ impl MiddleEnvironment {
                 }
             }
 
+            for key in self.typing.impls.keys() {
+                if ParserText::temp_name_suffix_matches(key, &ident) {
+                    return Ok(key.clone());
+                }
+            }
+
             if self.scoping.all_time_generics.contains(&ident) {
                 return Ok(ident);
             }
@@ -442,21 +448,16 @@ impl MiddleEnvironment {
         let (ty, mut generic_types) = match ident {
             IdentifierType::Ident(x) => {
                 let x = x.to_string();
-
-                let resolved = self
-                    .resolve(scope, &x, ResolutionOptions::default().with_dollar())
-                    .unwrap_or(x.clone());
-
-                if self.symbols.variables.contains_key(&resolved) {
-                    return Err(self.context.err_at_current(MiddleErr::Object(resolved)));
-                }
+                let resolved =
+                    self.resolve(scope, &x, ResolutionOptions::default().with_dollar())?;
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
-                        ParserInnerType::Struct(x) => ParserInnerType::Struct(
-                            self.resolve(scope, &x, ResolutionOptions::typing())
-                                .unwrap_or(x),
-                        ),
+                        ParserInnerType::Struct(x) => ParserInnerType::Struct(self.resolve(
+                            scope,
+                            &x,
+                            ResolutionOptions::typing(),
+                        )?),
                         x => x,
                     },
                     Vec::new(),
@@ -464,20 +465,16 @@ impl MiddleEnvironment {
             }
             IdentifierType::Generic(PotentialGenericTypeIdentifier::Identifier(x))
             | IdentifierType::Dollar(x) => {
-                let resolved = self
-                    .resolve(scope, x, ResolutionOptions::default().with_dollar())
-                    .unwrap_or(x.text().clone());
-
-                if self.symbols.variables.contains_key(&resolved) {
-                    return Err(self.context.err_at_current(MiddleErr::Object(resolved)));
-                }
+                let resolved =
+                    self.resolve(scope, x, ResolutionOptions::default().with_dollar())?;
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
-                        ParserInnerType::Struct(x) => ParserInnerType::Struct(
-                            self.resolve(scope, &x, ResolutionOptions::typing())
-                                .unwrap_or(x),
-                        ),
+                        ParserInnerType::Struct(x) => ParserInnerType::Struct(self.resolve(
+                            scope,
+                            &x,
+                            ResolutionOptions::typing(),
+                        )?),
                         x => x,
                     },
                     Vec::new(),
@@ -489,19 +486,14 @@ impl MiddleEnvironment {
             }) => {
                 let generic_types: Vec<ParserDataType> = generic_types
                     .iter()
-                    .map(|x| {
-                        self.resolve_data_type(scope, x, ResolutionOptions::typing())
-                            .unwrap()
-                    })
-                    .collect();
+                    .map(|x| self.resolve_data_type(scope, x, ResolutionOptions::typing()))
+                    .collect::<Result<Vec<_>, _>>()?;
 
-                let resolved = self
-                    .resolve(
-                        scope,
-                        identifier,
-                        ResolutionOptions::default().with_dollar(),
-                    )
-                    .unwrap_or(identifier.text().clone());
+                let resolved = self.resolve(
+                    scope,
+                    identifier,
+                    ResolutionOptions::default().with_dollar(),
+                )?;
 
                 if self.symbols.variables.contains_key(&resolved) {
                     return Err(self.context.err_at_current(MiddleErr::Object(resolved)));
@@ -509,10 +501,11 @@ impl MiddleEnvironment {
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
-                        ParserInnerType::Struct(x) => ParserInnerType::Struct(
-                            self.resolve(scope, &x, ResolutionOptions::typing())
-                                .unwrap_or(x),
-                        ),
+                        ParserInnerType::Struct(x) => ParserInnerType::Struct(self.resolve(
+                            scope,
+                            &x,
+                            ResolutionOptions::typing(),
+                        )?),
                         x => x,
                     },
                     generic_types,

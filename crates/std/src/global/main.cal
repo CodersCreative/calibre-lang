@@ -89,7 +89,7 @@ trait Iter {
 		for  => {
 			let v : Self::Item? = self.next();
 			if let .Some : value <- v => {
-				out <<= op(v.next);
+				out <<= op(value);
 			} else => {
 				break;
 			};

@@ -147,8 +147,7 @@ impl<'a> LirEnvironment<'a> {
         let mut out: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>> =
             FxHashMap::default();
 
-        for imp in env.typing.impls.values() {
-            let concrete = imp.data_type.clone().unwrap_all_refs().to_string();
+        for (concrete, imp) in env.typing.impls.iter() {
             let trait_map = out.entry(concrete.clone()).or_default();
 
             for trait_name in &imp.traits {

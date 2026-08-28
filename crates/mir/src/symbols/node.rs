@@ -1,3 +1,5 @@
+use std::println;
+
 use crate::{
     environment::MiddleEnvironment, scoping::ScopeId, symbols::resolve::ResolutionOptions,
     typing::MiddleTypeDefType,

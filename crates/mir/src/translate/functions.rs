@@ -1,3 +1,5 @@
+use std::{println, vec};
+
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirConditional, MirExtern, MirFunction,
@@ -248,12 +250,13 @@ impl MiddleEnvironment {
         for (idx, node) in slots.into_iter().enumerate() {
             let node = node?;
             if wrap_with_some.get(idx).copied().unwrap_or(false) {
-                lowered.push(MiddleNode::new(
-                    MiddleNodeType::CallExpression(MirCall {
-                        caller: Box::new(MiddleNode::identifier(span, "some")),
-                        args: vec![self.evaluate(scope, node)],
-                    }),
-                    span,
+                lowered.push(self.evaluate(
+                    scope,
+                    AstNode::call(
+                        span,
+                        AstNode::identifier(span, "some"),
+                        vec![CallArg::Value(node)],
+                    ),
                 ));
             } else {
                 lowered.push(self.evaluate(scope, node));
