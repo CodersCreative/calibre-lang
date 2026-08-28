@@ -6,7 +6,8 @@ const main := fn => {
 	
 	let wg := spawn => {
 		print("Spawned!!!");
-		emit ch"Hello, Joe!";
+		let v := "Hello, Joe!";
+		emit ch v;
 	};
 	
 	defer wg.wait();

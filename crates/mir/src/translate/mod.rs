@@ -164,129 +164,76 @@ impl MiddleEnvironment {
                 self.evaluate_index_access(scope, node.span, *base, *index)
             }
             AstNodeType::Spawn {
-                mut items,
-                auto_wait,
-            } if items.len() == 1 => {
-                let value = items.remove(0);
-                let original_value = value.clone();
-                let inner = match value.node_type {
-                    AstNodeType::ScopeDeclaration { .. } => {
-                        return self.evaluate_inner(
-                            scope,
+                items,
+                auto_wait: true,
+            } => {
+                let ident: PotentialDollarIdentifier =
+                    ParserText::temp_name_with_suffix("spawn_wait_wg", node.span).into();
+
+                Ok(self.evaluate(
+                    scope,
+                    AstNode::new_temp_scope_with_create(
+                        vec![
                             AstNode::new(
                                 node.span,
-                                AstNodeType::Spawn {
-                                    items: vec![AstNode::new(
-                                        node.span,
-                                        AstNodeType::FunctionDeclaration {
-                                            header: FunctionHeader {
-                                                generics: GenericTypes::default(),
-                                                parameters: Vec::new(),
-                                                return_type: ParserDataType::auto(node.span),
-                                                param_destructures: Vec::new(),
-                                            },
-                                            body: Box::new(value),
-                                        },
-                                    )],
-                                    auto_wait,
-                                },
-                            ),
-                        );
-                    }
-                    AstNodeType::CallExpression {
-                        string_fn: _,
-                        caller,
-                        generic_types,
-                        mut args,
-                        mut reverse_args,
-                    } => {
-                        let mut body: Vec<AstNode> = Vec::new();
-                        let mut captured_args: Vec<CallArg> = Vec::new();
-                        let mut idx = 0usize;
-
-                        let mut push_capture = |arg: AstNode| {
-                            let name = format!("spawn_capture_{idx}");
-                            idx += 1;
-                            let ident: PotentialDollarIdentifier =
-                                ParserText::from(name.clone()).into();
-
-                            body.push(AstNode::new(
-                                self.context.current_span(),
                                 AstNodeType::VariableDeclaration {
                                     var_type: VarType::Immutable,
                                     identifier: ident.clone(),
-                                    data_type: ParserDataType::auto(self.context.current_span()),
-                                    value: Box::new(arg),
+                                    data_type: ParserDataType::object(node.span, "WaitGroup"),
+                                    value: Box::new(AstNode::new(
+                                        node.span,
+                                        AstNodeType::Spawn {
+                                            items,
+                                            auto_wait: false,
+                                        },
+                                    )),
                                 },
-                            ));
+                            ),
+                            AstNode::call(
+                                node.span,
+                                AstNode::member(
+                                    node.span,
+                                    AstNode::identifier(node.span, ident),
+                                    "wait",
+                                ),
+                                Vec::new(),
+                            ),
+                        ],
+                        Some(false),
+                    ),
+                ))
+            }
+            AstNodeType::Spawn {
+                mut items,
+                auto_wait,
+            } if items.len() == 1 => {
+                let value: AstNode = items.remove(0);
 
-                            CallArg::Value(AstNode::identifier(self.context.current_span(), ident))
-                        };
-
-                        for arg in args.drain(..) {
-                            match arg {
-                                CallArg::Value(node) => captured_args.push(push_capture(node)),
-                                CallArg::Named(name, node) => {
-                                    let cap = push_capture(node);
-                                    if let CallArg::Value(value) = cap {
-                                        captured_args.push(CallArg::Named(name, value));
-                                    }
-                                }
-                            }
-                        }
-
-                        for node in reverse_args.drain(..) {
-                            captured_args.push(push_capture(node));
-                        }
-
-                        let func_decl = AstNode::new(
-                            self.context.current_span(),
-                            AstNodeType::FunctionDeclaration {
-                                header: FunctionHeader {
-                                    generics: GenericTypes::default(),
-                                    parameters: Vec::new(),
-                                    return_type: ParserDataType::auto(self.context.current_span()),
-                                    param_destructures: Vec::new(),
-                                },
-                                body: Box::new(AstNode::call_full(
-                                    self.context.current_span(),
-                                    *caller,
-                                    generic_types,
-                                    captured_args,
-                                    Vec::new(),
-                                    None,
-                                )),
+                let inner = match value.node_type {
+                    AstNodeType::ScopeDeclaration { .. } => AstNode::new(
+                        node.span,
+                        AstNodeType::FunctionDeclaration {
+                            header: FunctionHeader {
+                                generics: GenericTypes::default(),
+                                parameters: Vec::new(),
+                                return_type: ParserDataType::auto(node.span),
+                                param_destructures: Vec::new(),
                             },
-                        );
-
-                        let fn_ident: PotentialDollarIdentifier =
-                            ParserText::temp_name_with_suffix("spawn_fn", node.span).into();
-
-                        body.push(AstNode::new(
-                            self.context.current_span(),
-                            AstNodeType::VariableDeclaration {
-                                var_type: VarType::Immutable,
-                                identifier: fn_ident.clone(),
-                                data_type: ParserDataType::auto(self.context.current_span()),
-                                value: Box::new(func_decl),
+                            body: Box::new(value),
+                        },
+                    ),
+                    AstNodeType::CallExpression { .. } => AstNode::new(
+                        node.span,
+                        AstNodeType::FunctionDeclaration {
+                            header: FunctionHeader {
+                                generics: GenericTypes::default(),
+                                parameters: Vec::new(),
+                                return_type: ParserDataType::auto(node.span),
+                                param_destructures: Vec::new(),
                             },
-                        ));
-
-                        body.push(AstNode::identifier(self.context.current_span(), fn_ident));
-
-                        let scope_node = AstNode::new(
-                            self.context.current_span(),
-                            AstNodeType::ScopeDeclaration {
-                                body: Some(body),
-                                named: None,
-                                is_temp: true,
-                                create_new_scope: Some(true),
-                                define: false,
-                            },
-                        );
-
-                        self.evaluate(scope, scope_node)
-                    }
+                            body: Box::new(AstNode::new_temp_scope(vec![value])),
+                        },
+                    ),
                     AstNodeType::LoopDeclaration {
                         loop_type,
                         body,
@@ -303,6 +250,7 @@ impl MiddleEnvironment {
 
                         let wg_ident_node = AstNode::identifier(node.span, wg_ident.clone());
                         let start_ident_node = AstNode::identifier(node.span, start_ident.clone());
+
                         let wg_new = AstNode::call(
                             node.span,
                             AstNode::member(
@@ -411,126 +359,37 @@ impl MiddleEnvironment {
                             wg_ident_node,
                         ]);
 
-                        return Ok(self.evaluate(scope, scope_node));
+                        return self.evaluate_inner(scope, scope_node);
                     }
-                    AstNodeType::FunctionDeclaration { header, body } => {
-                        let fn_ident: PotentialDollarIdentifier =
-                            ParserText::temp_name_with_suffix("spawn_fn", body.span).into();
-
-                        let scope_node = AstNode::call(
-                            node.span,
-                            AstNode::member(
-                                node.span,
-                                AstNode::identifier(node.span, "WaitGroup"),
-                                "raw_new",
-                            ),
-                            vec![CallArg::Value(AstNode::new(
-                                self.context.current_span(),
-                                AstNodeType::ScopeDeclaration {
-                                    body: Some(vec![
-                                        AstNode::new(
-                                            self.context.current_span(),
-                                            AstNodeType::VariableDeclaration {
-                                                var_type: VarType::Immutable,
-                                                identifier: fn_ident.clone(),
-                                                data_type: ParserDataType::auto(
-                                                    self.context.current_span(),
-                                                ),
-                                                value: Box::new(AstNode::new(
-                                                    self.context.current_span(),
-                                                    AstNodeType::FunctionDeclaration {
-                                                        header,
-                                                        body,
-                                                    },
-                                                )),
-                                            },
-                                        ),
-                                        AstNode::identifier(self.context.current_span(), fn_ident),
-                                    ]),
-                                    named: None,
-                                    is_temp: true,
-                                    create_new_scope: Some(true),
-                                    define: false,
-                                },
-                            ))],
-                        );
-
-                        self.evaluate(scope, scope_node)
-                    }
-                    other => self.evaluate(scope, AstNode::new(value.span, other)),
+                    AstNodeType::FunctionDeclaration { .. } => value,
+                    _ => unimplemented!(),
                 };
 
-                if auto_wait {
-                    let wg_ident: PotentialDollarIdentifier =
-                        ParserText::temp_name_with_suffix("spawn_wait_wg", node.span).into();
-                    let wait_scope = AstNode::new_temp_scope_with_create(
-                        vec![
-                            AstNode::new(
-                                node.span,
-                                AstNodeType::VariableDeclaration {
-                                    var_type: VarType::Immutable,
-                                    identifier: wg_ident.clone(),
-                                    data_type: ParserDataType::object(node.span, "WaitGroup"),
-                                    value: Box::new(AstNode::new(
-                                        node.span,
-                                        AstNodeType::Spawn {
-                                            items: vec![original_value],
-                                            auto_wait: false,
-                                        },
-                                    )),
-                                },
-                            ),
-                            AstNode::call(
-                                node.span,
-                                AstNode::member(
-                                    node.span,
-                                    AstNode::identifier(node.span, wg_ident),
-                                    "wait",
-                                ),
-                                Vec::new(),
-                            ),
-                        ],
-                        Some(true),
-                    );
-                    Ok(self.evaluate(scope, wait_scope))
-                } else {
-                    Ok(MiddleNode::new(
-                        MiddleNodeType::Spawn(MirSpawn {
-                            value: Box::new(inner),
-                        }),
-                        node.span,
-                    ))
-                }
+                Ok(MiddleNode::new(
+                    MiddleNodeType::Spawn(MirSpawn {
+                        value: Box::new(self.evaluate_inner(scope, inner)?),
+                    }),
+                    node.span,
+                ))
             }
-            AstNodeType::Spawn { items, auto_wait } => {
+            AstNodeType::Spawn { items, .. } => {
                 let span = node.span;
                 let wg_ident: PotentialDollarIdentifier =
                     ParserText::temp_name_with_suffix("spawn_wg", span).into();
-                let wg_ident_node = AstNode::new(
-                    span,
-                    AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                        wg_ident.clone(),
-                    )),
-                );
 
-                let wg_new = AstNode::call(
-                    span,
-                    AstNode::member(span, AstNode::identifier(span, "WaitGroup"), "new"),
-                    Vec::new(),
-                );
-
-                let wg_decl = AstNode::new(
+                let mut body_nodes = vec![AstNode::new(
                     span,
                     AstNodeType::VariableDeclaration {
                         var_type: VarType::Mutable,
                         identifier: wg_ident.clone(),
                         data_type: ParserDataType::object(span, "WaitGroup"),
-                        value: Box::new(wg_new),
+                        value: Box::new(AstNode::call(
+                            span,
+                            AstNode::member(span, AstNode::identifier(span, "WaitGroup"), "new"),
+                            Vec::new(),
+                        )),
                     },
-                );
-
-                let mut body_nodes = Vec::new();
-                body_nodes.push(wg_decl);
+                )];
 
                 for item in items {
                     let item = match item.node_type {
@@ -552,7 +411,7 @@ impl MiddleEnvironment {
                                 span,
                                 AstNodeType::RefStatement {
                                     mutability: RefMutability::MutRef,
-                                    value: Box::new(wg_ident_node.clone()),
+                                    value: Box::new(AstNode::identifier(span, &wg_ident)),
                                 },
                             )),
                             CallArg::Value(item),
@@ -561,43 +420,19 @@ impl MiddleEnvironment {
                     body_nodes.push(join_call);
                 }
 
-                body_nodes.push(wg_ident_node);
-
-                let scope_node = AstNode::new(
-                    span,
-                    AstNodeType::ScopeDeclaration {
-                        body: Some(body_nodes),
-                        named: None,
-                        is_temp: true,
-                        create_new_scope: Some(true),
-                        define: false,
-                    },
-                );
-
-                if auto_wait {
-                    let wait_scope = AstNode::new_temp_scope_with_create(
-                        vec![
-                            AstNode::new(
-                                span,
-                                AstNodeType::VariableDeclaration {
-                                    var_type: VarType::Immutable,
-                                    identifier: wg_ident.clone(),
-                                    data_type: ParserDataType::object(span, "WaitGroup"),
-                                    value: Box::new(scope_node),
-                                },
-                            ),
-                            AstNode::call(
-                                span,
-                                AstNode::member(span, AstNode::identifier(span, wg_ident), "wait"),
-                                Vec::new(),
-                            ),
-                        ],
-                        Some(true),
-                    );
-                    Ok(self.evaluate(scope, wait_scope))
-                } else {
-                    Ok(self.evaluate(scope, scope_node))
-                }
+                self.evaluate_inner(
+                    scope,
+                    AstNode::new(
+                        span,
+                        AstNodeType::ScopeDeclaration {
+                            body: Some(body_nodes),
+                            named: None,
+                            is_temp: true,
+                            create_new_scope: Some(false),
+                            define: false,
+                        },
+                    ),
+                )
             }
             AstNodeType::Ternary {
                 comparison,

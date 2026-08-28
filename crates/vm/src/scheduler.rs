@@ -25,6 +25,7 @@ struct SchedulerInner {
     workers: Mutex<Vec<Arc<Worker>>>,
     handles: Mutex<Vec<thread::JoinHandle<()>>>,
     shutdown: AtomicBool,
+    vm_pool: Mutex<VecDeque<VM>>,
 }
 
 #[derive(Debug)]
@@ -53,6 +54,7 @@ impl SchedulerHandle {
             workers: Mutex::new(Vec::new()),
             handles: Mutex::new(Vec::new()),
             shutdown: AtomicBool::new(false),
+            vm_pool: Mutex::new(VecDeque::new()),
         });
 
         let worker_count = std::thread::available_parallelism()
@@ -117,11 +119,20 @@ impl SchedulerHandle {
             }
         };
 
-        let mut vm = VM::new_shared(
-            base_vm.registry.clone(),
-            base_vm.mappings.clone(),
-            base_vm.config.clone(),
-        );
+        let mut vm = {
+            let mut pool = self.inner.vm_pool.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(mut pooled_vm) = pool.pop_front() {
+                pooled_vm.task_state = Default::default();
+                pooled_vm.captured_output = String::new();
+                pooled_vm
+            } else {
+                VM::new_shared(
+                    base_vm.registry.clone(),
+                    base_vm.mappings.clone(),
+                    base_vm.config.clone(),
+                )
+            }
+        };
 
         for id in 0..vm.variables.slot_len() {
             if let Some(value) = vm.variables.get_by_id(id).cloned() {
@@ -161,7 +172,7 @@ impl SchedulerHandle {
                     }
                 };
 
-                if let Some(status) = run_task_slice(&mut task, worker.quantum) {
+                if let Some(status) = run_task_slice(&mut task, worker.quantum, &scheduler) {
                     match status {
                         TaskStatus::Yielded => {
                             let mut queue = worker.queue.lock().unwrap_or_else(|e| e.into_inner());
@@ -172,6 +183,9 @@ impl SchedulerHandle {
                             if let Some(wg) = task.wait_group.take() {
                                 wg.done();
                             }
+                            let mut pool =
+                                scheduler.vm_pool.lock().unwrap_or_else(|e| e.into_inner());
+                            pool.push_back(task.vm);
                         }
                     }
                 }
@@ -216,7 +230,11 @@ enum TaskStatus {
     Finished,
 }
 
-fn run_task_slice(task: &mut Task, quantum: usize) -> Option<TaskStatus> {
+fn run_task_slice(
+    task: &mut Task,
+    quantum: usize,
+    _scheduler: &Arc<SchedulerInner>,
+) -> Option<TaskStatus> {
     let status = match &task.func {
         RuntimeValue::Function { name, captures } => {
             let Some(func) = task.vm.resolve_function_by_name(name) else {
@@ -224,22 +242,7 @@ fn run_task_slice(task: &mut Task, quantum: usize) -> Option<TaskStatus> {
             };
 
             let mut state = task.vm.take_task_state();
-            let resolved_captures = Arc::new(
-                captures
-                    .as_ref()
-                    .iter()
-                    .map(|(k, v)| {
-                        let resolved = task
-                            .vm
-                            .resolve_value_for_op_ref(v)
-                            .unwrap_or_else(|_| RuntimeValue::Null);
-                        let resolved = task.vm.resolve_saveable_runtime_value_ref(
-                            &task.vm.convert_runtime_var_into_saveable(resolved),
-                        );
-                        (k.clone(), resolved)
-                    })
-                    .collect(),
-            );
+            let resolved_captures = captures.clone();
 
             let status = task.vm.run_function_with_budget(
                 func.as_ref(),
