@@ -1,4 +1,9 @@
-use crate::{ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId};
+use crate::{
+    ast::{MiddleNode, MiddleNodeType},
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    scoping::ScopeId,
+};
 use calibre_parser::ast::{
     idents::ParserText,
     nodes::{AstNode, AstNodeType},
@@ -7,6 +12,7 @@ use rustc_hash::FxHashMap;
 use std::{
     fmt::Debug,
     sync::{Arc, Mutex},
+    unimplemented,
 };
 
 mod builders;
@@ -92,6 +98,73 @@ impl MiddleEnvironment {
             "init".to_string(),
             TagHandler {
                 handler: init_handler,
+            },
+        );
+
+        // TODO
+        let backend_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: ScopeId,
+             node: AstNode,
+             _tag: ParserText,
+             args: Vec<AstNode>| {
+                let backend = "interpreter";
+                let mut build = false;
+
+                for arg in args {
+                    if let AstNodeType::StringLiteral(val) = arg.node_type
+                        && val.text == backend
+                    {
+                        build = true;
+                        break;
+                    }
+                }
+
+                if build {
+                    env.evaluate_inner(scope, node)
+                } else {
+                    Ok(MiddleNode::new(MiddleNodeType::EmptyLine, node.span))
+                }
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "backend".to_string(),
+            TagHandler {
+                handler: backend_handler,
+            },
+        );
+
+        let os_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: ScopeId,
+             node: AstNode,
+             _tag: ParserText,
+             args: Vec<AstNode>| {
+                let os = std::env::consts::OS;
+                let mut build = false;
+
+                for arg in args {
+                    if let AstNodeType::StringLiteral(val) = arg.node_type
+                        && val.text == os
+                    {
+                        build = true;
+                        break;
+                    }
+                }
+
+                if build {
+                    env.evaluate_inner(scope, node)
+                } else {
+                    Ok(MiddleNode::new(MiddleNodeType::EmptyLine, node.span))
+                }
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            "os".to_string(),
+            TagHandler {
+                handler: os_handler,
             },
         );
 
