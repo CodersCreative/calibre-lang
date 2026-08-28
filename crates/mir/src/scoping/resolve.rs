@@ -8,7 +8,7 @@ use calibre_parser::{
     Parser,
     ast::nodes::{AstNode, AstNodeType},
 };
-use std::{fs, print};
+use std::fs;
 use tracing::{debug, instrument};
 
 impl MiddleEnvironment {

@@ -75,9 +75,7 @@ impl MiddleEnvironment {
             }
         }
 
-        let original_value_node = value.clone();
-
-        let function_decl = match &original_value_node.node_type {
+        let function_decl = match &value.node_type {
             AstNodeType::FunctionDeclaration { header, body, .. } => Some((header, body)),
             _ => None,
         };
@@ -169,45 +167,15 @@ impl MiddleEnvironment {
             }
         };
 
-        let mut value = if let Some((header, _)) = function_decl {
-            self.register_variable(
-                scope,
-                &identifier,
-                new_name.clone(),
-                data_type.clone(),
-                var_type,
-            )?;
+        self.register_variable(
+            scope,
+            &identifier,
+            new_name.clone(),
+            data_type.clone(),
+            var_type,
+        )?;
 
-            let new_scope = self.scoping.new_scope_from_parent_shallow(scope);
-
-            for param in header.parameters.iter() {
-                let og_name =
-                    self.resolve(scope, &param.0, ResolutionOptions::default().with_dollar())?;
-
-                let new_name = ParserText::temp_name_with_suffix(og_name.trim(), span);
-
-                let data_type = if let Some(x) = param.1.clone() {
-                    self.resolve_data_type(scope, &x, ResolutionOptions::typing())?
-                } else if let Some(node) = &param.2 {
-                    self.resolve_type_from_node(scope, node)
-                        .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?
-                } else {
-                    return Err(self.context.err_at_current(MiddleErr::InferImpossible));
-                };
-
-                self.register_variable(
-                    new_scope,
-                    &og_name,
-                    new_name.text.clone(),
-                    data_type.clone(),
-                    VarType::Mutable,
-                )?;
-            }
-
-            self.evaluate(new_scope, value)
-        } else {
-            self.evaluate(scope, value)
-        };
+        let mut value = self.evaluate(scope, value);
 
         if matches!(data_type.data_type, ParserInnerType::DynamicTraits(_)) {
             value = MiddleNode::new(
@@ -218,20 +186,7 @@ impl MiddleEnvironment {
                 }),
                 span,
             );
-        }
-
-        if !matches!(
-            original_value_node.node_type,
-            AstNodeType::FunctionDeclaration { .. }
-        ) {
-            self.register_variable(
-                scope,
-                &identifier,
-                new_name.clone(),
-                data_type.clone(),
-                var_type,
-            )?;
-        }
+        };
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {

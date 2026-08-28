@@ -533,14 +533,17 @@ impl MiddleEnvironment {
 
         for param in header.parameters {
             param_idents.push(param.0.clone());
-            let og_name =
-                self.resolve(scope, &param.0, ResolutionOptions::default().with_dollar())?;
+            let og_name = self.resolve(
+                new_scope,
+                &param.0,
+                ResolutionOptions::default().with_dollar(),
+            )?;
             let new_name = ParserText::temp_name_with_suffix(og_name.trim(), span).text;
 
             let data_type = if let Some(x) = param.1 {
-                self.resolve_data_type(scope, &x, ResolutionOptions::typing())?
+                self.resolve_data_type(new_scope, &x, ResolutionOptions::typing())?
             } else if let Some(node) = &param.2 {
-                self.resolve_type_from_node(scope, node)
+                self.resolve_type_from_node(new_scope, node)
                     .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?
             } else {
                 return Err(self.context.err_at_current(MiddleErr::InferImpossible));
@@ -557,7 +560,7 @@ impl MiddleEnvironment {
             params.push((
                 ParserText::from(new_name),
                 data_type,
-                param.2.map(|x| Box::new(self.evaluate(scope, *x))),
+                param.2.map(|x| Box::new(self.evaluate(new_scope, *x))),
             ));
         }
 

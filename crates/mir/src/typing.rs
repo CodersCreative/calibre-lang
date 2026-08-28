@@ -241,10 +241,13 @@ impl MiddleImpl {
             Some(x)
         } else if let Some(x) = members.iter().find(|x| x.generic_params.is_empty()) {
             Some(x)
+        } else if let Some(x) = members
+            .iter()
+            .find(|x| x.generic_params.len() == generic_params.len())
+        {
+            Some(x)
         } else {
-            members
-                .iter()
-                .find(|x| x.generic_params.len() == generic_params.len())
+            members.first()
         }
     }
 
