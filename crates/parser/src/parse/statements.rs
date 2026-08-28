@@ -96,17 +96,14 @@ pub fn build_statement_parser<'a>(
             choice((
                 lex(pad.clone(), just('('))
                     .ignore_then(
-                        ident
+                        named_ident
                             .clone()
-                            .map(|(n, sp)| PotentialDollarIdentifier::new(sp, n))
                             .separated_by(comma.clone())
                             .allow_trailing()
                             .collect::<Vec<_>>(),
                     )
                     .then_ignore(lex(pad.clone(), just(')'))),
-                ident
-                    .clone()
-                    .map(|(n, sp)| vec![PotentialDollarIdentifier::new(sp, n)]),
+                named_ident.clone().map(|x| vec![x]),
                 lex(pad.clone(), just('*')).map(|_| {
                     vec![PotentialDollarIdentifier::Identifier(ParserText::from(
                         "*".to_string(),
@@ -115,17 +112,15 @@ pub fn build_statement_parser<'a>(
             ))
             .then_ignore(lex(pad.clone(), just("from")))
             .then(
-                ident
+                named_ident
                     .clone()
-                    .map(|(n, sp)| PotentialDollarIdentifier::new(sp, n))
                     .separated_by(lex(pad.clone(), just("::")))
                     .at_least(1)
                     .collect::<Vec<_>>(),
             )
             .map(|(values, module)| (values, module, None)),
-            ident
+            named_ident
                 .clone()
-                .map(|(n, sp)| PotentialDollarIdentifier::new(sp, n))
                 .separated_by(lex(pad.clone(), just("::")))
                 .at_least(1)
                 .collect::<Vec<_>>()

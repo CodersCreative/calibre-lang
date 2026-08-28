@@ -76,7 +76,7 @@ const main := fn => {
 	
 	let => @add_scope [$first := 9f, $second := 11f, $t := type : float] {
 		// match_res will be captured at the call_site;
-		let sum : $t = $first + $second + match_res;
+		let sum : $t = $first + $second + match_res as! $t;
 		print("add_scope: ");
 		print(sum);
 	};

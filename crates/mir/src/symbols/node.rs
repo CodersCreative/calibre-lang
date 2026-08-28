@@ -1,7 +1,9 @@
 use std::println;
 
 use crate::{
-    environment::MiddleEnvironment, scoping::ScopeId, symbols::resolve::ResolutionOptions,
+    environment::MiddleEnvironment,
+    scoping::ScopeId,
+    symbols::resolve::{ResolutionOptions, StrOrAstNode},
     typing::MiddleTypeDefType,
 };
 use calibre_parser::ast::{
@@ -450,12 +452,18 @@ impl MiddleEnvironment {
                 caller_type?.data_type.apply_callable()
             }
             AstNodeType::Identifier(x) => {
-                if let Ok(iden) = self.resolve(scope, x, ResolutionOptions::all())
-                    && let Some(x) = self.symbols.variables.get(&iden)
+                match self
+                    .resolve_potential_node(scope, x, ResolutionOptions::all())
+                    .ok()?
                 {
-                    Some(x.data_type.clone())
-                } else {
-                    None
+                    StrOrAstNode::Str(iden) => {
+                        if let Some(x) = self.symbols.variables.get(&iden) {
+                            Some(x.data_type.clone())
+                        } else {
+                            None
+                        }
+                    }
+                    StrOrAstNode::Node(x) => return self.resolve_type_from_node(scope, &x),
                 }
             }
             AstNodeType::FieldAccess { base, field } => {

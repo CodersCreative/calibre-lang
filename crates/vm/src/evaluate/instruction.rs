@@ -1140,7 +1140,7 @@ impl VM {
                     }
                     RuntimeValue::Option(Some(inner)) if !(name == "next" || name == "0") => {
                         if let Some(callee) =
-                            self.resolve_associated_member_value("T?", name, short_name)
+                            self.resolve_associated_member_value("option", name, short_name)
                         {
                             self.bind_member_receiver_if_callable(
                                 callee,
@@ -1225,7 +1225,7 @@ impl VM {
                     }
                     result @ RuntimeValue::Result(_) => {
                         if let Some(callee) =
-                            self.resolve_associated_member_value("E!T", name, short_name)
+                            self.resolve_associated_member_value("result", name, short_name)
                         {
                             self.bind_member_receiver_if_callable(
                                 callee,

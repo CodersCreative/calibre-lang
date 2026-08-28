@@ -424,6 +424,31 @@ impl RuntimeValue {
         )
     }
 
+    pub fn impl_name(&self) -> Option<String> {
+        match self {
+            RuntimeValue::Big(_) => Some("big".to_string()),
+            RuntimeValue::Int(_) => Some("int".to_string()),
+            RuntimeValue::UInt(_) => Some("uint".to_string()),
+            RuntimeValue::Byte(_) => Some("byte".to_string()),
+            RuntimeValue::Float(_) => Some("float".to_string()),
+            RuntimeValue::Bool(_) => Some("bool".to_string()),
+            RuntimeValue::Str(_) => Some("str".to_string()),
+            RuntimeValue::Char(_) => Some("char".to_string()),
+            RuntimeValue::Range(_, _) => Some("range".to_string()),
+            RuntimeValue::Ptr(_) => Some("ptr".to_string()),
+            RuntimeValue::Aggregate(Some(name), _) | RuntimeValue::Enum(name, _, _) => {
+                Some(name.clone())
+            }
+            RuntimeValue::Generator { type_name, .. } => Some(type_name.to_string()),
+            RuntimeValue::DynObject { type_name, .. } => Some(type_name.to_string()),
+            RuntimeValue::List(_) => Some("list".to_string()),
+            RuntimeValue::Option(_) => Some("option".to_string()),
+            RuntimeValue::Result(_) => Some("result".to_string()),
+            RuntimeValue::Null => Some("null".to_string()),
+            _ => None,
+        }
+    }
+
     pub fn constants() -> &'static FxHashMap<String, Self> {
         static CONSTANTS: OnceLock<FxHashMap<String, RuntimeValue>> = OnceLock::new();
 

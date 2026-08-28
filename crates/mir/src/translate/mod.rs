@@ -8,7 +8,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::resolve::ResolutionOptions,
+    symbols::resolve::{ResolutionOptions, StrOrAstNode},
     tags::TagInfo,
     typing::{
         MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType, Typing,
@@ -85,7 +85,10 @@ impl MiddleEnvironment {
             }
             AstNodeType::Identifier(x) => Ok(MiddleNode::identifier(
                 node.span,
-                self.resolve(scope, &x, ResolutionOptions::all())?,
+                match self.resolve_potential_node(scope, &x, ResolutionOptions::all())? {
+                    StrOrAstNode::Str(x) => x,
+                    StrOrAstNode::Node(x) => return self.evaluate_inner(scope, x),
+                },
             )),
             AstNodeType::IntLiteral(text) => Ok(MiddleNode {
                 node_type: MiddleNodeType::IntLiteral(MirInt {

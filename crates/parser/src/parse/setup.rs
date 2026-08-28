@@ -120,7 +120,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
 
     let generic_params = lex(pad.clone(), just('<'))
         .ignore_then(
-            lex(pad_with_newline.clone(), ident.clone())
+            lex(pad_with_newline.clone(), named_ident.clone())
                 .separated_by(comma.clone())
                 .allow_trailing()
                 .collect::<Vec<_>>()
@@ -134,8 +134,8 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                 items
                     .unwrap_or_default()
                     .into_iter()
-                    .map(|(name, sp)| GenericType {
-                        identifier: PotentialDollarIdentifier::new(sp, name),
+                    .map(|name| GenericType {
+                        identifier: name,
                         trait_constraints: Vec::new(),
                     })
                     .collect(),

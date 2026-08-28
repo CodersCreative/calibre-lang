@@ -8,13 +8,19 @@ use calibre_parser::{
     Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::AstNodeType,
+        nodes::{AstNode, AstNodeType},
         types::{ParserDataType, ParserInnerType},
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{fmt::Display, str::FromStr, write};
 use tracing::{instrument, trace, warn};
+
+#[derive(PartialEq)]
+pub enum StrOrAstNode {
+    Str(String),
+    Node(AstNode),
+}
 
 pub enum IdentifierType<'a> {
     Generic(&'a PotentialGenericTypeIdentifier),
@@ -286,19 +292,45 @@ impl MiddleEnvironment {
         ident: impl Into<IdentifierType<'a>>,
         options: ResolutionOptions,
     ) -> Result<String, MiddleErr> {
-        let mut current = self.resolve_inner(scope, ident, options)?;
+        let mut current = match self.resolve_inner(scope, ident, options)? {
+            StrOrAstNode::Node(x) => {
+                return Err(self
+                    .context
+                    .err_at_current(MiddleErr::UnexpectedMacroArgType(x.to_string())));
+            }
+            StrOrAstNode::Str(x) => x,
+        };
 
         for _ in 0..64 {
-            if let Ok(x) = self.resolve_inner(scope, &current, options)
-                && current != x
-            {
-                current = x;
-            } else {
-                break;
+            match self.resolve_inner(scope, &current, options) {
+                Ok(StrOrAstNode::Str(x)) if current != x => current = x,
+                _ => break,
             }
         }
 
         Ok(current)
+    }
+
+    pub fn resolve_potential_node<'a>(
+        &'a self,
+        scope: ScopeId,
+        ident: impl Into<IdentifierType<'a>>,
+        options: ResolutionOptions,
+    ) -> Result<StrOrAstNode, MiddleErr> {
+        let mut current = match self.resolve_inner(scope, ident, options)? {
+            StrOrAstNode::Node(x) => return Ok(StrOrAstNode::Node(x)),
+            StrOrAstNode::Str(x) => x,
+        };
+
+        for _ in 0..64 {
+            match self.resolve_inner(scope, &current, options) {
+                Ok(StrOrAstNode::Str(x)) if current != x => current = x,
+                Ok(StrOrAstNode::Node(x)) => return Ok(StrOrAstNode::Node(x)),
+                _ => break,
+            }
+        }
+
+        Ok(StrOrAstNode::Str(current))
     }
 
     #[instrument(skip_all)]
@@ -307,16 +339,19 @@ impl MiddleEnvironment {
         scope: ScopeId,
         ident: impl Into<IdentifierType<'a>>,
         options: ResolutionOptions,
-    ) -> Result<String, MiddleErr> {
+    ) -> Result<StrOrAstNode, MiddleErr> {
         let ident = ident.into();
         trace!(ident = %ident, "Resolving identifier");
 
         let ident = match ident {
-            IdentifierType::Generic(x) => {
-                let inner_ident = x.get_ident();
-                inner_ident.to_string()
-            }
-            IdentifierType::Dollar(PotentialDollarIdentifier::DollarIdentifier(x)) => {
+            IdentifierType::Generic(PotentialGenericTypeIdentifier::Generic {
+                identifier: PotentialDollarIdentifier::DollarIdentifier(x),
+                ..
+            })
+            | IdentifierType::Generic(PotentialGenericTypeIdentifier::Identifier(
+                PotentialDollarIdentifier::DollarIdentifier(x),
+            ))
+            | IdentifierType::Dollar(PotentialDollarIdentifier::DollarIdentifier(x)) => {
                 if !options.dollar_resolution {
                     warn!(
                         "Resolution failed : No dollar resolution allowed but dollar ident provided"
@@ -338,11 +373,13 @@ impl MiddleEnvironment {
                         PotentialDollarIdentifier::DollarIdentifier(x) => x.to_string(),
                     },
                     _ => {
-                        return Err(self
-                            .context
-                            .err_at_current(MiddleErr::UnexpectedMacroArgType(x.to_string())));
+                        return Ok(StrOrAstNode::Node(resolved.clone()));
                     }
                 }
+            }
+            IdentifierType::Generic(x) => {
+                let inner_ident = x.get_ident();
+                inner_ident.to_string()
             }
             IdentifierType::Dollar(PotentialDollarIdentifier::Identifier(x)) => x.text.clone(),
             IdentifierType::Ident(x) => x.to_string(),
@@ -356,7 +393,7 @@ impl MiddleEnvironment {
                     || self.typing.trait_defs.contains_key(&ident)
                     || self.typing.impls.contains_key(&ident)
                 {
-                    return Ok(ident);
+                    return Ok(StrOrAstNode::Str(ident));
                 }
 
                 let ty = ParserDataType::from(ParserInnerType::from_str(&ident).unwrap());
@@ -364,27 +401,27 @@ impl MiddleEnvironment {
                 let scope_ref = self.scoping.scope_or_err(current_scope)?;
 
                 if let Some(x) = scope_ref.type_mappings.get(&ty.impl_name()).cloned() {
-                    return Ok(ParserDataType::from(x).impl_name());
+                    return Ok(StrOrAstNode::Str(ParserDataType::from(x).impl_name()));
                 }
 
                 if options.name_resolution {
                     if self.symbols.variables.contains_key(&ident) {
-                        return Ok(ident);
+                        return Ok(StrOrAstNode::Str(ident));
                     }
 
                     if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
-                        return Ok(x);
+                        return Ok(StrOrAstNode::Str(x));
                     }
                 }
             } else if options.name_resolution {
                 if self.symbols.variables.contains_key(&ident) {
-                    return Ok(ident);
+                    return Ok(StrOrAstNode::Str(ident));
                 }
 
                 let scope_ref = self.scoping.scope_or_err(current_scope)?;
 
                 if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
-                    return Ok(x);
+                    return Ok(StrOrAstNode::Str(x));
                 }
             }
         }
@@ -392,30 +429,30 @@ impl MiddleEnvironment {
         if options.type_resolution {
             for key in self.typing.trait_defs.keys() {
                 if ParserText::temp_name_suffix_matches(key, &ident) {
-                    return Ok(key.clone());
+                    return Ok(StrOrAstNode::Str(key.clone()));
                 }
             }
 
             for key in self.typing.objects.keys() {
                 if ParserText::temp_name_suffix_matches(key, &ident) {
-                    return Ok(key.clone());
+                    return Ok(StrOrAstNode::Str(key.clone()));
                 }
             }
 
             for key in self.typing.impls.keys() {
                 if ParserText::temp_name_suffix_matches(key, &ident) {
-                    return Ok(key.clone());
+                    return Ok(StrOrAstNode::Str(key.clone()));
                 }
             }
 
             if self.scoping.all_time_generics.contains(&ident) {
-                return Ok(ident);
+                return Ok(StrOrAstNode::Str(ident));
             }
 
             if options.name_resolution {
                 for key in self.symbols.variables.keys() {
                     if ParserText::temp_name_suffix_matches(key, &ident) {
-                        return Ok(key.clone());
+                        return Ok(StrOrAstNode::Str(key.clone()));
                     }
                 }
             }
@@ -424,12 +461,12 @@ impl MiddleEnvironment {
         }
 
         if !options.name_resolution {
-            return Ok(ident);
+            return Ok(StrOrAstNode::Str(ident));
         }
 
         for key in self.symbols.variables.keys() {
             if ParserText::temp_name_suffix_matches(key, &ident) {
-                return Ok(key.clone());
+                return Ok(StrOrAstNode::Str(key.clone()));
             }
         }
 
