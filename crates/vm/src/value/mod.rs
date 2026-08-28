@@ -709,6 +709,7 @@ impl RuntimeValue {
 impl From<VMLiteral> for RuntimeValue {
     fn from(value: VMLiteral) -> Self {
         match value {
+            VMLiteral::Bool(x) => Self::Bool(x),
             VMLiteral::Big(x) => Self::Big(x),
             VMLiteral::Int(x) => Self::Int(x),
             VMLiteral::UInt(x) => Self::UInt(x),

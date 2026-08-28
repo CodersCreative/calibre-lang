@@ -257,6 +257,7 @@ pub struct AggregateLayout {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VMLiteral {
+    Bool(bool),
     Big(BigFloat),
     Int(i64),
     UInt(u64),
@@ -281,6 +282,7 @@ pub enum VMLiteral {
 impl Display for VMLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Bool(x) => write!(f, "{x}"),
             Self::Int(x) => write!(f, "{x}"),
             Self::UInt(x) => write!(f, "{x}u"),
             Self::Byte(x) => write!(f, "{x}b"),
@@ -316,6 +318,7 @@ impl Display for VMLiteral {
 impl VMLiteral {
     pub fn from_lir_literal(value: LirLiteral, cc: &mut Consts) -> Self {
         match value {
+            LirLiteral::Bool(x) => Self::Bool(x),
             LirLiteral::Int(x) => Self::Int(x),
             LirLiteral::UInt(x) => Self::UInt(x),
             LirLiteral::Byte(x) => Self::Byte(x),

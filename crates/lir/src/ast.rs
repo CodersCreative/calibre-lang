@@ -33,6 +33,7 @@ impl Display for LirNode {
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum LirLiteral {
+    Bool(bool),
     Int(i64),
     UInt(u64),
     Byte(u8),
@@ -46,6 +47,7 @@ pub enum LirLiteral {
 impl Display for LirLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Bool(x) => write!(f, "{x}"),
             Self::Int(x) => write!(f, "{x}"),
             Self::UInt(x) => write!(f, "{x}u"),
             Self::Byte(x) => write!(f, "{x}b"),
@@ -273,11 +275,7 @@ impl LirNodeType {
 
     #[inline]
     pub fn bool(value: bool) -> Self {
-        LirNodeType::Load(LirLoad {
-            value: if value { "true" } else { "false" }
-                .to_string()
-                .into_boxed_str(),
-        })
+        LirNodeType::Literal(LirLiteral::Bool(value))
     }
 
     #[inline]

@@ -1809,11 +1809,6 @@ impl MiddleEnvironment {
                 target,
                 variables,
             } => {
-                let resolved = self
-                    .resolve_data_type(scope, &target, ResolutionOptions::typing())?
-                    .unwrap_all_refs();
-                let self_name = resolved.impl_name();
-
                 let mut prev_generics = Vec::new();
                 if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
                     for generic in generics.0.iter() {
@@ -1839,6 +1834,11 @@ impl MiddleEnvironment {
                 if !generic_params.is_empty() {
                     self.scoping.push_generic_params(generic_params.clone());
                 }
+
+                let resolved = self
+                    .resolve_data_type(scope, &target, ResolutionOptions::typing())?
+                    .unwrap_all_refs();
+                let self_name = resolved.impl_name();
 
                 let impl_key = self
                     .typing

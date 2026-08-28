@@ -201,11 +201,13 @@ impl LirNodeType {
             LirNodeType::Load(LirLoad { value })
             | LirNodeType::Move(LirMove { value })
             | LirNodeType::RefLoad(LirRefLoad { value }) => {
-                if registry.functions.contains_key(value.as_ref()) {
-                    if reachable_functions.insert(value.as_ref().to_string()) {
-                        worklist.push(value.as_ref().to_string());
-                    }
-                } else if registry.globals.contains_key(value.as_ref()) {
+                if registry.functions.contains_key(value.as_ref())
+                    && reachable_functions.insert(value.as_ref().to_string())
+                {
+                    worklist.push(value.as_ref().to_string());
+                }
+
+                if registry.globals.contains_key(value.as_ref()) {
                     reachable_globals.insert(value.as_ref().to_string());
                 }
             }
