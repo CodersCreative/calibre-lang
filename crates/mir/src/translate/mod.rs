@@ -241,125 +241,71 @@ impl MiddleEnvironment {
                         label,
                         else_body,
                     } => {
-                        let wg_name = ParserText::temp_name_with_suffix("spawn_wg", node.span);
-                        let wg_ident: PotentialDollarIdentifier = wg_name.clone().into();
+                        let ident: PotentialDollarIdentifier =
+                            ParserText::temp_name_with_suffix("spawn_wg", node.span)
+                                .clone()
+                                .into();
 
-                        let start_name =
-                            ParserText::temp_name_with_suffix("spawn_start", node.span);
-                        let start_ident: PotentialDollarIdentifier = start_name.clone().into();
+                        let decl = AstNode::new(
+                            node.span,
+                            AstNodeType::VariableDeclaration {
+                                var_type: VarType::Mutable,
+                                identifier: ident.clone(),
+                                data_type: ParserDataType::auto(node.span),
+                                value: Box::new(AstNode::call(
+                                    node.span,
+                                    AstNode::member(
+                                        node.span,
+                                        AstNode::identifier(node.span, "WaitGroup"),
+                                        "new",
+                                    ),
+                                    Vec::new(),
+                                )),
+                            },
+                        );
 
-                        let wg_ident_node = AstNode::identifier(node.span, wg_ident.clone());
-                        let start_ident_node = AstNode::identifier(node.span, start_ident.clone());
-
-                        let wg_new = AstNode::call(
+                        let join_call = AstNode::call(
                             node.span,
                             AstNode::member(
                                 node.span,
-                                AstNode::identifier(node.span, "WaitGroup"),
-                                "new",
+                                AstNode::identifier(node.span, ident.clone()),
+                                "join",
                             ),
-                            Vec::new(),
-                        );
-
-                        let wg_decl = AstNode::new(
-                            node.span,
-                            AstNodeType::VariableDeclaration {
-                                var_type: VarType::Mutable,
-                                identifier: wg_ident.clone(),
-                                data_type: ParserDataType::auto(node.span),
-                                value: Box::new(wg_new.clone()),
-                            },
-                        );
-                        let start_decl = AstNode::new(
-                            node.span,
-                            AstNodeType::VariableDeclaration {
-                                var_type: VarType::Mutable,
-                                identifier: start_ident.clone(),
-                                data_type: ParserDataType::auto(node.span),
-                                value: Box::new(wg_new),
-                            },
-                        );
-                        let start_add = AstNode::call(
-                            node.span,
-                            AstNode::member(node.span, start_ident_node.clone(), "raw_add"),
-                            vec![CallArg::Value(AstNode::int(node.span, 1))],
-                        );
-                        let start_done = AstNode::call(
-                            node.span,
-                            AstNode::member(node.span, start_ident_node.clone(), "raw_done"),
-                            Vec::new(),
-                        );
-
-                        let spawn_inner = match &*loop_type {
-                            LoopType::For(name, _range) => {
-                                let loop_ident_node = AstNode::identifier(node.span, name);
-
-                                let body_node = (*body).clone();
-                                let mut body_nodes = Vec::new();
-                                body_nodes.push(AstNode::call(
-                                    node.span,
-                                    AstNode::member(node.span, start_ident_node.clone(), "wait"),
-                                    Vec::new(),
-                                ));
-                                body_nodes.push(AstNode::new(
-                                    node.span,
-                                    AstNodeType::VariableDeclaration {
-                                        var_type: VarType::Mutable,
-                                        identifier: name.clone(),
-                                        data_type: ParserDataType::auto(node.span),
-                                        value: Box::new(loop_ident_node),
-                                    },
-                                ));
-                                body_nodes.extend(body_node.nodes());
-
-                                let scope_body = AstNode::new_temp_scope(body_nodes);
-                                AstNode::new(
-                                    node.span,
-                                    AstNodeType::Spawn {
-                                        items: vec![scope_body],
-                                        auto_wait: false,
-                                    },
-                                )
-                            }
-                            _ => AstNode::new(
+                            vec![CallArg::Value(AstNode::new(
                                 node.span,
                                 AstNodeType::Spawn {
                                     items: vec![*body],
                                     auto_wait: false,
                                 },
-                            ),
-                        };
-
-                        let join_call = AstNode::call(
-                            node.span,
-                            AstNode::member(node.span, wg_ident_node.clone(), "join"),
-                            vec![CallArg::Value(spawn_inner)],
+                            ))],
                         );
-
-                        let loop_body =
-                            AstNode::new_temp_scope_with_create(vec![join_call], Some(false));
 
                         let loop_node = AstNode::new(
                             node.span,
                             AstNodeType::LoopDeclaration {
                                 loop_type,
-                                body: Box::new(loop_body),
+                                body: Box::new(AstNode::new_temp_scope_with_create(
+                                    vec![join_call],
+                                    Some(false),
+                                )),
                                 until,
                                 label,
                                 else_body,
                             },
                         );
-
-                        let scope_node = AstNode::new_temp_scope(vec![
-                            wg_decl,
-                            start_decl,
-                            start_add,
-                            loop_node,
-                            start_done,
-                            wg_ident_node,
-                        ]);
-
-                        return self.evaluate_inner(scope, scope_node);
+                        return self.evaluate_inner(
+                            scope,
+                            AstNode::new_temp_scope(vec![
+                                decl,
+                                loop_node,
+                                AstNode::new(
+                                    node.span,
+                                    AstNodeType::Emit(EmitType::Scope(Box::new(
+                                        AstNode::identifier(node.span, ident),
+                                    ))),
+                                ),
+                            ]),
+                        );
                     }
                     AstNodeType::FunctionDeclaration { .. } => value,
                     _ => unimplemented!(),
@@ -374,14 +320,14 @@ impl MiddleEnvironment {
             }
             AstNodeType::Spawn { items, .. } => {
                 let span = node.span;
-                let wg_ident: PotentialDollarIdentifier =
+                let ident: PotentialDollarIdentifier =
                     ParserText::temp_name_with_suffix("spawn_wg", span).into();
 
-                let mut body_nodes = vec![AstNode::new(
+                let mut body = vec![AstNode::new(
                     span,
                     AstNodeType::VariableDeclaration {
                         var_type: VarType::Mutable,
-                        identifier: wg_ident.clone(),
+                        identifier: ident.clone(),
                         data_type: ParserDataType::object(span, "WaitGroup"),
                         value: Box::new(AstNode::call(
                             span,
@@ -411,21 +357,26 @@ impl MiddleEnvironment {
                                 span,
                                 AstNodeType::RefStatement {
                                     mutability: RefMutability::MutRef,
-                                    value: Box::new(AstNode::identifier(span, &wg_ident)),
+                                    value: Box::new(AstNode::identifier(span, &ident)),
                                 },
                             )),
                             CallArg::Value(item),
                         ],
                     );
-                    body_nodes.push(join_call);
+                    body.push(join_call);
                 }
+
+                body.push(AstNode::new(
+                    span,
+                    AstNodeType::Emit(EmitType::Scope(Box::new(AstNode::identifier(span, ident)))),
+                ));
 
                 self.evaluate_inner(
                     scope,
                     AstNode::new(
                         span,
                         AstNodeType::ScopeDeclaration {
-                            body: Some(body_nodes),
+                            body: Some(body),
                             named: None,
                             is_temp: true,
                             create_new_scope: Some(false),
