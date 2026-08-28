@@ -95,7 +95,7 @@ impl MiddleEnvironment {
                 span,
                 AstNodeType::VariableDeclaration {
                     var_type: VarType::Constant,
-                    identifier: PotentialDollarIdentifier::new(span, field),
+                    identifier: PotentialDollarIdentifier::new(span, format!("set_{field}")),
                     data_type: ParserDataType::auto(span),
                     value: Box::new(AstNode::new(
                         span,

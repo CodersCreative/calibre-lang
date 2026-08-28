@@ -18,10 +18,10 @@ const main := fn => {
 	print(defaults.build());
 	
 	// It should now work because we provided host
-	let defaults := defaults.host(Host.default());
+	let defaults := defaults.set_host(Host.default());
 	print(defaults.build());
 	
 	let custom_builder := ServerBuilder.default();
-	let custom_builder := custom_builder.host(Host { name : "example.com" }).port(443).secure(true);
+	let custom_builder := custom_builder.set_host(Host { name : "example.com" }).set_port(443).set_secure(true);
 	print(custom_builder.build());
 };
