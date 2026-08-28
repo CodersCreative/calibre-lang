@@ -1,5 +1,3 @@
-use std::{println, vec};
-
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirConditional, MirExtern, MirFunction,

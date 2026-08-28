@@ -1,7 +1,7 @@
 use crate::cli::Verbosity;
 use crate::commands::repl::{Repl, ReplBuilder};
 use crate::commands::utils::{
-    is_repl_file, package_metadata_from_project, resolve_run_target, vm_config_from_project,
+    is_repl_file, package_metadata_from_project, resolve_run_targets, vm_config_from_project,
 };
 use crate::config::load_project_from;
 use calibre::{CalibreEngine, CalibreError, standalone::CalibreStandalone};
@@ -9,18 +9,16 @@ use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::{VM, config::VMConfig};
 use derive_builder::Builder;
 use smol::fs;
-use std::{
-    error::Error,
-    path::{Path, PathBuf},
-};
+use std::{error::Error, path::PathBuf};
 use tracing::instrument;
 
 #[derive(Builder, Debug)]
 pub struct Run {
-    path: Option<String>,
+    paths: Vec<String>,
     example: Option<String>,
     verbosity: Option<Verbosity>,
     no_std: Option<bool>,
+    parallel: bool,
     program_args: Vec<String>,
     cache_enabled: bool,
 }
@@ -28,7 +26,14 @@ pub struct Run {
 impl Run {
     #[instrument]
     pub async fn execute(mut self) -> Result<(), Box<dyn Error>> {
-        if let Some(path) = resolve_run_target(self.path, self.example)? {
+        let targets = resolve_run_targets(self.paths, self.example)?;
+        if targets.is_empty() {
+            return Repl::default().execute().await;
+        }
+
+        let mut handles = Vec::new();
+
+        for (index, path) in targets.into_iter().enumerate() {
             let contents = fs::read_to_string(&path).await?;
             if is_repl_file(&contents) {
                 return ReplBuilder::default()
@@ -38,11 +43,14 @@ impl Run {
                     .await;
             }
 
+            let mut run = RunSourceBuilder::default();
             let project = load_project_from(&path).map_err(|e| format!("config error: {e}"))?;
-            let vm_config = vm_config_from_project(project.as_ref());
-            let package_metadata = package_metadata_from_project(project.as_ref());
-
-            let cache_base_dir = project.as_ref().map(|p| p.root.clone());
+            run.path(path);
+            run.contents(contents);
+            run.entry_name(None);
+            run.vm_config(vm_config_from_project(project.as_ref()));
+            run.package_metadata(package_metadata_from_project(project.as_ref()));
+            run.cache_base_dir(project.as_ref().map(|p| p.root.clone()));
 
             if let Some(project) = project
                 && self.no_std.is_none()
@@ -50,29 +58,40 @@ impl Run {
                 self.no_std = Some(project.config.no_std);
             }
 
-            RunSource {
-                contents,
-                path: &path,
-                cache: self.cache_enabled,
-                verbosity: self.verbosity.unwrap_or_default(),
-                program_args: self.program_args,
-                entry_name: None,
-                vm_config,
-                package_metadata,
-                cache_base_dir,
-                no_std: self.no_std,
+            run.no_std(self.no_std);
+            run.cache(self.cache_enabled);
+            run.verbosity(self.verbosity.clone().unwrap_or_default());
+            run.program_args(self.program_args.clone());
+            let run = run.build()?;
+
+            if self.parallel {
+                handles.push(
+                    std::thread::Builder::new()
+                        .name(format!("calibre-{}", index))
+                        .stack_size(64 * 1024 * 1024)
+                        .spawn(move || {
+                            smol::block_on(
+                                async move { run.execute().await.map_err(|x| x.to_string()) },
+                            )
+                        })?,
+                );
+            } else {
+                run.execute().await?
             }
-            .execute()
-            .await
-        } else {
-            Repl::default().execute().await
         }
+
+        for handle in handles {
+            let _ = handle.join();
+        }
+
+        Ok(())
     }
 }
 
-struct RunSource<'a> {
+#[derive(Debug, Builder)]
+struct RunSource {
     contents: String,
-    path: &'a Path,
+    path: PathBuf,
     cache: bool,
     verbosity: Verbosity,
     program_args: Vec<String>,
@@ -83,7 +102,7 @@ struct RunSource<'a> {
     no_std: Option<bool>,
 }
 
-impl<'a> RunSource<'a> {
+impl RunSource {
     async fn execute(self) -> Result<(), Box<dyn Error>> {
         let start = std::time::Instant::now();
         let mut engine = CalibreEngine::default()
@@ -116,7 +135,7 @@ impl<'a> RunSource<'a> {
         } {
             Ok(artifacts) => artifacts,
             Err(CalibreError::Parse { errors, .. }) => {
-                calibre_diagnostics::emit_calibre_errors(self.path, &self.contents, &errors);
+                calibre_diagnostics::emit_calibre_errors(&self.path, &self.contents, &errors);
                 return Err("parse failed".into());
             }
             Err(CalibreError::Middle {
@@ -130,12 +149,12 @@ impl<'a> RunSource<'a> {
                     println!("{}", ast);
                 }
 
-                calibre_diagnostics::emit_mir_error(self.path, &self.contents, &error);
+                calibre_diagnostics::emit_mir_error(&self.path, &self.contents, &error);
                 return Err("compile failed".into());
             }
             Err(CalibreError::MissingEntryPoint(name)) => {
                 calibre_diagnostics::emit_error(
-                    self.path,
+                    &self.path,
                     &self.contents,
                     format!("Missing entry point: {name}"),
                     None,
@@ -175,7 +194,7 @@ impl<'a> RunSource<'a> {
 
         let entry_name = std::mem::take(&mut artifacts.entry_name);
         let mut vm: VM = VM::new(artifacts.registry, artifacts.mappings, self.vm_config);
-        vm.set_source_file_override(self.path);
+        vm.set_source_file_override(&self.path);
         vm.set_program_args(self.program_args);
 
         if self.verbosity.is_level(&Verbosity::Byte) {
@@ -187,7 +206,7 @@ impl<'a> RunSource<'a> {
         for (_, func_name) in artifacts.init_functions {
             if let Some(init_func) = vm.registry.functions.get(&func_name).cloned() {
                 if let Err(err) = vm.run(init_func.as_ref(), Vec::new()) {
-                    calibre_diagnostics::emit_calibre_error(self.path, &self.contents, &err, None);
+                    calibre_diagnostics::emit_calibre_error(&self.path, &self.contents, &err, None);
                     return Err("runtime error".into());
                 }
                 ran = true;
@@ -196,7 +215,7 @@ impl<'a> RunSource<'a> {
 
         if !ran {
             calibre_diagnostics::emit_error(
-                self.path,
+                &self.path,
                 &self.contents,
                 format!("Missing @init fn or {} fn", entry_name),
                 None,
@@ -208,7 +227,7 @@ impl<'a> RunSource<'a> {
             if let Some(fin_func) = vm.registry.functions.get(&func_name).cloned()
                 && let Err(err) = vm.run(fin_func.as_ref(), Vec::new())
             {
-                calibre_diagnostics::emit_calibre_error(self.path, &self.contents, &err, None);
+                calibre_diagnostics::emit_calibre_error(&self.path, &self.contents, &err, None);
                 return Err("runtime error".into());
             }
         }

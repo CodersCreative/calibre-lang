@@ -39,13 +39,15 @@ pub enum Commands {
         no_std: bool,
     },
     Run {
-        path: Option<String>,
+        paths: Vec<String>,
         #[arg(short, long)]
         example: Option<String>,
         #[arg(long)]
         verbosity: Option<Verbosity>,
         #[arg(long, default_value_t = false)]
         no_cache: bool,
+        #[arg(long, default_value_t = true)]
+        parallel: bool,
         #[arg(long)]
         no_std: Option<bool>,
         #[arg(last = true)]

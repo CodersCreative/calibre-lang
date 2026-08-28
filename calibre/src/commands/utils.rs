@@ -78,20 +78,12 @@ pub fn vm_config_from_project(project: Option<&ProjectContext>) -> VMConfig {
         .unwrap_or_default()
 }
 
-pub fn resolve_run_target(
-    path: Option<String>,
+pub fn resolve_run_targets(
+    paths: Vec<String>,
     example: Option<String>,
-) -> Result<Option<PathBuf>, Box<dyn Error>> {
-    if path.is_some() && example.is_some() {
+) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+    if !paths.is_empty() && example.is_some() {
         return Err("cannot use both a path and --example".into());
-    }
-
-    if let Some(path) = path {
-        if path.ends_with(".cal") {
-            return Ok(Some(PathBuf::from(path)));
-        } else {
-            return Ok(Some(std::fs::canonicalize(path)?));
-        }
     }
 
     let cwd = std::env::current_dir()?;
@@ -102,12 +94,14 @@ pub fn resolve_run_target(
             return Err("`--example` requires a calibre.toml project".into());
         };
         if let Some(path) = resolve_example_by_name(&project, &example) {
-            return Ok(Some(path));
+            return Ok(vec![path]);
         }
         return Err(format!("example `{example}` not found").into());
     }
 
-    if let Some(project) = project {
+    if paths.is_empty()
+        && let Some(project) = project
+    {
         let cwd = project.root.join(project.config.package.src);
         let path1 = cwd.join("main.cal");
         let path2 = cwd.join("src/main.cal");
@@ -117,14 +111,23 @@ pub fn resolve_run_target(
             path1.exists() && path1.is_file(),
             path2.exists() && path2.is_file(),
         ) {
-            (true, _, _) => Ok(Some(cwd)),
-            (_, true, _) => Ok(Some(path1)),
-            (_, _, true) => Ok(Some(path2)),
-            _ => Ok(None),
+            (true, _, _) => return Ok(vec![cwd]),
+            (_, true, _) => return Ok(vec![path1]),
+            (_, _, true) => return Ok(vec![path2]),
+            _ => {}
         }
-    } else {
-        Ok(None)
-    }
+    };
+
+    paths
+        .into_iter()
+        .map(|path| {
+            if path.ends_with(".cal") {
+                return Ok(PathBuf::from(path));
+            } else {
+                return Ok(std::fs::canonicalize(path)?);
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()
 }
 
 pub fn package_metadata_from_project(project: Option<&ProjectContext>) -> Option<PackageMetadata> {

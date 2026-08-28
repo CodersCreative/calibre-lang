@@ -607,7 +607,7 @@ impl CalibreLanguageServer {
             }
         }
 
-        if let Some(imp) = env.typing.find_impl_for_type(&base_ty) {
+        if let Some(imp) = env.typing.find_impl_for_type(&base_ty.impl_name()) {
             for (member_name, canonical_member) in imp.get_all_members() {
                 if !prefix.is_empty() && !member_name.starts_with(prefix) {
                     continue;

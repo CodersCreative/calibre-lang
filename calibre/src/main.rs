@@ -68,20 +68,22 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .await
             }
             Some(Commands::Run {
-                path,
+                paths,
                 example,
                 verbosity,
                 no_std,
                 program_args,
                 no_cache,
+                parallel,
             }) => {
                 RunBuilder::default()
-                    .path(path)
+                    .paths(paths)
                     .example(example)
                     .verbosity(verbosity)
                     .no_std(no_std)
                     .program_args(program_args)
                     .cache_enabled(!no_cache)
+                    .parallel(parallel)
                     .build()?
                     .execute()
                     .await

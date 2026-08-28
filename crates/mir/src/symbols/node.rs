@@ -1,5 +1,3 @@
-use std::println;
-
 use crate::{
     environment::MiddleEnvironment,
     scoping::ScopeId,

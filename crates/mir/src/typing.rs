@@ -11,7 +11,7 @@ use calibre_parser::{
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::{fmt::Display, println};
+use std::fmt::Display;
 use tracing::{debug, instrument, trace};
 
 #[derive(Debug, Clone, Default)]

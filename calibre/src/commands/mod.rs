@@ -7,7 +7,7 @@ pub mod test;
 pub mod utils;
 
 use crate::commands::utils::{
-    collect_cal_sources, collect_project_sources, resolve_run_target, vm_config_from_project,
+    collect_cal_sources, collect_project_sources, resolve_run_targets, vm_config_from_project,
 };
 use crate::config::load_project_from;
 use calibre::{CalibreEngine, CalibreError, CompileMode, standalone::CalibreStandalone};
@@ -40,14 +40,19 @@ impl<'a> RunSuite<'a> {
         if self.recursive {
             if self.path.is_none() && self.example.is_none() {
                 collect_project_sources(project.as_ref(), &cwd, &mut files);
-            } else if let Some(target) = resolve_run_target(self.path, self.example)? {
+            } else if let Some(target) =
+                resolve_run_targets(self.path.map(|x| vec![x]).unwrap_or_default(), self.example)?
+                    .pop()
+            {
                 if target.is_dir() {
                     collect_cal_sources(&target, &mut files);
                 } else if target.is_file() {
                     files.push(target);
                 }
             }
-        } else if let Some(target) = resolve_run_target(self.path, self.example)? {
+        } else if let Some(target) =
+            resolve_run_targets(self.path.map(|x| vec![x]).unwrap_or_default(), self.example)?.pop()
+        {
             files.push(target);
         }
 

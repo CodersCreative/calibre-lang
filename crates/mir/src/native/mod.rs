@@ -9,7 +9,7 @@ use calibre_parser::{
 };
 use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
 use rustc_hash::FxHashMap;
-use std::{eprintln, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 impl Scoping {
     pub fn new_root_scope_no_std(
