@@ -183,9 +183,7 @@ impl MiddleEnvironment {
         } = &mut node.node_type
         {
             debug!("predeclaring nodes");
-            let _ = env.predeclare_nodes(scope, body).map_err(|err| {
-                env.context.push_error(err);
-            });
+            env.predeclare_nodes(scope, body);
         }
 
         debug!("translating AST to MIR");

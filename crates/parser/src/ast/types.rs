@@ -447,6 +447,7 @@ impl ParserInnerType {
             || self.is_dyn()
             || self.is_dyn_trait()
             || other == self
+            || self.impl_name() == other.impl_name()
     }
 
     #[inline]

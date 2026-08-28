@@ -1674,27 +1674,33 @@ impl MiddleEnvironment {
 
                 let mut statements = Vec::new();
 
-                for var in variables {
-                    let (dec, iden, dependant) = match var.node_type {
+                fn process_var(
+                    env: &mut MiddleEnvironment,
+                    scope: ScopeId,
+                    resolved: &ParserDataType,
+                    generic_params: &[String],
+                    var: AstNode,
+                ) -> Result<Option<(AstNode, String, bool)>, MiddleErr> {
+                    match var.node_type {
                         AstNodeType::VariableDeclaration {
                             var_type,
                             identifier,
                             value,
                             data_type,
                         } => {
-                            let identifier = self.resolve(
+                            let identifier = env.resolve(
                                 scope,
                                 &identifier,
                                 ResolutionOptions::default().with_dollar(),
                             )?;
-                            let resolved_iden = format!("{}.{}", impl_key, identifier);
+                            let resolved_iden = format!("{}.{}", resolved.impl_name(), identifier);
 
                             let dependant = match &value.node_type {
                                 AstNodeType::FunctionDeclaration { header, .. } => {
                                     let param_type = if let Some(Some(param)) =
                                         header.parameters.first().map(|x| &x.1)
                                     {
-                                        self.resolve_data_type(
+                                        env.resolve_data_type(
                                             scope,
                                             param,
                                             ResolutionOptions::typing(),
@@ -1704,7 +1710,7 @@ impl MiddleEnvironment {
                                     } else if let Some(Some(node)) =
                                         header.parameters.first().map(|x| x.2.clone())
                                     {
-                                        self.resolve_type_from_node(scope, &node)
+                                        env.resolve_type_from_node(scope, &node)
                                             .map(|x| x.unwrap_all_refs())
                                     } else {
                                         None
@@ -1721,7 +1727,7 @@ impl MiddleEnvironment {
                                 _ => false,
                             };
 
-                            (
+                            Ok(Some((
                                 AstNode {
                                     span: var.span,
                                     node_type: AstNodeType::VariableDeclaration {
@@ -1735,11 +1741,28 @@ impl MiddleEnvironment {
                                 },
                                 identifier,
                                 dependant,
-                            )
+                            )))
                         }
-                        AstNodeType::TypeDeclaration { .. } => {
-                            continue;
-                        }
+                        AstNodeType::Tag {
+                            node,
+                            tag,
+                            arguments,
+                        } => match process_var(env, scope, resolved, generic_params, *node) {
+                            Ok(Some(x)) => Ok(Some((
+                                AstNode::new(
+                                    Span::default(),
+                                    AstNodeType::Tag {
+                                        node: Box::new(x.0),
+                                        tag,
+                                        arguments,
+                                    },
+                                ),
+                                x.1,
+                                x.2,
+                            ))),
+                            x => x,
+                        },
+                        AstNodeType::TypeDeclaration { .. } => Ok(None),
                         _ => {
                             return Err(MiddleErr::At(
                                 var.span,
@@ -1748,7 +1771,15 @@ impl MiddleEnvironment {
                                 )),
                             ));
                         }
-                    };
+                    }
+                }
+
+                for var in variables {
+                    let (dec, iden, dependant) =
+                        match process_var(self, scope, &resolved, &generic_params, var)? {
+                            Some(x) => x,
+                            None => continue,
+                        };
 
                     let dec = self.evaluate(scope, dec);
 
@@ -1758,7 +1789,7 @@ impl MiddleEnvironment {
                         }
                         _ => {
                             return Err(MiddleErr::At(
-                                var.span,
+                                dec.span,
                                 Box::new(MiddleErr::Internal(
                                     "impl body did not lower to variable declaration".to_string(),
                                 )),
@@ -1771,7 +1802,7 @@ impl MiddleEnvironment {
                         .get_mut(&impl_key)
                         .ok_or_else(|| {
                             MiddleErr::At(
-                                var.span,
+                                dec.span,
                                 Box::new(MiddleErr::Internal(format!("missing impl {impl_key:?}"))),
                             )
                         })?
@@ -2398,6 +2429,7 @@ impl MiddleEnvironment {
 
                 let (new_scope, build_node) = if let Some(alias) = alias {
                     if ["super", "root"].contains(&alias.as_str()) {
+                        // TODO return err
                         return Ok(MiddleNode {
                             node_type: MiddleNodeType::EmptyLine,
                             span: node.span,

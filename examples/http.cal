@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Async
 import * from std::net;
 import * from std::thread;
 import * from std::console;
@@ -25,6 +24,4 @@ const main := fn => {
 	let real := Http.client("api.namefake.com", 443);
 	let resp : HttpResponse = real.get("/");
 	print("namefake real => " & resp.body);
-	
-	wait(10);
 };

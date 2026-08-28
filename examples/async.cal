@@ -7,7 +7,8 @@ const worker := fn (id : int, jobs : &Channel:<int>, results : &mut Channel:<int
 	let mut handled := 0;
 	
 	for !jobs.closed() => {
-		if let .Some : job <- jobs.get() => {
+		let value : int? = jobs.get();
+		if let .Some : job <- value => {
 			let score := job * (id + 1);
 			print("worker " & id & " got " & job & " => " & score);
 			emit results score;
@@ -87,7 +88,8 @@ const main := fn => {
 	
 	let width : int = 32;
 	
-	let concurrent := [=> {
+	// TODO Fix Spawn Iters 
+	/*let concurrent := [=> {
 		if i % 2 = 0 => {
 			Duration.from_ms((width + 1 - i) * 2).sleep();
 		};
@@ -95,5 +97,5 @@ const main := fn => {
 		emit i;
 	} spawn for i in 0..=width];
 	
-	print("concurrent list => " & concurrent);
+	print("concurrent list => " & concurrent);*/
 };

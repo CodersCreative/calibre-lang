@@ -9,16 +9,10 @@ use calibre_parser::ast::{
 };
 
 impl MiddleEnvironment {
-    pub fn predeclare_nodes(
-        &mut self,
-        scope: ScopeId,
-        nodes: &mut [AstNode],
-    ) -> Result<(), MiddleErr> {
+    pub fn predeclare_nodes(&mut self, scope: ScopeId, nodes: &mut [AstNode]) {
         for node in nodes {
-            self.predeclare_node(scope, node)?;
+            let _ = self.predeclare_node(scope, node);
         }
-
-        Ok(())
     }
 
     fn predeclare_node(&mut self, scope: ScopeId, node: &mut AstNode) -> Result<(), MiddleErr> {
@@ -57,7 +51,7 @@ impl MiddleEnvironment {
                     &ident.text,
                     new_name.text.clone(),
                     data_type.clone(),
-                    VarType::Mutable,
+                    VarType::Constant,
                 )?;
 
                 *ident = new_name;

@@ -8,7 +8,7 @@ use calibre_parser::{
     Parser,
     ast::nodes::{AstNode, AstNodeType},
 };
-use std::fs;
+use std::{fs, print};
 use tracing::{debug, instrument};
 
 impl MiddleEnvironment {
@@ -136,7 +136,7 @@ impl MiddleEnvironment {
                     body: Some(body), ..
                 } = &mut program.node_type
                 {
-                    self.predeclare_nodes(scope, body)?;
+                    self.predeclare_nodes(scope, body);
                 }
 
                 debug!("evaluating build scope");
@@ -179,7 +179,7 @@ impl MiddleEnvironment {
             body: Some(body), ..
         } = &mut program.node_type
         {
-            self.predeclare_nodes(scope, body)?;
+            self.predeclare_nodes(scope, body);
         }
 
         debug!("evaluating imported scope");

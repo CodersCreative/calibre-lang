@@ -5,7 +5,11 @@ use crate::{
 };
 use calibre_parser::{
     Parser,
-    ast::{idents::ParserText, nodes::VarType, types::ParserDataType},
+    ast::{
+        idents::ParserText,
+        nodes::{AstNodeType, VarType},
+        types::ParserDataType,
+    },
 };
 use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
 use rustc_hash::FxHashMap;
@@ -134,7 +138,7 @@ impl MiddleEnvironment {
             && let Ok(stdlib) = fs::read_to_string(&scope_ref.path)
         {
             let scope_path = scope_ref.path.clone();
-            let program = parser.produce_ast(&stdlib);
+            let mut program = parser.produce_ast(&stdlib);
 
             if !parser.errors.is_empty() {
                 let errors = std::mem::take(&mut parser.errors);
@@ -143,6 +147,13 @@ impl MiddleEnvironment {
                     contents: stdlib.clone(),
                     errors,
                 });
+            }
+
+            if let AstNodeType::ScopeDeclaration {
+                body: Some(body), ..
+            } = &mut program.node_type
+            {
+                self.predeclare_nodes(scope, body);
             }
 
             let error_count_before = self.context.errors.len();
@@ -229,7 +240,8 @@ impl MiddleEnvironment {
             if let Ok(stdlib) = fs::read_to_string(&scope_path) {
                 let scope_path_clone = scope_path.clone();
                 parser.set_source_path(Some(scope_path.clone()));
-                let program = parser.produce_ast(&stdlib);
+                let mut program = parser.produce_ast(&stdlib);
+
                 if !parser.errors.is_empty() {
                     self.context.errors.push(MiddleErr::ParserErrors {
                         path: scope_path.clone(),
@@ -237,6 +249,13 @@ impl MiddleEnvironment {
                         errors: std::mem::take(&mut parser.errors),
                     });
                     return;
+                }
+
+                if let AstNodeType::ScopeDeclaration {
+                    body: Some(body), ..
+                } = &mut program.node_type
+                {
+                    self.predeclare_nodes(scope, body);
                 }
 
                 let error_count_before = self.context.errors.len();

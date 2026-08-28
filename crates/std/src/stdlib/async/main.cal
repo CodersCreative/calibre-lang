@@ -72,7 +72,7 @@ impl<T> Mutex:<T> {
 impl<T> LazyLock:<T> {
 	const new := fn (init_fn : fn () -> T) -> LazyLock:<T> => return LazyLock:<T> { inner : Mutex:<T>.new(), init_fn };
 
-	const get := fn (self : &Self) -> &mut T? => return self.inner.get();
+	@ignore_invalid_return const get := fn (self : &Self) -> &mut T? => return self.inner.get();
 
 	@ignore_invalid_return const get_or_init := fn (self : &Self) -> &mut T => {
 		let value : &mut T? = self.inner.get();
