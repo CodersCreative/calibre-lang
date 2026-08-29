@@ -22,7 +22,7 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-default = ["cli", "wasm"]
+default = ["cli"]
 cli = ["clap", "tracing-flame", "tracing-appender"]
 wasm = ["wasm-bindgen", "getrandom/js"]
 

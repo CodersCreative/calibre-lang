@@ -197,6 +197,7 @@ pub fn resolve_examples(ctx: &ProjectContext) -> Vec<ResolvedExample> {
     if let Some(ex_cfg) = &ctx.config.examples {
         for member in &ex_cfg.members {
             let has_glob = member.contains('*') || member.contains('?') || member.contains('[');
+            #[cfg(feature = "cli")]
             if has_glob {
                 let pattern = ctx.root.join(member).to_string_lossy().to_string();
                 if let Ok(paths) = glob::glob(&pattern) {

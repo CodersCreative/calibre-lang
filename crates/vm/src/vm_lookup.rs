@@ -30,7 +30,7 @@ impl VM {
             other => other,
         };
 
-        let mut out = Vec::new();
+        let mut out: Vec<String> = Vec::new();
 
         #[cfg(target_os = "android")]
         {

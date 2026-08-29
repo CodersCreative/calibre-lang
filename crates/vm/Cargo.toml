@@ -16,7 +16,6 @@ tracing = { workspace = true }
 calibre-lir = { workspace = true }
 calibre-parser = { workspace = true }
 fastrand = { workspace = true }
-rustyline = { workspace = true }
 thiserror = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
@@ -36,4 +35,4 @@ errno = { version = "0.3.14", optional = true }
 astro-float = "=0.9.6"
 
 [features]
-native = ["errno", "libffi", "libloading"]
+native = ["errno", "libffi", "libloading", "ureq", "socket2"]

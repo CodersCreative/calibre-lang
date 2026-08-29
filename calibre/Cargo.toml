@@ -22,8 +22,8 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-default = ["cli", "wasm"]
-cli = ["clap", "rustyline", "glob", "smol", "tracing-flame", "tracing-appender", "calibre-vm/native", "calibre-parser/native"]
+default = ["cli"]
+cli = ["clap", "rustyline", "glob", "smol", "tracing-flame", "tracing-appender", "tracing-subscriber", "calibre-vm/native", "calibre-parser/native"]
 wasm = ["wasm-bindgen", "js-sys", "getrandom/js", "calibre-parser/wasm", "calibre-mir/wasm"]
 
 [dependencies]
@@ -40,7 +40,7 @@ thiserror = {workspace = true }
 rustc-hash = { workspace = true }
 tracing = { workspace = true }
 wasm_lite_std = { workspace = true}
-tracing-subscriber = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true }
 tracing-flame = { workspace = true, optional = true }
 tracing-appender = { workspace = true, optional = true }
 smol = { workspace = true, optional = true }

@@ -5,11 +5,15 @@ use calibre_mir::{environment::MiddleEnvironment, errors::MiddleErr, testing::Te
 use calibre_parser::Parser;
 use calibre_std::{get_globals_path, get_stdlib_path};
 use calibre_vm::{VM, conversion::VMRegistry};
-use glob::glob;
+
 use serde::{Deserialize, Serialize};
-use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use tracing::{debug, instrument};
+
+#[cfg(feature = "cli")]
+use std::fs::{self, File};
+#[cfg(feature = "cli")]
+use glob::glob;
 
 const CACHE_FORMAT_VERSION: &str = "v6";
 
@@ -60,16 +64,34 @@ pub trait CalibreStandalone {
 }
 
 impl CalibreStandalone for CalibreEngine {
+    #[cfg(feature = "cli")]
     fn compile_file(self, path: impl AsRef<Path>) -> Result<CalibreArtifacts, CalibreError> {
         let path = path.as_ref();
         self.with_source_path(path.to_path_buf())
             .compile_source(fs::read_to_string(path)?, false)
     }
 
+    #[cfg(feature = "cli")]
     fn run_file(self, path: impl AsRef<Path>) -> Result<RunResult, CalibreError> {
         let path = path.as_ref();
         self.with_source_path(path.to_path_buf())
             .run_source(fs::read_to_string(path)?)
+    }
+
+    #[cfg(not(feature = "cli"))]
+    fn compile_file(self, _path: impl AsRef<Path>) -> Result<CalibreArtifacts, CalibreError> {
+        Err(CalibreError::Io(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "compile_file is not available without the 'cli' feature",
+        )))
+    }
+
+    #[cfg(not(feature = "cli"))]
+    fn run_file(self, _path: impl AsRef<Path>) -> Result<RunResult, CalibreError> {
+        Err(CalibreError::Io(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "run_file is not available without the 'cli' feature",
+        )))
     }
 
     #[instrument(skip_all, fields(source = ?self.source_path, entry = %self.entry_name))]
@@ -103,11 +125,15 @@ impl CalibreStandalone for CalibreEngine {
             return_value: vm.run(main.as_ref(), Vec::new()).map_err(|error| {
                 let error_path = path.to_path_buf();
 
+                #[cfg(feature = "cli")]
                 let error_contents = if error_path != path {
                     fs::read_to_string(&error_path).unwrap_or_else(|_| full_source.clone())
                 } else {
                     full_source.clone()
                 };
+
+                #[cfg(not(feature = "cli"))]
+                let error_contents = full_source.clone();
 
                 CalibreError::Runtime {
                     path: error_path,
@@ -119,6 +145,7 @@ impl CalibreStandalone for CalibreEngine {
         })
     }
 
+    #[cfg(feature = "cli")]
     fn stdlib_cache_tag() -> String {
         let stdlib = get_stdlib_path();
         let globals = get_globals_path();
@@ -134,7 +161,9 @@ impl CalibreStandalone for CalibreEngine {
             .map(|p| p.to_path_buf())
             .unwrap_or(stdlib.clone());
 
+        #[cfg(feature = "cli")]
         let pattern = format!("{}/**/*.cal", stdlib.to_string_lossy());
+        #[cfg(feature = "cli")]
         if let Ok(paths) = glob(&pattern) {
             for entry in paths.flatten() {
                 files.push(entry);
@@ -151,6 +180,11 @@ impl CalibreStandalone for CalibreEngine {
         }
 
         hasher.finalize().to_string()
+    }
+
+    #[cfg(not(feature = "cli"))]
+    fn stdlib_cache_tag() -> String {
+        "wasm-stdlib-tag".to_string()
     }
 
     fn cache_key(&self, full_source: &str) -> blake3::Hash {
@@ -193,6 +227,7 @@ impl CalibreStandalone for CalibreEngine {
         )
     }
 
+    #[cfg(feature = "cli")]
     fn cache_root(&self) -> Option<PathBuf> {
         if let Some(path) = &self.cache_dir {
             return Some(path.clone());
@@ -208,6 +243,12 @@ impl CalibreStandalone for CalibreEngine {
         Some(cwd.join("target").join("calibre"))
     }
 
+    #[cfg(not(feature = "cli"))]
+    fn cache_root(&self) -> Option<PathBuf> {
+        self.cache_dir.clone()
+    }
+
+    #[cfg(feature = "cli")]
     fn try_load_cached_program(
         &self,
         full_source: &str,
@@ -237,6 +278,15 @@ impl CalibreStandalone for CalibreEngine {
         }
     }
 
+    #[cfg(not(feature = "cli"))]
+    fn try_load_cached_program(
+        &self,
+        _full_source: &str,
+    ) -> Result<Option<CachedProgramBlob>, CalibreError> {
+        Ok(None)
+    }
+
+    #[cfg(feature = "cli")]
     fn store_cached_program(
         &self,
         full_source: &str,
@@ -265,6 +315,15 @@ impl CalibreStandalone for CalibreEngine {
         bincode::serialize_into(&mut writer, &cache)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
             .map_err(CalibreError::Io)?;
+        Ok(())
+    }
+
+    #[cfg(not(feature = "cli"))]
+    fn store_cached_program(
+        &self,
+        _full_source: &str,
+        _artifacts: &CalibreArtifacts,
+    ) -> Result<(), CalibreError> {
         Ok(())
     }
 

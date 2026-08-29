@@ -494,7 +494,6 @@ dependencies = [
  "libloading",
  "regex",
  "rustc-hash",
- "rustyline",
  "serde",
  "sha2",
  "socket2",
