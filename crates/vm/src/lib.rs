@@ -89,6 +89,7 @@ pub struct VM {
     pub(crate) moved_functions: FxHashSet<String>,
     pub suppress_output: bool,
     pub captured_output: String,
+    pub input_buffer: Vec<String>,
     pub big_consts: Consts,
 }
 
@@ -114,6 +115,7 @@ impl Clone for VM {
             moved_functions: self.moved_functions.clone(),
             suppress_output: self.suppress_output,
             captured_output: self.captured_output.clone(),
+            input_buffer: self.input_buffer.clone(),
             big_consts: Consts::new().unwrap(),
         }
     }
@@ -248,6 +250,7 @@ impl VM {
             moved_functions: FxHashSet::default(),
             suppress_output: false,
             captured_output: String::new(),
+            input_buffer: Vec::new(),
             big_consts: Consts::new().unwrap(),
         };
 

@@ -69,7 +69,12 @@ impl NativeFunction for ConsoleInput {
         String::from("console_input")
     }
 
-    fn run(&self, _env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        if !env.input_buffer.is_empty() {
+            let input = env.input_buffer.remove(0);
+            return Ok(RuntimeValue::Str(Arc::new(Mutex::new(input))));
+        }
+
         let stdin = io::stdin();
         let mut handle = stdin.lock();
         let mut line = String::new();

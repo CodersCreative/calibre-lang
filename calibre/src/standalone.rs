@@ -111,6 +111,8 @@ impl CalibreStandalone for CalibreEngine {
             self.vm_config.clone(),
         );
         vm.set_source_file_override(&path);
+        vm.suppress_output = self.suppress_output;
+        vm.input_buffer = self.input_buffer.clone();
 
         self.install_bindings(&mut vm);
 

@@ -31,6 +31,8 @@ impl NativeFunction for ClosureNative {
 pub trait CalibreEmbedded {
     fn run(&mut self, source: impl Into<String>) -> Result<RuntimeValue, CalibreError>;
 
+    fn run_with_output(&mut self, source: impl Into<String>) -> Result<(RuntimeValue, String), CalibreError>;
+
     fn with_prelude(self, source: impl Into<String>) -> Self;
 
     fn with_global(self, name: impl Into<String>, value: RuntimeValue) -> Self;
@@ -45,11 +47,25 @@ pub trait CalibreEmbedded {
             + Send
             + Sync
             + 'static;
+
+    fn with_input_buffer(self, input: Vec<String>) -> Self;
+
+    fn add_input(&mut self, input: String);
+
+    fn with_suppress_output(self, suppress: bool) -> Self;
 }
 
 impl CalibreEmbedded for CalibreEngine {
     fn run(&mut self, source: impl Into<String>) -> Result<RuntimeValue, CalibreError> {
         self.run_source(source).map(|r| r.return_value)
+    }
+
+    fn run_with_output(&mut self, source: impl Into<String>) -> Result<(RuntimeValue, String), CalibreError> {
+        let original_suppress = self.suppress_output;
+        self.suppress_output = true;
+        let result = self.run_source(source)?;
+        self.suppress_output = original_suppress;
+        Ok((result.return_value, result.vm.captured_output.clone()))
     }
 
     fn with_prelude(mut self, source: impl Into<String>) -> Self {
@@ -96,6 +112,20 @@ impl CalibreEmbedded for CalibreEngine {
             value: RuntimeValue::NativeFunction(Arc::new(native)),
         });
 
+        self
+    }
+
+    fn with_input_buffer(mut self, input: Vec<String>) -> Self {
+        self.input_buffer = input;
+        self
+    }
+
+    fn add_input(&mut self, input: String) {
+        self.input_buffer.push(input);
+    }
+
+    fn with_suppress_output(mut self, suppress: bool) -> Self {
+        self.suppress_output = suppress;
         self
     }
 }

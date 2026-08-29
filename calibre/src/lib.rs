@@ -94,6 +94,8 @@ pub struct CalibreEngine {
     cache_enabled: bool,
     cache_dir: Option<PathBuf>,
     no_std: bool,
+    suppress_output: bool,
+    input_buffer: Vec<String>,
 }
 
 impl Default for CalibreEngine {
@@ -108,6 +110,8 @@ impl Default for CalibreEngine {
             cache_enabled: true,
             cache_dir: None,
             no_std: false,
+            suppress_output: false,
+            input_buffer: Vec::new(),
         }
     }
 }
@@ -146,6 +150,20 @@ impl CalibreEngine {
     pub fn with_cache_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.cache_dir = Some(path.into());
         self
+    }
+
+    pub fn with_suppress_output(mut self, suppress: bool) -> Self {
+        self.suppress_output = suppress;
+        self
+    }
+
+    pub fn with_input_buffer(mut self, input: Vec<String>) -> Self {
+        self.input_buffer = input;
+        self
+    }
+
+    pub fn add_input(&mut self, input: String) {
+        self.input_buffer.push(input);
     }
 }
 

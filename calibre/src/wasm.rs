@@ -1,14 +1,18 @@
 use crate::{
-    CalibreArtifacts, CalibreEngine, CalibreError, RunResult, embedded::NativeBinding,
-    standalone::CalibreStandalone,
+    CalibreArtifacts, CalibreEngine, RunResult, standalone::CalibreStandalone,
 };
 use calibre_mir::tags::context::PackageMetadata;
-use calibre_vm::{VM, config::VMConfig, value::RuntimeValue};
+use calibre_vm::{config::VMConfig, value::RuntimeValue};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub struct WasmCalibreEngine {
     inner: CalibreEngine,
+    // TODO Make these into host functions then have console_output and console_input call them if available
+    output_callback: Option<js_sys::Function>,
+    input_callback: Option<js_sys::Function>,
+    // TODO Remove, this is highkey just a temporary solution to input until we have it properly finished
+    input_buffer: Vec<String>,
 }
 
 #[wasm_bindgen]
@@ -17,6 +21,9 @@ impl WasmCalibreEngine {
     pub fn new() -> Self {
         Self {
             inner: CalibreEngine::default(),
+            output_callback: None,
+            input_callback: None,
+            input_buffer: Vec::new(),
         }
     }
 
@@ -59,13 +66,6 @@ impl WasmCalibreEngine {
         self.inner.cache_dir = Some(std::path::PathBuf::from(path));
     }
 
-    pub fn run_source(&mut self, source: String) -> Result<WasmRunResult, JsError> {
-        self.inner
-            .run_source(source)
-            .map(|result| WasmRunResult::from(result))
-            .map_err(|e| JsError::from(e.to_string()))
-    }
-
     pub fn compile_source(&mut self, source: String) -> Result<WasmCalibreArtifacts, JsError> {
         self.inner
             .compile_source(source, false)
@@ -77,12 +77,37 @@ impl WasmCalibreEngine {
         self.inner.prelude.push(source);
     }
 
-    /*pub fn add_global(&mut self, name: String, value: JsValue) {
-        self.inner.bindings.push(NativeBinding {
-            name,
-            value: value.into_native(),
-        });
-    }*/
+    pub fn set_output_callback(&mut self, callback: js_sys::Function) {
+        self.output_callback = Some(callback);
+    }
+
+    pub fn set_input_callback(&mut self, callback: js_sys::Function) {
+        self.input_callback = Some(callback);
+    }
+
+    pub fn add_input(&mut self, input: String) {
+        self.input_buffer.push(input);
+    }
+
+    pub fn run_source(&mut self, source: String) -> Result<WasmRunResult, JsError> {
+        self.inner.suppress_output = true;
+
+        self.inner.input_buffer = self.input_buffer.clone();
+
+        let result = self.inner.run_source(source).map_err(|e| JsError::from(e.to_string()))?;
+
+        let captured_output = result.vm.captured_output.clone();
+
+        if !captured_output.is_empty() && let Some(callback) = &self.output_callback {
+            let output_str = JsValue::from_str(&captured_output);
+            let _ = callback.call0(&output_str);
+        }
+
+        let mut wasm_result = WasmRunResult::from(result);
+        wasm_result.captured_output = captured_output;
+
+        Ok(wasm_result)
+    }
 }
 
 #[wasm_bindgen]
@@ -146,6 +171,7 @@ impl WasmPackageMetadata {
 #[wasm_bindgen]
 pub struct WasmRunResult {
     return_value: WasmValue,
+    captured_output: String,
 }
 
 impl From<RunResult> for WasmRunResult {
@@ -154,6 +180,7 @@ impl From<RunResult> for WasmRunResult {
             return_value: WasmValue {
                 inner: value.return_value,
             },
+            captured_output: value.vm.captured_output.clone(),
         }
     }
 }
@@ -162,6 +189,10 @@ impl From<RunResult> for WasmRunResult {
 impl WasmRunResult {
     pub fn return_value(&self) -> WasmValue {
         self.return_value.clone()
+    }
+
+    pub fn captured_output(&self) -> String {
+        self.captured_output.clone()
     }
 }
 
