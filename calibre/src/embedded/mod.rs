@@ -31,7 +31,10 @@ impl NativeFunction for ClosureNative {
 pub trait CalibreEmbedded {
     fn run(&mut self, source: impl Into<String>) -> Result<RuntimeValue, CalibreError>;
 
-    fn run_with_output(&mut self, source: impl Into<String>) -> Result<(RuntimeValue, String), CalibreError>;
+    fn run_with_output(
+        &mut self,
+        source: impl Into<String>,
+    ) -> Result<(RuntimeValue, String), CalibreError>;
 
     fn with_prelude(self, source: impl Into<String>) -> Self;
 
@@ -60,7 +63,10 @@ impl CalibreEmbedded for CalibreEngine {
         self.run_source(source).map(|r| r.return_value)
     }
 
-    fn run_with_output(&mut self, source: impl Into<String>) -> Result<(RuntimeValue, String), CalibreError> {
+    fn run_with_output(
+        &mut self,
+        source: impl Into<String>,
+    ) -> Result<(RuntimeValue, String), CalibreError> {
         let original_suppress = self.suppress_output;
         self.suppress_output = true;
         let result = self.run_source(source)?;

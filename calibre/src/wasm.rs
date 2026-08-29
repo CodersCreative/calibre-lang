@@ -1,6 +1,4 @@
-use crate::{
-    CalibreArtifacts, CalibreEngine, RunResult, standalone::CalibreStandalone,
-};
+use crate::{CalibreArtifacts, CalibreEngine, RunResult, standalone::CalibreStandalone};
 use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::{config::VMConfig, value::RuntimeValue};
 use wasm_bindgen::prelude::*;
@@ -94,11 +92,16 @@ impl WasmCalibreEngine {
 
         self.inner.input_buffer = self.input_buffer.clone();
 
-        let result = self.inner.run_source(source).map_err(|e| JsError::from(e.to_string()))?;
+        let result = self
+            .inner
+            .run_source(source)
+            .map_err(|e| JsError::from(e.to_string()))?;
 
         let captured_output = result.vm.captured_output.clone();
 
-        if !captured_output.is_empty() && let Some(callback) = &self.output_callback {
+        if !captured_output.is_empty()
+            && let Some(callback) = &self.output_callback
+        {
             let output_str = JsValue::from_str(&captured_output);
             let _ = callback.call0(&output_str);
         }

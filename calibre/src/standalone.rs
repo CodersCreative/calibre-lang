@@ -11,9 +11,9 @@ use std::path::{Path, PathBuf};
 use tracing::{debug, instrument};
 
 #[cfg(feature = "cli")]
-use std::fs::{self, File};
-#[cfg(feature = "cli")]
 use glob::glob;
+#[cfg(feature = "cli")]
+use std::fs::{self, File};
 
 const CACHE_FORMAT_VERSION: &str = "v6";
 
