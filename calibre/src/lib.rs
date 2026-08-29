@@ -17,6 +17,9 @@ pub mod config;
 pub mod embedded;
 pub mod standalone;
 
+#[cfg(any(feature = "wasm", target_arch = "wasm32"))]
+pub mod wasm;
+
 #[derive(Debug, Error)]
 pub enum CalibreError {
     #[error("{0}")]

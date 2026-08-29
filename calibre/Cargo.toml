@@ -11,8 +11,23 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
+[lib]
+name = "calibre"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "calibre"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+default = ["cli", "wasm"]
+cli = ["clap", "rustyline", "smol", "tracing-flame", "tracing-appender", "calibre-vm/libc", "calibre-parser/libc"]
+wasm = ["wasm-bindgen", "js-sys", "getrandom/js", "calibre-parser/no-libc"]
+
 [dependencies]
-clap = { workspace = true }
+clap = { workspace = true, optional = true }
 calibre-parser = {workspace = true}
 calibre-diagnostics = {workspace = true}
 calibre-mir = { workspace = true }
@@ -20,17 +35,21 @@ calibre-lir = { workspace = true }
 calibre-vm = { workspace = true }
 calibre-std = { workspace = true }
 serde = { workspace = true }
-rustyline = {workspace = true }
+rustyline = {workspace = true, optional = true }
 thiserror = {workspace = true }
 rustc-hash = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-tracing-flame = { workspace = true }
-tracing-appender = { workspace = true }
-smol = { workspace = true }
+tracing-flame = { workspace = true, optional = true }
+tracing-appender = { workspace = true, optional = true }
+smol = { workspace = true, optional = true }
 derive_builder = { workspace = true }
 
 bincode = "1"
 blake3 = "1.6.1"
 toml = "1.0.1"
 glob = "0.3.1"
+
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+getrandom = { version = "0.2", optional = true }

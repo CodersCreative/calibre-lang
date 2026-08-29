@@ -41,7 +41,7 @@ impl ParserDataType {
         static NATIVES: OnceLock<FxHashMap<String, ParserDataType>> = OnceLock::new();
 
         NATIVES.get_or_init(|| {
-            let lst: [(&str, Vec<ParserInnerType>, ParserInnerType); 122] = [
+            let lst: Vec<(&str, Vec<ParserInnerType>, ParserInnerType)> = vec![
                 (
                     "console_output",
                     vec![ParserInnerType::List(Box::new(Self::native_type(
@@ -76,12 +76,15 @@ impl ParserDataType {
                     vec![ParserInnerType::Dynamic],
                     ParserInnerType::Int,
                 ),
+                #[cfg(feature = "libc")]
                 ("libc.get_c_errno", vec![], ParserInnerType::Int),
+                #[cfg(feature = "libc")]
                 (
                     "libc.set_c_errno",
                     vec![ParserInnerType::Int],
                     ParserInnerType::Null,
                 ),
+                #[cfg(feature = "libc")]
                 ("libc.get_c_errno_description", vec![], ParserInnerType::Str),
                 ("len", vec![ParserInnerType::Dynamic], ParserInnerType::Int),
                 (

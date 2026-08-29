@@ -11,11 +11,28 @@ license.workspace = true
 repository.workspace = true
 readme.workspace = true
 
+[lib]
+name = "calibre_fmt"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "calibre-fmt"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+default = ["cli", "wasm"]
+cli = ["clap", "tracing-flame", "tracing-appender"]
+wasm = ["wasm-bindgen", "getrandom/js"]
+
 [dependencies]
-clap = { workspace = true }
+clap = { workspace = true, optional = true }
 calibre-parser = { workspace = true }
 calibre-diagnostics = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-tracing-flame = { workspace = true }
-tracing-appender = { workspace = true }
+tracing-flame = { workspace = true, optional = true }
+tracing-appender = { workspace = true, optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+getrandom = { version = "0.2", optional = true }

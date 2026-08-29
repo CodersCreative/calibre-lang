@@ -10,6 +10,9 @@ use std::{
 };
 use tracing::{debug, instrument};
 
+#[cfg(any(feature = "wasm", target_arch = "wasm32"))]
+pub mod wasm;
+
 #[derive(Debug)]
 pub enum FormatError {
     Read {

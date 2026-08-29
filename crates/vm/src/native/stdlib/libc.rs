@@ -1,4 +1,3 @@
-extern crate errno;
 use crate::{
     VM,
     error::RuntimeError,
@@ -8,8 +7,9 @@ use crate::{
     },
     value::RuntimeValue,
 };
-use errno::{Errno, errno, set_errno};
 use std::sync::{Arc, Mutex};
+extern crate errno;
+use errno::{Errno, errno, set_errno};
 
 pub struct GetCErrNo;
 
