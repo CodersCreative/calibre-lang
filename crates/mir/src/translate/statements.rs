@@ -167,15 +167,29 @@ impl MiddleEnvironment {
             }
         };
 
-        self.register_variable(
-            scope,
-            &identifier,
-            new_name.clone(),
-            data_type.clone(),
-            var_type,
-        )?;
+        let mut value = if function_decl.is_some() {
+            self.register_variable(
+                scope,
+                &identifier,
+                new_name.clone(),
+                data_type.clone(),
+                var_type,
+            )?;
 
-        let mut value = self.evaluate(scope, value);
+            self.evaluate(scope, value)
+        } else {
+            let value = self.evaluate(scope, value);
+
+            self.register_variable(
+                scope,
+                &identifier,
+                new_name.clone(),
+                data_type.clone(),
+                var_type,
+            )?;
+
+            value
+        };
 
         if matches!(data_type.data_type, ParserInnerType::DynamicTraits(_)) {
             value = MiddleNode::new(
