@@ -9,14 +9,14 @@
 // @init(0)
 const main := fn => {
 	print("Running");
-
+	
 	// The @os tag can be used to make any statement only run a specific os
 	@os("linux", "macos") print("on either linux or macos");
 	@os("linux") print("on linux");
 	@os("macos") print("on macos");
 	@os("windows") print("on windows");
-
-	// When I eventually get to making another backend, 
+	
+	// When I eventually get to making another backend,
 	// this statement will allow you to only run a statement on a specific area_of_triangle
 	@backend("interpreter") print("on the rust-based interpreter");
 };

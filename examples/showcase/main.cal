@@ -302,7 +302,7 @@ const main := fn => {
 	}));
 	
 	=> {
-		// Defer in a temp scope.;
+		// Defer in a temp scope.;;
 		defer print("defer fired");
 		print("before defer");
 	};

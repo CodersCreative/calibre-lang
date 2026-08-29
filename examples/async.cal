@@ -87,15 +87,15 @@ const main := fn => {
 	};
 	
 	let width : int = 32;
-	
-	// TODO Fix Spawn Iters 
-	/*let concurrent := [=> {
-		if i % 2 = 0 => {
-			Duration.from_ms((width + 1 - i) * 2).sleep();
-		};
-		
-		emit i;
-	} spawn for i in 0..=width];
-	
-	print("concurrent list => " & concurrent);*/
 };
+// TODO Fix Spawn Iters
+/* let concurrent := [=> {
+if i % 2 = 0 => {
+Duration.from_ms((width + 1 - i) * 2).sleep();
+};
+
+emit i;
+} spawn for i in 0..=width];
+
+print("concurrent list => " & concurrent);
+*/

@@ -1,0 +1,15 @@
+fn worker(id) do
+  #! sleep doesn't work in wasm yet
+  # sleep(0.1)
+	let x = 10000000 / 3 + 5
+  print("worker " ~ (id + x) ~ " done")
+end
+
+let handles = {}
+for i in 0..100000
+  handles:push(spawn(worker(i)))
+
+for h in handles
+  join(h)
+
+print("all workers finished")

@@ -4,6 +4,7 @@ import * from std::regex;
 const main := fn => {
 	let words := list:<str>["a", "b", "c"];
 	print("join default => " & words.join());
+	
 	// print("find_or default => " & find_or("x", "abc"));
 	print("approx_eq default => " & float.approx_eq(1f, 1.0000000001));
 };

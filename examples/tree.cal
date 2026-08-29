@@ -1,0 +1,26 @@
+import (Path, Dir, FileType) from std::fs;
+
+const get_tree_output := fn (path : Path, depth : int = 2) -> str => {
+	if depth <= 0 => return "";
+	let mut out := "\t";
+	let objects : str!list:<DirEntry> = path.read_dir();
+	let objects : list:<DirEntry> = try objects => panic();
+	
+	for i in 0..len(objects) => {
+		out &= objects[i].file_name() & "\n";
+		let typ : str!FileType = objects[i].file_type();
+		let typ : FileType = try typ => panic();
+		if typ.is_dir() => {
+			out &= get_tree_output(objects[i].path(), depth - 1);
+			out &= "\n";
+		};
+	};
+	
+	return out.replace("\n", "\n\t");
+};
+
+@current_context const main := fn => {
+	i;
+	let path : Path = Path.new(current_context.path.replace("examples/tree.cal", "."));
+	print(get_tree_output(path));
+};
