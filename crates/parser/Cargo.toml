@@ -19,6 +19,6 @@ rustc-hash = { workspace = true }
 chumsky = "0.12"
 
 [features]
-default = ["libc"]
-libc = []
-no-libc = []
+default = ["native"]
+native = []
+wasm = []

@@ -401,6 +401,7 @@ impl VM {
                     return Ok(Some(step));
                 }
             }
+            #[cfg(feature = "native")]
             RuntimeValue::ExternFunction(func) => {
                 let value = func.call(self, self.collect_call_args_vec(args))?;
                 self.set_reg_value(dst, value);
@@ -440,6 +441,8 @@ impl VM {
                             },
                         );
                     }
+
+                    #[cfg(feature = "native")]
                     VMLiteral::ExternFunction {
                         abi,
                         library,
@@ -484,6 +487,13 @@ impl VM {
 
                         self.set_reg_value(*dst, RuntimeValue::ExternFunction(Arc::new(func)));
                     }
+                                        VMLiteral::ExternFunction {
+                        abi,
+                        library,
+                        symbol,
+                        parameters,
+                        return_type,
+                    } => {}
                     other => {
                         self.set_reg_value(*dst, RuntimeValue::from(other));
                     }

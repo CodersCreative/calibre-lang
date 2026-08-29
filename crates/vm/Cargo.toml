@@ -23,16 +23,17 @@ serde = { workspace = true }
 indextree = { workspace = true }
 wasm_lite_std = { workspace = true}
 dumpster = "2.0.0"
-libloading = "0.9"
-libffi = "4"
+libloading = {version = "0.9", optional = true }
+libffi = {version = "4", optional = true }
 regex = "1.10.6"
 sha2 = "0.10.8"
 blake3 = "1.5.4"
 hex = "0.4.3"
-ureq = "3"
-socket2 = "0.6"
+
+ureq = {version = "3", optional = true }
+socket2 = {version = "0.6", optional = true }
 errno = { version = "0.3.14", optional = true }
 astro-float = "=0.9.6"
 
 [features]
-libc = ["errno"]
+native = ["errno", "libffi", "libloading"]

@@ -76,15 +76,15 @@ impl ParserDataType {
                     vec![ParserInnerType::Dynamic],
                     ParserInnerType::Int,
                 ),
-                #[cfg(feature = "libc")]
+                #[cfg(feature = "native")]
                 ("libc.get_c_errno", vec![], ParserInnerType::Int),
-                #[cfg(feature = "libc")]
+                #[cfg(feature = "native")]
                 (
                     "libc.set_c_errno",
                     vec![ParserInnerType::Int],
                     ParserInnerType::Null,
                 ),
-                #[cfg(feature = "libc")]
+                #[cfg(feature = "native")]
                 ("libc.get_c_errno_description", vec![], ParserInnerType::Str),
                 ("len", vec![ParserInnerType::Dynamic], ParserInnerType::Int),
                 (
@@ -166,6 +166,7 @@ impl ParserDataType {
                     ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Str))),
                 ),
                 // TODO Finish off params
+                #[cfg(feature = "native")]
                 (
                     "fs.dir_create",
                     vec![],
@@ -174,6 +175,7 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::Null)),
                     },
                 ),
+                #[cfg(feature = "native")]
                 (
                     "fs.dir_create_all",
                     vec![],
@@ -182,6 +184,7 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::Null)),
                     },
                 ),
+                #[cfg(feature = "native")]
                 (
                     "fs.dir_remove",
                     vec![],
@@ -190,6 +193,7 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::Null)),
                     },
                 ),
+                #[cfg(feature = "native")]
                 (
                     "fs.dir_remove_all",
                     vec![],
@@ -198,11 +202,17 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::Null)),
                     },
                 ),
+                #[cfg(feature = "native")]
                 ("fs.path_new", vec![], ParserInnerType::Dynamic),
+                #[cfg(feature = "native")]
                 ("fs.path_as_str", vec![], ParserInnerType::Str),
+                #[cfg(feature = "native")]
                 ("fs.path_exists", vec![], ParserInnerType::Bool),
+                #[cfg(feature = "native")]
                 ("fs.path_is_file", vec![], ParserInnerType::Bool),
+                #[cfg(feature = "native")]
                 ("fs.path_is_dir", vec![], ParserInnerType::Bool),
+                #[cfg(feature = "native")]
                 (
                     "fs.path_canonicalize",
                     vec![],
@@ -211,29 +221,37 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::Dynamic)),
                     },
                 ),
+                #[cfg(feature = "native")]
                 (
                     "fs.path_parent",
                     vec![],
                     ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Dynamic))),
                 ),
+                #[cfg(feature = "native")]
                 (
                     "fs.path_file_name",
                     vec![],
                     ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),
                 ),
+                #[cfg(feature = "native")]
                 (
                     "fs.path_extension",
                     vec![],
                     ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),
                 ),
+                #[cfg(feature = "native")]
                 (
                     "fs.path_stem",
                     vec![],
                     ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Str))),
                 ),
+                #[cfg(feature = "native")]
                 ("fs.path_join", vec![], ParserInnerType::Null),
+                #[cfg(feature = "native")]
                 ("fs.path_with_extension", vec![], ParserInnerType::Dynamic),
+                #[cfg(feature = "native")]
                 ("fs.path_with_file_name", vec![], ParserInnerType::Dynamic),
+                #[cfg(feature = "native")]
                 (
                     "fs.path_read_dir",
                     vec![],
@@ -244,8 +262,11 @@ impl ParserDataType {
                         )))),
                     },
                 ),
+                #[cfg(feature = "native")]
                 ("fs.direntry_path", vec![], ParserInnerType::Dynamic),
+                #[cfg(feature = "native")]
                 ("fs.direntry_file_name", vec![], ParserInnerType::Str),
+                #[cfg(feature = "native")]
                 (
                     "fs.direntry_file_type",
                     vec![],
@@ -254,6 +275,7 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::Dynamic)),
                     },
                 ),
+                #[cfg(feature = "native")]
                 (
                     "fs.direntry_metadata",
                     vec![],
@@ -262,12 +284,19 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::Dynamic)),
                     },
                 ),
+                #[cfg(feature = "native")]
                 ("fs.filetype_is_file", vec![], ParserInnerType::Bool),
+                #[cfg(feature = "native")]
                 ("fs.filetype_is_dir", vec![], ParserInnerType::Bool),
+                #[cfg(feature = "native")]
                 ("fs.filetype_is_symlink", vec![], ParserInnerType::Bool),
+                #[cfg(feature = "native")]
                 ("fs.metadata_is_file", vec![], ParserInnerType::Bool),
+                #[cfg(feature = "native")]
                 ("fs.metadata_is_dir", vec![], ParserInnerType::Bool),
+                #[cfg(feature = "native")]
                 ("fs.metadata_len", vec![], ParserInnerType::UInt),
+                #[cfg(feature = "native")]
                 (
                     "fs.metadata_modified",
                     vec![],
@@ -276,6 +305,7 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::UInt)),
                     },
                 ),
+                #[cfg(feature = "native")]
                 (
                     "fs.metadata_created",
                     vec![],
@@ -284,6 +314,7 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::UInt)),
                     },
                 ),
+                #[cfg(feature = "native")]
                 (
                     "fs.metadata_accessed",
                     vec![],
@@ -292,7 +323,9 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::UInt)),
                     },
                 ),
+                #[cfg(feature = "native")]
                 ("fs.metadata_is_readonly", vec![], ParserInnerType::Bool),
+                #[cfg(feature = "native")]
                 (
                     "fs.file_open",
                     vec![],
@@ -301,6 +334,7 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::Dynamic)),
                     },
                 ),
+                #[cfg(feature = "native")]
                 (
                     "fs.file_close",
                     vec![],
@@ -308,7 +342,7 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Null)),
                     },
-                ),
+                ),#[cfg(feature = "native")]
                 (
                     "fs.file_write",
                     vec![],
@@ -316,7 +350,7 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Null)),
                     },
-                ),
+                ),#[cfg(feature = "native")]
                 (
                     "fs.file_write_line",
                     vec![],
@@ -324,7 +358,7 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Null)),
                     },
-                ),
+                ),#[cfg(feature = "native")]
                 (
                     "fs.file_read_all",
                     vec![],
@@ -332,7 +366,7 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Str)),
                     },
-                ),
+                ),#[cfg(feature = "native")]
                 (
                     "fs.file_flush",
                     vec![],
@@ -475,9 +509,8 @@ impl ParserDataType {
                     "list.raw_remove",
                     vec![],
                     ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Dynamic))),
-                ),
-                ("net.http_request_raw", vec![], ParserInnerType::Str),
-                ("http_request_raw", vec![], ParserInnerType::Str),
+                ),#[cfg(feature = "native")]
+                ("net.http_request_raw", vec![], ParserInnerType::Str),#[cfg(feature = "native")]
                 (
                     "net.http_request_try",
                     vec![],
@@ -485,7 +518,7 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Str)),
                     },
-                ),
+                ),#[cfg(feature = "native")]
                 (
                     "http_request_try",
                     vec![],
@@ -493,24 +526,24 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Str)),
                     },
-                ),
+                ),#[cfg(feature = "native")]
                 (
                     "net.tcp_connect",
                     vec![],
                     ParserInnerType::Struct(String::from("TcpStream")),
-                ),
+                ),#[cfg(feature = "native")]
                 (
                     "net.tcp_listen",
                     vec![],
                     ParserInnerType::Struct(String::from("TcpListener")),
-                ),
+                ),#[cfg(feature = "native")]
                 (
                     "net.tcp_accept",
                     vec![],
                     ParserInnerType::Struct(String::from("TcpStream")),
-                ),
-                ("net.tcp_read", vec![], ParserInnerType::Str),
-                ("net.tcp_write", vec![], ParserInnerType::Int),
+                ),#[cfg(feature = "native")]
+                ("net.tcp_read", vec![], ParserInnerType::Str),#[cfg(feature = "native")]
+                ("net.tcp_write", vec![], ParserInnerType::Int),#[cfg(feature = "native")]
                 ("net.tcp_close", vec![], ParserInnerType::Null),
             ];
 

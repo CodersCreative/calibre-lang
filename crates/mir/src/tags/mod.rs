@@ -107,7 +107,10 @@ impl MiddleEnvironment {
              node: AstNode,
              _tag: ParserText,
              args: Vec<AstNode>| {
-                let backend = "interpreter";
+                #[cfg(feature = "native")]
+                let backend = "interpreter-native";
+                #[cfg(not(feature = "native"))]
+                let backend = "interpreter-wasm";
                 let mut build = false;
 
                 for arg in args {

@@ -321,6 +321,7 @@ impl Display for RuntimeValue {
                 write!(f, "{}", print_list_from_iter(iter, '[', ']'))
             }
             Self::NativeFunction(x) => write!(f, "fn {} ...", x.name()),
+            #[cfg(feature = "native")]
             Self::ExternFunction(x) => write!(f, "extern fn {} ...", x.symbol),
             Self::Option(Some(x)) => write!(f, "Some : {}", x.as_ref()),
             Self::Option(_) => write!(f, "None"),

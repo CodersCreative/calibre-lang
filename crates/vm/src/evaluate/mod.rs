@@ -7,7 +7,6 @@ use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tracing::{debug, instrument, trace};
-
 use crate::{
     VM, VarName,
     conversion::{VMBlock, VMFunction, VMGlobal, VMInstruction, VMLiteral},
@@ -343,6 +342,7 @@ impl VM {
                 self.run_function(func.as_ref(), args, refreshed)
             }
             RuntimeValue::NativeFunction(func) => func.run(self, args),
+            #[cfg(feature = "native")]
             RuntimeValue::ExternFunction(func) => func.call(self, args),
             RuntimeValue::BoundMethod { callee, receiver } => {
                 let mut full_args = vec![receiver.as_ref().clone()];
@@ -741,12 +741,21 @@ impl VM {
                 }
                 _ => false,
             },
-            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction { .. } => matches!(
+            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction { .. } => {
+                let val = matches!(
                 value,
                 RuntimeValue::Function { .. }
                     | RuntimeValue::NativeFunction(_)
-                    | RuntimeValue::ExternFunction(_)
-            ),
+                    
+                );
+
+            #[cfg(feature = "native")]
+            {val || matches!(
+                value, RuntimeValue::ExternFunction(_)
+            )}
+            #[cfg(not(feature = "native"))]
+            val
+            },
             ParserInnerType::Struct(identifier)
             | ParserInnerType::StructWithGenerics { identifier, .. } => match value {
                 RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
