@@ -29,10 +29,7 @@ use std::os::raw::c_char;
 #[cfg(feature = "native")]
 use std::os::raw::c_void;
 
-use std::{
-    any::Any,
-    
-};
+use std::any::Any;
 #[cfg(feature = "native")]
 use std::ffi::{CStr, CString};
 use std::{
@@ -44,7 +41,7 @@ use std::{
         atomic::{AtomicBool, AtomicIsize, Ordering},
     },
 };
-use wasm_lite_std::{Mutex, condvar::Condvar};
+use wasm_sync::{Condvar, Mutex};
 
 mod bridge;
 pub mod conversion;
@@ -84,7 +81,7 @@ impl TryFrom<RuntimeValue> for HashKey {
             RuntimeValue::Byte(x) => Ok(Self::UInt(x as u64)),
             RuntimeValue::Bool(x) => Ok(Self::Bool(x)),
             RuntimeValue::Char(x) => Ok(Self::Char(x)),
-            RuntimeValue::Str(x) => Ok(Self::Str(x.lock_sync().clone())),
+            RuntimeValue::Str(x) => Ok(Self::Str(x.lock().unwrap().clone())),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
@@ -126,15 +123,15 @@ impl WaitGroupInner {
     }
 
     pub fn wait(&self) -> Result<(), RuntimeError> {
-        let mut guard = self.mutex.lock_sync();
+        let mut guard = self.mutex.lock().unwrap();
 
         while self.count.load(Ordering::Acquire) > 0 {
-            guard = self.cvar.wait_sync(guard);
+            guard = self.cvar.wait(guard).unwrap();
         }
 
         drop(guard);
 
-        let joined = self.joined.lock_sync();
+        let joined = self.joined.lock().unwrap();
 
         for inner in joined.iter() {
             inner.wait()?;
@@ -165,9 +162,9 @@ impl MutexInner {
     }
 
     pub fn lock(self: &Arc<Self>) -> MutexGuardInner {
-        let mut guard = self.mutex.lock_sync();
+        let mut guard = self.mutex.lock().unwrap();
         while self.locked.load(Ordering::Acquire) {
-            guard = self.cvar.wait_sync(guard);
+            guard = self.cvar.wait(guard).unwrap();
         }
         self.locked.store(true, Ordering::Release);
         drop(guard);
@@ -236,7 +233,7 @@ unsafe impl<V: Visitor> TraceWith<V> for GcMap {
 }
 
 pub type HostInner = dyn Any + Send;
-pub type Host = Arc<Mutex<Box<HostInner>>>;
+pub type Host = Arc<Mutex<HostInner>>;
 pub type RuntimeHashMap = Arc<Mutex<FxHashMap<HashKey, RuntimeValue>>>;
 pub type RuntimeHashSet = Arc<Mutex<FxHashSet<HashKey>>>;
 
@@ -394,25 +391,22 @@ impl RuntimeValue {
                 | RuntimeValue::BoundMethod { .. }
         );
 
-
         #[cfg(feature = "native")]
-        return val || matches!(
-            self,RuntimeValue::ExternFunction(_));
-        
+        return val || matches!(self, RuntimeValue::ExternFunction(_));
+
         #[cfg(not(feature = "native"))]
         return val;
     }
 
-
     #[inline]
     pub fn bind_if_callable(self, receiver: RuntimeValue) -> RuntimeValue {
         match self {
-            RuntimeValue::Function { .. }
-            | RuntimeValue::NativeFunction(_)
-            => RuntimeValue::BoundMethod {
-                callee: Box::new(self),
-                receiver: Gc::new(receiver),
-            },
+            RuntimeValue::Function { .. } | RuntimeValue::NativeFunction(_) => {
+                RuntimeValue::BoundMethod {
+                    callee: Box::new(self),
+                    receiver: Gc::new(receiver),
+                }
+            }
             #[cfg(feature = "native")]
             RuntimeValue::ExternFunction(_) => RuntimeValue::BoundMethod {
                 callee: Box::new(self),
@@ -578,44 +572,61 @@ impl RuntimeValue {
                 (
                     "fs.direntry_metadata",
                     Arc::new(stdlib::fs::FsDirEntryMetadata),
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "fs.filetype_is_file",
                     Arc::new(stdlib::fs::FsFileTypeIsFile),
-                ),#[cfg(feature = "native")]
-                ("fs.filetype_is_dir", Arc::new(stdlib::fs::FsFileTypeIsDir)),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
+                ("fs.filetype_is_dir", Arc::new(stdlib::fs::FsFileTypeIsDir)),
+                #[cfg(feature = "native")]
                 (
                     "fs.filetype_is_symlink",
                     Arc::new(stdlib::fs::FsFileTypeIsSymlink),
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "fs.metadata_is_file",
                     Arc::new(stdlib::fs::FsMetadataIsFile),
-                ),#[cfg(feature = "native")]
-                ("fs.metadata_is_dir", Arc::new(stdlib::fs::FsMetadataIsDir)),#[cfg(feature = "native")]
-                ("fs.metadata_len", Arc::new(stdlib::fs::FsMetadataLen)),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
+                ("fs.metadata_is_dir", Arc::new(stdlib::fs::FsMetadataIsDir)),
+                #[cfg(feature = "native")]
+                ("fs.metadata_len", Arc::new(stdlib::fs::FsMetadataLen)),
+                #[cfg(feature = "native")]
                 (
                     "fs.metadata_modified",
                     Arc::new(stdlib::fs::FsMetadataModified),
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "fs.metadata_created",
                     Arc::new(stdlib::fs::FsMetadataCreated),
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "fs.metadata_accessed",
                     Arc::new(stdlib::fs::FsMetadataAccessed),
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "fs.metadata_is_readonly",
                     Arc::new(stdlib::fs::FsMetadataIsReadOnly),
-                ),#[cfg(feature = "native")]
-                ("fs.file_open", Arc::new(stdlib::fs::FsFileOpen)),#[cfg(feature = "native")]
-                ("fs.file_close", Arc::new(stdlib::fs::FsFileClose)),#[cfg(feature = "native")]
-                ("fs.file_write", Arc::new(stdlib::fs::FsFileWrite)),#[cfg(feature = "native")]
-                ("fs.file_write_line", Arc::new(stdlib::fs::FsFileWriteLine)),#[cfg(feature = "native")]
-                ("fs.file_read_all", Arc::new(stdlib::fs::FsFileReadAll)),#[cfg(feature = "native")]
-                ("fs.file_flush", Arc::new(stdlib::fs::FsFileFlush)),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
+                ("fs.file_open", Arc::new(stdlib::fs::FsFileOpen)),
+                #[cfg(feature = "native")]
+                ("fs.file_close", Arc::new(stdlib::fs::FsFileClose)),
+                #[cfg(feature = "native")]
+                ("fs.file_write", Arc::new(stdlib::fs::FsFileWrite)),
+                #[cfg(feature = "native")]
+                ("fs.file_write_line", Arc::new(stdlib::fs::FsFileWriteLine)),
+                #[cfg(feature = "native")]
+                ("fs.file_read_all", Arc::new(stdlib::fs::FsFileReadAll)),
+                #[cfg(feature = "native")]
+                ("fs.file_flush", Arc::new(stdlib::fs::FsFileFlush)),
+                #[cfg(feature = "native")]
                 ("discriminant", Arc::new(native::global::DiscriminantFn)),
                 ("tuple", Arc::new(native::global::TupleFn)),
                 ("panic", Arc::new(native::global::PanicFn)),
@@ -727,19 +738,29 @@ impl RuntimeValue {
                     "list.binary_search_by",
                     Arc::new(stdlib::list::ListBinarySearchBy),
                 ),
-                ("list.raw_remove", Arc::new(stdlib::list::ListRawRemove)),#[cfg(feature = "native")]
-                ("net.tcp_connect", Arc::new(stdlib::net::TcpConnect)),#[cfg(feature = "native")]
-                ("net.tcp_listen", Arc::new(stdlib::net::TcpListen)),#[cfg(feature = "native")]
-                ("net.tcp_accept", Arc::new(stdlib::net::TcpAccept)),#[cfg(feature = "native")]
-                ("net.tcp_read", Arc::new(stdlib::net::TcpRead)),#[cfg(feature = "native")]
-                ("net.tcp_write", Arc::new(stdlib::net::TcpWrite)),#[cfg(feature = "native")]
-                ("net.tcp_close", Arc::new(stdlib::net::TcpClose)),#[cfg(feature = "native")]
-                ("net.http_request_raw", Arc::new(stdlib::net::HttpRequest)),#[cfg(feature = "native")]
+                ("list.raw_remove", Arc::new(stdlib::list::ListRawRemove)),
+                #[cfg(feature = "native")]
+                ("net.tcp_connect", Arc::new(stdlib::net::TcpConnect)),
+                #[cfg(feature = "native")]
+                ("net.tcp_listen", Arc::new(stdlib::net::TcpListen)),
+                #[cfg(feature = "native")]
+                ("net.tcp_accept", Arc::new(stdlib::net::TcpAccept)),
+                #[cfg(feature = "native")]
+                ("net.tcp_read", Arc::new(stdlib::net::TcpRead)),
+                #[cfg(feature = "native")]
+                ("net.tcp_write", Arc::new(stdlib::net::TcpWrite)),
+                #[cfg(feature = "native")]
+                ("net.tcp_close", Arc::new(stdlib::net::TcpClose)),
+                #[cfg(feature = "native")]
+                ("net.http_request_raw", Arc::new(stdlib::net::HttpRequest)),
+                #[cfg(feature = "native")]
                 (
                     "net.http_request_try",
                     Arc::new(stdlib::net::HttpRequestTry),
-                ),#[cfg(feature = "native")]
-                ("http_request_raw", Arc::new(stdlib::net::HttpRequest)),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
+                ("http_request_raw", Arc::new(stdlib::net::HttpRequest)),
+                #[cfg(feature = "native")]
                 ("http_request_try", Arc::new(stdlib::net::HttpRequestTry)),
                 (
                     "async.waitgroup_new",

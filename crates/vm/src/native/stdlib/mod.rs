@@ -10,8 +10,8 @@ pub mod regex;
 pub mod str;
 
 #[cfg(feature = "native")]
-pub mod libc;
-#[cfg(feature = "native")]
 pub mod fs;
+#[cfg(feature = "native")]
+pub mod libc;
 #[cfg(feature = "native")]
 pub mod net;

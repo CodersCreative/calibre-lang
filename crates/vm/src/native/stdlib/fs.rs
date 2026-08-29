@@ -15,7 +15,7 @@ use std::{
     fs::{DirEntry, File, FileType, Metadata, OpenOptions},
     time::Duration,
 };
-use wasm_lite_std::Mutex;
+use wasm_sync::Mutex;
 
 // Path
 
@@ -31,8 +31,8 @@ impl NativeFunction for FsPathNew {
 
         let path = resolve_str(env, &pop_or_null(&mut args))?;
 
-        let path_buf = PathBuf::from(path.lock_sync().as_str());
-        Ok(RuntimeValue::Host(Arc::new(Mutex::new(Box::new(path_buf)))))
+        let path_buf = PathBuf::from(path.lock().unwrap().as_str());
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(path_buf))))
     }
 }
 
@@ -49,7 +49,8 @@ impl NativeFunction for FsPathAsStr {
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Str(Arc::new(Mutex::new(
-            path.lock_sync()
+            path.lock()
+                .unwrap()
                 .downcast_ref::<PathBuf>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .to_string_lossy()
@@ -71,7 +72,8 @@ impl NativeFunction for FsPathExists {
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            path.lock_sync()
+            path.lock()
+                .unwrap()
                 .downcast_ref::<PathBuf>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .exists(),
@@ -92,7 +94,8 @@ impl NativeFunction for FsPathIsFile {
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            path.lock_sync()
+            path.lock()
+                .unwrap()
                 .downcast_ref::<PathBuf>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_file(),
@@ -113,7 +116,8 @@ impl NativeFunction for FsPathIsDir {
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            path.lock_sync()
+            path.lock()
+                .unwrap()
                 .downcast_ref::<PathBuf>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_dir(),
@@ -134,13 +138,14 @@ impl NativeFunction for FsPathCanonicalize {
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
         match path
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_ref::<PathBuf>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .canonicalize()
         {
             Ok(canonical) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
-                Arc::new(Mutex::new(Box::new(canonical))),
+                Arc::new(Mutex::new(canonical)),
             ))))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
@@ -162,14 +167,15 @@ impl NativeFunction for FsPathParent {
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
         match path
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_ref::<PathBuf>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .parent()
         {
-            Some(parent) => Ok(RuntimeValue::Host(Arc::new(Mutex::new(Box::new(
+            Some(parent) => Ok(RuntimeValue::Host(Arc::new(Mutex::new(
                 parent.to_path_buf(),
-            ))))),
+            )))),
             None => Ok(RuntimeValue::Null),
         }
     }
@@ -188,7 +194,8 @@ impl NativeFunction for FsPathFileName {
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
         match path
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_ref::<PathBuf>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .file_name()
@@ -214,7 +221,8 @@ impl NativeFunction for FsPathExtension {
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
         match path
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_ref::<PathBuf>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .extension()
@@ -240,7 +248,8 @@ impl NativeFunction for FsPathStem {
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
         match path
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_ref::<PathBuf>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .file_stem()
@@ -266,10 +275,11 @@ impl NativeFunction for FsPathJoin {
         let other = resolve_str(env, &pop_or_null(&mut args))?;
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
-        path.lock_sync()
+        path.lock()
+            .unwrap()
             .downcast_mut::<PathBuf>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
-            .push(other.lock_sync().as_str());
+            .push(other.lock().unwrap().as_str());
         Ok(RuntimeValue::Null)
     }
 }
@@ -287,12 +297,13 @@ impl NativeFunction for FsPathWithExtension {
         let other = resolve_str(env, &pop_or_null(&mut args))?;
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
-        Ok(RuntimeValue::Host(Arc::new(Mutex::new(Box::new(
-            path.lock_sync()
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(
+            path.lock()
+                .unwrap()
                 .downcast_ref::<PathBuf>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
-                .with_extension(other.lock_sync().as_str()),
-        )))))
+                .with_extension(other.lock().unwrap().as_str()),
+        ))))
     }
 }
 
@@ -309,12 +320,13 @@ impl NativeFunction for FsPathWithFileName {
         let other = resolve_str(env, &pop_or_null(&mut args))?;
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
-        Ok(RuntimeValue::Host(Arc::new(Mutex::new(Box::new(
-            path.lock_sync()
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(
+            path.lock()
+                .unwrap()
                 .downcast_ref::<PathBuf>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
-                .with_file_name(other.lock_sync().as_str()),
-        )))))
+                .with_file_name(other.lock().unwrap().as_str()),
+        ))))
     }
 }
 
@@ -331,7 +343,8 @@ impl NativeFunction for FsPathReadDir {
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
         match std::fs::read_dir(
-            path.lock_sync()
+            path.lock()
+                .unwrap()
                 .downcast_ref::<PathBuf>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?,
         ) {
@@ -340,7 +353,7 @@ impl NativeFunction for FsPathReadDir {
                 for entry in entries {
                     match entry {
                         Ok(entry) => {
-                            out.push(RuntimeValue::Host(Arc::new(Mutex::new(Box::new(entry)))));
+                            out.push(RuntimeValue::Host(Arc::new(Mutex::new(entry))));
                         }
                         Err(err) => {
                             return Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
@@ -374,13 +387,14 @@ impl NativeFunction for FsDirEntryPath {
 
         let entry = resolve_host(env, &pop_or_null(&mut args))?;
 
-        Ok(RuntimeValue::Host(Arc::new(Mutex::new(Box::new(
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(
             entry
-                .lock_sync()
+                .lock()
+                .unwrap()
                 .downcast_ref::<DirEntry>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .path(),
-        )))))
+        ))))
     }
 }
 
@@ -398,7 +412,8 @@ impl NativeFunction for FsDirEntryFileName {
 
         Ok(RuntimeValue::Str(Arc::new(Mutex::new(
             entry
-                .lock_sync()
+                .lock()
+                .unwrap()
                 .downcast_ref::<DirEntry>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .file_name()
@@ -421,13 +436,14 @@ impl NativeFunction for FsDirEntryFileType {
         let entry = resolve_host(env, &pop_or_null(&mut args))?;
 
         match entry
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_ref::<DirEntry>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .file_type()
         {
             Ok(ft) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
-                Arc::new(Mutex::new(Box::new(ft))),
+                Arc::new(Mutex::new(ft)),
             ))))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
@@ -449,13 +465,14 @@ impl NativeFunction for FsDirEntryMetadata {
         let entry = resolve_host(env, &pop_or_null(&mut args))?;
 
         match entry
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_ref::<DirEntry>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .metadata()
         {
             Ok(meta) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
-                Arc::new(Mutex::new(Box::new(meta))),
+                Arc::new(Mutex::new(meta)),
             ))))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
@@ -479,7 +496,8 @@ impl NativeFunction for FsFileTypeIsFile {
         let ft = resolve_host(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            ft.lock_sync()
+            ft.lock()
+                .unwrap()
                 .downcast_ref::<FileType>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_file(),
@@ -500,7 +518,8 @@ impl NativeFunction for FsFileTypeIsDir {
         let ft = resolve_host(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            ft.lock_sync()
+            ft.lock()
+                .unwrap()
                 .downcast_ref::<FileType>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_dir(),
@@ -521,7 +540,8 @@ impl NativeFunction for FsFileTypeIsSymlink {
         let ft = resolve_host(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            ft.lock_sync()
+            ft.lock()
+                .unwrap()
                 .downcast_ref::<FileType>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_symlink(),
@@ -544,7 +564,8 @@ impl NativeFunction for FsMetadataIsFile {
         let meta = resolve_host(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            meta.lock_sync()
+            meta.lock()
+                .unwrap()
                 .downcast_ref::<Metadata>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_file(),
@@ -565,7 +586,8 @@ impl NativeFunction for FsMetadataIsDir {
         let meta = resolve_host(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            meta.lock_sync()
+            meta.lock()
+                .unwrap()
                 .downcast_ref::<Metadata>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .is_dir(),
@@ -586,7 +608,8 @@ impl NativeFunction for FsMetadataLen {
         let meta = resolve_host(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::UInt(
-            meta.lock_sync()
+            meta.lock()
+                .unwrap()
                 .downcast_ref::<Metadata>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .len(),
@@ -607,7 +630,8 @@ impl NativeFunction for FsMetadataModified {
         let meta = resolve_host(env, &pop_or_null(&mut args))?;
 
         match meta
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_ref::<Metadata>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .modified()
@@ -640,7 +664,8 @@ impl NativeFunction for FsMetadataCreated {
         let meta = resolve_host(env, &pop_or_null(&mut args))?;
 
         match meta
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_ref::<Metadata>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .created()
@@ -673,7 +698,8 @@ impl NativeFunction for FsMetadataAccessed {
         let meta = resolve_host(env, &pop_or_null(&mut args))?;
 
         match meta
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_ref::<Metadata>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .accessed()
@@ -706,7 +732,8 @@ impl NativeFunction for FsMetadataIsReadOnly {
         let meta = resolve_host(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            meta.lock_sync()
+            meta.lock()
+                .unwrap()
                 .downcast_ref::<Metadata>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .permissions()
@@ -731,7 +758,7 @@ impl NativeFunction for FsFileOpen {
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
         let mut options = OpenOptions::new();
-        match mode.lock_sync().as_str() {
+        match mode.lock().unwrap().as_str() {
             "r" => options.read(true),
             "w" => options.write(true).create(true).truncate(true),
             "a" => options.write(true).create(true).append(true),
@@ -746,12 +773,13 @@ impl NativeFunction for FsFileOpen {
         };
 
         match options.open(
-            path.lock_sync()
+            path.lock()
+                .unwrap()
                 .downcast_ref::<PathBuf>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?,
         ) {
             Ok(file) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
-                Arc::new(Mutex::new(Box::new(file))),
+                Arc::new(Mutex::new(file)),
             ))))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
@@ -773,7 +801,8 @@ impl NativeFunction for FsFileClose {
         let file = resolve_host(env, &pop_or_null(&mut args))?;
 
         match file
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_mut::<File>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .flush()
@@ -803,10 +832,11 @@ impl NativeFunction for FsFileWrite {
         let file = resolve_host(env, &pop_or_null(&mut args))?;
 
         match file
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_mut::<File>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
-            .write_all(content.lock_sync().as_bytes())
+            .write_all(content.lock().unwrap().as_bytes())
         {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
@@ -830,11 +860,12 @@ impl NativeFunction for FsFileWriteLine {
         let file = resolve_host(env, &pop_or_null(&mut args))?;
 
         match writeln!(
-            file.lock_sync()
+            file.lock()
+                .unwrap()
                 .downcast_mut::<File>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?,
             "{}",
-            content.lock_sync().as_str()
+            content.lock().unwrap().as_str()
         ) {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
@@ -859,7 +890,8 @@ impl NativeFunction for FsFileReadAll {
         let mut content = String::new();
 
         match file
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_mut::<File>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .read_to_string(&mut content)
@@ -887,7 +919,8 @@ impl NativeFunction for FsFileFlush {
         let file = resolve_host(env, &pop_or_null(&mut args))?;
 
         match file
-            .lock_sync()
+            .lock()
+            .unwrap()
             .downcast_mut::<File>()
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .flush()
@@ -914,7 +947,7 @@ impl NativeFunction for FsDirCreate {
 
         let path = resolve_str(env, &pop_or_null(&mut args))?;
 
-        match std::fs::create_dir(path.lock_sync().as_str()) {
+        match std::fs::create_dir(path.lock().unwrap().as_str()) {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
@@ -935,7 +968,7 @@ impl NativeFunction for FsDirCreateAll {
 
         let path = resolve_str(env, &pop_or_null(&mut args))?;
 
-        match std::fs::create_dir_all(path.lock_sync().as_str()) {
+        match std::fs::create_dir_all(path.lock().unwrap().as_str()) {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
@@ -956,7 +989,7 @@ impl NativeFunction for FsDirRemove {
 
         let path = resolve_str(env, &pop_or_null(&mut args))?;
 
-        match std::fs::remove_dir(path.lock_sync().as_str()) {
+        match std::fs::remove_dir(path.lock().unwrap().as_str()) {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),
@@ -977,7 +1010,7 @@ impl NativeFunction for FsDirRemoveAll {
 
         let path = resolve_str(env, &pop_or_null(&mut args))?;
 
-        match std::fs::remove_dir_all(path.lock_sync().as_str()) {
+        match std::fs::remove_dir_all(path.lock().unwrap().as_str()) {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(e.to_string())),

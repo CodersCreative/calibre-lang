@@ -8,7 +8,7 @@ use crate::{
     value::RuntimeValue,
 };
 use std::sync::Arc;
-use wasm_lite_std::Mutex;
+use wasm_sync::Mutex;
 extern crate errno;
 use errno::{Errno, errno, set_errno};
 

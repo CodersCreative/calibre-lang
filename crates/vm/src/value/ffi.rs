@@ -212,7 +212,7 @@ impl ExternFunction {
                     match (Self::resolve_value(env, value), x) {
                         (RuntimeValue::Str(x), ParserInnerType::Str) => {
                             arg_types.push(Type::pointer());
-                            let value = CString::new(x.lock_sync().as_str())
+                            let value = CString::new(x.lock().unwrap().as_str())
                                 .map_err(|_| RuntimeError::InvalidFunctionCall)?;
                             let ptr = value.as_ptr() as *const c_void;
                             Self::push_arg(
@@ -291,7 +291,7 @@ impl ExternFunction {
                         }
                         (RuntimeValue::Str(x), ParserInnerType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
-                            let value = CString::new(x.lock_sync().as_str())
+                            let value = CString::new(x.lock().unwrap().as_str())
                                 .map_err(|_| RuntimeError::InvalidFunctionCall)?;
                             let ptr = value.as_ptr() as *const c_void;
                             Self::push_arg(

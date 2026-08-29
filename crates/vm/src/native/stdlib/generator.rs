@@ -9,7 +9,7 @@ use crate::{
 };
 use dumpster::sync::Gc;
 use std::sync::Arc;
-use wasm_lite_std::Mutex;
+use wasm_sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct GeneratorState {
@@ -30,7 +30,7 @@ impl NativeFunction for GeneratorResumeFn {
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[0])?;
 
-        let mut state = self.state.lock_sync();
+        let mut state = self.state.lock().unwrap();
 
         if state.completed {
             return Ok(RuntimeValue::Option(None));

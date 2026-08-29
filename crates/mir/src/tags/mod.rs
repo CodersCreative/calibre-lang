@@ -10,7 +10,7 @@ use calibre_parser::ast::{
 };
 use rustc_hash::FxHashMap;
 use std::{fmt::Debug, sync::Arc};
-use wasm_lite_std::Mutex;
+use wasm_sync::Mutex;
 
 mod builders;
 pub mod context;
@@ -18,17 +18,15 @@ pub mod defaults;
 
 pub type TagHandlerFn = Arc<
     Mutex<
-        Box<
-            dyn Fn(
-                    &mut MiddleEnvironment,
-                    ScopeId,
-                    AstNode,
-                    ParserText,
-                    Vec<AstNode>,
-                ) -> Result<MiddleNode, MiddleErr>
-                + Send
-                + Sync,
-        >,
+        dyn Fn(
+                &mut MiddleEnvironment,
+                ScopeId,
+                AstNode,
+                ParserText,
+                Vec<AstNode>,
+            ) -> Result<MiddleNode, MiddleErr>
+            + Send
+            + Sync,
     >,
 >;
 
@@ -71,7 +69,7 @@ pub struct Tagging {
 
 impl MiddleEnvironment {
     pub fn register_tag_handlers(&mut self) {
-        let init_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let init_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -91,7 +89,7 @@ impl MiddleEnvironment {
 
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "init".to_string(),
@@ -101,7 +99,7 @@ impl MiddleEnvironment {
         );
 
         // TODO
-        let backend_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let backend_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -128,7 +126,7 @@ impl MiddleEnvironment {
                     Ok(MiddleNode::new(MiddleNodeType::EmptyLine, node.span))
                 }
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "backend".to_string(),
@@ -137,7 +135,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let os_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let os_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -161,7 +159,7 @@ impl MiddleEnvironment {
                     Ok(MiddleNode::new(MiddleNodeType::EmptyLine, node.span))
                 }
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "os".to_string(),
@@ -170,7 +168,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let fin_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let fin_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -190,7 +188,7 @@ impl MiddleEnvironment {
 
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "fin".to_string(),
@@ -199,7 +197,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let default_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let default_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -210,7 +208,7 @@ impl MiddleEnvironment {
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "default".to_string(),
@@ -219,7 +217,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let builder_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let builder_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -230,7 +228,7 @@ impl MiddleEnvironment {
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "builder".to_string(),
@@ -239,7 +237,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let panics_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let panics_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -250,7 +248,7 @@ impl MiddleEnvironment {
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "panics".to_string(),
@@ -259,7 +257,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let todo_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let todo_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -277,7 +275,7 @@ impl MiddleEnvironment {
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "todo".to_string(),
@@ -286,7 +284,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let deprecated_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let deprecated_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -304,7 +302,7 @@ impl MiddleEnvironment {
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "deprecated".to_string(),
@@ -313,7 +311,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let skip_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let skip_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -331,7 +329,7 @@ impl MiddleEnvironment {
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "skip".to_string(),
@@ -340,7 +338,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let bench_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let bench_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -351,7 +349,7 @@ impl MiddleEnvironment {
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "bench".to_string(),
@@ -360,7 +358,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let suite_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let suite_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -378,7 +376,7 @@ impl MiddleEnvironment {
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "suite".to_string(),
@@ -387,7 +385,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let package_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let package_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -396,7 +394,7 @@ impl MiddleEnvironment {
                 let middle = env.evaluate_with_package_injection(scope, node)?;
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "package".to_string(),
@@ -405,7 +403,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let caller_context_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let caller_context_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -416,7 +414,7 @@ impl MiddleEnvironment {
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "caller_context".to_string(),
@@ -425,7 +423,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let ignore_invalid_return_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let ignore_invalid_return_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -436,7 +434,7 @@ impl MiddleEnvironment {
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "ignore_invalid_return".to_string(),
@@ -445,7 +443,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let ignore_invalid_let_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let ignore_invalid_let_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -456,7 +454,7 @@ impl MiddleEnvironment {
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "ignore_invalid_let".to_string(),
@@ -465,7 +463,7 @@ impl MiddleEnvironment {
             },
         );
 
-        let current_context_handler: TagHandlerFn = Arc::new(Mutex::new(Box::new(
+        let current_context_handler: TagHandlerFn = Arc::new(Mutex::new(
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
@@ -474,7 +472,7 @@ impl MiddleEnvironment {
                 let middle = env.evaluate_with_current_context_injection(scope, node)?;
                 Ok(middle)
             },
-        )));
+        ));
 
         self.tagging.tag_handlers.insert(
             "current_context".to_string(),

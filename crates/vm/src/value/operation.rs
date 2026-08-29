@@ -10,7 +10,7 @@ use calibre_parser::ast::{
 use dumpster::sync::Gc;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
 use std::sync::Arc;
-use wasm_lite_std::Mutex;
+use wasm_sync::Mutex;
 
 fn comparison_value_handle<T: PartialEq + PartialOrd>(
     op: &ComparisonOperator,
@@ -49,7 +49,7 @@ pub fn comparison(
             (RuntimeValue::Float(a), RuntimeValue::Float(b)) => Some(a == b),
             (RuntimeValue::Char(a), RuntimeValue::Char(b)) => Some(a == b),
             (RuntimeValue::Str(a), RuntimeValue::Str(b)) => {
-                Some(a.lock_sync().as_str() == b.lock_sync().as_mut_str())
+                Some(a.lock().unwrap().as_str() == b.lock().unwrap().as_mut_str())
             }
             (RuntimeValue::Enum(a_name, a_idx, _), RuntimeValue::Enum(b_name, b_idx, _)) => {
                 Some(a_name == b_name && a_idx == b_idx)
@@ -233,7 +233,7 @@ pub fn comparison(
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
         }
         (RuntimeValue::Str(x), RuntimeValue::Str(y), op) => Ok(RuntimeValue::Bool(
-            comparison_value_handle(op, x.lock_sync().as_str(), y.lock_sync().as_str()),
+            comparison_value_handle(op, x.lock().unwrap().as_str(), y.lock().unwrap().as_str()),
         )),
         (left, right, ComparisonOperator::Equal) => Ok(RuntimeValue::Bool(matches!(
             eq_value(&left, &right),
@@ -460,7 +460,7 @@ impl RuntimeValue {
             }
             Self::Str(x) => {
                 let value = rhs.display(vm);
-                x.lock_sync().push_str(&value);
+                x.lock().unwrap().push_str(&value);
                 Ok(Self::Str(x))
             }
             lhs => match rhs {
@@ -472,7 +472,7 @@ impl RuntimeValue {
                 Self::Str(x) => {
                     let mut value = lhs.display(vm);
                     {
-                        let mut data = x.lock_sync();
+                        let mut data = x.lock().unwrap();
                         value.push_str(data.as_str());
                         *data = value;
                     }

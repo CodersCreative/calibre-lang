@@ -108,7 +108,7 @@ impl NativeFunction for ChannelGet {
 
         let ch = resolve_channel(env, &pop_or_null(&mut args))?;
 
-        let mut guard = ch.queue.lock_sync();
+        let mut guard = ch.queue.lock().unwrap();
 
         loop {
             if let Some(value) = guard.pop_front() {
@@ -119,7 +119,7 @@ impl NativeFunction for ChannelGet {
                 return Ok(RuntimeValue::Option(None));
             }
 
-            guard = ch.cvar.wait_sync(guard);
+            guard = ch.cvar.wait(guard).unwrap();
         }
     }
 }
@@ -136,7 +136,7 @@ impl NativeFunction for ChannelTryGet {
 
         let ch = resolve_channel(env, &pop_or_null(&mut args))?;
 
-        let mut guard = ch.queue.lock_sync();
+        let mut guard = ch.queue.lock().unwrap();
 
         if let Some(value) = guard.pop_front() {
             return Ok(RuntimeValue::Option(Some(dumpster::sync::Gc::new(value))));
@@ -180,7 +180,7 @@ impl NativeFunction for ChannelClosed {
             return Ok(RuntimeValue::Bool(false));
         }
 
-        let empty = ch.queue.lock_sync().is_empty();
+        let empty = ch.queue.lock().unwrap().is_empty();
 
         Ok(RuntimeValue::Bool(empty))
     }

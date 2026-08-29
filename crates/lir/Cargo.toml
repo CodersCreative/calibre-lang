@@ -19,4 +19,4 @@ rustc-hash = { workspace = true }
 serde = { workspace = true }
 indextree = { workspace = true }
 derive_builder = { workspace = true }
-wasm_lite_std = { workspace = true}
+wasm_sync = { workspace = true }

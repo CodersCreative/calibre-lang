@@ -263,7 +263,7 @@ impl WasmValue {
 
     pub fn as_string(&self) -> String {
         match &self.inner {
-            RuntimeValue::Str(s) => s.lock_sync().clone(),
+            RuntimeValue::Str(s) => s.lock().unwrap().clone(),
             _ => String::new(),
         }
     }

@@ -12,7 +12,7 @@ use std::{
     io::{self, BufRead, Write},
     sync::Arc,
 };
-use wasm_lite_std::Mutex;
+use wasm_sync::Mutex;
 
 pub struct ConsoleOutput;
 
@@ -28,7 +28,7 @@ impl NativeFunction for ConsoleOutput {
             .into_iter()
             .map(|arg| match arg {
                 RuntimeValue::Str(value) => {
-                    calibre_parser::parse::util::unescape_string(&value.lock_sync())
+                    calibre_parser::parse::util::unescape_string(&value.lock().unwrap())
                 }
                 other => other.display(env),
             })
@@ -230,10 +230,10 @@ impl NativeFunction for Len {
                 RuntimeValue::List(data) => data.as_ref().0.len() as u64,
                 RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as u64,
                 RuntimeValue::Range(from, to) => (to - from).max(0).unsigned_abs(),
-                RuntimeValue::Str(x) => x.lock_sync().len() as u64,
+                RuntimeValue::Str(x) => x.lock().unwrap().len() as u64,
                 RuntimeValue::Null => 0,
-                RuntimeValue::HashMap(map) => map.lock_sync().len() as u64,
-                RuntimeValue::HashSet(set) => set.lock_sync().len() as u64,
+                RuntimeValue::HashMap(map) => map.lock().unwrap().len() as u64,
+                RuntimeValue::HashSet(set) => set.lock().unwrap().len() as u64,
                 RuntimeValue::Int(x) => x as u64,
                 RuntimeValue::UInt(x) => x,
                 RuntimeValue::Float(x) => x as u64,
@@ -274,7 +274,7 @@ impl NativeFunction for Trim {
 
         match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
-                s.lock_sync().trim().to_string(),
+                s.lock().unwrap().trim().to_string(),
             )))),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
@@ -293,7 +293,7 @@ impl NativeFunction for TrimStart {
 
         match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
-                s.lock_sync().trim_start().to_string(),
+                s.lock().unwrap().trim_start().to_string(),
             )))),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
@@ -312,7 +312,7 @@ impl NativeFunction for TrimEnd {
 
         match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
-                s.lock_sync().trim_end().to_string(),
+                s.lock().unwrap().trim_end().to_string(),
             )))),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
@@ -330,7 +330,7 @@ impl NativeFunction for IsWhitespace {
 
         match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Bool(
-                s.lock_sync().chars().all(|c| c.is_whitespace()),
+                s.lock().unwrap().chars().all(|c| c.is_whitespace()),
             )),
             RuntimeValue::Char(c) => Ok(RuntimeValue::Bool(c.is_whitespace())),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),

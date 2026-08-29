@@ -56,8 +56,9 @@ impl VM {
             .iter()
             .chain(RuntimeValue::natives())
         {
-            let name = self.registry.natives.get(full_name).unwrap();
-            let _ = self.variables.insert(name, value.clone());
+            if let Some(name) = self.registry.natives.get(full_name) {
+                let _ = self.variables.insert(name, value.clone());
+            }
         }
     }
 }

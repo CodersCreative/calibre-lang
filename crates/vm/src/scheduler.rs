@@ -10,8 +10,8 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
-use wasm_lite_std as thread;
-use wasm_lite_std::{Mutex, condvar::Condvar};
+use wasm_sync::{Condvar, Mutex};
+use wasm_thread as thread;
 
 #[derive(Clone, Debug)]
 pub struct SchedulerHandle {
@@ -62,8 +62,8 @@ impl SchedulerHandle {
             .unwrap_or(2);
 
         {
-            let mut workers = inner.workers.lock_sync();
-            let mut handles = inner.handles.lock_sync();
+            let mut workers = inner.workers.lock().unwrap();
+            let mut handles = inner.handles.lock().unwrap();
 
             for _ in 0..worker_count {
                 let worker = Arc::new(Worker {
@@ -87,7 +87,7 @@ impl SchedulerHandle {
         }
 
         let worker = {
-            let mut workers = self.inner.workers.lock_sync();
+            let mut workers = self.inner.workers.lock().unwrap();
             let mut selected = None;
             let mut best_load = usize::MAX;
 
@@ -107,7 +107,7 @@ impl SchedulerHandle {
                     tasks: AtomicUsize::new(0),
                 });
                 let handle = Self::start_worker(worker.clone(), self.inner.clone());
-                let mut handles = self.inner.handles.lock_sync();
+                let mut handles = self.inner.handles.lock().unwrap();
                 handles.push(handle);
                 workers.push(worker.clone());
                 selected = Some(worker);
@@ -121,7 +121,7 @@ impl SchedulerHandle {
         };
 
         let mut vm = {
-            let mut pool = self.inner.vm_pool.lock_sync();
+            let mut pool = self.inner.vm_pool.lock().unwrap();
             if let Some(mut pooled_vm) = pool.pop_front() {
                 pooled_vm.task_state = Default::default();
                 pooled_vm.captured_output = String::new();
@@ -147,7 +147,7 @@ impl SchedulerHandle {
         vm.ptr_heap = base_vm.ptr_heap.clone();
         vm.moved_functions = Default::default();
 
-        let mut queue = worker.queue.lock_sync();
+        let mut queue = worker.queue.lock().unwrap();
         worker.tasks.fetch_add(1, Ordering::AcqRel);
         queue.push_back(Task {
             vm,
@@ -161,7 +161,7 @@ impl SchedulerHandle {
         thread::spawn(move || {
             loop {
                 let mut task = {
-                    let mut queue = worker.queue.lock_sync();
+                    let mut queue = worker.queue.lock().unwrap();
                     loop {
                         if let Some(task) = queue.pop_front() {
                             break task;
@@ -169,14 +169,14 @@ impl SchedulerHandle {
                         if scheduler.shutdown.load(Ordering::Acquire) {
                             return;
                         }
-                        queue = worker.cvar.wait_sync(queue);
+                        queue = worker.cvar.wait(queue).unwrap();
                     }
                 };
 
                 if let Some(status) = run_task_slice(&mut task, worker.quantum, &scheduler) {
                     match status {
                         TaskStatus::Yielded => {
-                            let mut queue = worker.queue.lock_sync();
+                            let mut queue = worker.queue.lock().unwrap();
                             queue.push_back(task);
                         }
                         TaskStatus::Finished => {
@@ -184,7 +184,7 @@ impl SchedulerHandle {
                             if let Some(wg) = task.wait_group.take() {
                                 wg.done();
                             }
-                            let mut pool = scheduler.vm_pool.lock_sync();
+                            let mut pool = scheduler.vm_pool.lock().unwrap();
                             pool.push_back(task.vm);
                         }
                     }
@@ -196,14 +196,14 @@ impl SchedulerHandle {
     fn stop_workers(&self) {
         self.inner.shutdown.store(true, Ordering::Release);
 
-        let workers = self.inner.workers.lock_sync();
+        let workers = self.inner.workers.lock().unwrap();
         for worker in workers.iter() {
             worker.cvar.notify_all();
         }
 
         drop(workers);
 
-        let mut handles = self.inner.handles.lock_sync();
+        let mut handles = self.inner.handles.lock().unwrap();
         for handle in handles.drain(..) {
             let _ = handle.join();
         }

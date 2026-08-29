@@ -20,7 +20,8 @@ thiserror = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 indextree = { workspace = true }
-wasm_lite_std = { workspace = true}
+wasm_thread = { workspace = true }
+wasm_sync = { workspace = true }
 dumpster = "2.0.0"
 libloading = {version = "0.9", optional = true }
 libffi = {version = "4", optional = true }
@@ -35,4 +36,6 @@ errno = { version = "0.3.14", optional = true }
 astro-float = "=0.9.6"
 
 [features]
+default = ["native"]
 native = ["errno", "libffi", "libloading", "ureq", "socket2"]
+wasm = []

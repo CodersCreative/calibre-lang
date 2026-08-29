@@ -133,10 +133,21 @@ extern "c" const c_strlen = fn(str) -> @usize from "libc" as "strlen";
 
 ## CLI Usage
 
-### Build
+### Native Build
 
 ```sh
 cargo build -p calibre
+```
+
+### WASM Build
+
+```sh
+# To build the calibre engine API to WASM
+# Replace <output-dir> with ehre you want the bindings to be built to. Use "../examples/wasm/pkg/calibre" for the example
+wasm-pack build -d <output-dir> --no-pack ./calibre --target web --no-default-features --features wasm
+
+# Use "../examples/wasm/pkg/fmt" for <output-dir> for the example
+wasm-pack build -d  <output-dir> --no-pack ./fmt --target web --no-default-features --features wasm
 ```
 
 ### REPL

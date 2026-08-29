@@ -10,7 +10,7 @@ use crate::{
 use blake3::Hasher as Blake3;
 use sha2::{Digest, Sha256, Sha512};
 use std::sync::Arc;
-use wasm_lite_std::Mutex;
+use wasm_sync::Mutex;
 
 pub struct Sha256Fn;
 
@@ -25,7 +25,7 @@ impl NativeFunction for Sha256Fn {
         let s = resolve_str(env, &pop_or_null(&mut args))?;
 
         let mut hasher = Sha256::new();
-        hasher.update(s.lock_sync().as_bytes());
+        hasher.update(s.lock().unwrap().as_bytes());
         let out = hasher.finalize();
         Ok(RuntimeValue::Str(Arc::new(Mutex::new(hex::encode(out)))))
     }
@@ -44,7 +44,7 @@ impl NativeFunction for Sha512Fn {
         let s = resolve_str(env, &pop_or_null(&mut args))?;
 
         let mut hasher = Sha512::new();
-        hasher.update(s.lock_sync().as_bytes());
+        hasher.update(s.lock().unwrap().as_bytes());
         let out = hasher.finalize();
         Ok(RuntimeValue::Str(Arc::new(Mutex::new(hex::encode(out)))))
     }
@@ -63,7 +63,7 @@ impl NativeFunction for Blake3Fn {
         let s = resolve_str(env, &pop_or_null(&mut args))?;
 
         let mut hasher = Blake3::new();
-        hasher.update(s.lock_sync().as_bytes());
+        hasher.update(s.lock().unwrap().as_bytes());
         let out = hasher.finalize();
         Ok(RuntimeValue::Str(Arc::new(Mutex::new(
             out.to_hex().to_string(),

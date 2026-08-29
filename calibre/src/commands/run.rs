@@ -11,7 +11,7 @@ use derive_builder::Builder;
 use smol::fs;
 use std::{error::Error, path::PathBuf};
 use tracing::instrument;
-use wasm_lite_std as thread;
+use wasm_thread as thread;
 
 #[derive(Builder, Debug)]
 pub struct Run {

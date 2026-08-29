@@ -10,7 +10,7 @@ use crate::{
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
-use wasm_lite_std::Mutex;
+use wasm_sync::Mutex;
 
 fn tuple_pair(value: RuntimeValue) -> Result<(RuntimeValue, RuntimeValue), RuntimeError> {
     match value {
@@ -166,7 +166,7 @@ impl NativeFunction for HashMapLen {
 
         let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
 
-        let len = map.lock_sync().len() as i64;
+        let len = map.lock().unwrap().len() as i64;
         Ok(RuntimeValue::Int(len))
     }
 }
@@ -381,7 +381,7 @@ impl NativeFunction for HashSetLen {
 
         let set = resolve_hashset(env, &pop_or_null(&mut args))?;
 
-        let len = set.lock_sync().len() as i64;
+        let len = set.lock().unwrap().len() as i64;
         Ok(RuntimeValue::Int(len))
     }
 }

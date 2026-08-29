@@ -9,7 +9,7 @@ use crate::{
 };
 use dumpster::sync::Gc;
 use std::sync::Arc;
-use wasm_lite_std::Mutex;
+use wasm_sync::Mutex;
 
 pub struct CharLowercase;
 
@@ -56,14 +56,16 @@ impl NativeFunction for StrSplit {
         let delim = resolve_str(env, &pop_or_null(&mut args))?;
         let text = resolve_str(env, &pop_or_null(&mut args))?;
 
-        let parts = if delim.lock_sync().is_empty() {
-            text.lock_sync()
+        let parts = if delim.lock().unwrap().is_empty() {
+            text.lock()
+                .unwrap()
                 .chars()
                 .map(|c| RuntimeValue::Str(Arc::new(Mutex::new(c.to_string()))))
                 .collect::<Vec<_>>()
         } else {
-            text.lock_sync()
-                .split(delim.lock_sync().as_str())
+            text.lock()
+                .unwrap()
+                .split(delim.lock().unwrap().as_str())
                 .map(|s| RuntimeValue::Str(Arc::new(Mutex::new(s.to_string()))))
                 .collect::<Vec<_>>()
         };
@@ -86,9 +88,10 @@ impl NativeFunction for StrContains {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            text.lock_sync()
+            text.lock()
+                .unwrap()
                 .as_str()
-                .contains(needle.lock_sync().as_str()),
+                .contains(needle.lock().unwrap().as_str()),
         ))
     }
 }
@@ -107,9 +110,10 @@ impl NativeFunction for StrStartsWith {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            text.lock_sync()
+            text.lock()
+                .unwrap()
                 .as_str()
-                .starts_with(prefix.lock_sync().as_str()),
+                .starts_with(prefix.lock().unwrap().as_str()),
         ))
     }
 }
@@ -128,9 +132,10 @@ impl NativeFunction for StrEndsWith {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            text.lock_sync()
+            text.lock()
+                .unwrap()
                 .as_str()
-                .ends_with(suffix.lock_sync().as_str()),
+                .ends_with(suffix.lock().unwrap().as_str()),
         ))
     }
 }

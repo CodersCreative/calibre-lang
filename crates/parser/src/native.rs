@@ -342,7 +342,8 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Null)),
                     },
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "fs.file_write",
                     vec![],
@@ -350,7 +351,8 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Null)),
                     },
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "fs.file_write_line",
                     vec![],
@@ -358,7 +360,8 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Null)),
                     },
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "fs.file_read_all",
                     vec![],
@@ -366,7 +369,8 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Str)),
                     },
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "fs.file_flush",
                     vec![],
@@ -509,8 +513,10 @@ impl ParserDataType {
                     "list.raw_remove",
                     vec![],
                     ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Dynamic))),
-                ),#[cfg(feature = "native")]
-                ("net.http_request_raw", vec![], ParserInnerType::Str),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
+                ("net.http_request_raw", vec![], ParserInnerType::Str),
+                #[cfg(feature = "native")]
                 (
                     "net.http_request_try",
                     vec![],
@@ -518,7 +524,8 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Str)),
                     },
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "http_request_try",
                     vec![],
@@ -526,24 +533,30 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Str)),
                     },
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "net.tcp_connect",
                     vec![],
                     ParserInnerType::Struct(String::from("TcpStream")),
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "net.tcp_listen",
                     vec![],
                     ParserInnerType::Struct(String::from("TcpListener")),
-                ),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
                 (
                     "net.tcp_accept",
                     vec![],
                     ParserInnerType::Struct(String::from("TcpStream")),
-                ),#[cfg(feature = "native")]
-                ("net.tcp_read", vec![], ParserInnerType::Str),#[cfg(feature = "native")]
-                ("net.tcp_write", vec![], ParserInnerType::Int),#[cfg(feature = "native")]
+                ),
+                #[cfg(feature = "native")]
+                ("net.tcp_read", vec![], ParserInnerType::Str),
+                #[cfg(feature = "native")]
+                ("net.tcp_write", vec![], ParserInnerType::Int),
+                #[cfg(feature = "native")]
                 ("net.tcp_close", vec![], ParserInnerType::Null),
             ];
 

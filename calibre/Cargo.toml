@@ -21,6 +21,20 @@ name = "calibre"
 path = "src/main.rs"
 required-features = ["cli"]
 
+[target.wasm32-unknown-unknown]
+rustflags = [
+    "-C", "target-feature=+atomics,+bulk-memory",
+    "-C", "link-arg=--shared-memory",
+    "-C", "link-arg=--import-memory",
+    "-C", "link-arg=--max-memory=1073741824",
+    "-C", "link-arg=--export=__stack_pointer",
+    "-C", "link-arg=--export=__tls_base",
+    "-C", "link-arg=--export=__tls_size",
+    "-C", "link-arg=--export=__tls_align",
+    "-C", "link-arg=--export=__wasm_init_tls",
+]
+
+
 [features]
 default = ["cli"]
 cli = ["clap", "rustyline", "glob", "smol", "tracing-flame", "tracing-appender", "tracing-subscriber", "calibre-vm/native", "calibre-parser/native"]
@@ -39,7 +53,8 @@ rustyline = {workspace = true, optional = true }
 thiserror = {workspace = true }
 rustc-hash = { workspace = true }
 tracing = { workspace = true }
-wasm_lite_std = { workspace = true}
+wasm_thread = { workspace = true }
+wasm_sync = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
 tracing-flame = { workspace = true, optional = true }
 tracing-appender = { workspace = true, optional = true }

@@ -383,7 +383,8 @@ dependencies = [
  "tracing-flame",
  "tracing-subscriber",
  "wasm-bindgen",
- "wasm_lite_std",
+ "wasm_sync",
+ "wasm_thread",
 ]
 
 [[package]]
@@ -423,7 +424,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "tracing",
- "wasm_lite_std",
+ "wasm_sync",
 ]
 
 [[package]]
@@ -456,7 +457,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tracing",
- "wasm_lite_std",
+ "wasm_sync",
 ]
 
 [[package]]
@@ -500,7 +501,8 @@ dependencies = [
  "thiserror",
  "tracing",
  "ureq",
- "wasm_lite_std",
+ "wasm_sync",
+ "wasm_thread",
 ]
 
 [[package]]
@@ -2019,17 +2021,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "syn"
-version = "3.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6275cddf4610d1775e6d1fe9469b2e77d0f39fd98fb7450901b821e0c53649f"
-dependencies = [
- "proc-macro2",
- "quote",
- "unicode-ident",
-]
-
-[[package]]
 name = "sync_wrapper"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2464,33 +2455,36 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm_lite"
-version = "0.1.4"
+name = "wasm_sync"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "363a316311ec1213cc8b1b962d512173c1299083a435492e9babd26cb6f2263c"
+checksum = "cff360cade7fec41ff0e9d2cda57fe58258c5f16def0e21302394659e6bbb0ea"
 dependencies = [
- "wasm_lite_macro",
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
-name = "wasm_lite_macro"
-version = "0.1.4"
+name = "wasm_thread"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd00ffa03acc08930444d1b126ab0014f0dd4419335de935fc82a55998e74beb"
+checksum = "b7516db7f32decdadb1c3b8deb1b7d78b9df7606c5cc2f6241737c2ab3a0258e"
 dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.4",
+ "futures",
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
-name = "wasm_lite_std"
-version = "0.1.4"
+name = "web-sys"
+version = "0.3.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f83bb792afb040fa21a0e298e2c72f0fdc6ec422a402ae9a60f7b2a68e4eeeb"
+checksum = "c435338968042f4f59a557f690a253676d47ce13ceb55d70100e7facf6620a30"
 dependencies = [
- "atomic-waker",
- "wasm_lite",
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]

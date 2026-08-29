@@ -1,12 +1,3 @@
-use calibre_lir::ast::BlockId;
-use calibre_parser::ast::binary::BinaryOperator;
-use calibre_parser::ast::comparison::ComparisonOperator;
-use calibre_parser::ast::types::ParserInnerType;
-use calibre_parser::ast::{ObjectMap, idents::ParserText};
-use dumpster::sync::Gc;
-use rustc_hash::{FxHashMap, FxHashSet};
-use std::sync::Arc;
-use tracing::{debug, instrument, trace};
 use crate::{
     VM, VarName,
     conversion::{VMBlock, VMFunction, VMGlobal, VMInstruction, VMLiteral},
@@ -16,6 +7,15 @@ use crate::{
         operation::{binary, boolean, comparison},
     },
 };
+use calibre_lir::ast::BlockId;
+use calibre_parser::ast::binary::BinaryOperator;
+use calibre_parser::ast::comparison::ComparisonOperator;
+use calibre_parser::ast::types::ParserInnerType;
+use calibre_parser::ast::{ObjectMap, idents::ParserText};
+use dumpster::sync::Gc;
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::sync::Arc;
+use tracing::{debug, instrument, trace};
 
 mod instruction;
 
@@ -743,19 +743,17 @@ impl VM {
             },
             ParserInnerType::Function { .. } | ParserInnerType::NativeFunction { .. } => {
                 let val = matches!(
-                value,
-                RuntimeValue::Function { .. }
-                    | RuntimeValue::NativeFunction(_)
-                    
+                    value,
+                    RuntimeValue::Function { .. } | RuntimeValue::NativeFunction(_)
                 );
 
-            #[cfg(feature = "native")]
-            {val || matches!(
-                value, RuntimeValue::ExternFunction(_)
-            )}
-            #[cfg(not(feature = "native"))]
-            val
-            },
+                #[cfg(feature = "native")]
+                {
+                    val || matches!(value, RuntimeValue::ExternFunction(_))
+                }
+                #[cfg(not(feature = "native"))]
+                val
+            }
             ParserInnerType::Struct(identifier)
             | ParserInnerType::StructWithGenerics { identifier, .. } => match value {
                 RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {

@@ -9,7 +9,7 @@ use crate::{
 };
 use regex::Regex;
 use std::sync::Arc;
-use wasm_lite_std::Mutex;
+use wasm_sync::Mutex;
 
 pub struct IsMatchFn;
 
@@ -24,10 +24,12 @@ impl NativeFunction for IsMatchFn {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
         let pattern = resolve_str(env, &pop_or_null(&mut args))?;
 
-        let re = Regex::new(pattern.lock_sync().as_str())
+        let re = Regex::new(pattern.lock().unwrap().as_str())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
 
-        Ok(RuntimeValue::Bool(re.is_match(text.lock_sync().as_str())))
+        Ok(RuntimeValue::Bool(
+            re.is_match(text.lock().unwrap().as_str()),
+        ))
     }
 }
 
@@ -44,10 +46,10 @@ impl NativeFunction for FindFn {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
         let pattern = resolve_str(env, &pop_or_null(&mut args))?;
 
-        let re = Regex::new(pattern.lock_sync().as_str())
+        let re = Regex::new(pattern.lock().unwrap().as_str())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
         let found = re
-            .find(text.lock_sync().as_str())
+            .find(text.lock().unwrap().as_str())
             .map(|m| RuntimeValue::Str(Arc::new(Mutex::new(m.as_str().to_string()))));
         Ok(RuntimeValue::Option(found.map(dumpster::sync::Gc::new)))
     }
@@ -67,10 +69,10 @@ impl NativeFunction for ReplaceFn {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
         let pattern = resolve_str(env, &pop_or_null(&mut args))?;
 
-        let re = Regex::new(pattern.lock_sync().as_str())
+        let re = Regex::new(pattern.lock().unwrap().as_str())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
-        let text = text.lock_sync();
-        let out = re.replace_all(text.as_str(), replacement.lock_sync().as_str());
+        let text = text.lock().unwrap();
+        let out = re.replace_all(text.as_str(), replacement.lock().unwrap().as_str());
         Ok(RuntimeValue::Str(Arc::new(Mutex::new(out.to_string()))))
     }
 }
