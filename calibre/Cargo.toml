@@ -38,7 +38,9 @@ rustflags = [
 [features]
 default = ["cli"]
 cli = ["clap", "rustyline", "glob", "smol", "tracing-flame", "tracing-appender", "tracing-subscriber", "calibre-vm/native", "calibre-parser/native"]
-wasm = ["wasm-bindgen", "js-sys", "getrandom/js", "calibre-parser/wasm", "calibre-mir/wasm"]
+wasm = ["wasm-bindgen", "js-sys", "getrandom/js", "calibre-parser/wasm", "calibre-mir/wasm", "calibre-vm/wasm"]
+python = ["pyo3"]
+ffi = ["cbindgen"]
 
 [dependencies]
 clap = { workspace = true, optional = true }
@@ -70,3 +72,7 @@ glob = {version = "0.3.1", optional = true}
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
 getrandom = { version = "0.2", optional = true }
+pyo3 = { version = "0.18", optional = true, features = ["extension-module"] }
+
+[build-dependencies]
+cbindgen = {version = "0.28", optional = true}

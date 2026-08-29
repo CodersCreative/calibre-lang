@@ -20,6 +20,12 @@ pub mod standalone;
 #[cfg(all(feature = "wasm", target_family = "wasm"))]
 pub mod wasm;
 
+#[cfg(feature = "ffi")]
+pub mod ffi;
+
+#[cfg(feature = "python")]
+pub mod python;
+
 #[derive(Debug, Error)]
 pub enum CalibreError {
     #[error("{0}")]
@@ -164,6 +170,26 @@ impl CalibreEngine {
 
     pub fn add_input(&mut self, input: String) {
         self.input_buffer.push(input);
+    }
+
+    pub fn set_no_std(&mut self, no_std: bool) {
+        self.no_std = no_std;
+    }
+
+    pub fn set_entry_name(&mut self, name: impl Into<String>) {
+        self.entry_name = name.into();
+    }
+
+    pub fn add_prelude(&mut self, source: impl Into<String>) {
+        self.prelude.push(source.into());
+    }
+
+    pub fn set_cache_enabled(&mut self, enabled: bool) {
+        self.cache_enabled = enabled;
+    }
+
+    pub fn set_cache_dir(&mut self, path: impl Into<PathBuf>) {
+        self.cache_dir = Some(path.into());
     }
 }
 

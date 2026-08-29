@@ -205,7 +205,7 @@ impl MiddleEnvironment {
             }
             AstNodeType::Spawn {
                 mut items,
-                auto_wait,
+                auto_wait: _,
             } if items.len() == 1 => {
                 let value: AstNode = items.remove(0);
 

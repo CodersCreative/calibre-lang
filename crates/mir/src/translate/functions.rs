@@ -897,7 +897,7 @@ impl MiddleEnvironment {
         let needs_caller_context = if let Some(var) = self.symbols.variables.get(&caller_name) {
             match var.data_type.clone().unwrap_all_refs().data_type {
                 ParserInnerType::Function {
-                    return_type,
+                    return_type: _,
                     parameters,
                 } if !parameters.is_empty() => {
                     parameters.last().unwrap().data_type

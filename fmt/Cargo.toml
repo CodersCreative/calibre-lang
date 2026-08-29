@@ -25,6 +25,8 @@ required-features = ["cli"]
 default = ["cli"]
 cli = ["clap", "tracing-flame", "tracing-appender"]
 wasm = ["wasm-bindgen", "getrandom/js"]
+python = ["pyo3"]
+ffi = ["cbindgen"]
 
 [dependencies]
 clap = { workspace = true, optional = true }
@@ -36,3 +38,7 @@ tracing-flame = { workspace = true, optional = true }
 tracing-appender = { workspace = true, optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 getrandom = { version = "0.2", optional = true }
+pyo3 = { version = "0.18", optional = true, features = ["extension-module"] }
+
+[build-dependencies]
+cbindgen = {version = "0.28", optional = true}

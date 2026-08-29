@@ -487,6 +487,7 @@ impl VM {
 
                         self.set_reg_value(*dst, RuntimeValue::ExternFunction(Arc::new(func)));
                     }
+                    #[cfg(feature = "wasm")]
                     VMLiteral::ExternFunction {
                         abi,
                         library,

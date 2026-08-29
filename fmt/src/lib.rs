@@ -13,6 +13,12 @@ use tracing::{debug, instrument};
 #[cfg(any(feature = "wasm", target_arch = "wasm32"))]
 pub mod wasm;
 
+#[cfg(feature = "ffi")]
+pub mod ffi;
+
+#[cfg(feature = "python")]
+pub mod python;
+
 #[derive(Debug)]
 pub enum FormatError {
     Read {
