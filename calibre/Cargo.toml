@@ -39,10 +39,12 @@ rustyline = {workspace = true, optional = true }
 thiserror = {workspace = true }
 rustc-hash = { workspace = true }
 tracing = { workspace = true }
+wasm_lite_std = { workspace = true}
 tracing-subscriber = { workspace = true }
 tracing-flame = { workspace = true, optional = true }
 tracing-appender = { workspace = true, optional = true }
 smol = { workspace = true, optional = true }
+
 derive_builder = { workspace = true }
 
 bincode = "1"

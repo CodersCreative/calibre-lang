@@ -6,11 +6,12 @@ use crate::{
         WaitGroupInner,
     },
 };
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use wasm_lite_std::Mutex;
 
 pub fn panic_message_arg(value: &RuntimeValue) -> String {
     match value {
-        RuntimeValue::Str(s) => s.lock().unwrap().clone(),
+        RuntimeValue::Str(s) => s.lock_sync().clone(),
         other => format!("{other:?}"),
     }
 }

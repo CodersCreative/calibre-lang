@@ -1,17 +1,17 @@
-use std::{
-    collections::VecDeque,
-    sync::{
-        Arc, Condvar, Mutex,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-    },
-    thread,
-};
-
 use crate::{
     VM,
     config::VMConfig,
     value::{RuntimeValue, WaitGroupInner},
 };
+use std::{
+    collections::VecDeque,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    },
+};
+use wasm_lite_std as thread;
+use wasm_lite_std::{Mutex, condvar::Condvar};
 
 #[derive(Clone, Debug)]
 pub struct SchedulerHandle {
@@ -57,13 +57,14 @@ impl SchedulerHandle {
             vm_pool: Mutex::new(VecDeque::new()),
         });
 
-        let worker_count = std::thread::available_parallelism()
+        let worker_count = thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(2);
 
         {
-            let mut workers = inner.workers.lock().unwrap_or_else(|e| e.into_inner());
-            let mut handles = inner.handles.lock().unwrap_or_else(|e| e.into_inner());
+            let mut workers = inner.workers.lock_sync();
+            let mut handles = inner.handles.lock_sync();
+
             for _ in 0..worker_count {
                 let worker = Arc::new(Worker {
                     queue: Mutex::new(VecDeque::new()),
@@ -86,7 +87,7 @@ impl SchedulerHandle {
         }
 
         let worker = {
-            let mut workers = self.inner.workers.lock().unwrap_or_else(|e| e.into_inner());
+            let mut workers = self.inner.workers.lock_sync();
             let mut selected = None;
             let mut best_load = usize::MAX;
 
@@ -106,7 +107,7 @@ impl SchedulerHandle {
                     tasks: AtomicUsize::new(0),
                 });
                 let handle = Self::start_worker(worker.clone(), self.inner.clone());
-                let mut handles = self.inner.handles.lock().unwrap_or_else(|e| e.into_inner());
+                let mut handles = self.inner.handles.lock_sync();
                 handles.push(handle);
                 workers.push(worker.clone());
                 selected = Some(worker);
@@ -120,7 +121,7 @@ impl SchedulerHandle {
         };
 
         let mut vm = {
-            let mut pool = self.inner.vm_pool.lock().unwrap_or_else(|e| e.into_inner());
+            let mut pool = self.inner.vm_pool.lock_sync();
             if let Some(mut pooled_vm) = pool.pop_front() {
                 pooled_vm.task_state = Default::default();
                 pooled_vm.captured_output = String::new();
@@ -146,7 +147,7 @@ impl SchedulerHandle {
         vm.ptr_heap = base_vm.ptr_heap.clone();
         vm.moved_functions = Default::default();
 
-        let mut queue = worker.queue.lock().unwrap_or_else(|e| e.into_inner());
+        let mut queue = worker.queue.lock_sync();
         worker.tasks.fetch_add(1, Ordering::AcqRel);
         queue.push_back(Task {
             vm,
@@ -160,7 +161,7 @@ impl SchedulerHandle {
         thread::spawn(move || {
             loop {
                 let mut task = {
-                    let mut queue = worker.queue.lock().unwrap_or_else(|e| e.into_inner());
+                    let mut queue = worker.queue.lock_sync();
                     loop {
                         if let Some(task) = queue.pop_front() {
                             break task;
@@ -168,14 +169,14 @@ impl SchedulerHandle {
                         if scheduler.shutdown.load(Ordering::Acquire) {
                             return;
                         }
-                        queue = worker.cvar.wait(queue).unwrap_or_else(|e| e.into_inner());
+                        queue = worker.cvar.wait_sync(queue);
                     }
                 };
 
                 if let Some(status) = run_task_slice(&mut task, worker.quantum, &scheduler) {
                     match status {
                         TaskStatus::Yielded => {
-                            let mut queue = worker.queue.lock().unwrap_or_else(|e| e.into_inner());
+                            let mut queue = worker.queue.lock_sync();
                             queue.push_back(task);
                         }
                         TaskStatus::Finished => {
@@ -183,8 +184,7 @@ impl SchedulerHandle {
                             if let Some(wg) = task.wait_group.take() {
                                 wg.done();
                             }
-                            let mut pool =
-                                scheduler.vm_pool.lock().unwrap_or_else(|e| e.into_inner());
+                            let mut pool = scheduler.vm_pool.lock_sync();
                             pool.push_back(task.vm);
                         }
                     }
@@ -196,14 +196,14 @@ impl SchedulerHandle {
     fn stop_workers(&self) {
         self.inner.shutdown.store(true, Ordering::Release);
 
-        let workers = self.inner.workers.lock().unwrap_or_else(|e| e.into_inner());
+        let workers = self.inner.workers.lock_sync();
         for worker in workers.iter() {
             worker.cvar.notify_all();
         }
 
         drop(workers);
 
-        let mut handles = self.inner.handles.lock().unwrap_or_else(|e| e.into_inner());
+        let mut handles = self.inner.handles.lock_sync();
         for handle in handles.drain(..) {
             let _ = handle.join();
         }

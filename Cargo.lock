@@ -383,6 +383,7 @@ dependencies = [
  "tracing-flame",
  "tracing-subscriber",
  "wasm-bindgen",
+ "wasm_lite_std",
 ]
 
 [[package]]
@@ -422,6 +423,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "tracing",
+ "wasm_lite_std",
 ]
 
 [[package]]
@@ -454,6 +456,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tracing",
+ "wasm_lite_std",
 ]
 
 [[package]]
@@ -498,6 +501,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "ureq",
+ "wasm_lite_std",
 ]
 
 [[package]]
@@ -2016,6 +2020,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "syn"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6275cddf4610d1775e6d1fe9469b2e77d0f39fd98fb7450901b821e0c53649f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
 name = "sync_wrapper"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2447,6 +2462,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ef64dbcc55df09c7e5a46182d181c2cfa3e925f3da937ea764728b4bbb9dcbf"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "wasm_lite"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "363a316311ec1213cc8b1b962d512173c1299083a435492e9babd26cb6f2263c"
+dependencies = [
+ "wasm_lite_macro",
+]
+
+[[package]]
+name = "wasm_lite_macro"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd00ffa03acc08930444d1b126ab0014f0dd4419335de935fc82a55998e74beb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.4",
+]
+
+[[package]]
+name = "wasm_lite_std"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f83bb792afb040fa21a0e298e2c72f0fdc6ec422a402ae9a60f7b2a68e4eeeb"
+dependencies = [
+ "atomic-waker",
+ "wasm_lite",
 ]
 
 [[package]]

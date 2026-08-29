@@ -77,12 +77,12 @@ impl WasmCalibreEngine {
         self.inner.prelude.push(source);
     }
 
-    pub fn add_global(&mut self, name: String, value: JsValue) {
+    /*pub fn add_global(&mut self, name: String, value: JsValue) {
         self.inner.bindings.push(NativeBinding {
             name,
             value: value.into_native(),
         });
-    }
+    }*/
 }
 
 #[wasm_bindgen]
@@ -229,7 +229,7 @@ impl WasmValue {
 
     pub fn as_string(&self) -> String {
         match &self.inner {
-            RuntimeValue::Str(s) => s.lock().map(|x| x.clone()).unwrap_or_default(),
+            RuntimeValue::Str(s) => s.lock_sync().clone(),
             _ => String::new(),
         }
     }

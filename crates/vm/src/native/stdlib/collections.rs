@@ -9,7 +9,8 @@ use crate::{
 };
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use wasm_lite_std::Mutex;
 
 fn tuple_pair(value: RuntimeValue) -> Result<(RuntimeValue, RuntimeValue), RuntimeError> {
     match value {
@@ -78,7 +79,7 @@ impl NativeFunction for HashMapSet {
         let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
         let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
 
-        if let Ok(mut guard) = map.lock() {
+        if let Ok(mut guard) = map.try_lock() {
             guard.insert(key, value);
         }
 
@@ -99,7 +100,7 @@ impl NativeFunction for HashMapGet {
         let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
         let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
 
-        if let Ok(guard) = map.lock()
+        if let Ok(guard) = map.try_lock()
             && let Some(value) = guard.get(&key)
         {
             return Ok(RuntimeValue::Option(Some(Gc::new(value.clone()))));
@@ -122,7 +123,7 @@ impl NativeFunction for HashMapRemove {
         let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
         let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
 
-        if let Ok(mut guard) = map.lock()
+        if let Ok(mut guard) = map.try_lock()
             && let Some(value) = guard.remove(&key)
         {
             return Ok(RuntimeValue::Option(Some(Gc::new(value))));
@@ -145,7 +146,7 @@ impl NativeFunction for HashMapContains {
         let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
         let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
 
-        if let Ok(guard) = map.lock() {
+        if let Ok(guard) = map.try_lock() {
             return Ok(RuntimeValue::Bool(guard.contains_key(&key)));
         }
 
@@ -165,7 +166,7 @@ impl NativeFunction for HashMapLen {
 
         let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
 
-        let len = map.lock().map(|m| m.len() as i64).unwrap_or(0);
+        let len = map.lock_sync().len() as i64;
         Ok(RuntimeValue::Int(len))
     }
 }
@@ -183,7 +184,7 @@ impl NativeFunction for HashMapKeys {
         let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
 
         let mut out = Vec::new();
-        if let Ok(guard) = map.lock() {
+        if let Ok(guard) = map.try_lock() {
             out = guard
                 .keys()
                 .map(|key| RuntimeValue::from(key.clone()))
@@ -207,7 +208,7 @@ impl NativeFunction for HashMapValues {
         let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
 
         let mut out = Vec::new();
-        if let Ok(guard) = map.lock() {
+        if let Ok(guard) = map.try_lock() {
             out = guard.values().cloned().collect();
         }
 
@@ -228,7 +229,7 @@ impl NativeFunction for HashMapEntries {
         let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
 
         let mut out = Vec::new();
-        if let Ok(guard) = map.lock() {
+        if let Ok(guard) = map.try_lock() {
             out = guard
                 .clone()
                 .into_iter()
@@ -263,7 +264,7 @@ impl NativeFunction for HashMapClear {
 
         let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
 
-        if let Ok(mut guard) = map.lock() {
+        if let Ok(mut guard) = map.try_lock() {
             guard.clear();
         }
 
@@ -312,7 +313,7 @@ impl NativeFunction for HashSetAdd {
         let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
         let set = resolve_hashset(env, &pop_or_null(&mut args))?;
 
-        let inserted = if let Ok(mut guard) = set.lock() {
+        let inserted = if let Ok(mut guard) = set.try_lock() {
             guard.insert(key)
         } else {
             false
@@ -335,7 +336,7 @@ impl NativeFunction for HashSetRemove {
         let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
         let set = resolve_hashset(env, &pop_or_null(&mut args))?;
 
-        let removed = if let Ok(mut guard) = set.lock() {
+        let removed = if let Ok(mut guard) = set.try_lock() {
             guard.remove(&key)
         } else {
             false
@@ -358,7 +359,7 @@ impl NativeFunction for HashSetContains {
         let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
         let set = resolve_hashset(env, &pop_or_null(&mut args))?;
 
-        let contains = if let Ok(guard) = set.lock() {
+        let contains = if let Ok(guard) = set.try_lock() {
             guard.contains(&key)
         } else {
             false
@@ -380,7 +381,7 @@ impl NativeFunction for HashSetLen {
 
         let set = resolve_hashset(env, &pop_or_null(&mut args))?;
 
-        let len = set.lock().map(|s| s.len() as i64).unwrap_or(0);
+        let len = set.lock_sync().len() as i64;
         Ok(RuntimeValue::Int(len))
     }
 }
@@ -398,7 +399,7 @@ impl NativeFunction for HashSetValues {
         let set = resolve_hashset(env, &pop_or_null(&mut args))?;
 
         let mut out = Vec::new();
-        if let Ok(guard) = set.lock() {
+        if let Ok(guard) = set.try_lock() {
             out = guard.clone().into_iter().map(RuntimeValue::from).collect();
         }
 
@@ -418,7 +419,7 @@ impl NativeFunction for HashSetClear {
 
         let set = resolve_hashset(env, &pop_or_null(&mut args))?;
 
-        if let Ok(mut guard) = set.lock() {
+        if let Ok(mut guard) = set.try_lock() {
             guard.clear();
         }
 

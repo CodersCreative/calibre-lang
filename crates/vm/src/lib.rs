@@ -654,7 +654,7 @@ impl VM {
                 }
             }
             RuntimeValue::HashMap(map) => {
-                if let Ok(guard) = map.lock() {
+                if let Ok(guard) = map.try_lock() {
                     for (_, value) in guard.iter() {
                         self.drop_runtime_value_inner_ref(value, seen, seen_regs);
                     }
@@ -675,7 +675,7 @@ impl VM {
             }
             RuntimeValue::Generator { .. } => {}
             RuntimeValue::Channel(ch) => {
-                if let Ok(mut queue) = ch.queue.lock() {
+                if let Ok(mut queue) = ch.queue.try_lock() {
                     while let Some(item) = queue.pop_front() {
                         self.drop_runtime_value_inner_ref(&item, seen, seen_regs);
                     }

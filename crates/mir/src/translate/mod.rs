@@ -2372,7 +2372,7 @@ impl MiddleEnvironment {
                 arguments,
             } => {
                 if let Some(handler) = self.tagging.tag_handlers.get(&tag.text).cloned() {
-                    let handler_fn = handler.handler.lock().unwrap();
+                    let handler_fn = handler.handler.lock_sync();
                     handler_fn(self, scope, *node, tag, arguments)
                 } else {
                     self.context.push_error(MiddleErr::InvalidTag(tag.text));

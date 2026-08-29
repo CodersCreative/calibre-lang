@@ -10,8 +10,9 @@ use crate::{
 use dumpster::sync::Gc;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::{collections::HashMap, time::Duration};
+use wasm_lite_std::Mutex;
 
 fn port_redirects() -> &'static Mutex<HashMap<String, i64>> {
     static REDIRECTS: OnceLock<Mutex<HashMap<String, i64>>> = OnceLock::new();
@@ -31,18 +32,15 @@ fn parse_http_args(
     expect_num_args(&args, &[3])?;
 
     let parts = [
-        resolve_str(env, &pop_or_null(&mut args))?
-            .lock()
-            .unwrap()
-            .to_string(),
-        resolve_str(env, &pop_or_null(&mut args))?
-            .lock()
-            .unwrap()
-            .to_string(),
-        resolve_str(env, &pop_or_null(&mut args))?
-            .lock()
-            .unwrap()
-            .to_string(),
+        resolve_str(env, &pop_or_null(&mut args))?,
+        resolve_str(env, &pop_or_null(&mut args))?,
+        resolve_str(env, &pop_or_null(&mut args))?,
+    ];
+
+    let parts = [
+        parts[0].lock_sync(),
+        parts[1].lock_sync(),
+        parts[2].lock_sync(),
     ];
 
     let looks_like_method = |s: &str| {
@@ -139,16 +137,15 @@ impl NativeFunction for TcpConnect {
 
         let port = resolve_int(env, &pop_or_null(&mut args))?;
         let host = resolve_str(env, &pop_or_null(&mut args))?
-            .lock()
-            .unwrap()
+            .lock_sync()
             .to_string();
 
         let remapped_port = {
             let key = key_for(host.as_str(), port);
             port_redirects()
-                .lock()
-                .ok()
-                .and_then(|m| m.get(&key).copied())
+                .lock_sync()
+                .get(&key)
+                .copied()
                 .unwrap_or(port)
         };
         let addr = format!("{}:{}", host, remapped_port);
@@ -158,7 +155,7 @@ impl NativeFunction for TcpConnect {
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
         let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
         let _ = stream.set_write_timeout(Some(Duration::from_secs(3)));
-        Ok(RuntimeValue::Host(Arc::new(Mutex::new(stream))))
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(Box::new(stream)))))
     }
 }
 
@@ -174,8 +171,7 @@ impl NativeFunction for TcpListen {
 
         let port = resolve_int(env, &pop_or_null(&mut args))?;
         let host = resolve_str(env, &pop_or_null(&mut args))?
-            .lock()
-            .unwrap()
+            .lock_sync()
             .to_string();
 
         let addr = format!("{}:{}", host, port);
@@ -219,7 +215,7 @@ impl NativeFunction for TcpListen {
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
         let listener: TcpListener = socket.into();
         if let Ok(local_addr) = listener.local_addr()
-            && let Ok(mut redirects) = port_redirects().lock()
+            && let Ok(mut redirects) = port_redirects().try_lock()
         {
             let key = key_for(host.as_str(), port);
             if local_addr.port() as i64 != port {
@@ -228,7 +224,7 @@ impl NativeFunction for TcpListen {
                 redirects.remove(&key);
             }
         }
-        Ok(RuntimeValue::Host(Arc::new(Mutex::new(listener))))
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(Box::new(listener)))))
     }
 }
 
@@ -245,8 +241,7 @@ impl NativeFunction for TcpAccept {
         let listener = resolve_host(env, &pop_or_null(&mut args))?;
 
         let (stream, _) = listener
-            .lock()
-            .unwrap()
+            .lock_sync()
             .downcast_mut::<TcpListener>()
             .unwrap()
             .accept()
@@ -255,7 +250,7 @@ impl NativeFunction for TcpAccept {
         let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
         let _ = stream.set_write_timeout(Some(Duration::from_secs(3)));
 
-        Ok(RuntimeValue::Host(Arc::new(Mutex::new(stream))))
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(Box::new(stream)))))
     }
 }
 
@@ -273,9 +268,7 @@ impl NativeFunction for TcpRead {
         let stream = resolve_host(env, &pop_or_null(&mut args))?;
 
         let mut buf = vec![0u8; len.max(0) as usize];
-        let mut guard = stream
-            .lock()
-            .map_err(|_| RuntimeError::Io("lock".to_string()))?;
+        let mut guard = stream.lock_sync();
         match guard.downcast_mut::<TcpStream>().unwrap().read(&mut buf) {
             Ok(n) => {
                 buf.truncate(n);
@@ -307,14 +300,12 @@ impl NativeFunction for TcpWrite {
         let data = resolve_str(env, &pop_or_null(&mut args))?;
         let stream = resolve_host(env, &pop_or_null(&mut args))?;
 
-        let mut guard = stream
-            .lock()
-            .map_err(|_| RuntimeError::Io("lock".to_string()))?;
+        let mut guard = stream.lock_sync();
 
         let n = guard
             .downcast_mut::<TcpStream>()
             .unwrap()
-            .write(data.lock().unwrap().as_bytes())
+            .write(data.lock_sync().as_bytes())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
 
         Ok(RuntimeValue::Int(n as i64))

@@ -8,7 +8,8 @@ use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
 use std::io::Write;
 use std::process::{Command, Stdio};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use wasm_lite_std::Mutex;
 
 #[derive(Debug, Clone)]
 struct RawExecOptions {
@@ -29,7 +30,7 @@ fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<String>, RuntimeErro
     for value in values.0.iter() {
         let value = env.resolve_value_for_op_ref(value)?;
         match value {
-            RuntimeValue::Str(v) => out.push(v.lock().unwrap().clone()),
+            RuntimeValue::Str(v) => out.push(v.lock_sync().clone()),
             other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
@@ -58,7 +59,7 @@ fn required_str_field(env: &VM, map: &Gc<GcMap>, key: &str) -> Result<String, Ru
         return Err(RuntimeError::InvalidFunctionCall);
     };
     match value {
-        RuntimeValue::Str(v) => Ok(v.lock().unwrap().clone()),
+        RuntimeValue::Str(v) => Ok(v.lock_sync().clone()),
         other => Err(RuntimeError::UnexpectedType(Box::new(other))),
     }
 }
@@ -67,10 +68,10 @@ fn parse_optional_string(value: RuntimeValue) -> Result<Option<String>, RuntimeE
     match value {
         RuntimeValue::Option(None) => Ok(None),
         RuntimeValue::Option(Some(v)) => match v.as_ref() {
-            RuntimeValue::Str(v) => Ok(Some(v.lock().unwrap().clone())),
+            RuntimeValue::Str(v) => Ok(Some(v.lock_sync().clone())),
             other => Err(RuntimeError::UnexpectedType(Box::new(other.clone()))),
         },
-        RuntimeValue::Str(v) => Ok(Some(v.lock().unwrap().clone())),
+        RuntimeValue::Str(v) => Ok(Some(v.lock_sync().clone())),
         other => Err(RuntimeError::UnexpectedType(Box::new(other))),
     }
 }
@@ -240,7 +241,7 @@ impl NativeFunction for ProcessRawExec {
         let result = match execute_raw(options) {
             Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
             Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(std::sync::Arc::new(
-                std::sync::Mutex::new(err),
+                Mutex::new(err),
             ))))),
         };
 

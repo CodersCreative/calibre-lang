@@ -17,7 +17,7 @@ pub mod config;
 pub mod embedded;
 pub mod standalone;
 
-#[cfg(any(feature = "wasm", target_arch = "wasm32"))]
+#[cfg(all(feature = "wasm", target_family = "wasm"))]
 pub mod wasm;
 
 #[derive(Debug, Error)]

@@ -51,7 +51,7 @@ impl NativeFunction for ChannelSend {
             return Ok(RuntimeValue::Null);
         }
 
-        if let Ok(mut queue) = ch.queue.lock() {
+        if let Ok(mut queue) = ch.queue.try_lock() {
             queue.push_back(value);
             ch.cvar.notify_one();
         }
@@ -87,7 +87,7 @@ impl NativeFunction for ChannelTrySend {
             return Ok(RuntimeValue::Bool(false));
         }
 
-        if let Ok(mut queue) = ch.queue.lock() {
+        if let Ok(mut queue) = ch.queue.try_lock() {
             queue.push_back(value);
             ch.cvar.notify_one();
         }
@@ -108,10 +108,7 @@ impl NativeFunction for ChannelGet {
 
         let ch = resolve_channel(env, &pop_or_null(&mut args))?;
 
-        let mut guard = ch
-            .queue
-            .lock()
-            .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
+        let mut guard = ch.queue.lock_sync();
 
         loop {
             if let Some(value) = guard.pop_front() {
@@ -122,10 +119,7 @@ impl NativeFunction for ChannelGet {
                 return Ok(RuntimeValue::Option(None));
             }
 
-            guard = ch
-                .cvar
-                .wait(guard)
-                .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
+            guard = ch.cvar.wait_sync(guard);
         }
     }
 }
@@ -142,10 +136,7 @@ impl NativeFunction for ChannelTryGet {
 
         let ch = resolve_channel(env, &pop_or_null(&mut args))?;
 
-        let mut guard = ch
-            .queue
-            .lock()
-            .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
+        let mut guard = ch.queue.lock_sync();
 
         if let Some(value) = guard.pop_front() {
             return Ok(RuntimeValue::Option(Some(dumpster::sync::Gc::new(value))));
@@ -189,7 +180,7 @@ impl NativeFunction for ChannelClosed {
             return Ok(RuntimeValue::Bool(false));
         }
 
-        let empty = ch.queue.lock().map(|q| q.is_empty()).unwrap_or(true);
+        let empty = ch.queue.lock_sync().is_empty();
 
         Ok(RuntimeValue::Bool(empty))
     }

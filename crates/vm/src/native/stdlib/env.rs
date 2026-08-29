@@ -8,7 +8,8 @@ use crate::{
     value::{GcVec, RuntimeValue},
 };
 use dumpster::sync::Gc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use wasm_lite_std::Mutex;
 
 pub struct EnvGet;
 
@@ -44,7 +45,7 @@ impl NativeFunction for EnvVar {
 
         let name = resolve_str(env, &pop_or_null(&mut args))?;
 
-        match std::env::var(name.lock().unwrap().as_str()) {
+        match std::env::var(name.lock_sync().as_str()) {
             Ok(value) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
                 Arc::new(Mutex::new(value)),
             ))))),
@@ -67,12 +68,7 @@ impl NativeFunction for EnvSetVar {
         let name = resolve_str(env, &pop_or_null(&mut args))?;
         let value = resolve_str(env, &pop_or_null(&mut args))?;
 
-        unsafe {
-            std::env::set_var(
-                name.lock().unwrap().as_str(),
-                value.lock().unwrap().as_str(),
-            )
-        };
+        unsafe { std::env::set_var(name.lock_sync().as_str(), value.lock_sync().as_str()) };
 
         Ok(RuntimeValue::Null)
     }
@@ -90,7 +86,7 @@ impl NativeFunction for EnvRemoveVar {
 
         let name = resolve_str(env, &pop_or_null(&mut args))?;
 
-        unsafe { std::env::remove_var(name.lock().unwrap().as_str()) };
+        unsafe { std::env::remove_var(name.lock_sync().as_str()) };
 
         Ok(RuntimeValue::Null)
     }

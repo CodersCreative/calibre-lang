@@ -5,7 +5,8 @@ use crate::{
 };
 use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use wasm_lite_std::Mutex;
 
 impl RuntimeValue {
     pub fn convert(
@@ -142,16 +143,16 @@ impl RuntimeValue {
             }
             (RuntimeValue::Str(x), ParserInnerType::Str) => Ok(RuntimeValue::Str(x)),
             (RuntimeValue::Str(x), ParserInnerType::Float) => {
-                Ok(RuntimeValue::Float(x.lock().unwrap().trim().parse()?))
+                Ok(RuntimeValue::Float(x.lock_sync().trim().parse()?))
             }
             (RuntimeValue::Str(x), ParserInnerType::UInt) => {
-                Ok(RuntimeValue::UInt(x.lock().unwrap().trim().parse()?))
+                Ok(RuntimeValue::UInt(x.lock_sync().trim().parse()?))
             }
             (RuntimeValue::Str(x), ParserInnerType::Byte) => {
-                Ok(RuntimeValue::Byte(x.lock().unwrap().trim().parse()?))
+                Ok(RuntimeValue::Byte(x.lock_sync().trim().parse()?))
             }
             (RuntimeValue::Str(x), ParserInnerType::Int) => {
-                Ok(RuntimeValue::Int(x.lock().unwrap().trim().parse()?))
+                Ok(RuntimeValue::Int(x.lock_sync().trim().parse()?))
             }
             (RuntimeValue::Byte(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x)),
             (RuntimeValue::Byte(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
@@ -163,7 +164,7 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Str(Arc::new(Mutex::new(x.to_string()))))
             }
             (RuntimeValue::Str(x), ParserInnerType::Char) => {
-                let ch = x.lock().unwrap().chars().next().ok_or_else(|| {
+                let ch = x.lock_sync().chars().next().ok_or_else(|| {
                     RuntimeError::CantConvert(
                         Box::new(RuntimeValue::Str(x.clone())),
                         ParserInnerType::Char,
@@ -175,8 +176,7 @@ impl RuntimeValue {
                 if t.data_type == ParserInnerType::Str =>
             {
                 Ok(RuntimeValue::List(Gc::new(GcVec(
-                    x.lock()
-                        .unwrap()
+                    x.lock_sync()
                         .chars()
                         .map(|x| RuntimeValue::Str(Arc::new(Mutex::new(x.to_string()))))
                         .collect::<Vec<RuntimeValue>>(),
@@ -186,8 +186,7 @@ impl RuntimeValue {
                 if t.data_type == ParserInnerType::Char =>
             {
                 Ok(RuntimeValue::List(Gc::new(GcVec(
-                    x.lock()
-                        .unwrap()
+                    x.lock_sync()
                         .chars()
                         .map(RuntimeValue::Char)
                         .collect::<Vec<RuntimeValue>>(),

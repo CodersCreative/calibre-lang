@@ -30,10 +30,11 @@ use std::{
     collections::VecDeque,
     fmt::{Debug, Display, Write},
     sync::{
-        Arc, Condvar, Mutex, OnceLock,
+        Arc, OnceLock,
         atomic::{AtomicBool, AtomicIsize, Ordering},
     },
 };
+use wasm_lite_std::{Mutex, condvar::Condvar};
 
 mod bridge;
 pub mod conversion;
@@ -70,7 +71,7 @@ impl TryFrom<RuntimeValue> for HashKey {
             RuntimeValue::Byte(x) => Ok(Self::UInt(x as u64)),
             RuntimeValue::Bool(x) => Ok(Self::Bool(x)),
             RuntimeValue::Char(x) => Ok(Self::Char(x)),
-            RuntimeValue::Str(x) => Ok(Self::Str(x.lock().unwrap().clone())),
+            RuntimeValue::Str(x) => Ok(Self::Str(x.lock_sync().clone())),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
@@ -112,21 +113,16 @@ impl WaitGroupInner {
     }
 
     pub fn wait(&self) -> Result<(), RuntimeError> {
-        let mut guard = self
-            .mutex
-            .lock()
-            .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
+        let mut guard = self.mutex.lock_sync();
+
         while self.count.load(Ordering::Acquire) > 0 {
-            guard = self
-                .cvar
-                .wait(guard)
-                .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
+            guard = self.cvar.wait_sync(guard);
         }
+
         drop(guard);
-        let joined = self
-            .joined
-            .lock()
-            .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
+
+        let joined = self.joined.lock_sync();
+
         for inner in joined.iter() {
             inner.wait()?;
         }
@@ -156,9 +152,9 @@ impl MutexInner {
     }
 
     pub fn lock(self: &Arc<Self>) -> MutexGuardInner {
-        let mut guard = self.mutex.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.mutex.lock_sync();
         while self.locked.load(Ordering::Acquire) {
-            guard = self.cvar.wait(guard).unwrap_or_else(|e| e.into_inner());
+            guard = self.cvar.wait_sync(guard);
         }
         self.locked.store(true, Ordering::Release);
         drop(guard);
@@ -227,7 +223,7 @@ unsafe impl<V: Visitor> TraceWith<V> for GcMap {
 }
 
 pub type HostInner = dyn Any + Send;
-pub type Host = Arc<Mutex<HostInner>>;
+pub type Host = Arc<Mutex<Box<HostInner>>>;
 pub type RuntimeHashMap = Arc<Mutex<FxHashMap<HashKey, RuntimeValue>>>;
 pub type RuntimeHashSet = Arc<Mutex<FxHashSet<HashKey>>>;
 
@@ -296,7 +292,7 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
             RuntimeValue::Result(Ok(x)) => x.accept(visitor),
             RuntimeValue::Result(Err(x)) => x.accept(visitor),
             RuntimeValue::Channel(ch) => {
-                if let Ok(queue) = ch.queue.lock() {
+                if let Ok(queue) = ch.queue.try_lock() {
                     for item in queue.iter() {
                         item.accept(visitor)?;
                     }
@@ -310,7 +306,7 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
             }
             RuntimeValue::MutexGuard(guard) => guard.get_clone().accept(visitor),
             RuntimeValue::HashMap(map) => {
-                if let Ok(guard) = map.lock() {
+                if let Ok(guard) = map.try_lock() {
                     for (_, value) in guard.iter() {
                         value.accept(visitor)?;
                     }

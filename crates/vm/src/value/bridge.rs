@@ -103,7 +103,7 @@ impl VM {
                 }
                 RuntimeValue::HashMap(map) => {
                     let mut new_map = FxHashMap::default();
-                    if let Ok(guard) = map.lock() {
+                    if let Ok(guard) = map.try_lock() {
                         for (k, v) in guard.iter() {
                             new_map.insert(k.clone(), transform(env, v.clone()));
                         }
@@ -112,7 +112,7 @@ impl VM {
                 }
                 RuntimeValue::HashSet(set) => {
                     let mut new_set = rustc_hash::FxHashSet::default();
-                    if let Ok(guard) = set.lock() {
+                    if let Ok(guard) = set.try_lock() {
                         for k in guard.iter() {
                             new_set.insert(k.clone());
                         }

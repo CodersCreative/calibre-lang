@@ -2,7 +2,8 @@ use crate::error::RuntimeError;
 use crate::value::{BIG_PRECISION, GcVec, HashKey, RuntimeValue};
 use astro_float::BigFloat;
 use dumpster::sync::Gc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use wasm_lite_std::Mutex;
 
 // Into HashKey
 
@@ -435,7 +436,7 @@ impl TryFrom<RuntimeValue> for String {
 
     fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
         match value {
-            RuntimeValue::Str(s) => Ok(s.lock().unwrap().clone()),
+            RuntimeValue::Str(s) => Ok(s.lock_sync().clone()),
             RuntimeValue::Char(c) => Ok(c.to_string()),
             _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }
@@ -466,7 +467,7 @@ impl<
     fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
         match value {
             RuntimeValue::HashMap(arc_map) => {
-                let map = arc_map.lock().unwrap();
+                let map = arc_map.lock_sync();
                 map.iter()
                     .map(|(k, v)| Ok((K::try_from(k.clone())?, V::try_from(v.clone())?)))
                     .collect()
@@ -484,7 +485,7 @@ impl<K: TryFrom<HashKey, Error = RuntimeError> + std::hash::Hash + Eq> TryFrom<R
     fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
         match value {
             RuntimeValue::HashSet(arc_set) => {
-                let set = arc_set.lock().unwrap();
+                let set = arc_set.lock_sync();
                 set.iter().cloned().map(|k| K::try_from(k)).collect()
             }
             _ => Err(RuntimeError::UnexpectedType(Box::new(value))),

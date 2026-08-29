@@ -1,11 +1,10 @@
-use std::sync::Mutex;
-
 use super::*;
 use crate::{
     native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
     value::GcVec,
 };
 use calibre_parser::ast::{idents::ParserText, nodes::AsFailureMode};
+use wasm_lite_std::Mutex;
 
 impl VM {
     #[inline]
@@ -745,7 +744,7 @@ impl VM {
                         RuntimeValue::Char(v) => Ok(v as i64),
                         RuntimeValue::List(v) => Ok(v.as_ref().0.len() as i64),
                         RuntimeValue::Aggregate(_, v) => Ok(v.as_ref().0.0.len() as i64),
-                        RuntimeValue::Str(v) => Ok(v.lock().unwrap().len() as i64),
+                        RuntimeValue::Str(v) => Ok(v.lock_sync().len() as i64),
                         RuntimeValue::Range(from, to) => Ok((to - from).max(0)),
                         other => Err(RuntimeError::UnexpectedType(Box::new(other))),
                     }
@@ -954,15 +953,11 @@ impl VM {
                             }))
                         }
                         "index" => {
-                            let guard = state.lock().map_err(|_| {
-                                RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
-                            })?;
+                            let guard = state.lock_sync();
                             RuntimeValue::Int(guard.index)
                         }
                         "done" => {
-                            let guard = state.lock().map_err(|_| {
-                                RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
-                            })?;
+                            let guard = state.lock_sync();
                             RuntimeValue::Bool(guard.completed)
                         }
                         _ => match self.resolve_associated_member_value(
@@ -1356,9 +1351,7 @@ impl VM {
                             });
                         }
 
-                        let mut guard = state.lock().map_err(|_| {
-                            RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
-                        })?;
+                        let mut guard = state.lock_sync();
                         match member_key {
                             "index" => match &value {
                                 RuntimeValue::Int(x) => guard.index = (*x).max(0),
@@ -1606,9 +1599,7 @@ impl VM {
                 >|
                  -> Result<RuntimeValue, RuntimeError> {
                     let key = crate::value::HashKey::try_from(index_val.clone())?;
-                    let guard = map
-                        .lock()
-                        .map_err(|_| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
+                    let guard = map.lock_sync();
                     Ok(guard.get(&key).cloned().unwrap_or(RuntimeValue::Null))
                 };
 
@@ -1699,25 +1690,24 @@ impl VM {
                     RuntimeValue::Str(s) => match &index_val {
                         RuntimeValue::Int(index) => {
                             let resolved = if *index < 0 {
-                                let len = s.lock().unwrap().chars().count();
+                                let len = s.lock_sync().chars().count();
                                 Self::resolve_index(len, *index)
                             } else {
                                 Some(*index as usize)
                             };
                             resolved
-                                .and_then(|i| s.lock().unwrap().chars().nth(i))
+                                .and_then(|i| s.lock_sync().chars().nth(i))
                                 .map(RuntimeValue::Char)
                                 .unwrap_or_else(|| RuntimeValue::Null)
                         }
                         RuntimeValue::UInt(index) => s
-                            .lock()
-                            .unwrap()
+                            .lock_sync()
                             .chars()
                             .nth(*index as usize)
                             .map(RuntimeValue::Char)
                             .unwrap_or_else(|| RuntimeValue::Null),
                         RuntimeValue::Range(start, end) => {
-                            let v = s.lock().unwrap().chars().collect::<Vec<char>>();
+                            let v = s.lock_sync().chars().collect::<Vec<char>>();
                             let (s, e) = Self::resolve_slice_range(v.len(), *start, *end);
                             let slice: String = v[s..e].iter().collect();
                             RuntimeValue::Str(Arc::new(Mutex::new(slice)))
@@ -1797,9 +1787,7 @@ impl VM {
                                 RuntimeValue::HashMap(map) => {
                                     let key = hash_index()?;
 
-                                    let mut guard = map.lock().map_err(|_| {
-                                        RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
-                                    })?;
+                                    let mut guard = map.lock_sync();
 
                                     guard.insert(key, value);
                                 }
@@ -1846,9 +1834,7 @@ impl VM {
                                 RuntimeValue::HashMap(map) => {
                                     let key = hash_index()?;
 
-                                    let mut guard = map.lock().map_err(|_| {
-                                        RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
-                                    })?;
+                                    let mut guard = map.lock_sync();
 
                                     guard.insert(key, value);
                                 }
@@ -1905,9 +1891,7 @@ impl VM {
                                 }
                                 RuntimeValue::HashMap(map) => {
                                     let key = hash_index()?;
-                                    let guard = map.lock().map_err(|_| {
-                                        RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
-                                    })?;
+                                    let guard = map.lock_sync();
                                     let mut guard = guard;
                                     guard.insert(key, value);
                                 }
@@ -1954,9 +1938,7 @@ impl VM {
                         RuntimeValue::HashMap(map) => {
                             let key = hash_index()?;
 
-                            let mut guard = map.lock().map_err(|_| {
-                                RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))
-                            })?;
+                            let mut guard = map.lock_sync();
 
                             guard.insert(key, value);
                             handled = true;

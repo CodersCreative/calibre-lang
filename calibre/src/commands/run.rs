@@ -11,6 +11,7 @@ use derive_builder::Builder;
 use smol::fs;
 use std::{error::Error, path::PathBuf};
 use tracing::instrument;
+use wasm_lite_std as thread;
 
 #[derive(Builder, Debug)]
 pub struct Run {
@@ -66,7 +67,7 @@ impl Run {
 
             if self.parallel {
                 handles.push(
-                    std::thread::Builder::new()
+                    thread::Builder::new()
                         .name(format!("calibre-{}", index))
                         .stack_size(64 * 1024 * 1024)
                         .spawn(move || {

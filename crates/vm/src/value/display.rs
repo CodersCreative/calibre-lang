@@ -28,7 +28,7 @@ impl RuntimeValue {
         }
 
         match self {
-            Self::Str(x) => format!("\"{}\"", x.lock().unwrap()),
+            Self::Str(x) => format!("\"{}\"", x.lock_sync()),
             Self::Char(x) => format!("'{}'", x),
             Self::Ref(x) => match vm.variables.get(x) {
                 Some(value) => value.clone().repr(vm),
@@ -40,7 +40,7 @@ impl RuntimeValue {
             },
             Self::RegRef { frame, reg } => vm.get_reg_value_in_frame(*frame, *reg).clone().repr(vm),
             Self::HashMap(map) => {
-                if let Ok(guard) = map.lock() {
+                if let Ok(guard) = map.try_lock() {
                     let mut parts = Vec::new();
                     for (k, v) in guard.iter() {
                         parts.push(format!(
@@ -55,7 +55,7 @@ impl RuntimeValue {
                 }
             }
             Self::HashSet(set) => {
-                if let Ok(guard) = set.lock() {
+                if let Ok(guard) = set.try_lock() {
                     let mut parts = Vec::new();
                     for k in guard.iter() {
                         parts.push(RuntimeValue::from(k.clone()).repr(vm));
@@ -158,7 +158,7 @@ impl RuntimeValue {
                 vm.get_reg_value_in_frame(*frame, *reg).clone().display(vm)
             }
             Self::HashMap(map) => {
-                if let Ok(guard) = map.lock() {
+                if let Ok(guard) = map.try_lock() {
                     let mut parts = Vec::new();
                     for (k, v) in guard.iter() {
                         parts.push(format!(
@@ -173,7 +173,7 @@ impl RuntimeValue {
                 }
             }
             Self::HashSet(set) => {
-                if let Ok(guard) = set.lock() {
+                if let Ok(guard) = set.try_lock() {
                     let mut parts = Vec::new();
                     for k in guard.iter() {
                         parts.push(RuntimeValue::from(k.clone()).display(vm));
@@ -333,7 +333,7 @@ impl Display for RuntimeValue {
             Self::HashMap(_) => write!(f, "HashMap"),
             Self::HashSet(_) => write!(f, "HashSet"),
             Self::Host(_) => write!(f, "Host"),
-            Self::Str(x) => write!(f, "{}", x.lock().unwrap()),
+            Self::Str(x) => write!(f, "{}", x.lock_sync()),
             Self::Char(x) => write!(f, "{}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
             Self::Generator { type_name: x, .. } => write!(
