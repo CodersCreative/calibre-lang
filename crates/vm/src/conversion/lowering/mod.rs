@@ -10,6 +10,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 mod block;
 mod function;
+mod ssa;
 
 struct BlockLoweringCtx<'a> {
     block: &'a mut VMBlock,

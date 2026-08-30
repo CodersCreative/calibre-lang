@@ -1,3 +1,4 @@
+use super::ssa::SSABuilder;
 use super::*;
 use calibre_lir::ast::{LirAssign, LirDeclare};
 use tracing::{debug, instrument};
@@ -40,40 +41,18 @@ impl From<LirFunction> for VMFunction {
     }
 }
 
-#[derive(Clone)]
-struct BlockInfo {
-    in_map: FxHashMap<String, Reg>,
-    out_map: FxHashMap<String, Reg>,
-    phi_for: FxHashMap<String, Reg>,
-    phis: Vec<PhiNode>,
-}
-
-impl BlockInfo {
-    fn new() -> Self {
-        Self {
-            in_map: FxHashMap::default(),
-            out_map: FxHashMap::default(),
-            phi_for: FxHashMap::default(),
-            phis: Vec::new(),
-        }
-    }
-}
-
 struct FunctionLowering {
     func: LirFunction,
     blocks: Vec<VMBlock>,
     block_map: FxHashMap<BlockId, usize>,
-    preds: Vec<Vec<BlockId>>,
-    infos: Vec<BlockInfo>,
+    ssa_builder: SSABuilder,
     reg_count: Reg,
     param_regs: Vec<Reg>,
-    locals: FxHashSet<String>,
     captures: FxHashSet<String>,
     entry: BlockId,
     null_reg: Reg,
     ret_reg: Reg,
     is_global: bool,
-    assign_regs: Vec<Vec<Option<Reg>>>,
     big_consts: Consts,
 }
 
@@ -175,191 +154,44 @@ impl FunctionLowering {
             assign_regs.push(regs);
         }
 
+        let ssa_builder = SSABuilder::new(
+            block_map.clone(),
+            locals,
+            param_regs.clone(),
+            null_reg,
+            assign_regs.clone(),
+            reg_count,
+        );
+
         Self {
             func,
             blocks: Vec::new(),
             block_map,
-            preds: Vec::new(),
-            infos: Vec::new(),
+            ssa_builder,
             reg_count,
             param_regs,
-            locals,
             captures,
             entry,
             null_reg,
             ret_reg,
             is_global,
-            assign_regs,
             big_consts: Consts::new().unwrap(),
         }
     }
 
     fn build_cfg(&mut self) {
-        let block_len = self.func.blocks.len();
-        self.preds = vec![Vec::new(); block_len];
-        self.infos = vec![BlockInfo::new(); block_len];
-
-        for block in &self.func.blocks {
-            let idx = self.block_map[&block.id];
-            if let Some(term) = block.terminator.as_ref() {
-                match term {
-                    LirTerminator::Jump { target, .. } => {
-                        if let Some(target_idx) = self.block_map.get(target) {
-                            self.preds[*target_idx].push(block.id);
-                        }
-                    }
-                    LirTerminator::Branch {
-                        then_block,
-                        else_block,
-                        ..
-                    } => {
-                        if let Some(target_idx) = self.block_map.get(then_block) {
-                            self.preds[*target_idx].push(block.id);
-                        }
-                        if let Some(target_idx) = self.block_map.get(else_block) {
-                            self.preds[*target_idx].push(block.id);
-                        }
-                    }
-                    LirTerminator::Return { .. } => {}
-                }
-            }
-            if idx == 0 {
-                self.preds[idx].push(BlockId(u32::MAX));
-            }
-        }
+        self.ssa_builder.build_cfg(&self.func.blocks, self.entry);
     }
 
     fn build_ssa(&mut self) {
-        let mut changed = true;
-        while changed {
-            changed = false;
-            for idx in 0..self.func.blocks.len() {
-                let mut phi_for = self.infos[idx].phi_for.clone();
-                let mut phis = self.infos[idx].phis.clone();
-                let incoming = self.merge_incoming(idx, &mut phi_for, &mut phis);
-
-                if incoming != self.infos[idx].in_map {
-                    self.infos[idx].in_map = incoming.clone();
-                    changed = true;
-                }
-
-                let mut out = incoming;
-                let instructions = self.func.blocks[idx].instructions.clone();
-                for (instr_idx, instr) in instructions.iter().enumerate() {
-                    if let Some(name) = instr.node_type.local_name() {
-                        let reg = match self.assign_regs[idx].get(instr_idx).and_then(|r| *r) {
-                            Some(reg) => reg,
-                            None => {
-                                let reg = self.alloc_reg();
-                                if let Some(slot) = self.assign_regs[idx].get_mut(instr_idx) {
-                                    *slot = Some(reg);
-                                }
-                                reg
-                            }
-                        };
-                        out.insert(name.to_string(), reg);
-                    }
-                }
-
-                if out != self.infos[idx].out_map {
-                    self.infos[idx].out_map = out;
-                    changed = true;
-                }
-                self.infos[idx].phi_for = phi_for;
-                self.infos[idx].phis = phis;
-            }
-        }
-    }
-
-    fn merge_incoming(
-        &mut self,
-        idx: usize,
-        phi_for: &mut FxHashMap<String, Reg>,
-        phis: &mut Vec<PhiNode>,
-    ) -> FxHashMap<String, Reg> {
-        let mut incoming: FxHashMap<String, Reg> = FxHashMap::default();
-        let preds = self.preds.get(idx).cloned().unwrap_or_default();
-
-        if preds.len() == 1 && preds[0].0 == u32::MAX {
-            for (name, reg) in self
-                .func
-                .params
-                .iter()
-                .map(|(n, _)| n)
-                .zip(self.param_regs.iter().copied())
-            {
-                incoming.insert(name.to_string(), reg);
-            }
-            return incoming;
-        }
-
-        let locals: Vec<String> = self.locals.iter().cloned().collect();
-        for var in locals.iter() {
-            let mut sources: Vec<(BlockId, Reg)> = Vec::new();
-            let mut reg_opt: Option<Reg> = None;
-
-            for pred in &preds {
-                if pred.0 == u32::MAX {
-                    continue;
-                }
-                let pred_idx = self.block_map[pred];
-                let pred_info = &self.infos[pred_idx];
-                let reg = pred_info.out_map.get(var).copied().unwrap_or(self.null_reg);
-                sources.push((*pred, reg));
-                reg_opt = match reg_opt {
-                    None => Some(reg),
-                    Some(existing) if existing == reg => Some(existing),
-                    Some(_) => Some(Reg::MAX),
-                };
-            }
-
-            if sources.is_empty() {
-                continue;
-            }
-
-            let reg = match reg_opt {
-                Some(r) if r != Reg::MAX => r,
-                _ => {
-                    if let Some(existing) = phi_for.get(var).copied() {
-                        existing
-                    } else {
-                        let new_reg = self.alloc_reg();
-                        phi_for.insert(var.clone(), new_reg);
-                        new_reg
-                    }
-                }
-            };
-
-            if let Some(phi_reg) = phi_for.get(var).copied() {
-                let phi = PhiNode {
-                    dest: phi_reg,
-                    sources: sources.clone(),
-                    name: Some(var.clone()),
-                };
-                let pos = phis.iter().position(|p| p.dest == phi_reg);
-                if let Some(i) = pos {
-                    phis[i] = phi;
-                } else {
-                    phis.push(phi);
-                }
-            }
-
-            incoming.insert(var.clone(), reg);
-        }
-
-        incoming
-    }
-
-    fn alloc_reg(&mut self) -> Reg {
-        let r = self.reg_count;
-        self.reg_count += 1;
-        r
+        self.ssa_builder.build(&self.func.blocks, &self.func.params);
+        self.reg_count = self.ssa_builder.reg_count();
     }
 
     fn emit_blocks(&mut self) {
         for block in &self.func.blocks {
             let idx = self.block_map[&block.id];
-            let info = self.infos[idx].clone();
+            let info = self.ssa_builder.get_block_info(idx).clone();
             let mut out = VMBlock {
                 id: block.id,
                 instructions: Vec::new(),
@@ -435,7 +267,9 @@ impl FunctionLowering {
             };
 
             for (instr_idx, instr) in block.instructions.iter().enumerate() {
-                let assigned = self.assign_regs[idx].get(instr_idx).and_then(|r| *r);
+                let assigned = self.ssa_builder.assign_regs()[idx]
+                    .get(instr_idx)
+                    .and_then(|r| *r);
                 let set_ret = ret_idx == Some(instr_idx);
                 ctx.lower_instr(instr.clone(), assigned, set_ret);
             }
