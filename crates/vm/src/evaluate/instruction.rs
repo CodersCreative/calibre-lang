@@ -362,15 +362,10 @@ impl VM {
                     return Ok(Some(step));
                 }
 
-                let mut seen = FxHashSet::default();
                 let mut refreshed_caps = Vec::with_capacity(captures.len());
-                let mut seen_names = FxHashSet::default();
+                let mut seen = FxHashSet::default();
 
                 for (cap_name, old_value) in captures.iter() {
-                    if !seen_names.insert(cap_name.clone()) {
-                        continue;
-                    }
-
                     let value = self.capture_value(cap_name, &mut seen);
 
                     let value = if value.is_null() && !old_value.is_null() {
@@ -385,8 +380,6 @@ impl VM {
                 let refreshed = Arc::new(refreshed_caps);
                 let value = self.run_function_from_regs(func.as_ref(), args, refreshed)?;
                 self.set_reg_value(dst, value);
-                let frame_idx = self.frames.len().saturating_sub(1);
-                self.propagate_member_source_args(args, frame_idx)?;
                 return Ok(None);
             }
             RuntimeValue::NativeFunction(func) => {

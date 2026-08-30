@@ -1,6 +1,6 @@
 use crate::{
     VM, VarName,
-    conversion::{VMBlock, VMFunction, VMGlobal, VMInstruction, VMLiteral},
+    conversion::{Reg, VMBlock, VMFunction, VMGlobal, VMInstruction, VMLiteral},
     error::RuntimeError,
     value::{
         RuntimeValue, TerminateValue, WaitGroupInner,
@@ -938,16 +938,7 @@ impl VM {
             self.set_reg_value(*reg, arg);
         }
 
-        let needs_param_vars = function.blocks.iter().any(|block| {
-            block.instructions.iter().any(|instr| {
-                matches!(
-                    instr,
-                    VMInstruction::LoadVar { .. } | VMInstruction::StoreVar { .. }
-                )
-            })
-        });
-
-        if needs_param_vars {
+        if function.needs_param_vars {
             for (name, reg) in function
                 .params
                 .iter()
@@ -961,12 +952,11 @@ impl VM {
         let prev_vars = if captures.is_empty() {
             Vec::new()
         } else {
-            let param_names: std::collections::HashSet<&str> =
-                function.params.iter().map(|x| x.as_str()).collect();
             let filtered_captures: Vec<(String, RuntimeValue)> = captures
                 .iter()
                 .filter(|(name, _)| {
-                    Self::should_install_capture(name) && !param_names.contains(name.as_str())
+                    Self::should_install_capture(name)
+                        && !function.param_names.contains(name.as_str())
                 })
                 .cloned()
                 .collect();
@@ -1024,7 +1014,7 @@ impl VM {
         self.pop_frame();
         self.restore_captures(prev_vars);
 
-        if needs_param_vars {
+        if function.needs_param_vars {
             for name in function.params.iter() {
                 self.variables.remove(name);
             }

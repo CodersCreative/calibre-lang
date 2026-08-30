@@ -19,6 +19,16 @@ impl VMFunction {
         lower.build_ssa();
         lower.emit_blocks();
         debug!("global lowering completed");
+
+        let needs_param_vars = lower.blocks.iter().any(|block| {
+            block.instructions.iter().any(|instr| {
+                matches!(
+                    instr,
+                    VMInstruction::LoadVar { .. } | VMInstruction::StoreVar { .. }
+                )
+            })
+        });
+
         VMFunction {
             name: lower.func.name.to_string(),
             params: Vec::new().into_boxed_slice(),
@@ -31,6 +41,8 @@ impl VMFunction {
             ret_reg: lower.ret_reg,
             entry: lower.entry,
             block_map: lower.block_map,
+            needs_param_vars,
+            param_names: FxHashSet::default(),
         }
     }
 }
@@ -66,6 +78,22 @@ impl FunctionLowering {
         lower.emit_blocks();
 
         debug!("function lowering completed");
+        let needs_param_vars = lower.blocks.iter().any(|block| {
+            block.instructions.iter().any(|instr| {
+                matches!(
+                    instr,
+                    VMInstruction::LoadVar { .. } | VMInstruction::StoreVar { .. }
+                )
+            })
+        });
+
+        let param_names: FxHashSet<String> = lower
+            .func
+            .params
+            .iter()
+            .map(|(n, _)| n.to_string())
+            .collect();
+
         VMFunction {
             name: lower.func.name.to_string(),
             params: lower
@@ -91,6 +119,8 @@ impl FunctionLowering {
             ret_reg: lower.ret_reg,
             entry: lower.entry,
             block_map: lower.block_map,
+            needs_param_vars,
+            param_names,
         }
     }
 

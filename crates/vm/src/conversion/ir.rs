@@ -11,7 +11,7 @@ use calibre_parser::ast::{
     types::ParserDataType,
 };
 use indextree::NodeId;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::sync::Arc;
@@ -113,6 +113,8 @@ impl From<LirGlobal> for VMGlobal {
 pub struct VMFunction {
     pub name: String,
     pub params: Box<[String]>,
+    #[serde(skip)]
+    pub param_names: FxHashSet<String>,
     pub captures: Box<[String]>,
     pub returns_value: bool,
     pub blocks: Box<[VMBlock]>,
@@ -124,6 +126,7 @@ pub struct VMFunction {
     pub entry: BlockId,
     #[serde(with = "crate::serialization::serde_fxhashmap")]
     pub block_map: FxHashMap<BlockId, usize>,
+    pub needs_param_vars: bool,
 }
 
 impl VMFunction {
