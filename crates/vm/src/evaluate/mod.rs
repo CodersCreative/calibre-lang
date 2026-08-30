@@ -1,6 +1,6 @@
 use crate::{
     VM, VarName,
-    conversion::{Reg, VMBlock, VMFunction, VMGlobal, VMInstruction, VMLiteral},
+    conversion::{VMBlock, VMFunction, VMGlobal, VMInstruction, VMLiteral},
     error::RuntimeError,
     value::{
         RuntimeValue, TerminateValue, WaitGroupInner,

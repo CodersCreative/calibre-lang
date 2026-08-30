@@ -13,6 +13,23 @@ pub trait VMLowering {
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg;
 
     #[inline(always)]
+    fn lower_to<'a>(self, env: &mut BlockLoweringCtx<'a>, target: Reg, span: Span)
+    where
+        Self: Sized,
+    {
+        let reg = self.lower(env, span);
+        if reg != target {
+            env.emit(
+                VMInstruction::Copy {
+                    dst: target,
+                    src: reg,
+                },
+                span,
+            );
+        }
+    }
+
+    #[inline(always)]
     fn lower_instr<'a>(
         self,
         env: &mut BlockLoweringCtx<'a>,
@@ -129,6 +146,29 @@ impl<'a> BlockLoweringCtx<'a> {
                             src: reg,
                         },
                         node.span,
+                    );
+                }
+            }
+        }
+    }
+
+    #[instrument(skip_all)]
+    pub(super) fn lower_node_to(&mut self, node: LirNodeType, target: Reg, span: Span) {
+        trace!("lowering LIR node to target register");
+        match node {
+            LirNodeType::Literal(x) => x.lower_to(self, target, span),
+            LirNodeType::List(x) => x.lower_to(self, target, span),
+            LirNodeType::Aggregate(x) => x.lower_to(self, target, span),
+            LirNodeType::Enum(x) => x.lower_to(self, target, span),
+            other => {
+                let reg = self.lower_node(other, span);
+                if reg != target {
+                    self.emit(
+                        VMInstruction::Copy {
+                            dst: target,
+                            src: reg,
+                        },
+                        span,
                     );
                 }
             }

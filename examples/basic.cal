@@ -30,4 +30,7 @@ type StackList := struct (list:<Stack2>);
 	if let .Some : x <- HashMap:<str, str>.get(hashmap.&, "hello") => print(x);
 	if let .Some : x <- hashmap.get("world") => print(x);
 	if let .None <- hashmap.get("") => print("none");
+
+	let mut a := 1;
+	assert((a + => {a += 1; emit a}) = 3, "SSA is not functioning correctly error");
 };

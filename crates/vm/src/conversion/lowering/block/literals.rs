@@ -16,39 +16,76 @@ use calibre_parser::Span;
 impl VMLowering for LirLiteral {
     #[inline(always)]
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
+        let dst = env.alloc_reg();
+        self.lower_to(env, dst, span);
+        dst
+    }
+
+    #[inline(always)]
+    fn lower_to<'a>(self, env: &mut BlockLoweringCtx<'a>, target: Reg, span: Span) {
         if let LirLiteral::Null = self {
-            return env.null_reg;
+            if target != env.null_reg {
+                env.emit(
+                    VMInstruction::Copy {
+                        dst: target,
+                        src: env.null_reg,
+                    },
+                    span,
+                );
+            }
+            return;
         }
 
         let lit = VMLiteral::from_lir_literal(self, env.big_consts);
         let lit = env.add_literal(lit);
-        let dst = env.alloc_reg();
-        env.emit(VMInstruction::LoadLiteral { dst, literal: lit }, span);
-
-        dst
+        env.emit(
+            VMInstruction::LoadLiteral {
+                dst: target,
+                literal: lit,
+            },
+            span,
+        );
     }
 }
 
 impl VMLowering for LirList {
     #[inline(always)]
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
-        let mut regs = Vec::with_capacity(self.values.len());
-
-        for item in self.values {
-            regs.push(env.lower_node(item, span));
-        }
-
         let dst = env.alloc_reg();
-        env.emit(VMInstruction::List { dst, items: regs }, span);
+        self.lower_to(env, dst, span);
         dst
+    }
+
+    #[inline(always)]
+    fn lower_to<'a>(self, env: &mut BlockLoweringCtx<'a>, target: Reg, span: Span) {
+        let regs = self
+            .values
+            .into_iter()
+            .map(|item| env.lower_node(item, span))
+            .collect();
+
+        env.emit(
+            VMInstruction::List {
+                dst: target,
+                items: regs,
+            },
+            span,
+        );
     }
 }
 
 impl VMLowering for LirAggregate {
     #[inline(always)]
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
-        let mut layout = Vec::new();
-        let mut values = Vec::new();
+        let dst = env.alloc_reg();
+        self.lower_to(env, dst, span);
+        dst
+    }
+
+    #[inline(always)]
+    fn lower_to<'a>(self, env: &mut BlockLoweringCtx<'a>, target: Reg, span: Span) {
+        let mut layout = Vec::with_capacity(self.fields.0.len());
+        let mut values = Vec::with_capacity(self.fields.0.len());
 
         for (k, item) in self.fields.0 {
             values.push(env.lower_node(item, span));
@@ -61,36 +98,38 @@ impl VMLowering for LirAggregate {
         });
 
         let index = env.block.aggregate_layouts.len() - 1;
-        let dst = env.alloc_reg();
 
         env.emit(
             VMInstruction::Aggregate {
-                dst,
+                dst: target,
                 layout: index as u16,
                 fields: values,
             },
             span,
         );
-
-        dst
     }
 }
 
 impl VMLowering for LirEnum {
     #[inline(always)]
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
+        let dst = env.alloc_reg();
+        self.lower_to(env, dst, span);
+        dst
+    }
+
+    #[inline(always)]
+    fn lower_to<'a>(self, env: &mut BlockLoweringCtx<'a>, target: Reg, span: Span) {
         let payload = self.payload.map(|v| env.lower_node(*v, span));
         let name = env.add_string(self.name.to_string());
-        let dst = env.alloc_reg();
         env.emit(
             VMInstruction::Enum {
-                dst,
+                dst: target,
                 name,
                 variant: self.variant as u16,
                 payload,
             },
             span,
         );
-        dst
     }
 }

@@ -29,6 +29,8 @@ impl VMFunction {
             })
         });
 
+        FunctionLowering::optimize_blocks(&mut lower.blocks);
+
         VMFunction {
             name: lower.func.name.to_string(),
             params: Vec::new().into_boxed_slice(),
@@ -94,6 +96,8 @@ impl FunctionLowering {
             .map(|(n, _)| n.to_string())
             .collect();
 
+        FunctionLowering::optimize_blocks(&mut lower.blocks);
+
         VMFunction {
             name: lower.func.name.to_string(),
             params: lower
@@ -121,6 +125,75 @@ impl FunctionLowering {
             block_map: lower.block_map,
             needs_param_vars,
             param_names,
+        }
+    }
+
+    // So I made this to see if potentially manually removing certain copies could provide a speedup.
+    // Results have been inconclusive so I may remove it in the future
+    fn optimize_blocks(blocks: &mut Vec<VMBlock>) {
+        for block in blocks.iter_mut() {
+            let mut i = 0;
+            while i < block.instructions.len() {
+                // Removes self-copies: %rX = %rX
+                if let VMInstruction::Copy { dst, src } = block.instructions[i]
+                    && dst == src
+                {
+                    block.instructions.remove(i);
+                    block.instruction_spans.remove(i);
+                    continue;
+                }
+
+                // Removes LoadLiteral followed by copy
+                if i + 1 < block.instructions.len() {
+                    if let (
+                        VMInstruction::LoadLiteral {
+                            dst: dst1,
+                            literal: lit1,
+                        },
+                        VMInstruction::Copy {
+                            dst: dst2,
+                            src: src1,
+                        },
+                    ) = (&block.instructions[i], &block.instructions[i + 1])
+                        && *dst1 == *src1
+                        && *dst1 != *dst2
+                    {
+                        block.instructions[i] = VMInstruction::LoadLiteral {
+                            dst: *dst2,
+                            literal: *lit1,
+                        };
+                        block.instructions.remove(i + 1);
+                        block.instruction_spans.remove(i + 1);
+                        continue;
+                    }
+                }
+
+                // Removes copy followed by copy: %r2 = %r1; %r3 = %r2; -> %r3 = %r1;
+                if i + 1 < block.instructions.len()
+                    && let (
+                        VMInstruction::Copy {
+                            dst: dst1,
+                            src: src1,
+                        },
+                        VMInstruction::Copy {
+                            dst: dst2,
+                            src: src2,
+                        },
+                    ) = (&block.instructions[i], &block.instructions[i + 1])
+                    && *dst1 == *src2
+                    && *dst1 != *dst2
+                {
+                    block.instructions[i] = VMInstruction::Copy {
+                        dst: *dst2,
+                        src: *src1,
+                    };
+                    block.instructions.remove(i + 1);
+                    block.instruction_spans.remove(i + 1);
+                    continue;
+                }
+
+                i += 1;
+            }
         }
     }
 
@@ -256,13 +329,6 @@ impl FunctionLowering {
                     VMInstruction::LoadLiteral {
                         dst: self.null_reg,
                         literal: lit,
-                    },
-                    Span::default(),
-                );
-                ctx.emit(
-                    VMInstruction::Copy {
-                        dst: self.ret_reg,
-                        src: self.null_reg,
                     },
                     Span::default(),
                 );

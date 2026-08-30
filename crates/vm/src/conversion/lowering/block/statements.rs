@@ -30,20 +30,13 @@ impl VMLowering for LirDeclare {
     ) where
         Self: Sized,
     {
-        let reg = env.lower_node(*self.value, span);
         if !env.is_global {
-            let target = assigned.unwrap_or(reg);
-            if target != reg {
-                env.emit(
-                    VMInstruction::Copy {
-                        dst: target,
-                        src: reg,
-                    },
-                    span,
-                );
-            }
+            let target = assigned.unwrap_or_else(|| env.alloc_reg());
+
+            env.lower_node_to(*self.value, target, span);
             let name_idx = env.add_string(self.dest.to_string());
             env.map.insert(self.dest.to_string(), target);
+
             env.emit(
                 VMInstruction::StoreVar {
                     name: name_idx,
@@ -52,6 +45,7 @@ impl VMLowering for LirDeclare {
                 span,
             );
         } else {
+            let reg = env.lower_node(*self.value, span);
             let name = env.add_string(self.dest.to_string());
             env.emit(VMInstruction::StoreVar { name, src: reg }, span);
         }
@@ -93,20 +87,13 @@ impl VMLowering for LirAssign {
     {
         match self.dest {
             LirLValue::Var(dest) => {
-                let reg = env.lower_node(*self.value, span);
                 let name_idx = env.add_string(dest.to_string());
                 if !env.is_global && env.map.contains_key(dest.as_ref()) {
-                    let target = assigned.unwrap_or(reg);
-                    if target != reg {
-                        env.emit(
-                            VMInstruction::Copy {
-                                dst: target,
-                                src: reg,
-                            },
-                            span,
-                        );
-                    }
+                    let target = assigned.unwrap_or_else(|| env.alloc_reg());
+
+                    env.lower_node_to(*self.value, target, span);
                     env.map.insert(dest.to_string(), target);
+
                     env.emit(
                         VMInstruction::StoreVar {
                             name: name_idx,
@@ -115,6 +102,7 @@ impl VMLowering for LirAssign {
                         span,
                     );
                 } else {
+                    let reg = env.lower_node(*self.value, span);
                     env.emit(
                         VMInstruction::StoreVar {
                             name: name_idx,
