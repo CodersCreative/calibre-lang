@@ -4,7 +4,7 @@ use crate::{
         MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirBreak, MirCall,
         MirComparison, MirConditional, MirDebug, MirDeref, MirDrop, MirEmit, MirEnum, MirField,
         MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange,
-        MirRef, MirReturn, MirScope, MirScopeDecl, MirSpawn, MirVarDecl,
+        MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
     },
 };
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
@@ -213,12 +213,6 @@ impl MiddleNodeType {
             }
             MiddleNodeType::FieldAccess(MirField { base, field }) => {
                 MiddleNodeType::FieldAccess(MirField {
-                    base: Box::new(base.rename(state)),
-                    field,
-                })
-            }
-            MiddleNodeType::ScopeAccess(MirScope { base, field }) => {
-                MiddleNodeType::ScopeAccess(MirScope {
                     base: Box::new(base.rename(state)),
                     field,
                 })

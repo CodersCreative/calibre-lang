@@ -88,7 +88,6 @@ impl MiddleNode {
             }
             MiddleNodeType::AsExpression(MirAs { value, .. })
             | MiddleNodeType::FieldAccess(MirField { base: value, .. })
-            | MiddleNodeType::ScopeAccess(MirScope { base: value, .. })
             | MiddleNodeType::IsExpression(MirIs { value, .. })
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
@@ -186,7 +185,6 @@ impl MiddleNode {
                 body.substitute(repl);
             }
             MiddleNodeType::FieldAccess(MirField { base, .. }) => base.substitute(repl),
-            MiddleNodeType::ScopeAccess(MirScope { base, .. }) => base.substitute(repl),
             MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
                 base.substitute(repl);
                 index.substitute(repl);
@@ -246,7 +244,6 @@ impl MiddleNode {
                 state.as_ref().is_some_and(|s| s.calls_self(name)) || body.calls_self(name)
             }
             MiddleNodeType::FieldAccess(MirField { base, .. }) => base.calls_self(name),
-            MiddleNodeType::ScopeAccess(MirScope { base, .. }) => base.calls_self(name),
             MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
                 base.calls_self(name) || index.calls_self(name)
             }
@@ -412,12 +409,6 @@ pub struct MirField {
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
-pub struct MirScope {
-    pub base: Box<MiddleNode>,
-    pub field: ParserText,
-}
-
-#[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirIndex {
     pub base: Box<MiddleNode>,
     pub index: Box<MiddleNode>,
@@ -523,7 +514,6 @@ pub enum MiddleNodeType {
     IsExpression(MirIs),
 
     FieldAccess(MirField),
-    ScopeAccess(MirScope),
     IndexAccess(MirIndex),
     CallExpression(MirCall),
 
@@ -551,7 +541,6 @@ impl MiddleNodeType {
                 | MiddleNodeType::CharLiteral(_)
                 | MiddleNodeType::Null
                 | MiddleNodeType::FieldAccess { .. }
-                | MiddleNodeType::ScopeAccess { .. }
                 | MiddleNodeType::IndexAccess { .. }
                 | MiddleNodeType::AggregateExpression { .. }
                 | MiddleNodeType::ListLiteral(_)
@@ -753,10 +742,6 @@ impl From<MiddleNodeType> for AstNodeType {
                 AstNodeType::IntLiteral(ParserText::from(out))
             }
             MiddleNodeType::FieldAccess(value) => AstNodeType::FieldAccess {
-                base: Box::new((*value.base).into()),
-                field: value.field.into(),
-            },
-            MiddleNodeType::ScopeAccess(value) => AstNodeType::ScopeAccess {
                 base: Box::new((*value.base).into()),
                 field: value.field.into(),
             },

@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirField, MirIndex, MirScope},
+    ast::{MiddleNode, MiddleNodeType, MirField, MirIndex},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -81,8 +81,6 @@ impl MiddleEnvironment {
         base: AstNode,
         field: PotentialDollarIdentifier,
     ) -> Result<MiddleNode, MiddleErr> {
-        let field_name = self.resolve(scope, &field, ResolutionOptions::default().with_dollar())?;
-
         let mut module_path = Vec::new();
         if base.scope_access_path(&mut module_path)
             && let Ok(new_scope) = self
@@ -94,13 +92,7 @@ impl MiddleEnvironment {
             return Ok(self.evaluate(new_scope, AstNode::identifier(span, &resolved)));
         }
 
-        Ok(MiddleNode::new(
-            MiddleNodeType::ScopeAccess(MirScope {
-                base: Box::new(self.evaluate(scope, base)),
-                field: field_name.into(),
-            }),
-            span,
-        ))
+        Err(MiddleErr::Scope(format!("Unable to resolve scope expression : {}::{}", base, field)))
     }
 
     pub(crate) fn evaluate_index_access(

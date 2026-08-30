@@ -12,7 +12,7 @@ use crate::{
     translate::LirLowering,
 };
 use calibre_mir::ast::{
-    MiddleNodeType, MirExtern, MirFunction, MirReturn, MirScopeDecl, MirVarDecl,
+    MiddleNodeType, MirExtern, MirFunction, MirScopeDecl, MirVarDecl,
 };
 use calibre_parser::{
     Span,
@@ -116,7 +116,7 @@ impl LirLowering for MirScopeDecl {
 
 impl LirLowering for MirFunction {
     #[inline(always)]
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         let param_names: FxHashSet<String> = self
             .parameters
             .iter()
@@ -147,39 +147,11 @@ impl LirLowering for MirFunction {
         let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
 
         let body_span = self.body.span;
-        let is_temp_body = matches!(
-            self.body.node_type,
-            MiddleNodeType::ScopeDeclaration(MirScopeDecl { is_temp: true, .. })
-        );
-        let fallback_expr = match &self.body.node_type {
-            MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => body.last().cloned(),
-            _ => None,
+
+        let (has_body_value, body_val) ={
+            let body = sub_lowerer.lower_node(*self.body);
+            (!body.is_null(), body)
         };
-
-        let (mut has_body_value, mut body_val) =
-            if let MiddleNodeType::Conditional { .. } = &self.body.node_type {
-                let _ = MirReturn {
-                    value: Some(self.body.clone()),
-                }
-                .lower(env, span);
-                (false, LirNodeType::null())
-            } else {
-                let body = sub_lowerer.lower_node(*self.body);
-                if is_temp_body {
-                    (false, LirNodeType::null())
-                } else {
-                    (!body.is_null(), body)
-                }
-            };
-
-        if !has_body_value && let Some(expr) = fallback_expr {
-            if expr.node_type.is_simple_function_fallback() {
-                body_val = sub_lowerer.lower_node(expr);
-                has_body_value = true;
-            } else if is_temp_body {
-                sub_lowerer.lower_and_add_node(expr);
-            }
-        }
 
         if sub_lowerer
             .blocks

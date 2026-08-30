@@ -4,7 +4,7 @@ use crate::{
         MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirBreak, MirCall,
         MirComparison, MirConditional, MirDebug, MirDeref, MirDrop, MirEmit, MirEnum, MirField,
         MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange,
-        MirRef, MirReturn, MirScope, MirScopeDecl, MirSpawn, MirVarDecl,
+        MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
     },
 };
 use calibre_parser::IdentifiersUsed;
@@ -131,7 +131,6 @@ impl IdentifiersUsed for MiddleNode {
                 amt
             }
             MiddleNodeType::FieldAccess(MirField { base, .. }) => base.identifiers_used(),
-            MiddleNodeType::ScopeAccess(MirScope { base, .. }) => base.identifiers_used(),
             MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
                 let mut amt = base.identifiers_used();
                 amt.append(&mut index.identifiers_used());
@@ -203,7 +202,6 @@ impl MiddleNode {
                 mutability: _,
                 value,
             })
-            | MiddleNodeType::ScopeAccess(MirScope { base: value, .. })
             | MiddleNodeType::FieldAccess(MirField { base: value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::NegExpression(MirNeg { value })

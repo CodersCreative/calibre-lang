@@ -11,31 +11,10 @@ use crate::{
     environment::LirEnvironment,
     translate::LirLowering,
 };
-use calibre_mir::ast::{MirCall, MirField, MirIndex, MirScope};
+use calibre_mir::ast::{MirCall, MirField, MirIndex,};
 use calibre_parser::{Span, ast::types::ParserInnerType};
 
 impl LirLowering for MirField {
-    #[inline(always)]
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Member(LirMember {
-            base: Box::new(env.lower_node(*self.base)),
-            field: self.field.text.into_boxed_str(),
-        })
-    }
-
-    #[inline(always)]
-    fn lower_lvalue<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirLValue
-    where
-        Self: Sized,
-    {
-        LirLValue::Ptr(Box::new(LirNodeType::Member(LirMember {
-            base: Box::new(env.lower_node(*self.base)),
-            field: self.field.text.into_boxed_str(),
-        })))
-    }
-}
-
-impl LirLowering for MirScope {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Member(LirMember {

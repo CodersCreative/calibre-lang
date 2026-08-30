@@ -255,7 +255,6 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::Break(x) => x.lower(self, span),
             MiddleNodeType::Continue(x) => x.lower(self, span),
             MiddleNodeType::FieldAccess(x) => x.lower(self, span),
-            MiddleNodeType::ScopeAccess(x) => x.lower(self, span),
             MiddleNodeType::IndexAccess(x) => x.lower(self, span),
             MiddleNodeType::DerefStatement(x) => x.lower(self, span),
             MiddleNodeType::RefStatement(x) => x.lower(self, span),
@@ -276,7 +275,6 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::Identifier(x) => x.lower_lvalue(self, node.span),
             MiddleNodeType::DerefStatement(x) => x.lower_lvalue(self, node.span),
             MiddleNodeType::FieldAccess(x) => x.lower_lvalue(self, node.span),
-            MiddleNodeType::ScopeAccess(x) => x.lower_lvalue(self, node.span),
             MiddleNodeType::IndexAccess(x) => x.lower_lvalue(self, node.span),
             _ => unreachable!(),
         }
