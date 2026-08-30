@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Wrong Output
 import File from std::fs;
 
 trait Person {

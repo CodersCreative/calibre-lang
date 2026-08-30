@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Stack Overflow? (Overloads)
 import (Channel, WaitGroup) from std::async;
 
 type NumType := struct { num : int } @overload {

@@ -6,8 +6,8 @@ const matmul := fn (n : int, a b : list:<list:<float>>) -> list:<list:<float>> =
 		let mut ci := list:<float>[0f for _ in 0..n];
 		
 		for k in 0..n => {
-			let aik : &float = a[i][k].&;
-			let bk : &list:<float> = b[k].&;
+			let aik : &mut float = a[i][k].&mut;
+			let bk : &mut list:<float> = b[k].&mut;
 			
 			for j in 0..n => ci[j] += aik.* * bk[j];
 		};

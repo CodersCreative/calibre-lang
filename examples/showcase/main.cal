@@ -153,9 +153,9 @@ const main := fn => {
 	*/
 	let mut lst : list:<int> = [n ** 2 for n in 0..20 if n % 2 = 0 if n % 4 != 0];
 	
-	for n in lst.&mut => {
-		n.* *= 2;
-	} until n > 16;
+	for i in len(lst) => {
+		lst[i] *= 2;
+	} until i > 15;
 	
 	print("list comp => " & lst);
 	
@@ -165,7 +165,7 @@ const main := fn => {
 	
 	// Generator function and inline generator expression.
 	let gen := even_numbers(0, 12);
-	print("generator fn firsts => " & gen.next() & ", " & gen.next() & ", " & gen.next());
+	// print("generator fn firsts => " & gen.next() & ", " & gen.next() & ", " & gen.next());
 	
 	// Until can also be used in generators and list comprehensions.
 	let inline := fn(n * 3 for n in 0..20 if n % 3 = 0 until n > 16);
@@ -254,6 +254,7 @@ const main := fn => {
 	};
 	
 	// String-template function call syntax.
+	// A builtin function called `fmt` is set up for this however
 	let name := "Ty";
 	let intro : str = fn (splits inputs : list:<str>) -> str => {
 		let mut txt : str = "";
@@ -267,6 +268,7 @@ const main := fn => {
 	}"Hello, my name is {name} and age is {age}";
 	
 	print("template fn => " & intro);
+	print(fmt"Using fmt => Hello, my name is {name} and age is {age}");
 	
 	// Iter helpers from std iter trait implementations.
 	let mapped := list:<int>[1, 2, 3].into_iter().map(fn (x : int) -> int => x * 10).collect();

@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Async
 import (Channel, Mutex, WaitGroup) from std::async;
 
 const worker := fn (id : int, jobs : &Channel:<int>, results : &mut Channel:<int>, total : &mut Mutex:<int>) => {
