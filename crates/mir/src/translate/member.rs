@@ -92,7 +92,10 @@ impl MiddleEnvironment {
             return Ok(self.evaluate(new_scope, AstNode::identifier(span, &resolved)));
         }
 
-        Err(MiddleErr::Scope(format!("Unable to resolve scope expression : {}::{}", base, field)))
+        Err(MiddleErr::Scope(format!(
+            "Unable to resolve scope expression : {}::{}",
+            base, field
+        )))
     }
 
     pub(crate) fn evaluate_index_access(

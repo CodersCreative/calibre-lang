@@ -11,7 +11,7 @@ use crate::{
     environment::LirEnvironment,
     translate::LirLowering,
 };
-use calibre_mir::ast::{MirCall, MirField, MirIndex,};
+use calibre_mir::ast::{MirCall, MirField, MirIndex};
 use calibre_parser::{Span, ast::types::ParserInnerType};
 
 impl LirLowering for MirField {

@@ -11,9 +11,7 @@ use crate::{
     environment::{LirEnvironment, LirFunction, LirGlobal},
     translate::LirLowering,
 };
-use calibre_mir::ast::{
-    MiddleNodeType, MirExtern, MirFunction, MirScopeDecl, MirVarDecl,
-};
+use calibre_mir::ast::{MiddleNodeType, MirExtern, MirFunction, MirScopeDecl, MirVarDecl};
 use calibre_parser::{
     Span,
     ast::types::{ParserDataType, ParserInnerType},
@@ -148,7 +146,7 @@ impl LirLowering for MirFunction {
 
         let body_span = self.body.span;
 
-        let (has_body_value, body_val) ={
+        let (has_body_value, body_val) = {
             let body = sub_lowerer.lower_node(*self.body);
             (!body.is_null(), body)
         };

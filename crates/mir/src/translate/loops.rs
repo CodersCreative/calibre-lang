@@ -795,37 +795,6 @@ impl MiddleEnvironment {
             }
 
             LoopType::Let { value, pattern } => {
-                if matches!(value.node_type, AstNodeType::ListLiteral(_, _))
-                    || self
-                        .resolve_type_from_node(scope, &value)
-                        .is_some_and(|dt| {
-                            matches!(dt.unwrap_all_refs().data_type, ParserInnerType::List(_))
-                        })
-                {
-                    let item_ident: PotentialDollarIdentifier =
-                        ParserText::temp_name_with_suffix("for_let_item", value.span).into();
-                    let item_node = AstNode::identifier(span, &item_ident);
-                    let filtered_body = AstNode::new(
-                        span,
-                        AstNodeType::IfStatement {
-                            comparison: Box::new(IfComparisonType::IfLet {
-                                value: item_node,
-                                pattern,
-                            }),
-                            then: Box::new(body),
-                            otherwise: Some(Box::new(AstNode::new(span, AstNodeType::EmptyLine))),
-                        },
-                    );
-                    return self.evaluate_loop_statement(
-                        scope,
-                        LoopType::For(item_ident, value),
-                        filtered_body,
-                        None,
-                        label,
-                        else_body,
-                    );
-                }
-
                 let body = self.eval_loop_body_with_ctx(
                     scope,
                     label_text.clone(),
@@ -847,6 +816,7 @@ impl MiddleEnvironment {
                         },
                     ),
                 )?;
+
                 let loop_node = MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration(MirLoop {
                         state: None,
@@ -856,6 +826,7 @@ impl MiddleEnvironment {
                     }),
                     span,
                 };
+
                 self.finish_loop_with_else(loop_node, scope, span, else_body, result_raw, broke_raw)
             }
 
