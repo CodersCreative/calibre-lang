@@ -1,41 +1,24 @@
-@backend("interpreter-native") {
-	extern "c" const c_rand := fn() -> @int from "libc" as "rand";
-	extern "c" const c_srand := fn(@uint) from "libc" as "srand";
-	extern "c" const c_time := fn(@usize) -> @int from "libc" as "time";
+const RAND_MAX := 2147483647;
 
-	const RAND_MAX := 2147483647;
+const generate := fn -> int => return try rand(-RAND_MAX..RAND_MAX) as int => 0;
 
-	const seed := fn => {
-		c_srand(try c_time(0) as uint => 0u);
+const bool := fn -> bool => return rand(0..=100) > 50.0;
+
+const ratio := fn -> float => return rand(0..RAND_MAX) / (try RAND_MAX as float => 1f);
+
+const range := fn (min max : int, inclusive : bool = false) -> int => {
+	if inclusive => max += 1;
+	if max <= min => return min else => {
+		return try rand(min..max) as int => 0;
 	};
+};
 
-	const seed_with := fn (value : int) => {
-		c_srand(try value as uint => 0u);
-	};
+const float_range := fn (min max : int) -> float => {
+	if max <= min => return min else => return rand(min..max);
+};
 
-	const generate := fn -> int => return c_rand();
-
-	const bool := fn -> bool => return (c_rand() & 1) = 1;
-
-	const ratio := fn -> float => return (try c_rand() as float => 0f) / (try RAND_MAX as float => 1f);
-
-	const range := fn (min max : int, inclusive : bool = false) -> int => {
-		if inclusive => max += 1;
-		if max <= min => return min else => {
-			let span := max - min;
-			return min + (c_rand() % span);
-		};
-	};
-
-	@deprecated("use std::random::range with inclusive : true instead.") const range_inclusive := fn (min max : int) -> int => return range(min, max + 1);
-
-	const float_range := fn (min max : float) -> float => {
-		if max <= min => return min else => return min + (ratio() * (max - min));
-	};
-
-	const choice := fn <T> (values : list:<T>) -> T? => {
-		if len(values) = 0 => return none;
-		let idx := range(0, len(values));
-		return some(values[idx]);
-	};
-}
+const choice := fn <T> (values : list:<T>) -> T? => {
+	if len(values) = 0 => return none;
+	let idx := range(0, len(values));
+	return some(values[idx]);
+};

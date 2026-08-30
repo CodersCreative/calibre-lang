@@ -88,6 +88,7 @@ pub struct VM {
     task_state: TaskState,
     pub(crate) moved_functions: FxHashSet<String>,
     pub suppress_output: bool,
+    pub in_global: bool,
     pub captured_output: String,
     pub input_buffer: Vec<String>,
     pub big_consts: Consts,
@@ -117,6 +118,7 @@ impl Clone for VM {
             captured_output: self.captured_output.clone(),
             input_buffer: self.input_buffer.clone(),
             big_consts: Consts::new().unwrap(),
+            in_global: self.in_global,
         }
     }
 }
@@ -249,6 +251,7 @@ impl VM {
             task_state: TaskState::default(),
             moved_functions: FxHashSet::default(),
             suppress_output: false,
+            in_global: false,
             captured_output: String::new(),
             input_buffer: Vec::new(),
             big_consts: Consts::new().unwrap(),

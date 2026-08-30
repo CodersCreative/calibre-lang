@@ -565,9 +565,13 @@ impl VM {
                 let name = self.local_string(block, *name)?;
                 let _ = self.variables.insert(
                     name,
-                    RuntimeValue::RegRef {
-                        frame: self.frames.len().saturating_sub(1),
-                        reg: *src,
+                    if self.in_global {
+                        self.get_reg_value(*src).clone()
+                    } else {
+                        RuntimeValue::RegRef {
+                            frame: self.frames.len().saturating_sub(1),
+                            reg: *src,
+                        }
                     },
                 );
             }

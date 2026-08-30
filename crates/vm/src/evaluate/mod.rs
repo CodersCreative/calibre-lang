@@ -840,27 +840,36 @@ impl VM {
         if self.registry.globals.is_empty() {
             return Ok(());
         }
+
         let registry = Arc::clone(&self.registry);
-        for (_name, global) in registry.globals.iter() {
-            self.run_global(global)?;
+        self.in_global = true;
+        for (name, global) in registry.globals.iter() {
+            if !self.registry.functions.contains_key(name) && !self.variables.contains_key(name) {
+                self.run_global(global)?;
+            }
         }
+        self.in_global = false;
+
         Ok(())
     }
 
     #[instrument(skip_all, fields(entry = ?global.entry))]
     pub fn run_global(&mut self, global: &VMGlobal) -> Result<RuntimeValue, RuntimeError> {
         debug!("running global");
+
         let entry = global
             .block_map
             .get(&global.entry)
             .copied()
             .ok_or_else(|| RuntimeError::InvalidBytecode("global has no blocks".to_string()))?;
+
         let mut block = global
             .blocks
             .get(entry)
             .ok_or_else(|| RuntimeError::InvalidBytecode("global has no blocks".to_string()))?;
 
         let mut prev_block: Option<BlockId> = None;
+
         loop {
             match self.run_block(block, prev_block)? {
                 TerminateValue::Jump(target) => {
@@ -898,6 +907,7 @@ impl VM {
         I: IntoIterator<Item = RuntimeValue>,
     {
         trace!("entering function");
+        self.in_global = false;
         let mut state = crate::TaskState::default();
         match self.run_function_with_budget(function, args, captures, usize::MAX, &mut state)? {
             Some(value) => Ok(value),

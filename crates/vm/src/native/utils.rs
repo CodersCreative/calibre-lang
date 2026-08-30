@@ -6,6 +6,7 @@ use crate::{
         WaitGroupInner,
     },
 };
+use std::ops::Range;
 use std::sync::Arc;
 use wasm_sync::Mutex;
 
@@ -75,6 +76,14 @@ pub fn resolve_int(env: &VM, value: &RuntimeValue) -> Result<i64, RuntimeError> 
         RuntimeValue::UInt(v) => v as i64,
         RuntimeValue::Byte(v) => v as i64,
         RuntimeValue::Float(v) => v as i64,
+        v => return Err(RuntimeError::UnexpectedType(Box::new(v))),
+    })
+}
+
+#[inline]
+pub fn resolve_range(env: &VM, value: &RuntimeValue) -> Result<Range<i64>, RuntimeError> {
+    Ok(match env.resolve_value_for_op_ref(value)? {
+        RuntimeValue::Range(from, to) => from..to,
         v => return Err(RuntimeError::UnexpectedType(Box::new(v))),
     })
 }

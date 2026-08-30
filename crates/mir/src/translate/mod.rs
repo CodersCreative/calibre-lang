@@ -1587,6 +1587,7 @@ impl MiddleEnvironment {
                 let resolved = self
                     .resolve_data_type(scope, &target, ResolutionOptions::typing())?
                     .unwrap_all_refs();
+
                 let impl_key = resolved.impl_name();
 
                 self.typing
@@ -2785,9 +2786,9 @@ impl MiddleEnvironment {
                                     value: Box::new(done_ident_node()),
                                 },
                             ))),
-                            then: Box::new(Self::scope_member_call(
+                            then: Box::new(AstNode::call(
                                 node.span,
-                                &["std", "thread", "wait"],
+                                AstNode::identifier(node.span, "wait"),
                                 vec![CallArg::Value(AstNode::int(node.span, 1))],
                             )),
                             otherwise: None,

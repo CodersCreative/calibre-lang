@@ -80,7 +80,7 @@ test "showcase_conversions" => {
 	for count < 2000 => {
 		let next := gen.next();
 		assert(next.is_some(), "generator ended too early during benchmark");
-		sum += next.unwrap_or(0);
+		sum += try next => 0;
 		count += 1;
 	};
 	
@@ -180,7 +180,7 @@ const main := fn => {
 		.Err : e => print("result err => " & e)
 	};
 	
-	let mut maybe := some(9).map(fn (n : int) -> int => n * 2).unwrap_or(0);
+	let mut maybe := try some(9).map(fn (n : int) -> int => n * 2) => 0;
 	
 	// Examples of mutable references and capturing
 	fn => {
@@ -193,7 +193,7 @@ const main := fn => {
 		maybe_mut.* += 1;
 	};
 	
-	print("option map/unwrap_or => " & maybe);
+	print("option map => " & maybe);
 	
 	// All cast modes: `as` -> result, `as!` -> panic on fail, `as?` -> option.
 	let cast_result := "64" as int;

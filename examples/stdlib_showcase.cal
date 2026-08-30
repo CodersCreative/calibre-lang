@@ -50,10 +50,8 @@ const main := fn => {
 	let squares := squares.collect();
 	print("squares => " & squares);
 	
-	let opt := some(10).map(fn (x : int) -> int => return x + 1).unwrap_or(0);
+	let opt := try some(10).map(fn (x : int) -> int => return x + 1) => 0;
 	print("option map => " & opt);
-	let opt2 := none.unwrap_or(123);
-	print("option unwrap_or => " & opt2);
 	let opt3 := some(5).and_then(fn (x : int) -> int? => if x > 3 => return some(x * 3) else => return none);
 	print("option and_then => " & opt3);
 	
@@ -62,8 +60,6 @@ const main := fn => {
 	let res2 := err("oops").map_err(fn (e : str) -> str => return "ERR: " & e);
 	print("result map_err => " & res2);
 	print("result is_ok => " & res1.is_ok());
-	let res3 := ok(9).unwrap_or(0);
-	print("result unwrap_or => " & res3);
 	
 	let dur := Duration.from_ms(150);
 	print("duration ms => " & dur.as_ms());

@@ -86,7 +86,18 @@ impl ParserDataType {
                 ),
                 #[cfg(feature = "native")]
                 ("libc.get_c_errno_description", vec![], ParserInnerType::Str),
+                (
+                    "random.rand",
+                    vec![ParserInnerType::Range],
+                    ParserInnerType::Float,
+                ),
+                (
+                    "random.seed",
+                    vec![ParserInnerType::Int],
+                    ParserInnerType::Null,
+                ),
                 ("len", vec![ParserInnerType::Dynamic], ParserInnerType::Int),
+                ("wait", vec![ParserInnerType::Int], ParserInnerType::Null),
                 (
                     "panic",
                     vec![ParserInnerType::List(Box::new(Self::native_type(

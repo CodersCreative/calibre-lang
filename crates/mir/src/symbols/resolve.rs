@@ -385,6 +385,14 @@ impl MiddleEnvironment {
             IdentifierType::Ident(x) => x.to_string(),
         };
 
+        if options.type_resolution {
+            match ParserInnerType::from_str(&ident) {
+                Ok(ParserInnerType::Struct(_) | ParserInnerType::StructWithGenerics { .. })
+                | Err(_) => {}
+                _ => return Ok(StrOrAstNode::Str(ident)),
+            }
+        }
+
         trace!(ident = %ident, "Identifier resolution complete");
 
         for current_scope in scope.ancestors(&self.scoping.scopes) {

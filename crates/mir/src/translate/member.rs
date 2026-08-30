@@ -17,21 +17,6 @@ use calibre_parser::{
 };
 
 impl MiddleEnvironment {
-    pub(crate) fn scope_member_call(span: Span, path: &[&str], args: Vec<CallArg>) -> AstNode {
-        let mut result = AstNode::identifier(span, path.first().unwrap());
-        for segment in path.iter().skip(1) {
-            result = AstNode::new(
-                span,
-                AstNodeType::ScopeAccess {
-                    base: Box::new(result),
-                    field: PotentialDollarIdentifier::new(span, segment),
-                },
-            );
-        }
-
-        AstNode::call_full(span, result, vec![], args, vec![], None)
-    }
-
     pub(crate) fn evaluate_field_access(
         &mut self,
         scope: ScopeId,

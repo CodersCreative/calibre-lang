@@ -1,0 +1,7 @@
+const TEN := 10;
+
+const main := fn => {
+    print(TEN);
+    print(TEN);
+    print(TEN);
+}

@@ -11,8 +11,10 @@ use dumpster::sync::Gc;
 use std::{
     io::{self, BufRead, Write},
     sync::Arc,
+    time::Duration,
 };
 use wasm_sync::Mutex;
+use wasm_thread as thread;
 
 pub struct ConsoleOutput;
 
@@ -144,6 +146,24 @@ impl NativeFunction for OkFn {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
+
+        Ok(RuntimeValue::Result(Ok(Gc::new(
+            env.resolve_value_for_op_ref(&pop_or_null(&mut args))?,
+        ))))
+    }
+}
+
+pub struct Wait;
+
+impl NativeFunction for Wait {
+    fn name(&self) -> String {
+        String::from("wait")
+    }
+
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+        let val = resolve_int(env, &args[0])?;
+        thread::sleep(Duration::from_millis(val as u64));
 
         Ok(RuntimeValue::Result(Ok(Gc::new(
             env.resolve_value_for_op_ref(&pop_or_null(&mut args))?,

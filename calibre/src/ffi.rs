@@ -4,6 +4,9 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
 
+type OutputCallback = Option<unsafe extern "C" fn() -> *const c_char>;
+type InputCallback = Option<unsafe extern "C" fn(*const c_char) -> *const c_char>;
+
 #[repr(C)]
 pub struct CalibreRunResult {
     pub return_value: *mut c_char,
@@ -120,9 +123,9 @@ pub extern "C" fn calibre_artifacts_free(ptr: *mut CalibreArtifacts) {
     if ptr.is_null() {
         return;
     }
-    
+
     let ca = unsafe { Box::from_raw(ptr) };
-    
+
     if !ca.entry_name.is_null() {
         unsafe {
             let _ = CString::from_raw(ca.entry_name);
@@ -179,9 +182,9 @@ pub extern "C" fn calibre_run_result_free(ptr: *mut CalibreRunResult) {
     if ptr.is_null() {
         return;
     }
-    
+
     let rr = unsafe { Box::from_raw(ptr) };
-    
+
     if !rr.return_value.is_null() {
         unsafe {
             let _ = CString::from_raw(rr.return_value);
