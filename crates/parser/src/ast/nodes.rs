@@ -233,6 +233,13 @@ impl AstNode {
         )
     }
 
+    pub fn emit(node: AstNode) -> Self {
+        Self::new(
+            node.span,
+            AstNodeType::Emit(EmitType::Scope(Box::new(node))),
+        )
+    }
+
     pub fn null(span: Span) -> Self {
         AstNode::new(span, AstNodeType::Null)
     }

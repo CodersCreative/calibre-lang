@@ -36,6 +36,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use tracing::{debug, instrument, trace};
 
 pub mod functions;
+pub mod iter;
 pub mod loops;
 pub mod matches;
 pub mod member;

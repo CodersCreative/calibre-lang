@@ -6,7 +6,7 @@ fn worker(id) do
 end
 
 let handles = {}
-for i in 0..100000
+for i in 0..800000
   handles:push(spawn(worker(i)))
 
 for h in handles

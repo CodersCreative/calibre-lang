@@ -1,11 +1,12 @@
 const worker = async (id) => {
-  console.log(`worker ${id} done`);
+  const x = 10000000 / 3 + 5;
+  console.log(`worker ${id + x} done`);
 };
 
 const main = async () => {
   const tasks = [];
 
-  for (let i = 0; i < 500000; i++) {
+  for (let i = 0; i < 800000; i++) {
     tasks.push(worker(i));
   }
 

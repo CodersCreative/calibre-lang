@@ -9,7 +9,7 @@ const worker := fn (id : int) => {
 const main := fn => {
 	let mut wg := WaitGroup.new();
 	
-	for i in 0..500000 => wg.join(spawn worker(i));
+	for i in 0.800000 => wg.join(spawn worker(i));
 	
 	wg.wait();
 	print("all workers finished");
