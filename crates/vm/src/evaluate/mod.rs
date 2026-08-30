@@ -18,6 +18,7 @@ use std::sync::Arc;
 use tracing::{debug, instrument, trace};
 
 mod instruction;
+mod tailcall;
 
 #[derive(Debug)]
 enum CaptureRestore {
@@ -933,30 +934,44 @@ impl VM {
         );
 
         for (reg, arg_reg) in function.param_regs.iter().zip(args.iter().copied()) {
-            let arg = self.call_arg_from_frame_reg(caller_frame, arg_reg);
-            self.set_reg_value(*reg, arg.clone());
+            let arg = self.get_reg_value_in_frame(caller_frame, arg_reg).clone();
+            self.set_reg_value(*reg, arg);
         }
 
-        for (name, reg) in function
-            .params
-            .iter()
-            .zip(function.param_regs.iter().copied())
-        {
-            let value = self.get_reg_value(reg).clone();
-            let _ = self.variables.insert(name, value);
-        }
-
-        let param_names: std::collections::HashSet<&str> =
-            function.params.iter().map(|x| x.as_str()).collect();
-        let filtered_captures: Vec<(String, RuntimeValue)> = captures
-            .iter()
-            .filter(|(name, _)| {
-                Self::should_install_capture(name) && !param_names.contains(name.as_str())
+        let needs_param_vars = function.blocks.iter().any(|block| {
+            block.instructions.iter().any(|instr| {
+                matches!(
+                    instr,
+                    VMInstruction::LoadVar { .. } | VMInstruction::StoreVar { .. }
+                )
             })
-            .cloned()
-            .collect();
+        });
 
-        let prev_vars = self.install_captures(filtered_captures.as_slice());
+        if needs_param_vars {
+            for (name, reg) in function
+                .params
+                .iter()
+                .zip(function.param_regs.iter().copied())
+            {
+                let value = self.get_reg_value(reg).clone();
+                let _ = self.variables.insert(name, value);
+            }
+        }
+
+        let prev_vars = if captures.is_empty() {
+            Vec::new()
+        } else {
+            let param_names: std::collections::HashSet<&str> =
+                function.params.iter().map(|x| x.as_str()).collect();
+            let filtered_captures: Vec<(String, RuntimeValue)> = captures
+                .iter()
+                .filter(|(name, _)| {
+                    Self::should_install_capture(name) && !param_names.contains(name.as_str())
+                })
+                .cloned()
+                .collect();
+            self.install_captures(filtered_captures.as_slice())
+        };
 
         let mut block_id = function.entry;
         let entry =
@@ -1009,71 +1024,13 @@ impl VM {
         self.pop_frame();
         self.restore_captures(prev_vars);
 
-        for name in function.params.iter() {
-            self.variables.remove(name);
-        }
-
-        Ok(result)
-    }
-
-    fn try_trampoline_self_tail_call(
-        &mut self,
-        block: &VMBlock,
-        ip: u32,
-        dst: u16,
-        args: &[u16],
-        func: &VMFunction,
-    ) -> Option<TerminateValue> {
-        let Some(VMInstruction::Return {
-            value: Some(ret_reg),
-        }) = block.instructions.get((ip as usize).saturating_add(1))
-        else {
-            return None;
-        };
-
-        if *ret_reg != dst || args.len() != func.param_regs.len() {
-            return None;
-        }
-
-        let caller_frame = self.frames.len().saturating_sub(1);
-        let call_args = args
-            .iter()
-            .map(|reg| self.call_arg_from_frame_reg(caller_frame, *reg))
-            .collect::<Vec<_>>();
-
-        let start = self.current_frame().reg_start;
-        let reg_count = func.reg_count as usize;
-        let frame_end = start + reg_count;
-
-        if frame_end > self.reg_arena.len() {
-            self.reg_arena.resize(frame_end, RuntimeValue::Null);
-        }
-
-        for slot in &mut self.reg_arena[start..frame_end] {
-            *slot = RuntimeValue::Null;
-        }
-
-        self.reg_top = frame_end;
-        {
-            let frame = self.current_frame_mut();
-            frame.reg_count = reg_count;
-            frame.acc = RuntimeValue::Null;
-            frame.func_ptr = func as *const VMFunction as usize;
-        }
-
-        for (reg, arg) in func.param_regs.iter().zip(call_args) {
-            let idx = *reg as usize;
-            if idx < reg_count {
-                self.reg_arena[start + idx] = arg.clone();
+        if needs_param_vars {
+            for name in function.params.iter() {
+                self.variables.remove(name);
             }
         }
 
-        for (name, reg) in func.params.iter().zip(func.param_regs.iter().copied()) {
-            let value = self.get_reg_value(reg).clone();
-            let _ = self.variables.insert(name, value);
-        }
-
-        Some(TerminateValue::Jump(func.entry))
+        Ok(result)
     }
 
     #[instrument(skip_all, fields(function = %function.name, budget = budget))]

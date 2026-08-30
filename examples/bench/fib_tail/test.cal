@@ -1,0 +1,16 @@
+const fib := fn (n : int) -> int => {
+    const fib_helper := fn (n a b : int) -> int => 
+        return (n < 1) ? a : fib_helper(n - 1, b, a + b);
+    
+    return fib_helper(n, 0, 1);
+};
+
+const main := fn => {
+	let n := 28;
+	let result := fib(n);
+	print(result);
+};
+
+@bench test "fib" => main();
+
+test "fib_10" => assert(fib(10) = 55, "Fib 10 did not equal 55 as expected");

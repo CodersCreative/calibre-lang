@@ -11,9 +11,7 @@ const fib := fn (n : int) -> int => {
 const main := fn => {
 	let n := 28
 	let result := fib(n);
-	print(fib(n));
-
-    print(result);
+	print(result);
 };
 
 @bench test "fib" => main();

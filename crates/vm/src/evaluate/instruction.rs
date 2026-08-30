@@ -356,13 +356,8 @@ impl VM {
                     return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
                 };
 
-                if captures.as_ref().is_empty()
-                    && std::ptr::eq(
-                        func.as_ref() as *const VMFunction,
-                        self.current_frame().func_ptr as *const VMFunction,
-                    )
-                    && let Some(step) =
-                        self.try_trampoline_self_tail_call(block, ip, dst, args, func.as_ref())
+                if let Some(step) =
+                    self.try_tail_call(block, ip, dst, args, func.as_ref(), &captures)
                 {
                     return Ok(Some(step));
                 }
@@ -871,10 +866,12 @@ impl VM {
                     ));
                 }
                 let func = unsafe { &*func_ptr };
-                if let Some(step) = self.try_trampoline_self_tail_call(block, ip, *dst, args, func)
-                {
+
+                let empty_caps = Self::empty_captures();
+                if let Some(step) = self.try_tail_call(block, ip, *dst, args, func, &empty_caps) {
                     return Ok(step);
                 }
+
                 let value = self.run_function_from_regs(func, args, Self::empty_captures())?;
                 self.set_reg_value(*dst, value);
             }

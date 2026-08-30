@@ -1,0 +1,16 @@
+fn fib(n) do
+    let a = 0
+    let b = 1
+    
+    for _ in 0..n do
+        let temp = a + b
+        a = b
+        b = temp
+    end
+    
+    a
+end
+
+let n = 28
+let result = fib(n)
+print(result)

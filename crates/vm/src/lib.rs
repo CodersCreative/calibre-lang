@@ -242,7 +242,7 @@ impl VM {
             reg_arena: Vec::new(),
             reg_top: 0,
             frames: vec![VMFrame::default()],
-            frame_pool: Vec::new(),
+            frame_pool: Vec::with_capacity(256),
             caches: VMCaches {
                 ..VMCaches::default()
             },
@@ -379,10 +379,15 @@ impl VM {
 
     fn push_frame(&mut self, reg_count: usize, func_ptr: usize, func_name: Option<String>) {
         let start = self.reg_top;
-        self.reg_top = self.reg_top.saturating_add(reg_count);
-        if self.reg_top > self.reg_arena.len() {
-            self.reg_arena.resize(self.reg_top, RuntimeValue::Null);
+        let new_top = self.reg_top.saturating_add(reg_count);
+
+        if new_top > self.reg_arena.len() {
+            let new_capacity = new_top.saturating_add(new_top / 4).max(64);
+            self.reg_arena.resize(new_capacity, RuntimeValue::Null);
         }
+
+        self.reg_top = new_top;
+
         if let Some(mut frame) = self.frame_pool.pop() {
             frame.reg_start = start;
             frame.reg_count = reg_count;
