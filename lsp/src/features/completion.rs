@@ -86,6 +86,7 @@ impl CalibreLanguageServer {
         let canonical_first = env
             .resolve(scope, &first, ResolutionOptions::all())
             .unwrap_or_else(|_| first.to_string());
+
         let mut current = if let Some(var) = env.symbols.variables.get(&canonical_first) {
             var.data_type.clone()
         } else if env.typing.objects.contains_key(&canonical_first) {
@@ -371,8 +372,8 @@ impl CalibreLanguageServer {
             let current_scope = Self::find_scope_at_with(&middle_ast, scope, position);
 
             if let Ok(canonical) = env
-                .resolve(current_scope, &callee, ResolutionOptions::all())
-                .or_else(|_| env.resolve(scope, &callee, ResolutionOptions::all()))
+                .resolve(current_scope, &callee, ResolutionOptions::idents())
+                .or_else(|_| env.resolve(scope, &callee, ResolutionOptions::idents()))
                 && let Some(var) = env.symbols.variables.get(&canonical)
                 && let Some(sig) =
                     Self::signature_information_for_data_type(&callee, &var.data_type)

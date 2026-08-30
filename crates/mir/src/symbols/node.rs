@@ -451,7 +451,7 @@ impl MiddleEnvironment {
             }
             AstNodeType::Identifier(x) => {
                 match self
-                    .resolve_potential_node(scope, x, ResolutionOptions::all())
+                    .resolve_potential_node(scope, x, ResolutionOptions::idents())
                     .ok()?
                 {
                     StrOrAstNode::Str(iden) => {
@@ -503,7 +503,7 @@ impl MiddleEnvironment {
                         .or_else(|_| self.import_scope_list(scope, module_path).map(|x| x.0))
                     {
                         let resolved = self
-                            .resolve(member_scope, field, ResolutionOptions::all())
+                            .resolve(member_scope, field, ResolutionOptions::idents())
                             .unwrap_or(member);
                         return self
                             .symbols

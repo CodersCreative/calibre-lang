@@ -113,7 +113,7 @@ impl MiddleEnvironment {
             )
             .ok()?;
         let resolved_name = self
-            .resolve(scope, &name, ResolutionOptions::all())
+            .resolve(scope, &name, ResolutionOptions::idents())
             .map(|x| x.to_string());
 
         let defaults_key = resolved_name.as_deref().unwrap_or(name.as_str());
@@ -869,7 +869,7 @@ impl MiddleEnvironment {
                     ));
                 }
 
-                if let Ok(caller) = self.resolve(scope, &caller_ident, ResolutionOptions::all())
+                if let Ok(caller) = self.resolve(scope, &caller_ident, ResolutionOptions::typing())
                     && self.typing.objects.contains_key(&caller)
                 {
                     return Ok(self.aggregate_from_call_nodes(

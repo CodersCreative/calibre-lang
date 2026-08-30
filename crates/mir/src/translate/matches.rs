@@ -499,7 +499,9 @@ impl MiddleEnvironment {
                 }
             },
             AstNodeType::Identifier(id)
-                if self.resolve(scope, id, ResolutionOptions::all()).is_err() =>
+                if self
+                    .resolve(scope, id, ResolutionOptions::idents())
+                    .is_err() =>
             {
                 self.match_add_binding(id.clone(), actual, None, body_nodes, guard_bindings);
             }
@@ -545,7 +547,10 @@ impl MiddleEnvironment {
                         MatchTupleItem::Value(AstNode {
                             node_type: AstNodeType::Identifier(id),
                             ..
-                        }) if self.resolve(scope, id, ResolutionOptions::all()).is_err() => {
+                        }) if self
+                            .resolve(scope, id, ResolutionOptions::idents())
+                            .is_err() =>
+                        {
                             body_nodes.push(Self::auto_var_decl(
                                 self.context.current_span(),
                                 VarType::Immutable,
@@ -827,7 +832,9 @@ impl MiddleEnvironment {
                 node_type: AstNodeType::Identifier(id),
                 ..
             }) = &pattern.0
-                && self.resolve(scope, id, ResolutionOptions::all()).is_err()
+                && self
+                    .resolve(scope, id, ResolutionOptions::idents())
+                    .is_err()
             {
                 pattern.0 = MatchArmType::Let {
                     var_type: VarType::Immutable,
@@ -853,7 +860,7 @@ impl MiddleEnvironment {
                             &mut guard_bindings,
                         );
                         let wants_other = self
-                            .resolve(scope, &"other", ResolutionOptions::all())
+                            .resolve(scope, &"other", ResolutionOptions::idents())
                             .is_err()
                             && (Self::node_uses_ident(&pattern.2, "other")
                                 || guard_nodes
@@ -1382,7 +1389,7 @@ impl MiddleEnvironment {
                         );
 
                         let wants_other = self
-                            .resolve(scope, &"other", ResolutionOptions::all())
+                            .resolve(scope, &"other", ResolutionOptions::idents())
                             .is_err()
                             && (Self::node_uses_ident(&pattern.2, "other")
                                 || guard_nodes

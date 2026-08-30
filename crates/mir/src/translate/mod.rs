@@ -85,7 +85,7 @@ impl MiddleEnvironment {
             }
             AstNodeType::Identifier(x) => Ok(MiddleNode::identifier(
                 node.span,
-                match self.resolve_potential_node(scope, &x, ResolutionOptions::all())? {
+                match self.resolve_potential_node(scope, &x, ResolutionOptions::idents())? {
                     StrOrAstNode::Str(x) => x,
                     StrOrAstNode::Node(x) => return self.evaluate_inner(scope, x),
                 },
@@ -405,7 +405,7 @@ impl MiddleEnvironment {
                     node_type: MiddleNodeType::Move(MirMove {
                         identifier: ParserText::new(
                             node.span,
-                            self.resolve(scope, &x, ResolutionOptions::all())?,
+                            self.resolve(scope, &x, ResolutionOptions::idents())?,
                         ),
                     }),
                     span: node.span,
@@ -529,12 +529,11 @@ impl MiddleEnvironment {
                     ),
                 )
             }
-
             AstNodeType::Drop(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::Drop(MirDrop {
                     identifier: ParserText::new(
                         node.span,
-                        self.resolve(scope, &x, ResolutionOptions::all())?,
+                        self.resolve(scope, &x, ResolutionOptions::idents())?,
                     ),
                 }),
                 span: node.span,
@@ -1864,7 +1863,7 @@ impl MiddleEnvironment {
                     .0
                     .iter()
                     .map(|g| {
-                        self.resolve(scope, &g.identifier, ResolutionOptions::all())
+                        self.resolve(scope, &g.identifier, ResolutionOptions::typing())
                             .unwrap_or(g.identifier.to_string())
                     })
                     .collect();
@@ -1873,7 +1872,8 @@ impl MiddleEnvironment {
                     self.scoping.push_generic_params(generic_params.clone());
                 }
 
-                let resolved_trait = self.resolve(scope, &trait_ident, ResolutionOptions::all())?;
+                let resolved_trait =
+                    self.resolve(scope, &trait_ident, ResolutionOptions::typing())?;
 
                 let resolved_target = self
                     .resolve_data_type(scope, &target, ResolutionOptions::typing())?
@@ -2263,7 +2263,7 @@ impl MiddleEnvironment {
                 node_type: MiddleNodeType::AggregateExpression(MirAggregate {
                     identifier: Some(ParserText::new(
                         node.span,
-                        self.resolve(scope, &identifier, ResolutionOptions::all())
+                        self.resolve(scope, &identifier, ResolutionOptions::typing())
                             .unwrap_or_else(|_| identifier.to_string()),
                     )),
                     value: ObjectMap(match value {
@@ -2294,7 +2294,7 @@ impl MiddleEnvironment {
                 value,
                 data,
             } => {
-                let identifier = self.resolve(scope, &identifier, ResolutionOptions::all())?;
+                let identifier = self.resolve(scope, &identifier, ResolutionOptions::typing())?;
 
                 let raw_variant = value.to_string();
                 let obj = self.typing.objects.get(&identifier);
@@ -2838,7 +2838,7 @@ impl MiddleEnvironment {
 
                 let is_callable_point = |env: &mut Self, point: &PipeSegment| {
                     if let AstNodeType::Identifier(id) = &point.get_node().node_type
-                        && let Ok(resolved) = env.resolve(scope, id, ResolutionOptions::all())
+                        && let Ok(resolved) = env.resolve(scope, id, ResolutionOptions::idents())
                         && env
                             .symbols
                             .variables

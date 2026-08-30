@@ -87,7 +87,11 @@ impl MiddleEnvironment {
                 .get_scope_list(scope, module_path.clone())
                 .or_else(|_| self.import_scope_list(scope, module_path).map(|x| x.0))
         {
-            let resolved = self.resolve(new_scope, &field, ResolutionOptions::all())?;
+            let resolved = self.resolve(
+                new_scope,
+                &field,
+                ResolutionOptions::default().with_dollar(),
+            )?;
 
             return Ok(self.evaluate(new_scope, AstNode::identifier(span, &resolved)));
         }

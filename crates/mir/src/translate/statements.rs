@@ -351,7 +351,7 @@ impl MiddleEnvironment {
                 _ => false,
             };
 
-        let default_ident = self.resolve(scope, &"Default", ResolutionOptions::all());
+        let default_ident = self.resolve(scope, &"Default", ResolutionOptions::typing());
         self.typing.objects.insert(
             new_name.clone(),
             MiddleObject {
