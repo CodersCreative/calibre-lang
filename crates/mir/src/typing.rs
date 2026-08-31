@@ -81,7 +81,15 @@ impl Typing {
         let mut stack = vec![root_trait.clone()];
         let mut visited_traits = FxHashSet::default();
 
+        let mut depth = 32;
+
         while let Some(current) = stack.pop() {
+            if depth <= 0 {
+                trace!("trait resolution exceeded max depth, stopping");
+                break;
+            }
+            depth -= 1;
+
             if !visited_traits.insert(current.clone()) {
                 continue;
             }

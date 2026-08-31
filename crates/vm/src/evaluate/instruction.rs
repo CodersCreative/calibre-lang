@@ -810,7 +810,10 @@ impl VM {
                             self.config.clone(),
                         );
 
-                        gen_vm.variables = self.variables.clone();
+                        for (k, v) in &resolved_caps {
+                            gen_vm.variables.insert(k.clone(), v.clone());
+                        }
+
                         gen_vm.ptr_heap = self.ptr_heap.clone();
                         gen_vm.moved_functions = self.moved_functions.clone();
 

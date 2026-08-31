@@ -25,17 +25,31 @@ impl MiddleEnvironment {
         }
     }
 
-    #[instrument(skip_all, fields(list = ?list))]
+    #[instrument(skip_all)]
     pub fn import_scope_list(
         &mut self,
         scope: ScopeId,
         list: &[Ustr],
     ) -> Result<(ScopeId, Option<MiddleNode>), MiddleErr> {
-        debug!("importing scope list");
+        self.import_scope_list_with_depth(scope, list, 32)
+    }
+
+    #[instrument(skip_all, fields(list = ?list))]
+    pub fn import_scope_list_with_depth(
+        &mut self,
+        scope: ScopeId,
+        list: &[Ustr],
+        depth: usize,
+    ) -> Result<(ScopeId, Option<MiddleNode>), MiddleErr> {
+        if depth <= 0 {
+            return Ok((scope, None));
+        }
+
+        debug!("importing scope list at depth {}", depth);
         if let Some(first) = list.first() {
             debug!(first = %first, "importing scope");
             let scope = self.import_next_scope(scope, &first);
-            self.import_scope_list(scope?.0, list)
+            self.import_scope_list_with_depth(scope?.0, list, depth - 1)
         } else {
             Ok((scope, None))
         }

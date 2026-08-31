@@ -13,7 +13,6 @@ use calibre_parser::ast::comparison::ComparisonOperator;
 use calibre_parser::ast::types::ParserInnerType;
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
 use dumpster::sync::Gc;
-use rustc_hash::FxHashSet;
 use std::sync::Arc;
 use tracing::{debug, instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
@@ -64,7 +63,30 @@ impl VM {
 
     #[instrument(skip_all)]
     fn write_back_runtime_value(&mut self, target: RuntimeValue, value: RuntimeValue) {
-        trace!("writing back runtime value");
+        self.write_back_runtime_value_with_depth(target, value, 32)
+    }
+
+    fn write_back_runtime_value_with_depth(
+        &mut self,
+        target: RuntimeValue,
+        value: RuntimeValue,
+        depth: usize,
+    ) {
+        if depth <= 0 {
+            trace!("write_back_runtime_value exceeded max depth, forcing write");
+            match target {
+                RuntimeValue::Ref(name) => {
+                    self.variables.insert(name, value);
+                }
+                RuntimeValue::VarRef(id) => {
+                    let _ = self.variables.set_by_id(id, value);
+                }
+                _ => {}
+            }
+            return;
+        }
+
+        trace!("writing back runtime value at depth {}", depth);
         match target {
             RuntimeValue::Ref(name) => {
                 if let Some(current) = self.variables.get(&name).cloned() {
@@ -72,7 +94,7 @@ impl VM {
                         RuntimeValue::Ref(_)
                         | RuntimeValue::VarRef(_)
                         | RuntimeValue::RegRef { .. } => {
-                            self.write_back_runtime_value(current, value);
+                            self.write_back_runtime_value_with_depth(current, value, depth - 1);
                         }
                         _ => {
                             self.variables.insert(name, value);
@@ -88,7 +110,7 @@ impl VM {
                         RuntimeValue::Ref(_)
                         | RuntimeValue::VarRef(_)
                         | RuntimeValue::RegRef { .. } => {
-                            self.write_back_runtime_value(current, value);
+                            self.write_back_runtime_value_with_depth(current, value, depth - 1);
                         }
                         _ => {
                             let _ = self.variables.set_by_id(id, value);

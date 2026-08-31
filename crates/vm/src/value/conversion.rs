@@ -126,7 +126,11 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Float(if x { 1.0 } else { 0.0 }))
             }
             (RuntimeValue::Bool(x), ParserInnerType::Str) => {
-                Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
+                Ok(RuntimeValue::Str(Ustr::from(if x {
+                    "true"
+                } else {
+                    "false"
+                })))
             }
             (RuntimeValue::Char(x), ParserInnerType::Char) => Ok(RuntimeValue::Char(x)),
             (RuntimeValue::Char(x), ParserInnerType::Bool) => {

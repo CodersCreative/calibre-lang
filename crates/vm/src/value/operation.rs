@@ -453,27 +453,32 @@ impl RuntimeValue {
     ) -> Result<RuntimeValue, (RuntimeValue, RuntimeValue)> {
         match self {
             Self::Char(x) => {
-                let mut s = x.to_string();
-                s.push_str(&rhs.display(vm));
+                let rhs_str = rhs.display(vm);
+                let mut s = String::with_capacity(x.len_utf8() + rhs_str.len());
+                s.push(x);
+                s.push_str(&rhs_str);
                 Ok(Self::Str(Ustr::from(&s)))
             }
             Self::Str(x) => {
-                let mut value = x.to_string();
-                value.push_str(&rhs.display(vm));
-                Ok(Self::Str(Ustr::from(&x)))
+                let rhs_str = rhs.display(vm);
+                let mut value = String::with_capacity(x.len() + rhs_str.len());
+                value.push_str(x.as_str());
+                value.push_str(&rhs_str);
+                Ok(Self::Str(Ustr::from(&value)))
             }
             lhs => match rhs {
                 Self::Char(x) => {
-                    let mut s = lhs.display(vm);
+                    let lhs_str = lhs.display(vm);
+                    let mut s = String::with_capacity(lhs_str.len() + x.len_utf8());
+                    s.push_str(&lhs_str);
                     s.push(x);
                     Ok(Self::Str(Ustr::from(&s)))
                 }
                 Self::Str(x) => {
-                    let mut value = lhs.display(vm);
-                    {
-                        let data = x.to_string();
-                        value.push_str(data.as_str());
-                    }
+                    let lhs_str = lhs.display(vm);
+                    let mut value = String::with_capacity(lhs_str.len() + x.len());
+                    value.push_str(&lhs_str);
+                    value.push_str(x.as_str());
                     Ok(Self::Str(Ustr::from(&value)))
                 }
                 _ => Err((lhs, rhs)),

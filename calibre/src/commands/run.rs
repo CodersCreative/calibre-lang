@@ -70,7 +70,7 @@ impl Run {
                 handles.push(
                     thread::Builder::new()
                         .name(format!("calibre-{}", index))
-                        .stack_size(64 * 1024 * 1024)
+                        .stack_size(128 * 1024 * 1024)
                         .spawn(move || {
                             smol::block_on(
                                 async move { run.execute().await.map_err(|x| x.to_string()) },
