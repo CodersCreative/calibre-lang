@@ -55,9 +55,7 @@ impl LirLowering for MirRef {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         if let MiddleNodeType::Identifier(MirIdentifier { identifier }) = self.value.node_type {
-            LirNodeType::RefLoad(LirRefLoad {
-                value: identifier,
-            })
+            LirNodeType::RefLoad(LirRefLoad { value: identifier })
         } else {
             LirNodeType::Ref(LirRef {
                 value: Box::new(env.lower_node(*self.value)),

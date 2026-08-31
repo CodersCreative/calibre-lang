@@ -7,9 +7,9 @@ use calibre_std::{get_globals_path, get_stdlib_path};
 use calibre_vm::{VM, conversion::VMRegistry};
 
 use serde::{Deserialize, Serialize};
-use ustr::Ustr;
 use std::path::{Path, PathBuf};
 use tracing::{debug, instrument};
+use ustr::Ustr;
 
 #[cfg(feature = "cli")]
 use glob::glob;

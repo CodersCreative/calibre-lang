@@ -1,5 +1,9 @@
 use crate::{
-    environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId, symbols::resolve::{ResolutionOptions, StrOrAstNode}, typing::MiddleTypeDefType,
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    scoping::ScopeId,
+    symbols::resolve::{ResolutionOptions, StrOrAstNode},
+    typing::MiddleTypeDefType,
 };
 use calibre_parser::ast::{
     Operator,
@@ -190,8 +194,15 @@ impl MiddleEnvironment {
                     .generics
                     .0
                     .iter()
-                    .map(|g| self.resolve(scope, &g.identifier, ResolutionOptions::typing()))
-                    .collect::<Result<Vec<Ustr>, MiddleErr>>().ok()?;
+                    .map(|g| {
+                        self.resolve(
+                            scope,
+                            &g.identifier,
+                            ResolutionOptions::default().with_dollar(),
+                        )
+                    })
+                    .collect::<Result<Vec<Ustr>, MiddleErr>>()
+                    .ok()?;
 
                 if !generic_params.is_empty() {
                     self.scoping.push_generic_params(generic_params.clone());

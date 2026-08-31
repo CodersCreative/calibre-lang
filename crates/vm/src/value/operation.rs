@@ -8,9 +8,9 @@ use calibre_parser::ast::{
     comparison::{BooleanOperator, ComparisonOperator},
 };
 use dumpster::sync::Gc;
-use ustr::Ustr;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
 use std::sync::Arc;
+use ustr::Ustr;
 use wasm_sync::Mutex;
 
 fn comparison_value_handle<T: PartialEq + PartialOrd>(
@@ -49,9 +49,7 @@ pub fn comparison(
             (RuntimeValue::Byte(a), RuntimeValue::Int(b)) => Some(*b >= 0 && *a == (*b as u8)),
             (RuntimeValue::Float(a), RuntimeValue::Float(b)) => Some(a == b),
             (RuntimeValue::Char(a), RuntimeValue::Char(b)) => Some(a == b),
-            (RuntimeValue::Str(a), RuntimeValue::Str(b)) => {
-                Some(a == b)
-            }
+            (RuntimeValue::Str(a), RuntimeValue::Str(b)) => Some(a == b),
             (RuntimeValue::Enum(a_name, a_idx, _), RuntimeValue::Enum(b_name, b_idx, _)) => {
                 Some(a_name == b_name && a_idx == b_idx)
             }
@@ -233,9 +231,9 @@ pub fn comparison(
         (RuntimeValue::Char(x), RuntimeValue::Char(y), op) => {
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
         }
-        (RuntimeValue::Str(x), RuntimeValue::Str(y), op) => Ok(RuntimeValue::Bool(
-            comparison_value_handle(op, x, y),
-        )),
+        (RuntimeValue::Str(x), RuntimeValue::Str(y), op) => {
+            Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
+        }
         (left, right, ComparisonOperator::Equal) => Ok(RuntimeValue::Bool(matches!(
             eq_value(&left, &right),
             Some(true)

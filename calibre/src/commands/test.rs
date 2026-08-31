@@ -89,7 +89,15 @@ impl<'a> Testing<'a> {
                         println!("test {label} ... ok (panicked as expected)");
                     } else {
                         println!("test {label} ... FAILED");
-                        failures.push((label, msg, captured.into_iter().map(|x| x.to_string()).collect::<Vec<_>>().join("")));
+                        failures.push((
+                            label,
+                            msg,
+                            captured
+                                .into_iter()
+                                .map(|x| x.to_string())
+                                .collect::<Vec<_>>()
+                                .join(""),
+                        ));
                     }
                 }
             }

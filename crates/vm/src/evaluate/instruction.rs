@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
-    native::stdlib::generator::{GeneratorResumeFn, GeneratorState}, value::{GcMap, GcVec},
+    native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
+    value::{GcMap, GcVec},
 };
 use calibre_parser::ast::{idents::ParserText, nodes::AsFailureMode};
 use wasm_sync::Mutex;
@@ -835,7 +836,12 @@ impl VM {
                     *dst,
                     RuntimeValue::Aggregate(
                         layout.name.clone(),
-                        Gc::new(crate::value::GcMap(ObjectMap(entries.into_iter().map(|x| (x.0.to_string(), x.1)).collect()))),
+                        Gc::new(crate::value::GcMap(ObjectMap(
+                            entries
+                                .into_iter()
+                                .map(|x| (x.0.to_string(), x.1))
+                                .collect(),
+                        ))),
                     ),
                 );
             }
@@ -999,11 +1005,15 @@ impl VM {
                             } else if let Some(x) = self.resolve_runtime_value(callee_name) {
                                 x.0
                             } else {
-                                return Err(RuntimeError::FunctionNotFound(callee_name.to_string()));
+                                return Err(RuntimeError::FunctionNotFound(
+                                    callee_name.to_string(),
+                                ));
                             }
-                        } else if let Some(callee) =
-                            self.resolve_dyn_method_callable(type_name.as_str(), member_short.as_str(), None)
-                        {
+                        } else if let Some(callee) = self.resolve_dyn_method_callable(
+                            type_name.as_str(),
+                            member_short.as_str(),
+                            None,
+                        ) {
                             callee.bind_if_callable(value.as_ref().clone())
                         } else if member_short == "type" {
                             RuntimeValue::Str(type_name.clone())
@@ -1014,9 +1024,10 @@ impl VM {
                                     .map(|x| RuntimeValue::Str(x.clone()))
                                     .collect(),
                             )))
-                        } else if let Some(x) =
-                            self.resolve_runtime_value(&Ustr::from(&format!("{}.{}", type_name, member_short)))
-                        {
+                        } else if let Some(x) = self.resolve_runtime_value(&Ustr::from(&format!(
+                            "{}.{}",
+                            type_name, member_short
+                        ))) {
                             x.0
                         } else {
                             return Err(RuntimeError::MissingMember {
@@ -1300,7 +1311,9 @@ impl VM {
                         self.current_frame_mut().member_sources.insert(
                             *dst,
                             source
-                                .map(|(parent, path)| (parent, Ustr::from(&format!("{path}.{name}"))))
+                                .map(|(parent, path)| {
+                                    (parent, Ustr::from(&format!("{path}.{name}")))
+                                })
                                 .unwrap_or((source_reg, Ustr::from(&name))),
                         );
                     }
@@ -1315,34 +1328,30 @@ impl VM {
                 let value = self.get_reg_value(*value).clone();
                 let (short_name, tuple_index) = Self::member_parts(name);
 
-                let update_aggregate =
-                    |agg_name: &Option<Ustr>, mut map: Gc<GcMap>| {
-                        let entries = &mut Gc::make_mut(&mut map).0.0;
-                        match (agg_name.as_ref(), tuple_index) {
-                            (None, Some(idx)) => {
-                                if idx >= entries.len() {
-                                    return Err(RuntimeError::StackUnderflow);
-                                }
-                                entries[idx].1 = value.clone();
+                let update_aggregate = |agg_name: &Option<Ustr>, mut map: Gc<GcMap>| {
+                    let entries = &mut Gc::make_mut(&mut map).0.0;
+                    match (agg_name.as_ref(), tuple_index) {
+                        (None, Some(idx)) => {
+                            if idx >= entries.len() {
+                                return Err(RuntimeError::StackUnderflow);
                             }
-                            (Some(_), _) => {
-                                if let Some(entry) = entries.iter_mut().find(|entry| {
-                                    entry.0 == *name
-                                        || short_name.is_some_and(|short| entry.0 == short)
-                                }) {
-                                    entry.1 = value.clone();
-                                } else {
-                                    return Err(RuntimeError::StackUnderflow);
-                                }
-                            }
-                            _ => {
-                                return Err(RuntimeError::UnexpectedType(Box::new(
-                                    RuntimeValue::Null,
-                                )));
+                            entries[idx].1 = value.clone();
+                        }
+                        (Some(_), _) => {
+                            if let Some(entry) = entries.iter_mut().find(|entry| {
+                                entry.0 == *name || short_name.is_some_and(|short| entry.0 == short)
+                            }) {
+                                entry.1 = value.clone();
+                            } else {
+                                return Err(RuntimeError::StackUnderflow);
                             }
                         }
-                        Ok(map)
-                    };
+                        _ => {
+                            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+                        }
+                    }
+                    Ok(map)
+                };
                 let update_generator =
                     |generator_value: RuntimeValue| -> Result<RuntimeValue, RuntimeError> {
                         let RuntimeValue::Generator { type_name, state } = generator_value else {
@@ -1707,7 +1716,6 @@ impl VM {
                                 .unwrap_or_else(|| RuntimeValue::Null)
                         }
                         RuntimeValue::UInt(index) => s
-                     
                             .chars()
                             .nth(*index as usize)
                             .map(RuntimeValue::Char)

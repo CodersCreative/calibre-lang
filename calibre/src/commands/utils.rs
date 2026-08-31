@@ -1,7 +1,6 @@
 use crate::config::{ProjectContext, load_project_from, resolve_example_by_name, resolve_examples};
 use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::{config::VMConfig, conversion::VMRegistry};
-use ustr::Ustr;
 use std::{
     error::Error,
     path::{Path, PathBuf},
@@ -9,6 +8,7 @@ use std::{
     time::Duration,
 };
 use tracing::instrument;
+use ustr::Ustr;
 
 pub fn collect_cal_sources(root: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(root) else {

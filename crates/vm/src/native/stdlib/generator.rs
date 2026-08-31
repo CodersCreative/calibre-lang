@@ -8,8 +8,8 @@ use crate::{
     value::RuntimeValue,
 };
 use dumpster::sync::Gc;
+use std::sync::Arc;
 use ustr::Ustr;
-use std::{sync::Arc};
 use wasm_sync::Mutex;
 
 #[derive(Debug, Clone)]
@@ -37,10 +37,7 @@ impl NativeFunction for GeneratorResumeFn {
             return Ok(RuntimeValue::Option(None));
         }
 
-        let Some(func) = state
-            .vm
-            .resolve_function_by_name(&state.function_name)
-        else {
+        let Some(func) = state.vm.resolve_function_by_name(&state.function_name) else {
             state.completed = true;
             return Ok(RuntimeValue::Option(None));
         };

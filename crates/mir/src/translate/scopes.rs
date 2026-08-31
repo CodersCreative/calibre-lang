@@ -174,10 +174,9 @@ impl MiddleEnvironment {
             let mut added = Vec::new();
 
             let scope_macro_args: Vec<(PotentialDollarIdentifier, AstNode)> = {
-                let scope_macro = self
-                    .scoping
-                    .resolve_macro(scope, &name)
-                    .ok_or_else(|| MiddleErr::At(span, Box::new(MiddleErr::Scope(name.to_string()))))?;
+                let scope_macro = self.scoping.resolve_macro(scope, &name).ok_or_else(|| {
+                    MiddleErr::At(span, Box::new(MiddleErr::Scope(name.to_string())))
+                })?;
                 if og_create_new_scope.is_none() {
                     og_create_new_scope = Some(scope_macro.create_new_scope);
                 }
@@ -231,7 +230,8 @@ impl MiddleEnvironment {
                         identifier,
                         ResolutionOptions::default().with_dollar(),
                     )?;
-                    let new_name = Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
+                    let new_name =
+                        Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
                     self.scoping
                         .scope_mut_or_err(new_scope)?
                         .mappings

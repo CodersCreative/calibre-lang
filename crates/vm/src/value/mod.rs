@@ -458,7 +458,7 @@ impl RuntimeValue {
             RuntimeValue::Range(_, _) => Some("range"),
             RuntimeValue::Ptr(_) => Some("ptr"),
             RuntimeValue::Aggregate(Some(name), _) | RuntimeValue::Enum(name, _, _) => {
-                return Some(name.clone())
+                return Some(name.clone());
             }
             RuntimeValue::Generator { type_name, .. } => return Some(type_name.clone()),
             RuntimeValue::DynObject { type_name, .. } => return Some(type_name.clone()),
@@ -467,7 +467,8 @@ impl RuntimeValue {
             RuntimeValue::Result(_) => Some("result"),
             RuntimeValue::Null => Some("null"),
             _ => None,
-        }.map(|x| Ustr::from(x))
+        }
+        .map(|x| Ustr::from(x))
     }
 
     pub fn constants() -> &'static FxHashMap<String, Self> {

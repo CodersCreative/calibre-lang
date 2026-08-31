@@ -6,12 +6,12 @@ use derive_builder::Builder;
 use rustyline::DefaultEditor;
 use rustyline::error::ReadlineError;
 use smol::fs;
-use ustr::Ustr;
 use std::{
     error::Error,
     path::{Path, PathBuf},
 };
 use tracing::instrument;
+use ustr::Ustr;
 
 #[derive(Builder, Debug, Default)]
 pub struct Repl {

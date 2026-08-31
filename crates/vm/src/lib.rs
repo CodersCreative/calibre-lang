@@ -10,15 +10,17 @@ use astro_float::Consts;
 use calibre_lir::ast::BlockId;
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
-use ustr::{Ustr, UstrMap, UstrSet};
 use std::{
-    fmt::Debug, path::Path, sync::{
+    fmt::Debug,
+    path::Path,
+    sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
 };
 use std::{fmt::Display, sync::OnceLock};
 use tracing::instrument;
+use ustr::{Ustr, UstrMap, UstrSet};
 
 static NULL_RUNTIME_VALUE: RuntimeValue = RuntimeValue::Null;
 static EMPTY_FRAME: OnceLock<VMFrame> = OnceLock::new();

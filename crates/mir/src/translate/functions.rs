@@ -117,7 +117,7 @@ impl MiddleEnvironment {
             .resolve(scope, &name, ResolutionOptions::idents())
             .map(|x| x.to_string());
 
-        let defaults_key = Ustr::from( resolved_name.as_deref().unwrap_or(name.as_str()));
+        let defaults_key = Ustr::from(resolved_name.as_deref().unwrap_or(name.as_str()));
         let defaults = self
             .symbols
             .function_param_defaults
@@ -456,7 +456,9 @@ impl MiddleEnvironment {
             .mappings
             .get(&ident)
             .cloned()
-            .unwrap_or_else(|| Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text));
+            .unwrap_or_else(|| {
+                Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text)
+            });
 
         let mut params = Vec::new();
         for ty in parameters {
@@ -481,7 +483,7 @@ impl MiddleEnvironment {
 
         self.register_variable(
             scope,
-        ident,
+            ident,
             new_name.clone(),
             fn_type.clone(),
             VarType::Constant,
@@ -493,9 +495,11 @@ impl MiddleEnvironment {
                 identifier: new_name,
                 value: Box::new(MiddleNode::new(
                     MiddleNodeType::ExternFunction(MirExtern {
-                        abi : Ustr::from(&abi),
-                        library : Ustr::from(&library),
-                        symbol: symbol.map(|x| Ustr::from(&x)).unwrap_or_else(|| ident.clone()),
+                        abi: Ustr::from(&abi),
+                        library: Ustr::from(&library),
+                        symbol: symbol
+                            .map(|x| Ustr::from(&x))
+                            .unwrap_or_else(|| ident.clone()),
                         parameters: params,
                         return_type,
                     }),
@@ -539,7 +543,8 @@ impl MiddleEnvironment {
                 &param.0,
                 ResolutionOptions::default().with_dollar(),
             )?;
-            let new_name = Ustr::from(&ParserText::temp_name_with_suffix(og_name.trim(), span).text);
+            let new_name =
+                Ustr::from(&ParserText::temp_name_with_suffix(og_name.trim(), span).text);
 
             let data_type = if let Some(x) = param.1 {
                 self.resolve_data_type(new_scope, &x, ResolutionOptions::typing())?
@@ -566,8 +571,8 @@ impl MiddleEnvironment {
         }
 
         if needs_caller_context {
-            let caller_context_name = Ustr::from(
-&                ParserText::temp_name_with_suffix("caller_context", span).text);
+            let caller_context_name =
+                Ustr::from(&ParserText::temp_name_with_suffix("caller_context", span).text);
             let caller_context_type =
                 ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
 
@@ -579,11 +584,7 @@ impl MiddleEnvironment {
                 VarType::Mutable,
             )?;
 
-            params.push((
-                caller_context_name,
-                caller_context_type,
-                None,
-            ));
+            params.push((caller_context_name, caller_context_type, None));
         }
 
         let return_type =
@@ -794,8 +795,8 @@ impl MiddleEnvironment {
                                 .path
                                 .canonicalize()
                                 .unwrap_or_default()
-                                .to_string_lossy(),)
-                        ),
+                                .to_string_lossy(),
+                        )),
                     ),
                     (
                         "line".to_string(),

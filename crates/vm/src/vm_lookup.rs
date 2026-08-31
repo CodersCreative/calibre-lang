@@ -1,6 +1,6 @@
+use super::*;
 use calibre_parser::ast::idents::ParserText;
 use ustr::Ustr;
-use super::*;
 
 #[derive(Debug, Clone)]
 pub(crate) enum VarName {
@@ -135,11 +135,7 @@ impl VM {
         self.make_runtime_function_inner(func, &mut seen)
     }
 
-    fn make_runtime_function_inner(
-        &self,
-        func: &VMFunction,
-        seen: &mut UstrSet,
-    ) -> RuntimeValue {
+    fn make_runtime_function_inner(&self, func: &VMFunction, seen: &mut UstrSet) -> RuntimeValue {
         let name = func.name.clone();
         if !seen.insert(name.clone()) {
             return RuntimeValue::Function {

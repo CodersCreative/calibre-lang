@@ -12,7 +12,7 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
-use rustc_hash::{FxHashSet};
+use rustc_hash::FxHashSet;
 use std::{fmt::Display, str::FromStr, write};
 use tracing::{instrument, trace, warn};
 use ustr::{Ustr, UstrMap};
@@ -252,7 +252,9 @@ impl MiddleEnvironment {
             }
             ParserInnerType::DynamicTraits(traits) => {
                 for tr in traits {
-                    if let Some(found) = trait_member_type(&self.typing.trait_defs, &Ustr::from(tr), member) {
+                    if let Some(found) =
+                        trait_member_type(&self.typing.trait_defs, &Ustr::from(tr), member)
+                    {
                         return Some(found);
                     }
                 }
@@ -268,7 +270,9 @@ impl MiddleEnvironment {
             );
         }
 
-        if let Some(imp) = self.typing.find_impl_for_type(&Ustr::from(&resolved.impl_name()))
+        if let Some(imp) = self
+            .typing
+            .find_impl_for_type(&Ustr::from(&resolved.impl_name()))
             && let Some(mapped_member) = imp.get_member(&member, &[])
         {
             return self
@@ -377,10 +381,13 @@ impl MiddleEnvironment {
                             "No dollar resolution allowed but dollar ident provided",
                         ))));
                 }
-                let resolved = self.scoping.resolve_macro_arg(scope, &Ustr::from(&x.text)).ok_or_else(|| {
-                    self.context
-                        .err_at_current(MiddleErr::MacroArg(x.to_string()))
-                })?;
+                let resolved = self
+                    .scoping
+                    .resolve_macro_arg(scope, &Ustr::from(&x.text))
+                    .ok_or_else(|| {
+                        self.context
+                            .err_at_current(MiddleErr::MacroArg(x.to_string()))
+                    })?;
 
                 match &resolved.node_type {
                     AstNodeType::Identifier(x) => match x.get_ident() {
@@ -424,8 +431,14 @@ impl MiddleEnvironment {
 
                 let scope_ref = self.scoping.scope_or_err(current_scope)?;
 
-                if let Some(x) = scope_ref.type_mappings.get(&Ustr::from(&ty.impl_name())).cloned() {
-                    return Ok(StrOrAstNode::Str(Ustr::from(&ParserDataType::from(x).impl_name())));
+                if let Some(x) = scope_ref
+                    .type_mappings
+                    .get(&Ustr::from(&ty.impl_name()))
+                    .cloned()
+                {
+                    return Ok(StrOrAstNode::Str(Ustr::from(
+                        &ParserDataType::from(x).impl_name(),
+                    )));
                 }
 
                 if options.name_resolution {
@@ -447,6 +460,8 @@ impl MiddleEnvironment {
                 if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
                     return Ok(StrOrAstNode::Str(x));
                 }
+            } else {
+                break;
             }
         }
 
@@ -481,7 +496,9 @@ impl MiddleEnvironment {
                 }
             }
 
-            return Err(self.context.err_at_current(MiddleErr::Object(ident.to_string())));
+            return Err(self
+                .context
+                .err_at_current(MiddleErr::Object(ident.to_string())));
         }
 
         if !options.name_resolution {
@@ -494,7 +511,9 @@ impl MiddleEnvironment {
             }
         }
 
-        Err(self.context.err_at_current(MiddleErr::Variable(ident.to_string())))
+        Err(self
+            .context
+            .err_at_current(MiddleErr::Variable(ident.to_string())))
     }
 
     #[instrument(skip_all)]
@@ -514,11 +533,10 @@ impl MiddleEnvironment {
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
-                        ParserInnerType::Struct(x) => ParserInnerType::Struct(self.resolve(
-                            scope,
-                            &x,
-                            ResolutionOptions::typing(),
-                        )?.to_string()),
+                        ParserInnerType::Struct(x) => ParserInnerType::Struct(
+                            self.resolve(scope, &x, ResolutionOptions::typing())?
+                                .to_string(),
+                        ),
                         x => x,
                     },
                     Vec::new(),
@@ -530,11 +548,10 @@ impl MiddleEnvironment {
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
-                        ParserInnerType::Struct(x) => ParserInnerType::Struct(self.resolve(
-                            scope,
-                            &x,
-                            ResolutionOptions::typing(),
-                        )?.to_string()),
+                        ParserInnerType::Struct(x) => ParserInnerType::Struct(
+                            self.resolve(scope, &x, ResolutionOptions::typing())?
+                                .to_string(),
+                        ),
                         x => x,
                     },
                     Vec::new(),
@@ -547,11 +564,10 @@ impl MiddleEnvironment {
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
-                        ParserInnerType::Struct(x) => ParserInnerType::Struct(self.resolve(
-                            scope,
-                            &x,
-                            ResolutionOptions::typing(),
-                        )?.to_string()),
+                        ParserInnerType::Struct(x) => ParserInnerType::Struct(
+                            self.resolve(scope, &x, ResolutionOptions::typing())?
+                                .to_string(),
+                        ),
                         x => x,
                     },
                     Vec::new(),
@@ -573,16 +589,17 @@ impl MiddleEnvironment {
                 )?;
 
                 if self.symbols.variables.contains_key(&resolved) {
-                    return Err(self.context.err_at_current(MiddleErr::Object(resolved.to_string())));
+                    return Err(self
+                        .context
+                        .err_at_current(MiddleErr::Object(resolved.to_string())));
                 }
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
-                        ParserInnerType::Struct(x) => ParserInnerType::Struct(self.resolve(
-                            scope,
-                            &x,
-                            ResolutionOptions::typing(),
-                        )?.to_string()),
+                        ParserInnerType::Struct(x) => ParserInnerType::Struct(
+                            self.resolve(scope, &x, ResolutionOptions::typing())?
+                                .to_string(),
+                        ),
                         x => x,
                     },
                     generic_types,
@@ -622,7 +639,9 @@ impl MiddleEnvironment {
 
         Ok(match data_type {
             ParserInnerType::Struct(identifier) => ParserDataType {
-                data_type: ParserInnerType::Struct(self.resolve(scope, identifier, options)?.to_string()),
+                data_type: ParserInnerType::Struct(
+                    self.resolve(scope, identifier, options)?.to_string(),
+                ),
                 span: self.context.current_span(),
             },
             ParserInnerType::StructWithGenerics {
@@ -742,8 +761,9 @@ impl MiddleEnvironment {
 
                 if lst.len() == 2
                     && let ParserInnerType::Struct(name) = &lst[1].data_type
-                    && let Some(resolved) =
-                        self.typing.resolve_associated_type(&lst[0], &Ustr::from(name))
+                    && let Some(resolved) = self
+                        .typing
+                        .resolve_associated_type(&lst[0], &Ustr::from(name))
                 {
                     return Ok(resolved);
                 }
@@ -769,7 +789,8 @@ impl MiddleEnvironment {
                     traits
                         .iter()
                         .map(|t| {
-                            self.resolve(scope, t, ResolutionOptions::typing()).map(|x| x.to_string())
+                            self.resolve(scope, t, ResolutionOptions::typing())
+                                .map(|x| x.to_string())
                                 .unwrap_or(t.to_string())
                         })
                         .collect(),

@@ -93,7 +93,7 @@ impl LirRegistry {
         entry_points: Vec<Ustr>,
         include_tests: bool,
     ) -> (UstrSet, UstrSet, UstrSet) {
-        let mut reachable_functions= UstrSet::default();
+        let mut reachable_functions = UstrSet::default();
         let mut reachable_globals = UstrSet::default();
         let mut referenced_types = UstrSet::default();
 
@@ -274,9 +274,7 @@ impl LirNodeType {
             LirNodeType::Load(LirLoad { value })
             | LirNodeType::Move(LirMove { value })
             | LirNodeType::RefLoad(LirRefLoad { value }) => {
-                if registry.functions.contains_key(value)
-                    && reachable_functions.insert(*value)
-                {
+                if registry.functions.contains_key(value) && reachable_functions.insert(*value) {
                     worklist.push_function(*value);
                 }
 
@@ -306,9 +304,7 @@ impl LirNodeType {
                 }
             }
             LirNodeType::Closure(LirClosure { label, .. }) => {
-                if registry.functions.contains_key(label)
-                    && reachable_functions.insert(*label)
-                {
+                if registry.functions.contains_key(label) && reachable_functions.insert(*label) {
                     worklist.push_function(*label);
                 }
             }

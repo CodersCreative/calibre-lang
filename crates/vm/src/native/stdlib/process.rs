@@ -6,9 +6,9 @@ use crate::{
 };
 use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
-use ustr::Ustr;
 use std::io::Write;
 use std::process::{Command, Stdio};
+use ustr::Ustr;
 
 #[derive(Debug, Clone)]
 struct RawExecOptions {
@@ -123,7 +123,13 @@ fn format_command_line(command: &Ustr, args: &[Ustr]) -> String {
     if args.is_empty() {
         command.to_string()
     } else {
-        format!("{command} {}", args.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" "))
+        format!(
+            "{command} {}",
+            args.iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join(" ")
+        )
     }
 }
 
@@ -131,20 +137,11 @@ fn process_result(command: Ustr, status: i64, stdout: Ustr, stderr: Ustr) -> Run
     RuntimeValue::Aggregate(
         Some(Ustr::from("ProcessResult")),
         Gc::new(GcMap(ObjectMap::from(vec![
-            (
-                String::from("command"),
-                RuntimeValue::Str(command),
-            ),
+            (String::from("command"), RuntimeValue::Str(command)),
             (String::from("status"), RuntimeValue::Int(status)),
             (String::from("success"), RuntimeValue::Bool(status == 0)),
-            (
-                String::from("stdout"),
-                RuntimeValue::Str(stdout),
-            ),
-            (
-                String::from("stderr"),
-                RuntimeValue::Str(stderr),
-            ),
+            (String::from("stdout"), RuntimeValue::Str(stdout)),
+            (String::from("stderr"), RuntimeValue::Str(stderr)),
         ]))),
     )
 }
@@ -211,7 +208,12 @@ fn execute_raw(options: RawExecOptions) -> Result<RuntimeValue, String> {
         return Err(summary);
     }
 
-    Ok(process_result(Ustr::from(&line), status, Ustr::from(&stdout), Ustr::from(&stderr)))
+    Ok(process_result(
+        Ustr::from(&line),
+        status,
+        Ustr::from(&stdout),
+        Ustr::from(&stderr),
+    ))
 }
 
 pub struct ProcessRawExec;
@@ -239,8 +241,7 @@ impl NativeFunction for ProcessRawExec {
 
         let result = match execute_raw(options) {
             Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
-            Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Ustr::from(&err),
-            )))),
+            Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Ustr::from(&err))))),
         };
 
         Ok(result)

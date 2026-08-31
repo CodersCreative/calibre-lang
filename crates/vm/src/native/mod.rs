@@ -14,7 +14,11 @@ pub trait NativeFunction: Send + Sync {
 
     fn get_resolved_name(&self, env: &VM) -> Ustr {
         let name = self.name();
-        env.registry.natives.get(&Ustr::from(&name)).cloned().unwrap_or_default()
+        env.registry
+            .natives
+            .get(&Ustr::from(&name))
+            .cloned()
+            .unwrap_or_default()
     }
 }
 

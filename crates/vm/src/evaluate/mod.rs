@@ -13,10 +13,10 @@ use calibre_parser::ast::comparison::ComparisonOperator;
 use calibre_parser::ast::types::ParserInnerType;
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
 use dumpster::sync::Gc;
-use rustc_hash::{FxHashSet};
-use ustr::{Ustr, UstrMap, UstrSet};
+use rustc_hash::FxHashSet;
 use std::sync::Arc;
 use tracing::{debug, instrument, trace};
+use ustr::{Ustr, UstrMap, UstrSet};
 
 mod instruction;
 mod tailcall;
@@ -382,11 +382,7 @@ impl VM {
         }
     }
 
-    fn lookup_dyn_trait_table(
-        &self,
-        concrete: &str,
-        trait_name: &str,
-    ) -> Option<&UstrMap<Ustr>> {
+    fn lookup_dyn_trait_table(&self, concrete: &str, trait_name: &str) -> Option<&UstrMap<Ustr>> {
         for (imp_ty, traits) in self.registry.dyn_vtables.iter() {
             if !ParserText::temp_name_suffix_matches(imp_ty, &concrete) {
                 continue;
@@ -656,7 +652,10 @@ impl VM {
                     traits.iter().all(|tr| constraints.iter().any(|x| x == tr))
                 }
                 other => self
-                    .build_dyn_vtable_for_value(other, &traits.iter().map(|x| Ustr::from(x)).collect::<Vec<_>>())
+                    .build_dyn_vtable_for_value(
+                        other,
+                        &traits.iter().map(|x| Ustr::from(x)).collect::<Vec<_>>(),
+                    )
                     .is_some(),
             },
             ParserInnerType::Auto(_) => true,
@@ -765,9 +764,7 @@ impl VM {
 
         if let Some(ref func) = found {
             let cached = Arc::clone(func);
-            self.caches
-                .call
-                .insert(name, Arc::clone(&cached));
+            self.caches.call.insert(name, Arc::clone(&cached));
             self.caches.callsite.insert(callsite, cached);
         }
 
@@ -930,8 +927,7 @@ impl VM {
             let filtered_captures: Vec<(Ustr, RuntimeValue)> = captures
                 .iter()
                 .filter(|(name, _)| {
-                    Self::should_install_capture(name)
-                        && !function.param_names.contains(name)
+                    Self::should_install_capture(name) && !function.param_names.contains(name)
                 })
                 .cloned()
                 .collect();

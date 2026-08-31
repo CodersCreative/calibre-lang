@@ -10,8 +10,8 @@ use calibre_parser::{
 };
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
-use ustr::Ustr;
 use std::fmt::Display;
+use ustr::Ustr;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LirNode {

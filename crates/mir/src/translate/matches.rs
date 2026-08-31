@@ -814,7 +814,9 @@ impl MiddleEnvironment {
                     .data_type
                 {
                     ParserInnerType::Struct(name) => Ustr::from(name),
-                    ParserInnerType::StructWithGenerics { identifier, .. } => Ustr::from(identifier),
+                    ParserInnerType::StructWithGenerics { identifier, .. } => {
+                        Ustr::from(identifier)
+                    }
                     other => Ustr::from(&other.to_string()),
                 };
                 if let Some(x) = self.typing.objects.get(&enum_key) {
@@ -1047,10 +1049,7 @@ impl MiddleEnvironment {
                                                 .as_ref()
                                                 .and_then(|types| types.get(idx))
                                                 .and_then(|dt| {
-                                                    self.enum_variant_index_from_data_type(
-                                                        dt,
-                                                        &val,
-                                                    )
+                                                    self.enum_variant_index_from_data_type(dt, &val)
                                                 })
                                         })
                                         .ok_or_else(|| {

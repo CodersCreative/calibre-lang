@@ -67,12 +67,7 @@ impl NativeFunction for EnvSetVar {
         let name = resolve_str(env, &pop_or_null(&mut args))?;
         let value = resolve_str(env, &pop_or_null(&mut args))?;
 
-        unsafe {
-            std::env::set_var(
-                name.as_str(),
-                value.as_str(),
-            )
-        };
+        unsafe { std::env::set_var(name.as_str(), value.as_str()) };
 
         Ok(RuntimeValue::Null)
     }

@@ -56,13 +56,11 @@ impl NativeFunction for StrSplit {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
 
         let parts = if delim.is_empty() {
-            text
-                .chars()
+            text.chars()
                 .map(|c| RuntimeValue::Str(Ustr::from(&c.to_string())))
                 .collect::<Vec<_>>()
         } else {
-            text
-                .split(delim.as_str())
+            text.split(delim.as_str())
                 .map(|s| RuntimeValue::Str(Ustr::from(s)))
                 .collect::<Vec<_>>()
         };
@@ -84,11 +82,7 @@ impl NativeFunction for StrContains {
         let needle = resolve_str(env, &pop_or_null(&mut args))?;
         let text = resolve_str(env, &pop_or_null(&mut args))?;
 
-        Ok(RuntimeValue::Bool(
-            text
-                .as_str()
-                .contains(needle.as_str()),
-        ))
+        Ok(RuntimeValue::Bool(text.as_str().contains(needle.as_str())))
     }
 }
 
@@ -106,9 +100,7 @@ impl NativeFunction for StrStartsWith {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            text
-                .as_str()
-                .starts_with(prefix.as_str()),
+            text.as_str().starts_with(prefix.as_str()),
         ))
     }
 }
@@ -126,10 +118,6 @@ impl NativeFunction for StrEndsWith {
         let suffix = resolve_str(env, &pop_or_null(&mut args))?;
         let text = resolve_str(env, &pop_or_null(&mut args))?;
 
-        Ok(RuntimeValue::Bool(
-            text
-                .as_str()
-                .ends_with(suffix.as_str()),
-        ))
+        Ok(RuntimeValue::Bool(text.as_str().ends_with(suffix.as_str())))
     }
 }

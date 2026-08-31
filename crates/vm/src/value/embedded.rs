@@ -2,8 +2,8 @@ use crate::error::RuntimeError;
 use crate::value::{BIG_PRECISION, GcVec, HashKey, RuntimeValue};
 use astro_float::BigFloat;
 use dumpster::sync::Gc;
-use ustr::Ustr;
 use std::sync::Arc;
+use ustr::Ustr;
 use wasm_sync::Mutex;
 
 // Into HashKey

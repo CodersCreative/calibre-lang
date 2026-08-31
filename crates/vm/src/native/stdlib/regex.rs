@@ -23,12 +23,9 @@ impl NativeFunction for IsMatchFn {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
         let pattern = resolve_str(env, &pop_or_null(&mut args))?;
 
-        let re = Regex::new(pattern.as_str())
-            .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        let re = Regex::new(pattern.as_str()).map_err(|e| RuntimeError::Io(e.to_string()))?;
 
-        Ok(RuntimeValue::Bool(
-            re.is_match(text.as_str()),
-        ))
+        Ok(RuntimeValue::Bool(re.is_match(text.as_str())))
     }
 }
 
@@ -45,8 +42,7 @@ impl NativeFunction for FindFn {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
         let pattern = resolve_str(env, &pop_or_null(&mut args))?;
 
-        let re = Regex::new(pattern.as_str())
-            .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        let re = Regex::new(pattern.as_str()).map_err(|e| RuntimeError::Io(e.to_string()))?;
         let found = re
             .find(text.as_str())
             .map(|m| RuntimeValue::Str(Ustr::from(m.as_str())));
@@ -68,8 +64,7 @@ impl NativeFunction for ReplaceFn {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
         let pattern = resolve_str(env, &pop_or_null(&mut args))?;
 
-        let re = Regex::new(pattern.as_str())
-            .map_err(|e| RuntimeError::Io(e.to_string()))?;
+        let re = Regex::new(pattern.as_str()).map_err(|e| RuntimeError::Io(e.to_string()))?;
         let out = re.replace_all(text.as_str(), replacement.as_str());
         Ok(RuntimeValue::Str(Ustr::from(&out.to_string())))
     }

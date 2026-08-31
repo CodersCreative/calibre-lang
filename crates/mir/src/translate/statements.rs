@@ -87,8 +87,15 @@ impl MiddleEnvironment {
                 .generics
                 .0
                 .iter()
-                .map(|g| self.resolve(scope, &g.identifier, ResolutionOptions::typing()))
-                .collect::<Result<Vec<_>, MiddleErr>>()?;
+                .map(|g| {
+                    self.resolve(
+                        scope,
+                        &g.identifier,
+                        ResolutionOptions::default().with_dollar(),
+                    )
+                })
+                .collect::<Result<Vec<_>, MiddleErr>>()
+                .unwrap_or_default();
 
             self.symbols
                 .generic_fn_templates
@@ -154,7 +161,12 @@ impl MiddleEnvironment {
             (Some(x), Some(_)) if self.tagging.tag_info.contains(&TagInfo::IgnoreInvalidLet) => x,
             (Some(x), Some(y)) => {
                 // TODO Handle generics better
-                if x.loose_eq(&y) || self.scoping.all_time_generics.contains(&Ustr::from(&y.impl_name())) {
+                if x.loose_eq(&y)
+                    || self
+                        .scoping
+                        .all_time_generics
+                        .contains(&Ustr::from(&y.impl_name()))
+                {
                     x
                 } else {
                     return Err(self.context.err_at_current(
@@ -275,9 +287,7 @@ impl MiddleEnvironment {
             {
                 let scope_ref = self.scoping.scope_mut_or_err(scope)?;
 
-                scope_ref
-                    .type_mappings
-                    .insert(identifier, inner.data_type);
+                scope_ref.type_mappings.insert(identifier, inner.data_type);
             }
 
             if !overloads.is_empty() {

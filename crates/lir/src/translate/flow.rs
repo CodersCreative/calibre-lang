@@ -116,9 +116,7 @@ impl LirLowering for MirConditional {
         }
 
         env.switch_to(merge_id);
-        LirNodeType::Load(LirLoad {
-            value: temp,
-        })
+        LirNodeType::Load(LirLoad { value: temp })
     }
 }
 
@@ -144,8 +142,7 @@ impl LirLowering for MirLoop {
             target: body_id,
         });
 
-        env.loop_stack
-            .push((header_id, exit_id, self.label));
+        env.loop_stack.push((header_id, exit_id, self.label));
 
         env.switch_to(body_id);
         env.lower_and_add_node(*self.body);

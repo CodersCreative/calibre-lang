@@ -1,10 +1,10 @@
 use calibre_mir::{environment::MiddleEnvironment, scoping::ScopeId};
 use calibre_parser::ast::types::ParserDataType;
 use rustc_hash::FxHashMap;
-use ustr::{Ustr, UstrMap};
 use std::fmt::Display;
 use std::sync::atomic::Ordering;
 use tracing::{debug, instrument};
+use ustr::{Ustr, UstrMap};
 
 use crate::{
     COUNTER,

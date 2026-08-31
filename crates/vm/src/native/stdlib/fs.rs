@@ -9,7 +9,6 @@ use crate::{
 };
 use calibre_parser::ast::types::ParserInnerType::Host;
 use dumpster::sync::Gc;
-use ustr::Ustr;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -17,6 +16,7 @@ use std::{
     fs::{DirEntry, File, FileType, Metadata, OpenOptions},
     time::Duration,
 };
+use ustr::Ustr;
 use wasm_sync::Mutex;
 
 // Path
@@ -51,11 +51,12 @@ impl NativeFunction for FsPathAsStr {
         let path = resolve_host(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Str(Ustr::from(
-            &path.lock()
+            &path
+                .lock()
                 .unwrap()
                 .downcast_ref::<PathBuf>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
-                .to_string_lossy()
+                .to_string_lossy(),
         )))
     }
 }
@@ -201,9 +202,7 @@ impl NativeFunction for FsPathFileName {
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .file_name()
         {
-            Some(name) => Ok(RuntimeValue::Str(Ustr::from(
-                &name.to_string_lossy()
-            ))),
+            Some(name) => Ok(RuntimeValue::Str(Ustr::from(&name.to_string_lossy()))),
             None => Ok(RuntimeValue::Null),
         }
     }
@@ -228,9 +227,7 @@ impl NativeFunction for FsPathExtension {
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .extension()
         {
-            Some(ext) => Ok(RuntimeValue::Str(Ustr::from(
-                &ext.to_string_lossy(),
-            ))),
+            Some(ext) => Ok(RuntimeValue::Str(Ustr::from(&ext.to_string_lossy()))),
             None => Ok(RuntimeValue::Null),
         }
     }
@@ -255,9 +252,7 @@ impl NativeFunction for FsPathStem {
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .file_stem()
         {
-            Some(stem) => Ok(RuntimeValue::Str(Ustr::from(
-                &stem.to_string_lossy(),
-            ))),
+            Some(stem) => Ok(RuntimeValue::Str(Ustr::from(&stem.to_string_lossy()))),
             None => Ok(RuntimeValue::Null),
         }
     }
@@ -418,7 +413,7 @@ impl NativeFunction for FsDirEntryFileName {
                 .downcast_ref::<DirEntry>()
                 .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
                 .file_name()
-                .to_string_lossy()
+                .to_string_lossy(),
         )))
     }
 }
@@ -869,8 +864,8 @@ impl NativeFunction for FsFileWriteLine {
         ) {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
-                Ustr::from(&e.to_string())),
-            )))),
+                Ustr::from(&e.to_string()),
+            ))))),
         }
     }
 }

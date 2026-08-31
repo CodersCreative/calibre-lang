@@ -91,7 +91,10 @@ impl CalibreLanguageServer {
         let mut current = if let Some(var) = env.symbols.variables.get(&canonical_first) {
             var.data_type.clone()
         } else if env.typing.objects.contains_key(&canonical_first) {
-            ParserDataType::new(CalSpan::default(), ParserInnerType::Struct(canonical_first.to_string()))
+            ParserDataType::new(
+                CalSpan::default(),
+                ParserInnerType::Struct(canonical_first.to_string()),
+            )
         } else {
             ParserDataType::new(
                 CalSpan::default(),
@@ -104,9 +107,12 @@ impl CalibreLanguageServer {
             if member.is_empty() {
                 continue;
             }
-            if let Some(field_ty) =
-                env.resolve_member_field_type(scope, &current, &Ustr::from(&member), CalSpan::default())
-            {
+            if let Some(field_ty) = env.resolve_member_field_type(
+                scope,
+                &current,
+                &Ustr::from(&member),
+                CalSpan::default(),
+            ) {
                 current = field_ty;
                 continue;
             }
@@ -131,9 +137,9 @@ impl CalibreLanguageServer {
         env: &'a MiddleEnvironment,
         data_type: &ParserDataType,
     ) -> Option<&'a MiddleObject> {
-        env.typing
-            .objects
-            .get(&Ustr::from(&data_type.clone().unwrap_all_refs().impl_name()))
+        env.typing.objects.get(&Ustr::from(
+            &data_type.clone().unwrap_all_refs().impl_name(),
+        ))
     }
 
     pub(super) fn extract_callee_before_open_paren(text: &str, open_idx: usize) -> Option<String> {
@@ -610,7 +616,10 @@ impl CalibreLanguageServer {
             }
         }
 
-        if let Some(imp) = env.typing.find_impl_for_type(&Ustr::from(&base_ty.impl_name())) {
+        if let Some(imp) = env
+            .typing
+            .find_impl_for_type(&Ustr::from(&base_ty.impl_name()))
+        {
             for (member_name, canonical_member) in imp.get_all_members() {
                 if !prefix.is_empty() && !member_name.starts_with(prefix) {
                     continue;
@@ -629,17 +638,18 @@ impl CalibreLanguageServer {
                     })
                     .unwrap_or_else(|| "method".to_string());
 
-                out.entry(member_name.to_string()).or_insert(CompletionItem {
-                    label: member_name.to_string(),
-                    detail: Some(detail),
-                    kind: Some(CompletionItemKind::METHOD),
-                    documentation: Some(Documentation::String(format!(
-                        "Method from impl/trait on `{}`\n\nCanonical: `{}`",
-                        base_ty, canonical_member.symbol_name
-                    ))),
-                    sort_text: Some(format!("1_{}", member_name)),
-                    ..CompletionItem::default()
-                });
+                out.entry(member_name.to_string())
+                    .or_insert(CompletionItem {
+                        label: member_name.to_string(),
+                        detail: Some(detail),
+                        kind: Some(CompletionItemKind::METHOD),
+                        documentation: Some(Documentation::String(format!(
+                            "Method from impl/trait on `{}`\n\nCanonical: `{}`",
+                            base_ty, canonical_member.symbol_name
+                        ))),
+                        sort_text: Some(format!("1_{}", member_name)),
+                        ..CompletionItem::default()
+                    });
             }
         }
     }

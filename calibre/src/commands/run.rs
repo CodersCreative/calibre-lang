@@ -9,9 +9,9 @@ use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::{VM, config::VMConfig};
 use derive_builder::Builder;
 use smol::fs;
-use ustr::Ustr;
 use std::{error::Error, path::PathBuf};
 use tracing::instrument;
+use ustr::Ustr;
 use wasm_thread as thread;
 
 #[derive(Builder, Debug)]
@@ -197,7 +197,12 @@ impl RunSource {
         let entry_name = std::mem::take(&mut artifacts.entry_name);
         let mut vm: VM = VM::new(artifacts.registry, artifacts.mappings, self.vm_config);
         vm.set_source_file_override(&self.path);
-        vm.set_program_args(self.program_args.into_iter().map(|x| Ustr::from(&x)).collect());
+        vm.set_program_args(
+            self.program_args
+                .into_iter()
+                .map(|x| Ustr::from(&x))
+                .collect(),
+        );
 
         if self.verbosity.is_level(&Verbosity::Byte) {
             println!("Bytecode - elapsed {}ms:", start.elapsed().as_millis());

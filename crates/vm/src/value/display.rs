@@ -346,7 +346,16 @@ impl Display for RuntimeValue {
                 type_name,
                 constraints,
                 ..
-            } => write!(f, "dyn:<{}>({})", constraints.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", "), type_name),
+            } => write!(
+                f,
+                "dyn:<{}>({})",
+                constraints
+                    .iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                type_name
+            ),
             Self::BoundMethod { .. } => write!(f, "<bound-method>"),
             Self::GeneratorSuspend(value) => write!(f, "<gen-suspend {}>", value),
         }

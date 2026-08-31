@@ -32,7 +32,7 @@ use calibre_parser::{
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
-use rustc_hash::{FxHashMap};
+use rustc_hash::FxHashMap;
 use tracing::{debug, instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
 
@@ -108,10 +108,10 @@ impl MiddleEnvironment {
             AstNodeType::BigLiteral(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::BigLiteral(MirBig {
                     value: x
-                            .text
-                            .strip_suffix('g')
-                            .map(|x| Ustr::from(x))
-                            .unwrap_or(Ustr::from(&x.text)),
+                        .text
+                        .strip_suffix('g')
+                        .map(|x| Ustr::from(x))
+                        .unwrap_or(Ustr::from(&x.text)),
                 }),
                 span: node.span,
             }),
@@ -120,7 +120,9 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             AstNodeType::StringLiteral(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::StringLiteral(MirString { value: Ustr::from(&x.text) }),
+                node_type: MiddleNodeType::StringLiteral(MirString {
+                    value: Ustr::from(&x.text),
+                }),
                 span: node.span,
             }),
             AstNodeType::CharLiteral(x) => Ok(MiddleNode {
@@ -402,8 +404,7 @@ impl MiddleEnvironment {
             AstNodeType::MoveExpression { value } => match value.node_type {
                 AstNodeType::Identifier(x) => Ok(MiddleNode {
                     node_type: MiddleNodeType::Move(MirMove {
-                        identifier: 
-                            self.resolve(scope, &x, ResolutionOptions::idents())?,
+                        identifier: self.resolve(scope, &x, ResolutionOptions::idents())?,
                     }),
                     span: node.span,
                 }),
@@ -528,8 +529,7 @@ impl MiddleEnvironment {
             }
             AstNodeType::Drop(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::Drop(MirDrop {
-                    identifier: 
-                        self.resolve(scope, &x, ResolutionOptions::idents())?,
+                    identifier: self.resolve(scope, &x, ResolutionOptions::idents())?,
                 }),
                 span: node.span,
             }),
@@ -681,7 +681,9 @@ impl MiddleEnvironment {
 
                     let break_node = MiddleNode::new(
                         MiddleNodeType::Break(MirBreak {
-                            label: label_text.or(raw_label_text.map(|x| Ustr::from(&x))).map(Into::into),
+                            label: label_text
+                                .or(raw_label_text.map(|x| Ustr::from(&x)))
+                                .map(Into::into),
                             value: None,
                         }),
                         self.context.current_span(),
@@ -751,7 +753,9 @@ impl MiddleEnvironment {
 
                     let cont_node = MiddleNode::new(
                         MiddleNodeType::Continue(MirContinue {
-                            label: label_text.or(raw_label_text.map(|x| Ustr::from(&x))).map(Into::into),
+                            label: label_text
+                                .or(raw_label_text.map(|x| Ustr::from(&x)))
+                                .map(Into::into),
                         }),
                         self.context.current_span(),
                     );
@@ -1385,7 +1389,12 @@ impl MiddleEnvironment {
                     .map(|s| s.path.clone())
                     .ok();
 
-                self.register_test(Ustr::from(&identifier.text), Ustr::from(&func_identifier), scope, file_path);
+                self.register_test(
+                    Ustr::from(&identifier.text),
+                    Ustr::from(&func_identifier),
+                    scope,
+                    file_path,
+                );
 
                 self.evaluate_inner(
                     scope,
@@ -1579,7 +1588,8 @@ impl MiddleEnvironment {
                 }
 
                 let resolved = self
-                    .resolve_data_type(scope, &target, ResolutionOptions::typing())?
+                    .resolve_data_type(scope, &target, ResolutionOptions::typing())
+                    .unwrap()
                     .unwrap_all_refs();
 
                 let impl_key = Ustr::from(&resolved.impl_name());
@@ -1601,7 +1611,8 @@ impl MiddleEnvironment {
                                         ResolutionOptions::default().with_dollar(),
                                     )
                                     .ok()?;
-                                let resolved_iden = Ustr::from(&format!("{}.{}", impl_key, identifier));
+                                let resolved_iden =
+                                    Ustr::from(&format!("{}.{}", impl_key, identifier));
                                 // TODO Unpack the dollar ident only without resolving
                                 Some((identifier, resolved_iden, generic_params.clone()))
                             } else {
@@ -1712,9 +1723,13 @@ impl MiddleEnvironment {
                                     };
 
                                     if let Some(param_type) = param_type {
-                                        resolved
-                                            .data_type
-                                            .matches(&param_type.data_type, &generic_params.iter().map(|x| x.as_ref()).collect::<Vec<_>>())
+                                        resolved.data_type.matches(
+                                            &param_type.data_type,
+                                            &generic_params
+                                                .iter()
+                                                .map(|x| x.as_ref())
+                                                .collect::<Vec<_>>(),
+                                        )
                                     } else {
                                         false
                                     }
@@ -1858,8 +1873,12 @@ impl MiddleEnvironment {
                     .0
                     .iter()
                     .map(|g| {
-                        self.resolve(scope, &g.identifier, ResolutionOptions::typing())
-                            .unwrap_or(Ustr::from(&g.identifier.to_string()))
+                        self.resolve(
+                            scope,
+                            &g.identifier,
+                            ResolutionOptions::default().with_dollar(),
+                        )
+                        .unwrap_or(Ustr::from(&g.identifier.to_string()))
                     })
                     .collect();
 
@@ -1918,9 +1937,7 @@ impl MiddleEnvironment {
                     let scope = self.scoping.scope_mut_or_err(scope)?;
 
                     (
-                        scope
-                            .mappings
-                            .insert(Ustr::from("Self"), impl_key.clone()),
+                        scope.mappings.insert(Ustr::from("Self"), impl_key.clone()),
                         scope
                             .type_mappings
                             .insert(Ustr::from("Self"), resolved_target.data_type.clone()),
@@ -2010,9 +2027,13 @@ impl MiddleEnvironment {
                                     };
 
                                     if let Some(param_type) = param_type {
-                                        resolved_target
-                                            .data_type
-                                            .matches(&param_type.data_type, &generic_params.iter().map(|x| x.as_ref()).collect::<Vec<_>>() )
+                                        resolved_target.data_type.matches(
+                                            &param_type.data_type,
+                                            &generic_params
+                                                .iter()
+                                                .map(|x| x.as_ref())
+                                                .collect::<Vec<_>>(),
+                                        )
                                     } else {
                                         false
                                     }
@@ -2151,7 +2172,9 @@ impl MiddleEnvironment {
                     }
                 };
 
-                let new_name = Ustr::from(&ParserText::temp_name_with_suffix(base_name.clone(), node.span).text);
+                let new_name = Ustr::from(
+                    &ParserText::temp_name_with_suffix(base_name.clone(), node.span).text,
+                );
 
                 self.typing.objects.insert(
                     new_name.clone(),
@@ -2183,7 +2206,8 @@ impl MiddleEnvironment {
                                 &member.data_type,
                                 ResolutionOptions::typing(),
                             )?;
-                            assoc_types.insert(Ustr::from(&member.identifier.to_string()), data_type);
+                            assoc_types
+                                .insert(Ustr::from(&member.identifier.to_string()), data_type);
                         }
                         TraitMemberKind::Const => {
                             let data_type = self.resolve_data_type(
@@ -2258,7 +2282,7 @@ impl MiddleEnvironment {
                 node_type: MiddleNodeType::AggregateExpression(MirAggregate {
                     identifier: Some(
                         self.resolve(scope, &identifier, ResolutionOptions::typing())
-                            .unwrap_or_else(|_| Ustr::from(&identifier.to_string()))
+                            .unwrap_or_else(|_| Ustr::from(&identifier.to_string())),
                     ),
                     value: ObjectMap(match value {
                         ObjectType::Map(x) => {
@@ -2366,7 +2390,12 @@ impl MiddleEnvironment {
                 tag,
                 arguments,
             } => {
-                if let Some(handler) = self.tagging.tag_handlers.get(&Ustr::from(&tag.text)).cloned() {
+                if let Some(handler) = self
+                    .tagging
+                    .tag_handlers
+                    .get(&Ustr::from(&tag.text))
+                    .cloned()
+                {
                     let handler_fn = handler.handler.lock().unwrap();
                     handler_fn(self, scope, *node, tag, arguments)
                 } else {
@@ -2413,7 +2442,8 @@ impl MiddleEnvironment {
                     .into_iter()
                     .map(|val| Ustr::from(&val.to_string()))
                     .collect();
-                let module_path: Vec<Ustr> = module.iter().map(|x| Ustr::from(&x.to_string())).collect();
+                let module_path: Vec<Ustr> =
+                    module.iter().map(|x| Ustr::from(&x.to_string())).collect();
 
                 let alias = if let Some(alias) = alias {
                     self.resolve(scope, &alias, ResolutionOptions::default().with_dollar())
@@ -2431,8 +2461,7 @@ impl MiddleEnvironment {
                         });
                     }
 
-                    let (new_scope_id, build_node) =
-                        self.import_scope_list(scope, &module_path)?;
+                    let (new_scope_id, build_node) = self.import_scope_list(scope, &module_path)?;
 
                     self.scoping
                         .scope_mut_or_err(scope)?
@@ -2444,8 +2473,7 @@ impl MiddleEnvironment {
                         span: node.span,
                     }));
                 } else if !values.is_empty() {
-                    let (new_scope_id, build_node) =
-                        self.import_scope_list(scope, &module_path)?;
+                    let (new_scope_id, build_node) = self.import_scope_list(scope, &module_path)?;
                     (new_scope_id, build_node)
                 } else {
                     let (_, n) = self.import_scope_list(scope, &module_path)?;
@@ -2851,11 +2879,7 @@ impl MiddleEnvironment {
                 };
 
                 let get_mapping = |env: &Self, key: &Ustr| -> Result<Option<Ustr>, MiddleErr> {
-                    Ok(env
-                        .scoping
-                        .scope_or_err(scope)?
-                        .mappings
-                        .get(key).cloned())
+                    Ok(env.scoping.scope_or_err(scope)?.mappings.get(key).cloned())
                 };
 
                 let restore_mapping =

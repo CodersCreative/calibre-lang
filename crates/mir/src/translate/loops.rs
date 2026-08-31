@@ -163,7 +163,7 @@ impl MiddleEnvironment {
             body = self.wrap_loop_body(body, until_node, false);
         }
 
-        let (result_raw, broke_raw,) = if else_body.is_some() {
+        let (result_raw, broke_raw) = if else_body.is_some() {
             let result = Ustr::from(&ParserText::temp_name_with_suffix("loop_result", span).text);
             let broke = Ustr::from(&ParserText::temp_name_with_suffix("loop_broke", span).text);
 
@@ -171,12 +171,9 @@ impl MiddleEnvironment {
                 scope_data.mappings.insert(result.clone(), result.clone());
                 scope_data.mappings.insert(broke.clone(), broke.clone());
             }
-            (
-                Some(result.clone()),
-                Some(broke.clone()),
-            )
+            (Some(result.clone()), Some(broke.clone()))
         } else {
-            (None, None,)
+            (None, None)
         };
 
         match loop_type {

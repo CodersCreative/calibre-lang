@@ -9,9 +9,7 @@ use calibre_mir::{
 };
 use calibre_parser::{
     Span,
-    ast::{
-        types::{ParserDataType, ParserInnerType},
-    },
+    ast::types::{ParserDataType, ParserInnerType},
 };
 use tracing::{debug, info, instrument, trace};
 use ustr::{Ustr, UstrMap};
@@ -140,11 +138,8 @@ impl<'a> LirEnvironment<'a> {
         methods
     }
 
-    pub fn build_dyn_vtables(
-        env: &MiddleEnvironment,
-    ) -> UstrMap<UstrMap<UstrMap<Ustr>>> {
-        let mut out: UstrMap<UstrMap<UstrMap<Ustr>>> =
-            UstrMap::default();
+    pub fn build_dyn_vtables(env: &MiddleEnvironment) -> UstrMap<UstrMap<UstrMap<Ustr>>> {
+        let mut out: UstrMap<UstrMap<UstrMap<Ustr>>> = UstrMap::default();
 
         for (concrete, imp) in env.typing.impls.iter() {
             let trait_map = out.entry(concrete.clone()).or_default();

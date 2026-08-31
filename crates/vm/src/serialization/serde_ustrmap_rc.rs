@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::sync::Arc;
 use ustr::{Ustr, UstrMap};
-use std::{ sync::Arc};
 
 pub fn serialize<S, V>(map: &UstrMap<Arc<V>>, serializer: S) -> Result<S::Ok, S::Error>
 where

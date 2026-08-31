@@ -1,17 +1,17 @@
 use super::super::ir::{PhiNode, Reg};
 use calibre_lir::ast::{BlockId, LirBlock, LirTerminator};
 use calibre_parser::ast::types::ParserDataType;
-use rustc_hash::{FxHashMap};
+use rustc_hash::FxHashMap;
 use ustr::{Ustr, UstrMap, UstrSet};
 
 #[derive(Clone, Default)]
 pub struct SSABlockInfo {
     // Names to registers at entry
-    pub in_map: UstrMap< Reg>,
+    pub in_map: UstrMap<Reg>,
     // Names to registers at exit
     pub out_map: UstrMap<Reg>,
     // Names to phi nodes
-    pub phi_for: UstrMap< Reg>,
+    pub phi_for: UstrMap<Reg>,
     pub phis: Vec<PhiNode>,
 }
 
@@ -82,11 +82,7 @@ impl SSABuilder {
         }
     }
 
-    pub fn build(
-        &mut self,
-        blocks: &[LirBlock],
-        params: &[(Ustr, ParserDataType)],
-    ) {
+    pub fn build(&mut self, blocks: &[LirBlock], params: &[(Ustr, ParserDataType)]) {
         let mut changed = true;
         while changed {
             changed = false;
@@ -164,7 +160,7 @@ impl SSABuilder {
         &mut self,
         var: Ustr,
         sources: &[(BlockId, Reg)],
-        phi_for: &mut UstrMap< Reg>,
+        phi_for: &mut UstrMap<Reg>,
     ) -> Reg {
         let reg_opt = sources
             .iter()

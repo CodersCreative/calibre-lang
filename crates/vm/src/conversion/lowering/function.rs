@@ -90,12 +90,7 @@ impl FunctionLowering {
             })
         });
 
-        let param_names: UstrSet = lower
-            .func
-            .params
-            .iter()
-            .map(|(n, _)| n.clone())
-            .collect();
+        let param_names: UstrSet = lower.func.params.iter().map(|(n, _)| n.clone()).collect();
 
         FunctionLowering::optimize_blocks(&mut lower.blocks);
 
@@ -228,8 +223,7 @@ impl FunctionLowering {
             }
         }
 
-        let captures: UstrSet =
-            func.captures.iter().map(|(n, _)| n.clone()).collect();
+        let captures: UstrSet = func.captures.iter().map(|(n, _)| n.clone()).collect();
 
         let mut reg_count: Reg = 0;
         let mut param_regs = Vec::new();

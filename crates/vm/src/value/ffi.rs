@@ -570,9 +570,7 @@ impl ExternFunction {
                             Ok(RuntimeValue::Str(Ustr::default()))
                         } else {
                             let c_str = CStr::from_ptr(res);
-                            Ok(RuntimeValue::Str(Ustr::from(
-                                &c_str.to_string_lossy(),
-                            )))
+                            Ok(RuntimeValue::Str(Ustr::from(&c_str.to_string_lossy())))
                         }
                     }
                     ParserInnerType::Ptr(_) => {

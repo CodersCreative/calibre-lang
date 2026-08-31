@@ -15,8 +15,8 @@ use calibre_mir::testing::{Test, TestOrBench};
 use calibre_vm::conversion::VMRegistry;
 use derive_builder::Builder;
 use smol::fs;
-use ustr::Ustr;
 use std::error::Error;
+use ustr::Ustr;
 
 #[derive(Builder, Debug)]
 pub struct RunSuite<'a> {

@@ -384,9 +384,8 @@ impl MiddleTypeDefType {
 
                     for (k, v) in variants {
                         lst.push((
-                            
-                                env.resolve(scope, &k, ResolutionOptions::default().with_dollar())
-                                    .unwrap_or_else(|_| Ustr::from(&k.to_string())),
+                            env.resolve(scope, &k, ResolutionOptions::default().with_dollar())
+                                .unwrap_or_else(|_| Ustr::from(&k.to_string())),
                             v.map(|v| {
                                 env.resolve_data_type(scope, &v, ResolutionOptions::typing())
                                     .unwrap_or(v)

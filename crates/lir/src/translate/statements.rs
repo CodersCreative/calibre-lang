@@ -32,12 +32,10 @@ impl LirLowering for MirAssignment {
         let ident_span = self.identifier.span;
 
         let (lhs, old_expr) = match self.identifier.node_type {
-            MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
-                (
-                    Some(LirLValue::Var(identifier.clone())),
-                    Some(LirNodeType::Load(LirLoad { value : identifier })),
-                )
-            }
+            MiddleNodeType::Identifier(MirIdentifier { identifier }) => (
+                Some(LirLValue::Var(identifier.clone())),
+                Some(LirNodeType::Load(LirLoad { value: identifier })),
+            ),
             MiddleNodeType::DerefStatement(MirDeref { value }) => {
                 let ptr_expr = env.lower_node(*value);
                 let ptr_tmp = env.get_temp();
@@ -49,9 +47,7 @@ impl LirLowering for MirAssignment {
                         value: Box::new(ptr_expr),
                     }),
                 ));
-                let ptr_load = LirNodeType::Load(LirLoad {
-                    value: ptr_tmp,
-                });
+                let ptr_load = LirNodeType::Load(LirLoad { value: ptr_tmp });
                 (
                     Some(LirLValue::Ptr(Box::new(ptr_load.clone()))),
                     Some(LirNodeType::Deref(LirDeref {
@@ -70,9 +66,7 @@ impl LirLowering for MirAssignment {
                         value: Box::new(base_expr),
                     }),
                 ));
-                let base_load = LirNodeType::Load(LirLoad {
-                    value: base_tmp,
-                });
+                let base_load = LirNodeType::Load(LirLoad { value: base_tmp });
 
                 (
                     Some(LirLValue::Ptr(Box::new(LirNodeType::Member(LirMember {
@@ -96,9 +90,7 @@ impl LirLowering for MirAssignment {
                         value: Box::new(base_expr),
                     }),
                 ));
-                let base_load = LirNodeType::Load(LirLoad {
-                    value: base_tmp,
-                });
+                let base_load = LirNodeType::Load(LirLoad { value: base_tmp });
 
                 let index_expr = env.lower_node(*index);
                 let index_tmp = env.get_temp();
@@ -111,9 +103,7 @@ impl LirLowering for MirAssignment {
                     }),
                 ));
 
-                let index_load = LirNodeType::Load(LirLoad {
-                    value: index_tmp,
-                });
+                let index_load = LirNodeType::Load(LirLoad { value: index_tmp });
 
                 (
                     Some(LirLValue::Ptr(Box::new(LirNodeType::Index(LirIndex {
@@ -153,9 +143,7 @@ impl LirLowering for MirAssignment {
             ));
         }
 
-        LirNodeType::Load(LirLoad {
-            value: temp,
-        })
+        LirNodeType::Load(LirLoad { value: temp })
     }
 }
 

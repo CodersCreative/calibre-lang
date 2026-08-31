@@ -105,9 +105,7 @@ impl LirLowering for MirScopeDecl {
                 }),
             ));
 
-            LirNodeType::Load(LirLoad {
-                value: temp,
-            })
+            LirNodeType::Load(LirLoad { value: temp })
         }
     }
 }

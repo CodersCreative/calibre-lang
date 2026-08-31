@@ -104,9 +104,7 @@ impl LirLowering for MirBoolean {
         }
 
         env.switch_to(merge_id);
-        LirNodeType::Load(LirLoad {
-            value: temp,
-        })
+        LirNodeType::Load(LirLoad { value: temp })
     }
 }
 

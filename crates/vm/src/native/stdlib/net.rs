@@ -8,11 +8,11 @@ use crate::{
     value::RuntimeValue,
 };
 use dumpster::sync::Gc;
-use ustr::Ustr;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, OnceLock};
 use std::{collections::HashMap, time::Duration};
+use ustr::Ustr;
 use wasm_sync::Mutex;
 
 fn port_redirects() -> &'static Mutex<HashMap<String, i64>> {
@@ -38,11 +38,7 @@ fn parse_http_args(
         resolve_str(env, &pop_or_null(&mut args))?,
     ];
 
-    let parts = [
-        parts[0].as_str(),
-        parts[1].as_str(),
-        parts[2].as_str(),
-    ];
+    let parts = [parts[0].as_str(), parts[1].as_str(), parts[2].as_str()];
 
     let looks_like_method = |s: &str| {
         matches!(
@@ -137,8 +133,7 @@ impl NativeFunction for TcpConnect {
         expect_num_args(&args, &[2])?;
 
         let port = resolve_int(env, &pop_or_null(&mut args))?;
-        let host = resolve_str(env, &pop_or_null(&mut args))?
-            .to_string();
+        let host = resolve_str(env, &pop_or_null(&mut args))?.to_string();
 
         let remapped_port = {
             let key = key_for(host.as_str(), port);
@@ -171,9 +166,7 @@ impl NativeFunction for TcpListen {
         expect_num_args(&args, &[2])?;
 
         let port = resolve_int(env, &pop_or_null(&mut args))?;
-        let host = resolve_str(env, &pop_or_null(&mut args))?
-
-            .to_string();
+        let host = resolve_str(env, &pop_or_null(&mut args))?.to_string();
 
         let addr = format!("{}:{}", host, port);
         let socket_addr = addr

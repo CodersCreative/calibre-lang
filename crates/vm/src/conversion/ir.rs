@@ -11,11 +11,11 @@ use calibre_parser::ast::{
     types::ParserDataType,
 };
 use indextree::NodeId;
-use rustc_hash::{FxHashMap};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use ustr::{Ustr, UstrMap, UstrSet};
 use std::fmt::Display;
 use std::sync::Arc;
+use ustr::{Ustr, UstrMap, UstrSet};
 
 use crate::value::{BIG_PRECISION, BIG_ROUNDING};
 

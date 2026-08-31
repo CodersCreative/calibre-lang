@@ -64,8 +64,6 @@ impl NativeFunction for Blake3Fn {
         let mut hasher = Blake3::new();
         hasher.update(s.as_bytes());
         let out = hasher.finalize();
-        Ok(RuntimeValue::Str(Ustr::from(
-            &out.to_hex().to_string(),
-        )))
+        Ok(RuntimeValue::Str(Ustr::from(&out.to_hex().to_string())))
     }
 }

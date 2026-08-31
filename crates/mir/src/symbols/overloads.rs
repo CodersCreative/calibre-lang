@@ -47,12 +47,22 @@ impl MiddleEnvironment {
             let matches_overload = |overload: &MiddleOverload| {
                 overload.parameters.len() == 2
                     && overload.operator == operator
-                    && overload.parameters[0]
-                        .data_type
-                        .matches(&left_ty.data_type, &overload.generic_params.iter().map(|x| x.as_str()).collect::<Vec<_>>())
-                    && overload.parameters[1]
-                        .data_type
-                        .matches(&right_ty.data_type, &overload.generic_params.iter().map(|x| x.as_str()).collect::<Vec<_>>())
+                    && overload.parameters[0].data_type.matches(
+                        &left_ty.data_type,
+                        &overload
+                            .generic_params
+                            .iter()
+                            .map(|x| x.as_str())
+                            .collect::<Vec<_>>(),
+                    )
+                    && overload.parameters[1].data_type.matches(
+                        &right_ty.data_type,
+                        &overload
+                            .generic_params
+                            .iter()
+                            .map(|x| x.as_str())
+                            .collect::<Vec<_>>(),
+                    )
             };
             if let Some(overload) = self
                 .symbols
@@ -94,11 +104,20 @@ impl MiddleEnvironment {
             .filter(|x| matches!(x.operator, Operator::As))
             .filter(|x| x.parameters.len() == 1)
             .find(|x| {
-                if x.parameters[0]
-                    .data_type
-                    .matches(&left_ty.data_type, &x.generic_params.iter().map(|x| x.as_str()).collect::<Vec<_>>())
-                    && let Some(t) = x.return_type.data_type.unwrap_one_result()
-                    && t.matches(&target.data_type, &x.generic_params.iter().map(|x| x.as_str()).collect::<Vec<_>>())
+                if x.parameters[0].data_type.matches(
+                    &left_ty.data_type,
+                    &x.generic_params
+                        .iter()
+                        .map(|x| x.as_str())
+                        .collect::<Vec<_>>(),
+                ) && let Some(t) = x.return_type.data_type.unwrap_one_result()
+                    && t.matches(
+                        &target.data_type,
+                        &x.generic_params
+                            .iter()
+                            .map(|x| x.as_str())
+                            .collect::<Vec<_>>(),
+                    )
                 {
                     true
                 } else {
@@ -136,11 +155,20 @@ impl MiddleEnvironment {
             .filter(|x| matches!(x.operator, Operator::As))
             .filter(|x| x.parameters.len() == 1)
             .find(|x| {
-                if x.parameters[0]
-                    .data_type
-                    .matches(&left_ty.data_type, &x.generic_params.iter().map(|x| x.as_str()).collect::<Vec<_>>())
-                    && let Some(t) = x.return_type.data_type.unwrap_one_result()
-                    && t.matches(&target.data_type, &x.generic_params.iter().map(|x| x.as_str()).collect::<Vec<_>>())
+                if x.parameters[0].data_type.matches(
+                    &left_ty.data_type,
+                    &x.generic_params
+                        .iter()
+                        .map(|x| x.as_str())
+                        .collect::<Vec<_>>(),
+                ) && let Some(t) = x.return_type.data_type.unwrap_one_result()
+                    && t.matches(
+                        &target.data_type,
+                        &x.generic_params
+                            .iter()
+                            .map(|x| x.as_str())
+                            .collect::<Vec<_>>(),
+                    )
                 {
                     true
                 } else {
@@ -174,15 +202,25 @@ impl MiddleEnvironment {
             .filter(|x| matches!(x.operator, Operator::IndexAssign))
             .filter(|x| x.parameters.len() == 3)
             .find(|x| {
-                x.parameters[0]
-                    .data_type
-                    .matches(&base_ty.data_type, &x.generic_params.iter().map(|x| x.as_str()).collect::<Vec<_>>())
-                    && x.parameters[1]
-                        .data_type
-                        .matches(&index_ty.data_type, &x.generic_params.iter().map(|x| x.as_str()).collect::<Vec<_>>())
-                    && x.parameters[2]
-                        .data_type
-                        .matches(&value_ty.data_type, &x.generic_params.iter().map(|x| x.as_str()).collect::<Vec<_>>())
+                x.parameters[0].data_type.matches(
+                    &base_ty.data_type,
+                    &x.generic_params
+                        .iter()
+                        .map(|x| x.as_str())
+                        .collect::<Vec<_>>(),
+                ) && x.parameters[1].data_type.matches(
+                    &index_ty.data_type,
+                    &x.generic_params
+                        .iter()
+                        .map(|x| x.as_str())
+                        .collect::<Vec<_>>(),
+                ) && x.parameters[2].data_type.matches(
+                    &value_ty.data_type,
+                    &x.generic_params
+                        .iter()
+                        .map(|x| x.as_str())
+                        .collect::<Vec<_>>(),
+                )
             })
             .cloned();
 
@@ -219,12 +257,19 @@ impl MiddleEnvironment {
             .iter()
             .filter(|x| x.parameters.len() == 2 && &x.operator == operator)
             .find(|x| {
-                x.parameters[0]
-                    .data_type
-                    .matches(&left_ty.data_type, &x.generic_params.iter().map(|x| x.as_str()).collect::<Vec<_>>())
-                    && x.parameters[1]
-                        .data_type
-                        .matches(&right_ty.data_type, &x.generic_params.iter().map(|x| x.as_str()).collect::<Vec<_>>())
+                x.parameters[0].data_type.matches(
+                    &left_ty.data_type,
+                    &x.generic_params
+                        .iter()
+                        .map(|x| x.as_str())
+                        .collect::<Vec<_>>(),
+                ) && x.parameters[1].data_type.matches(
+                    &right_ty.data_type,
+                    &x.generic_params
+                        .iter()
+                        .map(|x| x.as_str())
+                        .collect::<Vec<_>>(),
+                )
             })
         {
             return Some(overload);

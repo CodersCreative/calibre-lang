@@ -6,7 +6,7 @@ use calibre_lir::{
 };
 use calibre_parser::Span;
 use calibre_parser::ast::types::{ParserDataType, ParserInnerType};
-use rustc_hash::{FxHashMap,};
+use rustc_hash::FxHashMap;
 use ustr::{Ustr, UstrMap, UstrSet};
 
 mod block;
