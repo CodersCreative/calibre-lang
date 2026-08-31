@@ -10,6 +10,7 @@ use calibre_vm::{
     VM, config::VMConfig, conversion::VMRegistry, error::RuntimeError, value::RuntimeValue,
 };
 use embedded::NativeBinding;
+use ustr::Ustr;
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -59,10 +60,10 @@ pub struct CalibreArtifacts {
     pub mir: Option<MiddleNode>,
     pub lir: Option<LirRegistry>,
     pub registry: VMRegistry,
-    pub mappings: Vec<String>,
-    pub entry_name: String,
-    pub init_functions: Vec<(i32, String)>,
-    pub fin_functions: Vec<(i32, String)>,
+    pub mappings: Vec<Ustr>,
+    pub entry_name: Ustr,
+    pub init_functions: Vec<(i32, Ustr)>,
+    pub fin_functions: Vec<(i32, Ustr)>,
     pub testing: Testing,
 }
 
@@ -197,7 +198,7 @@ impl CalibreEngine {
     pub(crate) fn install_bindings(&self, vm: &mut VM) {
         for binding in &self.bindings {
             let resolved = resolve_binding_name(vm, &binding.name);
-            vm.variables.insert(&resolved, binding.value.clone());
+            vm.variables.insert(Ustr::from(&resolved), binding.value.clone());
         }
     }
 

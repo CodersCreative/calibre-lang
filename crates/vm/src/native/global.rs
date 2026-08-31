@@ -8,12 +8,11 @@ use crate::{
     value::{GcMap, RuntimeValue},
 };
 use dumpster::sync::Gc;
+use ustr::Ustr;
 use std::{
     io::{self, BufRead, Write},
-    sync::Arc,
     time::Duration,
 };
-use wasm_sync::Mutex;
 use wasm_thread as thread;
 
 pub struct ConsoleOutput;
@@ -30,14 +29,14 @@ impl NativeFunction for ConsoleOutput {
             .into_iter()
             .map(|arg| match arg {
                 RuntimeValue::Str(value) => {
-                    calibre_parser::parse::util::unescape_string(&value.lock().unwrap())
+                    calibre_parser::parse::util::unescape_string(&value)
                 }
                 other => other.display(env),
             })
             .collect::<String>();
 
         if env.suppress_output {
-            env.captured_output.push_str(&rendered);
+            env.captured_output.push(Ustr::from(&rendered));
         } else if handle_type == 2 {
             let stderr = io::stderr();
             let mut handle = stderr.lock();
@@ -74,7 +73,7 @@ impl NativeFunction for ConsoleInput {
     fn run(&self, env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         if !env.input_buffer.is_empty() {
             let input = env.input_buffer.remove(0);
-            return Ok(RuntimeValue::Str(Arc::new(Mutex::new(input))));
+            return Ok(RuntimeValue::Str(Ustr::from(&input)));
         }
 
         let stdin = io::stdin();
@@ -82,10 +81,10 @@ impl NativeFunction for ConsoleInput {
         let mut line = String::new();
 
         match handle.read_line(&mut line) {
-            Ok(0) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(String::new())))),
-            Ok(_) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
-                line.trim().to_string(),
-            )))),
+            Ok(0) => Ok(RuntimeValue::Str(Ustr::default())),
+            Ok(_) => Ok(RuntimeValue::Str(Ustr::from(
+                line.trim(),
+            ))),
             Err(e) => Err(RuntimeError::Io(e.to_string())),
         }
     }
@@ -117,7 +116,7 @@ impl NativeFunction for Repr {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        Ok(RuntimeValue::Str(Arc::new(Mutex::new(args[0].repr(env)))))
+        Ok(RuntimeValue::Str(Ustr::from(&args[0].repr(env))))
     }
 }
 
@@ -131,9 +130,9 @@ impl NativeFunction for Display {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        Ok(RuntimeValue::Str(Arc::new(Mutex::new(
-            args[0].display(env),
-        ))))
+        Ok(RuntimeValue::Str(Ustr::from(
+            &args[0].display(env),
+        )))
     }
 }
 
@@ -250,7 +249,7 @@ impl NativeFunction for Len {
                 RuntimeValue::List(data) => data.as_ref().0.len() as u64,
                 RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as u64,
                 RuntimeValue::Range(from, to) => (to - from).max(0).unsigned_abs(),
-                RuntimeValue::Str(x) => x.lock().unwrap().len() as u64,
+                RuntimeValue::Str(x) => x.len() as u64,
                 RuntimeValue::Null => 0,
                 RuntimeValue::HashMap(map) => map.lock().unwrap().len() as u64,
                 RuntimeValue::HashSet(set) => set.lock().unwrap().len() as u64,
@@ -293,9 +292,9 @@ impl NativeFunction for Trim {
         expect_num_args(&args, &[1])?;
 
         match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
-            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
-                s.lock().unwrap().trim().to_string(),
-            )))),
+            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Ustr::from(
+                s.trim(),
+            ))),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
@@ -312,9 +311,9 @@ impl NativeFunction for TrimStart {
         expect_num_args(&args, &[1])?;
 
         match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
-            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
-                s.lock().unwrap().trim_start().to_string(),
-            )))),
+            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Ustr::from(
+                s.trim_start(),
+            ))),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
@@ -331,9 +330,9 @@ impl NativeFunction for TrimEnd {
         expect_num_args(&args, &[1])?;
 
         match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
-            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Arc::new(Mutex::new(
-                s.lock().unwrap().trim_end().to_string(),
-            )))),
+            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Ustr::from(
+                s.trim_end(),
+            ))),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
@@ -350,7 +349,7 @@ impl NativeFunction for IsWhitespace {
 
         match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Bool(
-                s.lock().unwrap().chars().all(|c| c.is_whitespace()),
+                s.chars().all(|c| c.is_whitespace()),
             )),
             RuntimeValue::Char(c) => Ok(RuntimeValue::Bool(c.is_whitespace())),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),

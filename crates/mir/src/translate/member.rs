@@ -15,6 +15,7 @@ use calibre_parser::{
         types::ParserDataType,
     },
 };
+use ustr::Ustr;
 
 impl MiddleEnvironment {
     pub(crate) fn evaluate_field_access(
@@ -39,7 +40,7 @@ impl MiddleEnvironment {
 
             if let Some(MiddleTypeDefType::Enum { .. }) = self
                 .typing
-                .find_object_for_struct_name(&ty.impl_name())
+                .find_object_for_struct_name(&Ustr::from(&ty.impl_name()))
                 .map(|x| &x.object_type)
             {
                 return self.evaluate_inner(
@@ -84,8 +85,8 @@ impl MiddleEnvironment {
         let mut module_path = Vec::new();
         if base.scope_access_path(&mut module_path)
             && let Ok(new_scope) = self
-                .get_scope_list(scope, module_path.clone())
-                .or_else(|_| self.import_scope_list(scope, module_path).map(|x| x.0))
+                .get_scope_list(scope, &module_path)
+                .or_else(|_| self.import_scope_list(scope, &module_path).map(|x| x.0))
         {
             let resolved = self.resolve(
                 new_scope,
@@ -153,7 +154,7 @@ impl MiddleEnvironment {
         scope: ScopeId,
         data_type: &ParserDataType,
         member: &impl ToString,
-    ) -> Option<String> {
+    ) -> Option<Ustr> {
         let resolved = self
             .resolve_data_type(scope, data_type, ResolutionOptions::typing())
             .ok()?;

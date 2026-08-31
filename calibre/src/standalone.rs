@@ -7,6 +7,7 @@ use calibre_std::{get_globals_path, get_stdlib_path};
 use calibre_vm::{VM, conversion::VMRegistry};
 
 use serde::{Deserialize, Serialize};
+use ustr::Ustr;
 use std::path::{Path, PathBuf};
 use tracing::{debug, instrument};
 
@@ -19,11 +20,11 @@ const CACHE_FORMAT_VERSION: &str = "v6";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedProgramBlob {
-    entry_name: String,
-    mappings: Vec<String>,
+    entry_name: Ustr,
+    mappings: Vec<Ustr>,
     registry: VMRegistry,
-    init_functions: Option<Vec<(i32, String)>>,
-    fin_functions: Option<Vec<(i32, String)>>,
+    init_functions: Option<Vec<(i32, Ustr)>>,
+    fin_functions: Option<Vec<(i32, Ustr)>>,
     testing: Option<Testing>,
 }
 
@@ -107,18 +108,18 @@ impl CalibreStandalone for CalibreEngine {
 
         let mut vm = VM::new(
             artifacts.registry.clone(),
-            artifacts.mappings.clone(),
+            artifacts.mappings.iter().map(|x| Ustr::from(x)).collect(),
             self.vm_config.clone(),
         );
         vm.set_source_file_override(&path);
         vm.suppress_output = self.suppress_output;
-        vm.input_buffer = self.input_buffer.clone();
+        vm.input_buffer = self.input_buffer.iter().map(|x| Ustr::from(x)).collect();
 
         self.install_bindings(&mut vm);
 
         let Some(main) = vm.registry.functions.get(&artifacts.entry_name).cloned() else {
             return Err(CalibreError::MissingEntryPoint(
-                artifacts.entry_name.clone(),
+                artifacts.entry_name.to_string(),
             ));
         };
 
@@ -414,7 +415,7 @@ impl CalibreStandalone for CalibreEngine {
 
         let entry_name = env
             .resolve(scope, &self.entry_name, ResolutionOptions::all())
-            .unwrap_or_else(|_| self.entry_name.clone());
+            .unwrap_or_else(|_| Ustr::from(&self.entry_name));
 
         let mut init_functions = std::mem::take(&mut env.tagging.init_functions);
 

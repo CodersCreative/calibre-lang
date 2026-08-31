@@ -184,7 +184,7 @@ fn remove_from_target(
                     let old_list = list.clone();
                     let removed = remove_from_list_value(&mut list, idx);
                     env.propagate_list_aliases(&old_list, &list);
-                    env.variables.insert(&name, RuntimeValue::List(list));
+                    env.variables.insert(name, RuntimeValue::List(list));
                     Ok(removed)
                 }
                 alias @ (RuntimeValue::Ref(_)

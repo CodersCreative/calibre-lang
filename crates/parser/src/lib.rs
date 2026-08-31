@@ -11,6 +11,7 @@ use std::{
 };
 use thiserror::Error;
 use tracing::{debug, info, instrument};
+use ustr::Ustr;
 
 pub mod ast;
 pub mod native;
@@ -22,6 +23,14 @@ pub trait IdentifiersUsed {
     fn identifiers_used(&self) -> Vec<&String>;
 
     fn owned_identifiers_used(&self) -> Vec<String> {
+        self.identifiers_used().into_iter().cloned().collect()
+    }
+}
+
+pub trait UstrIdentifiersUsed {
+    fn identifiers_used(&self) -> Vec<&Ustr>;
+
+    fn owned_identifiers_used(&self) -> Vec<Ustr> {
         self.identifiers_used().into_iter().cloned().collect()
     }
 }

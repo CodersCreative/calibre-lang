@@ -1,15 +1,11 @@
 use crate::errors::MiddleErr;
 use calibre_parser::{
     Location, Span,
-    ast::{
-        idents::{ParserText, PotentialDollarIdentifier},
-        nodes::AstNode,
-        types::ParserInnerType,
-    },
+    ast::{idents::PotentialDollarIdentifier, nodes::AstNode, types::ParserInnerType},
 };
 use indextree::{Arena, Node, NodeId};
-use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::PathBuf;
+use ustr::{Ustr, UstrMap, UstrSet};
 
 pub mod resolve;
 pub type ScopeId = NodeId;
@@ -19,8 +15,8 @@ pub struct Scoping {
     pub scopes: Arena<MiddleScope>,
     pub loop_stack: Vec<LoopContext>,
     pub return_type_stack: Vec<ParserInnerType>,
-    pub generic_param_stack: Vec<Vec<String>>,
-    pub all_time_generics: FxHashSet<String>,
+    pub generic_param_stack: Vec<Vec<Ustr>>,
+    pub all_time_generics: UstrSet,
 }
 
 impl Scoping {
@@ -41,7 +37,7 @@ impl Scoping {
     }
 
     #[inline(always)]
-    pub fn push_generic_params(&mut self, params: Vec<String>) {
+    pub fn push_generic_params(&mut self, params: Vec<Ustr>) {
         self.all_time_generics.extend(params.clone());
         self.generic_param_stack.push(params);
     }
@@ -52,9 +48,9 @@ impl Scoping {
     }
 
     #[inline(always)]
-    pub fn is_generic_param(&self, ident: &str) -> bool {
+    pub fn is_generic_param(&self, ident: &Ustr) -> bool {
         for params in self.generic_param_stack.iter().rev() {
-            if params.contains(&ident.to_string()) {
+            if params.contains(ident) {
                 return true;
             }
         }
@@ -70,7 +66,7 @@ impl Scoping {
     }
 
     #[inline(always)]
-    pub fn resolve_macro_arg(&self, scope: ScopeId, iden: &str) -> Option<&AstNode> {
+    pub fn resolve_macro_arg(&self, scope: ScopeId, iden: &Ustr) -> Option<&AstNode> {
         scope.ancestors(&self.scopes).find_map(|x| {
             self.scope_or_err(x.clone())
                 .ok()
@@ -79,7 +75,7 @@ impl Scoping {
     }
 
     #[inline(always)]
-    pub fn resolve_macro(&self, scope: ScopeId, iden: &str) -> Option<&ScopeMacro> {
+    pub fn resolve_macro(&self, scope: ScopeId, iden: &Ustr) -> Option<&ScopeMacro> {
         scope.ancestors(&self.scopes).find_map(|x| {
             self.scope_or_err(x.clone())
                 .ok()
@@ -127,12 +123,12 @@ impl Scoping {
         &mut self,
         parent: Option<ScopeId>,
         path: PathBuf,
-        namespace: Option<&str>,
+        namespace: Option<&Ustr>,
     ) -> ScopeId {
         if let (Some(parent_id), Some(ns)) = (parent, namespace) {
             let existing = self.scopes.iter().find_map(|scope| {
                 let scope_ref = scope.get();
-                if scope_ref.namespace != ns {
+                if &scope_ref.namespace != ns {
                     return None;
                 }
 
@@ -157,12 +153,12 @@ impl Scoping {
 
         let id = self.add_scope(
             MiddleScope {
-                macros: FxHashMap::default(),
-                macro_args: FxHashMap::default(),
-                namespace: namespace.unwrap_or_default().to_string(),
-                mappings: FxHashMap::default(),
-                type_mappings: FxHashMap::default(),
-                children: FxHashMap::default(),
+                macros: UstrMap::default(),
+                macro_args: UstrMap::default(),
+                namespace: namespace.cloned().unwrap_or_default(),
+                mappings: UstrMap::default(),
+                type_mappings: UstrMap::default(),
+                children: UstrMap::default(),
                 defers: Vec::new(),
                 path,
                 built: false,
@@ -183,18 +179,18 @@ impl Scoping {
     pub fn new_build_scope_from_parent(
         &mut self,
         parent: ScopeId,
-        namespace: &str,
+        namespace: &Ustr,
     ) -> Option<ScopeId> {
         let path = self.scope_or_err(parent).ok()?.path.clone();
         let parent_name = path.file_name()?;
         let folder = path.parent()?.to_path_buf();
 
         let extra = if parent_name == "main.cal" || parent_name == "mod.cal" {
-            String::new()
+            Ustr::default()
         } else {
             let parent_str = parent_name.to_str()?;
             let base = parent_str.split('.').next()?;
-            format!("{base}/")
+            Ustr::from(&format!("{base}/"))
         };
 
         let mut path1 = folder.clone();
@@ -209,7 +205,7 @@ impl Scoping {
 
     pub fn get_scope_from_path(
         &self,
-        path: &[String],
+        path: &[Ustr],
         mut parent: Option<ScopeId>,
     ) -> Result<ScopeId, MiddleErr> {
         let mut skip = 0;
@@ -222,7 +218,7 @@ impl Scoping {
                 .and_then(|x| self.get_id(x));
 
             if parent.is_none() {
-                return Err(MiddleErr::Scope(path[0].clone()));
+                return Err(MiddleErr::Scope(path[0].to_string()));
             }
 
             skip = 1;
@@ -234,18 +230,25 @@ impl Scoping {
             }
         }
 
-        parent.ok_or_else(|| MiddleErr::Scope(path.join("::")))
+        parent.ok_or_else(|| {
+            MiddleErr::Scope(
+                path.iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<String>>()
+                    .join("::"),
+            )
+        })
     }
 
     #[inline(always)]
     pub fn get_scope_from_children(
         &self,
         parent: ScopeId,
-        namespace: &str,
+        namespace: &Ustr,
     ) -> Result<ScopeId, MiddleErr> {
         if let Some(x) = parent.children(&self.scopes).find(|child| {
             self.scope_or_err(*child)
-                .is_ok_and(|x| x.namespace == namespace)
+                .is_ok_and(|x| &x.namespace == namespace)
         }) {
             Ok(x)
         } else if let Some(x) = self
@@ -262,7 +265,7 @@ impl Scoping {
     pub fn new_scope_from_parent(
         &mut self,
         parent: ScopeId,
-        namespace: &str,
+        namespace: &Ustr,
     ) -> Result<ScopeId, MiddleErr> {
         if let Ok(scope) = self.get_scope_from_children(parent, namespace) {
             return Ok(scope);
@@ -337,16 +340,16 @@ impl Scoping {
 
 #[derive(Debug, Clone)]
 pub struct LoopContext {
-    pub label: Option<String>,
-    pub result_target: Option<ParserText>,
-    pub broke_target: Option<ParserText>,
+    pub label: Option<Ustr>,
+    pub result_target: Option<Ustr>,
+    pub broke_target: Option<Ustr>,
     pub continue_inject: Option<AstNode>,
     pub scope_id: ScopeId,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScopeMacro {
-    pub name: String,
+    pub name: Ustr,
     pub args: Vec<(PotentialDollarIdentifier, AstNode)>,
     pub body: Vec<AstNode>,
     pub create_new_scope: bool,
@@ -354,12 +357,12 @@ pub struct ScopeMacro {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleScope {
-    pub mappings: FxHashMap<String, String>,
-    pub type_mappings: FxHashMap<String, ParserInnerType>,
-    pub macros: FxHashMap<String, ScopeMacro>,
-    pub macro_args: FxHashMap<String, AstNode>,
-    pub children: FxHashMap<String, NodeId>,
-    pub namespace: String,
+    pub mappings: UstrMap<Ustr>,
+    pub type_mappings: UstrMap<ParserInnerType>,
+    pub macros: UstrMap<ScopeMacro>,
+    pub macro_args: UstrMap<AstNode>,
+    pub children: UstrMap<NodeId>,
+    pub namespace: Ustr,
     pub path: PathBuf,
     pub defers: Vec<AstNode>,
     pub built: bool,
@@ -367,10 +370,10 @@ pub struct MiddleScope {
 
 impl MiddleScope {
     #[inline(always)]
-    pub fn path_or_fallback(&self) -> String {
-        let file = self.path.to_string_lossy().to_string();
+    pub fn path_or_fallback(&self) -> Ustr {
+        let file = Ustr::from(&self.path.to_string_lossy());
         if file.is_empty() {
-            String::from("unknown")
+            Ustr::from("unknown")
         } else {
             file
         }

@@ -47,6 +47,7 @@ derive_builder = "0.20.2"
 indextree = {version = "4.9.0", features = ["serde"]}
 wasm_thread = "0.3.3"
 wasm_sync = "0.1.2"
+ustr = {version = "1.1.0", features = ["serde"]}
 
 [workspace.lints.clippy]
 # Don't Panic - prevent panics from unwraps and unsafe slicing or indexing

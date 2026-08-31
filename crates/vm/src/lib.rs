@@ -10,9 +10,9 @@ use astro_float::Consts;
 use calibre_lir::ast::BlockId;
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
+use ustr::{Ustr, UstrMap, UstrSet};
 use std::{
-    fmt::Debug,
-    sync::{
+    fmt::Debug, path::Path, sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
@@ -22,7 +22,7 @@ use tracing::instrument;
 
 static NULL_RUNTIME_VALUE: RuntimeValue = RuntimeValue::Null;
 static EMPTY_FRAME: OnceLock<VMFrame> = OnceLock::new();
-static EMPTY_CAPTURES: OnceLock<Arc<Vec<(String, RuntimeValue)>>> = OnceLock::new();
+static EMPTY_CAPTURES: OnceLock<Arc<Vec<(Ustr, RuntimeValue)>>> = OnceLock::new();
 
 pub mod config;
 pub mod conversion;
@@ -41,9 +41,9 @@ pub(crate) use vm_lookup::VarName;
 pub struct VMFrame {
     pub reg_start: usize,
     pub reg_count: usize,
-    pub member_sources: FxHashMap<Reg, (Reg, String)>,
+    pub member_sources: FxHashMap<Reg, (Reg, Ustr)>,
     pub func_ptr: usize,
-    pub func_name: Option<String>,
+    pub func_name: Option<Ustr>,
     pub acc: RuntimeValue,
 }
 
@@ -72,12 +72,12 @@ impl Default for VMFrame {
 pub struct VM {
     pub variables: VariableStore,
     pub registry: Arc<VMRegistry>,
-    pub mappings: Arc<Vec<String>>,
-    pub program_args: Arc<Vec<String>>,
+    pub mappings: Arc<Vec<Ustr>>,
+    pub program_args: Arc<Vec<Ustr>>,
     pub counter: u64,
     pub ptr_heap: FxHashMap<u64, RuntimeValue>,
     pub config: VMConfig,
-    source_file_override: Option<Arc<String>>,
+    source_file_override: Option<Ustr>,
     reg_arena: Vec<RuntimeValue>,
     reg_top: usize,
     pub frames: Vec<VMFrame>,
@@ -86,11 +86,11 @@ pub struct VM {
     gc: VMGC,
     scheduler: Option<scheduler::SchedulerHandle>,
     task_state: TaskState,
-    pub(crate) moved_functions: FxHashSet<String>,
+    pub(crate) moved_functions: UstrSet,
     pub suppress_output: bool,
     pub in_global: bool,
-    pub captured_output: String,
-    pub input_buffer: Vec<String>,
+    pub captured_output: Vec<Ustr>,
+    pub input_buffer: Vec<Ustr>,
     pub big_consts: Consts,
 }
 
@@ -125,7 +125,7 @@ impl Clone for VM {
 
 #[derive(Debug, Clone, Default)]
 pub struct VMCaches {
-    call: FxHashMap<String, Arc<VMFunction>>,
+    call: UstrMap<Arc<VMFunction>>,
     callsite: FxHashMap<(usize, usize, u32), Arc<VMFunction>>,
 }
 
@@ -226,7 +226,7 @@ impl VM {
 
     fn from_shared_parts(
         registry: Arc<VMRegistry>,
-        mappings: Arc<Vec<String>>,
+        mappings: Arc<Vec<Ustr>>,
         config: VMConfig,
         install_builtins: bool,
     ) -> Self {
@@ -249,10 +249,10 @@ impl VM {
             gc: VMGC::default(),
             scheduler: None,
             task_state: TaskState::default(),
-            moved_functions: FxHashSet::default(),
+            moved_functions: UstrSet::default(),
             suppress_output: false,
             in_global: false,
-            captured_output: String::new(),
+            captured_output: Vec::new(),
             input_buffer: Vec::new(),
             big_consts: Consts::new().unwrap(),
         };
@@ -281,36 +281,36 @@ impl VM {
     }
 
     #[inline]
-    pub(crate) fn empty_captures() -> Arc<Vec<(String, RuntimeValue)>> {
+    pub(crate) fn empty_captures() -> Arc<Vec<(Ustr, RuntimeValue)>> {
         EMPTY_CAPTURES.get_or_init(|| Arc::new(Vec::new())).clone()
     }
 
     #[inline]
-    pub(crate) fn get_function_ref(&self, name: &str) -> Option<&VMFunction> {
+    pub(crate) fn get_function_ref(&self, name: &Ustr) -> Option<&VMFunction> {
         if self.moved_functions.contains(name) {
             return None;
         }
         self.registry.functions.get(name).map(Arc::as_ref)
     }
 
-    pub(crate) fn take_function(&mut self, name: &str) -> Option<Arc<VMFunction>> {
-        if self.moved_functions.contains(name) {
+    pub(crate) fn take_function(&mut self, name: Ustr) -> Option<Arc<VMFunction>> {
+        if self.moved_functions.contains(&name) {
             return None;
         }
-        let func = self.registry.functions.get(name).cloned();
+        let func = self.registry.functions.get(&name).cloned();
         if func.is_some() {
-            self.moved_functions.insert(name.to_string());
+            self.moved_functions.insert(name);
         }
         func
     }
 
-    pub fn new(registry: VMRegistry, mappings: Vec<String>, config: VMConfig) -> Self {
+    pub fn new(registry: VMRegistry, mappings: Vec<Ustr>, config: VMConfig) -> Self {
         Self::from_shared_parts(Arc::new(registry), Arc::new(mappings), config, true)
     }
 
     pub fn new_shared(
         registry: Arc<VMRegistry>,
-        mappings: Arc<Vec<String>>,
+        mappings: Arc<Vec<Ustr>>,
         config: VMConfig,
     ) -> Self {
         Self::from_shared_parts(registry, mappings, config, true)
@@ -326,7 +326,7 @@ impl VM {
             self.scheduler = Some(scheduler::SchedulerHandle::new(&self.config));
         }
         if let RuntimeValue::Function { name: _, captures } = &mut func {
-            let resolved: Vec<(String, RuntimeValue)> = captures
+            let resolved: Vec<(Ustr, RuntimeValue)> = captures
                 .as_ref()
                 .iter()
                 .map(|(key, value)| {
@@ -346,17 +346,17 @@ impl VM {
         }
     }
 
-    pub fn set_program_args(&mut self, args: Vec<String>) {
+    pub fn set_program_args(&mut self, args: Vec<Ustr>) {
         self.program_args = Arc::new(args);
     }
 
-    pub fn program_args(&self) -> &[String] {
+    pub fn program_args(&self) -> &[Ustr] {
         self.program_args.as_ref()
     }
 
-    pub fn set_source_file_override(&mut self, path: &std::path::Path) {
+    pub fn set_source_file_override(&mut self, path: &Path) {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        self.source_file_override = Some(Arc::new(path.to_string_lossy().to_string()));
+        self.source_file_override = Some(Ustr::from(&path.to_string_lossy()));
     }
 
     pub fn take_task_state(&mut self) -> TaskState {
@@ -367,7 +367,7 @@ impl VM {
         self.task_state = state;
     }
 
-    pub fn take_captured_output(&mut self) -> String {
+    pub fn take_captured_output(&mut self) -> Vec<Ustr> {
         std::mem::take(&mut self.captured_output)
     }
 
@@ -377,7 +377,7 @@ impl VM {
         id
     }
 
-    fn push_frame(&mut self, reg_count: usize, func_ptr: usize, func_name: Option<String>) {
+    fn push_frame(&mut self, reg_count: usize, func_ptr: usize, func_name: Option<Ustr>) {
         let start = self.reg_top;
         let new_top = self.reg_top.saturating_add(reg_count);
 
@@ -530,7 +530,7 @@ impl VM {
         value: &RuntimeValue,
     ) -> Result<RuntimeValue, RuntimeError> {
         let mut owned: Option<RuntimeValue> = None;
-        let mut seen_refs: FxHashSet<String> = FxHashSet::default();
+        let mut seen_refs = UstrSet::default();
         let mut seen_var_refs: FxHashSet<usize> = FxHashSet::default();
         let mut seen_reg_refs: FxHashSet<(usize, u16)> = FxHashSet::default();
 
@@ -575,7 +575,7 @@ impl VM {
                     if matches!(&v, RuntimeValue::VarRef(next) if next == id) {
                         if let Some(name) = self.variables.name_of(*id)
                             && let Ok(local) =
-                                self.resolve_value_for_op_ref(&RuntimeValue::Ref(name.to_string()))
+                                self.resolve_value_for_op_ref(&RuntimeValue::Ref(name))
                             && !matches!(&local, RuntimeValue::VarRef(next) if next == id)
                         {
                             owned = Some(local);
@@ -614,7 +614,7 @@ impl VM {
     }
 
     fn drop_runtime_value(&mut self, value: RuntimeValue) {
-        let mut seen = FxHashSet::default();
+        let mut seen = UstrSet::default();
         let mut seen_regs = FxHashSet::default();
         self.drop_runtime_value_inner_ref(&value, &mut seen, &mut seen_regs);
     }
@@ -622,7 +622,7 @@ impl VM {
     fn drop_runtime_value_inner_ref(
         &mut self,
         value: &RuntimeValue,
-        seen: &mut FxHashSet<String>,
+        seen: &mut UstrSet,
         seen_regs: &mut FxHashSet<usize>,
     ) {
         let _ = self.call_trait_for_type(value, "drop", Vec::new(), Some(0));
@@ -637,7 +637,7 @@ impl VM {
                 }
             }
             RuntimeValue::VarRef(id) => {
-                let key = format!("#{}", id);
+                let key = Ustr::from(&format!("#{}", id));
                 if !seen.insert(key) {
                     return;
                 }
@@ -709,7 +709,7 @@ impl VM {
             _ => return Ok(RuntimeValue::Null),
         };
 
-        let drop_method_name = format!("{type_name}.{method}",);
+        let drop_method_name = Ustr::from(&format!("{type_name}.{method}"));
 
         if let Some(_drop_func) = self.registry.functions.get(&drop_method_name) {
             if let Some(x) = value_pos {
@@ -718,7 +718,7 @@ impl VM {
 
             self.call_runtime_callable_at(
                 RuntimeValue::Function {
-                    name: Arc::new(drop_method_name.clone()),
+                    name: drop_method_name.clone(),
                     captures: Arc::new(Vec::new()),
                 },
                 args,

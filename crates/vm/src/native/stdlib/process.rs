@@ -6,22 +6,21 @@ use crate::{
 };
 use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
+use ustr::Ustr;
 use std::io::Write;
 use std::process::{Command, Stdio};
-use std::sync::Arc;
-use wasm_sync::Mutex;
 
 #[derive(Debug, Clone)]
 struct RawExecOptions {
-    command: String,
-    args: Vec<String>,
-    cwd: Option<String>,
+    command: Ustr,
+    args: Vec<Ustr>,
+    cwd: Option<Ustr>,
     shell: bool,
-    stdin: Option<String>,
+    stdin: Option<Ustr>,
     check: bool,
 }
 
-fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<String>, RuntimeError> {
+fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<Ustr>, RuntimeError> {
     let RuntimeValue::List(values) = value else {
         return Err(RuntimeError::InvalidFunctionCall);
     };
@@ -30,7 +29,7 @@ fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<String>, RuntimeErro
     for value in values.0.iter() {
         let value = env.resolve_value_for_op_ref(value)?;
         match value {
-            RuntimeValue::Str(v) => out.push(v.lock().unwrap().clone()),
+            RuntimeValue::Str(v) => out.push(v.clone()),
             other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
@@ -54,24 +53,24 @@ fn resolve_field(
 }
 
 #[inline]
-fn required_str_field(env: &VM, map: &Gc<GcMap>, key: &str) -> Result<String, RuntimeError> {
+fn required_str_field(env: &VM, map: &Gc<GcMap>, key: &str) -> Result<Ustr, RuntimeError> {
     let Some(value) = resolve_field(env, map, key)? else {
         return Err(RuntimeError::InvalidFunctionCall);
     };
     match value {
-        RuntimeValue::Str(v) => Ok(v.lock().unwrap().clone()),
+        RuntimeValue::Str(v) => Ok(v.clone()),
         other => Err(RuntimeError::UnexpectedType(Box::new(other))),
     }
 }
 
-fn parse_optional_string(value: RuntimeValue) -> Result<Option<String>, RuntimeError> {
+fn parse_optional_string(value: RuntimeValue) -> Result<Option<Ustr>, RuntimeError> {
     match value {
         RuntimeValue::Option(None) => Ok(None),
         RuntimeValue::Option(Some(v)) => match v.as_ref() {
-            RuntimeValue::Str(v) => Ok(Some(v.lock().unwrap().clone())),
+            RuntimeValue::Str(v) => Ok(Some(v.clone())),
             other => Err(RuntimeError::UnexpectedType(Box::new(other.clone()))),
         },
-        RuntimeValue::Str(v) => Ok(Some(v.lock().unwrap().clone())),
+        RuntimeValue::Str(v) => Ok(Some(v.clone())),
         other => Err(RuntimeError::UnexpectedType(Box::new(other))),
     }
 }
@@ -120,37 +119,37 @@ fn parse_options(env: &VM, options: RuntimeValue) -> Result<RawExecOptions, Runt
     })
 }
 
-fn format_command_line(command: &str, args: &[String]) -> String {
+fn format_command_line(command: &Ustr, args: &[Ustr]) -> String {
     if args.is_empty() {
         command.to_string()
     } else {
-        format!("{command} {}", args.join(" "))
+        format!("{command} {}", args.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" "))
     }
 }
 
-fn process_result(command: String, status: i64, stdout: String, stderr: String) -> RuntimeValue {
+fn process_result(command: Ustr, status: i64, stdout: Ustr, stderr: Ustr) -> RuntimeValue {
     RuntimeValue::Aggregate(
-        Some(String::from("ProcessResult")),
+        Some(Ustr::from("ProcessResult")),
         Gc::new(GcMap(ObjectMap::from(vec![
             (
                 String::from("command"),
-                RuntimeValue::Str(Arc::new(Mutex::new(command))),
+                RuntimeValue::Str(command),
             ),
             (String::from("status"), RuntimeValue::Int(status)),
             (String::from("success"), RuntimeValue::Bool(status == 0)),
             (
                 String::from("stdout"),
-                RuntimeValue::Str(Arc::new(Mutex::new(stdout))),
+                RuntimeValue::Str(stdout),
             ),
             (
                 String::from("stderr"),
-                RuntimeValue::Str(Arc::new(Mutex::new(stderr))),
+                RuntimeValue::Str(stderr),
             ),
         ]))),
     )
 }
 
-fn shell_command_line(command: &str, args: &[String]) -> String {
+fn shell_command_line(command: &Ustr, args: &[Ustr]) -> String {
     format_command_line(command, args)
 }
 
@@ -212,7 +211,7 @@ fn execute_raw(options: RawExecOptions) -> Result<RuntimeValue, String> {
         return Err(summary);
     }
 
-    Ok(process_result(line, status, stdout, stderr))
+    Ok(process_result(Ustr::from(&line), status, Ustr::from(&stdout), Ustr::from(&stderr)))
 }
 
 pub struct ProcessRawExec;
@@ -240,9 +239,8 @@ impl NativeFunction for ProcessRawExec {
 
         let result = match execute_raw(options) {
             Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
-            Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(std::sync::Arc::new(
-                Mutex::new(err),
-            ))))),
+            Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Ustr::from(&err),
+            )))),
         };
 
         Ok(result)

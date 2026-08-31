@@ -10,6 +10,7 @@ use calibre_parser::{
 };
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
+use ustr::Ustr;
 use std::fmt::Display;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,8 +40,8 @@ pub enum LirLiteral {
     Byte(u8),
     Float(f64),
     Char(char),
-    Big(String),
-    String(String),
+    Big(Ustr),
+    String(Ustr),
     Null,
 }
 
@@ -67,8 +68,8 @@ pub struct LirSpawn {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirClosure {
-    pub label: Box<str>,
-    pub captures: Vec<Box<str>>,
+    pub label: Ustr,
+    pub captures: Vec<Ustr>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -79,7 +80,7 @@ pub struct LirList {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirAggregate {
-    pub name: Option<String>,
+    pub name: Option<Ustr>,
     pub fields: ObjectMap<LirNodeType>,
 }
 
@@ -92,17 +93,17 @@ pub struct LirRange {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirLoad {
-    pub value: Box<str>,
+    pub value: Ustr,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirMove {
-    pub value: Box<str>,
+    pub value: Ustr,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirDrop {
-    pub value: Box<str>,
+    pub value: Ustr,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -144,7 +145,7 @@ pub struct LirRef {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirRefLoad {
-    pub value: Box<str>,
+    pub value: Ustr,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -156,12 +157,12 @@ pub struct LirIndex {
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirMember {
     pub base: Box<LirNodeType>,
-    pub field: Box<str>,
+    pub field: Ustr,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirEnum {
-    pub name: Box<str>,
+    pub name: Ustr,
     pub variant: u32,
     pub payload: Option<Box<LirNodeType>>,
 }
@@ -187,16 +188,16 @@ pub struct LirAssign {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirDeclare {
-    pub dest: Box<str>,
+    pub dest: Ustr,
     pub value: Box<LirNodeType>,
     pub data_type: ParserDataType,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct LirExtern {
-    pub abi: Box<str>,
-    pub library: Box<str>,
-    pub symbol: Box<str>,
+    pub abi: Ustr,
+    pub library: Ustr,
+    pub symbol: Ustr,
     pub parameters: Vec<ParserDataType>,
     pub return_type: ParserDataType,
 }
@@ -242,13 +243,13 @@ impl LirNodeType {
         matches!(self, LirNodeType::Literal(LirLiteral::Null))
     }
 
-    pub fn local_name(&self) -> Option<&str> {
+    pub fn local_name(&self) -> Option<&Ustr> {
         match self {
-            LirNodeType::Declare(LirDeclare { dest, .. }) => Some(dest.as_ref()),
+            LirNodeType::Declare(LirDeclare { dest, .. }) => Some(dest),
             LirNodeType::Assign(LirAssign {
                 dest: LirLValue::Var(name),
                 ..
-            }) => Some(name.as_ref()),
+            }) => Some(name),
             _ => None,
         }
     }
@@ -418,7 +419,7 @@ pub struct BlockId(pub u32);
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum LirLValue {
-    Var(Box<str>),
+    Var(Ustr),
     Ptr(Box<LirNodeType>),
 }
 

@@ -1,8 +1,5 @@
 use crate::{
-    environment::MiddleEnvironment,
-    scoping::ScopeId,
-    symbols::resolve::{ResolutionOptions, StrOrAstNode},
-    typing::MiddleTypeDefType,
+    environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId, symbols::resolve::{ResolutionOptions, StrOrAstNode}, typing::MiddleTypeDefType,
 };
 use calibre_parser::ast::{
     Operator,
@@ -10,6 +7,7 @@ use calibre_parser::ast::{
     nodes::{AsFailureMode, AstNode, AstNodeType, EmitType},
     types::{ParserDataType, ParserInnerType},
 };
+use ustr::Ustr;
 
 impl MiddleEnvironment {
     pub fn resolve_emit_type_from_node(
@@ -188,12 +186,12 @@ impl MiddleEnvironment {
             }
             AstNodeType::FunctionDeclaration { header, .. }
             | AstNodeType::FnMatchDeclaration { header, .. } => {
-                let generic_params: Vec<String> = header
+                let generic_params: Vec<Ustr> = header
                     .generics
                     .0
                     .iter()
-                    .map(|g| g.identifier.to_string())
-                    .collect();
+                    .map(|g| self.resolve(scope, &g.identifier, ResolutionOptions::typing()))
+                    .collect::<Result<Vec<Ustr>, MiddleErr>>().ok()?;
 
                 if !generic_params.is_empty() {
                     self.scoping.push_generic_params(generic_params.clone());
@@ -383,7 +381,7 @@ impl MiddleEnvironment {
                 if let AstNodeType::FieldAccess { base, field } = &caller.node_type {
                     let member_name = self
                         .resolve(scope, field, ResolutionOptions::default().with_dollar())
-                        .unwrap_or(field.text().clone());
+                        .unwrap_or(Ustr::from(&field.text()));
 
                     if !member_name.is_empty() {
                         if let Some(ty) = &self.resolve_type_from_node(scope, base).or_else(|| {
@@ -419,7 +417,7 @@ impl MiddleEnvironment {
                     if let Ok(caller_ty) = self.resolve_to_data_type(scope, caller) {
                         match &caller_ty.data_type {
                             ParserInnerType::Struct(name) => {
-                                if self.typing.objects.contains_key(name) {
+                                if self.typing.objects.contains_key(&Ustr::from(name)) {
                                     return Some(ParserDataType {
                                         data_type: ParserInnerType::Struct(name.clone()),
                                         span: node.span,
@@ -430,7 +428,7 @@ impl MiddleEnvironment {
                                 identifier,
                                 generic_types,
                             } => {
-                                if self.typing.objects.contains_key(identifier) {
+                                if self.typing.objects.contains_key(&Ustr::from(identifier)) {
                                     return Some(ParserDataType {
                                         data_type: ParserInnerType::StructWithGenerics {
                                             identifier: identifier.clone(),
@@ -475,7 +473,7 @@ impl MiddleEnvironment {
 
                 let member = self
                     .resolve(scope, field, ResolutionOptions::default().with_dollar())
-                    .unwrap_or_else(|_| field.text().clone());
+                    .unwrap_or_else(|_| Ustr::from(&field.text()));
 
                 if let Some(member_type) = self.resolve_member_fn_type(&ty, &member) {
                     return Some(member_type);
@@ -483,7 +481,7 @@ impl MiddleEnvironment {
 
                 if let Some(MiddleTypeDefType::Enum { .. }) = self
                     .typing
-                    .find_object_for_struct_name(&ty.impl_name())
+                    .find_object_for_struct_name(&Ustr::from(&ty.impl_name()))
                     .map(|x| &x.object_type)
                 {
                     return Some(ty);
@@ -496,11 +494,11 @@ impl MiddleEnvironment {
                 if base.scope_access_path(&mut module_path) {
                     let member = self
                         .resolve(scope, field, ResolutionOptions::default().with_dollar())
-                        .unwrap_or_else(|_| field.text().clone());
+                        .unwrap_or_else(|_| Ustr::from(&field.text()));
 
                     if let Ok(member_scope) = self
-                        .get_scope_list(scope, module_path.clone())
-                        .or_else(|_| self.import_scope_list(scope, module_path).map(|x| x.0))
+                        .get_scope_list(scope, &module_path.clone())
+                        .or_else(|_| self.import_scope_list(scope, &module_path).map(|x| x.0))
                     {
                         let resolved = self
                             .resolve(member_scope, field, ResolutionOptions::idents())

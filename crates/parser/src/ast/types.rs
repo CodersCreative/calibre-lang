@@ -551,9 +551,9 @@ impl ParserInnerType {
         }
     }
 
-    pub fn matches(&self, other: &Self, generic_params: &[String]) -> bool {
+    pub fn matches(&self, other: &Self, generic_params: &[&str]) -> bool {
         match (self, other) {
-            (ParserInnerType::Struct(a), _) if generic_params.contains(a) => true,
+            (ParserInnerType::Struct(a), _) if generic_params.contains(&a.as_str()) => true,
             (ParserInnerType::Struct(a), ParserInnerType::Struct(b)) if a == b => true,
             (
                 ParserInnerType::StructWithGenerics { identifier: a, .. },

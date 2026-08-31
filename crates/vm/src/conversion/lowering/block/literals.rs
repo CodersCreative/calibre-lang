@@ -12,6 +12,7 @@ use crate::conversion::{
 };
 use calibre_lir::ast::{LirAggregate, LirEnum, LirList, LirLiteral};
 use calibre_parser::Span;
+use ustr::Ustr;
 
 impl VMLowering for LirLiteral {
     #[inline(always)]
@@ -89,7 +90,7 @@ impl VMLowering for LirAggregate {
 
         for (k, item) in self.fields.0 {
             values.push(env.lower_node(item, span));
-            layout.push(k.to_string());
+            layout.push(Ustr::from(&k));
         }
 
         env.block.aggregate_layouts.push(AggregateLayout {
@@ -121,7 +122,7 @@ impl VMLowering for LirEnum {
     #[inline(always)]
     fn lower_to<'a>(self, env: &mut BlockLoweringCtx<'a>, target: Reg, span: Span) {
         let payload = self.payload.map(|v| env.lower_node(*v, span));
-        let name = env.add_string(self.name.to_string());
+        let name = env.add_string(self.name);
         env.emit(
             VMInstruction::Enum {
                 dst: target,

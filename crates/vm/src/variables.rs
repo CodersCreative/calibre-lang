@@ -1,26 +1,15 @@
 use crate::value::RuntimeValue;
-use rustc_hash::FxHashMap;
-use std::sync::Arc;
+use ustr::{Ustr, UstrMap};
 
 #[derive(Debug, Clone, Default)]
 pub struct VariableStore {
     values: Vec<Option<RuntimeValue>>,
     free: Vec<usize>,
-    map: FxHashMap<Arc<str>, usize>,
-    names: FxHashMap<Arc<str>, Arc<str>>,
+    map: UstrMap<usize>,
 }
 
 impl VariableStore {
-    fn intern(&mut self, name: &str) -> Arc<str> {
-        if let Some(existing) = self.names.get(name) {
-            return existing.clone();
-        }
-        let arc: Arc<str> = Arc::from(name);
-        self.names.insert(arc.clone(), arc.clone());
-        arc
-    }
-
-    pub fn get(&self, name: &str) -> Option<&RuntimeValue> {
+    pub fn get(&self, name: &Ustr) -> Option<&RuntimeValue> {
         let idx = *self.map.get(name)?;
         self.values.get(idx)?.as_ref()
     }
@@ -29,7 +18,7 @@ impl VariableStore {
         self.values.get(id)?.as_ref()
     }
 
-    pub fn get_mut(&mut self, name: &str) -> Option<&mut RuntimeValue> {
+    pub fn get_mut(&mut self, name: &Ustr) -> Option<&mut RuntimeValue> {
         let idx = *self.map.get(name)?;
         self.values.get_mut(idx)?.as_mut()
     }
@@ -43,9 +32,8 @@ impl VariableStore {
         slot.replace(value)
     }
 
-    pub fn insert(&mut self, name: &str, value: RuntimeValue) -> Option<RuntimeValue> {
-        let name = self.intern(name);
-        if let Some(&idx) = self.map.get(name.as_ref()) {
+    pub fn insert(&mut self, name: Ustr, value: RuntimeValue) -> Option<RuntimeValue> {
+        if let Some(&idx) = self.map.get(&name) {
             let slot = self.values.get_mut(idx)?;
             return slot.replace(value);
         }
@@ -61,9 +49,8 @@ impl VariableStore {
         None
     }
 
-    pub fn insert_with_id(&mut self, name: &str, value: RuntimeValue) -> usize {
-        let name = self.intern(name);
-        if let Some(&idx) = self.map.get(name.as_ref()) {
+    pub fn insert_with_id(&mut self, name: Ustr, value: RuntimeValue) -> usize {
+        if let Some(&idx) = self.map.get(&name) {
             if let Some(slot) = self.values.get_mut(idx) {
                 let _ = slot.replace(value);
             }
@@ -81,24 +68,23 @@ impl VariableStore {
         idx
     }
 
-    pub fn id_of(&self, name: &str) -> Option<usize> {
+    pub fn id_of(&self, name: &Ustr) -> Option<usize> {
         self.map.get(name).copied()
     }
 
-    pub fn name_of(&self, id: usize) -> Option<Arc<str>> {
+    pub fn name_of(&self, id: usize) -> Option<Ustr> {
         self.map.iter().find(|x| x.1 == &id).map(|x| x.0).cloned()
     }
 
-    pub fn bind_alias_by_id(&mut self, name: &str, id: usize) {
-        let name = self.intern(name);
+    pub fn bind_alias_by_id(&mut self, name: Ustr, id: usize) {
         self.map.insert(name, id);
     }
 
-    pub fn remove_name_only(&mut self, name: &str) -> bool {
+    pub fn remove_name_only(&mut self, name: &Ustr) -> bool {
         self.map.remove(name).is_some()
     }
 
-    pub fn remove(&mut self, name: &str) -> Option<RuntimeValue> {
+    pub fn remove(&mut self, name: &Ustr) -> Option<RuntimeValue> {
         let id = self.map.remove(name)?;
         self.remove_by_id(id)
     }
@@ -111,7 +97,7 @@ impl VariableStore {
         out
     }
 
-    pub fn contains_key(&self, name: &str) -> bool {
+    pub fn contains_key(&self, name: &Ustr) -> bool {
         self.map.contains_key(name)
     }
 
@@ -119,7 +105,7 @@ impl VariableStore {
         self.values.len()
     }
 
-    pub fn keys(&self) -> impl Iterator<Item = &str> {
-        self.map.keys().map(|k| k.as_ref())
+    pub fn keys(&self) -> impl Iterator<Item = &Ustr> {
+        self.map.keys()
     }
 }

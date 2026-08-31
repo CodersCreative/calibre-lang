@@ -1,3 +1,5 @@
+use ustr::Ustr;
+
 use crate::{environment::MiddleEnvironment, scoping::ScopeId, tags::TagInfo};
 use std::path::PathBuf;
 
@@ -14,22 +16,22 @@ pub enum TestOrBench {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Test {
-    pub name: String,
-    pub function_name: String,
+    pub name: Ustr,
+    pub function_name: Ustr,
     pub kind: TestOrBench,
     pub skip: bool,
-    pub skip_reason: Option<String>,
+    pub skip_reason: Option<Ustr>,
     pub panics: bool,
     pub todo: bool,
-    pub todo_reason: Option<String>,
+    pub todo_reason: Option<Ustr>,
     pub scope_id: ScopeId,
     pub file_path: Option<PathBuf>,
-    pub suites: Vec<String>,
+    pub suites: Vec<Ustr>,
 }
 
 impl Testing {
-    pub fn get_test(&self, name: &str) -> Option<&Test> {
-        self.tests.iter().find(|x| x.name == name)
+    pub fn get_test(&self, name: &Ustr) -> Option<&Test> {
+        self.tests.iter().find(|x| &x.name == name)
     }
 
     pub fn get_all_tests(&self) -> Vec<&Test> {
@@ -78,8 +80,8 @@ impl Testing {
 impl MiddleEnvironment {
     pub fn register_test(
         &mut self,
-        name: String,
-        function_name: String,
+        name: Ustr,
+        function_name: Ustr,
         scope_id: ScopeId,
         file_path: Option<PathBuf>,
     ) {

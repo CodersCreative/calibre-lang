@@ -8,8 +8,7 @@ use crate::{
     value::{GcVec, RuntimeValue},
 };
 use dumpster::sync::Gc;
-use std::sync::Arc;
-use wasm_sync::Mutex;
+use ustr::Ustr;
 
 pub struct CharLowercase;
 
@@ -56,17 +55,15 @@ impl NativeFunction for StrSplit {
         let delim = resolve_str(env, &pop_or_null(&mut args))?;
         let text = resolve_str(env, &pop_or_null(&mut args))?;
 
-        let parts = if delim.lock().unwrap().is_empty() {
-            text.lock()
-                .unwrap()
+        let parts = if delim.is_empty() {
+            text
                 .chars()
-                .map(|c| RuntimeValue::Str(Arc::new(Mutex::new(c.to_string()))))
+                .map(|c| RuntimeValue::Str(Ustr::from(&c.to_string())))
                 .collect::<Vec<_>>()
         } else {
-            text.lock()
-                .unwrap()
-                .split(delim.lock().unwrap().as_str())
-                .map(|s| RuntimeValue::Str(Arc::new(Mutex::new(s.to_string()))))
+            text
+                .split(delim.as_str())
+                .map(|s| RuntimeValue::Str(Ustr::from(s)))
                 .collect::<Vec<_>>()
         };
 
@@ -88,10 +85,9 @@ impl NativeFunction for StrContains {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            text.lock()
-                .unwrap()
+            text
                 .as_str()
-                .contains(needle.lock().unwrap().as_str()),
+                .contains(needle.as_str()),
         ))
     }
 }
@@ -110,10 +106,9 @@ impl NativeFunction for StrStartsWith {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            text.lock()
-                .unwrap()
+            text
                 .as_str()
-                .starts_with(prefix.lock().unwrap().as_str()),
+                .starts_with(prefix.as_str()),
         ))
     }
 }
@@ -132,10 +127,9 @@ impl NativeFunction for StrEndsWith {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            text.lock()
-                .unwrap()
+            text
                 .as_str()
-                .ends_with(suffix.lock().unwrap().as_str()),
+                .ends_with(suffix.as_str()),
         ))
     }
 }

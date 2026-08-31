@@ -15,8 +15,8 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
-use rustc_hash::FxHashMap;
 use tracing::instrument;
+use ustr::{Ustr, UstrMap};
 
 impl MiddleEnvironment {
     #[instrument(skip_all, fields(scope, identifier))]
@@ -35,7 +35,7 @@ impl MiddleEnvironment {
             ResolutionOptions::default().with_dollar(),
         )?;
 
-        let new_name = ParserText::temp_name_with_suffix(identifier.trim(), span).text;
+        let new_name = Ustr::from(&ParserText::temp_name_with_suffix(identifier.trim(), span).text);
 
         if let AstNodeType::CallExpression {
             caller,
@@ -83,16 +83,16 @@ impl MiddleEnvironment {
         if let Some((header, body)) = function_decl
             && !header.generics.0.is_empty()
         {
-            let base_name = new_name.clone();
-            let template_params: Vec<String> = header
+            let template_params: Vec<Ustr> = header
                 .generics
                 .0
                 .iter()
-                .map(|g| g.identifier.to_string())
-                .collect();
+                .map(|g| self.resolve(scope, &g.identifier, ResolutionOptions::typing()))
+                .collect::<Result<Vec<_>, MiddleErr>>()?;
+
             self.symbols
                 .generic_fn_templates
-                .entry(base_name)
+                .entry(new_name)
                 .or_insert((template_params, (*header).clone(), (**body).clone()));
         }
 
@@ -115,7 +115,7 @@ impl MiddleEnvironment {
                 .parameters
                 .iter()
                 .map(|(name, declared_ty, default)| FunctionParamDefault {
-                    name: name.to_string(),
+                    name: Ustr::from(&name.to_string()),
                     explicit_default: default
                         .clone()
                         .map(|node| Box::new(self.evaluate(scope, *node)))
@@ -154,7 +154,7 @@ impl MiddleEnvironment {
             (Some(x), Some(_)) if self.tagging.tag_info.contains(&TagInfo::IgnoreInvalidLet) => x,
             (Some(x), Some(y)) => {
                 // TODO Handle generics better
-                if x.loose_eq(&y) || self.scoping.all_time_generics.contains(&y.impl_name()) {
+                if x.loose_eq(&y) || self.scoping.all_time_generics.contains(&Ustr::from(&y.impl_name())) {
                     x
                 } else {
                     return Err(self.context.err_at_current(
@@ -170,7 +170,7 @@ impl MiddleEnvironment {
         let mut value = if function_decl.is_some() {
             self.register_variable(
                 scope,
-                &identifier,
+                identifier,
                 new_name.clone(),
                 data_type.clone(),
                 var_type,
@@ -182,7 +182,7 @@ impl MiddleEnvironment {
 
             self.register_variable(
                 scope,
-                &identifier,
+                identifier,
                 new_name.clone(),
                 data_type.clone(),
                 var_type,
@@ -205,10 +205,7 @@ impl MiddleEnvironment {
         Ok(MiddleNode {
             node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type,
-                identifier: ParserText {
-                    text: new_name,
-                    span,
-                },
+                identifier: new_name,
                 value: Box::new(value),
                 data_type,
             }),
@@ -246,14 +243,14 @@ impl MiddleEnvironment {
 
         // TODO Work on NewTypes
         if let TypeDefType::NewType(inner) = &object {
-            let generic_params: Vec<String> = match &identifier {
+            let generic_params: Vec<Ustr> = match &identifier {
                 PotentialGenericTypeIdentifier::Generic { generic_types, .. } => generic_types
                     .iter()
                     .filter_map(|t| match t {
                         ParserDataType {
                             data_type: ParserInnerType::Struct(s),
                             ..
-                        } => Some(s.clone()),
+                        } => Some(Ustr::from(s)),
                         _ => None,
                     })
                     .collect(),
@@ -280,7 +277,7 @@ impl MiddleEnvironment {
 
                 scope_ref
                     .type_mappings
-                    .insert(identifier.to_string(), inner.data_type);
+                    .insert(identifier, inner.data_type);
             }
 
             if !overloads.is_empty() {
@@ -313,13 +310,13 @@ impl MiddleEnvironment {
             generic_types,
         } = identifier.clone()
         {
-            let template_params: Vec<String> = generic_types
+            let template_params: Vec<Ustr> = generic_types
                 .iter()
                 .filter_map(|t| match t {
                     ParserDataType {
                         data_type: ParserInnerType::Struct(s),
                         ..
-                    } => Some(s.clone()),
+                    } => Some(Ustr::from(s)),
                     _ => None,
                 })
                 .collect();
@@ -338,7 +335,7 @@ impl MiddleEnvironment {
             Vec::new()
         };
 
-        let new_name = ParserText::temp_name_with_suffix(ident.trim(), span).text;
+        let new_name = Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
 
         let object = MiddleTypeDefType::from_type_def_type(self, scope, object.clone());
 
@@ -356,7 +353,7 @@ impl MiddleEnvironment {
             new_name.clone(),
             MiddleObject {
                 object_type: object.clone(),
-                variables: FxHashMap::default(),
+                variables: UstrMap::default(),
                 traits: if let Ok(x) = default_ident
                     && has_default
                 {
@@ -373,11 +370,11 @@ impl MiddleEnvironment {
 
             scope
                 .type_mappings
-                .insert(ident.clone(), ParserInnerType::Struct(new_name.clone()));
+                .insert(ident.clone(), ParserInnerType::Struct(new_name.to_string()));
 
             scope.type_mappings.insert(
-                String::from("Self"),
-                ParserInnerType::Struct(new_name.clone()),
+                Ustr::from("Self"),
+                ParserInnerType::Struct(new_name.to_string()),
             )
         };
 
@@ -416,7 +413,7 @@ impl MiddleEnvironment {
             let scope = self.scoping.scope_mut_or_err(scope)?;
 
             if let Some(prev) = previous_self_type {
-                scope.type_mappings.insert(String::from("Self"), prev);
+                scope.type_mappings.insert(Ustr::from("Self"), prev);
             }
         }
 

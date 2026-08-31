@@ -1,6 +1,7 @@
 use crate::config::{ProjectContext, load_project_from, resolve_example_by_name, resolve_examples};
 use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::{config::VMConfig, conversion::VMRegistry};
+use ustr::Ustr;
 use std::{
     error::Error,
     path::{Path, PathBuf},
@@ -133,14 +134,14 @@ pub fn resolve_run_targets(
 pub fn package_metadata_from_project(project: Option<&ProjectContext>) -> Option<PackageMetadata> {
     let project = project?;
     Some(PackageMetadata {
-        name: project.config.package.name.clone(),
-        version: project.config.package.version.clone(),
-        description: project.config.package.description.clone(),
-        license: project.config.package.license.clone(),
-        repository: project.config.package.repository.clone(),
-        homepage: project.config.package.homepage.clone(),
-        src: project.config.package.src.clone(),
-        root: project.root.to_string_lossy().to_string(),
+        name: Ustr::from(&project.config.package.name),
+        version: Ustr::from(&project.config.package.version),
+        description: Ustr::from(&project.config.package.description),
+        license: Ustr::from(&project.config.package.license),
+        repository: Ustr::from(&project.config.package.repository),
+        homepage: Ustr::from(&project.config.package.homepage),
+        src: Ustr::from(&project.config.package.src),
+        root: Ustr::from(&project.root.to_string_lossy()),
     })
 }
 
@@ -206,14 +207,14 @@ pub fn runtime_error_message(err: &calibre_vm::error::RuntimeError) -> String {
 pub fn run_named_function_once(
     vm_config: &VMConfig,
     registry: VMRegistry,
-    mappings: Vec<String>,
-    key: &str,
+    mappings: Vec<Ustr>,
+    key: &Ustr,
     suppress_output: bool,
-) -> Result<(Duration, String), (String, String)> {
+) -> Result<(Duration, Vec<Ustr>), (String, Vec<Ustr>)> {
     let mut vm = calibre_vm::VM::new(registry, mappings, vm_config.clone());
     vm.suppress_output = suppress_output;
     let Some(func) = vm.registry.functions.get(key).cloned() else {
-        return Err(("missing function".to_string(), String::new()));
+        return Err(("missing function".to_string(), Vec::new()));
     };
     let start = std::time::Instant::now();
     match vm.run(func.as_ref(), Vec::new()) {

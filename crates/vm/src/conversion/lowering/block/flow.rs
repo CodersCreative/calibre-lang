@@ -34,8 +34,8 @@ impl VMLowering for LirClosure {
     #[inline(always)]
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
         env.block.local_literals.push(VMLiteral::Closure {
-            label: self.label.to_string(),
-            captures: self.captures.into_iter().map(|x| x.to_string()).collect(),
+            label: self.label,
+            captures: self.captures,
         });
         let lit = (env.block.local_literals.len() - 1) as u16;
         let dst = env.alloc_reg();

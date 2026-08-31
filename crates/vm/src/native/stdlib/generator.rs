@@ -8,14 +8,15 @@ use crate::{
     value::RuntimeValue,
 };
 use dumpster::sync::Gc;
-use std::sync::Arc;
+use ustr::Ustr;
+use std::{sync::Arc};
 use wasm_sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct GeneratorState {
     pub vm: VM,
-    pub function_name: Arc<String>,
-    pub captures: Arc<Vec<(String, RuntimeValue)>>,
+    pub function_name: Ustr,
+    pub captures: Arc<Vec<(Ustr, RuntimeValue)>>,
     pub task_state: TaskState,
     pub index: i64,
     pub completed: bool,
@@ -38,7 +39,7 @@ impl NativeFunction for GeneratorResumeFn {
 
         let Some(func) = state
             .vm
-            .resolve_function_by_name(state.function_name.as_str())
+            .resolve_function_by_name(&state.function_name)
         else {
             state.completed = true;
             return Ok(RuntimeValue::Option(None));

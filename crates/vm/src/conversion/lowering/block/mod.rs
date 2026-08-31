@@ -112,7 +112,7 @@ impl<'a> BlockLoweringCtx<'a> {
         idx
     }
 
-    pub(super) fn add_string(&mut self, text: String) -> u16 {
+    pub(super) fn add_string(&mut self, text: Ustr) -> u16 {
         if let Some(idx) = self.string_map.get(&text).copied() {
             return idx;
         }

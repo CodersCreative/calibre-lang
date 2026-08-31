@@ -1,21 +1,19 @@
-use std::unreachable;
-
 use calibre_parser::ast::idents::ParserText;
-
+use ustr::Ustr;
 use super::*;
 
 #[derive(Debug, Clone)]
 pub(crate) enum VarName {
-    Var(String),
-    Func(String),
+    Var(Ustr),
+    Func(Ustr),
 }
 
 impl VM {
-    pub(crate) fn resolve_function_by_name(&self, name: &str) -> Option<Arc<VMFunction>> {
+    pub(crate) fn resolve_function_by_name(&self, name: &Ustr) -> Option<Arc<VMFunction>> {
         self.registry.functions.get(name).cloned()
     }
 
-    pub(crate) fn resolve_library_candidates(name: &str) -> Vec<String> {
+    pub(crate) fn resolve_library_candidates(name: &Ustr) -> Vec<String> {
         let has_path = name.contains('/') || name.contains('\\');
         let lower = name.to_ascii_lowercase();
         let has_ext =
@@ -25,7 +23,7 @@ impl VM {
             return vec![name.to_string()];
         }
 
-        let base = match name {
+        let base = match name.as_str() {
             "c" | "libc" => "c",
             other => other,
         };
@@ -73,7 +71,7 @@ impl VM {
         out.into_iter().filter(|c| !c.is_empty()).collect()
     }
 
-    pub(crate) fn capture_value(&self, name: &str, seen: &mut FxHashSet<String>) -> RuntimeValue {
+    pub(crate) fn capture_value(&self, name: &Ustr, seen: &mut UstrSet) -> RuntimeValue {
         let current_frame = self.frames.len().saturating_sub(1);
         if let Some(id) = self.variables.id_of(name)
             && let Some(RuntimeValue::RegRef { frame, .. }) = self.variables.get_by_id(id)
@@ -90,14 +88,14 @@ impl VM {
             return self.resolve_saveable_runtime_value_ref(value);
         }
 
-        if let Ok(value) = self.resolve_value_for_op_ref(&RuntimeValue::Ref(name.to_string()))
+        if let Ok(value) = self.resolve_value_for_op_ref(&RuntimeValue::Ref(name.clone()))
             && !value.is_null()
         {
             return self.resolve_saveable_runtime_value_ref(&value);
         }
 
         // TODO Handle unresolved names
-        match self.resolve_var_name(name) {
+        match self.resolve_var_name(name.clone()) {
             Some(VarName::Var(var)) => {
                 if let Some(value) = self.variables.get(&var) {
                     self.resolve_saveable_runtime_value_ref(value)
@@ -118,11 +116,11 @@ impl VM {
     #[instrument(skip_all)]
     pub(crate) fn capture_values(
         &self,
-        captures: &[String],
-        seen: &mut FxHashSet<String>,
-    ) -> Vec<(String, RuntimeValue)> {
+        captures: &[Ustr],
+        seen: &mut UstrSet,
+    ) -> Vec<(Ustr, RuntimeValue)> {
         let mut out = Vec::with_capacity(captures.len());
-        let mut seen_names = FxHashSet::default();
+        let mut seen_names = UstrSet::default();
         for name in captures {
             if !seen_names.insert(name.clone()) {
                 continue;
@@ -133,19 +131,19 @@ impl VM {
     }
 
     pub(crate) fn make_runtime_function(&self, func: &VMFunction) -> RuntimeValue {
-        let mut seen = FxHashSet::default();
+        let mut seen = UstrSet::default();
         self.make_runtime_function_inner(func, &mut seen)
     }
 
     fn make_runtime_function_inner(
         &self,
         func: &VMFunction,
-        seen: &mut FxHashSet<String>,
+        seen: &mut UstrSet,
     ) -> RuntimeValue {
         let name = func.name.clone();
         if !seen.insert(name.clone()) {
             return RuntimeValue::Function {
-                name: name.clone().into(),
+                name,
                 captures: Arc::new(Vec::new()),
             };
         }
@@ -179,11 +177,11 @@ impl VM {
         })
     }
 
-    pub(crate) fn resolve_var_name(&self, name: &str) -> Option<VarName> {
-        if self.get_function_ref(name).is_some() {
-            Some(VarName::Func(name.to_string()))
-        } else if self.variables.contains_key(name) {
-            Some(VarName::Var(name.to_string()))
+    pub(crate) fn resolve_var_name(&self, name: Ustr) -> Option<VarName> {
+        if self.get_function_ref(&name).is_some() {
+            Some(VarName::Func(name))
+        } else if self.variables.contains_key(&name) {
+            Some(VarName::Var(name))
         } else {
             None
         }
@@ -205,8 +203,8 @@ impl VM {
         &self,
         block: &'a VMBlock,
         idx: u16,
-    ) -> Result<&'a str, RuntimeError> {
+    ) -> Result<&'a Ustr, RuntimeError> {
         let idx = self.checked_local_string_idx(block, idx)?;
-        Ok(block.local_strings[idx].as_str())
+        Ok(&block.local_strings[idx])
     }
 }

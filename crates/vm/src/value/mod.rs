@@ -23,6 +23,7 @@ use libffi::middle::{Arg, Cif, CodePtr, Type};
 use libloading::Library;
 
 use rustc_hash::{FxHashMap, FxHashSet};
+use ustr::{Ustr, UstrMap};
 
 #[cfg(feature = "native")]
 use std::os::raw::c_char;
@@ -69,7 +70,7 @@ pub enum HashKey {
     UInt(u64),
     Bool(bool),
     Char(char),
-    Str(String),
+    Str(Ustr),
 }
 
 impl TryFrom<RuntimeValue> for HashKey {
@@ -81,7 +82,7 @@ impl TryFrom<RuntimeValue> for HashKey {
             RuntimeValue::Byte(x) => Ok(Self::UInt(x as u64)),
             RuntimeValue::Bool(x) => Ok(Self::Bool(x)),
             RuntimeValue::Char(x) => Ok(Self::Char(x)),
-            RuntimeValue::Str(x) => Ok(Self::Str(x.lock().unwrap().clone())),
+            RuntimeValue::Str(x) => Ok(Self::Str(x.clone())),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
@@ -94,7 +95,7 @@ impl From<HashKey> for RuntimeValue {
             HashKey::UInt(x) => RuntimeValue::UInt(x),
             HashKey::Bool(x) => RuntimeValue::Bool(x),
             HashKey::Char(x) => RuntimeValue::Char(x),
-            HashKey::Str(x) => RuntimeValue::Str(Arc::new(Mutex::new(x))),
+            HashKey::Str(x) => RuntimeValue::Str(x),
         }
     }
 }
@@ -249,11 +250,11 @@ pub enum RuntimeValue {
     Ptr(u64),
     Range(i64, i64),
     Bool(bool),
-    Str(Arc<Mutex<String>>),
+    Str(Ustr),
     Char(char),
-    Aggregate(Option<String>, Gc<GcMap>),
-    Enum(String, usize, Option<Gc<RuntimeValue>>),
-    Ref(String),
+    Aggregate(Option<Ustr>, Gc<GcMap>),
+    Enum(Ustr, usize, Option<Gc<RuntimeValue>>),
+    Ref(Ustr),
     VarRef(usize),
     RegRef {
         frame: usize,
@@ -272,18 +273,18 @@ pub enum RuntimeValue {
     #[cfg(feature = "native")]
     ExternFunction(Arc<ExternFunction>),
     Function {
-        name: Arc<String>,
-        captures: Arc<Vec<(String, RuntimeValue)>>,
+        name: Ustr,
+        captures: Arc<Vec<(Ustr, RuntimeValue)>>,
     },
     Generator {
-        type_name: Arc<String>,
+        type_name: Ustr,
         state: Arc<Mutex<GeneratorState>>,
     },
     DynObject {
-        type_name: Arc<String>,
-        constraints: Arc<Vec<String>>,
+        type_name: Ustr,
+        constraints: Arc<Vec<Ustr>>,
         value: Gc<RuntimeValue>,
-        vtable: Arc<FxHashMap<String, String>>,
+        vtable: Arc<UstrMap<Ustr>>,
     },
     BoundMethod {
         callee: Box<RuntimeValue>,
@@ -351,9 +352,9 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
 #[cfg(feature = "native")]
 #[derive(Debug, Clone)]
 pub struct ExternFunction {
-    pub abi: String,
-    pub library: String,
-    pub symbol: String,
+    pub abi: Ustr,
+    pub library: Ustr,
+    pub symbol: Ustr,
     pub parameters: Vec<ParserDataType>,
     pub return_type: ParserDataType,
     pub handle: Arc<Library>,
@@ -444,29 +445,29 @@ impl RuntimeValue {
         )
     }
 
-    pub fn impl_name(&self) -> Option<String> {
+    pub fn impl_name(&self) -> Option<Ustr> {
         match self {
-            RuntimeValue::Big(_) => Some("big".to_string()),
-            RuntimeValue::Int(_) => Some("int".to_string()),
-            RuntimeValue::UInt(_) => Some("uint".to_string()),
-            RuntimeValue::Byte(_) => Some("byte".to_string()),
-            RuntimeValue::Float(_) => Some("float".to_string()),
-            RuntimeValue::Bool(_) => Some("bool".to_string()),
-            RuntimeValue::Str(_) => Some("str".to_string()),
-            RuntimeValue::Char(_) => Some("char".to_string()),
-            RuntimeValue::Range(_, _) => Some("range".to_string()),
-            RuntimeValue::Ptr(_) => Some("ptr".to_string()),
+            RuntimeValue::Big(_) => Some("big"),
+            RuntimeValue::Int(_) => Some("int"),
+            RuntimeValue::UInt(_) => Some("uint"),
+            RuntimeValue::Byte(_) => Some("byte"),
+            RuntimeValue::Float(_) => Some("float"),
+            RuntimeValue::Bool(_) => Some("bool"),
+            RuntimeValue::Str(_) => Some("str"),
+            RuntimeValue::Char(_) => Some("char"),
+            RuntimeValue::Range(_, _) => Some("range"),
+            RuntimeValue::Ptr(_) => Some("ptr"),
             RuntimeValue::Aggregate(Some(name), _) | RuntimeValue::Enum(name, _, _) => {
-                Some(name.clone())
+                return Some(name.clone())
             }
-            RuntimeValue::Generator { type_name, .. } => Some(type_name.to_string()),
-            RuntimeValue::DynObject { type_name, .. } => Some(type_name.to_string()),
-            RuntimeValue::List(_) => Some("list".to_string()),
-            RuntimeValue::Option(_) => Some("option".to_string()),
-            RuntimeValue::Result(_) => Some("result".to_string()),
-            RuntimeValue::Null => Some("null".to_string()),
+            RuntimeValue::Generator { type_name, .. } => return Some(type_name.clone()),
+            RuntimeValue::DynObject { type_name, .. } => return Some(type_name.clone()),
+            RuntimeValue::List(_) => Some("list"),
+            RuntimeValue::Option(_) => Some("option"),
+            RuntimeValue::Result(_) => Some("result"),
+            RuntimeValue::Null => Some("null"),
             _ => None,
-        }
+        }.map(|x| Ustr::from(x))
     }
 
     pub fn constants() -> &'static FxHashMap<String, Self> {
@@ -813,7 +814,7 @@ impl From<VMLiteral> for RuntimeValue {
             VMLiteral::Byte(x) => Self::Byte(x),
             VMLiteral::Float(x) => Self::Float(x),
             VMLiteral::Char(x) => Self::Char(x),
-            VMLiteral::String(x) => Self::Str(Arc::new(Mutex::new(x))),
+            VMLiteral::String(x) => Self::Str(x),
             VMLiteral::Null => Self::Null,
             VMLiteral::Closure { label, captures: _ } => Self::Function {
                 name: label.into(),

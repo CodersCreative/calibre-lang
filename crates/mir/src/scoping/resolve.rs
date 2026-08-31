@@ -10,49 +10,44 @@ use calibre_parser::{
 };
 use std::fs;
 use tracing::{debug, instrument};
+use ustr::Ustr;
 
 impl MiddleEnvironment {
     #[instrument(skip_all, fields(list = ?list))]
-    pub fn get_scope_list(
-        &self,
-        scope: ScopeId,
-        mut list: Vec<String>,
-    ) -> Result<ScopeId, MiddleErr> {
+    pub fn get_scope_list(&self, scope: ScopeId, list: &[Ustr]) -> Result<ScopeId, MiddleErr> {
         debug!("getting scope list");
-        if list.is_empty() {
-            debug!("empty scope list, returning current scope");
-            return Ok(scope);
+        if let Some(first) = list.first() {
+            debug!(first = %first, "importing scope");
+            let scope = self.get_next_scope(scope, &first);
+            self.get_scope_list(scope?, list)
+        } else {
+            Ok(scope)
         }
-        let first = list.remove(0);
-        debug!(next = %first, "navigating to next scope");
-        let scope = self.get_next_scope(scope, first.as_str())?;
-        self.get_scope_list(scope, list)
     }
 
     #[instrument(skip_all, fields(list = ?list))]
     pub fn import_scope_list(
         &mut self,
         scope: ScopeId,
-        mut list: Vec<String>,
+        list: &[Ustr],
     ) -> Result<(ScopeId, Option<MiddleNode>), MiddleErr> {
         debug!("importing scope list");
-        let first = list.remove(0);
-        debug!(first = %first, "importing first scope");
-        let scope = self.import_next_scope(scope, first.as_str());
-        if list.is_empty() {
-            scope
-        } else {
+        if let Some(first) = list.first() {
+            debug!(first = %first, "importing scope");
+            let scope = self.import_next_scope(scope, &first);
             self.import_scope_list(scope?.0, list)
+        } else {
+            Ok((scope, None))
         }
     }
 
     pub fn import_next_scope(
         &mut self,
         scope: ScopeId,
-        key: &str,
+        key: &Ustr,
     ) -> Result<(ScopeId, Option<MiddleNode>), MiddleErr> {
         Ok(match key {
-            "super" => {
+            x if x.contains("super") => {
                 let parent = scope
                     .ancestors(&self.scoping.scopes)
                     .nth(1)
@@ -88,7 +83,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         parent: ScopeId,
-        key: &str,
+        key: &Ustr,
     ) -> Result<(ScopeId, Option<MiddleNode>), MiddleErr> {
         debug!("loading import scope");
         let mut parser = Parser::default();
@@ -216,15 +211,17 @@ impl MiddleEnvironment {
         Ok((scope, Some(node)))
     }
 
-    pub fn get_next_scope(&self, scope: ScopeId, key: &str) -> Result<ScopeId, MiddleErr> {
+    pub fn get_next_scope(&self, scope: ScopeId, key: &Ustr) -> Result<ScopeId, MiddleErr> {
         Ok(match key {
-            "super" => scope
-                .ancestors(&self.scoping.scopes)
-                .nth(1)
-                .ok_or_else(|| {
-                    self.context
-                        .err_at_current(MiddleErr::Scope("super".to_string()))
-                })?,
+            x if x.contains("super") => {
+                scope
+                    .ancestors(&self.scoping.scopes)
+                    .nth(1)
+                    .ok_or_else(|| {
+                        self.context
+                            .err_at_current(MiddleErr::Scope("super".to_string()))
+                    })?
+            }
             _ => {
                 if let Ok(x) = self.scoping.get_scope_from_children(scope, key) {
                     x

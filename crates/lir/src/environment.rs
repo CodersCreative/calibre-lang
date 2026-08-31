@@ -1,6 +1,7 @@
 use calibre_mir::{environment::MiddleEnvironment, scoping::ScopeId};
 use calibre_parser::ast::types::ParserDataType;
 use rustc_hash::FxHashMap;
+use ustr::{Ustr, UstrMap};
 use std::fmt::Display;
 use std::sync::atomic::Ordering;
 use tracing::{debug, instrument};
@@ -12,11 +13,11 @@ use crate::{
 
 #[derive(Debug, Clone, Default)]
 pub struct LirRegistry {
-    pub functions: FxHashMap<String, LirFunction>,
-    pub globals: FxHashMap<String, LirGlobal>,
-    pub natives: FxHashMap<String, String>,
-    pub dyn_vtables: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>>,
-    pub scope_to_file: FxHashMap<ScopeId, String>,
+    pub functions: UstrMap<LirFunction>,
+    pub globals: UstrMap<LirGlobal>,
+    pub natives: UstrMap<Ustr>,
+    pub dyn_vtables: UstrMap<UstrMap<UstrMap<Ustr>>>,
+    pub scope_to_file: FxHashMap<ScopeId, Ustr>,
 }
 
 impl LirRegistry {
@@ -47,7 +48,7 @@ impl Display for LirRegistry {
 
 #[derive(Debug, Clone)]
 pub struct LirGlobal {
-    pub name: Box<str>,
+    pub name: Ustr,
     pub data_type: ParserDataType,
     pub blocks: Box<[LirBlock]>,
 }
@@ -66,9 +67,9 @@ impl Display for LirGlobal {
 
 #[derive(Debug, Clone)]
 pub struct LirFunction {
-    pub name: Box<str>,
-    pub params: Box<[(Box<str>, ParserDataType)]>,
-    pub captures: Box<[(Box<str>, ParserDataType)]>,
+    pub name: Ustr,
+    pub params: Box<[(Ustr, ParserDataType)]>,
+    pub captures: Box<[(Ustr, ParserDataType)]>,
     pub return_type: ParserDataType,
     pub blocks: Box<[LirBlock]>,
 }
@@ -94,11 +95,11 @@ impl Display for LirFunction {
 #[derive(Debug, Clone)]
 pub struct LirEnvironment<'a> {
     pub env: &'a MiddleEnvironment,
-    pub last_ident: Option<String>,
+    pub last_ident: Option<Ustr>,
     pub registry: LirRegistry,
     pub blocks: Vec<LirBlock>,
     pub current_block: BlockId,
-    pub loop_stack: Vec<(BlockId, BlockId, Option<String>)>,
+    pub loop_stack: Vec<(BlockId, BlockId, Option<Ustr>)>,
     pub allow_global_hoist: bool,
 }
 
@@ -112,14 +113,14 @@ impl<'a> LirEnvironment<'a> {
         debug!("creating LIR environment");
         let entry_id = BlockId(0);
 
-        let scope_to_file: FxHashMap<ScopeId, String> = env
+        let scope_to_file: FxHashMap<ScopeId, Ustr> = env
             .scoping
             .scopes
             .iter()
             .filter_map(|x| {
                 env.scoping
                     .get_id(x)
-                    .map(|id| (id, x.get().path.to_string_lossy().to_string()))
+                    .map(|id| (id, Ustr::from(&x.get().path.to_string_lossy())))
             })
             .collect();
 
@@ -132,8 +133,8 @@ impl<'a> LirEnvironment<'a> {
             env,
             last_ident: None,
             registry: LirRegistry {
-                functions: FxHashMap::default(),
-                globals: FxHashMap::default(),
+                functions: UstrMap::default(),
+                globals: UstrMap::default(),
                 natives: env.symbols.native_mappings.clone(),
                 dyn_vtables: Self::build_dyn_vtables(env),
                 scope_to_file,
@@ -149,9 +150,9 @@ impl<'a> LirEnvironment<'a> {
         }
     }
 
-    pub fn get_temp(&mut self) -> String {
+    pub fn get_temp(&mut self) -> Ustr {
         let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-        format!("tmp_{}", id)
+        Ustr::from(&format!("tmp_{}", id))
     }
 
     #[inline]
@@ -162,7 +163,7 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
-    pub fn find_loop_target(&self, label: Option<&str>, use_exit: bool) -> Option<BlockId> {
+    pub fn find_loop_target(&self, label: Option<&Ustr>, use_exit: bool) -> Option<BlockId> {
         let labeled = label.and_then(|lbl| {
             self.loop_stack
                 .iter()

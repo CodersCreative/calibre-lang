@@ -12,13 +12,14 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashSet};
 use std::{fmt::Display, str::FromStr, write};
 use tracing::{instrument, trace, warn};
+use ustr::{Ustr, UstrMap};
 
 #[derive(PartialEq)]
 pub enum StrOrAstNode {
-    Str(String),
+    Str(Ustr),
     Node(AstNode),
 }
 
@@ -26,6 +27,7 @@ pub enum IdentifierType<'a> {
     Generic(&'a PotentialGenericTypeIdentifier),
     Dollar(&'a PotentialDollarIdentifier),
     Ident(&'a dyn ToString),
+    Ustr(Ustr),
 }
 
 impl<'a> Display for IdentifierType<'a> {
@@ -37,6 +39,7 @@ impl<'a> Display for IdentifierType<'a> {
                 Self::Generic(x) => x.get_ident().to_string(),
                 Self::Dollar(x) => x.to_string(),
                 Self::Ident(x) => x.to_string(),
+                Self::Ustr(x) => x.to_string(),
             }
         )
     }
@@ -57,6 +60,18 @@ impl<'a> From<&'a PotentialGenericTypeIdentifier> for IdentifierType<'a> {
 impl<'a> From<&'a PotentialDollarIdentifier> for IdentifierType<'a> {
     fn from(val: &'a PotentialDollarIdentifier) -> IdentifierType<'a> {
         IdentifierType::Dollar(val)
+    }
+}
+
+impl<'a> From<&'a Ustr> for IdentifierType<'a> {
+    fn from(val: &'a Ustr) -> IdentifierType<'a> {
+        IdentifierType::Ustr(val.clone())
+    }
+}
+
+impl<'a> From<Ustr> for IdentifierType<'a> {
+    fn from(val: Ustr) -> IdentifierType<'a> {
+        IdentifierType::Ustr(val)
     }
 }
 
@@ -147,13 +162,13 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         base: &ParserDataType,
-        member: &str,
+        member: &Ustr,
         span: Span,
     ) -> Option<ParserDataType> {
         fn trait_member_type(
-            defs: &FxHashMap<String, MiddleTrait>,
-            trait_name: &str,
-            member: &str,
+            defs: &UstrMap<MiddleTrait>,
+            trait_name: &Ustr,
+            member: &Ustr,
         ) -> Option<ParserDataType> {
             let root = defs
                 .iter()
@@ -195,7 +210,7 @@ impl MiddleEnvironment {
         let out = match &resolved.data_type {
             ParserInnerType::Struct(struct_name) => self
                 .typing
-                .find_object_for_struct_name(struct_name)
+                .find_object_for_struct_name(&Ustr::from(struct_name))
                 .and_then(|obj| match &obj.object_type {
                     MiddleTypeDefType::Struct(fields) => {
                         fields.get(member).map(|(ty, _)| ty.clone())
@@ -204,7 +219,7 @@ impl MiddleEnvironment {
                 }),
             ParserInnerType::StructWithGenerics { identifier, .. } => self
                 .typing
-                .find_object_for_struct_name(identifier)
+                .find_object_for_struct_name(&Ustr::from(identifier))
                 .and_then(|obj| match &obj.object_type {
                     MiddleTypeDefType::Struct(fields) => {
                         fields.get(member).map(|(ty, _)| ty.clone())
@@ -237,7 +252,7 @@ impl MiddleEnvironment {
             }
             ParserInnerType::DynamicTraits(traits) => {
                 for tr in traits {
-                    if let Some(found) = trait_member_type(&self.typing.trait_defs, tr, member) {
+                    if let Some(found) = trait_member_type(&self.typing.trait_defs, &Ustr::from(tr), member) {
                         return Some(found);
                     }
                 }
@@ -253,7 +268,7 @@ impl MiddleEnvironment {
             );
         }
 
-        if let Some(imp) = self.typing.find_impl_for_type(&resolved.impl_name())
+        if let Some(imp) = self.typing.find_impl_for_type(&Ustr::from(&resolved.impl_name()))
             && let Some(mapped_member) = imp.get_member(&member, &[])
         {
             return self
@@ -270,7 +285,7 @@ impl MiddleEnvironment {
         &self,
         ty: &ParserDataType,
         member: &impl ToString,
-    ) -> Option<String> {
+    ) -> Option<Ustr> {
         let symbol_name = self
             .typing
             .find_impl_member(ty, member)?
@@ -279,7 +294,7 @@ impl MiddleEnvironment {
 
         self.symbols.variables.get(&symbol_name).and_then(|var| {
             if var.data_type.clone().unwrap_all_refs().is_callable() {
-                Some(symbol_name)
+                Some(Ustr::from(&symbol_name))
             } else {
                 None
             }
@@ -291,7 +306,7 @@ impl MiddleEnvironment {
         scope: ScopeId,
         ident: impl Into<IdentifierType<'a>>,
         options: ResolutionOptions,
-    ) -> Result<String, MiddleErr> {
+    ) -> Result<Ustr, MiddleErr> {
         let mut current = match self.resolve_inner(scope, ident, options)? {
             StrOrAstNode::Node(x) => {
                 return Err(self
@@ -343,7 +358,7 @@ impl MiddleEnvironment {
         let ident = ident.into();
         trace!(ident = %ident, "Resolving identifier");
 
-        let ident = match ident {
+        let ident: Ustr = match ident {
             IdentifierType::Generic(PotentialGenericTypeIdentifier::Generic {
                 identifier: PotentialDollarIdentifier::DollarIdentifier(x),
                 ..
@@ -362,15 +377,15 @@ impl MiddleEnvironment {
                             "No dollar resolution allowed but dollar ident provided",
                         ))));
                 }
-                let resolved = self.scoping.resolve_macro_arg(scope, x).ok_or_else(|| {
+                let resolved = self.scoping.resolve_macro_arg(scope, &Ustr::from(&x.text)).ok_or_else(|| {
                     self.context
                         .err_at_current(MiddleErr::MacroArg(x.to_string()))
                 })?;
 
                 match &resolved.node_type {
                     AstNodeType::Identifier(x) => match x.get_ident() {
-                        PotentialDollarIdentifier::Identifier(x) => x.text.clone(),
-                        PotentialDollarIdentifier::DollarIdentifier(x) => x.to_string(),
+                        PotentialDollarIdentifier::Identifier(x) => Ustr::from(&x.text),
+                        PotentialDollarIdentifier::DollarIdentifier(x) => Ustr::from(&x.text),
                     },
                     _ => {
                         return Ok(StrOrAstNode::Node(resolved.clone()));
@@ -379,10 +394,11 @@ impl MiddleEnvironment {
             }
             IdentifierType::Generic(x) => {
                 let inner_ident = x.get_ident();
-                inner_ident.to_string()
+                Ustr::from(&inner_ident.to_string())
             }
-            IdentifierType::Dollar(PotentialDollarIdentifier::Identifier(x)) => x.text.clone(),
-            IdentifierType::Ident(x) => x.to_string(),
+            IdentifierType::Dollar(PotentialDollarIdentifier::Identifier(x)) => Ustr::from(&x.text),
+            IdentifierType::Ident(x) => Ustr::from(&x.to_string()),
+            IdentifierType::Ustr(x) => x,
         };
 
         if options.type_resolution {
@@ -408,8 +424,8 @@ impl MiddleEnvironment {
 
                 let scope_ref = self.scoping.scope_or_err(current_scope)?;
 
-                if let Some(x) = scope_ref.type_mappings.get(&ty.impl_name()).cloned() {
-                    return Ok(StrOrAstNode::Str(ParserDataType::from(x).impl_name()));
+                if let Some(x) = scope_ref.type_mappings.get(&Ustr::from(&ty.impl_name())).cloned() {
+                    return Ok(StrOrAstNode::Str(Ustr::from(&ParserDataType::from(x).impl_name())));
                 }
 
                 if options.name_resolution {
@@ -465,7 +481,7 @@ impl MiddleEnvironment {
                 }
             }
 
-            return Err(self.context.err_at_current(MiddleErr::Object(ident)));
+            return Err(self.context.err_at_current(MiddleErr::Object(ident.to_string())));
         }
 
         if !options.name_resolution {
@@ -478,7 +494,7 @@ impl MiddleEnvironment {
             }
         }
 
-        Err(self.context.err_at_current(MiddleErr::Variable(ident)))
+        Err(self.context.err_at_current(MiddleErr::Variable(ident.to_string())))
     }
 
     #[instrument(skip_all)]
@@ -492,7 +508,7 @@ impl MiddleEnvironment {
 
         let (ty, mut generic_types) = match ident {
             IdentifierType::Ident(x) => {
-                let x = x.to_string();
+                let x = Ustr::from(&x.to_string());
                 let resolved =
                     self.resolve(scope, &x, ResolutionOptions::default().with_dollar())?;
 
@@ -502,7 +518,23 @@ impl MiddleEnvironment {
                             scope,
                             &x,
                             ResolutionOptions::typing(),
-                        )?),
+                        )?.to_string()),
+                        x => x,
+                    },
+                    Vec::new(),
+                )
+            }
+            IdentifierType::Ustr(x) => {
+                let resolved =
+                    self.resolve(scope, &x, ResolutionOptions::default().with_dollar())?;
+
+                (
+                    match ParserInnerType::from_str(&resolved).unwrap() {
+                        ParserInnerType::Struct(x) => ParserInnerType::Struct(self.resolve(
+                            scope,
+                            &x,
+                            ResolutionOptions::typing(),
+                        )?.to_string()),
                         x => x,
                     },
                     Vec::new(),
@@ -519,7 +551,7 @@ impl MiddleEnvironment {
                             scope,
                             &x,
                             ResolutionOptions::typing(),
-                        )?),
+                        )?.to_string()),
                         x => x,
                     },
                     Vec::new(),
@@ -541,7 +573,7 @@ impl MiddleEnvironment {
                 )?;
 
                 if self.symbols.variables.contains_key(&resolved) {
-                    return Err(self.context.err_at_current(MiddleErr::Object(resolved)));
+                    return Err(self.context.err_at_current(MiddleErr::Object(resolved.to_string())));
                 }
 
                 (
@@ -550,7 +582,7 @@ impl MiddleEnvironment {
                             scope,
                             &x,
                             ResolutionOptions::typing(),
-                        )?),
+                        )?.to_string()),
                         x => x,
                     },
                     generic_types,
@@ -590,7 +622,7 @@ impl MiddleEnvironment {
 
         Ok(match data_type {
             ParserInnerType::Struct(identifier) => ParserDataType {
-                data_type: ParserInnerType::Struct(self.resolve(scope, identifier, options)?),
+                data_type: ParserInnerType::Struct(self.resolve(scope, identifier, options)?.to_string()),
                 span: self.context.current_span(),
             },
             ParserInnerType::StructWithGenerics {
@@ -620,7 +652,7 @@ impl MiddleEnvironment {
 
                 ParserDataType {
                     data_type: ParserInnerType::StructWithGenerics {
-                        identifier: id,
+                        identifier: id.to_string(),
                         generic_types: resolved_gens,
                     },
                     span: self.context.current_span(),
@@ -711,7 +743,7 @@ impl MiddleEnvironment {
                 if lst.len() == 2
                     && let ParserInnerType::Struct(name) = &lst[1].data_type
                     && let Some(resolved) =
-                        self.typing.resolve_associated_type(&lst[0], name.as_str())
+                        self.typing.resolve_associated_type(&lst[0], &Ustr::from(name))
                 {
                     return Ok(resolved);
                 }
@@ -722,7 +754,7 @@ impl MiddleEnvironment {
                 }
             }
             ParserInnerType::DollarIdentifier(x) => {
-                if let Some(node) = self.scoping.resolve_macro_arg(scope, x) {
+                if let Some(node) = self.scoping.resolve_macro_arg(scope, &Ustr::from(x)) {
                     let AstNodeType::DataType { data_type } = node.node_type.clone() else {
                         unimplemented!()
                     };
@@ -737,7 +769,7 @@ impl MiddleEnvironment {
                     traits
                         .iter()
                         .map(|t| {
-                            self.resolve(scope, t, ResolutionOptions::typing())
+                            self.resolve(scope, t, ResolutionOptions::typing()).map(|x| x.to_string())
                                 .unwrap_or(t.to_string())
                         })
                         .collect(),

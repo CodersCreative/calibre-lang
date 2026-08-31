@@ -22,6 +22,7 @@ serde = { workspace = true }
 indextree = { workspace = true }
 derive_builder = { workspace = true }
 wasm_sync = { workspace = true }
+ustr = { workspace = true }
 
 [features]
 default = ["native"]

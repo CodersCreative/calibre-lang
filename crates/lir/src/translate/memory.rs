@@ -21,7 +21,7 @@ impl LirLowering for MirMove {
     #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Move(LirMove {
-            value: self.identifier.to_string().into_boxed_str(),
+            value: self.identifier,
         })
     }
 }
@@ -56,7 +56,7 @@ impl LirLowering for MirRef {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         if let MiddleNodeType::Identifier(MirIdentifier { identifier }) = self.value.node_type {
             LirNodeType::RefLoad(LirRefLoad {
-                value: identifier.text.into_boxed_str(),
+                value: identifier,
             })
         } else {
             LirNodeType::Ref(LirRef {
@@ -70,7 +70,7 @@ impl LirLowering for MirDrop {
     #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Drop(LirDrop {
-            value: self.identifier.to_string().into_boxed_str(),
+            value: self.identifier,
         })
     }
 }

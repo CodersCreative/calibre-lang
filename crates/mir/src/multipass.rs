@@ -7,6 +7,7 @@ use calibre_parser::ast::{
     nodes::{AstNode, AstNodeType, VarType},
     types::ParserDataType,
 };
+use ustr::Ustr;
 
 impl MiddleEnvironment {
     pub fn predeclare_nodes(&mut self, scope: ScopeId, nodes: &mut [AstNode]) {
@@ -35,7 +36,11 @@ impl MiddleEnvironment {
             } if *var_type == VarType::Constant => {
                 let new_name = ParserText::temp_name_with_suffix(&ident, node.span);
 
-                if self.symbols.variables.contains_key(&new_name.text) {
+                if self
+                    .symbols
+                    .variables
+                    .contains_key(&Ustr::from(&new_name.text))
+                {
                     return Ok(());
                 }
 
@@ -48,8 +53,8 @@ impl MiddleEnvironment {
 
                 self.register_variable(
                     scope,
-                    &ident.text,
-                    new_name.text.clone(),
+                    Ustr::from(ident),
+                    Ustr::from(&new_name.text),
                     data_type.clone(),
                     VarType::Constant,
                 )?;
@@ -66,7 +71,11 @@ impl MiddleEnvironment {
             } => {
                 let new_name = ParserText::temp_name_with_suffix(&ident, node.span);
 
-                if self.symbols.variables.contains_key(&new_name.text) {
+                if self
+                    .symbols
+                    .variables
+                    .contains_key(&Ustr::from(&new_name.text))
+                {
                     return Ok(());
                 }
 
@@ -93,8 +102,8 @@ impl MiddleEnvironment {
 
                 self.register_variable(
                     scope,
-                    &ident.text,
-                    new_name.text.clone(),
+                    Ustr::from(ident),
+                    Ustr::from(&new_name.text),
                     data_type.clone(),
                     VarType::Mutable,
                 )?;

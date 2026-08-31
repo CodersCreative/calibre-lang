@@ -10,6 +10,7 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
+use ustr::Ustr;
 use wasm_sync::{Condvar, Mutex};
 use wasm_thread as thread;
 
@@ -124,7 +125,7 @@ impl SchedulerHandle {
             let mut pool = self.inner.vm_pool.lock().unwrap();
             if let Some(mut pooled_vm) = pool.pop_front() {
                 pooled_vm.task_state = Default::default();
-                pooled_vm.captured_output = String::new();
+                pooled_vm.captured_output = Vec::default();
                 pooled_vm
             } else {
                 VM::new_shared(

@@ -8,8 +8,7 @@ use crate::{
     value::RuntimeValue,
 };
 use regex::Regex;
-use std::sync::Arc;
-use wasm_sync::Mutex;
+use ustr::Ustr;
 
 pub struct IsMatchFn;
 
@@ -24,11 +23,11 @@ impl NativeFunction for IsMatchFn {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
         let pattern = resolve_str(env, &pop_or_null(&mut args))?;
 
-        let re = Regex::new(pattern.lock().unwrap().as_str())
+        let re = Regex::new(pattern.as_str())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
 
         Ok(RuntimeValue::Bool(
-            re.is_match(text.lock().unwrap().as_str()),
+            re.is_match(text.as_str()),
         ))
     }
 }
@@ -46,11 +45,11 @@ impl NativeFunction for FindFn {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
         let pattern = resolve_str(env, &pop_or_null(&mut args))?;
 
-        let re = Regex::new(pattern.lock().unwrap().as_str())
+        let re = Regex::new(pattern.as_str())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
         let found = re
-            .find(text.lock().unwrap().as_str())
-            .map(|m| RuntimeValue::Str(Arc::new(Mutex::new(m.as_str().to_string()))));
+            .find(text.as_str())
+            .map(|m| RuntimeValue::Str(Ustr::from(m.as_str())));
         Ok(RuntimeValue::Option(found.map(dumpster::sync::Gc::new)))
     }
 }
@@ -69,10 +68,9 @@ impl NativeFunction for ReplaceFn {
         let text = resolve_str(env, &pop_or_null(&mut args))?;
         let pattern = resolve_str(env, &pop_or_null(&mut args))?;
 
-        let re = Regex::new(pattern.lock().unwrap().as_str())
+        let re = Regex::new(pattern.as_str())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
-        let text = text.lock().unwrap();
-        let out = re.replace_all(text.as_str(), replacement.lock().unwrap().as_str());
-        Ok(RuntimeValue::Str(Arc::new(Mutex::new(out.to_string()))))
+        let out = re.replace_all(text.as_str(), replacement.as_str());
+        Ok(RuntimeValue::Str(Ustr::from(&out.to_string())))
     }
 }

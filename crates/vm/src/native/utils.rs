@@ -8,11 +8,11 @@ use crate::{
 };
 use std::ops::Range;
 use std::sync::Arc;
-use wasm_sync::Mutex;
+use ustr::Ustr;
 
 pub fn panic_message_arg(value: &RuntimeValue) -> String {
     match value {
-        RuntimeValue::Str(s) => s.lock().unwrap().clone(),
+        RuntimeValue::Str(s) => s.to_string(),
         other => format!("{other:?}"),
     }
 }
@@ -49,7 +49,7 @@ pub fn first_or_null(args: &mut Vec<RuntimeValue>) -> RuntimeValue {
 }
 
 #[inline]
-pub fn resolve_str(env: &VM, value: &RuntimeValue) -> Result<Arc<Mutex<String>>, RuntimeError> {
+pub fn resolve_str(env: &VM, value: &RuntimeValue) -> Result<Ustr, RuntimeError> {
     let value = env.resolve_value_for_op_ref(value)?;
     if let RuntimeValue::Str(s) = value {
         Ok(s)

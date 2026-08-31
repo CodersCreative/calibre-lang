@@ -57,7 +57,7 @@ impl VM {
 
         for (name, reg) in func.params.iter().zip(func.param_regs.iter().copied()) {
             let value = self.get_reg_value(reg).clone();
-            let _ = self.variables.insert(name, value);
+            let _ = self.variables.insert(*name, value);
         }
     }
 
@@ -68,7 +68,7 @@ impl VM {
         dst: u16,
         args: &[u16],
         func: &VMFunction,
-        captures: &Arc<Vec<(String, RuntimeValue)>>,
+        captures: &Arc<Vec<(Ustr, RuntimeValue)>>,
     ) -> Option<TerminateValue> {
         if !Self::is_tail_position(block, ip, dst) {
             return None;

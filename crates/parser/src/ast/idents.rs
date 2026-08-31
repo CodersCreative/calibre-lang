@@ -11,6 +11,7 @@ use std::{
     ops::{Deref, DerefMut},
     str::FromStr,
 };
+use ustr::Ustr;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PotentialGenericTypeIdentifier {
@@ -19,6 +20,12 @@ pub enum PotentialGenericTypeIdentifier {
         identifier: PotentialDollarIdentifier,
         generic_types: Vec<ParserDataType>,
     },
+}
+
+impl From<Ustr> for PotentialGenericTypeIdentifier {
+    fn from(value: Ustr) -> Self {
+        Self::new(Span::default(), value)
+    }
 }
 
 impl Display for PotentialGenericTypeIdentifier {
@@ -148,6 +155,12 @@ impl From<PotentialDollarIdentifier> for AstNode {
             span: *val.span(),
             node_type: AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(val)),
         }
+    }
+}
+
+impl From<Ustr> for PotentialDollarIdentifier {
+    fn from(value: Ustr) -> Self {
+        Self::Identifier(ParserText::new(Span::default(), value))
     }
 }
 
@@ -312,6 +325,12 @@ impl ParserText {
 
 impl From<String> for ParserText {
     fn from(value: String) -> Self {
+        Self::new(Span::default(), value)
+    }
+}
+
+impl From<Ustr> for ParserText {
+    fn from(value: Ustr) -> Self {
         Self::new(Span::default(), value)
     }
 }

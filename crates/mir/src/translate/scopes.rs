@@ -12,6 +12,7 @@ use calibre_parser::{
         nodes::{AstNode, AstNodeType, LoopType, NamedScope},
     },
 };
+use ustr::Ustr;
 
 impl MiddleEnvironment {
     fn ends_in_control_flow(node: &MiddleNode) -> bool {
@@ -50,7 +51,7 @@ impl MiddleEnvironment {
             .scoping
             .resolve_macro(scope, &name)
             .cloned()
-            .ok_or_else(|| MiddleErr::At(span, Box::new(MiddleErr::Scope(name.clone()))))?;
+            .ok_or_else(|| MiddleErr::At(span, Box::new(MiddleErr::Scope(name.to_string()))))?;
         let mut args = Vec::new();
 
         let mut added = Vec::new();
@@ -100,7 +101,7 @@ impl MiddleEnvironment {
         let mut stmts = Vec::new();
         let mut og_create_new_scope = create_new_scope;
         let mut create_new_scope = create_new_scope.unwrap_or(true);
-        let mut macro_args_to_insert: Vec<(String, AstNode)> = Vec::new();
+        let mut macro_args_to_insert: Vec<(Ustr, AstNode)> = Vec::new();
 
         if let Some(named) = named {
             if define {
@@ -176,7 +177,7 @@ impl MiddleEnvironment {
                 let scope_macro = self
                     .scoping
                     .resolve_macro(scope, &name)
-                    .ok_or_else(|| MiddleErr::At(span, Box::new(MiddleErr::Scope(name.clone()))))?;
+                    .ok_or_else(|| MiddleErr::At(span, Box::new(MiddleErr::Scope(name.to_string()))))?;
                 if og_create_new_scope.is_none() {
                     og_create_new_scope = Some(scope_macro.create_new_scope);
                 }
@@ -230,7 +231,7 @@ impl MiddleEnvironment {
                         identifier,
                         ResolutionOptions::default().with_dollar(),
                     )?;
-                    let new_name = ParserText::temp_name_with_suffix(ident.trim(), span).text;
+                    let new_name = Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
                     self.scoping
                         .scope_mut_or_err(new_scope)?
                         .mappings

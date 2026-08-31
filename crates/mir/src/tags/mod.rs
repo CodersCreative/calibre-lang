@@ -8,8 +8,8 @@ use calibre_parser::ast::{
     idents::ParserText,
     nodes::{AstNode, AstNodeType},
 };
-use rustc_hash::FxHashMap;
 use std::{fmt::Debug, sync::Arc};
+use ustr::{Ustr, UstrMap};
 use wasm_sync::Mutex;
 
 mod builders;
@@ -52,19 +52,19 @@ pub enum TagInfo {
     CallerContext,
     IgnoreInvalidReturn,
     IgnoreInvalidLet,
-    Suite(String),
-    Todo(Option<String>),
-    Deprecated(Option<String>),
-    Skip(Option<String>),
+    Suite(Ustr),
+    Todo(Option<Ustr>),
+    Deprecated(Option<Ustr>),
+    Skip(Option<Ustr>),
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct Tagging {
-    pub tag_handlers: FxHashMap<String, TagHandler>,
-    pub init_functions: Vec<(i32, String)>,
-    pub fin_functions: Vec<(i32, String)>,
+    pub tag_handlers: UstrMap<TagHandler>,
+    pub init_functions: Vec<(i32, Ustr)>,
+    pub fin_functions: Vec<(i32, Ustr)>,
     pub tag_info: Vec<TagInfo>,
-    pub caller_context: FxHashMap<String, String>,
+    pub caller_context: UstrMap<Ustr>,
 }
 
 impl MiddleEnvironment {
@@ -92,7 +92,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "init".to_string(),
+            Ustr::from("init"),
             TagHandler {
                 handler: init_handler,
             },
@@ -129,7 +129,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "backend".to_string(),
+            Ustr::from("backend"),
             TagHandler {
                 handler: backend_handler,
             },
@@ -162,7 +162,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "os".to_string(),
+            Ustr::from("os"),
             TagHandler {
                 handler: os_handler,
             },
@@ -191,7 +191,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "fin".to_string(),
+            Ustr::from("fin"),
             TagHandler {
                 handler: fin_handler,
             },
@@ -211,7 +211,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "default".to_string(),
+            Ustr::from("default"),
             TagHandler {
                 handler: default_handler,
             },
@@ -231,7 +231,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "builder".to_string(),
+            Ustr::from("builder"),
             TagHandler {
                 handler: builder_handler,
             },
@@ -251,7 +251,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "panics".to_string(),
+            Ustr::from("panics"),
             TagHandler {
                 handler: panics_handler,
             },
@@ -262,15 +262,13 @@ impl MiddleEnvironment {
              scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
-             args: Vec<AstNode>| {
-                env.tagging
-                    .tag_info
-                    .push(TagInfo::Todo(args.first().and_then(
-                        |x| match &x.node_type {
-                            AstNodeType::StringLiteral(x) => Some(x.text.clone()),
-                            _ => None,
-                        },
-                    )));
+             mut args: Vec<AstNode>| {
+                env.tagging.tag_info.push(TagInfo::Todo(args.pop().and_then(
+                    |x| match x.node_type {
+                        AstNodeType::StringLiteral(x) => Some(Ustr::from(&x.text)),
+                        _ => None,
+                    },
+                )));
                 let middle = env.evaluate_inner(scope, node)?;
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
@@ -278,7 +276,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "todo".to_string(),
+            Ustr::from("todo"),
             TagHandler {
                 handler: todo_handler,
             },
@@ -289,12 +287,12 @@ impl MiddleEnvironment {
              scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
-             args: Vec<AstNode>| {
+             mut args: Vec<AstNode>| {
                 env.tagging
                     .tag_info
-                    .push(TagInfo::Deprecated(args.first().and_then(
+                    .push(TagInfo::Deprecated(args.pop().and_then(
                         |x| match &x.node_type {
-                            AstNodeType::StringLiteral(x) => Some(x.text.clone()),
+                            AstNodeType::StringLiteral(x) => Some(Ustr::from(&x.text)),
                             _ => None,
                         },
                     )));
@@ -305,7 +303,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "deprecated".to_string(),
+            Ustr::from("deprecated"),
             TagHandler {
                 handler: deprecated_handler,
             },
@@ -316,15 +314,13 @@ impl MiddleEnvironment {
              scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
-             args: Vec<AstNode>| {
-                env.tagging
-                    .tag_info
-                    .push(TagInfo::Skip(args.first().and_then(
-                        |x| match &x.node_type {
-                            AstNodeType::StringLiteral(x) => Some(x.text.clone()),
-                            _ => None,
-                        },
-                    )));
+             mut args: Vec<AstNode>| {
+                env.tagging.tag_info.push(TagInfo::Skip(args.pop().and_then(
+                    |x| match &x.node_type {
+                        AstNodeType::StringLiteral(x) => Some(Ustr::from(&x.text)),
+                        _ => None,
+                    },
+                )));
                 let middle = env.evaluate_inner(scope, node)?;
                 let _ = env.tagging.tag_info.pop();
                 Ok(middle)
@@ -332,7 +328,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "skip".to_string(),
+            Ustr::from("skip"),
             TagHandler {
                 handler: skip_handler,
             },
@@ -352,7 +348,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "bench".to_string(),
+            Ustr::from("bench"),
             TagHandler {
                 handler: bench_handler,
             },
@@ -363,12 +359,12 @@ impl MiddleEnvironment {
              scope: ScopeId,
              node: AstNode,
              _tag: ParserText,
-             args: Vec<AstNode>| {
+             mut args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Suite(
-                    args.first()
+                    args.pop()
                         .map(|x| match &x.node_type {
-                            AstNodeType::StringLiteral(x) => x.text.clone(),
-                            _ => String::new(),
+                            AstNodeType::StringLiteral(x) => Ustr::from(&x.text),
+                            _ => Ustr::default(),
                         })
                         .unwrap_or_default(),
                 ));
@@ -379,7 +375,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "suite".to_string(),
+            Ustr::from("suite"),
             TagHandler {
                 handler: suite_handler,
             },
@@ -397,7 +393,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "package".to_string(),
+            Ustr::from("package"),
             TagHandler {
                 handler: package_handler,
             },
@@ -417,7 +413,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "caller_context".to_string(),
+            Ustr::from("caller_context"),
             TagHandler {
                 handler: caller_context_handler,
             },
@@ -437,7 +433,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "ignore_invalid_return".to_string(),
+            Ustr::from("ignore_invalid_return"),
             TagHandler {
                 handler: ignore_invalid_return_handler,
             },
@@ -457,7 +453,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "ignore_invalid_let".to_string(),
+            Ustr::from("ignore_invalid_let"),
             TagHandler {
                 handler: ignore_invalid_let_handler,
             },
@@ -475,7 +471,7 @@ impl MiddleEnvironment {
         ));
 
         self.tagging.tag_handlers.insert(
-            "current_context".to_string(),
+            Ustr::from("current_context"),
             TagHandler {
                 handler: current_context_handler,
             },

@@ -132,7 +132,7 @@ impl<'a> Benchmarks<'a> {
             let p50 = samples[iters / 2];
             let mean = total.as_secs_f64() * 1000.0 / iters as f64;
             let stddev = stddev_ms(&samples, mean);
-            rows.push((test.name, iters, mean, stddev, p50, min, max));
+            rows.push((test.name.to_string(), iters, mean, stddev, p50, min, max));
         }
 
         if !rows.is_empty() {

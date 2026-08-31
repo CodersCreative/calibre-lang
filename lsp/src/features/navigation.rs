@@ -358,7 +358,7 @@ impl CalibreLanguageServer {
         let position_scope = Self::find_scope_at_with(&middle_ast, scope, position);
         env.resolve(position_scope, &word, ResolutionOptions::all())
             .or_else(|_| env.resolve(scope, &word, ResolutionOptions::all()))
-            .ok()
+            .ok().map(|x| x.to_string())
     }
 
     pub(super) fn semantic_references_in_document(

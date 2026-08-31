@@ -13,6 +13,7 @@ use crate::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use ustr::Ustr;
 use std::{fmt::Display, matches, str::FromStr};
 
 #[repr(u8)]
@@ -176,17 +177,17 @@ impl AstNode {
         }
     }
 
-    pub fn scope_access_path(&self, path: &mut Vec<String>) -> bool {
+    pub fn scope_access_path(&self, path: &mut Vec<Ustr>) -> bool {
         match &self.node_type {
             AstNodeType::Identifier(identifier) => {
-                path.push(identifier.get_ident().text().clone());
+                path.push(Ustr::from(identifier.get_ident().text()));
                 true
             }
             AstNodeType::ScopeAccess { base, field } => {
                 if !base.scope_access_path(path) {
                     return false;
                 }
-                path.push(field.text().clone());
+                path.push(Ustr::from(field.text()));
                 true
             }
             _ => false,

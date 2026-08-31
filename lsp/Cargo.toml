@@ -23,6 +23,7 @@ tracing-appender = { workspace = true }
 
 smol = { workspace = true }
 futures = "0.3"
+ustr = { workspace = true }
 
 async-lsp = { version = "0.2.2", features = ["async-io"] }
 tower = { version = "0.5", default-features = false, features = ["util"] }

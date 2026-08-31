@@ -3,20 +3,20 @@ use crate::ast::{
     MirComparison, MirDebug, MirDeref, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex,
     MirIs, MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
 };
-use rustc_hash::FxHashMap;
+use ustr::{Ustr, UstrMap};
 
 struct InlineFn {
-    params: Vec<String>,
+    params: Vec<Ustr>,
     body: MiddleNode,
 }
 
 pub fn inline_small_calls(root: &mut MiddleNode, max_nodes: usize) {
-    let mut inline_map: FxHashMap<String, InlineFn> = FxHashMap::default();
+    let mut inline_map: UstrMap<InlineFn> = UstrMap::default();
     collect_inlineable(root, &mut inline_map, max_nodes);
     inline_in_node(root, &inline_map);
 }
 
-fn collect_inlineable(node: &MiddleNode, map: &mut FxHashMap<String, InlineFn>, max_nodes: usize) {
+fn collect_inlineable(node: &MiddleNode, map: &mut UstrMap<InlineFn>, max_nodes: usize) {
     match &node.node_type {
         MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
             for stmt in body {
@@ -30,11 +30,11 @@ fn collect_inlineable(node: &MiddleNode, map: &mut FxHashMap<String, InlineFn>, 
                 parameters, body, ..
             }) = &value.node_type
                 && let Some(expr) = extract_single_return_expr(body)
-                && !&expr.calls_self(&identifier.text)
+                && !&expr.calls_self(&identifier)
                 && expr.len() <= max_nodes
             {
-                let params = parameters.iter().map(|(p, _, _)| p.text.clone()).collect();
-                map.insert(identifier.text.clone(), InlineFn { params, body: expr });
+                let params = parameters.iter().map(|(p, _, _)| p.clone()).collect();
+                map.insert(identifier.clone(), InlineFn { params, body: expr });
             }
         }
         _ => {}
@@ -58,7 +58,7 @@ fn extract_single_return_expr(body: &MiddleNode) -> Option<MiddleNode> {
     }
 }
 
-fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
+fn inline_in_node(node: &mut MiddleNode, map: &UstrMap<InlineFn>) {
     match &mut node.node_type {
         MiddleNodeType::CallExpression(MirCall { caller, args }) => {
             inline_in_node(caller, map);
@@ -66,10 +66,10 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<String, InlineFn>) {
                 inline_in_node(a, map);
             }
             if let MiddleNodeType::Identifier(MirIdentifier { identifier }) = &caller.node_type
-                && let Some(inline_fn) = map.get(&identifier.text)
+                && let Some(inline_fn) = map.get(&identifier)
                 && inline_fn.params.len() == args.len()
             {
-                let mut replacements: FxHashMap<String, MiddleNode> = FxHashMap::default();
+                let mut replacements: UstrMap<MiddleNode> = UstrMap::default();
                 for (param, arg) in inline_fn.params.iter().zip(args.iter()) {
                     replacements.insert(param.clone(), arg.clone());
                 }

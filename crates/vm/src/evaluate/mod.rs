@@ -13,7 +13,8 @@ use calibre_parser::ast::comparison::ComparisonOperator;
 use calibre_parser::ast::types::ParserInnerType;
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
 use dumpster::sync::Gc;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashSet};
+use ustr::{Ustr, UstrMap, UstrSet};
 use std::sync::Arc;
 use tracing::{debug, instrument, trace};
 
@@ -28,7 +29,7 @@ enum CaptureRestore {
 }
 
 impl VM {
-    fn recover_member_source_for_list(&self, reg: u16, frame_idx: usize) -> Option<(u16, String)> {
+    fn recover_member_source_for_list(&self, reg: u16, frame_idx: usize) -> Option<(u16, Ustr)> {
         if let Some(source) = self
             .frames
             .get(frame_idx)?
@@ -74,11 +75,11 @@ impl VM {
                             self.write_back_runtime_value(current, value);
                         }
                         _ => {
-                            self.variables.insert(&name, value);
+                            self.variables.insert(name, value);
                         }
                     }
                 } else {
-                    self.variables.insert(&name, value);
+                    self.variables.insert(name, value);
                 }
             }
             RuntimeValue::VarRef(id) => {
@@ -118,7 +119,7 @@ impl VM {
         args: &[u16],
         caller_frame: usize,
     ) -> Result<(), RuntimeError> {
-        let propagated_args: Vec<(usize, u16, u16, String)> = args
+        let propagated_args: Vec<(usize, u16, u16, Ustr)> = args
             .iter()
             .filter_map(|arg_reg| {
                 let arg_val = self.get_reg_value_in_frame(caller_frame, *arg_reg).clone();
@@ -151,7 +152,7 @@ impl VM {
         frame_idx: usize,
         field_reg: u16,
         parent_reg: u16,
-        field_name: &str,
+        field_name: &Ustr,
     ) -> Result<(), RuntimeError> {
         let updated_field = self.get_reg_value_in_frame(frame_idx, field_reg).clone();
         let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg).clone();
@@ -266,7 +267,7 @@ impl VM {
         I: IntoIterator<Item = String>,
     {
         for candidate in candidates {
-            if let Some((resolved, _)) = self.resolve_runtime_value(&candidate) {
+            if let Some((resolved, _)) = self.resolve_runtime_value(&Ustr::from(&candidate)) {
                 if matches!(resolved, RuntimeValue::Null) {
                     continue;
                 }
@@ -319,12 +320,12 @@ impl VM {
         match self.resolve_value_for_op_ref(&callable)? {
             RuntimeValue::Function { name, captures } => {
                 let callsite = (self.current_frame().func_ptr, callsite_block, callsite_tag);
-                let Some(func) = self.resolve_callable_cached(name.as_str(), callsite) else {
+                let Some(func) = self.resolve_callable_cached(name, callsite) else {
                     return Err(RuntimeError::FunctionNotFound(name.to_string()));
                 };
-                let mut seen = FxHashSet::default();
+                let mut seen = UstrSet::default();
                 let mut refreshed_caps = Vec::with_capacity(captures.len());
-                let mut seen_names = FxHashSet::default();
+                let mut seen_names = UstrSet::default();
                 for (cap_name, old_value) in captures.iter() {
                     if !seen_names.insert(cap_name.clone()) {
                         continue;
@@ -381,37 +382,11 @@ impl VM {
         }
     }
 
-    fn concrete_runtime_type_name(&self, value: &RuntimeValue) -> Option<String> {
-        match value {
-            RuntimeValue::Int(_) => Some("int".to_string()),
-            RuntimeValue::UInt(_) => Some("uint".to_string()),
-            RuntimeValue::Byte(_) => Some("byte".to_string()),
-            RuntimeValue::Float(_) => Some("float".to_string()),
-            RuntimeValue::Bool(_) => Some("bool".to_string()),
-            RuntimeValue::Str(_) => Some("str".to_string()),
-            RuntimeValue::Char(_) => Some("char".to_string()),
-            RuntimeValue::Range(_, _) => Some("range".to_string()),
-            RuntimeValue::Ptr(_) => Some("ptr".to_string()),
-            RuntimeValue::Aggregate(Some(name), _) | RuntimeValue::Enum(name, _, _) => {
-                Some(name.clone())
-            }
-            RuntimeValue::Channel(_) => Some("Channel".to_string()),
-            RuntimeValue::WaitGroup(_) => Some("WaitGroup".to_string()),
-            RuntimeValue::Mutex(_) | RuntimeValue::MutexGuard(_) => Some("Mutex".to_string()),
-            RuntimeValue::HashMap(_) => Some("HashMap".to_string()),
-            RuntimeValue::HashSet(_) => Some("HashSet".to_string()),
-            RuntimeValue::Host(_) => Some("host".to_string()),
-            RuntimeValue::Generator { type_name, .. } => Some(type_name.to_string()),
-            RuntimeValue::DynObject { type_name, .. } => Some(type_name.to_string()),
-            _ => None,
-        }
-    }
-
     fn lookup_dyn_trait_table(
         &self,
         concrete: &str,
         trait_name: &str,
-    ) -> Option<&FxHashMap<String, String>> {
+    ) -> Option<&UstrMap<Ustr>> {
         for (imp_ty, traits) in self.registry.dyn_vtables.iter() {
             if !ParserText::temp_name_suffix_matches(imp_ty, &concrete) {
                 continue;
@@ -428,14 +403,14 @@ impl VM {
     pub(crate) fn build_dyn_vtable_for_value(
         &self,
         value: &RuntimeValue,
-        constraints: &[String],
-    ) -> Option<(String, FxHashMap<String, String>)> {
-        let concrete = self.concrete_runtime_type_name(value)?;
+        constraints: &[Ustr],
+    ) -> Option<(Ustr, UstrMap<Ustr>)> {
+        let concrete = value.impl_name()?;
         if constraints.is_empty() {
-            return Some((concrete, FxHashMap::default()));
+            return Some((concrete, UstrMap::default()));
         }
 
-        let mut merged = FxHashMap::default();
+        let mut merged = UstrMap::default();
         for tr in constraints {
             let table = self.lookup_dyn_trait_table(&concrete, tr)?;
             for (member, callee) in table {
@@ -465,7 +440,7 @@ impl VM {
     ) -> Option<RuntimeValue> {
         let candidates = Self::build_member_candidates(owner, member, short_member, true, None);
         for candidate in candidates {
-            if let Some((resolved, _)) = self.resolve_runtime_value(&candidate) {
+            if let Some((resolved, _)) = self.resolve_runtime_value(&Ustr::from(&candidate)) {
                 if matches!(resolved, RuntimeValue::Null) {
                     continue;
                 }
@@ -483,7 +458,7 @@ impl VM {
             let candidates =
                 Self::build_member_candidates(&std_owner, member, short_member, true, None);
             for candidate in candidates {
-                if let Some((resolved, _)) = self.resolve_runtime_value(&candidate) {
+                if let Some((resolved, _)) = self.resolve_runtime_value(&Ustr::from(&candidate)) {
                     return Some(resolved);
                 }
             }
@@ -520,27 +495,27 @@ impl VM {
     #[inline]
     fn install_captures(
         &mut self,
-        captures: &[(String, RuntimeValue)],
-    ) -> Vec<(String, CaptureRestore)> {
+        captures: &[(Ustr, RuntimeValue)],
+    ) -> Vec<(Ustr, CaptureRestore)> {
         if captures.is_empty() {
             return Vec::new();
         }
         let mut prev_vars = Vec::with_capacity(captures.len() * 2);
         let mut install_one =
-            |key: &str, value: &RuntimeValue, prev_vars: &mut Vec<(String, CaptureRestore)>| {
+            |key: Ustr, value: &RuntimeValue, prev_vars: &mut Vec<(Ustr, CaptureRestore)>| {
                 if let RuntimeValue::Ref(target) = value
-                    && target == key
+                    && target == &key
                 {
-                    prev_vars.push((key.to_string(), CaptureRestore::Keep));
+                    prev_vars.push((key, CaptureRestore::Keep));
                     return;
                 }
 
-                let old = self.variables.get(key).cloned();
+                let old = self.variables.get(&key).cloned();
 
                 if let RuntimeValue::VarRef(id) = value {
                     self.variables.bind_alias_by_id(key, *id);
                     prev_vars.push((
-                        key.to_string(),
+                        key,
                         if old.is_some() {
                             CaptureRestore::Value(old)
                         } else {
@@ -549,14 +524,14 @@ impl VM {
                     ));
                 } else {
                     prev_vars.push((
-                        key.to_string(),
+                        key,
                         CaptureRestore::Value(self.variables.insert(key, value.clone())),
                     ));
                 }
             };
 
         for (name, value) in captures {
-            install_one(name, value, &mut prev_vars);
+            install_one(*name, value, &mut prev_vars);
         }
 
         prev_vars
@@ -568,11 +543,11 @@ impl VM {
     }
 
     #[inline]
-    fn restore_captures(&mut self, prev_vars: Vec<(String, CaptureRestore)>) {
+    fn restore_captures(&mut self, prev_vars: Vec<(Ustr, CaptureRestore)>) {
         for (name, old) in prev_vars {
             match old {
                 CaptureRestore::Value(Some(value)) => {
-                    self.variables.insert(&name, value);
+                    self.variables.insert(name, value);
                 }
                 CaptureRestore::Value(None) => {
                     self.variables.remove(&name);
@@ -681,7 +656,7 @@ impl VM {
                     traits.iter().all(|tr| constraints.iter().any(|x| x == tr))
                 }
                 other => self
-                    .build_dyn_vtable_for_value(other, traits.as_slice())
+                    .build_dyn_vtable_for_value(other, &traits.iter().map(|x| Ustr::from(x)).collect::<Vec<_>>())
                     .is_some(),
             },
             ParserInnerType::Auto(_) => true,
@@ -760,7 +735,7 @@ impl VM {
                 RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
                     actual == identifier
                 }
-                RuntimeValue::Generator { type_name, .. } => identifier == type_name.as_ref(),
+                RuntimeValue::Generator { type_name, .. } => identifier == type_name.as_str(),
                 _ => false,
             },
             ParserInnerType::Scope(_)
@@ -771,7 +746,7 @@ impl VM {
 
     fn resolve_callable_cached(
         &mut self,
-        name: &str,
+        name: Ustr,
         callsite: (usize, usize, u32),
     ) -> Option<Arc<VMFunction>> {
         if let Some(cached) = self.caches.callsite.get(&callsite)
@@ -780,19 +755,19 @@ impl VM {
             return Some(Arc::clone(cached));
         }
 
-        if let Some(cached) = self.caches.call.get(name) {
+        if let Some(cached) = self.caches.call.get(&name) {
             let resolved = Arc::clone(cached);
             self.caches.callsite.insert(callsite, Arc::clone(&resolved));
             return Some(resolved);
         }
 
-        let found = self.resolve_function_by_name(name);
+        let found = self.resolve_function_by_name(&name);
 
         if let Some(ref func) = found {
             let cached = Arc::clone(func);
             self.caches
                 .call
-                .insert(name.to_string(), Arc::clone(&cached));
+                .insert(name, Arc::clone(&cached));
             self.caches.callsite.insert(callsite, cached);
         }
 
@@ -800,8 +775,8 @@ impl VM {
     }
 
     #[inline]
-    fn resolve_runtime_value(&self, name: &str) -> Option<(RuntimeValue, String)> {
-        if let Some(native) = RuntimeValue::natives().get(name) {
+    fn resolve_runtime_value(&self, name: &Ustr) -> Option<(RuntimeValue, String)> {
+        if let Some(native) = RuntimeValue::natives().get(name.as_str()) {
             return Some((native.clone(), name.to_string()));
         }
         if let Some(func) = self.get_function_ref(name) {
@@ -817,12 +792,12 @@ impl VM {
     }
 
     #[inline]
-    fn move_runtime_value(&mut self, name: &str) -> Option<RuntimeValue> {
+    fn move_runtime_value(&mut self, name: Ustr) -> Option<RuntimeValue> {
         if let Some(func) = self.take_function(name) {
             return Some(self.make_runtime_function(&func));
         }
         self.variables
-            .remove(name)
+            .remove(&name)
             .map(|var| self.resolve_saveable_runtime_value_ref(&var))
     }
 
@@ -902,7 +877,7 @@ impl VM {
         &mut self,
         function: &VMFunction,
         args: I,
-        captures: Arc<Vec<(String, RuntimeValue)>>,
+        captures: Arc<Vec<(Ustr, RuntimeValue)>>,
     ) -> Result<RuntimeValue, RuntimeError>
     where
         I: IntoIterator<Item = RuntimeValue>,
@@ -922,7 +897,7 @@ impl VM {
         &mut self,
         function: &VMFunction,
         args: &[u16],
-        captures: Arc<Vec<(String, RuntimeValue)>>,
+        captures: Arc<Vec<(Ustr, RuntimeValue)>>,
     ) -> Result<RuntimeValue, RuntimeError> {
         let caller_frame = self.frames.len().saturating_sub(1);
 
@@ -945,18 +920,18 @@ impl VM {
                 .zip(function.param_regs.iter().copied())
             {
                 let value = self.get_reg_value(reg).clone();
-                let _ = self.variables.insert(name, value);
+                let _ = self.variables.insert(*name, value);
             }
         }
 
         let prev_vars = if captures.is_empty() {
             Vec::new()
         } else {
-            let filtered_captures: Vec<(String, RuntimeValue)> = captures
+            let filtered_captures: Vec<(Ustr, RuntimeValue)> = captures
                 .iter()
                 .filter(|(name, _)| {
                     Self::should_install_capture(name)
-                        && !function.param_names.contains(name.as_str())
+                        && !function.param_names.contains(name)
                 })
                 .cloned()
                 .collect();
@@ -1028,7 +1003,7 @@ impl VM {
         &mut self,
         function: &VMFunction,
         args: I,
-        captures: Arc<Vec<(String, RuntimeValue)>>,
+        captures: Arc<Vec<(Ustr, RuntimeValue)>>,
         budget: usize,
         state: &mut crate::TaskState,
     ) -> Result<Option<RuntimeValue>, RuntimeError>
@@ -1054,14 +1029,14 @@ impl VM {
                 .zip(function.param_regs.iter().copied())
             {
                 let value = self.get_reg_value(reg).clone();
-                let _ = self.variables.insert(name, value);
+                let _ = self.variables.insert(*name, value);
             }
 
-            let param_names: FxHashSet<&str> = function.params.iter().map(|x| x.as_str()).collect();
-            let filtered_captures: Vec<(String, RuntimeValue)> = captures
+            let param_names: UstrSet = function.params.clone().into_iter().collect();
+            let filtered_captures: Vec<(Ustr, RuntimeValue)> = captures
                 .iter()
                 .filter(|(name, _)| {
-                    Self::should_install_capture(name) && !param_names.contains(name.as_str())
+                    Self::should_install_capture(name) && !param_names.contains(name)
                 })
                 .cloned()
                 .collect();

@@ -8,8 +8,7 @@ use crate::{
     value::{GcVec, RuntimeValue},
 };
 use dumpster::sync::Gc;
-use std::sync::Arc;
-use wasm_sync::Mutex;
+use ustr::Ustr;
 
 pub struct EnvGet;
 
@@ -28,7 +27,7 @@ impl NativeFunction for EnvGet {
         };
 
         Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
-            Arc::new(Mutex::new(value.clone())),
+            value.clone(),
         )))))
     }
 }
@@ -45,9 +44,9 @@ impl NativeFunction for EnvVar {
 
         let name = resolve_str(env, &pop_or_null(&mut args))?;
 
-        match std::env::var(name.lock().unwrap().as_str()) {
+        match std::env::var(name.as_str()) {
             Ok(value) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
-                Arc::new(Mutex::new(value)),
+                Ustr::from(&value),
             ))))),
             Err(std::env::VarError::NotPresent) => Ok(RuntimeValue::Option(None)),
             Err(err) => Err(RuntimeError::Io(err.to_string())),
@@ -70,8 +69,8 @@ impl NativeFunction for EnvSetVar {
 
         unsafe {
             std::env::set_var(
-                name.lock().unwrap().as_str(),
-                value.lock().unwrap().as_str(),
+                name.as_str(),
+                value.as_str(),
             )
         };
 
@@ -91,7 +90,7 @@ impl NativeFunction for EnvRemoveVar {
 
         let name = resolve_str(env, &pop_or_null(&mut args))?;
 
-        unsafe { std::env::remove_var(name.lock().unwrap().as_str()) };
+        unsafe { std::env::remove_var(name.as_str()) };
 
         Ok(RuntimeValue::Null)
     }
@@ -106,7 +105,7 @@ impl NativeFunction for EnvVars {
 
     fn run(&self, _env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let vars = std::env::vars()
-            .map(|(k, v)| RuntimeValue::Str(Arc::new(Mutex::new(format!("{k}={v}")))))
+            .map(|(k, v)| RuntimeValue::Str(Ustr::from(&format!("{k}={v}"))))
             .collect();
 
         Ok(RuntimeValue::List(Gc::new(GcVec(vars))))

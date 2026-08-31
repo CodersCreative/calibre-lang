@@ -10,22 +10,23 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 use std::fmt::Display;
 use tracing::{debug, instrument, trace};
+use ustr::{Ustr, UstrMap, UstrSet};
 
 #[derive(Debug, Clone, Default)]
 pub struct Typing {
-    pub objects: FxHashMap<String, MiddleObject>,
-    pub impls: FxHashMap<String, MiddleImpl>,
-    pub trait_defs: FxHashMap<String, MiddleTrait>,
-    pub generic_type_templates: FxHashMap<String, (Vec<String>, TypeDefType, Vec<Overload>)>,
-    pub type_specializations: FxHashMap<String, String>,
+    pub objects: UstrMap<MiddleObject>,
+    pub impls: UstrMap<MiddleImpl>,
+    pub trait_defs: UstrMap<MiddleTrait>,
+    pub generic_type_templates: UstrMap<(Vec<Ustr>, TypeDefType, Vec<Overload>)>,
+    pub type_specializations: UstrMap<Ustr>,
 }
 
 impl Typing {
     #[instrument(skip_all, fields(ty = %ty))]
-    pub fn find_impl_for_type(&self, ty: &String) -> Option<&MiddleImpl> {
+    pub fn find_impl_for_type(&self, ty: &Ustr) -> Option<&MiddleImpl> {
         trace!("finding impl for type");
         if let Some(x) = self.impls.get(ty) {
             debug!("found impl by direct key");
@@ -42,7 +43,7 @@ impl Typing {
         ty: &ParserDataType,
         member: &impl ToString,
     ) -> Option<&MiddleImplMember> {
-        let generic_params: Vec<String> = match &ty.data_type {
+        let generic_params: Vec<Ustr> = match &ty.data_type {
             ParserInnerType::StructWithGenerics { generic_types, .. } => {
                 generic_types.iter().collect()
             }
@@ -52,10 +53,10 @@ impl Typing {
             _ => Vec::new(),
         }
         .into_iter()
-        .map(|x| x.impl_name())
+        .map(|x| Ustr::from(&x.impl_name()))
         .collect();
 
-        let identifier = ty.impl_name();
+        let identifier = Ustr::from(&ty.impl_name());
 
         if let Some(implementation) = self.find_impl_for_type(&identifier) {
             return implementation.get_member(member, &generic_params);
@@ -63,7 +64,7 @@ impl Typing {
 
         // TODO Remove, its the worst case scenario
         self.impls.iter().find_map(|(name, implementation)| {
-            name.contains(&identifier)
+            name.contains(identifier.as_str())
                 .then(|| implementation.get_member(member, &generic_params))
                 .flatten()
         })
@@ -71,13 +72,13 @@ impl Typing {
 
     #[instrument(skip_all, fields(root_trait = %root_trait))]
     pub fn collect_trait_default_members(
-        trait_defs: &FxHashMap<String, MiddleTrait>,
-        root_trait: &str,
-        provided: &FxHashSet<String>,
-    ) -> Vec<(String, MiddleTraitMember)> {
+        trait_defs: &UstrMap<MiddleTrait>,
+        root_trait: &Ustr,
+        provided: &UstrSet,
+    ) -> Vec<(Ustr, MiddleTraitMember)> {
         let mut out = Vec::new();
         let mut seen_members = FxHashSet::default();
-        let mut stack = vec![root_trait.to_string()];
+        let mut stack = vec![root_trait.clone()];
         let mut visited_traits = FxHashSet::default();
 
         while let Some(current) = stack.pop() {
@@ -110,7 +111,7 @@ impl Typing {
     }
 
     #[instrument(skip_all, fields(struct_name = %struct_name))]
-    pub fn find_object_for_struct_name(&self, struct_name: &str) -> Option<&MiddleObject> {
+    pub fn find_object_for_struct_name(&self, struct_name: &Ustr) -> Option<&MiddleObject> {
         trace!("finding object for struct name");
         self.objects.get(struct_name)
     }
@@ -119,18 +120,18 @@ impl Typing {
     pub fn resolve_associated_type(
         &self,
         base: &ParserDataType,
-        name: &str,
+        name: &Ustr,
     ) -> Option<ParserDataType> {
         trace!("resolving associated type");
 
         if let ParserInnerType::Struct(trait_name) = &base.data_type
-            && let Some(trait_def) = self.trait_defs.get(trait_name)
+            && let Some(trait_def) = self.trait_defs.get(&Ustr::from(trait_name))
             && let Some(assoc_type) = trait_def.assoc_types.get(name)
         {
             return Some(assoc_type.clone());
         }
 
-        if let Some(imp) = self.find_impl_for_type(&base.impl_name()) {
+        if let Some(imp) = self.find_impl_for_type(&Ustr::from(&base.impl_name())) {
             if let Some(assoc_type) = imp.assoc_types.get(name) {
                 return Some(assoc_type.clone());
             }
@@ -147,11 +148,11 @@ impl Typing {
     }
 
     #[instrument(skip_all, fields(name = %name))]
-    pub fn get_or_create_impl(&mut self, name: String, location: Option<Location>) {
+    pub fn get_or_create_impl(&mut self, name: Ustr, location: Option<Location>) {
         self.impls.entry(name).or_insert(MiddleImpl {
-            members: FxHashMap::default(),
+            members: UstrMap::default(),
             traits: Vec::new(),
-            assoc_types: FxHashMap::default(),
+            assoc_types: UstrMap::default(),
             location,
         });
     }
@@ -160,20 +161,20 @@ impl Typing {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleObject {
     pub object_type: MiddleTypeDefType,
-    pub variables: FxHashMap<String, (String, bool)>,
-    pub traits: Vec<String>,
+    pub variables: UstrMap<(Ustr, bool)>,
+    pub traits: Vec<Ustr>,
     pub location: Option<Location>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleImplMember {
-    pub symbol_name: String,
-    pub generic_params: Vec<String>,
+    pub symbol_name: Ustr,
+    pub generic_params: Vec<Ustr>,
     pub dependant: bool,
 }
 
 impl MiddleImplMember {
-    pub fn new(symbol_name: String, generic_params: Vec<String>, dependant: bool) -> Self {
+    pub fn new(symbol_name: Ustr, generic_params: Vec<Ustr>, dependant: bool) -> Self {
         Self {
             symbol_name,
             generic_params,
@@ -184,18 +185,21 @@ impl MiddleImplMember {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleImpl {
-    members: FxHashMap<String, Vec<MiddleImplMember>>,
-    pub traits: Vec<String>,
-    pub assoc_types: FxHashMap<String, ParserDataType>,
+    members: UstrMap<Vec<MiddleImplMember>>,
+    pub traits: Vec<Ustr>,
+    pub assoc_types: UstrMap<ParserDataType>,
     pub location: Option<Location>,
 }
 
 impl MiddleImpl {
-    fn normalize_member_name(name: &impl ToString) -> String {
+    fn normalize_member_name(name: &impl ToString) -> Ustr {
         let name = ParserText::get_temp_name_suffix(name).unwrap_or(name.to_string());
-        name.rsplit_once('.')
-            .map(|x| x.1.to_string())
-            .unwrap_or(name)
+        Ustr::from(
+            &name
+                .rsplit_once('.')
+                .map(|x| x.1.to_string())
+                .unwrap_or(name),
+        )
     }
 
     pub fn insert_member(&mut self, name: &impl ToString, member: MiddleImplMember) {
@@ -217,8 +221,8 @@ impl MiddleImpl {
     pub fn insert_member_placeholder(
         &mut self,
         name: &impl ToString,
-        symbol_name: String,
-        generic_params: Vec<String>,
+        symbol_name: Ustr,
+        generic_params: Vec<Ustr>,
     ) {
         let entry = self
             .members
@@ -233,7 +237,7 @@ impl MiddleImpl {
     pub fn get_member(
         &self,
         name: &impl ToString,
-        generic_params: &[String],
+        generic_params: &[Ustr],
     ) -> Option<&MiddleImplMember> {
         let members = self.members.get(&Self::normalize_member_name(name))?;
 
@@ -251,7 +255,7 @@ impl MiddleImpl {
         }
     }
 
-    pub fn get_all_members(&self) -> Vec<(&String, &MiddleImplMember)> {
+    pub fn get_all_members(&self) -> Vec<(&Ustr, &MiddleImplMember)> {
         let mut members = Vec::new();
 
         for (name, member) in &self.members {
@@ -272,15 +276,15 @@ pub struct MiddleTraitMember {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleTrait {
-    pub implied_traits: Vec<String>,
-    pub members: FxHashMap<String, MiddleTraitMember>,
-    pub assoc_types: FxHashMap<String, ParserDataType>,
+    pub implied_traits: Vec<Ustr>,
+    pub members: UstrMap<MiddleTraitMember>,
+    pub assoc_types: UstrMap<ParserDataType>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MiddleTypeDefType {
     Enum {
-        variants: Vec<(ParserText, Option<ParserDataType>)>,
+        variants: Vec<(Ustr, Option<ParserDataType>)>,
         default_variant: Option<usize>,
         default_value: Option<Box<AstNode>>,
     },
@@ -305,7 +309,7 @@ impl Display for MiddleTypeDefType {
                     {
                         writeln!(f, "\t@default")?;
                     }
-                    write!(f, "\t{}", name.text)?;
+                    write!(f, "\t{}", name)?;
                     if let Some(dt) = data_type {
                         write!(f, " : {}", dt)?;
                     }
@@ -380,10 +384,9 @@ impl MiddleTypeDefType {
 
                     for (k, v) in variants {
                         lst.push((
-                            ParserText::from(
+                            
                                 env.resolve(scope, &k, ResolutionOptions::default().with_dollar())
-                                    .unwrap_or_else(|_| k.to_string()),
-                            ),
+                                    .unwrap_or_else(|_| Ustr::from(&k.to_string())),
                             v.map(|v| {
                                 env.resolve_data_type(scope, &v, ResolutionOptions::typing())
                                     .unwrap_or(v)

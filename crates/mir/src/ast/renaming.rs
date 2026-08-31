@@ -8,11 +8,11 @@ use crate::{
     },
 };
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
-use rustc_hash::FxHashMap;
+use ustr::{Ustr, UstrMap};
 
 #[derive(Default)]
 pub struct AlphaRenameState {
-    pub data: FxHashMap<String, String>,
+    pub data: UstrMap<Ustr>,
 }
 
 impl MiddleNode {
@@ -25,7 +25,7 @@ impl MiddleNode {
 }
 
 #[inline]
-fn mapped_name_or_original(state: &AlphaRenameState, original: String) -> String {
+fn mapped_name_or_original(state: &AlphaRenameState, original: Ustr) -> Ustr {
     state.data.get(&original).cloned().unwrap_or(original)
 }
 
@@ -71,10 +71,10 @@ impl MiddleNodeType {
                 })
             }
             MiddleNodeType::Drop(MirDrop { identifier }) => MiddleNodeType::Drop(MirDrop {
-                identifier: mapped_name_or_original(state, identifier.text).into(),
+                identifier: mapped_name_or_original(state, identifier).into(),
             }),
             MiddleNodeType::Move(MirMove { identifier }) => MiddleNodeType::Move(MirMove {
-                identifier: mapped_name_or_original(state, identifier.text).into(),
+                identifier: mapped_name_or_original(state, identifier).into(),
             }),
             MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type,
@@ -82,15 +82,13 @@ impl MiddleNodeType {
                 value,
                 data_type,
             }) => {
-                let new_name = format!("{}->{}", identifier.text, fastrand::u32(0..u32::MAX));
-                state.data.insert(identifier.text, new_name.clone());
+                let new_name =
+                    Ustr::from(&format!("{}->{}", identifier, fastrand::u32(0..u32::MAX)));
+                state.data.insert(identifier, new_name.clone());
 
                 MiddleNodeType::VariableDeclaration(MirVarDecl {
                     var_type,
-                    identifier: ParserText {
-                        text: new_name,
-                        span: identifier.span,
-                    },
+                    identifier: new_name,
                     value: Box::new(value.rename(state)),
                     data_type,
                 })
@@ -124,17 +122,11 @@ impl MiddleNodeType {
                 parameters: parameters
                     .into_iter()
                     .map(|x| {
-                        let new_name = format!("{}->{}", x.0.text, fastrand::u32(0..u32::MAX));
-                        state.data.insert(x.0.text, new_name.clone());
+                        let new_name =
+                            Ustr::from(&format!("{}->{}", x.0, fastrand::u32(0..u32::MAX)));
+                        state.data.insert(x.0, new_name);
 
-                        (
-                            ParserText {
-                                text: new_name,
-                                span: x.0.span,
-                            },
-                            x.1,
-                            x.2.map(|x| Box::new(x.rename(state))),
-                        )
+                        (new_name, x.1, x.2.map(|x| Box::new(x.rename(state))))
                     })
                     .collect(),
                 body: Box::new(body.rename(state)),
@@ -199,10 +191,7 @@ impl MiddleNodeType {
             }),
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
                 MiddleNodeType::Identifier(MirIdentifier {
-                    identifier: ParserText {
-                        text: mapped_name_or_original(state, identifier.text),
-                        span: identifier.span,
-                    },
+                    identifier: mapped_name_or_original(state, identifier),
                 })
             }
             MiddleNodeType::ListLiteral(MirList { data_type, values }) => {

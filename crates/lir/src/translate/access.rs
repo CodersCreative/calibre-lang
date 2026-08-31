@@ -19,7 +19,7 @@ impl LirLowering for MirField {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Member(LirMember {
             base: Box::new(env.lower_node(*self.base)),
-            field: self.field.text.into_boxed_str(),
+            field: self.field,
         })
     }
 
@@ -30,7 +30,7 @@ impl LirLowering for MirField {
     {
         LirLValue::Ptr(Box::new(LirNodeType::Member(LirMember {
             base: Box::new(env.lower_node(*self.base)),
-            field: self.field.text.into_boxed_str(),
+            field: self.field,
         })))
     }
 }
@@ -66,7 +66,7 @@ impl LirLowering for MirCall {
 
         if let LirNodeType::Load(LirLoad { value }) | LirNodeType::Move(LirMove { value }) =
             &l_caller
-            && let Some(var) = env.env.symbols.variables.get(value.as_ref())
+            && let Some(var) = env.env.symbols.variables.get(value)
             && let ParserInnerType::Function { parameters, .. } = &var.data_type.data_type
         {
             if let Some(first) = parameters.first() {

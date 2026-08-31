@@ -1,7 +1,6 @@
 use super::*;
 use crate::{
-    native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
-    value::GcVec,
+    native::stdlib::generator::{GeneratorResumeFn, GeneratorState}, value::{GcMap, GcVec},
 };
 use calibre_parser::ast::{idents::ParserText, nodes::AsFailureMode};
 use wasm_sync::Mutex;
@@ -93,7 +92,7 @@ impl VM {
     fn callee_expects_receiver(&mut self, callee: &RuntimeValue) -> bool {
         match callee {
             RuntimeValue::Function { name, .. } => {
-                if let Some(func) = self.resolve_function_by_name(name.as_str()) {
+                if let Some(func) = self.resolve_function_by_name(name) {
                     func.params
                         .first()
                         .map(|first| first == "self" || first.ends_with(":self"))
@@ -176,7 +175,7 @@ impl VM {
                 if source.is_none()
                     && let RuntimeValue::List(target_list) = self.get_reg_value(reg).clone()
                 {
-                    let candidates: Vec<(u16, (u16, String))> = self
+                    let candidates: Vec<(u16, (u16, Ustr))> = self
                         .current_frame()
                         .member_sources
                         .iter()
@@ -212,7 +211,7 @@ impl VM {
                                 self.set_reg_value_in_frame(frame, reg, updated_parent);
                             }
                             RuntimeValue::Ref(name) => {
-                                self.variables.insert(&name, updated_parent);
+                                self.variables.insert(name, updated_parent);
                             }
                             RuntimeValue::VarRef(id) => {
                                 let _ = self.variables.set_by_id(id, updated_parent);
@@ -322,7 +321,7 @@ impl VM {
             && let Some((owner, member)) = name.rsplit_once(".")
             && let Some(first) = args.first()
             && let Ok(receiver) = self.resolve_value_for_op_ref(self.get_reg_value(*first))
-            && let Some(receiver_type) = self.concrete_runtime_type_name(&receiver)
+            && let Some(receiver_type) = receiver.impl_name()
         {
             if self.callee_expects_receiver(&func)
                 && !ParserText::temp_name_suffix_matches(&receiver_type, &owner)
@@ -352,7 +351,7 @@ impl VM {
             RuntimeValue::Function { name, captures } => {
                 let callsite = (self.current_frame().func_ptr, block.id.0 as usize, ip);
 
-                let Some(func) = self.resolve_callable_cached(name.as_str(), callsite) else {
+                let Some(func) = self.resolve_callable_cached(name, callsite) else {
                     return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
                 };
 
@@ -363,7 +362,7 @@ impl VM {
                 }
 
                 let mut refreshed_caps = Vec::with_capacity(captures.len());
-                let mut seen = FxHashSet::default();
+                let mut seen = UstrSet::default();
 
                 for (cap_name, old_value) in captures.iter() {
                     let value = self.capture_value(cap_name, &mut seen);
@@ -419,7 +418,7 @@ impl VM {
                     .ok_or_else(|| RuntimeError::InvalidBytecode("missing literal".to_string()))?;
                 match lit {
                     VMLiteral::Closure { label, captures } => {
-                        let mut seen = FxHashSet::default();
+                        let mut seen = UstrSet::default();
                         let caps = self.capture_values(&captures, &mut seen);
                         self.set_reg_value(
                             *dst,
@@ -490,7 +489,7 @@ impl VM {
             }
             VMInstruction::LoadVar { dst, name } => {
                 let name = self.local_string(block, *name)?;
-                let value = match self.resolve_var_name(name) {
+                let value = match self.resolve_var_name(*name) {
                     Some(VarName::Var(var)) => {
                         if let Some(v) = self.variables.get(&var) {
                             self.resolve_saveable_runtime_value_ref(v)
@@ -512,12 +511,12 @@ impl VM {
             }
             VMInstruction::MoveVar { dst, name } => {
                 let name = self.local_string(block, *name)?;
-                let resolved = self.resolve_var_name(name);
+                let resolved = self.resolve_var_name(*name);
                 let value = self
-                    .move_runtime_value(name)
+                    .move_runtime_value(*name)
                     .unwrap_or_else(|| match &resolved {
                         Some(VarName::Func(func)) => {
-                            if let Some(func) = self.take_function(func) {
+                            if let Some(func) = self.take_function(*func) {
                                 self.make_runtime_function(&func)
                             } else {
                                 RuntimeValue::Null
@@ -537,7 +536,7 @@ impl VM {
             }
             VMInstruction::DropVar { name } => {
                 let name = self.local_string(block, *name)?;
-                match self.resolve_var_name(name) {
+                match self.resolve_var_name(*name) {
                     Some(VarName::Var(var)) => {
                         if let Some(val) = self.variables.remove(&var) {
                             self.drop_runtime_value(val);
@@ -552,7 +551,7 @@ impl VM {
             VMInstruction::StoreVar { name, src } => {
                 let name = self.local_string(block, *name)?;
                 let _ = self.variables.insert(
-                    name,
+                    *name,
                     if self.in_global {
                         self.get_reg_value(*src).clone()
                     } else {
@@ -574,7 +573,7 @@ impl VM {
                         },
                     );
                 } else {
-                    self.set_reg_value(*dst, RuntimeValue::Ref(name.to_string()));
+                    self.set_reg_value(*dst, RuntimeValue::Ref(*name));
                 }
             }
             VMInstruction::LoadRegRef { dst, src } => {
@@ -623,7 +622,7 @@ impl VM {
                     AsFailureMode::Result => match conversion {
                         Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
                         Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
-                            Arc::new(Mutex::new(err.to_string())),
+                            Ustr::from(&err.to_string()),
                         )))),
                     },
                 };
@@ -747,7 +746,7 @@ impl VM {
                         RuntimeValue::Char(v) => Ok(v as i64),
                         RuntimeValue::List(v) => Ok(v.as_ref().0.len() as i64),
                         RuntimeValue::Aggregate(_, v) => Ok(v.as_ref().0.0.len() as i64),
-                        RuntimeValue::Str(v) => Ok(v.lock().unwrap().len() as i64),
+                        RuntimeValue::Str(v) => Ok(v.len() as i64),
                         RuntimeValue::Range(from, to) => Ok((to - from).max(0)),
                         other => Err(RuntimeError::UnexpectedType(Box::new(other))),
                     }
@@ -794,7 +793,7 @@ impl VM {
                         (short == "data").then(|| value.clone())
                     });
                     if let Some(RuntimeValue::Function { name, captures }) = next_fn {
-                        let resolved_caps: Vec<(String, RuntimeValue)> = captures
+                        let resolved_caps: Vec<(Ustr, RuntimeValue)> = captures
                             .iter()
                             .map(|(k, v)| {
                                 let resolved = self
@@ -803,11 +802,13 @@ impl VM {
                                 (k.clone(), resolved)
                             })
                             .collect();
+
                         let mut gen_vm = VM::new_shared(
                             self.registry.clone(),
                             self.mappings.clone(),
                             self.config.clone(),
                         );
+
                         gen_vm.variables = self.variables.clone();
                         gen_vm.ptr_heap = self.ptr_heap.clone();
                         gen_vm.moved_functions = self.moved_functions.clone();
@@ -815,7 +816,7 @@ impl VM {
                         self.set_reg_value(
                             *dst,
                             RuntimeValue::Generator {
-                                type_name: Arc::new(type_name),
+                                type_name: type_name,
                                 state: Arc::new(Mutex::new(GeneratorState {
                                     vm: gen_vm,
                                     function_name: name,
@@ -834,7 +835,7 @@ impl VM {
                     *dst,
                     RuntimeValue::Aggregate(
                         layout.name.clone(),
-                        Gc::new(crate::value::GcMap(ObjectMap(entries))),
+                        Gc::new(crate::value::GcMap(ObjectMap(entries.into_iter().map(|x| (x.0.to_string(), x.1)).collect()))),
                     ),
                 );
             }
@@ -848,7 +849,7 @@ impl VM {
                 let payload = payload.map(|reg| Gc::new(self.get_reg_value(reg).clone()));
                 self.set_reg_value(
                     *dst,
-                    RuntimeValue::Enum(name.to_string(), *variant as usize, payload),
+                    RuntimeValue::Enum(name.clone(), *variant as usize, payload),
                 );
             }
             VMInstruction::CallSelf { dst, args } => {
@@ -879,7 +880,7 @@ impl VM {
                 let resolved = self.resolve_value_for_op_ref(self.get_reg_value(*callee))?;
                 let to_spawn = match resolved {
                     RuntimeValue::Function { name, captures } => {
-                        let resolved_caps: Vec<(String, RuntimeValue)> = captures
+                        let resolved_caps: Vec<(Ustr, RuntimeValue)> = captures
                             .as_ref()
                             .iter()
                             .map(|(k, v)| {
@@ -917,7 +918,7 @@ impl VM {
                     self.set_reg_value(*dst, callee);
                     self.current_frame_mut()
                         .member_sources
-                        .insert(*dst, (source_reg, name.to_string()));
+                        .insert(*dst, (source_reg, name.clone()));
                     return Ok(TerminateValue::None);
                 }
 
@@ -985,36 +986,36 @@ impl VM {
                         vtable,
                         constraints,
                     } => {
-                        let member_short = short_name.unwrap_or(name);
+                        let member_short = Ustr::from(short_name.unwrap_or(name));
                         if let Some(callee_name) =
-                            vtable.get(member_short).or_else(|| vtable.get(name))
+                            vtable.get(&member_short).or_else(|| vtable.get(name))
                         {
                             if let Some(callee) = self.resolve_dyn_method_callable(
                                 type_name.as_str(),
-                                member_short,
+                                member_short.as_str(),
                                 Some(callee_name.as_str()),
                             ) {
                                 callee.bind_if_callable(value.as_ref().clone())
                             } else if let Some(x) = self.resolve_runtime_value(callee_name) {
                                 x.0
                             } else {
-                                return Err(RuntimeError::FunctionNotFound(callee_name.clone()));
+                                return Err(RuntimeError::FunctionNotFound(callee_name.to_string()));
                             }
                         } else if let Some(callee) =
-                            self.resolve_dyn_method_callable(type_name.as_str(), member_short, None)
+                            self.resolve_dyn_method_callable(type_name.as_str(), member_short.as_str(), None)
                         {
                             callee.bind_if_callable(value.as_ref().clone())
                         } else if member_short == "type" {
-                            RuntimeValue::Str(Arc::new(Mutex::new(type_name.to_string())))
+                            RuntimeValue::Str(type_name.clone())
                         } else if member_short == "traits" {
                             RuntimeValue::List(Gc::new(GcVec(
                                 constraints
                                     .iter()
-                                    .map(|x| RuntimeValue::Str(Arc::new(Mutex::new(x.clone()))))
+                                    .map(|x| RuntimeValue::Str(x.clone()))
                                     .collect(),
                             )))
                         } else if let Some(x) =
-                            self.resolve_runtime_value(&format!("{}.{}", type_name, member_short))
+                            self.resolve_runtime_value(&Ustr::from(&format!("{}.{}", type_name, member_short)))
                         {
                             x.0
                         } else {
@@ -1276,7 +1277,7 @@ impl VM {
                         });
                     }
                     other => {
-                        if let Some(type_name) = self.concrete_runtime_type_name(&other) {
+                        if let Some(type_name) = other.impl_name() {
                             bind_assoc(self, type_name.as_str(), other)?
                         } else {
                             return Err(RuntimeError::UnexpectedType(Box::new(other)));
@@ -1288,7 +1289,7 @@ impl VM {
                     Some((parent, field)) => {
                         self.current_frame_mut()
                             .member_sources
-                            .insert(*dst, (parent, field));
+                            .insert(*dst, (parent, Ustr::from(&field)));
                     }
                     None => {
                         let source = self
@@ -1299,8 +1300,8 @@ impl VM {
                         self.current_frame_mut().member_sources.insert(
                             *dst,
                             source
-                                .map(|(parent, path)| (parent, format!("{path}.{name}")))
-                                .unwrap_or((source_reg, name.to_string())),
+                                .map(|(parent, path)| (parent, Ustr::from(&format!("{path}.{name}"))))
+                                .unwrap_or((source_reg, Ustr::from(&name))),
                         );
                     }
                 }
@@ -1315,7 +1316,7 @@ impl VM {
                 let (short_name, tuple_index) = Self::member_parts(name);
 
                 let update_aggregate =
-                    |agg_name: &Option<String>, mut map: Gc<crate::value::GcMap>| {
+                    |agg_name: &Option<Ustr>, mut map: Gc<GcMap>| {
                         let entries = &mut Gc::make_mut(&mut map).0.0;
                         match (agg_name.as_ref(), tuple_index) {
                             (None, Some(idx)) => {
@@ -1392,7 +1393,7 @@ impl VM {
                                 if let Some(value) = self.variables.get(&ref_name).cloned() {
                                     value
                                 } else {
-                                    return Err(RuntimeError::DanglingRef(ref_name.clone()));
+                                    return Err(RuntimeError::DanglingRef(ref_name.to_string()));
                                 };
                             match current {
                                 RuntimeValue::Ref(_)
@@ -1404,13 +1405,13 @@ impl VM {
                                 RuntimeValue::Aggregate(name, map) => {
                                     let updated = update_aggregate(&name, map)?;
                                     self.variables
-                                        .insert(&ref_name, RuntimeValue::Aggregate(name, updated));
+                                        .insert(ref_name, RuntimeValue::Aggregate(name, updated));
                                 }
                                 RuntimeValue::List(_list) => {
-                                    self.variables.insert(&ref_name, value);
+                                    self.variables.insert(ref_name, value);
                                 }
                                 RuntimeValue::Generator { .. } => {
-                                    self.variables.insert(&ref_name, update_generator(current)?);
+                                    self.variables.insert(ref_name, update_generator(current)?);
                                 }
                                 other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
                             }
@@ -1695,28 +1696,27 @@ impl VM {
                     RuntimeValue::Str(s) => match &index_val {
                         RuntimeValue::Int(index) => {
                             let resolved = if *index < 0 {
-                                let len = s.lock().unwrap().chars().count();
+                                let len = s.chars().count();
                                 Self::resolve_index(len, *index)
                             } else {
                                 Some(*index as usize)
                             };
                             resolved
-                                .and_then(|i| s.lock().unwrap().chars().nth(i))
+                                .and_then(|i| s.chars().nth(i))
                                 .map(RuntimeValue::Char)
                                 .unwrap_or_else(|| RuntimeValue::Null)
                         }
                         RuntimeValue::UInt(index) => s
-                            .lock()
-                            .unwrap()
+                     
                             .chars()
                             .nth(*index as usize)
                             .map(RuntimeValue::Char)
                             .unwrap_or_else(|| RuntimeValue::Null),
                         RuntimeValue::Range(start, end) => {
-                            let v = s.lock().unwrap().chars().collect::<Vec<char>>();
+                            let v = s.chars().collect::<Vec<char>>();
                             let (s, e) = Self::resolve_slice_range(v.len(), *start, *end);
                             let slice: String = v[s..e].iter().collect();
-                            RuntimeValue::Str(Arc::new(Mutex::new(slice)))
+                            RuntimeValue::Str(Ustr::from(&slice))
                         }
                         _ => {
                             return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
@@ -1763,7 +1763,7 @@ impl VM {
                                 if let Some(value) = self.variables.get(&ref_name).cloned() {
                                     value
                                 } else {
-                                    return Err(RuntimeError::DanglingRef(ref_name.clone()));
+                                    return Err(RuntimeError::DanglingRef(ref_name.to_string()));
                                 };
                             match current {
                                 RuntimeValue::Ref(_)
@@ -1784,7 +1784,7 @@ impl VM {
                                     let idx = Self::resolve_index_or_err(vec.len(), index)?;
                                     vec[idx] = value;
 
-                                    self.variables.insert(&ref_name, RuntimeValue::List(list));
+                                    self.variables.insert(ref_name, RuntimeValue::List(list));
                                     self.propagate_member_source_reg(
                                         *target,
                                         self.frames.len().saturating_sub(1),
@@ -1983,8 +1983,8 @@ impl VM {
                     {
                         RuntimeValue::VarRef(id)
                     } else {
-                        let name = self.get_ref_id().to_string();
-                        let id = self.variables.insert_with_id(&name, other);
+                        let name = Ustr::from(&self.get_ref_id().to_string());
+                        let id = self.variables.insert_with_id(name, other);
                         RuntimeValue::VarRef(id)
                     },
                 };
@@ -2000,7 +2000,7 @@ impl VM {
                 let value = self.get_reg_value(*value).clone();
                 match target {
                     RuntimeValue::Ref(name) => {
-                        self.variables.insert(&name, value);
+                        self.variables.insert(name, value);
                     }
                     RuntimeValue::VarRef(id) => {
                         let _ = self.variables.set_by_id(id, value);

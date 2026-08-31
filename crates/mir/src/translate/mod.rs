@@ -32,8 +32,9 @@ use calibre_parser::{
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap};
 use tracing::{debug, instrument, trace};
+use ustr::{Ustr, UstrMap, UstrSet};
 
 pub mod functions;
 pub mod iter;
@@ -106,14 +107,11 @@ impl MiddleEnvironment {
             }),
             AstNodeType::BigLiteral(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::BigLiteral(MirBig {
-                    value: ParserText {
-                        text: x
+                    value: x
                             .text
                             .strip_suffix('g')
-                            .map(|x| x.to_string())
-                            .unwrap_or(x.text),
-                        ..x
-                    },
+                            .map(|x| Ustr::from(x))
+                            .unwrap_or(Ustr::from(&x.text)),
                 }),
                 span: node.span,
             }),
@@ -122,7 +120,7 @@ impl MiddleEnvironment {
                 span: node.span,
             }),
             AstNodeType::StringLiteral(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::StringLiteral(MirString { value: x }),
+                node_type: MiddleNodeType::StringLiteral(MirString { value: Ustr::from(&x.text) }),
                 span: node.span,
             }),
             AstNodeType::CharLiteral(x) => Ok(MiddleNode {
@@ -404,10 +402,8 @@ impl MiddleEnvironment {
             AstNodeType::MoveExpression { value } => match value.node_type {
                 AstNodeType::Identifier(x) => Ok(MiddleNode {
                     node_type: MiddleNodeType::Move(MirMove {
-                        identifier: ParserText::new(
-                            node.span,
+                        identifier: 
                             self.resolve(scope, &x, ResolutionOptions::idents())?,
-                        ),
                     }),
                     span: node.span,
                 }),
@@ -532,10 +528,8 @@ impl MiddleEnvironment {
             }
             AstNodeType::Drop(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::Drop(MirDrop {
-                    identifier: ParserText::new(
-                        node.span,
+                    identifier: 
                         self.resolve(scope, &x, ResolutionOptions::idents())?,
-                    ),
                 }),
                 span: node.span,
             }),
@@ -687,7 +681,7 @@ impl MiddleEnvironment {
 
                     let break_node = MiddleNode::new(
                         MiddleNodeType::Break(MirBreak {
-                            label: label_text.or(raw_label_text).map(Into::into),
+                            label: label_text.or(raw_label_text.map(|x| Ustr::from(&x))).map(Into::into),
                             value: None,
                         }),
                         self.context.current_span(),
@@ -757,7 +751,7 @@ impl MiddleEnvironment {
 
                     let cont_node = MiddleNode::new(
                         MiddleNodeType::Continue(MirContinue {
-                            label: label_text.or(raw_label_text).map(Into::into),
+                            label: label_text.or(raw_label_text.map(|x| Ustr::from(&x))).map(Into::into),
                         }),
                         self.context.current_span(),
                     );
@@ -1224,7 +1218,7 @@ impl MiddleEnvironment {
             }
             AstNodeType::DebugExpression { value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::DebugExpression(MirDebug {
-                    pretty_printed_str: value.to_string(),
+                    pretty_printed_str: Ustr::from(&value.to_string()),
                     value: Box::new(self.evaluate_inner(scope, *value)?),
                 }),
                 span: node.span,
@@ -1391,7 +1385,7 @@ impl MiddleEnvironment {
                     .map(|s| s.path.clone())
                     .ok();
 
-                self.register_test(identifier.text, func_identifier.clone(), scope, file_path);
+                self.register_test(Ustr::from(&identifier.text), Ustr::from(&func_identifier), scope, file_path);
 
                 self.evaluate_inner(
                     scope,
@@ -1561,13 +1555,13 @@ impl MiddleEnvironment {
                 let mut prev_generics = Vec::new();
                 if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
                     for generic in generics.0.iter() {
-                        let name = generic.identifier.to_string();
+                        let name = Ustr::from(&generic.identifier.to_string());
                         prev_generics.push((name.clone(), scope_ref.mappings.get(&name).cloned()));
                         scope_ref.mappings.insert(name.clone(), name.clone());
                     }
                 }
 
-                let generic_params: Vec<String> = generics
+                let generic_params: Vec<Ustr> = generics
                     .0
                     .iter()
                     .map(|g| {
@@ -1576,7 +1570,7 @@ impl MiddleEnvironment {
                             &g.identifier,
                             ResolutionOptions::default().with_dollar(),
                         )
-                        .unwrap_or(g.identifier.to_string())
+                        .unwrap_or(Ustr::from(&g.identifier.to_string()))
                     })
                     .collect();
 
@@ -1588,7 +1582,7 @@ impl MiddleEnvironment {
                     .resolve_data_type(scope, &target, ResolutionOptions::typing())?
                     .unwrap_all_refs();
 
-                let impl_key = resolved.impl_name();
+                let impl_key = Ustr::from(&resolved.impl_name());
 
                 self.typing
                     .get_or_create_impl(impl_key.clone(), self.context.current_location.clone());
@@ -1607,7 +1601,7 @@ impl MiddleEnvironment {
                                         ResolutionOptions::default().with_dollar(),
                                     )
                                     .ok()?;
-                                let resolved_iden = format!("{}.{}", impl_key, identifier);
+                                let resolved_iden = Ustr::from(&format!("{}.{}", impl_key, identifier));
                                 // TODO Unpack the dollar ident only without resolving
                                 Some((identifier, resolved_iden, generic_params.clone()))
                             } else {
@@ -1670,7 +1664,7 @@ impl MiddleEnvironment {
 
                     scope
                         .type_mappings
-                        .insert(String::from("Self"), resolved.data_type.clone())
+                        .insert(Ustr::from("Self"), resolved.data_type.clone())
                 };
 
                 let mut statements = Vec::new();
@@ -1679,9 +1673,9 @@ impl MiddleEnvironment {
                     env: &mut MiddleEnvironment,
                     scope: ScopeId,
                     resolved: &ParserDataType,
-                    generic_params: &[String],
+                    generic_params: &[Ustr],
                     var: AstNode,
-                ) -> Result<Option<(AstNode, String, bool)>, MiddleErr> {
+                ) -> Result<Option<(AstNode, Ustr, bool)>, MiddleErr> {
                     match var.node_type {
                         AstNodeType::VariableDeclaration {
                             var_type,
@@ -1720,7 +1714,7 @@ impl MiddleEnvironment {
                                     if let Some(param_type) = param_type {
                                         resolved
                                             .data_type
-                                            .matches(&param_type.data_type, &generic_params)
+                                            .matches(&param_type.data_type, &generic_params.iter().map(|x| x.as_ref()).collect::<Vec<_>>())
                                     } else {
                                         false
                                     }
@@ -1786,7 +1780,7 @@ impl MiddleEnvironment {
 
                     let new_name = match &dec.node_type {
                         MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => {
-                            identifier.text.clone()
+                            identifier.clone()
                         }
                         _ => {
                             return Err(MiddleErr::At(
@@ -1819,7 +1813,7 @@ impl MiddleEnvironment {
                     let scope = self.scoping.scope_mut_or_err(scope)?;
 
                     if let Some(prev) = previous_self_type {
-                        scope.type_mappings.insert(String::from("Self"), prev);
+                        scope.type_mappings.insert(Ustr::from("Self"), prev);
                     }
 
                     for (name, prev) in prev_generics {
@@ -1854,18 +1848,18 @@ impl MiddleEnvironment {
                 let mut prev_generics = Vec::new();
                 if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
                     for generic in generics.0.iter() {
-                        let name = generic.identifier.to_string();
+                        let name = Ustr::from(&generic.identifier.to_string());
                         prev_generics.push((name.clone(), scope_ref.mappings.get(&name).cloned()));
                         scope_ref.mappings.insert(name.clone(), name.clone());
                     }
                 }
 
-                let generic_params: Vec<String> = generics
+                let generic_params: Vec<Ustr> = generics
                     .0
                     .iter()
                     .map(|g| {
                         self.resolve(scope, &g.identifier, ResolutionOptions::typing())
-                            .unwrap_or(g.identifier.to_string())
+                            .unwrap_or(Ustr::from(&g.identifier.to_string()))
                     })
                     .collect();
 
@@ -1879,14 +1873,14 @@ impl MiddleEnvironment {
                 let resolved_target = self
                     .resolve_data_type(scope, &target, ResolutionOptions::typing())?
                     .unwrap_all_refs();
-                let impl_key = resolved_target.impl_name();
+                let impl_key = Ustr::from(&resolved_target.impl_name());
 
-                let mut provided = FxHashSet::default();
+                let mut provided = UstrSet::default();
                 let mut assoc_types = Vec::new();
                 for var in &variables {
                     match &var.node_type {
                         AstNodeType::VariableDeclaration { identifier, .. } => {
-                            provided.insert(identifier.to_string());
+                            provided.insert(Ustr::from(&identifier.to_string()));
                         }
                         AstNodeType::TypeDeclaration {
                             identifier, object, ..
@@ -1926,10 +1920,10 @@ impl MiddleEnvironment {
                     (
                         scope
                             .mappings
-                            .insert(String::from("Self"), impl_key.clone()),
+                            .insert(Ustr::from("Self"), impl_key.clone()),
                         scope
                             .type_mappings
-                            .insert(String::from("Self"), resolved_target.data_type.clone()),
+                            .insert(Ustr::from("Self"), resolved_target.data_type.clone()),
                     )
                 };
 
@@ -1969,7 +1963,7 @@ impl MiddleEnvironment {
                     for var in &all_vars {
                         if let AstNodeType::VariableDeclaration { identifier, .. } = &var.node_type
                         {
-                            let resolved_iden = format!("{}.{}", impl_key, identifier);
+                            let resolved_iden = Ustr::from(&format!("{}.{}", impl_key, identifier));
                             impl_ref.insert_member_placeholder(
                                 &identifier.to_string(),
                                 resolved_iden,
@@ -2018,7 +2012,7 @@ impl MiddleEnvironment {
                                     if let Some(param_type) = param_type {
                                         resolved_target
                                             .data_type
-                                            .matches(&param_type.data_type, &generic_params)
+                                            .matches(&param_type.data_type, &generic_params.iter().map(|x| x.as_ref()).collect::<Vec<_>>() )
                                     } else {
                                         false
                                     }
@@ -2059,7 +2053,7 @@ impl MiddleEnvironment {
 
                     let new_name = match &dec.node_type {
                         MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => {
-                            identifier.text.clone()
+                            identifier.clone()
                         }
                         _ => {
                             return Err(MiddleErr::At(
@@ -2102,11 +2096,11 @@ impl MiddleEnvironment {
                     let scope = self.scoping.scope_mut_or_err(scope)?;
 
                     if let Some(prev) = previous_self {
-                        scope.mappings.insert(String::from("Self"), prev);
+                        scope.mappings.insert(Ustr::from("Self"), prev);
                     }
 
                     if let Some(prev) = previous_self_type {
-                        scope.type_mappings.insert(String::from("Self"), prev);
+                        scope.type_mappings.insert(Ustr::from("Self"), prev);
                     }
 
                     for (name, prev) in prev_generics {
@@ -2139,7 +2133,7 @@ impl MiddleEnvironment {
             } => {
                 let mut generic_names = Vec::new();
                 let base_name = match &identifier {
-                    PotentialGenericTypeIdentifier::Identifier(x) => x.to_string(),
+                    PotentialGenericTypeIdentifier::Identifier(x) => Ustr::from(&x.to_string()),
                     PotentialGenericTypeIdentifier::Generic {
                         identifier,
                         generic_types,
@@ -2150,20 +2144,20 @@ impl MiddleEnvironment {
                                 ..
                             } = t
                             {
-                                generic_names.push(s.clone());
+                                generic_names.push(Ustr::from(&s));
                             }
                         }
-                        identifier.to_string()
+                        Ustr::from(&identifier.to_string())
                     }
                 };
 
-                let new_name = ParserText::temp_name_with_suffix(base_name.clone(), node.span).text;
+                let new_name = Ustr::from(&ParserText::temp_name_with_suffix(base_name.clone(), node.span).text);
 
                 self.typing.objects.insert(
                     new_name.clone(),
                     MiddleObject {
                         object_type: MiddleTypeDefType::Trait,
-                        variables: FxHashMap::default(),
+                        variables: UstrMap::default(),
                         traits: Vec::new(),
                         location: self.context.current_location.clone(),
                     },
@@ -2179,8 +2173,8 @@ impl MiddleEnvironment {
                     }
                 }
 
-                let mut trait_members = FxHashMap::default();
-                let mut assoc_types = FxHashMap::default();
+                let mut trait_members = UstrMap::default();
+                let mut assoc_types = UstrMap::default();
                 for member in members {
                     match member.kind {
                         TraitMemberKind::Type => {
@@ -2189,7 +2183,7 @@ impl MiddleEnvironment {
                                 &member.data_type,
                                 ResolutionOptions::typing(),
                             )?;
-                            assoc_types.insert(member.identifier.to_string(), data_type);
+                            assoc_types.insert(Ustr::from(&member.identifier.to_string()), data_type);
                         }
                         TraitMemberKind::Const => {
                             let data_type = self.resolve_data_type(
@@ -2198,7 +2192,7 @@ impl MiddleEnvironment {
                                 ResolutionOptions::typing(),
                             )?;
                             trait_members.insert(
-                                member.identifier.to_string(),
+                                Ustr::from(&member.identifier.to_string()),
                                 MiddleTraitMember {
                                     data_type,
                                     default: member.value.map(|x| *x),
@@ -2212,7 +2206,7 @@ impl MiddleEnvironment {
                 for imp in implied_traits {
                     let resolved = self
                         .resolve(scope, &imp, ResolutionOptions::default().with_dollar())
-                        .unwrap_or_else(|_| imp.to_string());
+                        .unwrap_or_else(|_| Ustr::from(&imp.to_string()));
                     implied.push(resolved);
                 }
 
@@ -2262,11 +2256,10 @@ impl MiddleEnvironment {
             // TODO Handle generics
             AstNodeType::StructLiteral { identifier, value } => Ok(MiddleNode {
                 node_type: MiddleNodeType::AggregateExpression(MirAggregate {
-                    identifier: Some(ParserText::new(
-                        node.span,
+                    identifier: Some(
                         self.resolve(scope, &identifier, ResolutionOptions::typing())
-                            .unwrap_or_else(|_| identifier.to_string()),
-                    )),
+                            .unwrap_or_else(|_| Ustr::from(&identifier.to_string()))
+                    ),
                     value: ObjectMap(match value {
                         ObjectType::Map(x) => {
                             let mut map = Vec::new();
@@ -2305,7 +2298,7 @@ impl MiddleEnvironment {
                 {
                     variants
                         .iter()
-                        .find(|(name, _)| name.text.eq_ignore_ascii_case(&raw_variant))
+                        .find(|(name, _)| name.eq_ignore_ascii_case(&raw_variant))
                         .map(|(name, _)| name.clone())
                         .ok_or(MiddleErr::At(
                             node.span,
@@ -2320,7 +2313,7 @@ impl MiddleEnvironment {
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::EnumExpression(MirEnum {
-                        identifier: ParserText::new(node.span, identifier),
+                        identifier,
                         value,
                         data: if let Some(data) = data {
                             Some(Box::new(self.evaluate_inner(scope, *data)?))
@@ -2373,7 +2366,7 @@ impl MiddleEnvironment {
                 tag,
                 arguments,
             } => {
-                if let Some(handler) = self.tagging.tag_handlers.get(&tag.text).cloned() {
+                if let Some(handler) = self.tagging.tag_handlers.get(&Ustr::from(&tag.text)).cloned() {
                     let handler_fn = handler.handler.lock().unwrap();
                     handler_fn(self, scope, *node, tag, arguments)
                 } else {
@@ -2416,11 +2409,11 @@ impl MiddleEnvironment {
                 alias,
                 values,
             } => {
-                let values: Vec<ParserText> = values
+                let values: Vec<Ustr> = values
                     .into_iter()
-                    .map(|val| ParserText::new(*val.span(), val.to_string()))
+                    .map(|val| Ustr::from(&val.to_string()))
                     .collect();
-                let module_path: Vec<String> = module.iter().map(|x| x.to_string()).collect();
+                let module_path: Vec<Ustr> = module.iter().map(|x| Ustr::from(&x.to_string())).collect();
 
                 let alias = if let Some(alias) = alias {
                     self.resolve(scope, &alias, ResolutionOptions::default().with_dollar())
@@ -2439,12 +2432,12 @@ impl MiddleEnvironment {
                     }
 
                     let (new_scope_id, build_node) =
-                        self.import_scope_list(scope, module_path.clone())?;
+                        self.import_scope_list(scope, &module_path)?;
 
                     self.scoping
                         .scope_mut_or_err(scope)?
                         .children
-                        .insert(alias.to_string(), new_scope_id);
+                        .insert(alias, new_scope_id);
 
                     return Ok(build_node.unwrap_or(MiddleNode {
                         node_type: MiddleNodeType::EmptyLine,
@@ -2452,10 +2445,10 @@ impl MiddleEnvironment {
                     }));
                 } else if !values.is_empty() {
                     let (new_scope_id, build_node) =
-                        self.import_scope_list(scope, module_path.clone())?;
+                        self.import_scope_list(scope, &module_path)?;
                     (new_scope_id, build_node)
                 } else {
-                    let (_, n) = self.import_scope_list(scope, module_path)?;
+                    let (_, n) = self.import_scope_list(scope, &module_path)?;
                     return Ok(if let Some(x) = n {
                         x
                     } else {
@@ -2472,7 +2465,7 @@ impl MiddleEnvironment {
                     (scope.mappings.clone(), scope.type_mappings.clone())
                 };
 
-                if &values[0].text == "*" {
+                if &values[0] == "*" {
                     let scope = self.scoping.scope_mut_or_err(scope)?;
 
                     for (key, value) in ident_map {
@@ -2486,16 +2479,16 @@ impl MiddleEnvironment {
                     let scope = self.scoping.scope_mut_or_err(scope)?;
 
                     for key in values {
-                        if let Some(value) = ident_map.get(&key.text).cloned() {
-                            scope.mappings.insert(key.to_string(), value);
+                        if let Some(value) = ident_map.get(&key).cloned() {
+                            scope.mappings.insert(key, value);
                             continue;
                         }
 
-                        if let Some(value) = type_map.get(&key.text).cloned() {
-                            scope.type_mappings.insert(key.to_string(), value);
+                        if let Some(value) = type_map.get(&key).cloned() {
+                            scope.type_mappings.insert(key, value);
                         } else {
                             return Err(MiddleErr::At(
-                                key.span,
+                                node.span,
                                 Box::new(MiddleErr::CantImport(format!("{} at {:?}", key, module))),
                             ));
                         }
@@ -2835,7 +2828,7 @@ impl MiddleEnvironment {
             }
             AstNodeType::PipeExpression(mut path) if !path.is_empty() => {
                 let mut value = path.remove(0).into();
-                let mut prior_mappings = FxHashMap::default();
+                let mut prior_mappings = UstrMap::default();
 
                 let is_callable_point = |env: &mut Self, point: &PipeSegment| {
                     if let AstNodeType::Identifier(id) = &point.get_node().node_type
@@ -2857,17 +2850,16 @@ impl MiddleEnvironment {
                     false
                 };
 
-                let get_mapping = |env: &Self, key: &str| -> Result<Option<String>, MiddleErr> {
+                let get_mapping = |env: &Self, key: &Ustr| -> Result<Option<Ustr>, MiddleErr> {
                     Ok(env
                         .scoping
                         .scope_or_err(scope)?
                         .mappings
-                        .get(key)
-                        .map(|x| x.to_string()))
+                        .get(key).cloned())
                 };
 
                 let restore_mapping =
-                    |env: &mut Self, key: String, value: Option<String>| -> Result<(), MiddleErr> {
+                    |env: &mut Self, key: Ustr, value: Option<Ustr>| -> Result<(), MiddleErr> {
                         let scope_ref = env.scoping.scope_mut_or_err(scope)?;
                         if let Some(v) = value {
                             scope_ref.mappings.insert(key, v);
@@ -2877,7 +2869,7 @@ impl MiddleEnvironment {
                         Ok(())
                     };
 
-                prior_mappings.insert("$".to_string(), get_mapping(self, "$")?);
+                prior_mappings.insert(Ustr::from("$"), get_mapping(self, &Ustr::from("$"))?);
 
                 let mut idx = 0usize;
                 while idx < path.len() {

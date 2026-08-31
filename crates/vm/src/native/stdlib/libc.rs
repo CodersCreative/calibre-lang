@@ -7,8 +7,7 @@ use crate::{
     },
     value::RuntimeValue,
 };
-use std::sync::Arc;
-use wasm_sync::Mutex;
+use ustr::Ustr;
 extern crate errno;
 use errno::{Errno, errno, set_errno};
 
@@ -38,7 +37,7 @@ impl NativeFunction for GetCErrNoDescription {
         expect_num_args(&args, &[0])?;
 
         let e = errno();
-        Ok(RuntimeValue::Str(Arc::new(Mutex::new(e.to_string()))))
+        Ok(RuntimeValue::Str(Ustr::from(&e.to_string())))
     }
 }
 

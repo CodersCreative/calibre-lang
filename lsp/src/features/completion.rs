@@ -1,5 +1,6 @@
 use calibre_mir::{scoping::ScopeId, symbols::resolve::ResolutionOptions, typing::MiddleObject};
 use calibre_parser::ast::idents::ParserText;
+use ustr::Ustr;
 
 use super::*;
 
@@ -85,12 +86,12 @@ impl CalibreLanguageServer {
         let first = parts[0];
         let canonical_first = env
             .resolve(scope, &first, ResolutionOptions::all())
-            .unwrap_or_else(|_| first.to_string());
+            .unwrap_or_else(|_| Ustr::from(first));
 
         let mut current = if let Some(var) = env.symbols.variables.get(&canonical_first) {
             var.data_type.clone()
         } else if env.typing.objects.contains_key(&canonical_first) {
-            ParserDataType::new(CalSpan::default(), ParserInnerType::Struct(canonical_first))
+            ParserDataType::new(CalSpan::default(), ParserInnerType::Struct(canonical_first.to_string()))
         } else {
             ParserDataType::new(
                 CalSpan::default(),
@@ -104,7 +105,7 @@ impl CalibreLanguageServer {
                 continue;
             }
             if let Some(field_ty) =
-                env.resolve_member_field_type(scope, &current, member, CalSpan::default())
+                env.resolve_member_field_type(scope, &current, &Ustr::from(&member), CalSpan::default())
             {
                 current = field_ty;
                 continue;
@@ -132,7 +133,7 @@ impl CalibreLanguageServer {
     ) -> Option<&'a MiddleObject> {
         env.typing
             .objects
-            .get(&data_type.clone().unwrap_all_refs().impl_name())
+            .get(&Ustr::from(&data_type.clone().unwrap_all_refs().impl_name()))
     }
 
     pub(super) fn extract_callee_before_open_paren(text: &str, open_idx: usize) -> Option<String> {
@@ -490,7 +491,8 @@ impl CalibreLanguageServer {
         visible: &str,
         canonical: &str,
     ) -> CompletionItem {
-        let (detail, kind, documentation) = if let Some(var) = env.symbols.variables.get(canonical)
+        let canonical = Ustr::from(canonical);
+        let (detail, kind, documentation) = if let Some(var) = env.symbols.variables.get(&canonical)
         {
             match &var.data_type.data_type {
                 ParserInnerType::Function {
@@ -524,8 +526,8 @@ impl CalibreLanguageServer {
                     )
                 }
             }
-        } else if env.typing.objects.contains_key(canonical) {
-            let (detail, kind) = if let Some(object) = env.typing.objects.get(canonical) {
+        } else if env.typing.objects.contains_key(&canonical) {
+            let (detail, kind) = if let Some(object) = env.typing.objects.get(&canonical) {
                 (
                     object.object_type.to_string(),
                     match &object.object_type {
@@ -571,7 +573,7 @@ impl CalibreLanguageServer {
                     if !prefix.is_empty() && !visible.starts_with(prefix) {
                         continue;
                     }
-                    out.entry(visible.clone()).or_insert_with(|| {
+                    out.entry(visible.to_string()).or_insert_with(|| {
                         Self::global_semantic_completion_item(env, visible, canonical)
                     });
                 }
@@ -608,7 +610,7 @@ impl CalibreLanguageServer {
             }
         }
 
-        if let Some(imp) = env.typing.find_impl_for_type(&base_ty.impl_name()) {
+        if let Some(imp) = env.typing.find_impl_for_type(&Ustr::from(&base_ty.impl_name())) {
             for (member_name, canonical_member) in imp.get_all_members() {
                 if !prefix.is_empty() && !member_name.starts_with(prefix) {
                     continue;
@@ -627,8 +629,8 @@ impl CalibreLanguageServer {
                     })
                     .unwrap_or_else(|| "method".to_string());
 
-                out.entry(member_name.clone()).or_insert(CompletionItem {
-                    label: member_name.clone(),
+                out.entry(member_name.to_string()).or_insert(CompletionItem {
+                    label: member_name.to_string(),
                     detail: Some(detail),
                     kind: Some(CompletionItemKind::METHOD),
                     documentation: Some(Documentation::String(format!(

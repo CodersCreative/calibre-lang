@@ -6,20 +6,20 @@ use crate::{
     },
     environment::{LirFunction, LirGlobal, LirRegistry},
 };
-use rustc_hash::FxHashSet;
+use ustr::{Ustr, UstrSet};
 
 enum WorkItem {
-    Function(String),
-    Global(String),
-    Type(String),
+    Function(Ustr),
+    Global(Ustr),
+    Type(Ustr),
 }
 
 #[derive(Default)]
 struct WorkList {
     stack: Vec<WorkItem>,
-    seen_functions: FxHashSet<String>,
-    seen_globals: FxHashSet<String>,
-    seen_types: FxHashSet<String>,
+    seen_functions: UstrSet,
+    seen_globals: UstrSet,
+    seen_types: UstrSet,
 }
 
 impl WorkList {
@@ -27,7 +27,7 @@ impl WorkList {
         self.stack.pop()
     }
 
-    pub fn push_function(&mut self, value: String) {
+    pub fn push_function(&mut self, value: Ustr) {
         if self.seen_functions.contains(&value) {
             return;
         }
@@ -36,7 +36,7 @@ impl WorkList {
         self.stack.push(WorkItem::Function(value));
     }
 
-    pub fn push_global(&mut self, value: String) {
+    pub fn push_global(&mut self, value: Ustr) {
         if self.seen_globals.contains(&value) {
             return;
         }
@@ -45,7 +45,7 @@ impl WorkList {
         self.stack.push(WorkItem::Global(value));
     }
 
-    pub fn push_type(&mut self, value: String) {
+    pub fn push_type(&mut self, value: Ustr) {
         if self.seen_types.contains(&value) {
             return;
         }
@@ -62,7 +62,7 @@ impl WorkList {
 impl LirRegistry {
     pub fn eliminate_dead_code(
         mut self,
-        entry_points: Vec<String>,
+        entry_points: Vec<Ustr>,
         include_tests: bool,
     ) -> LirRegistry {
         let (reachable_functions, reachable_globals, referenced_types) =
@@ -75,14 +75,14 @@ impl LirRegistry {
             reachable_functions.contains(name)
                 || name
                     .rsplit_once(".")
-                    .is_some_and(|x| reachable_functions.contains(x.1))
+                    .is_some_and(|x| reachable_functions.contains(&Ustr::from(x.1)))
         });
 
         self.globals.retain(|name, _| {
             reachable_globals.contains(name)
                 || name
                     .rsplit_once(".")
-                    .is_some_and(|x| reachable_globals.contains(x.1))
+                    .is_some_and(|x| reachable_globals.contains(&Ustr::from(x.1)))
         });
 
         self
@@ -90,12 +90,12 @@ impl LirRegistry {
 
     fn collect_references(
         &self,
-        entry_points: Vec<String>,
+        entry_points: Vec<Ustr>,
         include_tests: bool,
-    ) -> (FxHashSet<String>, FxHashSet<String>, FxHashSet<String>) {
-        let mut reachable_functions: FxHashSet<String> = FxHashSet::default();
-        let mut reachable_globals: FxHashSet<String> = FxHashSet::default();
-        let mut referenced_types: FxHashSet<String> = FxHashSet::default();
+    ) -> (UstrSet, UstrSet, UstrSet) {
+        let mut reachable_functions= UstrSet::default();
+        let mut reachable_globals = UstrSet::default();
+        let mut referenced_types = UstrSet::default();
 
         for entry in entry_points.iter() {
             if self.functions.contains_key(entry) {
@@ -137,13 +137,13 @@ impl LirRegistry {
             }
 
             for typ in referenced_types.clone().iter() {
-                for global in self.globals.iter().filter(|x| x.0.contains(typ)) {
+                for global in self.globals.iter().filter(|x| x.0.contains(typ.as_str())) {
                     if reachable_globals.insert(global.0.clone()) {
                         worklist.push_global(global.0.clone());
                     }
                 }
 
-                for func in self.functions.iter().filter(|x| x.0.contains(typ)) {
+                for func in self.functions.iter().filter(|x| x.0.contains(typ.as_str())) {
                     if reachable_functions.insert(func.0.clone()) {
                         worklist.push_function(func.0.clone());
                     }
@@ -175,13 +175,13 @@ impl LirRegistry {
                         }
                     }
                     WorkItem::Type(typ) => {
-                        for global in self.globals.iter().filter(|x| x.0.contains(&typ)) {
+                        for global in self.globals.iter().filter(|x| x.0.contains(typ.as_str())) {
                             if reachable_globals.insert(global.0.clone()) {
                                 worklist.push_global(global.0.clone());
                             }
                         }
 
-                        for func in self.functions.iter().filter(|x| x.0.contains(&typ)) {
+                        for func in self.functions.iter().filter(|x| x.0.contains(typ.as_str())) {
                             if reachable_functions.insert(func.0.clone()) {
                                 worklist.push_function(func.0.clone());
                             }
@@ -199,9 +199,9 @@ impl LirFunction {
     fn collect_references(
         &self,
         registry: &LirRegistry,
-        reachable_functions: &mut FxHashSet<String>,
-        reachable_globals: &mut FxHashSet<String>,
-        referenced_types: &mut FxHashSet<String>,
+        reachable_functions: &mut UstrSet,
+        reachable_globals: &mut UstrSet,
+        referenced_types: &mut UstrSet,
         worklist: &mut WorkList,
     ) {
         for block in &self.blocks {
@@ -232,9 +232,9 @@ impl LirGlobal {
     fn collect_references(
         &self,
         registry: &LirRegistry,
-        reachable_functions: &mut FxHashSet<String>,
-        reachable_globals: &mut FxHashSet<String>,
-        referenced_types: &mut FxHashSet<String>,
+        reachable_functions: &mut UstrSet,
+        reachable_globals: &mut UstrSet,
+        referenced_types: &mut UstrSet,
         worklist: &mut WorkList,
     ) {
         for block in &self.blocks {
@@ -265,24 +265,24 @@ impl LirNodeType {
     fn collect_references(
         &self,
         registry: &LirRegistry,
-        reachable_functions: &mut FxHashSet<String>,
-        reachable_globals: &mut FxHashSet<String>,
-        referenced_types: &mut FxHashSet<String>,
+        reachable_functions: &mut UstrSet,
+        reachable_globals: &mut UstrSet,
+        referenced_types: &mut UstrSet,
         worklist: &mut WorkList,
     ) {
         match self {
             LirNodeType::Load(LirLoad { value })
             | LirNodeType::Move(LirMove { value })
             | LirNodeType::RefLoad(LirRefLoad { value }) => {
-                if registry.functions.contains_key(value.as_ref())
-                    && reachable_functions.insert(value.as_ref().to_string())
+                if registry.functions.contains_key(value)
+                    && reachable_functions.insert(*value)
                 {
-                    worklist.push_function(value.as_ref().to_string());
+                    worklist.push_function(*value);
                 }
 
-                if registry.globals.contains_key(value.as_ref()) {
-                    if reachable_globals.insert(value.as_ref().to_string()) {
-                        worklist.push_global(value.as_ref().to_string());
+                if registry.globals.contains_key(value) {
+                    if reachable_globals.insert(*value) {
+                        worklist.push_global(*value);
                     }
                 }
             }
@@ -306,14 +306,14 @@ impl LirNodeType {
                 }
             }
             LirNodeType::Closure(LirClosure { label, .. }) => {
-                if registry.functions.contains_key(label.as_ref())
-                    && reachable_functions.insert(label.as_ref().to_string())
+                if registry.functions.contains_key(label)
+                    && reachable_functions.insert(*label)
                 {
-                    worklist.push_function(label.as_ref().to_string());
+                    worklist.push_function(*label);
                 }
             }
             LirNodeType::List(LirList { values, data_type }) => {
-                let type_name = data_type.impl_name();
+                let type_name = Ustr::from(&data_type.impl_name());
                 if referenced_types.insert(type_name.clone()) {
                     worklist.push_type(type_name);
                 }
@@ -330,8 +330,8 @@ impl LirNodeType {
             }
             LirNodeType::Aggregate(LirAggregate { name, fields }) => {
                 if let Some(x) = name {
-                    if referenced_types.insert(x.to_string()) {
-                        worklist.push_type(x.to_string());
+                    if referenced_types.insert(*x) {
+                        worklist.push_type(*x);
                     }
                 }
 
@@ -386,8 +386,8 @@ impl LirNodeType {
                 );
             }
             LirNodeType::Enum(LirEnum { name, payload, .. }) => {
-                if referenced_types.insert(name.as_ref().to_string()) {
-                    worklist.push_type(name.as_ref().to_string());
+                if referenced_types.insert(*name) {
+                    worklist.push_type(*name);
                 }
                 if let Some(payload) = payload {
                     payload.collect_references(
@@ -408,7 +408,7 @@ impl LirNodeType {
                 value, data_type, ..
             })
             | LirNodeType::Is(LirIs { value, data_type }) => {
-                let type_name = data_type.impl_name();
+                let type_name = Ustr::from(&data_type.impl_name());
                 if referenced_types.insert(type_name.clone()) {
                     worklist.push_type(type_name);
                 }
@@ -465,9 +465,9 @@ impl LirTerminator {
     fn collect_references(
         &self,
         registry: &LirRegistry,
-        reachable_functions: &mut FxHashSet<String>,
-        reachable_globals: &mut FxHashSet<String>,
-        referenced_types: &mut FxHashSet<String>,
+        reachable_functions: &mut UstrSet,
+        reachable_globals: &mut UstrSet,
+        referenced_types: &mut UstrSet,
         worklist: &mut WorkList,
     ) {
         match self {

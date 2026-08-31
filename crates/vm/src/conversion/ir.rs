@@ -11,8 +11,9 @@ use calibre_parser::ast::{
     types::ParserDataType,
 };
 use indextree::NodeId;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap};
 use serde::{Deserialize, Serialize};
+use ustr::{Ustr, UstrMap, UstrSet};
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -22,16 +23,14 @@ pub type Reg = u16;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct VMRegistry {
-    #[serde(with = "crate::serialization::serde_fxhashmap_rc")]
-    pub functions: FxHashMap<String, Arc<VMFunction>>,
-    #[serde(with = "crate::serialization::serde_fxhashmap")]
-    pub globals: FxHashMap<String, VMGlobal>,
-    #[serde(with = "crate::serialization::serde_fxhashmap")]
-    pub natives: FxHashMap<String, String>,
+    #[serde(with = "crate::serialization::serde_ustrmap_rc")]
+    pub functions: UstrMap<Arc<VMFunction>>,
+    pub globals: UstrMap<VMGlobal>,
+    pub natives: UstrMap<Ustr>,
     #[serde(default)]
-    pub dyn_vtables: FxHashMap<String, FxHashMap<String, FxHashMap<String, String>>>,
+    pub dyn_vtables: UstrMap<UstrMap<UstrMap<Ustr>>>,
     #[serde(default)]
-    pub scope_to_file: FxHashMap<NodeId, String>,
+    pub scope_to_file: FxHashMap<NodeId, Ustr>,
 }
 
 impl Display for VMRegistry {
@@ -53,13 +52,13 @@ impl Display for VMRegistry {
 impl From<LirRegistry> for VMRegistry {
     fn from(value: LirRegistry) -> Self {
         let mut functions =
-            FxHashMap::with_capacity_and_hasher(value.functions.len(), Default::default());
+            UstrMap::with_capacity_and_hasher(value.functions.len(), Default::default());
         for (k, func) in value.functions {
             functions.insert(k, Arc::new(func.into()));
         }
 
         let mut globals =
-            FxHashMap::with_capacity_and_hasher(value.globals.len(), Default::default());
+            UstrMap::with_capacity_and_hasher(value.globals.len(), Default::default());
         for (k, v) in value.globals {
             globals.insert(k, v.into());
         }
@@ -98,7 +97,7 @@ impl Display for VMGlobal {
 
 impl From<LirGlobal> for VMGlobal {
     fn from(value: LirGlobal) -> Self {
-        let func = VMFunction::from_global(value.name.to_string(), value.blocks.into_vec());
+        let func = VMFunction::from_global(value.name, value.blocks.into_vec());
         Self {
             name: value.name.to_string(),
             blocks: func.blocks,
@@ -111,15 +110,14 @@ impl From<LirGlobal> for VMGlobal {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VMFunction {
-    pub name: String,
-    pub params: Box<[String]>,
+    pub name: Ustr,
+    pub params: Box<[Ustr]>,
     #[serde(skip)]
-    pub param_names: FxHashSet<String>,
-    pub captures: Box<[String]>,
+    pub param_names: UstrSet,
+    pub captures: Box<[Ustr]>,
     pub returns_value: bool,
     pub blocks: Box<[VMBlock]>,
-    #[serde(with = "crate::serialization::serde_fxhashmap")]
-    pub renamed: FxHashMap<String, String>,
+    pub renamed: UstrMap<Ustr>,
     pub reg_count: Reg,
     pub param_regs: Vec<Reg>,
     pub ret_reg: Reg,
@@ -130,10 +128,10 @@ pub struct VMFunction {
 }
 
 impl VMFunction {
-    pub fn rename(mut self, mut declared: FxHashMap<String, String>) -> Self {
+    pub fn rename(mut self, mut declared: UstrMap<Ustr>) -> Self {
         for param in self.params.iter_mut() {
-            let new_name = format!("{}->{}", param, fastrand::u32(0..u32::MAX));
-            declared.insert(param.to_string(), new_name.clone());
+            let new_name = Ustr::from(&format!("{}->{}", param, fastrand::u32(0..u32::MAX)));
+            declared.insert(Ustr::from(param), new_name.clone());
             *param = new_name;
         }
 
@@ -149,8 +147,8 @@ impl VMFunction {
                             && !declared.contains_key(dest)
                         {
                             declared.insert(
-                                dest.to_string(),
-                                format!("{}->{}", dest, fastrand::u32(0..u32::MAX)),
+                                *dest,
+                                Ustr::from(&format!("{}->{}", dest, fastrand::u32(0..u32::MAX))),
                             );
                         }
                     }
@@ -160,7 +158,7 @@ impl VMFunction {
 
             for string in block.local_strings.iter_mut() {
                 if let Some(x) = declared.get(string) {
-                    *string = x.to_string();
+                    *string = *x;
                 }
             }
 
@@ -168,7 +166,7 @@ impl VMFunction {
                 if let VMLiteral::Closure { label, captures: _ } = literal
                     && let Some(x) = declared.get(label)
                 {
-                    *label = x.to_string();
+                    *label = *x;
                 }
             }
         }
@@ -215,7 +213,7 @@ pub struct VMBlock {
     pub instructions: Vec<VMInstruction>,
     pub instruction_spans: Vec<Span>,
     pub local_literals: Vec<VMLiteral>,
-    pub local_strings: Vec<String>,
+    pub local_strings: Vec<Ustr>,
     pub aggregate_layouts: Vec<AggregateLayout>,
     pub phis: Vec<PhiNode>,
 }
@@ -249,13 +247,13 @@ impl Display for VMBlock {
 pub struct PhiNode {
     pub dest: Reg,
     pub sources: Vec<(BlockId, Reg)>,
-    pub name: Option<String>,
+    pub name: Option<Ustr>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregateLayout {
-    pub name: Option<String>,
-    pub members: Vec<String>,
+    pub name: Option<Ustr>,
+    pub members: Vec<Ustr>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -267,16 +265,16 @@ pub enum VMLiteral {
     Byte(u8),
     Float(f64),
     Char(char),
-    String(String),
+    String(Ustr),
     Null,
     Closure {
-        label: String,
-        captures: Vec<String>,
+        label: Ustr,
+        captures: Vec<Ustr>,
     },
     ExternFunction {
-        abi: String,
-        library: String,
-        symbol: String,
+        abi: Ustr,
+        library: Ustr,
+        symbol: Ustr,
         parameters: Vec<ParserDataType>,
         return_type: ParserDataType,
     },

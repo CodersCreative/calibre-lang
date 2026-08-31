@@ -9,6 +9,7 @@ use calibre_parser::{
 };
 use rustc_hash::FxHashMap;
 use std::fmt::Debug;
+use ustr::{Ustr, UstrMap};
 
 pub mod node;
 pub mod overloads;
@@ -16,20 +17,19 @@ pub mod resolve;
 
 #[derive(Debug, Clone, Default)]
 pub struct Symbols {
-    pub variables: FxHashMap<String, MiddleVariable>,
-    pub native_mappings: FxHashMap<String, String>,
-    pub resolved_variables: Vec<String>,
+    pub variables: UstrMap<MiddleVariable>,
+    pub native_mappings: UstrMap<Ustr>,
     pub overloads: Vec<MiddleOverload>,
-    pub generic_fn_templates: FxHashMap<String, (Vec<String>, FunctionHeader, AstNode)>,
-    pub function_param_defaults: FxHashMap<String, Vec<FunctionParamDefault>>,
-    pub fn_specializations: FxHashMap<String, String>,
+    pub generic_fn_templates: UstrMap<(Vec<Ustr>, FunctionHeader, AstNode)>,
+    pub function_param_defaults: UstrMap<Vec<FunctionParamDefault>>,
+    pub fn_specializations: UstrMap<Ustr>,
     pub specialization_decls_by_scope: FxHashMap<ScopeId, Vec<MiddleNode>>,
     pub func_defers: Vec<AstNode>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionParamDefault {
-    pub name: String,
+    pub name: Ustr,
     pub explicit_default: Option<MiddleNode>,
     pub implicit_none: bool,
 }
@@ -47,5 +47,5 @@ pub struct MiddleOverload {
     pub parameters: Vec<ParserDataType>,
     pub return_type: ParserDataType,
     pub func: AstNode,
-    pub generic_params: Vec<String>,
+    pub generic_params: Vec<Ustr>,
 }

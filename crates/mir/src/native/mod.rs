@@ -12,32 +12,32 @@ use calibre_parser::{
     },
 };
 use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
-use rustc_hash::FxHashMap;
 use std::{fs, path::PathBuf};
+use ustr::{Ustr, UstrMap};
 
 impl Scoping {
     pub fn new_root_scope_no_std(
         &mut self,
         parent: Option<ScopeId>,
         path: PathBuf,
-        namespace: Option<&str>,
+        namespace: Option<&Ustr>,
     ) -> ScopeId {
         let scope = self.add_scope(
             MiddleScope {
-                macros: FxHashMap::default(),
-                macro_args: FxHashMap::default(),
-                namespace: namespace.unwrap_or_default().to_string(),
+                macros: UstrMap::default(),
+                macro_args: UstrMap::default(),
+                namespace: namespace.cloned().unwrap_or_default(),
                 path: path.clone(),
-                mappings: FxHashMap::default(),
-                type_mappings: FxHashMap::default(),
-                children: FxHashMap::default(),
+                mappings: UstrMap::default(),
+                type_mappings: UstrMap::default(),
+                children: UstrMap::default(),
                 defers: Vec::new(),
                 built: false,
             },
             parent,
         );
 
-        self.new_scope(Some(scope), path, Some("root"))
+        self.new_scope(Some(scope), path, Some(&Ustr::from("root")))
     }
 }
 
@@ -46,18 +46,18 @@ impl MiddleEnvironment {
         &mut self,
         parent: Option<ScopeId>,
         path: PathBuf,
-        namespace: Option<&str>,
+        namespace: Option<&Ustr>,
     ) -> ScopeId {
         self.register_tag_handlers();
         let scope = self.scoping.add_scope(
             MiddleScope {
-                macros: FxHashMap::default(),
-                macro_args: FxHashMap::default(),
-                namespace: namespace.unwrap_or_default().to_string(),
+                macros: UstrMap::default(),
+                macro_args: UstrMap::default(),
+                namespace: namespace.cloned().unwrap_or_default(),
                 path: path.clone(),
-                mappings: FxHashMap::default(),
-                type_mappings: FxHashMap::default(),
-                children: FxHashMap::default(),
+                mappings: UstrMap::default(),
+                type_mappings: UstrMap::default(),
+                children: UstrMap::default(),
                 defers: Vec::new(),
                 built: false,
             },
@@ -99,11 +99,12 @@ impl MiddleEnvironment {
 
         let std = self
             .scoping
-            .new_scope(Some(scope), get_stdlib_path(), Some("std"));
+            .new_scope(Some(scope), get_stdlib_path(), Some(&Ustr::from("std")));
 
         self.setup_std(std);
 
-        self.scoping.new_scope(Some(scope), path, Some("root"))
+        self.scoping
+            .new_scope(Some(scope), path, Some(&Ustr::from("root")))
     }
 
     pub fn setup_global(&mut self, scope: ScopeId) {
@@ -116,18 +117,13 @@ impl MiddleEnvironment {
             ParserDataType::constants().iter().collect();
         vars.append(&mut funcs);
 
-        for var in vars {
-            let name = ParserText::temp_name_with_suffix(var.0, var.1.span).text;
+        for (name, var) in vars {
+            let name = Ustr::from(name);
+            let new_name = Ustr::from(&ParserText::temp_name_with_suffix(name, var.span).text);
 
-            let _ = self.register_variable(
-                scope,
-                var.0.clone(),
-                name.clone(),
-                var.1.clone(),
-                VarType::Constant,
-            );
+            let _ = self.register_variable(scope, name, new_name, var.clone(), VarType::Constant);
 
-            self.symbols.native_mappings.insert(var.0.clone(), name);
+            self.symbols.native_mappings.insert(name, new_name);
         }
     }
 
@@ -176,7 +172,7 @@ impl MiddleEnvironment {
             }
         }
 
-        let mut add = |name, load| self.setup_std_module(scope, name, load);
+        let mut add = |name, load| self.setup_std_module(scope, Ustr::from(name), load);
 
         add("traits", true);
         add("thread", true);
@@ -201,11 +197,11 @@ impl MiddleEnvironment {
         add("json", false);
     }
 
-    pub fn setup_std_module(&mut self, parent: ScopeId, name: &str, load_source: bool) {
-        let scope_path = get_stdlib_module_path(name);
+    pub fn setup_std_module(&mut self, parent: ScopeId, name: Ustr, load_source: bool) {
+        let scope_path = get_stdlib_module_path(&name);
         let scope = self
             .scoping
-            .new_scope(Some(parent), scope_path.clone(), Some(name));
+            .new_scope(Some(parent), scope_path.clone(), Some(&name));
 
         let funcs: Vec<(&String, &ParserDataType)> = ParserDataType::natives()
             .iter()
@@ -213,14 +209,15 @@ impl MiddleEnvironment {
             .collect();
 
         for (original_name, var) in funcs {
-            let short_name = original_name
-                .rsplit_once(".")
-                .map(|x| x.1)
-                .unwrap_or(original_name)
-                .trim()
-                .to_string();
+            let short_name = Ustr::from(
+                original_name
+                    .rsplit_once(".")
+                    .map(|x| x.1)
+                    .unwrap_or(original_name)
+                    .trim(),
+            );
 
-            let name = ParserText::temp_name_with_suffix(&short_name, var.span).text;
+            let name = Ustr::from(&ParserText::temp_name_with_suffix(&short_name, var.span).text);
 
             let _ = self.register_variable(
                 scope,
@@ -232,7 +229,7 @@ impl MiddleEnvironment {
 
             self.symbols
                 .native_mappings
-                .insert(original_name.clone(), name);
+                .insert(Ustr::from(original_name), name);
         }
 
         if load_source {

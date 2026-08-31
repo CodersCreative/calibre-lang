@@ -22,7 +22,7 @@ use calibre_parser::Span;
 impl LirLowering for MirBreak {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
-        env.jump_to_loop_target_if_present(span, LirEnvironment::loop_label(&self.label), true);
+        env.jump_to_loop_target_if_present(span, self.label.as_ref(), true);
         LirNodeType::null()
     }
 }
@@ -30,7 +30,7 @@ impl LirLowering for MirBreak {
 impl LirLowering for MirContinue {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
-        env.jump_to_loop_target_if_present(span, LirEnvironment::loop_label(&self.label), false);
+        env.jump_to_loop_target_if_present(span, self.label.as_ref(), false);
         LirNodeType::null()
     }
 }
@@ -86,7 +86,7 @@ impl LirLowering for MirConditional {
         let merge_id = env.create_block();
 
         let temp = env.get_temp();
-        env.declare_temp_null(span, temp.as_str());
+        env.declare_temp_null(span, temp);
 
         let cond = env.lower_node(*self.comparison);
         env.set_terminator(LirTerminator::Branch {
@@ -99,7 +99,7 @@ impl LirLowering for MirConditional {
         env.switch_to(then_id);
         let then_val = env.lower_node(*self.then);
         if env.current_block_open() {
-            env.assign_temp_if_non_null(span, temp.as_str(), then_val);
+            env.assign_temp_if_non_null(span, temp, then_val);
             env.jump_if_open(span, merge_id);
         }
 
@@ -111,13 +111,13 @@ impl LirLowering for MirConditional {
         };
 
         if env.current_block_open() {
-            env.assign_temp_if_non_null(span, temp.as_str(), else_val);
+            env.assign_temp_if_non_null(span, temp, else_val);
             env.jump_if_open(span, merge_id);
         }
 
         env.switch_to(merge_id);
         LirNodeType::Load(LirLoad {
-            value: temp.into_boxed_str(),
+            value: temp,
         })
     }
 }
@@ -145,7 +145,7 @@ impl LirLowering for MirLoop {
         });
 
         env.loop_stack
-            .push((header_id, exit_id, self.label.map(|l| l.text)));
+            .push((header_id, exit_id, self.label));
 
         env.switch_to(body_id);
         env.lower_and_add_node(*self.body);

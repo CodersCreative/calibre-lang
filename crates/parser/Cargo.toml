@@ -17,6 +17,7 @@ thiserror = { workspace = true }
 serde = { workspace = true}
 rustc-hash = { workspace = true }
 chumsky = "0.12"
+ustr = { workspace = true }
 
 [features]
 default = ["native"]

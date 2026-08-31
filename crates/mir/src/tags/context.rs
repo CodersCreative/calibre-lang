@@ -10,31 +10,32 @@ use calibre_parser::ast::{
     nodes::{AstNode, AstNodeType, VarType},
     types::ParserDataType,
 };
+use ustr::Ustr;
 
 #[derive(Debug, Clone, Default)]
 pub struct PackageMetadata {
-    pub name: String,
-    pub version: String,
-    pub description: String,
-    pub license: String,
-    pub repository: String,
-    pub homepage: String,
-    pub src: String,
-    pub root: String,
+    pub name: Ustr,
+    pub version: Ustr,
+    pub description: Ustr,
+    pub license: Ustr,
+    pub repository: Ustr,
+    pub homepage: Ustr,
+    pub src: Ustr,
+    pub root: Ustr,
 }
 
 impl MiddleEnvironment {
     pub fn package_metadata_for_scope(&self, scope: &MiddleScope) -> PackageMetadata {
         if scope.namespace == "std" {
             return PackageMetadata {
-                name: String::from("std"),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                description: String::from("Calibre standard library"),
-                license: String::from("MIT"),
-                repository: String::new(),
-                homepage: String::new(),
-                src: scope.path.to_string_lossy().to_string(),
-                root: scope.path.to_string_lossy().to_string(),
+                name: Ustr::from("std"),
+                version: Ustr::from(env!("CARGO_PKG_VERSION")),
+                description: Ustr::from("Calibre standard library"),
+                license: Ustr::from("MIT"),
+                repository: Ustr::default(),
+                homepage: Ustr::default(),
+                src: Ustr::from(&scope.path.to_string_lossy()),
+                root: Ustr::from(&scope.path.to_string_lossy()),
             };
         }
 
@@ -44,26 +45,26 @@ impl MiddleEnvironment {
                 .package_metadata
                 .clone()
                 .unwrap_or_else(|| PackageMetadata {
-                    name: String::from("__package__"),
-                    version: String::from("0.0.0"),
-                    description: String::from("default package metadata"),
-                    license: String::new(),
-                    repository: String::new(),
-                    homepage: String::new(),
+                    name: Ustr::from("__package__"),
+                    version: Ustr::from("0.0.0"),
+                    description: Ustr::from("default package metadata"),
+                    license: Ustr::default(),
+                    repository: Ustr::default(),
+                    homepage: Ustr::default(),
                     src: scope.path_or_fallback(),
-                    root: String::new(),
+                    root: Ustr::default(),
                 });
         }
 
         PackageMetadata {
             name: scope.namespace.clone(),
-            version: String::from("0.0.0"),
-            description: String::from("default package metadata"),
-            license: String::new(),
-            repository: String::new(),
-            homepage: String::new(),
+            version: Ustr::from("0.0.0"),
+            description: Ustr::from("default package metadata"),
+            license: Ustr::default(),
+            repository: Ustr::default(),
+            homepage: Ustr::default(),
             src: scope.path_or_fallback(),
-            root: String::new(),
+            root: Ustr::default(),
         }
     }
 
@@ -78,8 +79,7 @@ impl MiddleEnvironment {
 
         let sp = node.span;
         let meta = self.package_metadata_for_scope(scope_ref);
-        let value =
-            |v: String| AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, v)));
+        let value = |v: Ustr| AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, v)));
 
         let mut prefix = vec![AstNode::new(
             sp,
@@ -137,14 +137,13 @@ impl MiddleEnvironment {
         };
 
         let sp = node.span;
-        let value =
-            |v: String| AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, v)));
+        let value = |v: Ustr| AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, v)));
 
         let function_name = match &node.node_type {
-            AstNodeType::VariableDeclaration { identifier, .. } => match identifier {
-                PotentialDollarIdentifier::Identifier(text) => text.text.clone(),
-                PotentialDollarIdentifier::DollarIdentifier(text) => text.text.clone(),
-            },
+            AstNodeType::VariableDeclaration { identifier, .. } => Ustr::from(match identifier {
+                PotentialDollarIdentifier::Identifier(text) => &text.text,
+                PotentialDollarIdentifier::DollarIdentifier(text) => &text.text,
+            }),
             _ => scope_ref.namespace.clone(),
         };
 
@@ -166,14 +165,13 @@ impl MiddleEnvironment {
                             ),
                             (
                                 "path".to_string(),
-                                value(
-                                    scope_ref
+                                value(Ustr::from(
+                                    &scope_ref
                                         .path
                                         .canonicalize()
                                         .unwrap_or_default()
-                                        .to_string_lossy()
-                                        .to_string(),
-                                ),
+                                        .to_string_lossy(),
+                                )),
                             ),
                             (
                                 "line".to_string(),

@@ -6,6 +6,7 @@ use derive_builder::Builder;
 use rustyline::DefaultEditor;
 use rustyline::error::ReadlineError;
 use smol::fs;
+use ustr::Ustr;
 use std::{
     error::Error,
     path::{Path, PathBuf},
@@ -140,20 +141,20 @@ impl<'a> RunSource<'a> {
         let lir_result = LirEnvironment::lower_with_root(
             &middle_result.0,
             middle_result.2.clone(),
-            "__repl".to_string(),
+            Ustr::from("__repl"),
         );
 
-        let mappings: Vec<String> = middle_result
+        let mappings: Vec<Ustr> = middle_result
             .0
             .symbols
             .variables
             .iter()
-            .map(|x| x.0.to_string())
+            .map(|x| x.0.clone())
             .collect();
 
         let mut vm: VM = VM::new(VMRegistry::from(lir_result), mappings, self.vm_config);
         let mut globals = vm.registry.globals.clone();
-        let repl_global = globals.remove("__repl");
+        let repl_global = globals.remove(&Ustr::from("__repl"));
 
         for (_, global) in globals {
             if let Err(err) = vm.run_global(&global) {

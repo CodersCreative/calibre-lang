@@ -8,6 +8,7 @@ use crate::{
     value::RuntimeValue,
 };
 use dumpster::sync::Gc;
+use ustr::Ustr;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, OnceLock};
@@ -38,9 +39,9 @@ fn parse_http_args(
     ];
 
     let parts = [
-        parts[0].lock().unwrap(),
-        parts[1].lock().unwrap(),
-        parts[2].lock().unwrap(),
+        parts[0].as_str(),
+        parts[1].as_str(),
+        parts[2].as_str(),
     ];
 
     let looks_like_method = |s: &str| {
@@ -101,7 +102,7 @@ impl NativeFunction for HttpRequest {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let (method, url, body) = parse_http_args(env, args)?;
         let text = send_http_request(&method, &url, &body)?;
-        Ok(RuntimeValue::Str(Arc::new(Mutex::new(text))))
+        Ok(RuntimeValue::Str(Ustr::from(&text)))
     }
 }
 
@@ -116,10 +117,10 @@ impl NativeFunction for HttpRequestTry {
         let (method, url, body) = parse_http_args(env, args)?;
         match send_http_request(&method, &url, &body) {
             Ok(text) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Str(
-                Arc::new(Mutex::new(text)),
+                Ustr::from(&text),
             ))))),
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
-                Arc::new(Mutex::new(e.to_string())),
+                Ustr::from(&e.to_string()),
             ))))),
         }
     }
@@ -137,8 +138,6 @@ impl NativeFunction for TcpConnect {
 
         let port = resolve_int(env, &pop_or_null(&mut args))?;
         let host = resolve_str(env, &pop_or_null(&mut args))?
-            .lock()
-            .unwrap()
             .to_string();
 
         let remapped_port = {
@@ -173,8 +172,7 @@ impl NativeFunction for TcpListen {
 
         let port = resolve_int(env, &pop_or_null(&mut args))?;
         let host = resolve_str(env, &pop_or_null(&mut args))?
-            .lock()
-            .unwrap()
+
             .to_string();
 
         let addr = format!("{}:{}", host, port);
@@ -277,14 +275,14 @@ impl NativeFunction for TcpRead {
             Ok(n) => {
                 buf.truncate(n);
                 let out = String::from_utf8_lossy(&buf).to_string();
-                Ok(RuntimeValue::Str(Arc::new(Mutex::new(out))))
+                Ok(RuntimeValue::Str(Ustr::from(&out)))
             }
             Err(e)
                 if e.kind() == std::io::ErrorKind::WouldBlock
                     || e.kind() == std::io::ErrorKind::TimedOut
                     || e.kind() == std::io::ErrorKind::ConnectionReset =>
             {
-                Ok(RuntimeValue::Str(Arc::new(Mutex::new(String::new()))))
+                Ok(RuntimeValue::Str(Ustr::default()))
             }
             Err(e) => Err(RuntimeError::Io(e.to_string())),
         }
@@ -309,7 +307,7 @@ impl NativeFunction for TcpWrite {
         let n = guard
             .downcast_mut::<TcpStream>()
             .unwrap()
-            .write(data.lock().unwrap().as_bytes())
+            .write(data.as_bytes())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
 
         Ok(RuntimeValue::Int(n as i64))

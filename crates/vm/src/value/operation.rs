@@ -8,6 +8,7 @@ use calibre_parser::ast::{
     comparison::{BooleanOperator, ComparisonOperator},
 };
 use dumpster::sync::Gc;
+use ustr::Ustr;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
 use std::sync::Arc;
 use wasm_sync::Mutex;
@@ -49,7 +50,7 @@ pub fn comparison(
             (RuntimeValue::Float(a), RuntimeValue::Float(b)) => Some(a == b),
             (RuntimeValue::Char(a), RuntimeValue::Char(b)) => Some(a == b),
             (RuntimeValue::Str(a), RuntimeValue::Str(b)) => {
-                Some(a.lock().unwrap().as_str() == b.lock().unwrap().as_mut_str())
+                Some(a == b)
             }
             (RuntimeValue::Enum(a_name, a_idx, _), RuntimeValue::Enum(b_name, b_idx, _)) => {
                 Some(a_name == b_name && a_idx == b_idx)
@@ -233,7 +234,7 @@ pub fn comparison(
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
         }
         (RuntimeValue::Str(x), RuntimeValue::Str(y), op) => Ok(RuntimeValue::Bool(
-            comparison_value_handle(op, x.lock().unwrap().as_str(), y.lock().unwrap().as_str()),
+            comparison_value_handle(op, x, y),
         )),
         (left, right, ComparisonOperator::Equal) => Ok(RuntimeValue::Bool(matches!(
             eq_value(&left, &right),
@@ -456,27 +457,26 @@ impl RuntimeValue {
             Self::Char(x) => {
                 let mut s = x.to_string();
                 s.push_str(&rhs.display(vm));
-                Ok(Self::Str(Arc::new(Mutex::new(s))))
+                Ok(Self::Str(Ustr::from(&s)))
             }
             Self::Str(x) => {
-                let value = rhs.display(vm);
-                x.lock().unwrap().push_str(&value);
-                Ok(Self::Str(x))
+                let mut value = x.to_string();
+                value.push_str(&rhs.display(vm));
+                Ok(Self::Str(Ustr::from(&x)))
             }
             lhs => match rhs {
                 Self::Char(x) => {
                     let mut s = lhs.display(vm);
                     s.push(x);
-                    Ok(Self::Str(Arc::new(Mutex::new(s))))
+                    Ok(Self::Str(Ustr::from(&s)))
                 }
                 Self::Str(x) => {
                     let mut value = lhs.display(vm);
                     {
-                        let mut data = x.lock().unwrap();
+                        let data = x.to_string();
                         value.push_str(data.as_str());
-                        *data = value;
                     }
-                    Ok(Self::Str(x))
+                    Ok(Self::Str(Ustr::from(&value)))
                 }
                 _ => Err((lhs, rhs)),
             },

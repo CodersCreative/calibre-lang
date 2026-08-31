@@ -52,7 +52,7 @@ impl LirLowering for MirBoolean {
         let merge_id = env.create_block();
 
         let temp = env.get_temp();
-        env.declare_temp_null(span, temp.as_str());
+        env.declare_temp_null(span, temp);
 
         let cond = env.lower_node(*self.left);
         env.set_terminator(LirTerminator::Branch {
@@ -72,20 +72,20 @@ impl LirLowering for MirBoolean {
                     operator: self.operator,
                 });
                 if env.current_block_open() {
-                    env.assign_var(span, temp.as_str(), checked);
+                    env.assign_var(span, temp, checked);
                     env.jump_if_open(span, merge_id);
                 }
 
                 env.switch_to(else_id);
                 if env.current_block_open() {
-                    env.assign_var(span, temp.as_str(), LirNodeType::bool(false));
+                    env.assign_var(span, temp, LirNodeType::bool(false));
                     env.jump_if_open(span, merge_id);
                 }
             }
             BooleanOperator::Or => {
                 env.switch_to(then_id);
                 if env.current_block_open() {
-                    env.assign_var(span, temp.as_str(), LirNodeType::bool(true));
+                    env.assign_var(span, temp, LirNodeType::bool(true));
                     env.jump_if_open(span, merge_id);
                 }
 
@@ -97,7 +97,7 @@ impl LirLowering for MirBoolean {
                     operator: self.operator,
                 });
                 if env.current_block_open() {
-                    env.assign_var(span, temp.as_str(), checked);
+                    env.assign_var(span, temp, checked);
                     env.jump_if_open(span, merge_id);
                 }
             }
@@ -105,7 +105,7 @@ impl LirLowering for MirBoolean {
 
         env.switch_to(merge_id);
         LirNodeType::Load(LirLoad {
-            value: temp.into_boxed_str(),
+            value: temp,
         })
     }
 }

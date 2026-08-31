@@ -28,7 +28,7 @@ impl RuntimeValue {
         }
 
         match self {
-            Self::Str(x) => format!("\"{}\"", x.lock().unwrap()),
+            Self::Str(x) => format!("\"{}\"", x),
             Self::Char(x) => format!("'{}'", x),
             Self::Ref(x) => match vm.variables.get(x) {
                 Some(value) => value.clone().repr(vm),
@@ -334,7 +334,7 @@ impl Display for RuntimeValue {
             Self::HashMap(_) => write!(f, "HashMap"),
             Self::HashSet(_) => write!(f, "HashSet"),
             Self::Host(_) => write!(f, "Host"),
-            Self::Str(x) => write!(f, "{}", x.lock().unwrap()),
+            Self::Str(x) => write!(f, "{}", x),
             Self::Char(x) => write!(f, "{}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
             Self::Generator { type_name: x, .. } => write!(
@@ -346,7 +346,7 @@ impl Display for RuntimeValue {
                 type_name,
                 constraints,
                 ..
-            } => write!(f, "dyn:<{}>({})", constraints.join(", "), type_name),
+            } => write!(f, "dyn:<{}>({})", constraints.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", "), type_name),
             Self::BoundMethod { .. } => write!(f, "<bound-method>"),
             Self::GeneratorSuspend(value) => write!(f, "<gen-suspend {}>", value),
         }

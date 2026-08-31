@@ -22,6 +22,7 @@ use std::fmt::Debug;
 use std::path::PathBuf;
 use std::str::FromStr;
 use tracing::{debug, instrument};
+use ustr::Ustr;
 
 #[derive(Debug, Clone, Default)]
 pub struct MiddleEnvironment {
@@ -48,8 +49,8 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         overload: Overload,
-        generic_params: Vec<String>,
-        target_name: Option<String>,
+        generic_params: Vec<Ustr>,
+        target_name: Option<Ustr>,
     ) -> Result<Option<MiddleOverload>, MiddleErr> {
         debug!("processing overload");
         overload.verify().map_err(MiddleErr::Overload)?;
@@ -106,8 +107,8 @@ impl MiddleEnvironment {
     pub fn register_variable(
         &mut self,
         scope: ScopeId,
-        original_name: impl ToString,
-        new_name: String,
+        original_name: Ustr,
+        new_name: Ustr,
         data_type: ParserDataType,
         var_type: VarType,
     ) -> Result<(), MiddleErr> {
@@ -121,13 +122,12 @@ impl MiddleEnvironment {
             },
         );
 
-        let original_name = original_name.to_string();
         if original_name != new_name {
             debug!("adding name mapping");
             self.scoping
                 .scope_mut_or_err(scope)?
                 .mappings
-                .insert(original_name.to_string(), new_name);
+                .insert(original_name, new_name);
         } else {
             debug!(name = ?original_name, "name already present");
         }

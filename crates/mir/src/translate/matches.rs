@@ -18,6 +18,7 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
+use ustr::Ustr;
 
 struct IdentAnalyzer<'a> {
     target: &'a str,
@@ -635,10 +636,10 @@ impl MiddleEnvironment {
         }
     }
 
-    fn enum_key_from_data_type(data_type: &ParserDataType) -> Option<String> {
+    fn enum_key_from_data_type(data_type: &ParserDataType) -> Option<Ustr> {
         match data_type.clone().unwrap_all_refs().data_type {
-            ParserInnerType::Struct(name) => Some(name),
-            ParserInnerType::StructWithGenerics { identifier, .. } => Some(identifier),
+            ParserInnerType::Struct(name) => Some(Ustr::from(&name)),
+            ParserInnerType::StructWithGenerics { identifier, .. } => Some(Ustr::from(&identifier)),
             _ => None,
         }
     }
@@ -646,12 +647,12 @@ impl MiddleEnvironment {
     fn enum_variant_index_from_data_type(
         &self,
         data_type: &ParserDataType,
-        variant_name: &str,
+        variant_name: &Ustr,
     ) -> Option<i64> {
         if let Some(key) = Self::enum_key_from_data_type(data_type)
             && let Some(obj) = self.typing.objects.get(&key)
             && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
-            && let Some(index) = variants.iter().position(|x| x.0.text == variant_name)
+            && let Some(index) = variants.iter().position(|x| &x.0 == variant_name)
         {
             return Some(index as i64);
         }
@@ -702,7 +703,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         value_node: &AstNode,
-        variant_name: &str,
+        variant_name: &Ustr,
     ) -> Option<i64> {
         if let Some(dt) = self.resolve_type_from_node(scope, value_node) {
             return self.enum_variant_index_from_data_type(&dt.unwrap_all_refs(), variant_name);
@@ -801,7 +802,7 @@ impl MiddleEnvironment {
             Some(ParserInnerType::Tuple(types)) => Some(types.clone()),
             _ => None,
         };
-        let enum_object: Option<Vec<(ParserText, Option<ParserDataType>)>> =
+        let enum_object: Option<Vec<(Ustr, Option<ParserDataType>)>> =
             if let Some(resolved_data_type) = &resolved_data_type {
                 reference = Some(match &resolved_data_type.data_type {
                     ParserInnerType::Ref(_, mutability) => *mutability,
@@ -812,9 +813,9 @@ impl MiddleEnvironment {
                     .unwrap_or(resolved_data_type)
                     .data_type
                 {
-                    ParserInnerType::Struct(name) => name.clone(),
-                    ParserInnerType::StructWithGenerics { identifier, .. } => identifier.clone(),
-                    other => other.to_string(),
+                    ParserInnerType::Struct(name) => Ustr::from(name),
+                    ParserInnerType::StructWithGenerics { identifier, .. } => Ustr::from(identifier),
+                    other => Ustr::from(&other.to_string()),
                 };
                 if let Some(x) = self.typing.objects.get(&enum_key) {
                     match &x.object_type {
@@ -1040,7 +1041,7 @@ impl MiddleEnvironment {
                                         ResolutionOptions::default().with_dollar(),
                                     )?;
                                     let enum_index = self
-                                        .enum_variant_index_from_value(scope, &current, val.trim())
+                                        .enum_variant_index_from_value(scope, &current, &val)
                                         .or_else(|| {
                                             tuple_item_types
                                                 .as_ref()
@@ -1048,7 +1049,7 @@ impl MiddleEnvironment {
                                                 .and_then(|dt| {
                                                     self.enum_variant_index_from_data_type(
                                                         dt,
-                                                        val.trim(),
+                                                        &val,
                                                     )
                                                 })
                                         })
@@ -1184,7 +1185,7 @@ impl MiddleEnvironment {
                                                                 .enum_variant_index_from_value(
                                                                     scope,
                                                                     &pcur,
-                                                                    resolved.trim(),
+                                                                    &resolved,
                                                                 )
                                                                 .ok_or_else(|| {
                                                                     self.context.err_at_current(
@@ -1951,15 +1952,15 @@ impl MiddleEnvironment {
                     let val =
                         self.resolve(scope, &val, ResolutionOptions::default().with_dollar())?;
                     let index: i64 = if let Some(object) = enum_object.as_ref() {
-                        let Some(index) = object.iter().position(|x| x.0.text == val) else {
+                        let Some(index) = object.iter().position(|x| x.0 == val) else {
                             return Err(MiddleErr::At(
                                 value.span,
-                                Box::new(MiddleErr::EnumVariant(val)),
+                                Box::new(MiddleErr::EnumVariant(val.to_string())),
                             ));
                         };
                         index as i64
                     } else if let Some(index) =
-                        self.enum_variant_index_from_data_type(resolved_data_type, val.trim())
+                        self.enum_variant_index_from_data_type(resolved_data_type, &val)
                     {
                         index
                     } else {

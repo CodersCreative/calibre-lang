@@ -21,7 +21,7 @@ impl LirLowering for MirIdentifier {
     #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Load(LirLoad {
-            value: self.identifier.to_string().into_boxed_str(),
+            value: self.identifier,
         })
     }
 
@@ -30,14 +30,14 @@ impl LirLowering for MirIdentifier {
     where
         Self: Sized,
     {
-        LirLValue::Var(self.identifier.to_string().into_boxed_str())
+        LirLValue::Var(self.identifier)
     }
 }
 
 impl LirLowering for MirString {
     #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Literal(LirLiteral::String(self.value.to_string()))
+        LirNodeType::Literal(LirLiteral::String(self.value))
     }
 }
 
@@ -79,6 +79,6 @@ impl LirLowering for MirInt {
 impl LirLowering for MirBig {
     #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Literal(LirLiteral::Big(self.value.text))
+        LirNodeType::Literal(LirLiteral::Big(self.value))
     }
 }

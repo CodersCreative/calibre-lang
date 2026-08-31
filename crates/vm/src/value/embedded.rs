@@ -2,6 +2,7 @@ use crate::error::RuntimeError;
 use crate::value::{BIG_PRECISION, GcVec, HashKey, RuntimeValue};
 use astro_float::BigFloat;
 use dumpster::sync::Gc;
+use ustr::Ustr;
 use std::sync::Arc;
 use wasm_sync::Mutex;
 
@@ -31,15 +32,21 @@ impl From<char> for HashKey {
     }
 }
 
+impl From<Ustr> for HashKey {
+    fn from(value: Ustr) -> Self {
+        Self::Str(value)
+    }
+}
+
 impl From<String> for HashKey {
     fn from(value: String) -> Self {
-        Self::Str(value)
+        Self::Str(Ustr::from(&value))
     }
 }
 
 impl From<&str> for HashKey {
     fn from(value: &str) -> Self {
-        Self::Str(value.to_string())
+        Self::Str(Ustr::from(value))
     }
 }
 
@@ -92,6 +99,17 @@ impl TryFrom<HashKey> for char {
 }
 
 impl TryFrom<HashKey> for String {
+    type Error = RuntimeError;
+
+    fn try_from(value: HashKey) -> Result<Self, Self::Error> {
+        match value {
+            HashKey::Str(s) => Ok(s.to_string()),
+            _ => Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))),
+        }
+    }
+}
+
+impl TryFrom<HashKey> for Ustr {
     type Error = RuntimeError;
 
     fn try_from(value: HashKey) -> Result<Self, Self::Error> {
@@ -190,13 +208,19 @@ impl From<char> for RuntimeValue {
 
 impl From<String> for RuntimeValue {
     fn from(value: String) -> Self {
-        Self::Str(Arc::new(Mutex::new(value)))
+        Self::Str(Ustr::from(&value))
+    }
+}
+
+impl From<Ustr> for RuntimeValue {
+    fn from(value: Ustr) -> Self {
+        Self::Str(value)
     }
 }
 
 impl From<&str> for RuntimeValue {
     fn from(value: &str) -> Self {
-        Self::Str(Arc::new(Mutex::new(value.to_string())))
+        Self::Str(Ustr::from(value))
     }
 }
 
@@ -436,7 +460,7 @@ impl TryFrom<RuntimeValue> for String {
 
     fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
         match value {
-            RuntimeValue::Str(s) => Ok(s.lock().unwrap().clone()),
+            RuntimeValue::Str(s) => Ok(s.to_string()),
             RuntimeValue::Char(c) => Ok(c.to_string()),
             _ => Err(RuntimeError::UnexpectedType(Box::new(value))),
         }

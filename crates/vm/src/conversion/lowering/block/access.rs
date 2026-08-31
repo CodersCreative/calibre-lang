@@ -29,7 +29,7 @@ impl VMLowering for LirCall {
 
         match *self.caller {
             LirNodeType::Load(LirLoad { value }) | LirNodeType::Move(LirMove { value })
-                if value.as_ref() == env.current_fn_name.as_str() =>
+                if value == env.current_fn_name =>
             {
                 env.emit(VMInstruction::CallSelf { dst, args }, span);
             }
@@ -58,7 +58,7 @@ impl VMLowering for LirMember {
     #[inline(always)]
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
         let value = env.lower_node(*self.base, span);
-        let member = env.add_string(self.field.to_string());
+        let member = env.add_string(self.field);
         let dst = env.alloc_reg();
         env.emit(VMInstruction::LoadMember { dst, value, member }, span);
         dst
@@ -80,7 +80,7 @@ impl VMLowering for LirRef {
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
         match *self.value {
             LirNodeType::Load(LirLoad { value }) => {
-                let idx = env.add_string(value.to_string());
+                let idx = env.add_string(value);
                 let dst = env.alloc_reg();
                 env.emit(VMInstruction::LoadVarRef { dst, name: idx }, span);
                 dst
@@ -98,7 +98,7 @@ impl VMLowering for LirRef {
 impl VMLowering for LirRefLoad {
     #[inline(always)]
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
-        let idx = env.add_string(self.value.to_string());
+        let idx = env.add_string(self.value);
         let dst = env.alloc_reg();
         env.emit(VMInstruction::LoadVarRef { dst, name: idx }, span);
         dst

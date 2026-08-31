@@ -1,16 +1,17 @@
 use super::super::ir::{PhiNode, Reg};
 use calibre_lir::ast::{BlockId, LirBlock, LirTerminator};
 use calibre_parser::ast::types::ParserDataType;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap};
+use ustr::{Ustr, UstrMap, UstrSet};
 
 #[derive(Clone, Default)]
 pub struct SSABlockInfo {
     // Names to registers at entry
-    pub in_map: FxHashMap<String, Reg>,
+    pub in_map: UstrMap< Reg>,
     // Names to registers at exit
-    pub out_map: FxHashMap<String, Reg>,
+    pub out_map: UstrMap<Reg>,
     // Names to phi nodes
-    pub phi_for: FxHashMap<String, Reg>,
+    pub phi_for: UstrMap< Reg>,
     pub phis: Vec<PhiNode>,
 }
 
@@ -19,7 +20,7 @@ pub struct SSABuilder {
     preds: Vec<Vec<BlockId>>,
     infos: Vec<SSABlockInfo>,
     reg_count: Reg,
-    locals: FxHashSet<String>,
+    locals: UstrSet,
     param_regs: Vec<Reg>,
     null_reg: Reg,
     assign_regs: Vec<Vec<Option<Reg>>>,
@@ -28,7 +29,7 @@ pub struct SSABuilder {
 impl SSABuilder {
     pub fn new(
         block_map: FxHashMap<BlockId, usize>,
-        locals: FxHashSet<String>,
+        locals: UstrSet,
         param_regs: Vec<Reg>,
         null_reg: Reg,
         assign_regs: Vec<Vec<Option<Reg>>>,
@@ -84,7 +85,7 @@ impl SSABuilder {
     pub fn build(
         &mut self,
         blocks: &[LirBlock],
-        params: &[(Box<str>, calibre_parser::ast::types::ParserDataType)],
+        params: &[(Ustr, ParserDataType)],
     ) {
         let mut changed = true;
         while changed {
@@ -113,40 +114,39 @@ impl SSABuilder {
     fn merge_block_inputs(
         &mut self,
         idx: usize,
-        params: &[(Box<str>, ParserDataType)],
-        phi_for: &mut FxHashMap<String, Reg>,
+        params: &[(Ustr, ParserDataType)],
+        phi_for: &mut UstrMap<Reg>,
         phis: &mut Vec<PhiNode>,
-    ) -> FxHashMap<String, Reg> {
-        let mut incoming: FxHashMap<String, Reg> = FxHashMap::default();
+    ) -> UstrMap<Reg> {
+        let mut incoming: UstrMap<Reg> = UstrMap::default();
         let preds = self.preds.get(idx).cloned().unwrap_or_default();
 
         if preds.len() == 1 && preds[0].0 == u32::MAX {
             for (name, reg) in params
                 .iter()
-                .map(|(n, _)| n.as_ref())
+                .map(|(n, _)| n)
                 .zip(self.param_regs.iter().copied())
             {
-                incoming.insert(name.to_string(), reg);
+                incoming.insert(*name, reg);
             }
             return incoming;
         }
 
-        let locals: Vec<String> = self.locals.iter().cloned().collect();
-        for var in locals.iter() {
-            let sources = self.compute_variable_sources(var, &preds);
+        for var in self.locals.clone() {
+            let sources = self.compute_variable_sources(&var, &preds);
             if sources.is_empty() {
                 continue;
             }
 
             let reg = self.compute_phi_register(var, &sources, phi_for);
-            self.update_phi_nodes(var, reg, &sources, phi_for, phis);
+            self.update_phi_nodes(&var, reg, &sources, phi_for, phis);
             incoming.insert(var.clone(), reg);
         }
 
         incoming
     }
 
-    fn compute_variable_sources(&self, var: &str, preds: &[BlockId]) -> Vec<(BlockId, Reg)> {
+    fn compute_variable_sources(&self, var: &Ustr, preds: &[BlockId]) -> Vec<(BlockId, Reg)> {
         let mut sources: Vec<(BlockId, Reg)> = Vec::new();
         for pred in preds {
             if pred.0 == u32::MAX {
@@ -162,9 +162,9 @@ impl SSABuilder {
 
     fn compute_phi_register(
         &mut self,
-        var: &str,
+        var: Ustr,
         sources: &[(BlockId, Reg)],
-        phi_for: &mut FxHashMap<String, Reg>,
+        phi_for: &mut UstrMap< Reg>,
     ) -> Reg {
         let reg_opt = sources
             .iter()
@@ -174,11 +174,11 @@ impl SSABuilder {
         match reg_opt {
             Some(r) if r != Reg::MAX => r,
             _ => {
-                if let Some(existing) = phi_for.get(var).copied() {
+                if let Some(existing) = phi_for.get(&var).copied() {
                     existing
                 } else {
                     let new_reg = self.alloc_reg();
-                    phi_for.insert(var.to_string(), new_reg);
+                    phi_for.insert(var, new_reg);
                     new_reg
                 }
             }
@@ -187,17 +187,17 @@ impl SSABuilder {
 
     fn update_phi_nodes(
         &self,
-        var: &str,
+        var: &Ustr,
         _reg: Reg,
         sources: &[(BlockId, Reg)],
-        phi_for: &FxHashMap<String, Reg>,
+        phi_for: &UstrMap<Reg>,
         phis: &mut Vec<PhiNode>,
     ) {
         if let Some(phi_reg) = phi_for.get(var).copied() {
             let phi = PhiNode {
                 dest: phi_reg,
                 sources: sources.to_vec(),
-                name: Some(var.to_string()),
+                name: Some(*var),
             };
             if let Some(i) = phis.iter().position(|p| p.dest == phi_reg) {
                 phis[i] = phi;
@@ -211,8 +211,8 @@ impl SSABuilder {
         &mut self,
         idx: usize,
         blocks: &[LirBlock],
-        mut incoming: FxHashMap<String, Reg>,
-    ) -> FxHashMap<String, Reg> {
+        mut incoming: UstrMap<Reg>,
+    ) -> UstrMap<Reg> {
         let instructions = blocks[idx].instructions.clone();
         for (instr_idx, instr) in instructions.iter().enumerate() {
             if let Some(name) = instr.node_type.local_name() {
@@ -226,7 +226,7 @@ impl SSABuilder {
                         reg
                     }
                 };
-                incoming.insert(name.to_string(), _reg);
+                incoming.insert(*name, _reg);
             }
         }
         incoming

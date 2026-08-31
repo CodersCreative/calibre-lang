@@ -15,6 +15,7 @@ use calibre_parser::{
     },
 };
 use tracing::instrument;
+use ustr::Ustr;
 
 impl MiddleEnvironment {
     fn wrap_loop_body(
@@ -36,9 +37,9 @@ impl MiddleEnvironment {
     fn eval_loop_body_with_ctx(
         &mut self,
         scope: ScopeId,
-        label_text: Option<String>,
-        result_target: Option<ParserText>,
-        broke_target: Option<ParserText>,
+        label_text: Option<Ustr>,
+        result_target: Option<Ustr>,
+        broke_target: Option<Ustr>,
         continue_inject: Option<AstNode>,
         body_node: AstNode,
     ) -> Result<MiddleNode, MiddleErr> {
@@ -61,20 +62,23 @@ impl MiddleEnvironment {
         scope: ScopeId,
         span: Span,
         else_body: Option<Box<AstNode>>,
-        result_raw: Option<String>,
-        broke_raw: Option<String>,
+        result_raw: Option<Ustr>,
+        broke_raw: Option<Ustr>,
     ) -> Result<MiddleNode, MiddleErr> {
         let Some(else_body) = else_body else {
             return Ok(loop_node);
         };
+
         let result_raw = result_raw.ok_or_else(|| {
             self.context
                 .err_at_current(MiddleErr::Internal("loop result missing".to_string()))
         })?;
+
         let broke_raw = broke_raw.ok_or_else(|| {
             self.context
                 .err_at_current(MiddleErr::Internal("loop broke missing".to_string()))
         })?;
+
         let result_ident = ParserText::from(result_raw.clone());
         let broke_ident = ParserText::from(broke_raw.clone());
         let result_decl = AstNode::new(
@@ -151,7 +155,7 @@ impl MiddleEnvironment {
         let scope = self.scoping.new_scope_from_parent_shallow(scope);
         let label_text = label.as_ref().map(|l| {
             self.resolve(scope, l, ResolutionOptions::default().with_dollar())
-                .unwrap_or_else(|_| l.to_string())
+                .unwrap_or_else(|_| Ustr::from(&l.to_string()))
         });
 
         if let Some(until) = until {
@@ -159,9 +163,9 @@ impl MiddleEnvironment {
             body = self.wrap_loop_body(body, until_node, false);
         }
 
-        let (result_raw, broke_raw, result_ident, broke_ident) = if else_body.is_some() {
-            let result = ParserText::temp_name_with_suffix("loop_result", span).to_string();
-            let broke = ParserText::temp_name_with_suffix("loop_broke", span).to_string();
+        let (result_raw, broke_raw,) = if else_body.is_some() {
+            let result = Ustr::from(&ParserText::temp_name_with_suffix("loop_result", span).text);
+            let broke = Ustr::from(&ParserText::temp_name_with_suffix("loop_broke", span).text);
 
             if let Ok(scope_data) = self.scoping.scope_mut_or_err(scope) {
                 scope_data.mappings.insert(result.clone(), result.clone());
@@ -170,11 +174,9 @@ impl MiddleEnvironment {
             (
                 Some(result.clone()),
                 Some(broke.clone()),
-                Some(ParserText::from(result)),
-                Some(ParserText::from(broke)),
             )
         } else {
-            (None, None, None, None)
+            (None, None,)
         };
 
         match loop_type {
@@ -182,8 +184,8 @@ impl MiddleEnvironment {
                 let body = self.eval_loop_body_with_ctx(
                     scope,
                     label_text.clone(),
-                    result_ident.clone(),
-                    broke_ident.clone(),
+                    result_raw.clone(),
+                    broke_raw.clone(),
                     None,
                     body,
                 )?;
@@ -223,8 +225,8 @@ impl MiddleEnvironment {
                 let body = self.eval_loop_body_with_ctx(
                     scope,
                     label_text.clone(),
-                    result_ident.clone(),
-                    broke_ident.clone(),
+                    result_raw.clone(),
+                    broke_raw.clone(),
                     None,
                     wrapped,
                 )?;
@@ -244,8 +246,8 @@ impl MiddleEnvironment {
                 let body = self.eval_loop_body_with_ctx(
                     scope,
                     label_text.clone(),
-                    result_ident.clone(),
-                    broke_ident.clone(),
+                    result_raw.clone(),
+                    broke_raw.clone(),
                     None,
                     AstNode::new(
                         span,
@@ -547,8 +549,8 @@ impl MiddleEnvironment {
                 let body = self.eval_loop_body_with_ctx(
                     scope,
                     label_text.clone(),
-                    result_ident.clone(),
-                    broke_ident.clone(),
+                    result_raw.clone(),
+                    broke_raw.clone(),
                     if is_indexable_loop {
                         Some(increment_node.clone())
                     } else {

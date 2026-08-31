@@ -1,3 +1,5 @@
+use ustr::Ustr;
+
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
 use std::{cmp::Ordering, fmt::Debug};
 
@@ -10,9 +12,9 @@ pub trait NativeFunction: Send + Sync {
 
     fn name(&self) -> String;
 
-    fn get_resolved_name(&self, env: &VM) -> String {
+    fn get_resolved_name(&self, env: &VM) -> Ustr {
         let name = self.name();
-        env.registry.natives.get(&name).cloned().unwrap_or_default()
+        env.registry.natives.get(&Ustr::from(&name)).cloned().unwrap_or_default()
     }
 }
 
@@ -56,8 +58,8 @@ impl VM {
             .iter()
             .chain(RuntimeValue::natives())
         {
-            if let Some(name) = self.registry.natives.get(full_name) {
-                let _ = self.variables.insert(name, value.clone());
+            if let Some(name) = self.registry.natives.get(&Ustr::from(full_name)) {
+                let _ = self.variables.insert(*name, value.clone());
             }
         }
     }

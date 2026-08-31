@@ -71,7 +71,7 @@ impl CalibreEmbedded for CalibreEngine {
         self.suppress_output = true;
         let result = self.run_source(source)?;
         self.suppress_output = original_suppress;
-        Ok((result.return_value, result.vm.captured_output.clone()))
+        Ok((result.return_value, result.vm.captured_output.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("\n")))
     }
 
     fn with_prelude(mut self, source: impl Into<String>) -> Self {

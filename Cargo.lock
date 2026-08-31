@@ -9,6 +9,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "ahash"
+version = "0.8.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
+dependencies = [
+ "cfg-if",
+ "once_cell",
+ "version_check",
+ "zerocopy",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -350,6 +362,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
+name = "byteorder"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+
+[[package]]
 name = "bytes"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -384,6 +402,7 @@ dependencies = [
  "tracing-appender",
  "tracing-flame",
  "tracing-subscriber",
+ "ustr",
  "wasm-bindgen",
  "wasm_sync",
  "wasm_thread",
@@ -428,6 +447,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "tracing",
+ "ustr",
  "wasm_sync",
 ]
 
@@ -446,6 +466,7 @@ dependencies = [
  "tracing-appender",
  "tracing-flame",
  "tracing-subscriber",
+ "ustr",
 ]
 
 [[package]]
@@ -461,6 +482,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tracing",
+ "ustr",
  "wasm_sync",
 ]
 
@@ -473,6 +495,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tracing",
+ "ustr",
 ]
 
 [[package]]
@@ -505,6 +528,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "ureq",
+ "ustr",
  "wasm_sync",
  "wasm_thread",
 ]
@@ -2557,6 +2581,19 @@ dependencies = [
  "percent-encoding",
  "serde",
  "serde_derive",
+]
+
+[[package]]
+name = "ustr"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18b19e258aa08450f93369cf56dd78063586adf19e92a75b338a800f799a0208"
+dependencies = [
+ "ahash",
+ "byteorder",
+ "lazy_static",
+ "parking_lot",
+ "serde",
 ]
 
 [[package]]

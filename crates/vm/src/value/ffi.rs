@@ -212,7 +212,7 @@ impl ExternFunction {
                     match (Self::resolve_value(env, value), x) {
                         (RuntimeValue::Str(x), ParserInnerType::Str) => {
                             arg_types.push(Type::pointer());
-                            let value = CString::new(x.lock().unwrap().as_str())
+                            let value = CString::new(x.as_str())
                                 .map_err(|_| RuntimeError::InvalidFunctionCall)?;
                             let ptr = value.as_ptr() as *const c_void;
                             Self::push_arg(
@@ -291,7 +291,7 @@ impl ExternFunction {
                         }
                         (RuntimeValue::Str(x), ParserInnerType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
-                            let value = CString::new(x.lock().unwrap().as_str())
+                            let value = CString::new(x.as_str())
                                 .map_err(|_| RuntimeError::InvalidFunctionCall)?;
                             let ptr = value.as_ptr() as *const c_void;
                             Self::push_arg(
@@ -567,12 +567,12 @@ impl ExternFunction {
                     ParserInnerType::Str => {
                         let res: *const c_char = cif.call(code, &libffi_args);
                         if res.is_null() {
-                            Ok(RuntimeValue::Str(Arc::new(Mutex::new(String::new()))))
+                            Ok(RuntimeValue::Str(Ustr::default()))
                         } else {
                             let c_str = CStr::from_ptr(res);
-                            Ok(RuntimeValue::Str(Arc::new(Mutex::new(
-                                c_str.to_string_lossy().to_string(),
-                            ))))
+                            Ok(RuntimeValue::Str(Ustr::from(
+                                &c_str.to_string_lossy(),
+                            )))
                         }
                     }
                     ParserInnerType::Ptr(_) => {

@@ -15,6 +15,7 @@ use calibre_mir::testing::{Test, TestOrBench};
 use calibre_vm::conversion::VMRegistry;
 use derive_builder::Builder;
 use smol::fs;
+use ustr::Ustr;
 use std::error::Error;
 
 #[derive(Builder, Debug)]
@@ -28,7 +29,7 @@ pub struct RunSuite<'a> {
 }
 
 impl<'a> RunSuite<'a> {
-    async fn execute(self) -> Result<Vec<(String, VMRegistry, Vec<String>, Test)>, Box<dyn Error>> {
+    async fn execute(self) -> Result<Vec<(String, VMRegistry, Vec<Ustr>, Test)>, Box<dyn Error>> {
         let cwd = std::env::current_dir()?;
         let project = load_project_from(&cwd).map_err(|e| format!("config error: {e}"))?;
         let vm_config = vm_config_from_project(project.as_ref());
@@ -101,7 +102,7 @@ impl<'a> RunSuite<'a> {
                     continue;
                 }
 
-                if !self.wanted.is_empty() && !self.wanted.contains(&test.name) {
+                if !self.wanted.is_empty() && !self.wanted.contains(&test.name.to_string()) {
                     continue;
                 }
 
@@ -109,7 +110,7 @@ impl<'a> RunSuite<'a> {
                     && self
                         .suites
                         .iter()
-                        .map(|x| test.suites.contains(x))
+                        .map(|x| test.suites.contains(&Ustr::from(x)))
                         .filter(|x| !*x)
                         .count()
                         > 0

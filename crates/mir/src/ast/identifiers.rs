@@ -7,10 +7,11 @@ use crate::{
         MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
     },
 };
-use calibre_parser::IdentifiersUsed;
+use calibre_parser::UstrIdentifiersUsed;
+use ustr::Ustr;
 
-impl IdentifiersUsed for MiddleNode {
-    fn identifiers_used(&self) -> Vec<&String> {
+impl UstrIdentifiersUsed for MiddleNode {
+    fn identifiers_used(&self) -> Vec<&Ustr> {
         match &self.node_type {
             MiddleNodeType::Break(MirBreak { value: None, .. })
             | MiddleNodeType::EmptyLine
@@ -166,7 +167,7 @@ impl IdentifiersUsed for MiddleNode {
 }
 
 impl MiddleNode {
-    pub fn captured(&self) -> Vec<&String> {
+    pub fn captured(&self) -> Vec<&Ustr> {
         let mut used = self.identifiers_used();
         let declared = self.identifiers_declared();
 
@@ -177,7 +178,7 @@ impl MiddleNode {
         used
     }
 
-    pub fn identifiers_declared(&self) -> Vec<&String> {
+    pub fn identifiers_declared(&self) -> Vec<&Ustr> {
         match &self.node_type {
             MiddleNodeType::Break { .. }
             | MiddleNodeType::EmptyLine
@@ -232,7 +233,7 @@ impl MiddleNode {
                 value,
                 data_type: _,
             }) => {
-                let mut amt = vec![&identifier.text];
+                let mut amt = vec![identifier];
                 amt.append(&mut value.identifiers_declared());
                 amt
             }

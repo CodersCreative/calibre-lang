@@ -22,6 +22,7 @@ use calibre_parser::{
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
+use ustr::Ustr;
 
 struct GeneratorReturnsRewriter;
 
@@ -116,12 +117,12 @@ impl MiddleEnvironment {
             .resolve(scope, &name, ResolutionOptions::idents())
             .map(|x| x.to_string());
 
-        let defaults_key = resolved_name.as_deref().unwrap_or(name.as_str());
+        let defaults_key = Ustr::from( resolved_name.as_deref().unwrap_or(name.as_str()));
         let defaults = self
             .symbols
             .function_param_defaults
-            .get(defaults_key)
-            .or_else(|| self.symbols.function_param_defaults.get(name.as_str()))
+            .get(&defaults_key)
+            .or_else(|| self.symbols.function_param_defaults.get(&name))
             .cloned()?;
 
         if !defaults
@@ -275,7 +276,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         span: Span,
-        identifier: Option<ParserText>,
+        identifier: Option<Ustr>,
         args: Vec<CallArg>,
         reverse_args: Vec<AstNode>,
     ) -> MiddleNode {
@@ -455,7 +456,7 @@ impl MiddleEnvironment {
             .mappings
             .get(&ident)
             .cloned()
-            .unwrap_or_else(|| ParserText::temp_name_with_suffix(ident.trim(), span).text);
+            .unwrap_or_else(|| Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text));
 
         let mut params = Vec::new();
         for ty in parameters {
@@ -480,7 +481,7 @@ impl MiddleEnvironment {
 
         self.register_variable(
             scope,
-            &ident,
+        ident,
             new_name.clone(),
             fn_type.clone(),
             VarType::Constant,
@@ -489,12 +490,12 @@ impl MiddleEnvironment {
         Ok(MiddleNode {
             node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: VarType::Constant,
-                identifier: ParserText::from(new_name),
+                identifier: new_name,
                 value: Box::new(MiddleNode::new(
                     MiddleNodeType::ExternFunction(MirExtern {
-                        abi,
-                        library,
-                        symbol: symbol.unwrap_or_else(|| ident.clone()),
+                        abi : Ustr::from(&abi),
+                        library : Ustr::from(&library),
+                        symbol: symbol.map(|x| Ustr::from(&x)).unwrap_or_else(|| ident.clone()),
                         parameters: params,
                         return_type,
                     }),
@@ -518,11 +519,11 @@ impl MiddleEnvironment {
         let mut old_func_defers = std::mem::take(&mut self.symbols.func_defers);
         let new_scope = self.scoping.new_scope_from_parent_shallow(scope);
 
-        let generic_params: Vec<String> = header
+        let generic_params: Vec<Ustr> = header
             .generics
             .0
             .iter()
-            .map(|g| g.identifier.to_string())
+            .map(|g| Ustr::from(&g.identifier.to_string()))
             .collect();
 
         if !generic_params.is_empty() {
@@ -538,7 +539,7 @@ impl MiddleEnvironment {
                 &param.0,
                 ResolutionOptions::default().with_dollar(),
             )?;
-            let new_name = ParserText::temp_name_with_suffix(og_name.trim(), span).text;
+            let new_name = Ustr::from(&ParserText::temp_name_with_suffix(og_name.trim(), span).text);
 
             let data_type = if let Some(x) = param.1 {
                 self.resolve_data_type(new_scope, &x, ResolutionOptions::typing())?
@@ -551,35 +552,35 @@ impl MiddleEnvironment {
 
             self.register_variable(
                 new_scope,
-                &og_name,
+                og_name,
                 new_name.clone(),
                 data_type.clone(),
                 VarType::Mutable,
             )?;
 
             params.push((
-                ParserText::from(new_name),
+                new_name,
                 data_type,
                 param.2.map(|x| Box::new(self.evaluate(new_scope, *x))),
             ));
         }
 
         if needs_caller_context {
-            let caller_context_name =
-                ParserText::temp_name_with_suffix("caller_context", span).text;
+            let caller_context_name = Ustr::from(
+&                ParserText::temp_name_with_suffix("caller_context", span).text);
             let caller_context_type =
                 ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
 
             self.register_variable(
                 new_scope,
-                "caller_context",
+                Ustr::from("caller_context"),
                 caller_context_name.clone(),
                 caller_context_type.clone(),
                 VarType::Mutable,
             )?;
 
             params.push((
-                ParserText::from(caller_context_name),
+                caller_context_name,
                 caller_context_type,
                 None,
             ));
@@ -749,12 +750,12 @@ impl MiddleEnvironment {
 
         // TODO revisit this
         for (p_name, _, _) in params.iter() {
-            let full = p_name.text.clone();
+            let full = p_name.clone();
             if let Some(short) = ParserText::get_temp_name_suffix(&full) {
                 self.scoping
                     .scope_mut_or_err(new_scope)?
                     .mappings
-                    .insert(short, full);
+                    .insert(Ustr::from(&short), full);
             }
         }
 
@@ -765,18 +766,18 @@ impl MiddleEnvironment {
         let scope_ref = self.scoping.scope_or_err(scope).ok()?;
 
         let value =
-            |v: String| AstNode::new(span, AstNodeType::StringLiteral(ParserText::new(span, v)));
+            |v: Ustr| AstNode::new(span, AstNodeType::StringLiteral(ParserText::new(span, v)));
 
         let current_function_name = if scope_ref.namespace.parse::<u64>().is_ok() {
-            "main".to_string()
+            Ustr::from("main")
         } else {
             scope_ref.namespace.clone()
         };
 
         let module_name = if !scope_ref.path.as_os_str().is_empty() {
-            scope_ref.namespace.to_string()
+            scope_ref.namespace
         } else {
-            "unknown".to_string()
+            Ustr::from("unknown")
         };
 
         Some(AstNode::new(
@@ -788,13 +789,12 @@ impl MiddleEnvironment {
                     ("module_name".to_string(), value(module_name)),
                     (
                         "path".to_string(),
-                        value(
-                            scope_ref
+                        value(Ustr::from(
+                            &scope_ref
                                 .path
                                 .canonicalize()
                                 .unwrap_or_default()
-                                .to_string_lossy()
-                                .to_string(),
+                                .to_string_lossy(),)
                         ),
                     ),
                     (
@@ -825,7 +825,7 @@ impl MiddleEnvironment {
             AstNodeType::FieldAccess { base, field } => {
                 let field_name = self
                     .resolve(scope, &field, ResolutionOptions::default().with_dollar())
-                    .unwrap_or(field.text().clone());
+                    .unwrap_or(Ustr::from(&field.text()));
 
                 if let Some(ty) = self.resolve_type_from_node(scope, base.as_ref())
                     && let Some(x) = self
@@ -875,7 +875,7 @@ impl MiddleEnvironment {
                     return Ok(self.aggregate_from_call_nodes(
                         scope,
                         span,
-                        Some(ParserText::new(span, caller)),
+                        Some(caller),
                         args,
                         reverse_args,
                     ));
@@ -891,7 +891,7 @@ impl MiddleEnvironment {
         let caller_name = if let AstNodeType::Identifier(ident) = &caller.node_type {
             self.resolve(scope, ident, ResolutionOptions::default().with_dollar())?
         } else {
-            String::new()
+            Ustr::default()
         };
 
         let needs_caller_context = if let Some(var) = self.symbols.variables.get(&caller_name) {
