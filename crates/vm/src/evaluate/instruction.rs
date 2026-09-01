@@ -598,7 +598,7 @@ impl VM {
                 data_type,
                 failure_mode,
             } => {
-                let value = self.take_reg_value(*src);
+                let value = self.get_reg_value(*src).clone();
                 let conversion = value.convert(self, &data_type.data_type);
                 let converted = match failure_mode {
                     AsFailureMode::Panic => match conversion {
@@ -628,7 +628,7 @@ impl VM {
                 src,
                 data_type,
             } => {
-                let value = self.take_reg_value(*src);
+                let value = self.get_reg_value(*src).clone();
                 let resolved = self.resolve_operand_value(value)?;
                 let out = self.runtime_matches_type(&resolved, &data_type.data_type);
                 self.set_reg_value(*dst, RuntimeValue::Bool(out));
@@ -645,55 +645,12 @@ impl VM {
                 self.set_reg_value(*dst, value);
             }
             VMInstruction::AccLoad { src } => {
-                self.current_frame_mut().acc = self.take_reg_value(*src);
+                self.current_frame_mut().acc = self.get_reg_value(*src).clone();
             }
             VMInstruction::AccStore { dst } => {
-                let acc = std::mem::replace(&mut self.current_frame_mut().acc, RuntimeValue::Null);
-                self.set_reg_value(*dst, acc);
+                self.set_reg_value(*dst, self.current_frame().acc.clone());
             }
             VMInstruction::AccBinary { op, right } => {
-                let can_fast_path = matches!(self.current_frame().acc, RuntimeValue::Int(_))
-                    && matches!(self.get_reg_value(*right), RuntimeValue::Int(_));
-
-                if can_fast_path {
-                    let acc =
-                        std::mem::replace(&mut self.current_frame_mut().acc, RuntimeValue::Null);
-                    let right_val = self.take_reg_value(*right);
-
-                    if let (RuntimeValue::Int(left), RuntimeValue::Int(right)) = (acc, right_val) {
-                        let value = match op {
-                            BinaryOperator::Add => RuntimeValue::Int(left.wrapping_add(right)),
-                            BinaryOperator::Sub => RuntimeValue::Int(left.wrapping_sub(right)),
-                            BinaryOperator::Mul => RuntimeValue::Int(left.wrapping_mul(right)),
-                            BinaryOperator::Div => RuntimeValue::Int(left.wrapping_div(right)),
-                            BinaryOperator::Mod => RuntimeValue::Int(left.wrapping_rem(right)),
-                            BinaryOperator::BitAnd => RuntimeValue::Int(left & right),
-                            BinaryOperator::BitOr => RuntimeValue::Int(left | right),
-                            BinaryOperator::BitXor => RuntimeValue::Int(left ^ right),
-                            BinaryOperator::Shl => {
-                                RuntimeValue::Int(left.wrapping_shl(right as u32))
-                            }
-                            BinaryOperator::Shr => {
-                                RuntimeValue::Int(left.wrapping_shr(right as u32))
-                            }
-                            _ => {
-                                self.current_frame_mut().acc = RuntimeValue::Int(left);
-                                let right = RuntimeValue::Int(right);
-                                let resolved_right = self.resolve_operand_value(right)?;
-                                let resolved_left =
-                                    self.resolve_operand_value(self.current_frame().acc.clone())?;
-                                let value = binary(self, op, resolved_left, resolved_right)?;
-                                self.current_frame_mut().acc = value;
-                                return Ok(TerminateValue::None);
-                            }
-                        };
-                        self.current_frame_mut().acc = value;
-                        return Ok(TerminateValue::None);
-                    }
-
-                    self.current_frame_mut().acc = RuntimeValue::Null;
-                }
-
                 let right = self.resolve_operand_value(self.get_reg_value(*right).clone())?;
 
                 let left = {
