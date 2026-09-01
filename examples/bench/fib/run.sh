@@ -8,6 +8,11 @@ hyperfine \
   "calibre run test.cal" \
   "calibre run ../fib_big/test.cal" \
   "calibre run --no-cache test.cal" \
+  "calibre_2 run ../fib_iter/test.cal" \
+  "calibre_2 run ../fib_tail/test.cal" \
+  "calibre_2 run test.cal" \
+  "calibre_2 run ../fib_big/test.cal" \
+  "calibre_2 run --no-cache test.cal" \
   "rustpython test.py" \
   "python test.py" \
   "rhai-run test.rhai" \

@@ -114,7 +114,7 @@ impl MiddleEnvironment {
     ) -> Result<(), MiddleErr> {
         debug!(var_type = ?var_type, data_type = %data_type, "registering variable");
         self.symbols.variables.insert(
-            new_name.clone(),
+            new_name,
             MiddleVariable {
                 data_type,
                 var_type,

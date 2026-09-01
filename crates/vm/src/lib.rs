@@ -444,6 +444,19 @@ impl VM {
     }
 
     #[inline(always)]
+    #[instrument(skip_all)]
+    pub(crate) fn take_reg_value(&mut self, reg: Reg) -> RuntimeValue {
+        let frame = self.current_frame_mut();
+        let idx = reg as usize;
+        if idx < frame.reg_count {
+            let arena_idx = frame.reg_start + idx;
+            std::mem::replace(&mut self.reg_arena[arena_idx], RuntimeValue::Null)
+        } else {
+            RuntimeValue::Null
+        }
+    }
+
+    #[inline(always)]
     pub(crate) fn get_reg_value_in_frame(&self, frame_idx: usize, reg: Reg) -> &RuntimeValue {
         if let Some(frame) = self.frames.get(frame_idx) {
             let idx = reg as usize;

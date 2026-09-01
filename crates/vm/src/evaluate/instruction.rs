@@ -176,19 +176,14 @@ impl VM {
                 if source.is_none()
                     && let RuntimeValue::List(target_list) = self.get_reg_value(reg).clone()
                 {
-                    let candidates: Vec<(u16, (u16, Ustr))> = self
-                        .current_frame()
-                        .member_sources
-                        .iter()
-                        .map(|(k, v)| (*k, v.clone()))
-                        .collect();
-
-                    for (candidate_reg, candidate_source) in candidates {
+                    for (candidate_reg, candidate_source) in
+                        self.current_frame().member_sources.iter()
+                    {
                         if let RuntimeValue::List(other_list) =
-                            self.get_reg_value(candidate_reg).clone()
+                            self.get_reg_value(*candidate_reg).clone()
                             && std::ptr::eq(other_list.as_ref(), target_list.as_ref())
                         {
-                            source = Some(candidate_source);
+                            source = Some(*candidate_source);
                             break;
                         }
                     }
@@ -578,17 +573,16 @@ impl VM {
                 }
             }
             VMInstruction::LoadRegRef { dst, src } => {
-                let value = match self.get_reg_value(*src).clone() {
-                    RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef { frame, reg },
-                    RuntimeValue::Ref(name) => RuntimeValue::Ref(name),
-                    RuntimeValue::VarRef(id) => RuntimeValue::VarRef(id),
-                    _ => RuntimeValue::RegRef {
-                        frame: self.frames.len().saturating_sub(1),
-                        reg: *src,
+                let value = match self.get_reg_value(*src) {
+                    RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef {
+                        frame: *frame,
+                        reg: *reg,
                     },
+                    RuntimeValue::Ref(name) => RuntimeValue::Ref(*name),
+                    RuntimeValue::VarRef(id) => RuntimeValue::VarRef(*id),
+                    other => other.clone(),
                 };
                 self.set_reg_value(*dst, value);
-                self.propagate_member_source_alias(*src, *dst);
             }
             VMInstruction::Copy { dst, src } => {
                 if dst == src {
@@ -604,7 +598,7 @@ impl VM {
                 data_type,
                 failure_mode,
             } => {
-                let value = self.get_reg_value(*src).clone();
+                let value = self.take_reg_value(*src);
                 let conversion = value.convert(self, &data_type.data_type);
                 let converted = match failure_mode {
                     AsFailureMode::Panic => match conversion {
@@ -634,7 +628,7 @@ impl VM {
                 src,
                 data_type,
             } => {
-                let value = self.get_reg_value(*src).clone();
+                let value = self.take_reg_value(*src);
                 let resolved = self.resolve_operand_value(value)?;
                 let out = self.runtime_matches_type(&resolved, &data_type.data_type);
                 self.set_reg_value(*dst, RuntimeValue::Bool(out));
@@ -651,61 +645,63 @@ impl VM {
                 self.set_reg_value(*dst, value);
             }
             VMInstruction::AccLoad { src } => {
-                self.current_frame_mut().acc = self.get_reg_value(*src).clone();
+                self.current_frame_mut().acc = self.take_reg_value(*src);
             }
             VMInstruction::AccStore { dst } => {
-                self.set_reg_value(*dst, self.current_frame().acc.clone());
+                let acc = std::mem::replace(&mut self.current_frame_mut().acc, RuntimeValue::Null);
+                self.set_reg_value(*dst, acc);
             }
             VMInstruction::AccBinary { op, right } => {
-                if let RuntimeValue::Int(left) = self.current_frame().acc.clone()
-                    && let RuntimeValue::Int(right) = self.get_reg_value(*right).clone()
-                    && let Some(value) = {
-                        match op {
-                            BinaryOperator::Add => {
-                                Some(RuntimeValue::Int(left.wrapping_add(right)))
-                            }
-                            BinaryOperator::Sub => {
-                                Some(RuntimeValue::Int(left.wrapping_sub(right)))
-                            }
-                            BinaryOperator::Mul => {
-                                Some(RuntimeValue::Int(left.wrapping_mul(right)))
-                            }
-                            BinaryOperator::Div => {
-                                if right == 0 {
-                                    None
-                                } else {
-                                    Some(RuntimeValue::Int(left / right))
-                                }
-                            }
-                            BinaryOperator::Mod => {
-                                if right == 0 {
-                                    None
-                                } else {
-                                    Some(RuntimeValue::Int(left % right))
-                                }
-                            }
-                            BinaryOperator::BitAnd => Some(RuntimeValue::Int(left & right)),
-                            BinaryOperator::BitOr => Some(RuntimeValue::Int(left | right)),
-                            BinaryOperator::BitXor => Some(RuntimeValue::Int(left ^ right)),
+                let can_fast_path = matches!(self.current_frame().acc, RuntimeValue::Int(_))
+                    && matches!(self.get_reg_value(*right), RuntimeValue::Int(_));
+
+                if can_fast_path {
+                    let acc =
+                        std::mem::replace(&mut self.current_frame_mut().acc, RuntimeValue::Null);
+                    let right_val = self.take_reg_value(*right);
+
+                    if let (RuntimeValue::Int(left), RuntimeValue::Int(right)) = (acc, right_val) {
+                        let value = match op {
+                            BinaryOperator::Add => RuntimeValue::Int(left.wrapping_add(right)),
+                            BinaryOperator::Sub => RuntimeValue::Int(left.wrapping_sub(right)),
+                            BinaryOperator::Mul => RuntimeValue::Int(left.wrapping_mul(right)),
+                            BinaryOperator::Div => RuntimeValue::Int(left.wrapping_div(right)),
+                            BinaryOperator::Mod => RuntimeValue::Int(left.wrapping_rem(right)),
+                            BinaryOperator::BitAnd => RuntimeValue::Int(left & right),
+                            BinaryOperator::BitOr => RuntimeValue::Int(left | right),
+                            BinaryOperator::BitXor => RuntimeValue::Int(left ^ right),
                             BinaryOperator::Shl => {
-                                Some(RuntimeValue::Int(left.wrapping_shl(right as u32)))
+                                RuntimeValue::Int(left.wrapping_shl(right as u32))
                             }
                             BinaryOperator::Shr => {
-                                Some(RuntimeValue::Int(left.wrapping_shr(right as u32)))
+                                RuntimeValue::Int(left.wrapping_shr(right as u32))
                             }
-                            BinaryOperator::Pow => None,
-                        }
+                            _ => {
+                                self.current_frame_mut().acc = RuntimeValue::Int(left);
+                                let right = RuntimeValue::Int(right);
+                                let resolved_right = self.resolve_operand_value(right)?;
+                                let resolved_left =
+                                    self.resolve_operand_value(self.current_frame().acc.clone())?;
+                                let value = binary(self, op, resolved_left, resolved_right)?;
+                                self.current_frame_mut().acc = value;
+                                return Ok(TerminateValue::None);
+                            }
+                        };
+                        self.current_frame_mut().acc = value;
+                        return Ok(TerminateValue::None);
                     }
-                {
-                    self.current_frame_mut().acc = value;
-                    return Ok(TerminateValue::None);
+
+                    self.current_frame_mut().acc = RuntimeValue::Null;
                 }
+
                 let right = self.resolve_operand_value(self.get_reg_value(*right).clone())?;
-                let left_raw = {
+
+                let left = {
                     let frame = self.current_frame_mut();
                     std::mem::replace(&mut frame.acc, RuntimeValue::Null)
                 };
-                let left = self.resolve_operand_value(left_raw)?;
+                let left = self.resolve_operand_value(left)?;
+
                 let value = binary(self, op, left, right)?;
                 self.current_frame_mut().acc = value;
             }
@@ -754,13 +750,17 @@ impl VM {
                 };
                 let from = as_range_bound(from)?;
                 let to = as_range_bound(to)?;
-                let end = if *inclusive { to + 1 } else { to };
-                self.set_reg_value(*dst, RuntimeValue::Range(from, end));
+                let range = if *inclusive {
+                    RuntimeValue::Range(from, to + 1)
+                } else {
+                    RuntimeValue::Range(from, to)
+                };
+                self.set_reg_value(*dst, range);
             }
             VMInstruction::List { dst, items } => {
                 let values = items
                     .iter()
-                    .map(|item| self.get_reg_value(*item).clone())
+                    .map(|item| self.take_reg_value(*item))
                     .collect();
                 self.set_reg_value(*dst, RuntimeValue::List(Gc::new(GcVec(values))));
             }
@@ -777,7 +777,7 @@ impl VM {
                     })?;
                 let mut entries = Vec::with_capacity(layout.members.len());
                 for (name, reg) in layout.members.iter().zip(fields.iter()) {
-                    let mut value = self.get_reg_value(*reg).clone();
+                    let mut value = self.take_reg_value(*reg);
                     if value.is_ref_like()
                         && let Ok(resolved) = self.resolve_value_for_op_ref(&value)
                     {
@@ -814,13 +814,16 @@ impl VM {
                             gen_vm.variables.insert(k.clone(), v.clone());
                         }
 
-                        gen_vm.ptr_heap = self.ptr_heap.clone();
+                        if !self.ptr_heap.is_empty() {
+                            gen_vm.ptr_heap = self.ptr_heap.clone();
+                        }
+
                         gen_vm.moved_functions = self.moved_functions.clone();
 
                         self.set_reg_value(
                             *dst,
                             RuntimeValue::Generator {
-                                type_name: type_name,
+                                type_name,
                                 state: Arc::new(Mutex::new(GeneratorState {
                                     vm: gen_vm,
                                     function_name: name,
@@ -855,7 +858,7 @@ impl VM {
                 payload,
             } => {
                 let name = self.local_string(block, *name)?;
-                let payload = payload.map(|reg| Gc::new(self.get_reg_value(reg).clone()));
+                let payload = payload.map(|reg| Gc::new(self.take_reg_value(reg)));
                 self.set_reg_value(
                     *dst,
                     RuntimeValue::Enum(name.clone(), *variant as usize, payload),

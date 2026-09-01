@@ -39,8 +39,7 @@ impl VM {
             return Some(source);
         }
 
-        let RuntimeValue::List(target_list) = self.get_reg_value_in_frame(frame_idx, reg).clone()
-        else {
+        let RuntimeValue::List(target_list) = self.get_reg_value_in_frame(frame_idx, reg) else {
             return None;
         };
 
@@ -49,9 +48,8 @@ impl VM {
                 if *candidate_reg == reg {
                     return None;
                 }
-                if let RuntimeValue::List(other_list) = self
-                    .get_reg_value_in_frame(frame_idx, *candidate_reg)
-                    .clone()
+                if let RuntimeValue::List(other_list) =
+                    self.get_reg_value_in_frame(frame_idx, *candidate_reg)
                     && std::ptr::eq(other_list.as_ref(), target_list.as_ref())
                 {
                     return Some(candidate_source.clone());
@@ -144,11 +142,11 @@ impl VM {
         let propagated_args: Vec<(usize, u16, u16, Ustr)> = args
             .iter()
             .filter_map(|arg_reg| {
-                let arg_val = self.get_reg_value_in_frame(caller_frame, *arg_reg).clone();
+                let arg_val = self.get_reg_value_in_frame(caller_frame, *arg_reg);
                 let RuntimeValue::RegRef { frame, reg } = arg_val else {
                     return None;
                 };
-                if frame != caller_frame {
+                if *frame != caller_frame {
                     return None;
                 }
                 let (parent_reg, field) = self
@@ -157,7 +155,7 @@ impl VM {
                     .member_sources
                     .get(&reg)
                     .cloned()?;
-                Some((caller_frame, reg, parent_reg, field))
+                Some((caller_frame, *reg, parent_reg, field))
             })
             .collect();
 
@@ -176,9 +174,10 @@ impl VM {
         parent_reg: u16,
         field_name: &Ustr,
     ) -> Result<(), RuntimeError> {
-        let updated_field = self.get_reg_value_in_frame(frame_idx, field_reg).clone();
-        let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg).clone();
+        let updated_field = self.get_reg_value_in_frame(frame_idx, field_reg);
+        let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg);
         let parent_resolved = self.resolve_value_for_op_ref(&parent_raw)?;
+
         fn update(
             value: RuntimeValue,
             field: &str,
@@ -197,17 +196,20 @@ impl VM {
 
                     let nested = update(wrapped.clone(), field, replacement)?;
                     *wrapped = nested;
+
                     Some(RuntimeValue::Aggregate(type_name, map))
                 }
                 RuntimeValue::List(mut list) => {
                     let values = &mut Gc::make_mut(&mut list).0;
                     let mut changed = false;
+
                     for item in values.iter_mut() {
                         if let Some(nested) = update(item.clone(), field, replacement) {
-                            item.clone_from(&nested);
+                            *item = nested;
                             changed = true;
                         }
                     }
+
                     changed.then_some(RuntimeValue::List(list))
                 }
                 _ => None,
@@ -224,7 +226,7 @@ impl VM {
                 .cloned();
             match parent_raw {
                 RuntimeValue::Ref(_) | RuntimeValue::VarRef(_) | RuntimeValue::RegRef { .. } => {
-                    self.write_back_runtime_value(parent_raw, updated_parent);
+                    self.write_back_runtime_value(parent_raw.clone(), updated_parent);
                 }
                 _ => {
                     self.set_reg_value_in_frame(frame_idx, parent_reg, updated_parent.clone());
@@ -376,21 +378,17 @@ impl VM {
                         (RuntimeValue::List(a), RuntimeValue::List(b)) => {
                             std::ptr::eq(a.as_ref(), b.as_ref())
                         }
-                        (RuntimeValue::Aggregate(_, a), RuntimeValue::Aggregate(_, b)) => {
+                        (RuntimeValue::HashMap(a), RuntimeValue::HashMap(b)) => {
+                            std::ptr::eq(a.as_ref(), b.as_ref())
+                        }
+                        (RuntimeValue::HashSet(a), RuntimeValue::HashSet(b)) => {
                             std::ptr::eq(a.as_ref(), b.as_ref())
                         }
                         _ => false,
                     };
-                    let same_value = matches!(
-                        comparison(
-                            &ComparisonOperator::Equal,
-                            full_args[0].clone(),
-                            full_args[1].clone()
-                        ),
-                        Ok(RuntimeValue::Bool(true))
-                    );
-                    if same_identity || same_value {
-                        full_args.remove(1);
+
+                    if same_identity {
+                        full_args.truncate(1);
                     }
                 }
                 self.call_runtime_callable_at(

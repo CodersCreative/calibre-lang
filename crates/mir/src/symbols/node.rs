@@ -152,16 +152,15 @@ impl MiddleEnvironment {
                 otherwise,
             } => {
                 if let Some(otherwise) = otherwise {
-                    let otherwise = if let AstNodeType::IfStatement { then: then2, .. } =
-                        &otherwise.node_type
-                    {
-                        then2.clone()
-                    } else {
-                        otherwise.clone()
-                    };
+                    let otherwise =
+                        if let AstNodeType::IfStatement { then, .. } = &otherwise.node_type {
+                            then
+                        } else {
+                            otherwise
+                        };
 
                     let then_ty = self.resolve_type_from_node(scope, then);
-                    let else_ty = self.resolve_type_from_node(scope, &otherwise);
+                    let else_ty = self.resolve_type_from_node(scope, otherwise);
                     match (then_ty, else_ty) {
                         (Some(a), Some(b)) if a.data_type == b.data_type => Some(a),
                         (Some(a), Some(b)) if a.data_type == ParserInnerType::Null => Some(b),
@@ -216,11 +215,11 @@ impl MiddleEnvironment {
                     data_type: ParserInnerType::Function {
                         return_type: Box::new(return_type),
                         parameters: {
-                            let mut params = Vec::new();
+                            let mut params = Vec::with_capacity(header.parameters.len());
 
-                            for param in header.parameters.clone() {
-                                let data_type = if let Some(x) = param.1 {
-                                    self.resolve_data_type(scope, &x, ResolutionOptions::typing())
+                            for param in &header.parameters {
+                                let data_type = if let Some(x) = &param.1 {
+                                    self.resolve_data_type(scope, x, ResolutionOptions::typing())
                                         .ok()?
                                 } else if let Some(node) = &param.2 {
                                     self.resolve_type_from_node(scope, node)?

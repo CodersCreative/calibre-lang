@@ -145,7 +145,10 @@ impl SchedulerHandle {
             }
         }
 
-        vm.ptr_heap = base_vm.ptr_heap.clone();
+        if !base_vm.ptr_heap.is_empty() {
+            vm.ptr_heap = base_vm.ptr_heap.clone();
+        }
+
         vm.moved_functions = Default::default();
 
         let mut queue = worker.queue.lock().unwrap();
