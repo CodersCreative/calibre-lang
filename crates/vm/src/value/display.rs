@@ -293,7 +293,7 @@ impl Display for RuntimeValue {
                         if i > 0 {
                             txt.push_str(", ");
                         }
-                        let _ = write!(txt, "{}", &val.1);
+                        let _ = write!(txt, "{}", val.1);
                     }
                     txt.push(')');
                     write!(f, "{}", txt)

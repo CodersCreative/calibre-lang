@@ -20,7 +20,7 @@ use ustr::{Ustr, UstrMap};
 #[derive(PartialEq)]
 pub enum StrOrAstNode {
     Str(Ustr),
-    Node(AstNode),
+    Node(Box<AstNode>),
 }
 
 pub enum IdentifierType<'a> {
@@ -65,7 +65,7 @@ impl<'a> From<&'a PotentialDollarIdentifier> for IdentifierType<'a> {
 
 impl<'a> From<&'a Ustr> for IdentifierType<'a> {
     fn from(val: &'a Ustr) -> IdentifierType<'a> {
-        IdentifierType::Ustr(val.clone())
+        IdentifierType::Ustr(*val)
     }
 }
 
@@ -173,12 +173,12 @@ impl MiddleEnvironment {
             let root = defs
                 .iter()
                 .find(|(name, _)| ParserText::temp_name_suffix_matches(name, &trait_name))
-                .map(|(name, _)| name.clone())?;
+                .map(|(name, _)| *name)?;
             let mut stack = vec![root];
             let mut visited = FxHashSet::default();
 
             while let Some(current) = stack.pop() {
-                if !visited.insert(current.clone()) {
+                if !visited.insert(current) {
                     continue;
                 }
                 let Some(def) = defs.get(&current) else {
@@ -192,9 +192,9 @@ impl MiddleEnvironment {
                         .iter()
                         .find(|(name, _)| ParserText::temp_name_suffix_matches(name, implied))
                     {
-                        stack.push(resolved.clone());
+                        stack.push(*resolved);
                     } else {
-                        stack.push(implied.clone());
+                        stack.push(*implied);
                     }
                 }
             }
@@ -290,11 +290,7 @@ impl MiddleEnvironment {
         ty: &ParserDataType,
         member: &impl ToString,
     ) -> Option<Ustr> {
-        let symbol_name = self
-            .typing
-            .find_impl_member(ty, member)?
-            .symbol_name
-            .clone();
+        let symbol_name = self.typing.find_impl_member(ty, member)?.symbol_name;
 
         self.symbols.variables.get(&symbol_name).and_then(|var| {
             if var.data_type.clone().unwrap_all_refs().is_callable() {
@@ -321,7 +317,7 @@ impl MiddleEnvironment {
         };
 
         for _ in 0..64 {
-            match self.resolve_inner(scope, &current, options) {
+            match self.resolve_inner(scope, current, options) {
                 Ok(StrOrAstNode::Str(x)) if current != x => current = x,
                 _ => break,
             }
@@ -342,7 +338,7 @@ impl MiddleEnvironment {
         };
 
         for _ in 0..64 {
-            match self.resolve_inner(scope, &current, options) {
+            match self.resolve_inner(scope, current, options) {
                 Ok(StrOrAstNode::Str(x)) if current != x => current = x,
                 Ok(StrOrAstNode::Node(x)) => return Ok(StrOrAstNode::Node(x)),
                 _ => break,
@@ -395,7 +391,7 @@ impl MiddleEnvironment {
                         PotentialDollarIdentifier::DollarIdentifier(x) => Ustr::from(&x.text),
                     },
                     _ => {
-                        return Ok(StrOrAstNode::Node(resolved.clone()));
+                        return Ok(StrOrAstNode::Node(Box::new(resolved.clone())));
                     }
                 }
             }
@@ -468,19 +464,19 @@ impl MiddleEnvironment {
         if options.type_resolution {
             for key in self.typing.trait_defs.keys() {
                 if ParserText::temp_name_suffix_matches(key, &ident) {
-                    return Ok(StrOrAstNode::Str(key.clone()));
+                    return Ok(StrOrAstNode::Str(*key));
                 }
             }
 
             for key in self.typing.objects.keys() {
                 if ParserText::temp_name_suffix_matches(key, &ident) {
-                    return Ok(StrOrAstNode::Str(key.clone()));
+                    return Ok(StrOrAstNode::Str(*key));
                 }
             }
 
             for key in self.typing.impls.keys() {
                 if ParserText::temp_name_suffix_matches(key, &ident) {
-                    return Ok(StrOrAstNode::Str(key.clone()));
+                    return Ok(StrOrAstNode::Str(*key));
                 }
             }
 
@@ -491,7 +487,7 @@ impl MiddleEnvironment {
             if options.name_resolution {
                 for key in self.symbols.variables.keys() {
                     if ParserText::temp_name_suffix_matches(key, &ident) {
-                        return Ok(StrOrAstNode::Str(key.clone()));
+                        return Ok(StrOrAstNode::Str(*key));
                     }
                 }
             }
@@ -507,7 +503,7 @@ impl MiddleEnvironment {
 
         for key in self.symbols.variables.keys() {
             if ParserText::temp_name_suffix_matches(key, &ident) {
-                return Ok(StrOrAstNode::Str(key.clone()));
+                return Ok(StrOrAstNode::Str(*key));
             }
         }
 
@@ -529,7 +525,7 @@ impl MiddleEnvironment {
             IdentifierType::Ident(x) => {
                 let x = Ustr::from(&x.to_string());
                 let resolved =
-                    self.resolve(scope, &x, ResolutionOptions::default().with_dollar())?;
+                    self.resolve(scope, x, ResolutionOptions::default().with_dollar())?;
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {
@@ -544,7 +540,7 @@ impl MiddleEnvironment {
             }
             IdentifierType::Ustr(x) => {
                 let resolved =
-                    self.resolve(scope, &x, ResolutionOptions::default().with_dollar())?;
+                    self.resolve(scope, x, ResolutionOptions::default().with_dollar())?;
 
                 (
                     match ParserInnerType::from_str(&resolved).unwrap() {

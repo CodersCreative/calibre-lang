@@ -114,7 +114,7 @@ impl MiddleEnvironment {
             )
             .ok()?;
         let resolved_name = self
-            .resolve(scope, &name, ResolutionOptions::idents())
+            .resolve(scope, name, ResolutionOptions::idents())
             .map(|x| x.to_string());
 
         let defaults_key = Ustr::from(resolved_name.as_deref().unwrap_or(name.as_str()));
@@ -433,6 +433,7 @@ impl MiddleEnvironment {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn evaluate_extern_function(
         &mut self,
         scope: ScopeId,
@@ -481,13 +482,7 @@ impl MiddleEnvironment {
             return_type.clone(),
         );
 
-        self.register_variable(
-            scope,
-            ident,
-            new_name.clone(),
-            fn_type.clone(),
-            VarType::Constant,
-        )?;
+        self.register_variable(scope, ident, new_name, fn_type.clone(), VarType::Constant)?;
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
@@ -497,9 +492,7 @@ impl MiddleEnvironment {
                     MiddleNodeType::ExternFunction(MirExtern {
                         abi: Ustr::from(&abi),
                         library: Ustr::from(&library),
-                        symbol: symbol
-                            .map(|x| Ustr::from(&x))
-                            .unwrap_or_else(|| ident.clone()),
+                        symbol: symbol.map(|x| Ustr::from(&x)).unwrap_or_else(|| ident),
                         parameters: params,
                         return_type,
                     }),
@@ -558,7 +551,7 @@ impl MiddleEnvironment {
             self.register_variable(
                 new_scope,
                 og_name,
-                new_name.clone(),
+                new_name,
                 data_type.clone(),
                 VarType::Mutable,
             )?;
@@ -579,7 +572,7 @@ impl MiddleEnvironment {
             self.register_variable(
                 new_scope,
                 Ustr::from("caller_context"),
-                caller_context_name.clone(),
+                caller_context_name,
                 caller_context_type.clone(),
                 VarType::Mutable,
             )?;
@@ -750,13 +743,12 @@ impl MiddleEnvironment {
         }
 
         // TODO revisit this
-        for (p_name, _, _) in params.iter() {
-            let full = p_name.clone();
-            if let Some(short) = ParserText::get_temp_name_suffix(&full) {
+        for (name, _, _) in params.iter() {
+            if let Some(short) = ParserText::get_temp_name_suffix(name) {
                 self.scoping
                     .scope_mut_or_err(new_scope)?
                     .mappings
-                    .insert(Ustr::from(&short), full);
+                    .insert(Ustr::from(&short), *name);
             }
         }
 
@@ -772,7 +764,7 @@ impl MiddleEnvironment {
         let current_function_name = if scope_ref.namespace.parse::<u64>().is_ok() {
             Ustr::from("main")
         } else {
-            scope_ref.namespace.clone()
+            scope_ref.namespace
         };
 
         let module_name = if !scope_ref.path.as_os_str().is_empty() {
@@ -826,13 +818,13 @@ impl MiddleEnvironment {
             AstNodeType::FieldAccess { base, field } => {
                 let field_name = self
                     .resolve(scope, &field, ResolutionOptions::default().with_dollar())
-                    .unwrap_or(Ustr::from(&field.text()));
+                    .unwrap_or(Ustr::from(field.text()));
 
                 if let Some(ty) = self.resolve_type_from_node(scope, base.as_ref())
                     && let Some(x) = self
                         .typing
                         .find_impl_member(&ty, &field_name)
-                        .map(|x| x.symbol_name.clone())
+                        .map(|x| x.symbol_name)
                 {
                     args.insert(0, CallArg::Value(*base));
                     return self.evaluate_call_expression(

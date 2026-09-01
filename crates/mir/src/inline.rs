@@ -30,11 +30,11 @@ fn collect_inlineable(node: &MiddleNode, map: &mut UstrMap<InlineFn>, max_nodes:
                 parameters, body, ..
             }) = &value.node_type
                 && let Some(expr) = extract_single_return_expr(body)
-                && !&expr.calls_self(&identifier)
+                && !&expr.calls_self(identifier)
                 && expr.len() <= max_nodes
             {
-                let params = parameters.iter().map(|(p, _, _)| p.clone()).collect();
-                map.insert(identifier.clone(), InlineFn { params, body: expr });
+                let params = parameters.iter().map(|(p, _, _)| *p).collect();
+                map.insert(*identifier, InlineFn { params, body: expr });
             }
         }
         _ => {}
@@ -66,12 +66,12 @@ fn inline_in_node(node: &mut MiddleNode, map: &UstrMap<InlineFn>) {
                 inline_in_node(a, map);
             }
             if let MiddleNodeType::Identifier(MirIdentifier { identifier }) = &caller.node_type
-                && let Some(inline_fn) = map.get(&identifier)
+                && let Some(inline_fn) = map.get(identifier)
                 && inline_fn.params.len() == args.len()
             {
                 let mut replacements: UstrMap<MiddleNode> = UstrMap::default();
                 for (param, arg) in inline_fn.params.iter().zip(args.iter()) {
-                    replacements.insert(param.clone(), arg.clone());
+                    replacements.insert(*param, arg.clone());
                 }
                 let mut inlined = inline_fn.body.clone();
                 inlined.substitute(&replacements);

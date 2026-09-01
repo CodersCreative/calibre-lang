@@ -79,8 +79,8 @@ impl MiddleEnvironment {
                 .err_at_current(MiddleErr::Internal("loop broke missing".to_string()))
         })?;
 
-        let result_ident = ParserText::from(result_raw.clone());
-        let broke_ident = ParserText::from(broke_raw.clone());
+        let result_ident = ParserText::from(result_raw);
+        let broke_ident = ParserText::from(broke_raw);
         let result_decl = AstNode::new(
             span,
             AstNodeType::VariableDeclaration {
@@ -168,10 +168,10 @@ impl MiddleEnvironment {
             let broke = Ustr::from(&ParserText::temp_name_with_suffix("loop_broke", span).text);
 
             if let Ok(scope_data) = self.scoping.scope_mut_or_err(scope) {
-                scope_data.mappings.insert(result.clone(), result.clone());
-                scope_data.mappings.insert(broke.clone(), broke.clone());
+                scope_data.mappings.insert(result, result);
+                scope_data.mappings.insert(broke, broke);
             }
-            (Some(result.clone()), Some(broke.clone()))
+            (Some(result), Some(broke))
         } else {
             (None, None)
         };
@@ -179,19 +179,14 @@ impl MiddleEnvironment {
         match loop_type {
             LoopType::Loop => {
                 let body = self.eval_loop_body_with_ctx(
-                    scope,
-                    label_text.clone(),
-                    result_raw.clone(),
-                    broke_raw.clone(),
-                    None,
-                    body,
+                    scope, label_text, result_raw, broke_raw, None, body,
                 )?;
                 let loop_node = MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration(MirLoop {
                         state: None,
                         body: Box::new(body),
                         scope_id: scope,
-                        label: label_text.clone().map(Into::into),
+                        label: label_text,
                     }),
                     span,
                 };
@@ -220,19 +215,14 @@ impl MiddleEnvironment {
 
                 let wrapped = self.wrap_loop_body(body, break_if_not, true);
                 let body = self.eval_loop_body_with_ctx(
-                    scope,
-                    label_text.clone(),
-                    result_raw.clone(),
-                    broke_raw.clone(),
-                    None,
-                    wrapped,
+                    scope, label_text, result_raw, broke_raw, None, wrapped,
                 )?;
                 let loop_node = MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration(MirLoop {
                         state: None,
                         body: Box::new(body),
                         scope_id: scope,
-                        label: label_text.clone().map(Into::into),
+                        label: label_text,
                     }),
                     span,
                 };
@@ -242,9 +232,9 @@ impl MiddleEnvironment {
             LoopType::Let { value, pattern } => {
                 let body = self.eval_loop_body_with_ctx(
                     scope,
-                    label_text.clone(),
-                    result_raw.clone(),
-                    broke_raw.clone(),
+                    label_text,
+                    result_raw,
+                    broke_raw,
                     None,
                     AstNode::new(
                         span,
@@ -267,7 +257,7 @@ impl MiddleEnvironment {
                         state: None,
                         body: Box::new(body),
                         scope_id: scope,
-                        label: label_text.clone().map(Into::into),
+                        label: label_text,
                     }),
                     span,
                 };
@@ -545,9 +535,9 @@ impl MiddleEnvironment {
 
                 let body = self.eval_loop_body_with_ctx(
                     scope,
-                    label_text.clone(),
-                    result_raw.clone(),
-                    broke_raw.clone(),
+                    label_text,
+                    result_raw,
+                    broke_raw,
                     if is_indexable_loop {
                         Some(increment_node.clone())
                     } else {
@@ -561,7 +551,7 @@ impl MiddleEnvironment {
                         state,
                         body: Box::new(body),
                         scope_id: scope,
-                        label: label_text.clone().map(Into::into),
+                        label: label_text,
                     }),
                     span,
                 };

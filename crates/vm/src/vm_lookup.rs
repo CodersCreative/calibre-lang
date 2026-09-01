@@ -88,14 +88,14 @@ impl VM {
             return self.resolve_saveable_runtime_value_ref(value);
         }
 
-        if let Ok(value) = self.resolve_value_for_op_ref(&RuntimeValue::Ref(name.clone()))
+        if let Ok(value) = self.resolve_value_for_op_ref(&RuntimeValue::Ref(*name))
             && !value.is_null()
         {
             return self.resolve_saveable_runtime_value_ref(&value);
         }
 
         // TODO Handle unresolved names
-        match self.resolve_var_name(name.clone()) {
+        match self.resolve_var_name(*name) {
             Some(VarName::Var(var)) => {
                 if let Some(value) = self.variables.get(&var) {
                     self.resolve_saveable_runtime_value_ref(value)
@@ -122,10 +122,10 @@ impl VM {
         let mut out = Vec::with_capacity(captures.len());
         let mut seen_names = UstrSet::default();
         for name in captures {
-            if !seen_names.insert(name.clone()) {
+            if !seen_names.insert(*name) {
                 continue;
             }
-            out.push((name.clone(), self.capture_value(name, seen)));
+            out.push((*name, self.capture_value(name, seen)));
         }
         out
     }
@@ -136,15 +136,15 @@ impl VM {
     }
 
     fn make_runtime_function_inner(&self, func: &VMFunction, seen: &mut UstrSet) -> RuntimeValue {
-        let name = func.name.clone();
-        if !seen.insert(name.clone()) {
+        let name = func.name;
+        if !seen.insert(name) {
             return RuntimeValue::Function {
                 name,
                 captures: Arc::new(Vec::new()),
             };
         }
         RuntimeValue::Function {
-            name: name.clone().into(),
+            name,
             captures: Arc::new(self.capture_values(&func.captures, seen)),
         }
     }

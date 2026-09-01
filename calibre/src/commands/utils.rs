@@ -123,9 +123,9 @@ pub fn resolve_run_targets(
         .into_iter()
         .map(|path| {
             if path.ends_with(".cal") {
-                return Ok(PathBuf::from(path));
+                Ok(PathBuf::from(path))
             } else {
-                return Ok(std::fs::canonicalize(path)?);
+                Ok(std::fs::canonicalize(path)?)
             }
         })
         .collect::<Result<Vec<_>, _>>()

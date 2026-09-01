@@ -399,7 +399,7 @@ impl Formatter {
                 for item in items {
                     let temp =
                         handle_comment!(self.get_potential_comment(&item.span), self.format(item));
-                    txt.push_str(&format!("{},\n", &self.fmt_txt_with_tab(&temp, 1, true)));
+                    txt.push_str(&format!("{},\n", self.fmt_txt_with_tab(&temp, 1, true)));
                 }
 
                 txt = txt.trim_end().trim_end_matches(",").trim_end().to_string();
@@ -488,7 +488,7 @@ impl Formatter {
                         format!("{} {}", line, self.format(&arm.body))
                     });
 
-                    txt.push_str(&format!("{},\n", &self.fmt_txt_with_tab(&temp, 1, true)));
+                    txt.push_str(&format!("{},\n", self.fmt_txt_with_tab(&temp, 1, true)));
                 }
                 txt = txt.trim_end().trim_end_matches(",").trim_end().to_string();
                 txt.push_str("\n}");
@@ -506,7 +506,7 @@ impl Formatter {
                 let get_module = |module: &[PotentialDollarIdentifier]| -> String {
                     let mut txt = module[0].to_string();
                     for val in module.iter().skip(1) {
-                        txt.push_str(&format!("::{}", &val));
+                        txt.push_str(&format!("::{}", val));
                     }
                     txt
                 };
@@ -1326,7 +1326,7 @@ impl Formatter {
                 let mut txt = format!("let @{} => @{} [", identifier, value.name);
 
                 for arg in &value.args {
-                    txt.push_str(&format!("${} := {}, ", &arg.0, self.format(&arg.1)));
+                    txt.push_str(&format!("${} := {}, ", arg.0, self.format(&arg.1)));
                 }
                 txt = txt.trim_end().trim_end_matches(",").to_string();
                 txt.push(']');
@@ -1360,7 +1360,7 @@ impl Formatter {
                     if !named.args.is_empty() {
                         txt.push_str(" [");
                         for arg in &named.args {
-                            txt.push_str(&format!("${} := {}, ", &arg.0, self.format(&arg.1)));
+                            txt.push_str(&format!("${} := {}, ", arg.0, self.format(&arg.1)));
                         }
                         txt = txt.trim_end().trim_end_matches(",").to_string();
                         txt.push(']');
@@ -1605,7 +1605,7 @@ impl Formatter {
                     self.format(&arm[0].2)
                 )
             });
-            txt.push_str(&format!("{},\n", &self.fmt_txt_with_tab(&temp, 1, true)));
+            txt.push_str(&format!("{},\n", self.fmt_txt_with_tab(&temp, 1, true)));
         }
         txt = txt.trim_end().trim_end_matches(",").to_string();
         txt.push_str("\n}");

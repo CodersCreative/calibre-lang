@@ -90,7 +90,7 @@ impl MiddleEnvironment {
             .tag_info
             .iter()
             .find_map(|tag| match tag {
-                TagInfo::Skip(reason) => Some((true, reason.clone())),
+                TagInfo::Skip(reason) => Some((true, *reason)),
                 _ => None,
             })
             .unwrap_or((false, None));
@@ -100,7 +100,7 @@ impl MiddleEnvironment {
             .tag_info
             .iter()
             .find_map(|tag| match tag {
-                TagInfo::Todo(reason) => Some((true, reason.clone())),
+                TagInfo::Todo(reason) => Some((true, *reason)),
                 _ => None,
             })
             .unwrap_or((false, None));
@@ -113,7 +113,7 @@ impl MiddleEnvironment {
                 .tag_info
                 .iter()
                 .filter_map(|tag| match tag {
-                    TagInfo::Suite(x) => Some(x.clone()),
+                    TagInfo::Suite(x) => Some(*x),
                     _ => None,
                 })
                 .collect(),

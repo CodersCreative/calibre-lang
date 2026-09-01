@@ -27,7 +27,7 @@ impl NativeFunction for EnvGet {
         };
 
         Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
-            value.clone(),
+            *value,
         )))))
     }
 }

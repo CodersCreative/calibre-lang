@@ -65,13 +65,13 @@ impl MiddleEnvironment {
             let arg_text =
                 self.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?;
             if !added.contains(&arg_text) {
-                added.push(arg_text.clone());
+                added.push(arg_text);
                 args.push(arg);
             }
         }
 
         let scope_macro = ScopeMacro {
-            name: name.clone(),
+            name,
             args,
             create_new_scope: create_new_scope.unwrap_or(scope_macro.create_new_scope),
             ..scope_macro
@@ -112,7 +112,7 @@ impl MiddleEnvironment {
                 )?;
 
                 let scope_macro = ScopeMacro {
-                    name: name.clone(),
+                    name,
                     args: named.args.clone(),
                     body: body.clone().unwrap_or_default(),
                     create_new_scope: og_create_new_scope.unwrap_or(create_new_scope),
@@ -137,7 +137,7 @@ impl MiddleEnvironment {
             if self.scoping.resolve_macro(scope, &name).is_none() {
                 if !named.args.is_empty() {
                     let scope_macro = ScopeMacro {
-                        name: name.clone(),
+                        name,
                         args: named.args.clone(),
                         body: body.clone().unwrap_or_default(),
                         create_new_scope,
@@ -145,7 +145,7 @@ impl MiddleEnvironment {
                     self.scoping
                         .scope_mut_or_err(scope)?
                         .macros
-                        .insert(name.clone(), scope_macro);
+                        .insert(name, scope_macro);
                 }
 
                 let mut body_nodes = body.unwrap_or_default();
@@ -187,7 +187,7 @@ impl MiddleEnvironment {
             for arg in named.args {
                 let arg_text =
                     self.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?;
-                added.push(arg_text.clone());
+                added.push(arg_text);
                 macro_args_to_insert.push((arg_text, arg.1));
             }
 
@@ -195,7 +195,7 @@ impl MiddleEnvironment {
                 let arg_text =
                     self.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?;
                 if !added.contains(&arg_text) {
-                    added.push(arg_text.clone());
+                    added.push(arg_text);
                     macro_args_to_insert.push((arg_text, arg.1));
                 }
             }
@@ -230,12 +230,14 @@ impl MiddleEnvironment {
                         identifier,
                         ResolutionOptions::default().with_dollar(),
                     )?;
+
                     let new_name =
                         Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
+
                     self.scoping
                         .scope_mut_or_err(new_scope)?
                         .mappings
-                        .entry(ident.clone())
+                        .entry(ident)
                         .or_insert(new_name);
                 }
             }

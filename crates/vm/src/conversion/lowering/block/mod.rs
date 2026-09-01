@@ -105,7 +105,7 @@ impl<'a> BlockLoweringCtx<'a> {
                 self.char_literals.insert(*x, idx);
             }
             VMLiteral::String(x) => {
-                self.string_literals.insert(x.clone(), idx);
+                self.string_literals.insert(*x, idx);
             }
             _ => {}
         }
@@ -119,7 +119,7 @@ impl<'a> BlockLoweringCtx<'a> {
         self.block.local_strings.push(text);
         let idx = (self.block.local_strings.len() - 1) as u16;
         if let Some(text) = self.block.local_strings.get(idx as usize) {
-            self.string_map.insert(text.clone(), idx);
+            self.string_map.insert(*text, idx);
         }
         idx
     }

@@ -32,7 +32,7 @@ impl WorkList {
             return;
         }
 
-        self.seen_functions.insert(value.clone());
+        self.seen_functions.insert(value);
         self.stack.push(WorkItem::Function(value));
     }
 
@@ -41,7 +41,7 @@ impl WorkList {
             return;
         }
 
-        self.seen_globals.insert(value.clone());
+        self.seen_globals.insert(value);
         self.stack.push(WorkItem::Global(value));
     }
 
@@ -50,7 +50,7 @@ impl WorkList {
             return;
         }
 
-        self.seen_types.insert(value.clone());
+        self.seen_types.insert(value);
         self.stack.push(WorkItem::Type(value));
     }
 
@@ -99,13 +99,13 @@ impl LirRegistry {
 
         for entry in entry_points.iter() {
             if self.functions.contains_key(entry) {
-                reachable_functions.insert(entry.clone());
+                reachable_functions.insert(*entry);
             }
         }
 
         if include_tests {
             for entry in self.functions.keys().filter(|x| x.contains("test::")) {
-                reachable_functions.insert(entry.clone());
+                reachable_functions.insert(*entry);
             }
         }
 
@@ -113,13 +113,13 @@ impl LirRegistry {
 
         for entry in entry_points.iter() {
             if self.functions.contains_key(entry) {
-                worklist.push_function(entry.clone());
+                worklist.push_function(*entry);
             }
         }
 
         if include_tests {
             for entry in self.functions.keys().filter(|x| x.contains("test::")) {
-                worklist.push_function(entry.clone());
+                worklist.push_function(*entry);
             }
         }
 
@@ -128,8 +128,8 @@ impl LirRegistry {
                 if referenced_types.contains(concrete_type) {
                     for methods in trait_map.values() {
                         for function_name in methods.values() {
-                            if reachable_functions.insert(function_name.clone()) {
-                                worklist.push_function(function_name.clone());
+                            if reachable_functions.insert(*function_name) {
+                                worklist.push_function(*function_name);
                             }
                         }
                     }
@@ -138,14 +138,14 @@ impl LirRegistry {
 
             for typ in referenced_types.clone().iter() {
                 for global in self.globals.iter().filter(|x| x.0.contains(typ.as_str())) {
-                    if reachable_globals.insert(global.0.clone()) {
-                        worklist.push_global(global.0.clone());
+                    if reachable_globals.insert(*global.0) {
+                        worklist.push_global(*global.0);
                     }
                 }
 
                 for func in self.functions.iter().filter(|x| x.0.contains(typ.as_str())) {
-                    if reachable_functions.insert(func.0.clone()) {
-                        worklist.push_function(func.0.clone());
+                    if reachable_functions.insert(*func.0) {
+                        worklist.push_function(*func.0);
                     }
                 }
             }
@@ -176,14 +176,14 @@ impl LirRegistry {
                     }
                     WorkItem::Type(typ) => {
                         for global in self.globals.iter().filter(|x| x.0.contains(typ.as_str())) {
-                            if reachable_globals.insert(global.0.clone()) {
-                                worklist.push_global(global.0.clone());
+                            if reachable_globals.insert(*global.0) {
+                                worklist.push_global(*global.0);
                             }
                         }
 
                         for func in self.functions.iter().filter(|x| x.0.contains(typ.as_str())) {
-                            if reachable_functions.insert(func.0.clone()) {
-                                worklist.push_function(func.0.clone());
+                            if reachable_functions.insert(*func.0) {
+                                worklist.push_function(*func.0);
                             }
                         }
                     }
@@ -278,10 +278,8 @@ impl LirNodeType {
                     worklist.push_function(*value);
                 }
 
-                if registry.globals.contains_key(value) {
-                    if reachable_globals.insert(*value) {
-                        worklist.push_global(*value);
-                    }
+                if registry.globals.contains_key(value) && reachable_globals.insert(*value) {
+                    worklist.push_global(*value);
                 }
             }
             LirNodeType::Call(LirCall { caller, args }) => {
@@ -310,7 +308,7 @@ impl LirNodeType {
             }
             LirNodeType::List(LirList { values, data_type }) => {
                 let type_name = Ustr::from(&data_type.impl_name());
-                if referenced_types.insert(type_name.clone()) {
+                if referenced_types.insert(type_name) {
                     worklist.push_type(type_name);
                 }
 
@@ -325,10 +323,10 @@ impl LirNodeType {
                 }
             }
             LirNodeType::Aggregate(LirAggregate { name, fields }) => {
-                if let Some(x) = name {
-                    if referenced_types.insert(*x) {
-                        worklist.push_type(*x);
-                    }
+                if let Some(x) = name
+                    && referenced_types.insert(*x)
+                {
+                    worklist.push_type(*x);
                 }
 
                 for (_field_name, field) in &fields.0 {
@@ -405,7 +403,7 @@ impl LirNodeType {
             })
             | LirNodeType::Is(LirIs { value, data_type }) => {
                 let type_name = Ustr::from(&data_type.impl_name());
-                if referenced_types.insert(type_name.clone()) {
+                if referenced_types.insert(type_name) {
                     worklist.push_type(type_name);
                 }
                 value.collect_references(

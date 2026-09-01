@@ -136,7 +136,7 @@ impl SSABuilder {
 
             let reg = self.compute_phi_register(var, &sources, phi_for);
             self.update_phi_nodes(&var, reg, &sources, phi_for, phis);
-            incoming.insert(var.clone(), reg);
+            incoming.insert(var, reg);
         }
 
         incoming

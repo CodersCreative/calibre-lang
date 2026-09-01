@@ -33,7 +33,7 @@ impl LirLowering for MirAssignment {
 
         let (lhs, old_expr) = match self.identifier.node_type {
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => (
-                Some(LirLValue::Var(identifier.clone())),
+                Some(LirLValue::Var(identifier)),
                 Some(LirNodeType::Load(LirLoad { value: identifier })),
             ),
             MiddleNodeType::DerefStatement(MirDeref { value }) => {
@@ -42,7 +42,7 @@ impl LirLowering for MirAssignment {
                 env.add_instr(LirNode::new(
                     ident_span,
                     LirNodeType::Declare(LirDeclare {
-                        dest: ptr_tmp.clone(),
+                        dest: ptr_tmp,
                         data_type: ParserDataType::auto(ident_span),
                         value: Box::new(ptr_expr),
                     }),
@@ -61,7 +61,7 @@ impl LirLowering for MirAssignment {
                 env.add_instr(LirNode::new(
                     ident_span,
                     LirNodeType::Declare(LirDeclare {
-                        dest: base_tmp.clone(),
+                        dest: base_tmp,
                         data_type: ParserDataType::auto(ident_span),
                         value: Box::new(base_expr),
                     }),
@@ -71,11 +71,11 @@ impl LirLowering for MirAssignment {
                 (
                     Some(LirLValue::Ptr(Box::new(LirNodeType::Member(LirMember {
                         base: Box::new(base_load.clone()),
-                        field: field.clone(),
+                        field,
                     })))),
                     Some(LirNodeType::Member(LirMember {
                         base: Box::new(base_load),
-                        field: field,
+                        field,
                     })),
                 )
             }
@@ -85,7 +85,7 @@ impl LirLowering for MirAssignment {
                 env.add_instr(LirNode::new(
                     ident_span,
                     LirNodeType::Declare(LirDeclare {
-                        dest: base_tmp.clone(),
+                        dest: base_tmp,
                         data_type: ParserDataType::auto(ident_span),
                         value: Box::new(base_expr),
                     }),
@@ -97,7 +97,7 @@ impl LirLowering for MirAssignment {
                 env.add_instr(LirNode::new(
                     ident_span,
                     LirNodeType::Declare(LirDeclare {
-                        dest: index_tmp.clone(),
+                        dest: index_tmp,
                         data_type: ParserDataType::auto(ident_span),
                         value: Box::new(index_expr),
                     }),
@@ -127,7 +127,7 @@ impl LirLowering for MirAssignment {
         env.add_instr(LirNode::new(
             ident_span,
             LirNodeType::Declare(LirDeclare {
-                dest: temp.clone(),
+                dest: temp,
                 data_type: ParserDataType::auto(ident_span),
                 value: Box::new(old_expr),
             }),

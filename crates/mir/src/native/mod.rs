@@ -217,15 +217,9 @@ impl MiddleEnvironment {
                     .trim(),
             );
 
-            let name = Ustr::from(&ParserText::temp_name_with_suffix(&short_name, var.span).text);
+            let name = Ustr::from(&ParserText::temp_name_with_suffix(short_name, var.span).text);
 
-            let _ = self.register_variable(
-                scope,
-                short_name,
-                name.clone(),
-                var.clone(),
-                VarType::Constant,
-            );
+            let _ = self.register_variable(scope, short_name, name, var.clone(), VarType::Constant);
 
             self.symbols
                 .native_mappings

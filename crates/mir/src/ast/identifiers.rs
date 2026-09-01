@@ -137,12 +137,7 @@ impl UstrIdentifiersUsed for MiddleNode {
                 amt.append(&mut index.identifiers_used());
                 amt
             }
-            MiddleNodeType::FunctionDeclaration(MirFunction {
-                parameters: _,
-                body,
-                return_type: _,
-                ..
-            }) => {
+            MiddleNodeType::FunctionDeclaration(MirFunction { body, .. }) => {
                 let _ = body;
                 Vec::new()
             }
@@ -304,12 +299,7 @@ impl MiddleNode {
 
                 amt
             }
-            MiddleNodeType::FunctionDeclaration(MirFunction {
-                parameters: _,
-                body: _,
-                return_type: _,
-                ..
-            }) => Vec::new(),
+            MiddleNodeType::FunctionDeclaration(MirFunction { .. }) => Vec::new(),
             MiddleNodeType::Conditional(MirConditional {
                 comparison,
                 then,

@@ -127,7 +127,7 @@ impl<'a> RunSuite<'a> {
             }
         }
 
-        out.sort_by(|a, b| a.3.name.cmp(&b.3.name));
+        out.sort_by_key(|a| a.3.name);
         out.dedup_by(|a, b| a.3.function_name == b.3.function_name && a.3.name == b.3.name);
         Ok(out)
     }

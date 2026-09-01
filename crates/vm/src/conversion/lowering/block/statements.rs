@@ -19,8 +19,8 @@ impl VMLowering for LirDeclare {
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, _span: Span) -> Reg {
         env.null_reg
     }
-    #[inline(always)]
 
+    #[inline(always)]
     fn lower_instr<'a>(
         self,
         env: &mut BlockLoweringCtx<'a>,

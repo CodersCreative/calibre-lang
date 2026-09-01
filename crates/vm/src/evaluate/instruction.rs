@@ -197,7 +197,7 @@ impl VM {
                             .0
                             .0
                             .iter_mut()
-                            .find(|(field, _)| field == &member_name)
+                            .find(|(field, _)| field == member_name)
                     {
                         entry.1 = updated_field;
 
@@ -370,7 +370,7 @@ impl VM {
                         value
                     };
 
-                    refreshed_caps.push((cap_name.clone(), value));
+                    refreshed_caps.push((*cap_name, value));
                 }
 
                 let refreshed = Arc::new(refreshed_caps);
@@ -420,7 +420,7 @@ impl VM {
                         self.set_reg_value(
                             *dst,
                             RuntimeValue::Function {
-                                name: label.into(),
+                                name: label,
                                 captures: Arc::new(caps),
                             },
                         );
@@ -741,10 +741,10 @@ impl VM {
                     {
                         value = resolved;
                     }
-                    entries.push((name.clone(), value));
+                    entries.push((name, value));
                 }
 
-                if let Some(type_name) = layout.name.clone()
+                if let Some(type_name) = layout.name
                     && Self::is_gen_type_name(&type_name)
                 {
                     let next_fn = entries.iter().find_map(|(field, value)| {
@@ -758,7 +758,7 @@ impl VM {
                                 let resolved = self
                                     .resolve_value_for_op_ref(v)
                                     .unwrap_or_else(|_| v.clone());
-                                (k.clone(), resolved)
+                                (*k, resolved)
                             })
                             .collect();
 
@@ -769,7 +769,7 @@ impl VM {
                         );
 
                         for (k, v) in &resolved_caps {
-                            gen_vm.variables.insert(k.clone(), v.clone());
+                            gen_vm.variables.insert(*k, v.clone());
                         }
 
                         if !self.ptr_heap.is_empty() {
@@ -799,7 +799,7 @@ impl VM {
                 self.set_reg_value(
                     *dst,
                     RuntimeValue::Aggregate(
-                        layout.name.clone(),
+                        layout.name,
                         Gc::new(crate::value::GcMap(ObjectMap(
                             entries
                                 .into_iter()
@@ -817,10 +817,7 @@ impl VM {
             } => {
                 let name = self.local_string(block, *name)?;
                 let payload = payload.map(|reg| Gc::new(self.take_reg_value(reg)));
-                self.set_reg_value(
-                    *dst,
-                    RuntimeValue::Enum(name.clone(), *variant as usize, payload),
-                );
+                self.set_reg_value(*dst, RuntimeValue::Enum(*name, *variant as usize, payload));
             }
             VMInstruction::CallSelf { dst, args } => {
                 let func_ptr = self.current_frame().func_ptr as *const VMFunction;
@@ -858,7 +855,7 @@ impl VM {
                                     .resolve_value_for_op_ref(v)
                                     .unwrap_or_else(|_| RuntimeValue::Null);
                                 let resolved = self.convert_runtime_var_into_saveable(resolved);
-                                (k.clone(), resolved)
+                                (*k, resolved)
                             })
                             .collect();
                         RuntimeValue::Function {
@@ -888,7 +885,7 @@ impl VM {
                     self.set_reg_value(*dst, callee);
                     self.current_frame_mut()
                         .member_sources
-                        .insert(*dst, (source_reg, name.clone()));
+                        .insert(*dst, (source_reg, *name));
                     return Ok(TerminateValue::None);
                 }
 
@@ -980,13 +977,10 @@ impl VM {
                         ) {
                             callee.bind_if_callable(value.as_ref().clone())
                         } else if member_short == "type" {
-                            RuntimeValue::Str(type_name.clone())
+                            RuntimeValue::Str(type_name)
                         } else if member_short == "traits" {
                             RuntimeValue::List(Gc::new(GcVec(
-                                constraints
-                                    .iter()
-                                    .map(|x| RuntimeValue::Str(x.clone()))
-                                    .collect(),
+                                constraints.iter().map(|x| RuntimeValue::Str(*x)).collect(),
                             )))
                         } else if let Some(x) = self.resolve_runtime_value(&Ustr::from(&format!(
                             "{}.{}",
@@ -1081,10 +1075,8 @@ impl VM {
                                 short_name,
                             ) {
                                 Some(value) => {
-                                    let resolved_receiver = RuntimeValue::Aggregate(
-                                        Some(type_name.clone()),
-                                        map.clone(),
-                                    );
+                                    let resolved_receiver =
+                                        RuntimeValue::Aggregate(Some(type_name), map.clone());
                                     self.bind_member_receiver_if_callable(
                                         value,
                                         name,
@@ -1278,7 +1270,7 @@ impl VM {
                                 .map(|(parent, path)| {
                                     (parent, Ustr::from(&format!("{path}.{name}")))
                                 })
-                                .unwrap_or((source_reg, Ustr::from(&name))),
+                                .unwrap_or((source_reg, Ustr::from(name))),
                         );
                     }
                 }

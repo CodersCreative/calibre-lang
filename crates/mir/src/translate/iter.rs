@@ -215,6 +215,7 @@ pub fn transform_spawn_iter(
 }
 
 impl MiddleEnvironment {
+    #[allow(clippy::too_many_arguments)]
     #[instrument(skip_all)]
     pub fn evaluate_iter_expression(
         &mut self,

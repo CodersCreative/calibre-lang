@@ -18,7 +18,7 @@ impl CalibreLanguageServer {
             let prefix = upto[idx + 2..].to_string();
 
             if !base_expr.is_empty() {
-                return CompletionContext::Member { base_expr, prefix };
+                return CompletionContext::MemberScope { base_expr, prefix };
             }
         }
 
@@ -30,7 +30,7 @@ impl CalibreLanguageServer {
             let prefix = upto[idx + 1..].to_string();
 
             if !base_expr.is_empty() {
-                return CompletionContext::Member { base_expr, prefix };
+                return CompletionContext::MemberAccess { base_expr, prefix };
             }
         }
 
@@ -110,7 +110,7 @@ impl CalibreLanguageServer {
             if let Some(field_ty) = env.resolve_member_field_type(
                 scope,
                 &current,
-                &Ustr::from(&member),
+                &Ustr::from(member),
                 CalSpan::default(),
             ) {
                 current = field_ty;
@@ -498,6 +498,7 @@ impl CalibreLanguageServer {
         canonical: &str,
     ) -> CompletionItem {
         let canonical = Ustr::from(canonical);
+        let display_name = Self::sanitize_name(visible);
         let (detail, kind, documentation) = if let Some(var) = env.symbols.variables.get(&canonical)
         {
             match &var.data_type.data_type {
@@ -512,7 +513,9 @@ impl CalibreLanguageServer {
                     var.data_type.to_string(),
                     CompletionItemKind::FUNCTION,
                     format!(
-                        "Resolved function `{visible}`\n\nCanonical: `{canonical}`\n\nParameters: {}\nReturn: {}",
+                        "Resolved function `{}`\n\nCanonical: `{}`\n\nParameters: {}\nReturn: {}",
+                        display_name,
+                        canonical,
                         parameters
                             .iter()
                             .map(|x| x.to_string())
@@ -527,7 +530,8 @@ impl CalibreLanguageServer {
                         ty.clone(),
                         CompletionItemKind::VARIABLE,
                         format!(
-                            "Resolved variable `{visible}`\n\nCanonical: `{canonical}`\n\nType: {ty}"
+                            "Resolved variable `{}`\n\nCanonical: `{}`\n\nType: {ty}",
+                            display_name, canonical
                         ),
                     )
                 }
@@ -546,22 +550,28 @@ impl CalibreLanguageServer {
             } else {
                 ("semantic type".to_string(), CompletionItemKind::STRUCT)
             };
-            let doc = format!("Resolved type `{visible}`\n\nCanonical: `{canonical}`\n\n{detail}");
+            let doc = format!(
+                "Resolved type `{}`\n\nCanonical: `{}`\n\n{detail}",
+                display_name, canonical
+            );
             (detail, kind, doc)
         } else {
             (
                 "semantic symbol".to_string(),
                 CompletionItemKind::FIELD,
-                format!("Resolved symbol `{visible}`\n\nCanonical: `{canonical}`"),
+                format!(
+                    "Resolved symbol `{}`\n\nCanonical: `{}`",
+                    display_name, canonical
+                ),
             )
         };
 
         CompletionItem {
-            label: visible.to_string(),
+            label: display_name.clone(),
             detail: Some(detail),
             kind: Some(kind),
             documentation: Some(Documentation::String(documentation)),
-            sort_text: Some(format!("1_{}", visible)),
+            sort_text: Some(format!("1_{}", display_name)),
             ..CompletionItem::default()
         }
     }
@@ -576,15 +586,99 @@ impl CalibreLanguageServer {
         current_scope.ancestors(&env.scoping.scopes).for_each(|x| {
             if let Ok(scope_ref) = env.scoping.scope_or_err(x) {
                 for (visible, canonical) in &scope_ref.mappings {
-                    if !prefix.is_empty() && !visible.starts_with(prefix) {
+                    let display_name = Self::sanitize_name(visible);
+
+                    if !prefix.is_empty() && !display_name.starts_with(prefix) {
                         continue;
                     }
-                    out.entry(visible.to_string()).or_insert_with(|| {
+
+                    if ParserText::is_temp_name(&visible.to_string()) {
+                        continue;
+                    }
+
+                    out.entry(display_name.clone()).or_insert_with(|| {
                         Self::global_semantic_completion_item(env, visible, canonical)
                     });
                 }
             }
         });
+    }
+
+    pub(super) fn collect_scope_completions(
+        env: &MiddleEnvironment,
+        _current_scope: ScopeId,
+        base_expr: &str,
+        prefix: &str,
+        out: &mut HashMap<String, CompletionItem>,
+    ) {
+        let cleaned = Self::clean_base_expr(base_expr);
+        if cleaned.is_empty() {
+            Self::collect_all_types(env, prefix, out);
+            return;
+        }
+
+        let normalized = cleaned.replace("::", ".");
+        let parts: Vec<&str> = normalized.split('.').filter(|s| !s.is_empty()).collect();
+
+        if parts.is_empty() {
+            return;
+        }
+
+        Self::collect_all_types(env, prefix, out);
+    }
+
+    fn collect_all_types(
+        env: &MiddleEnvironment,
+        prefix: &str,
+        out: &mut HashMap<String, CompletionItem>,
+    ) {
+        for (type_name, object) in &env.typing.objects {
+            let display_name = Self::sanitize_name(type_name);
+            if !prefix.is_empty() && !display_name.starts_with(prefix) {
+                continue;
+            }
+
+            let kind = match &object.object_type {
+                MiddleTypeDefType::Struct(_) => CompletionItemKind::STRUCT,
+                MiddleTypeDefType::Enum { .. } => CompletionItemKind::ENUM,
+                MiddleTypeDefType::NewType(_) => CompletionItemKind::TYPE_PARAMETER,
+                MiddleTypeDefType::Trait => CompletionItemKind::INTERFACE,
+            };
+
+            out.entry(display_name.clone()).or_insert(CompletionItem {
+                label: display_name.clone(),
+                detail: Some(object.object_type.to_string()),
+                kind: Some(kind),
+                documentation: Some(Documentation::String(format!("Type: {}", type_name))),
+                sort_text: Some(format!("1_{}", display_name)),
+                ..CompletionItem::default()
+            });
+        }
+
+        for trait_name in env.typing.trait_defs.keys() {
+            let display_name = Self::sanitize_name(trait_name);
+            if !prefix.is_empty() && !display_name.starts_with(prefix) {
+                continue;
+            }
+
+            out.entry(display_name.clone()).or_insert(CompletionItem {
+                label: display_name.clone(),
+                detail: Some("trait".to_string()),
+                kind: Some(CompletionItemKind::INTERFACE),
+                documentation: Some(Documentation::String(format!("Trait: {}", trait_name))),
+                sort_text: Some(format!("1_{}", display_name)),
+                ..CompletionItem::default()
+            });
+        }
+    }
+
+    fn sanitize_name(name: &str) -> String {
+        if ParserText::is_temp_name(&name.to_string())
+            && let Some(suffix) = ParserText::get_temp_name_suffix(&name.to_string())
+        {
+            return suffix;
+        }
+        name.to_string()
     }
 
     pub(super) fn collect_member_semantic_completions(
@@ -602,15 +696,16 @@ impl CalibreLanguageServer {
             && let MiddleTypeDefType::Struct(fields) = &obj.object_type
         {
             for (field_name, (field_ty, _default)) in &fields.0 {
-                if !prefix.is_empty() && !field_name.starts_with(prefix) {
+                let display_name = Self::sanitize_name(field_name);
+                if !prefix.is_empty() && !display_name.starts_with(prefix) {
                     continue;
                 }
-                out.entry(field_name.clone()).or_insert(CompletionItem {
-                    label: field_name.clone(),
+                out.entry(display_name.clone()).or_insert(CompletionItem {
+                    label: display_name.clone(),
                     detail: Some(format!("field: {}", field_ty)),
                     kind: Some(CompletionItemKind::FIELD),
                     documentation: Some(Documentation::String(format!("Field on `{}`", base_ty))),
-                    sort_text: Some(format!("1_{}", field_name)),
+                    sort_text: Some(format!("1_{}", display_name)),
                     ..CompletionItem::default()
                 });
             }
@@ -621,7 +716,8 @@ impl CalibreLanguageServer {
             .find_impl_for_type(&Ustr::from(&base_ty.impl_name()))
         {
             for (member_name, canonical_member) in imp.get_all_members() {
-                if !prefix.is_empty() && !member_name.starts_with(prefix) {
+                let display_name = Self::sanitize_name(member_name);
+                if !prefix.is_empty() && !display_name.starts_with(prefix) {
                     continue;
                 }
 
@@ -638,18 +734,17 @@ impl CalibreLanguageServer {
                     })
                     .unwrap_or_else(|| "method".to_string());
 
-                out.entry(member_name.to_string())
-                    .or_insert(CompletionItem {
-                        label: member_name.to_string(),
-                        detail: Some(detail),
-                        kind: Some(CompletionItemKind::METHOD),
-                        documentation: Some(Documentation::String(format!(
-                            "Method from impl/trait on `{}`\n\nCanonical: `{}`",
-                            base_ty, canonical_member.symbol_name
-                        ))),
-                        sort_text: Some(format!("1_{}", member_name)),
-                        ..CompletionItem::default()
-                    });
+                out.entry(display_name.clone()).or_insert(CompletionItem {
+                    label: display_name.clone(),
+                    detail: Some(detail),
+                    kind: Some(CompletionItemKind::METHOD),
+                    documentation: Some(Documentation::String(format!(
+                        "Method from impl/trait on `{}`\n\nCanonical: `{}`",
+                        base_ty, canonical_member.symbol_name
+                    ))),
+                    sort_text: Some(format!("1_{}", display_name)),
+                    ..CompletionItem::default()
+                });
             }
         }
     }

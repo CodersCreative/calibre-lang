@@ -67,9 +67,9 @@ impl LirLowering for MirScopeDecl {
                     env.registry.append(sub_lowerer.registry);
 
                     env.registry.globals.insert(
-                        identifier.clone(),
+                        *identifier,
                         LirGlobal {
-                            name: identifier.clone(),
+                            name: *identifier,
                             data_type: global_type,
                             blocks: sub_lowerer.blocks.into_boxed_slice(),
                         },
@@ -99,7 +99,7 @@ impl LirLowering for MirScopeDecl {
             env.add_instr(LirNode::new(
                 span,
                 LirNodeType::Declare(LirDeclare {
-                    dest: temp.clone(),
+                    dest: temp,
                     data_type: ParserDataType::auto(span),
                     value: Box::new(lowered),
                 }),
@@ -113,11 +113,7 @@ impl LirLowering for MirScopeDecl {
 impl LirLowering for MirFunction {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        let param_names: UstrSet = self
-            .parameters
-            .iter()
-            .map(|(name, _, _)| name.clone())
-            .collect();
+        let param_names: UstrSet = self.parameters.iter().map(|(name, _, _)| *name).collect();
 
         let captures: Vec<(Ustr, ParserDataType)> = self
             .body
@@ -126,7 +122,7 @@ impl LirLowering for MirFunction {
             .filter(|x| !param_names.contains(x))
             .map(|cap| {
                 (
-                    cap.clone(),
+                    *cap,
                     env.env
                         .symbols
                         .variables
@@ -165,14 +161,14 @@ impl LirLowering for MirFunction {
         let mut captures_for_func = Vec::with_capacity(captures.len());
 
         for (n, t) in captures.into_iter() {
-            capture_names.push(n.clone());
+            capture_names.push(n);
             captures_for_func.push((n, t));
         }
 
         env.registry.functions.insert(
-            internal_name.clone(),
+            internal_name,
             LirFunction {
-                name: internal_name.clone(),
+                name: internal_name,
                 params: self
                     .parameters
                     .into_iter()

@@ -90,7 +90,7 @@ impl FunctionLowering {
             })
         });
 
-        let param_names: UstrSet = lower.func.params.iter().map(|(n, _)| n.clone()).collect();
+        let param_names: UstrSet = lower.func.params.iter().map(|(n, _)| *n).collect();
 
         FunctionLowering::optimize_blocks(&mut lower.blocks);
 
@@ -100,14 +100,14 @@ impl FunctionLowering {
                 .func
                 .params
                 .iter()
-                .map(|(n, _)| n.clone())
+                .map(|(n, _)| *n)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
             captures: lower
                 .func
                 .captures
                 .iter()
-                .map(|(n, _)| n.clone())
+                .map(|(n, _)| *n)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
             returns_value: lower.func.return_type
@@ -126,7 +126,7 @@ impl FunctionLowering {
 
     // So I made this to see if potentially manually removing certain copies could provide a speedup.
     // Results have been inconclusive so I may remove it in the future
-    fn optimize_blocks(blocks: &mut Vec<VMBlock>) {
+    fn optimize_blocks(blocks: &mut [VMBlock]) {
         for block in blocks.iter_mut() {
             let mut i = 0;
             while i < block.instructions.len() {
@@ -140,8 +140,8 @@ impl FunctionLowering {
                 }
 
                 // Removes LoadLiteral followed by copy
-                if i + 1 < block.instructions.len() {
-                    if let (
+                if i + 1 < block.instructions.len()
+                    && let (
                         VMInstruction::LoadLiteral {
                             dst: dst1,
                             literal: lit1,
@@ -151,17 +151,16 @@ impl FunctionLowering {
                             src: src1,
                         },
                     ) = (&block.instructions[i], &block.instructions[i + 1])
-                        && *dst1 == *src1
-                        && *dst1 != *dst2
-                    {
-                        block.instructions[i] = VMInstruction::LoadLiteral {
-                            dst: *dst2,
-                            literal: *lit1,
-                        };
-                        block.instructions.remove(i + 1);
-                        block.instruction_spans.remove(i + 1);
-                        continue;
-                    }
+                    && *dst1 == *src1
+                    && *dst1 != *dst2
+                {
+                    block.instructions[i] = VMInstruction::LoadLiteral {
+                        dst: *dst2,
+                        literal: *lit1,
+                    };
+                    block.instructions.remove(i + 1);
+                    block.instruction_spans.remove(i + 1);
+                    continue;
                 }
 
                 // Removes copy followed by copy: %r2 = %r1; %r3 = %r2; -> %r3 = %r1;
@@ -203,19 +202,19 @@ impl FunctionLowering {
         let mut locals = UstrSet::default();
         if !is_global {
             for (name, _) in &func.params {
-                locals.insert(name.clone());
+                locals.insert(*name);
             }
             for block in &func.blocks {
                 for instr in &block.instructions {
                     match &instr.node_type {
                         LirNodeType::Declare(LirDeclare { dest, .. }) => {
-                            locals.insert(dest.clone());
+                            locals.insert(*dest);
                         }
                         LirNodeType::Assign(LirAssign {
                             dest: LirLValue::Var(name),
                             ..
                         }) => {
-                            locals.insert(name.clone());
+                            locals.insert(*name);
                         }
                         _ => {}
                     }
@@ -223,7 +222,7 @@ impl FunctionLowering {
             }
         }
 
-        let captures: UstrSet = func.captures.iter().map(|(n, _)| n.clone()).collect();
+        let captures: UstrSet = func.captures.iter().map(|(n, _)| *n).collect();
 
         let mut reg_count: Reg = 0;
         let mut param_regs = Vec::new();
@@ -314,7 +313,7 @@ impl FunctionLowering {
                 float_literals: FxHashMap::default(),
                 char_literals: FxHashMap::default(),
                 string_literals: UstrMap::default(),
-                current_fn_name: self.func.name.clone(),
+                current_fn_name: self.func.name,
                 big_consts: &mut self.big_consts,
             };
 

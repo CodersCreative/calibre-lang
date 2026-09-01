@@ -8,7 +8,7 @@ where
     V: Serialize,
 {
     map.iter()
-        .map(|(k, v)| (k.clone(), v.as_ref()))
+        .map(|(k, v)| (*k, v.as_ref()))
         .collect::<Vec<_>>()
         .serialize(serializer)
 }

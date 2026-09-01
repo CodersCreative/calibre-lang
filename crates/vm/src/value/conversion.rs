@@ -169,10 +169,7 @@ impl RuntimeValue {
             }
             (RuntimeValue::Str(x), ParserInnerType::Char) => {
                 let ch = x.chars().next().ok_or_else(|| {
-                    RuntimeError::CantConvert(
-                        Box::new(RuntimeValue::Str(x.clone())),
-                        ParserInnerType::Char,
-                    )
+                    RuntimeError::CantConvert(Box::new(RuntimeValue::Str(x)), ParserInnerType::Char)
                 })?;
                 Ok(RuntimeValue::Char(ch))
             }
@@ -208,10 +205,10 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Ptr(id))
             }
             (RuntimeValue::Null, ParserInnerType::Null) => Ok(RuntimeValue::Null),
-            (RuntimeValue::Aggregate(Some(x), z), ParserInnerType::Struct(y)) if &x == y => {
+            (RuntimeValue::Aggregate(Some(x), z), ParserInnerType::Struct(y)) if x == y => {
                 Ok(RuntimeValue::Aggregate(Some(x), z))
             }
-            (RuntimeValue::Enum(x, z, w), ParserInnerType::Struct(y)) if &x == y => {
+            (RuntimeValue::Enum(x, z, w), ParserInnerType::Struct(y)) if x == y => {
                 Ok(RuntimeValue::Enum(x, z, w))
             }
             (RuntimeValue::Aggregate(None, x), ParserInnerType::Tuple(_)) => {
@@ -297,7 +294,7 @@ impl VM {
             })?;
 
         Ok(RuntimeValue::DynObject {
-            type_name: type_name,
+            type_name,
             constraints: Arc::new(constraints),
             value: Gc::new(stored_value),
             vtable: Arc::new(vtable),

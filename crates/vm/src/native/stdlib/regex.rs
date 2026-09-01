@@ -66,6 +66,6 @@ impl NativeFunction for ReplaceFn {
 
         let re = Regex::new(pattern.as_str()).map_err(|e| RuntimeError::Io(e.to_string()))?;
         let out = re.replace_all(text.as_str(), replacement.as_str());
-        Ok(RuntimeValue::Str(Ustr::from(&out.to_string())))
+        Ok(RuntimeValue::Str(Ustr::from(&out)))
     }
 }

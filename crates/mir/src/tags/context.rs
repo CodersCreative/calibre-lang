@@ -57,7 +57,7 @@ impl MiddleEnvironment {
         }
 
         PackageMetadata {
-            name: scope.namespace.clone(),
+            name: scope.namespace,
             version: Ustr::from("0.0.0"),
             description: Ustr::from("default package metadata"),
             license: Ustr::default(),
@@ -144,7 +144,7 @@ impl MiddleEnvironment {
                 PotentialDollarIdentifier::Identifier(text) => &text.text,
                 PotentialDollarIdentifier::DollarIdentifier(text) => &text.text,
             }),
-            _ => scope_ref.namespace.clone(),
+            _ => scope_ref.namespace,
         };
 
         let mut nodes = vec![AstNode::new(
@@ -159,10 +159,7 @@ impl MiddleEnvironment {
                         identifier: PotentialGenericTypeIdentifier::new(sp, "ExecContext"),
                         value: ObjectType::Map(vec![
                             ("function_name".to_string(), value(function_name)),
-                            (
-                                "module_name".to_string(),
-                                value(scope_ref.namespace.clone()),
-                            ),
+                            ("module_name".to_string(), value(scope_ref.namespace)),
                             (
                                 "path".to_string(),
                                 value(Ustr::from(

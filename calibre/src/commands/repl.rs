@@ -149,7 +149,7 @@ impl<'a> RunSource<'a> {
             .symbols
             .variables
             .iter()
-            .map(|x| x.0.clone())
+            .map(|x| *x.0)
             .collect();
 
         let mut vm: VM = VM::new(VMRegistry::from(lir_result), mappings, self.vm_config);

@@ -117,17 +117,17 @@ impl<'a> LirEnvironment<'a> {
         if let Some(trait_def) = trait_def {
             for member in trait_def.members.keys() {
                 if let Some(mapped) = imp.get_member(member, &[]) {
-                    methods.insert(member.clone(), mapped.symbol_name.clone());
+                    methods.insert(*member, mapped.symbol_name);
                 } else if let Some(trait_member) = trait_def.members.get(member)
                     && trait_member.default.is_some()
                 {
                     let symbol_name = Ustr::from(&format!("{}.{}", trait_name, member));
-                    methods.insert(member.clone(), symbol_name);
+                    methods.insert(*member, symbol_name);
                 }
             }
         } else {
             for (member, mapped) in imp.get_all_members() {
-                methods.insert(member.clone(), mapped.symbol_name.clone());
+                methods.insert(*member, mapped.symbol_name);
             }
         }
         methods
@@ -137,7 +137,7 @@ impl<'a> LirEnvironment<'a> {
         let mut out: UstrMap<UstrMap<UstrMap<Ustr>>> = UstrMap::default();
 
         for (concrete, imp) in env.typing.impls.iter() {
-            let trait_map = out.entry(concrete.clone()).or_default();
+            let trait_map = out.entry(*concrete).or_default();
 
             for trait_name in &imp.traits {
                 let methods = Self::collect_trait_methods(
@@ -146,7 +146,7 @@ impl<'a> LirEnvironment<'a> {
                     trait_name,
                 );
                 if !methods.is_empty() {
-                    trait_map.insert(trait_name.clone(), methods);
+                    trait_map.insert(*trait_name, methods);
                 }
             }
         }
@@ -180,7 +180,7 @@ impl<'a> LirEnvironment<'a> {
             debug!("creating global for root");
             let blocks = std::mem::take(&mut this.blocks).into_boxed_slice();
             this.registry.globals.insert(
-                root_name.clone(),
+                root_name,
                 LirGlobal {
                     name: root_name,
                     data_type: ParserDataType::new(Span::default(), ParserInnerType::Dynamic),

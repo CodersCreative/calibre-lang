@@ -131,7 +131,7 @@ impl VMFunction {
     pub fn rename(mut self, mut declared: UstrMap<Ustr>) -> Self {
         for param in self.params.iter_mut() {
             let new_name = Ustr::from(&format!("{}->{}", param, fastrand::u32(0..u32::MAX)));
-            declared.insert(Ustr::from(param), new_name.clone());
+            declared.insert(Ustr::from(param), new_name);
             *param = new_name;
         }
 

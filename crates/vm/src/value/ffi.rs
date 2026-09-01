@@ -206,7 +206,7 @@ impl ExternFunction {
             return Err(RuntimeError::InvalidFunctionCall);
         }
 
-        for (param, value) in self.parameters.iter().zip(args.into_iter()) {
+        for (param, value) in self.parameters.iter().zip(args) {
             match &param.data_type {
                 x if !matches!(x, ParserInnerType::FfiType(_)) => {
                     match (Self::resolve_value(env, value), x) {

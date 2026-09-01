@@ -34,7 +34,7 @@ impl VM {
             frame.reg_count = reg_count;
             frame.acc = RuntimeValue::Null;
             frame.func_ptr = func as *const VMFunction as usize;
-            frame.func_name = Some(func.name.clone());
+            frame.func_name = Some(func.name);
         }
     }
 

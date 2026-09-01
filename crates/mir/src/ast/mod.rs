@@ -45,7 +45,7 @@ impl MiddleNode {
 
     pub fn member_field(&self) -> Result<Ustr, MiddleErr> {
         Ok(match &self.node_type {
-            MiddleNodeType::Identifier(name) => name.identifier.clone(),
+            MiddleNodeType::Identifier(name) => name.identifier,
             MiddleNodeType::IntLiteral(MirInt {
                 value: ParsedIntLiteral { value, int_type },
             }) => match int_type {
@@ -125,7 +125,7 @@ impl MiddleNode {
     pub fn substitute(&mut self, repl: &UstrMap<MiddleNode>) {
         match &mut self.node_type {
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
-                if let Some(replacement) = repl.get(&identifier) {
+                if let Some(replacement) = repl.get(identifier) {
                     *self = replacement.clone();
                 }
             }

@@ -391,7 +391,7 @@ impl MiddleEnvironment {
                 if let AstNodeType::FieldAccess { base, field } = &caller.node_type {
                     let member_name = self
                         .resolve(scope, field, ResolutionOptions::default().with_dollar())
-                        .unwrap_or(Ustr::from(&field.text()));
+                        .unwrap_or(Ustr::from(field.text()));
 
                     if !member_name.is_empty() {
                         if let Some(ty) = &self.resolve_type_from_node(scope, base).or_else(|| {
@@ -426,27 +426,25 @@ impl MiddleEnvironment {
 
                     if let Ok(caller_ty) = self.resolve_to_data_type(scope, caller) {
                         match &caller_ty.data_type {
-                            ParserInnerType::Struct(name) => {
-                                if self.typing.objects.contains_key(&Ustr::from(name)) {
-                                    return Some(ParserDataType {
-                                        data_type: ParserInnerType::Struct(name.clone()),
-                                        span: node.span,
-                                    });
-                                }
+                            ParserInnerType::Struct(name)
+                                if self.typing.objects.contains_key(&Ustr::from(name)) =>
+                            {
+                                return Some(ParserDataType {
+                                    data_type: ParserInnerType::Struct(name.clone()),
+                                    span: node.span,
+                                });
                             }
                             ParserInnerType::StructWithGenerics {
                                 identifier,
                                 generic_types,
-                            } => {
-                                if self.typing.objects.contains_key(&Ustr::from(identifier)) {
-                                    return Some(ParserDataType {
-                                        data_type: ParserInnerType::StructWithGenerics {
-                                            identifier: identifier.clone(),
-                                            generic_types: generic_types.clone(),
-                                        },
-                                        span: node.span,
-                                    });
-                                }
+                            } if self.typing.objects.contains_key(&Ustr::from(identifier)) => {
+                                return Some(ParserDataType {
+                                    data_type: ParserInnerType::StructWithGenerics {
+                                        identifier: identifier.clone(),
+                                        generic_types: generic_types.clone(),
+                                    },
+                                    span: node.span,
+                                });
                             }
                             _ => {}
                         }
@@ -462,13 +460,11 @@ impl MiddleEnvironment {
                     .resolve_potential_node(scope, x, ResolutionOptions::idents())
                     .ok()?
                 {
-                    StrOrAstNode::Str(iden) => {
-                        if let Some(x) = self.symbols.variables.get(&iden) {
-                            Some(x.data_type.clone())
-                        } else {
-                            None
-                        }
-                    }
+                    StrOrAstNode::Str(iden) => self
+                        .symbols
+                        .variables
+                        .get(&iden)
+                        .map(|x| x.data_type.clone()),
                     StrOrAstNode::Node(x) => return self.resolve_type_from_node(scope, &x),
                 }
             }
@@ -483,7 +479,7 @@ impl MiddleEnvironment {
 
                 let member = self
                     .resolve(scope, field, ResolutionOptions::default().with_dollar())
-                    .unwrap_or_else(|_| Ustr::from(&field.text()));
+                    .unwrap_or_else(|_| Ustr::from(field.text()));
 
                 if let Some(member_type) = self.resolve_member_fn_type(&ty, &member) {
                     return Some(member_type);
@@ -504,7 +500,7 @@ impl MiddleEnvironment {
                 if base.scope_access_path(&mut module_path) {
                     let member = self
                         .resolve(scope, field, ResolutionOptions::default().with_dollar())
-                        .unwrap_or_else(|_| Ustr::from(&field.text()));
+                        .unwrap_or_else(|_| Ustr::from(field.text()));
 
                     if let Ok(member_scope) = self
                         .get_scope_list(scope, &module_path.clone())

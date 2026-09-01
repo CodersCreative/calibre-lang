@@ -106,14 +106,12 @@ impl MiddleEnvironment {
         if let Some((header, _)) = function_decl {
             for tag in &self.tagging.tag_info {
                 match tag {
-                    TagInfo::Init(priority) => self
-                        .tagging
-                        .init_functions
-                        .push((*priority, new_name.clone())),
-                    TagInfo::Fin(priority) => self
-                        .tagging
-                        .fin_functions
-                        .push((*priority, new_name.clone())),
+                    TagInfo::Init(priority) => {
+                        self.tagging.init_functions.push((*priority, new_name))
+                    }
+                    TagInfo::Fin(priority) => {
+                        self.tagging.fin_functions.push((*priority, new_name))
+                    }
                     _ => {}
                 }
             }
@@ -140,10 +138,10 @@ impl MiddleEnvironment {
 
             self.symbols
                 .function_param_defaults
-                .insert(new_name.clone(), defaults.clone());
+                .insert(new_name, defaults.clone());
             self.symbols
                 .function_param_defaults
-                .insert(identifier.clone(), defaults);
+                .insert(identifier, defaults);
         }
 
         let node_ty = self.resolve_type_from_node(scope, &value);
@@ -180,25 +178,13 @@ impl MiddleEnvironment {
         };
 
         let mut value = if function_decl.is_some() {
-            self.register_variable(
-                scope,
-                identifier,
-                new_name.clone(),
-                data_type.clone(),
-                var_type,
-            )?;
+            self.register_variable(scope, identifier, new_name, data_type.clone(), var_type)?;
 
             self.evaluate(scope, value)
         } else {
             let value = self.evaluate(scope, value);
 
-            self.register_variable(
-                scope,
-                identifier,
-                new_name.clone(),
-                data_type.clone(),
-                var_type,
-            )?;
+            self.register_variable(scope, identifier, new_name, data_type.clone(), var_type)?;
 
             value
         };
@@ -279,7 +265,7 @@ impl MiddleEnvironment {
                 self.resolve_data_type(scope, inner.as_ref(), ResolutionOptions::typing())?;
 
             let target_name = if identifier == inner.impl_name() {
-                Some(identifier.clone())
+                Some(identifier)
             } else {
                 None
             };
@@ -292,12 +278,9 @@ impl MiddleEnvironment {
 
             if !overloads.is_empty() {
                 for overload in overloads {
-                    if let Some(processed) = self.process_overload(
-                        scope,
-                        overload,
-                        generic_params.clone(),
-                        target_name.clone(),
-                    )? {
+                    if let Some(processed) =
+                        self.process_overload(scope, overload, generic_params.clone(), target_name)?
+                    {
                         self.symbols.overloads.push(processed);
                     }
                 }
@@ -331,10 +314,11 @@ impl MiddleEnvironment {
                 })
                 .collect();
 
-            self.typing
-                .generic_type_templates
-                .entry(ident.clone())
-                .or_insert((template_params, object.clone(), overloads.clone()));
+            self.typing.generic_type_templates.entry(ident).or_insert((
+                template_params,
+                object.clone(),
+                overloads.clone(),
+            ));
 
             self.typing
                 .generic_type_templates
@@ -360,7 +344,7 @@ impl MiddleEnvironment {
 
         let default_ident = self.resolve(scope, &"Default", ResolutionOptions::typing());
         self.typing.objects.insert(
-            new_name.clone(),
+            new_name,
             MiddleObject {
                 object_type: object.clone(),
                 variables: UstrMap::default(),
@@ -380,7 +364,7 @@ impl MiddleEnvironment {
 
             scope
                 .type_mappings
-                .insert(ident.clone(), ParserInnerType::Struct(new_name.to_string()));
+                .insert(ident, ParserInnerType::Struct(new_name.to_string()));
 
             scope.type_mappings.insert(
                 Ustr::from("Self"),
@@ -409,12 +393,9 @@ impl MiddleEnvironment {
         };
 
         for overload in overloads {
-            if let Some(processed) = self.process_overload(
-                scope,
-                overload,
-                generic_params.clone(),
-                Some(new_name.clone()),
-            )? {
+            if let Some(processed) =
+                self.process_overload(scope, overload, generic_params.clone(), Some(new_name))?
+            {
                 self.symbols.overloads.push(processed);
             }
         }

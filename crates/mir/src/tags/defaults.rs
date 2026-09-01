@@ -54,7 +54,7 @@ impl MiddleEnvironment {
                                                 span,
                                                 AstNodeType::EnumExpression {
                                                     identifier: identifier.clone().into(),
-                                                    value: default_variant_name.clone().into(),
+                                                    value: (*default_variant_name).into(),
                                                     data: default_value.clone(),
                                                 },
                                             )),

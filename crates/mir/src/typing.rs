@@ -78,7 +78,7 @@ impl Typing {
     ) -> Vec<(Ustr, MiddleTraitMember)> {
         let mut out = Vec::new();
         let mut seen_members = FxHashSet::default();
-        let mut stack = vec![root_trait.clone()];
+        let mut stack = vec![root_trait];
         let mut visited_traits = FxHashSet::default();
 
         let mut depth = 32;
@@ -90,16 +90,16 @@ impl Typing {
             }
             depth -= 1;
 
-            if !visited_traits.insert(current.clone()) {
+            if !visited_traits.insert(current) {
                 continue;
             }
 
-            let Some(def) = trait_defs.get(&current) else {
+            let Some(def) = trait_defs.get(current) else {
                 continue;
             };
 
             for implied in &def.implied_traits {
-                stack.push(implied.clone());
+                stack.push(implied);
             }
 
             for (name, member) in &def.members {
@@ -110,8 +110,8 @@ impl Typing {
                     continue;
                 }
 
-                seen_members.insert(name.clone());
-                out.push((name.clone(), member.clone()));
+                seen_members.insert(name);
+                out.push((*name, member.clone()));
             }
         }
 

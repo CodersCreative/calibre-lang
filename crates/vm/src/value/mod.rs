@@ -82,7 +82,7 @@ impl TryFrom<RuntimeValue> for HashKey {
             RuntimeValue::Byte(x) => Ok(Self::UInt(x as u64)),
             RuntimeValue::Bool(x) => Ok(Self::Bool(x)),
             RuntimeValue::Char(x) => Ok(Self::Char(x)),
-            RuntimeValue::Str(x) => Ok(Self::Str(x.clone())),
+            RuntimeValue::Str(x) => Ok(Self::Str(x)),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
@@ -319,7 +319,7 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
             RuntimeValue::MutexGuard(guard) => guard.get_clone().accept(visitor),
             RuntimeValue::HashMap(map) => {
                 if let Ok(guard) = map.try_lock() {
-                    for (_, value) in guard.iter() {
+                    for value in guard.values() {
                         value.accept(visitor)?;
                     }
                 }
@@ -472,17 +472,17 @@ impl RuntimeValue {
             RuntimeValue::Range(_, _) => Some("range"),
             RuntimeValue::Ptr(_) => Some("ptr"),
             RuntimeValue::Aggregate(Some(name), _) | RuntimeValue::Enum(name, _, _) => {
-                return Some(name.clone());
+                return Some(*name);
             }
-            RuntimeValue::Generator { type_name, .. } => return Some(type_name.clone()),
-            RuntimeValue::DynObject { type_name, .. } => return Some(type_name.clone()),
+            RuntimeValue::Generator { type_name, .. } => return Some(*type_name),
+            RuntimeValue::DynObject { type_name, .. } => return Some(*type_name),
             RuntimeValue::List(_) => Some("list"),
             RuntimeValue::Option(_) => Some("option"),
             RuntimeValue::Result(_) => Some("result"),
             RuntimeValue::Null => Some("null"),
             _ => None,
         }
-        .map(|x| Ustr::from(x))
+        .map(Ustr::from)
     }
 
     pub fn constants() -> &'static FxHashMap<String, Self> {
@@ -832,7 +832,7 @@ impl From<VMLiteral> for RuntimeValue {
             VMLiteral::String(x) => Self::Str(x),
             VMLiteral::Null => Self::Null,
             VMLiteral::Closure { label, captures: _ } => Self::Function {
-                name: label.into(),
+                name: label,
                 captures: Arc::new(Vec::new()),
             },
             VMLiteral::ExternFunction { .. } => Self::Null,

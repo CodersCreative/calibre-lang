@@ -18,7 +18,6 @@ type StackList := struct (list:<Stack2>);
 	let mut arr := Stack { values : [0; 30] };
 	
 	print([1 + i for i in 100]);
-
 	// arr.smth();
 	arr.values[10] := 100;
 	let mut arr2 := Stack2(move arr);

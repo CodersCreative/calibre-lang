@@ -31,7 +31,7 @@ impl MiddleEnvironment {
             && let Ok(ty) = self.resolve_to_data_type(scope, ident)
         {
             if let Some(member) = self.typing.find_impl_member(&ty, &field_name) {
-                return Ok(MiddleNode::identifier(span, member.symbol_name.clone()));
+                return Ok(MiddleNode::identifier(span, member.symbol_name));
             }
 
             if let Some(member) = self.resolve_impl_member(scope, &ty, &field_name) {
@@ -61,7 +61,7 @@ impl MiddleEnvironment {
             && let Some(x) = self
                 .typing
                 .find_impl_member(&ty, &field_name)
-                .map(|x| x.symbol_name.clone())
+                .map(|x| x.symbol_name)
         {
             return Ok(MiddleNode::identifier(span, x));
         }
@@ -69,7 +69,7 @@ impl MiddleEnvironment {
         Ok(MiddleNode::new(
             MiddleNodeType::FieldAccess(MirField {
                 base: Box::new(self.evaluate_inner(scope, base)?),
-                field: field_name.into(),
+                field: field_name,
             }),
             span,
         ))
@@ -94,7 +94,7 @@ impl MiddleEnvironment {
                 ResolutionOptions::default().with_dollar(),
             )?;
 
-            return Ok(self.evaluate(new_scope, AstNode::identifier(span, &resolved)));
+            return Ok(self.evaluate(new_scope, AstNode::identifier(span, resolved)));
         }
 
         Err(MiddleErr::Scope(format!(
@@ -160,6 +160,6 @@ impl MiddleEnvironment {
             .ok()?;
         self.typing
             .find_impl_member(&resolved, member)
-            .map(|x| x.symbol_name.clone())
+            .map(|x| x.symbol_name)
     }
 }

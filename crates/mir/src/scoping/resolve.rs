@@ -18,7 +18,7 @@ impl MiddleEnvironment {
         debug!("getting scope list");
         if let Some(first) = list.first() {
             debug!(first = %first, "importing scope");
-            let scope = self.get_next_scope(scope, &first);
+            let scope = self.get_next_scope(scope, first);
             self.get_scope_list(scope?, list)
         } else {
             Ok(scope)
@@ -41,14 +41,14 @@ impl MiddleEnvironment {
         list: &[Ustr],
         depth: usize,
     ) -> Result<(ScopeId, Option<MiddleNode>), MiddleErr> {
-        if depth <= 0 {
+        if depth == 0 {
             return Ok((scope, None));
         }
 
         debug!("importing scope list at depth {}", depth);
         if let Some(first) = list.first() {
             debug!(first = %first, "importing scope");
-            let scope = self.import_next_scope(scope, &first);
+            let scope = self.import_next_scope(scope, first);
             self.import_scope_list_with_depth(scope?.0, list, depth - 1)
         } else {
             Ok((scope, None))

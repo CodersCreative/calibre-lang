@@ -88,7 +88,7 @@ impl MiddleEnvironment {
                 node.span,
                 match self.resolve_potential_node(scope, &x, ResolutionOptions::idents())? {
                     StrOrAstNode::Str(x) => x,
-                    StrOrAstNode::Node(x) => return self.evaluate_inner(scope, x),
+                    StrOrAstNode::Node(x) => return self.evaluate_inner(scope, *x),
                 },
             )),
             AstNodeType::IntLiteral(text) => Ok(MiddleNode {
@@ -109,7 +109,7 @@ impl MiddleEnvironment {
                     value: x
                         .text
                         .strip_suffix('g')
-                        .map(|x| Ustr::from(x))
+                        .map(Ustr::from)
                         .unwrap_or(Ustr::from(&x.text)),
                 }),
                 span: node.span,
@@ -616,8 +616,8 @@ impl MiddleEnvironment {
                             self.scoping.loop_stack.last()
                         };
                         (
-                            target_ctx.and_then(|ctx| ctx.result_target.clone()),
-                            target_ctx.and_then(|ctx| ctx.broke_target.clone()),
+                            target_ctx.and_then(|ctx| ctx.result_target),
+                            target_ctx.and_then(|ctx| ctx.broke_target),
                             target_ctx.map(|ctx| ctx.scope_id),
                         )
                     };
@@ -629,7 +629,7 @@ impl MiddleEnvironment {
                             MiddleNodeType::AssignmentExpression(MirAssignment {
                                 identifier: Box::new(MiddleNode::identifier(
                                     self.context.current_span(),
-                                    &result_target,
+                                    result_target,
                                 )),
                                 value: Box::new(value_node.unwrap_or(MiddleNode::new(
                                     MiddleNodeType::Null,
@@ -648,7 +648,7 @@ impl MiddleEnvironment {
                             MiddleNodeType::AssignmentExpression(MirAssignment {
                                 identifier: Box::new(MiddleNode::identifier(
                                     self.context.current_span(),
-                                    &broke_target,
+                                    broke_target,
                                 )),
                                 value: Box::new(MiddleNode::new(
                                     MiddleNodeType::IntLiteral(MirInt {
@@ -680,9 +680,7 @@ impl MiddleEnvironment {
 
                     let break_node = MiddleNode::new(
                         MiddleNodeType::Break(MirBreak {
-                            label: label_text
-                                .or(raw_label_text.map(|x| Ustr::from(&x)))
-                                .map(Into::into),
+                            label: label_text.or(raw_label_text.map(|x| Ustr::from(&x))),
                             value: None,
                         }),
                         self.context.current_span(),
@@ -752,9 +750,7 @@ impl MiddleEnvironment {
 
                     let cont_node = MiddleNode::new(
                         MiddleNodeType::Continue(MirContinue {
-                            label: label_text
-                                .or(raw_label_text.map(|x| Ustr::from(&x)))
-                                .map(Into::into),
+                            label: label_text.or(raw_label_text.map(|x| Ustr::from(&x))),
                         }),
                         self.context.current_span(),
                     );
@@ -1564,8 +1560,8 @@ impl MiddleEnvironment {
                 if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
                     for generic in generics.0.iter() {
                         let name = Ustr::from(&generic.identifier.to_string());
-                        prev_generics.push((name.clone(), scope_ref.mappings.get(&name).cloned()));
-                        scope_ref.mappings.insert(name.clone(), name.clone());
+                        prev_generics.push((name, scope_ref.mappings.get(&name).cloned()));
+                        scope_ref.mappings.insert(name, name);
                     }
                 }
 
@@ -1594,7 +1590,7 @@ impl MiddleEnvironment {
                 let impl_key = Ustr::from(&resolved.impl_name());
 
                 self.typing
-                    .get_or_create_impl(impl_key.clone(), self.context.current_location.clone());
+                    .get_or_create_impl(impl_key, self.context.current_location.clone());
 
                 {
                     let placeholders = variables
@@ -1772,14 +1768,12 @@ impl MiddleEnvironment {
                             x => x,
                         },
                         AstNodeType::TypeDeclaration { .. } => Ok(None),
-                        _ => {
-                            return Err(MiddleErr::At(
-                                var.span,
-                                Box::new(MiddleErr::Internal(
-                                    "expected variable declaration in impl".to_string(),
-                                )),
-                            ));
-                        }
+                        _ => Err(MiddleErr::At(
+                            var.span,
+                            Box::new(MiddleErr::Internal(
+                                "expected variable declaration in impl".to_string(),
+                            )),
+                        )),
                     }
                 }
 
@@ -1794,7 +1788,7 @@ impl MiddleEnvironment {
 
                     let new_name = match &dec.node_type {
                         MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => {
-                            identifier.clone()
+                            identifier
                         }
                         _ => {
                             return Err(MiddleErr::At(
@@ -1817,7 +1811,7 @@ impl MiddleEnvironment {
                         })?
                         .insert_member(
                             &iden,
-                            MiddleImplMember::new(new_name, generic_params.clone(), dependant),
+                            MiddleImplMember::new(*new_name, generic_params.clone(), dependant),
                         );
 
                     statements.push(dec);
@@ -1863,8 +1857,8 @@ impl MiddleEnvironment {
                 if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
                     for generic in generics.0.iter() {
                         let name = Ustr::from(&generic.identifier.to_string());
-                        prev_generics.push((name.clone(), scope_ref.mappings.get(&name).cloned()));
-                        scope_ref.mappings.insert(name.clone(), name.clone());
+                        prev_generics.push((name, scope_ref.mappings.get(&name).cloned()));
+                        scope_ref.mappings.insert(name, name);
                     }
                 }
 
@@ -1924,7 +1918,7 @@ impl MiddleEnvironment {
                         AstNodeType::VariableDeclaration {
                             var_type: VarType::Constant,
                             identifier: PotentialDollarIdentifier::Identifier(ParserText::from(
-                                name.clone(),
+                                name,
                             )),
                             data_type: member.data_type.clone(),
                             value: Box::new(default),
@@ -1936,7 +1930,7 @@ impl MiddleEnvironment {
                     let scope = self.scoping.scope_mut_or_err(scope)?;
 
                     (
-                        scope.mappings.insert(Ustr::from("Self"), impl_key.clone()),
+                        scope.mappings.insert(Ustr::from("Self"), impl_key),
                         scope
                             .type_mappings
                             .insert(Ustr::from("Self"), resolved_target.data_type.clone()),
@@ -1944,7 +1938,7 @@ impl MiddleEnvironment {
                 };
 
                 self.typing
-                    .get_or_create_impl(impl_key.clone(), self.context.current_location.clone());
+                    .get_or_create_impl(impl_key, self.context.current_location.clone());
 
                 for (identifier, object) in assoc_types {
                     if let TypeDefType::NewType(inner) = object {
@@ -2073,7 +2067,7 @@ impl MiddleEnvironment {
 
                     let new_name = match &dec.node_type {
                         MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => {
-                            identifier.clone()
+                            identifier
                         }
                         _ => {
                             return Err(MiddleErr::At(
@@ -2095,16 +2089,16 @@ impl MiddleEnvironment {
 
                     impl_ref.insert_member(
                         &iden,
-                        MiddleImplMember::new(new_name, generic_params.clone(), dependant),
+                        MiddleImplMember::new(*new_name, generic_params.clone(), dependant),
                     );
                     if !impl_ref.traits.contains(&resolved_trait) {
-                        impl_ref.traits.push(resolved_trait.clone());
+                        impl_ref.traits.push(resolved_trait);
                     }
 
                     if let Some(trait_def) = self.typing.trait_defs.get(&resolved_trait) {
                         for implied in &trait_def.implied_traits {
                             if !impl_ref.traits.contains(implied) {
-                                impl_ref.traits.push(implied.clone());
+                                impl_ref.traits.push(*implied);
                             }
                         }
                     }
@@ -2164,19 +2158,18 @@ impl MiddleEnvironment {
                                 ..
                             } = t
                             {
-                                generic_names.push(Ustr::from(&s));
+                                generic_names.push(Ustr::from(s));
                             }
                         }
                         Ustr::from(&identifier.to_string())
                     }
                 };
 
-                let new_name = Ustr::from(
-                    &ParserText::temp_name_with_suffix(base_name.clone(), node.span).text,
-                );
+                let new_name =
+                    Ustr::from(&ParserText::temp_name_with_suffix(base_name, node.span).text);
 
                 self.typing.objects.insert(
-                    new_name.clone(),
+                    new_name,
                     MiddleObject {
                         object_type: MiddleTypeDefType::Trait,
                         variables: UstrMap::default(),
@@ -2187,11 +2180,11 @@ impl MiddleEnvironment {
 
                 let mut prev_generics = Vec::new();
                 if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
-                    scope_ref.mappings.insert(base_name, new_name.clone());
+                    scope_ref.mappings.insert(base_name, new_name);
 
                     for name in &generic_names {
-                        prev_generics.push((name.clone(), scope_ref.mappings.get(name).cloned()));
-                        scope_ref.mappings.insert(name.clone(), name.clone());
+                        prev_generics.push((name, scope_ref.mappings.get(name).cloned()));
+                        scope_ref.mappings.insert(*name, *name);
                     }
                 }
 
@@ -2234,7 +2227,7 @@ impl MiddleEnvironment {
                 }
 
                 self.typing.trait_defs.insert(
-                    new_name.clone(),
+                    new_name,
                     MiddleTrait {
                         implied_traits: implied,
                         members: trait_members,
@@ -2245,9 +2238,9 @@ impl MiddleEnvironment {
                 if let Ok(scope_ref) = self.scoping.scope_mut_or_err(scope) {
                     for (name, prev) in prev_generics {
                         if let Some(prev) = prev {
-                            scope_ref.mappings.insert(name, prev);
+                            scope_ref.mappings.insert(*name, prev);
                         } else {
-                            scope_ref.mappings.remove(&name);
+                            scope_ref.mappings.remove(name);
                         }
                     }
                 }
@@ -2322,7 +2315,7 @@ impl MiddleEnvironment {
                     variants
                         .iter()
                         .find(|(name, _)| name.eq_ignore_ascii_case(&raw_variant))
-                        .map(|(name, _)| name.clone())
+                        .map(|(name, _)| name)
                         .ok_or(MiddleErr::At(
                             node.span,
                             Box::new(MiddleErr::EnumVariant(raw_variant.clone())),
@@ -2337,7 +2330,7 @@ impl MiddleEnvironment {
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::EnumExpression(MirEnum {
                         identifier,
-                        value,
+                        value: *value,
                         data: if let Some(data) = data {
                             Some(Box::new(self.evaluate_inner(scope, *data)?))
                         } else {
@@ -2871,10 +2864,8 @@ impl MiddleEnvironment {
                     let from_type = env
                         .resolve_type_from_node(scope, point.get_node())
                         .map(|x| x.unwrap_all_refs().data_type);
-                    if from_type.map(|x| x.is_callable()).unwrap_or_default() {
-                        return true;
-                    }
-                    false
+
+                    from_type.map(|x| x.is_callable()).unwrap_or_default()
                 };
 
                 let get_mapping = |env: &Self, key: &Ustr| -> Result<Option<Ustr>, MiddleErr> {
@@ -2937,8 +2928,7 @@ impl MiddleEnvironment {
                                         ResolutionOptions::default().with_dollar(),
                                     )?;
 
-                                    prior_mappings
-                                        .insert(ident.clone(), get_mapping(self, &ident)?);
+                                    prior_mappings.insert(ident, get_mapping(self, &ident)?);
 
                                     AstNode::new(
                                         self.context.current_span(),

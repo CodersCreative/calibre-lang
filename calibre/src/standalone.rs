@@ -307,7 +307,7 @@ impl CalibreStandalone for CalibreEngine {
 
         let mut writer = std::io::BufWriter::new(file);
         let cache = CachedProgramBlob {
-            entry_name: artifacts.entry_name.clone(),
+            entry_name: artifacts.entry_name,
             mappings: artifacts.mappings.clone(),
             registry: artifacts.registry.clone(),
             init_functions: Some(artifacts.init_functions.clone()),
@@ -350,7 +350,7 @@ impl CalibreStandalone for CalibreEngine {
                 mappings: cached.mappings,
                 init_functions: cached
                     .init_functions
-                    .unwrap_or_else(|| vec![(0, cached.entry_name.clone())]),
+                    .unwrap_or_else(|| vec![(0, cached.entry_name)]),
                 entry_name: cached.entry_name,
                 fin_functions: cached.fin_functions.unwrap_or_default(),
                 testing: cached.testing.unwrap_or_default(),
@@ -420,13 +420,13 @@ impl CalibreStandalone for CalibreEngine {
         let mut init_functions = std::mem::take(&mut env.tagging.init_functions);
 
         if !init_functions.iter().any(|x| x.1 == entry_name) {
-            init_functions.push((0, entry_name.clone()));
+            init_functions.push((0, entry_name));
         }
 
-        init_functions.sort_by(|a, b| b.0.cmp(&a.0));
+        init_functions.sort_by_key(|a| a.0);
 
         let mut fin_functions = std::mem::take(&mut env.tagging.fin_functions);
-        fin_functions.sort_by(|a, b| b.0.cmp(&a.0));
+        fin_functions.sort_by_key(|a| a.0);
 
         let testing = std::mem::take(&mut env.testing);
 

@@ -29,7 +29,7 @@ fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<Ustr>, RuntimeError>
     for value in values.0.iter() {
         let value = env.resolve_value_for_op_ref(value)?;
         match value {
-            RuntimeValue::Str(v) => out.push(v.clone()),
+            RuntimeValue::Str(v) => out.push(v),
             other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
@@ -58,7 +58,7 @@ fn required_str_field(env: &VM, map: &Gc<GcMap>, key: &str) -> Result<Ustr, Runt
         return Err(RuntimeError::InvalidFunctionCall);
     };
     match value {
-        RuntimeValue::Str(v) => Ok(v.clone()),
+        RuntimeValue::Str(v) => Ok(v),
         other => Err(RuntimeError::UnexpectedType(Box::new(other))),
     }
 }
@@ -67,10 +67,10 @@ fn parse_optional_string(value: RuntimeValue) -> Result<Option<Ustr>, RuntimeErr
     match value {
         RuntimeValue::Option(None) => Ok(None),
         RuntimeValue::Option(Some(v)) => match v.as_ref() {
-            RuntimeValue::Str(v) => Ok(Some(v.clone())),
+            RuntimeValue::Str(v) => Ok(Some(*v)),
             other => Err(RuntimeError::UnexpectedType(Box::new(other.clone()))),
         },
-        RuntimeValue::Str(v) => Ok(Some(v.clone())),
+        RuntimeValue::Str(v) => Ok(Some(v)),
         other => Err(RuntimeError::UnexpectedType(Box::new(other))),
     }
 }
@@ -168,7 +168,7 @@ fn execute_raw(options: RawExecOptions) -> Result<RuntimeValue, String> {
             cmd
         }
     } else {
-        let mut cmd = Command::new(&options.command);
+        let mut cmd = Command::new(options.command);
         cmd.args(options.args.iter());
         cmd
     };

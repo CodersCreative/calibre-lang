@@ -50,7 +50,7 @@ impl VM {
                     self.get_reg_value_in_frame(frame_idx, *candidate_reg)
                     && std::ptr::eq(other_list.as_ref(), target_list.as_ref())
                 {
-                    return Some(candidate_source.clone());
+                    return Some(*candidate_source);
                 }
                 None
             },
@@ -68,7 +68,7 @@ impl VM {
         value: RuntimeValue,
         depth: usize,
     ) {
-        if depth <= 0 {
+        if depth == 0 {
             trace!("write_back_runtime_value exceeded max depth, forcing write");
             match target {
                 RuntimeValue::Ref(name) => {
@@ -151,7 +151,7 @@ impl VM {
                     .frames
                     .get(caller_frame)?
                     .member_sources
-                    .get(&reg)
+                    .get(reg)
                     .cloned()?;
                 Some((caller_frame, *reg, parent_reg, field))
             })
@@ -174,7 +174,7 @@ impl VM {
     ) -> Result<(), RuntimeError> {
         let updated_field = self.get_reg_value_in_frame(frame_idx, field_reg);
         let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg);
-        let parent_resolved = self.resolve_value_for_op_ref(&parent_raw)?;
+        let parent_resolved = self.resolve_value_for_op_ref(parent_raw)?;
 
         fn update(
             value: RuntimeValue,
@@ -216,7 +216,7 @@ impl VM {
 
         let leaf = field_name.rsplit('.').next().unwrap_or(field_name);
         let leaf = leaf.rsplit_once(']').map(|(_, name)| name).unwrap_or(leaf);
-        if let Some(updated_parent) = update(parent_resolved, leaf, &updated_field) {
+        if let Some(updated_parent) = update(parent_resolved, leaf, updated_field) {
             let parent_source = self
                 .frames
                 .get(frame_idx)
@@ -349,7 +349,7 @@ impl VM {
                 let mut refreshed_caps = Vec::with_capacity(captures.len());
                 let mut seen_names = UstrSet::default();
                 for (cap_name, old_value) in captures.iter() {
-                    if !seen_names.insert(cap_name.clone()) {
+                    if !seen_names.insert(*cap_name) {
                         continue;
                     }
                     let value = self.capture_value(cap_name, &mut seen);
@@ -360,7 +360,7 @@ impl VM {
                     } else {
                         value
                     };
-                    refreshed_caps.push((cap_name.clone(), value));
+                    refreshed_caps.push((*cap_name, value));
                 }
                 let refreshed = Arc::new(refreshed_caps);
                 self.run_function(func.as_ref(), args, refreshed)
@@ -428,9 +428,7 @@ impl VM {
         for tr in constraints {
             let table = self.lookup_dyn_trait_table(&concrete, tr)?;
             for (member, callee) in table {
-                merged
-                    .entry(member.clone())
-                    .or_insert_with(|| callee.clone());
+                merged.entry(*member).or_insert_with(|| *callee);
             }
         }
         Some((concrete, merged))
@@ -597,16 +595,14 @@ impl VM {
                 }
             }
             RuntimeValue::Ref(name) => {
-                if let Ok(resolved) =
-                    self.resolve_value_for_op_ref(&RuntimeValue::Ref(name.clone()))
-                {
+                if let Ok(resolved) = self.resolve_value_for_op_ref(&RuntimeValue::Ref(*name)) {
                     if resolved.should_pass_by_reg_ref() {
-                        RuntimeValue::Ref(name.clone())
+                        RuntimeValue::Ref(*name)
                     } else {
                         resolved
                     }
                 } else {
-                    RuntimeValue::Ref(name.clone())
+                    RuntimeValue::Ref(*name)
                 }
             }
             RuntimeValue::VarRef(id) => {
@@ -917,11 +913,7 @@ impl VM {
         let caller_frame = self.frames.len().saturating_sub(1);
 
         let func_ptr = function as *const VMFunction as usize;
-        self.push_frame(
-            function.reg_count as usize,
-            func_ptr,
-            Some(function.name.clone()),
-        );
+        self.push_frame(function.reg_count as usize, func_ptr, Some(function.name));
 
         for (reg, arg_reg) in function.param_regs.iter().zip(args.iter().copied()) {
             let arg = self.get_reg_value_in_frame(caller_frame, arg_reg).clone();
@@ -1028,11 +1020,7 @@ impl VM {
         state.yielded = None;
         let prev_vars = if state.block.is_none() {
             let func_ptr = function as *const VMFunction as usize;
-            self.push_frame(
-                function.reg_count as usize,
-                func_ptr,
-                Some(function.name.clone()),
-            );
+            self.push_frame(function.reg_count as usize, func_ptr, Some(function.name));
             for (reg, arg) in function.param_regs.iter().zip(args) {
                 self.set_reg_value(*reg, arg.clone());
             }

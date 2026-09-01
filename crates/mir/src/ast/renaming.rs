@@ -71,10 +71,10 @@ impl MiddleNodeType {
                 })
             }
             MiddleNodeType::Drop(MirDrop { identifier }) => MiddleNodeType::Drop(MirDrop {
-                identifier: mapped_name_or_original(state, identifier).into(),
+                identifier: mapped_name_or_original(state, identifier),
             }),
             MiddleNodeType::Move(MirMove { identifier }) => MiddleNodeType::Move(MirMove {
-                identifier: mapped_name_or_original(state, identifier).into(),
+                identifier: mapped_name_or_original(state, identifier),
             }),
             MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type,
@@ -84,7 +84,7 @@ impl MiddleNodeType {
             }) => {
                 let new_name =
                     Ustr::from(&format!("{}->{}", identifier, fastrand::u32(0..u32::MAX)));
-                state.data.insert(identifier, new_name.clone());
+                state.data.insert(identifier, new_name);
 
                 MiddleNodeType::VariableDeclaration(MirVarDecl {
                     var_type,

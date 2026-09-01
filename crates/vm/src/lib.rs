@@ -106,7 +106,7 @@ impl Clone for VM {
             counter: self.counter,
             ptr_heap: self.ptr_heap.clone(),
             config: self.config.clone(),
-            source_file_override: self.source_file_override.clone(),
+            source_file_override: self.source_file_override,
             reg_arena: self.reg_arena.clone(),
             reg_top: self.reg_top,
             frames: self.frames.clone(),
@@ -349,7 +349,7 @@ impl VM {
                     let resolved = self.resolve_saveable_runtime_value_ref(
                         &self.convert_runtime_var_into_saveable(resolved),
                     );
-                    (key.clone(), resolved)
+                    (*key, resolved)
                 })
                 .collect();
             *captures = Arc::new(resolved);
@@ -568,7 +568,7 @@ impl VM {
 
             match current {
                 RuntimeValue::Ref(pointer) => {
-                    if !seen_refs.insert(pointer.clone()) {
+                    if !seen_refs.insert(*pointer) {
                         return Err(RuntimeError::DanglingRef(format!("ref-cycle({})", pointer)));
                     }
 
@@ -655,7 +655,7 @@ impl VM {
 
         match value {
             RuntimeValue::Ref(name) => {
-                if !seen.insert(name.clone()) {
+                if !seen.insert(*name) {
                     return;
                 }
                 if let Some(inner) = self.variables.remove(name) {
@@ -692,7 +692,7 @@ impl VM {
             }
             RuntimeValue::HashMap(map) => {
                 if let Ok(guard) = map.try_lock() {
-                    for (_, value) in guard.iter() {
+                    for value in guard.values() {
                         self.drop_runtime_value_inner_ref(value, seen, seen_regs);
                     }
                 }
@@ -744,7 +744,7 @@ impl VM {
 
             self.call_runtime_callable_at(
                 RuntimeValue::Function {
-                    name: drop_method_name.clone(),
+                    name: drop_method_name,
                     captures: Arc::new(Vec::new()),
                 },
                 args,

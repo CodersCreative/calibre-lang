@@ -13,7 +13,6 @@ const main := fn => {
 	
 	// Every builder has its own default method.
 	print(HostBuilder.default());
-	
 	let defaults := ServerBuilder.default();
 	print(defaults.build());
 	

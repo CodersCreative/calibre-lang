@@ -35,7 +35,7 @@ impl VM {
                     }
                     other => other,
                 })
-                .unwrap_or_else(|| RuntimeValue::Ref(pointer.clone())),
+                .unwrap_or_else(|| RuntimeValue::Ref(*pointer)),
             RuntimeValue::VarRef(id) => self
                 .variables
                 .get_by_id(*id)

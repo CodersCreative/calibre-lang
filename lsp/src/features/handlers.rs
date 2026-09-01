@@ -1,3 +1,5 @@
+use async_lsp::lsp_types::HoverParams;
+
 use super::*;
 
 impl LanguageServer for CalibreLanguageServer {
@@ -102,7 +104,7 @@ impl LanguageServer for CalibreLanguageServer {
 
     fn hover(
         &mut self,
-        params: async_lsp::lsp_types::HoverParams,
+        params: HoverParams,
     ) -> BoxFuture<'static, Result<Option<Hover>, Self::Error>> {
         let uri = params
             .text_document_position_params
@@ -295,7 +297,17 @@ impl LanguageServer for CalibreLanguageServer {
                     let current_scope =
                         CalibreLanguageServer::find_scope_at_with(&middle_ast, scope, position);
 
-                    if let CompletionContext::Member { base_expr, .. } = &completion_ctx {
+                    if let CompletionContext::MemberScope { base_expr, .. } = &completion_ctx {
+                        CalibreLanguageServer::collect_scope_completions(
+                            &env,
+                            current_scope,
+                            base_expr,
+                            prefix,
+                            &mut out,
+                        );
+                    } else if let CompletionContext::MemberAccess { base_expr, .. } =
+                        &completion_ctx
+                    {
                         CalibreLanguageServer::collect_member_semantic_completions(
                             &mut env,
                             current_scope,

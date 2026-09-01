@@ -68,7 +68,7 @@ impl Scoping {
     #[inline(always)]
     pub fn resolve_macro_arg(&self, scope: ScopeId, iden: &Ustr) -> Option<&AstNode> {
         scope.ancestors(&self.scopes).find_map(|x| {
-            self.scope_or_err(x.clone())
+            self.scope_or_err(x)
                 .ok()
                 .and_then(|x| x.macro_args.get(iden))
         })
@@ -76,11 +76,9 @@ impl Scoping {
 
     #[inline(always)]
     pub fn resolve_macro(&self, scope: ScopeId, iden: &Ustr) -> Option<&ScopeMacro> {
-        scope.ancestors(&self.scopes).find_map(|x| {
-            self.scope_or_err(x.clone())
-                .ok()
-                .and_then(|x| x.macros.get(iden))
-        })
+        scope
+            .ancestors(&self.scopes)
+            .find_map(|x| self.scope_or_err(x).ok().and_then(|x| x.macros.get(iden)))
     }
 
     #[inline(always)]
@@ -133,13 +131,13 @@ impl Scoping {
                 }
 
                 if scope_ref.path == path {
-                    return Some(self.get_id(scope)?);
+                    return self.get_id(scope);
                 }
 
                 let left = std::fs::canonicalize(&scope_ref.path).ok();
                 let right = std::fs::canonicalize(&path).ok();
                 if left.is_some() && left == right {
-                    Some(self.get_id(scope)?)
+                    self.get_id(scope)
                 } else {
                     None
                 }
@@ -151,7 +149,7 @@ impl Scoping {
             }
         }
 
-        let id = self.add_scope(
+        self.add_scope(
             MiddleScope {
                 macros: UstrMap::default(),
                 macro_args: UstrMap::default(),
@@ -164,9 +162,7 @@ impl Scoping {
                 built: false,
             },
             parent,
-        );
-
-        id
+        )
     }
 
     pub fn new_scope_from_parent_shallow(&mut self, parent: ScopeId) -> ScopeId {
