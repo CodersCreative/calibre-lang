@@ -400,6 +400,20 @@ impl RuntimeValue {
     }
 
     #[inline]
+    pub fn might_contain_list(&self) -> bool {
+        matches!(
+            self,
+            RuntimeValue::List(_)
+                | RuntimeValue::Aggregate(_, _)
+                | RuntimeValue::Enum(_, _, _)
+                | RuntimeValue::Option(_)
+                | RuntimeValue::Result(_)
+                | RuntimeValue::DynObject { .. }
+                | RuntimeValue::BoundMethod { .. }
+        )
+    }
+
+    #[inline]
     pub fn bind_if_callable(self, receiver: RuntimeValue) -> RuntimeValue {
         match self {
             RuntimeValue::Function { .. } | RuntimeValue::NativeFunction(_) => {

@@ -209,7 +209,13 @@ impl VM {
         for frame_idx in 0..frame_count {
             let reg_count = self.frames[frame_idx].reg_count as u16;
             for reg in 0..reg_count {
-                let mut value = self.get_reg_value_in_frame(frame_idx, reg).clone();
+                let value = self.get_reg_value_in_frame(frame_idx, reg);
+
+                if !value.might_contain_list() {
+                    continue;
+                }
+
+                let mut value = value.clone();
                 Self::replace_list_aliases_in_runtime_value(&mut value, old_list, new_list);
                 self.set_reg_value_in_frame(frame_idx, reg, value);
             }
@@ -217,10 +223,15 @@ impl VM {
 
         let slot_len = self.variables.slot_len();
         for id in 0..slot_len {
-            let Some(current) = self.variables.get_by_id(id).cloned() else {
+            let Some(current) = self.variables.get_by_id(id) else {
                 continue;
             };
-            let mut value = current;
+
+            if !current.might_contain_list() {
+                continue;
+            }
+
+            let mut value = current.clone();
             Self::replace_list_aliases_in_runtime_value(&mut value, old_list, new_list);
             let _ = self.variables.set_by_id(id, value);
         }

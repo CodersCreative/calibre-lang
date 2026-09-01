@@ -7,7 +7,6 @@ use crate::{
     },
     value::{GcVec, RuntimeValue},
 };
-use calibre_parser::ast::types::ParserInnerType::Host;
 use dumpster::sync::Gc;
 use std::io::{Read, Write};
 use std::path::PathBuf;

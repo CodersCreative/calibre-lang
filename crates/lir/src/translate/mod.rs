@@ -99,11 +99,6 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
-    fn loop_label(label: &Option<Ustr>) -> Option<&Ustr> {
-        label.as_ref()
-    }
-
-    #[inline]
     fn next_function_label(&mut self) -> Ustr {
         if let Some(name) = self.last_ident.take()
             && !name.contains("curry_capture")

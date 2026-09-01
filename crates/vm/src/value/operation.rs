@@ -9,9 +9,7 @@ use calibre_parser::ast::{
 };
 use dumpster::sync::Gc;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
-use std::sync::Arc;
 use ustr::Ustr;
-use wasm_sync::Mutex;
 
 fn comparison_value_handle<T: PartialEq + PartialOrd>(
     op: &ComparisonOperator,

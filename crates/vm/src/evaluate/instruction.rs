@@ -174,13 +174,12 @@ impl VM {
                 let mut source = self.current_frame().member_sources.get(&reg).cloned();
 
                 if source.is_none()
-                    && let RuntimeValue::List(target_list) = self.get_reg_value(reg).clone()
+                    && let RuntimeValue::List(target_list) = self.get_reg_value(reg)
                 {
                     for (candidate_reg, candidate_source) in
                         self.current_frame().member_sources.iter()
                     {
-                        if let RuntimeValue::List(other_list) =
-                            self.get_reg_value(*candidate_reg).clone()
+                        if let RuntimeValue::List(other_list) = self.get_reg_value(*candidate_reg)
                             && std::ptr::eq(other_list.as_ref(), target_list.as_ref())
                         {
                             source = Some(*candidate_source);
@@ -191,8 +190,8 @@ impl VM {
 
                 if let Some((parent_reg, member_name)) = source {
                     let updated_field = self.get_reg_value(reg).clone();
-                    let parent_raw = self.get_reg_value(parent_reg).clone();
-                    let parent_resolved = self.resolve_value_for_op_ref(&parent_raw)?;
+                    let parent_raw = self.get_reg_value(parent_reg);
+                    let parent_resolved = self.resolve_value_for_op_ref(parent_raw)?;
                     if let RuntimeValue::Aggregate(type_name, mut map) = parent_resolved
                         && let Some(entry) = Gc::make_mut(&mut map)
                             .0
@@ -201,8 +200,10 @@ impl VM {
                             .find(|(field, _)| field == &member_name)
                     {
                         entry.1 = updated_field;
+
                         let updated_parent = RuntimeValue::Aggregate(type_name, map);
-                        match parent_raw {
+
+                        match parent_raw.clone() {
                             RuntimeValue::RegRef { frame, reg } => {
                                 self.set_reg_value_in_frame(frame, reg, updated_parent);
                             }

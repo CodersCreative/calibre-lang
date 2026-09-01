@@ -10,7 +10,6 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
-use ustr::Ustr;
 use wasm_sync::{Condvar, Mutex};
 use wasm_thread as thread;
 

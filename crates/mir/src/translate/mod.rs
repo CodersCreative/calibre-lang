@@ -32,7 +32,6 @@ use calibre_parser::{
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
-use rustc_hash::FxHashMap;
 use tracing::{debug, instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
 

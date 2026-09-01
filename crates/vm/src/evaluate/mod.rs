@@ -8,8 +8,6 @@ use crate::{
     },
 };
 use calibre_lir::ast::BlockId;
-use calibre_parser::ast::binary::BinaryOperator;
-use calibre_parser::ast::comparison::ComparisonOperator;
 use calibre_parser::ast::types::ParserInnerType;
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
 use dumpster::sync::Gc;

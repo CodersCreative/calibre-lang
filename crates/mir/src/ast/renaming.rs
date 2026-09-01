@@ -7,7 +7,7 @@ use crate::{
         MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
     },
 };
-use calibre_parser::ast::{ObjectMap, idents::ParserText};
+use calibre_parser::ast::ObjectMap;
 use ustr::{Ustr, UstrMap};
 
 #[derive(Default)]
