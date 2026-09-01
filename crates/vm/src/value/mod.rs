@@ -376,8 +376,8 @@ enum FfiArg {
     Bool(u8),
     Char(u8),
     Ptr(*const c_void),
-    CString { value: CString, ptr: *const c_void },
-    Bytes { value: Vec<u8>, ptr: *const c_void },
+    CString { _value: CString, ptr: *const c_void },
+    Bytes { _value: Vec<u8>, ptr: *const c_void },
     Struct { backing: Vec<u64> },
 }
 

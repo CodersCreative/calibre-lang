@@ -451,23 +451,15 @@ impl MiddleEnvironment {
             ResolutionOptions::default().with_dollar(),
         )?;
 
-        let new_name = self
-            .scoping
-            .scope_or_err(scope)?
-            .mappings
-            .get(&ident)
-            .cloned()
-            .unwrap_or_else(|| {
-                Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text)
-            });
+        let new_name = Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
 
         let mut params = Vec::new();
         for ty in parameters {
-            params.push(self.resolve_data_type(
-                scope,
-                &ty.resolve_ffi(),
-                ResolutionOptions::typing(),
-            )?);
+            let ty = ty.clone().resolve_ffi();
+            params.push(
+                self.resolve_data_type(scope, &ty, ResolutionOptions::typing())
+                    .unwrap_or(ty),
+            );
         }
 
         let return_type = self.resolve_data_type(

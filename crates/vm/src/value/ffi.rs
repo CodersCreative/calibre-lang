@@ -55,40 +55,38 @@ impl ExternFunction {
         }
     }
 
-    fn push_arg(ffi_args: &mut Vec<FfiArg>, libffi_args: &mut Vec<Arg>, arg: FfiArg) {
+    fn push_arg(ffi_args: &mut Vec<FfiArg>, arg: FfiArg) {
         ffi_args.push(arg);
-        let Some(last) = ffi_args.last() else {
-            return;
-        };
-        match last {
-            FfiArg::U8(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::I8(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::U16(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::I16(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::U32(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::I32(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::U64(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::I64(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::F32(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::F64(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::Bool(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::Char(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::Ptr(x) => libffi_args.push(Arg::new(x)),
-            FfiArg::CString { value, ptr } => {
-                let _ = value.as_bytes();
-                libffi_args.push(Arg::new(ptr));
-            }
-            FfiArg::Bytes { value, ptr } => {
-                let _ = value.as_slice();
-                libffi_args.push(Arg::new(ptr));
-            }
-            FfiArg::Struct { backing } => {
-                let _ = backing.as_slice();
-                if let Some(first) = backing.first() {
-                    libffi_args.push(Arg::new(first));
+    }
+
+    fn ffi_args_to_libffi(ffi_args: &[FfiArg]) -> Vec<Arg<'_>> {
+        ffi_args
+            .iter()
+            .map(|arg| match arg {
+                FfiArg::U8(x) => Arg::new(x),
+                FfiArg::I8(x) => Arg::new(x),
+                FfiArg::U16(x) => Arg::new(x),
+                FfiArg::I16(x) => Arg::new(x),
+                FfiArg::U32(x) => Arg::new(x),
+                FfiArg::I32(x) => Arg::new(x),
+                FfiArg::U64(x) => Arg::new(x),
+                FfiArg::I64(x) => Arg::new(x),
+                FfiArg::F32(x) => Arg::new(x),
+                FfiArg::F64(x) => Arg::new(x),
+                FfiArg::Bool(x) => Arg::new(x),
+                FfiArg::Char(x) => Arg::new(x),
+                FfiArg::Ptr(x) => Arg::new(x),
+                FfiArg::CString { ptr, .. } => Arg::new(ptr),
+                FfiArg::Bytes { ptr, .. } => Arg::new(ptr),
+                FfiArg::Struct { backing } => {
+                    if let Some(first) = backing.first() {
+                        Arg::new(first)
+                    } else {
+                        Arg::new(&0u64)
+                    }
                 }
-            }
-        }
+            })
+            .collect()
     }
 
     fn struct_field_to_bytes(value: RuntimeValue) -> Option<(Vec<u8>, Type, usize, usize)> {
@@ -200,7 +198,6 @@ impl ExternFunction {
     ) -> Result<RuntimeValue, RuntimeError> {
         let mut arg_types = Vec::with_capacity(self.parameters.len());
         let mut ffi_args: Vec<FfiArg> = Vec::with_capacity(self.parameters.len());
-        let mut libffi_args: Vec<Arg> = Vec::with_capacity(self.parameters.len());
 
         if args.len() != self.parameters.len() {
             return Err(RuntimeError::InvalidFunctionCall);
@@ -215,98 +212,78 @@ impl ExternFunction {
                             let value = CString::new(x.as_str())
                                 .map_err(|_| RuntimeError::InvalidFunctionCall)?;
                             let ptr = value.as_ptr() as *const c_void;
-                            Self::push_arg(
-                                &mut ffi_args,
-                                &mut libffi_args,
-                                FfiArg::CString { value, ptr },
-                            );
+                            Self::push_arg(&mut ffi_args, FfiArg::CString { _value: value, ptr });
                         }
                         (RuntimeValue::UInt(x), ParserInnerType::UInt) => {
                             arg_types.push(Type::u64());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::U64(x));
+                            Self::push_arg(&mut ffi_args, FfiArg::U64(x));
                         }
                         (RuntimeValue::UInt(x), ParserInnerType::Int) => {
                             arg_types.push(Type::i64());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::I64(x as i64));
+                            Self::push_arg(&mut ffi_args, FfiArg::I64(x as i64));
                         }
                         (RuntimeValue::UInt(x), ParserInnerType::Float) => {
                             arg_types.push(Type::f64());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::F64(x as f64));
+                            Self::push_arg(&mut ffi_args, FfiArg::F64(x as f64));
                         }
                         (RuntimeValue::Int(x), ParserInnerType::Int) => {
                             arg_types.push(Type::i64());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::I64(x));
+                            Self::push_arg(&mut ffi_args, FfiArg::I64(x));
                         }
                         (RuntimeValue::Int(x), ParserInnerType::Float) => {
                             arg_types.push(Type::f64());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::F64(x as f64));
+                            Self::push_arg(&mut ffi_args, FfiArg::F64(x as f64));
                         }
                         (RuntimeValue::Int(x), ParserInnerType::UInt) => {
                             arg_types.push(Type::u64());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::U64(x as u64));
+                            Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
                         }
                         (RuntimeValue::Float(x), ParserInnerType::Float) => {
                             arg_types.push(Type::f64());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::F64(x));
+                            Self::push_arg(&mut ffi_args, FfiArg::F64(x));
                         }
                         (RuntimeValue::Float(x), ParserInnerType::UInt) => {
                             arg_types.push(Type::u64());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::U64(x as u64));
+                            Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
                         }
                         (RuntimeValue::Float(x), ParserInnerType::Int) => {
                             arg_types.push(Type::i64());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::I64(x as i64));
+                            Self::push_arg(&mut ffi_args, FfiArg::I64(x as i64));
                         }
                         (RuntimeValue::Char(x), ParserInnerType::Char) => {
                             arg_types.push(Type::u8());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::Char(x as u8));
+                            Self::push_arg(&mut ffi_args, FfiArg::Char(x as u8));
                         }
                         (RuntimeValue::Bool(x), ParserInnerType::Bool) => {
                             arg_types.push(Type::u8());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::Bool(x as u8));
+                            Self::push_arg(&mut ffi_args, FfiArg::Bool(x as u8));
                         }
                         (RuntimeValue::Bool(x), ParserInnerType::UInt) => {
                             arg_types.push(Type::u64());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::U64(x as u64));
+                            Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
                         }
                         (RuntimeValue::Bool(x), ParserInnerType::Int) => {
                             arg_types.push(Type::i64());
-                            Self::push_arg(&mut ffi_args, &mut libffi_args, FfiArg::I64(x as i64));
+                            Self::push_arg(&mut ffi_args, FfiArg::I64(x as i64));
                         }
                         (RuntimeValue::UInt(x), ParserInnerType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
-                            Self::push_arg(
-                                &mut ffi_args,
-                                &mut libffi_args,
-                                FfiArg::Ptr(x as *const c_void),
-                            );
+                            Self::push_arg(&mut ffi_args, FfiArg::Ptr(x as *const c_void));
                         }
                         (RuntimeValue::Int(x), ParserInnerType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
-                            Self::push_arg(
-                                &mut ffi_args,
-                                &mut libffi_args,
-                                FfiArg::Ptr(x as usize as *const c_void),
-                            );
+                            Self::push_arg(&mut ffi_args, FfiArg::Ptr(x as usize as *const c_void));
                         }
                         (RuntimeValue::Str(x), ParserInnerType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
                             let value = CString::new(x.as_str())
                                 .map_err(|_| RuntimeError::InvalidFunctionCall)?;
                             let ptr = value.as_ptr() as *const c_void;
-                            Self::push_arg(
-                                &mut ffi_args,
-                                &mut libffi_args,
-                                FfiArg::CString { value, ptr },
-                            );
+                            Self::push_arg(&mut ffi_args, FfiArg::CString { _value: value, ptr });
                         }
                         (RuntimeValue::Ptr(id), ParserInnerType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
-                            Self::push_arg(
-                                &mut ffi_args,
-                                &mut libffi_args,
-                                FfiArg::Ptr(id as *const c_void),
-                            );
+                            Self::push_arg(&mut ffi_args, FfiArg::Ptr(id as *const c_void));
                         }
                         (RuntimeValue::List(list), ParserInnerType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
@@ -325,11 +302,7 @@ impl ExternFunction {
                                 }
                             }
                             let ptr = bytes.as_ptr() as *const c_void;
-                            Self::push_arg(
-                                &mut ffi_args,
-                                &mut libffi_args,
-                                FfiArg::Bytes { value: bytes, ptr },
-                            );
+                            Self::push_arg(&mut ffi_args, FfiArg::Bytes { _value: bytes, ptr });
                         }
                         (value, ParserInnerType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
@@ -337,11 +310,7 @@ impl ExternFunction {
                                 Self::pack_aggregate_bytes(&Self::resolve_value(env, value))
                             {
                                 let ptr = bytes.as_ptr() as *const c_void;
-                                Self::push_arg(
-                                    &mut ffi_args,
-                                    &mut libffi_args,
-                                    FfiArg::Bytes { value: bytes, ptr },
-                                );
+                                Self::push_arg(&mut ffi_args, FfiArg::Bytes { _value: bytes, ptr });
                             } else {
                                 return Err(RuntimeError::InvalidFunctionCall);
                             }
@@ -366,11 +335,7 @@ impl ExternFunction {
                                 let dst = unsafe { std::slice::from_raw_parts_mut(raw, raw_len) };
                                 dst[..bytes.len()].copy_from_slice(&bytes);
                             }
-                            Self::push_arg(
-                                &mut ffi_args,
-                                &mut libffi_args,
-                                FfiArg::Struct { backing },
-                            );
+                            Self::push_arg(&mut ffi_args, FfiArg::Struct { backing });
                         }
                         _ => return Err(RuntimeError::InvalidFunctionCall),
                     }
@@ -530,11 +495,13 @@ impl ExternFunction {
                         ) => FfiArg::I8(x as i8),
                         _ => return Err(RuntimeError::InvalidFunctionCall),
                     };
-                    Self::push_arg(&mut ffi_args, &mut libffi_args, arg);
+                    Self::push_arg(&mut ffi_args, arg);
                 }
                 _ => return Err(RuntimeError::InvalidFunctionCall),
             }
         }
+
+        let libffi_args = Self::ffi_args_to_libffi(&ffi_args);
 
         let cif = Cif::new(arg_types, Self::type_to_libffi_type(&self.return_type));
 
