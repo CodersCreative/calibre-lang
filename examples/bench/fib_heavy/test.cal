@@ -1,0 +1,19 @@
+const fib := fn (n : int) -> big => {
+    let mut a := 0g;
+    let mut b := 1g;
+    
+    for _ in n =>
+        b += (a := b);
+
+    return a;
+};
+
+const main := fn => {
+	let n := 1000000;
+	let result := fib(n);
+	print(result);
+};
+
+@bench test "fib" => main();
+
+test "fib_10" => assert(fib(10) = 55g, "Fib 10 did not equal 55 as expected");
