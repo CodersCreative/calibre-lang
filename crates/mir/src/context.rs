@@ -7,6 +7,7 @@ pub struct MiddleContext {
     pub errors: Vec<MiddleErr>,
     pub stdlib_nodes: Vec<MiddleNode>,
     pub package_metadata: Option<PackageMetadata>,
+    pub type_check: bool,
 }
 
 impl MiddleContext {
@@ -14,6 +15,11 @@ impl MiddleContext {
         if !self.errors.contains(&err) {
             self.errors.push(err);
         }
+    }
+
+    pub fn with_type_check(mut self, type_check: bool) -> Self {
+        self.type_check = type_check;
+        self
     }
 
     pub fn take_errors(&mut self) -> Vec<MiddleErr> {

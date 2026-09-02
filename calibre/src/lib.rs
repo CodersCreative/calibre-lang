@@ -103,6 +103,7 @@ pub struct CalibreEngine {
     no_std: bool,
     suppress_output: bool,
     input_buffer: Vec<String>,
+    type_check: bool,
 }
 
 impl Default for CalibreEngine {
@@ -119,6 +120,7 @@ impl Default for CalibreEngine {
             no_std: false,
             suppress_output: false,
             input_buffer: Vec::new(),
+            type_check: true,
         }
     }
 }
@@ -166,6 +168,11 @@ impl CalibreEngine {
 
     pub fn with_input_buffer(mut self, input: Vec<String>) -> Self {
         self.input_buffer = input;
+        self
+    }
+
+    pub fn with_type_check(mut self, type_check: bool) -> Self {
+        self.type_check = type_check;
         self
     }
 

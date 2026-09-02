@@ -177,7 +177,8 @@ impl CalibreLanguageServer {
             let mut parser = Parser::default();
             parser.set_source_path(Some(path.clone()));
             let ast = parser.produce_ast(text);
-            let (env, scope, middle_ast) = MiddleEnvironment::new_and_evaluate(ast, path, false);
+            let (env, scope, middle_ast) =
+                MiddleEnvironment::new_and_evaluate(ast, path, false, true);
             let position_scope = Self::find_scope_at_with(&middle_ast, scope, position);
 
             let resolved = env
@@ -353,7 +354,7 @@ impl CalibreLanguageServer {
         let mut parser = Parser::default();
         parser.set_source_path(Some(path.clone()));
         let ast = parser.produce_ast(text);
-        let (env, scope, middle_ast) = MiddleEnvironment::new_and_evaluate(ast, path, false);
+        let (env, scope, middle_ast) = MiddleEnvironment::new_and_evaluate(ast, path, false, true);
 
         let position_scope = Self::find_scope_at_with(&middle_ast, scope, position);
         env.resolve(position_scope, &word, ResolutionOptions::all())
@@ -374,7 +375,7 @@ impl CalibreLanguageServer {
         let mut parser = Parser::default();
         parser.set_source_path(Some(path.clone()));
         let ast = parser.produce_ast(text);
-        let (env, scope, middle_ast) = MiddleEnvironment::new_and_evaluate(ast, path, false);
+        let (env, scope, middle_ast) = MiddleEnvironment::new_and_evaluate(ast, path, false, true);
 
         let mut out = Vec::new();
         for (visible_name, mapped_canonical) in env

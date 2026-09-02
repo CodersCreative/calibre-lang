@@ -26,6 +26,7 @@ pub struct RunSuite<'a> {
     path: Option<String>,
     example: Option<String>,
     recursive: bool,
+    type_check: bool,
 }
 
 impl<'a> RunSuite<'a> {
@@ -77,6 +78,8 @@ impl<'a> RunSuite<'a> {
             if let Some(dir) = cache_base_dir.clone() {
                 engine = engine.with_cache_dir(dir.join("target").join("calibre"));
             }
+
+            engine = engine.with_type_check(self.type_check);
 
             let artifacts = match engine.compile_source(contents.clone(), true) {
                 Ok(artifacts) => artifacts,

@@ -21,6 +21,7 @@ pub struct Benchmarks<'a> {
     max_runs: usize,
     time_limit_ms: u64,
     verbose: bool,
+    type_check: bool,
 }
 
 impl<'a> Benchmarks<'a> {
@@ -37,6 +38,7 @@ impl<'a> Benchmarks<'a> {
             .path(self.path)
             .example(self.example)
             .recursive(self.recursive)
+            .type_check(self.type_check)
             .build()?
             .execute()
             .await?;

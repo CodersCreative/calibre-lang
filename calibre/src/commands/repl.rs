@@ -124,7 +124,7 @@ impl<'a> RunSource<'a> {
         }
 
         let (mut env, scope, middle_node) =
-            MiddleEnvironment::new_and_evaluate(program, self.path.to_path_buf(), false);
+            MiddleEnvironment::new_and_evaluate(program, self.path.to_path_buf(), false, true);
 
         let mir_errors = env.context.take_errors();
         if !mir_errors.is_empty() {

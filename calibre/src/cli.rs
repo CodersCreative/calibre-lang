@@ -46,10 +46,12 @@ pub enum Commands {
         verbosity: Option<Verbosity>,
         #[arg(long, default_value_t = false)]
         no_cache: bool,
-        #[arg(long, default_value_t = true)]
-        parallel: bool,
+        #[arg(long, default_value_t = false)]
+        sequential: bool,
         #[arg(long)]
         no_std: Option<bool>,
+        #[arg(long, default_value_t = false)]
+        no_type_check: bool,
         #[arg(last = true)]
         program_args: Vec<String>,
     },
@@ -87,6 +89,8 @@ pub enum Commands {
         benchmarks: Vec<String>,
         #[arg(long)]
         suites: Vec<String>,
+        #[arg(long, default_value_t = false)]
+        no_type_check: bool,
     },
     #[command(external_subcommand)]
     External(Vec<String>),

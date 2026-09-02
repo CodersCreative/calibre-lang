@@ -23,6 +23,7 @@ pub struct Run {
     parallel: bool,
     program_args: Vec<String>,
     cache_enabled: bool,
+    type_check: bool,
 }
 
 impl Run {
@@ -64,6 +65,7 @@ impl Run {
             run.cache(self.cache_enabled);
             run.verbosity(self.verbosity.clone().unwrap_or_default());
             run.program_args(self.program_args.clone());
+            run.type_check(self.type_check);
             let run = run.build()?;
 
             if self.parallel {
@@ -102,6 +104,7 @@ struct RunSource {
     package_metadata: Option<PackageMetadata>,
     cache_base_dir: Option<PathBuf>,
     no_std: Option<bool>,
+    type_check: bool,
 }
 
 impl RunSource {
@@ -127,6 +130,8 @@ impl RunSource {
         if let Some(no_std) = self.no_std {
             engine = engine.with_no_std(no_std);
         }
+
+        engine = engine.with_type_check(self.type_check);
 
         let mut artifacts = match if self.verbosity.is_level(&Verbosity::Ast)
             || self.verbosity.is_level(&Verbosity::Mir)

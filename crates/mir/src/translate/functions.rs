@@ -873,6 +873,28 @@ impl MiddleEnvironment {
             .resolve_type_from_node(scope, &caller)
             .map(|x| x.unwrap_all_refs().data_type);
 
+            if !self.context.type_check && let Some(ParserInnerType::Function { parameters, .. }) = &data_type {
+            let all_args: Vec<&AstNode> = args
+                .iter()
+                .map(|a| match a {
+                    CallArg::Value(v) => v,
+                    CallArg::Named(_, v) => v,
+                })
+                .chain(reverse_args.iter())
+                .collect();
+
+            for (i, arg) in all_args.iter().enumerate() {
+                if let Some(param) = parameters.get(i) {
+                    let arg_ty = self.resolve_type_from_node(scope, arg);
+                    self.compare_types_ref(
+                        Some(param),
+                        arg_ty.as_ref(),
+                        Some(&TagInfo::IgnoreInvalidTypeCheck),
+                    )?;
+                }
+            }
+        }
+
         let caller_name = if let AstNodeType::Identifier(ident) = &caller.node_type {
             self.resolve(scope, ident, ResolutionOptions::default().with_dollar())?
         } else {

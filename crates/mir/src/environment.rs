@@ -141,11 +141,13 @@ impl MiddleEnvironment {
         path: PathBuf,
         package_metadata: Option<PackageMetadata>,
         no_std: bool,
+        type_check: bool,
     ) -> (Self, ScopeId, MiddleNode) {
         debug!("creating MIR environment with package metadata");
         let mut env = Self {
             context: MiddleContext {
                 package_metadata,
+                type_check,
                 ..Default::default()
             },
             ..Default::default()
@@ -231,8 +233,9 @@ impl MiddleEnvironment {
         node: AstNode,
         path: PathBuf,
         no_std: bool,
+        type_check: bool,
     ) -> (Self, ScopeId, MiddleNode) {
         debug!("starting MIR construction");
-        Self::new_and_evaluate_with_package(node, path, None, no_std)
+        Self::new_and_evaluate_with_package(node, path, None, no_std, type_check)
     }
 }

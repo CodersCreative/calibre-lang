@@ -240,7 +240,7 @@ impl ParserDataType {
     }
 
     pub fn loose_eq(&self, other: &Self) -> bool {
-        self.key().loose_eq(&other.key())
+        self.data_type.loose_eq(&other.data_type) || self.key().loose_eq(&other.key())
     }
 
     pub fn function(
@@ -424,7 +424,7 @@ impl ParserInnerType {
     }
 
     pub fn is_dyn(&self) -> bool {
-        matches!(self, Self::Dynamic)
+        matches!(self, Self::Dynamic) || matches!(self, Self::Struct(x) if x.contains("dyn"))
     }
 
     pub fn is_dyn_trait(&self) -> bool {
@@ -451,6 +451,10 @@ impl ParserInnerType {
         matches!(self, Self::List(_))
     }
 
+    pub fn is_dyn_list(&self) -> bool {
+        matches!(self, Self::List(x) if x.is_dyn() || x.is_dyn_trait() || x.is_dyn_list())
+    }
+
     pub fn is_tuple(&self) -> bool {
         matches!(self, Self::Tuple(_))
     }
@@ -460,10 +464,13 @@ impl ParserInnerType {
             || other.is_tuple()
             || other.is_host()
             || other.is_dyn()
+            || other.is_dyn_list()
             || other.is_dyn_trait()
+            || self.is_auto()
             || self.is_tuple()
             || self.is_host()
             || self.is_dyn()
+            || self.is_dyn_list()
             || self.is_dyn_trait()
             || other == self
             || self.impl_name() == other.impl_name()

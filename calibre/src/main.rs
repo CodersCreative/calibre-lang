@@ -74,7 +74,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 no_std,
                 program_args,
                 no_cache,
-                parallel,
+                sequential,
+                no_type_check,
             }) => {
                 RunBuilder::default()
                     .paths(paths)
@@ -83,7 +84,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .no_std(no_std)
                     .program_args(program_args)
                     .cache_enabled(!no_cache)
-                    .parallel(parallel)
+                    .parallel(!sequential)
+                    .type_check(!no_type_check)
                     .build()?
                     .execute()
                     .await
@@ -119,6 +121,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 time_limit_ms,
                 benchmarks,
                 suites,
+                no_type_check,
             }) => {
                 BenchmarksBuilder::default()
                     .wanted(&benchmarks)
@@ -131,6 +134,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .max_runs(max_runs)
                     .time_limit_ms(time_limit_ms)
                     .verbose(verbose)
+                    .type_check(!no_type_check)
                     .build()?
                     .execute()
                     .await

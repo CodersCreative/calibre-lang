@@ -395,9 +395,15 @@ impl CalibreStandalone for CalibreEngine {
                 path.clone(),
                 Some(metadata.clone()),
                 self.no_std,
+                self.type_check,
             )
         } else {
-            MiddleEnvironment::new_and_evaluate(ast.clone(), path.clone(), self.no_std)
+            MiddleEnvironment::new_and_evaluate(
+                ast.clone(),
+                path.clone(),
+                self.no_std,
+                self.type_check,
+            )
         };
 
         let mir_errors = env.context.take_errors();

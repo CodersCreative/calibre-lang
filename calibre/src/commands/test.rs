@@ -30,6 +30,7 @@ impl<'a> Testing<'a> {
             .path(self.path)
             .example(self.example)
             .recursive(self.recursive)
+            .type_check(true)
             .build()?
             .execute()
             .await?;

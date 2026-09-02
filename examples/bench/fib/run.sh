@@ -8,6 +8,9 @@ hyperfine \
   "calibre run test.cal" \
   "calibre run ../fib_big/test.cal" \
   "calibre run --no-cache test.cal" \
+  "calibre run --no-type-check test.cal" \
+  "calibre run --no-type-check ../fib_big/test.cal" \
+  "calibre run --no-type-check --no-cache test.cal" \
   "calibre_2 run ../fib_iter/test.cal" \
   "calibre_2 run ../fib_tail/test.cal" \
   "calibre_2 run test.cal" \
