@@ -25,9 +25,9 @@ The project is actively evolving, but it already supports a broad set of languag
 - tuple and struct destructuring declarations are supported
 
 ```cal
-let x = 10;
-let mut y = 20;
-let mut a, mut b = 1, 2;
+let x := 10;
+let mut y := 20;
+let mut a, mut b := 1, 2;
 ```
 
 ### Functions
@@ -37,8 +37,8 @@ let mut a, mut b = 1, 2;
 ```cal
 const add := fn (a b : int) -> int => a + b;
 
-const main = fn => {
-  let result = add(2, 3);
+const main := fn => {
+  let result := add(2, 3);
   print(result);
 };
 ```
@@ -56,14 +56,14 @@ Calibre currently supports primitives and structured types including:
 ### Structs, Enums, and Match
 
 ```cal
-type Point = struct { x y : int };
+type Point := struct { x y : int };
 
-type MaybeInt = enum {
+type MaybeInt := enum {
   Some : int,
   None,
 };
 
-const inspect = fn (v : MaybeInt) => {
+const inspect := fn (v : MaybeInt) => {
   match v {
     .Some : x => print("value = " & x),
     .None => print("none")
@@ -76,13 +76,13 @@ const inspect = fn (v : MaybeInt) => {
 ```cal
 trait Person {
   const name : fn (&Self) -> str;
-  const greeting = fn (self : &Self) -> str => "Hello " & self.name();
+  const greeting := fn (self : &Self) -> str => "Hello " & self.name();
 };
 
 type User = struct { name : str };
 
 impl Person for User {
-  const name = fn (self : &User) -> str => self.name;
+  const name := fn (self : &User) -> str => self.name;
 };
 ```
 
@@ -97,7 +97,7 @@ Calibre currently supports:
 
 ```cal
 for i in 0..10 => {
-  if i % 2 == 0 => continue;
+  if i % 2 = 0 => continue;
   print(i);
 };
 ```
@@ -105,7 +105,7 @@ for i in 0..10 => {
 ### Generators and Collection-style Pipelines
 
 ```cal
-const evens = fn(x for x in 0..20 if x % 2 == 0);
+const evens = fn(x for x in 0..20 if x % 2 = 0);
 print(evens.collect());
 ```
 
@@ -126,7 +126,7 @@ Examples are available in `examples/async.cal`.
 Calibre supports C/Zig-style extern declarations with explicit signatures.
 
 ```cal
-extern "c" const c_strlen = fn(str) -> @usize from "libc" as "strlen";
+extern "c" const c_strlen := fn(str) -> @usize from "libc" as "strlen";
 ```
 
 ---
@@ -143,7 +143,7 @@ cargo build -p calibre
 
 ```sh
 # To build the calibre engine API to WASM
-# Replace <output-dir> with ehre you want the bindings to be built to. Use "../examples/wasm/pkg/calibre" for the example
+# Replace <output-dir> with where you want the bindings to be built to. Use "../examples/wasm/pkg/calibre" for the example
 wasm-pack build -d <output-dir> --no-pack ./calibre --target web --no-default-features --features wasm
 
 # Use "../examples/wasm/pkg/fmt" for <output-dir> for the example
@@ -222,6 +222,7 @@ The `examples/` directory contains practical programs for current language/runti
 - [x] Formatter
 - [x] LSP support
 - [ ] Package manager
+- [ ] Linter
 
 ---
 

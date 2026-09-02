@@ -44,6 +44,44 @@ pub mod scopes;
 pub mod statements;
 
 impl MiddleEnvironment {
+    pub fn compare_types(
+        &self,
+        type1: Option<ParserDataType>,
+        type2: Option<ParserDataType>,
+        overload_tag: Option<&TagInfo>,
+    ) -> Result<ParserDataType, MiddleErr> {
+        match (type1, type2) {
+            (None, None) => Err(self.context.err_at_current(MiddleErr::InferImpossible)),
+            (Some(x), None) => Ok(x),
+            (None, Some(x)) => Ok(x),
+            (Some(x), Some(_))
+                if overload_tag.is_some_and(|x| self.tagging.tag_info.contains(&x)) =>
+            {
+                Ok(x)
+            }
+            (Some(x), Some(y)) => {
+                // TODO Handle generics better
+                if x.loose_eq(&y)
+                    || self
+                        .scoping
+                        .all_time_generics
+                        .contains(&Ustr::from(&y.impl_name()))
+                    || self
+                        .scoping
+                        .all_time_generics
+                        .contains(&Ustr::from(&x.impl_name()))
+                {
+                    Ok(x)
+                } else {
+                    Err(self.context.err_at_current(MiddleErr::InvalidType {
+                        expected: Box::new(x.clone()),
+                        found: Box::new(y.clone()),
+                    }))
+                }
+            }
+        }
+    }
+
     #[instrument(skip_all)]
     pub fn evaluate(&mut self, scope: ScopeId, node: AstNode) -> MiddleNode {
         let span = node.span;
@@ -132,22 +170,46 @@ impl MiddleEnvironment {
                 from,
                 to,
                 inclusive,
-            } => Ok(MiddleNode {
-                node_type: MiddleNodeType::RangeDeclaration(MirRange {
-                    from: Box::new(self.evaluate(scope, *from)),
-                    to: Box::new(self.evaluate(scope, *to)),
-                    inclusive,
-                }),
-                span: node.span,
-            }),
-            AstNodeType::Emit(EmitType::Channel { channel, value }) => self.evaluate_inner(
-                scope,
-                AstNode::call(
-                    node.span,
-                    AstNode::member(node.span, *channel, "send"),
-                    vec![CallArg::Value(*value)],
-                ),
-            ),
+            } => {
+                let from_type = self.resolve_type_from_node(scope, &from);
+                let to_type = self.resolve_type_from_node(scope, &to);
+
+                let data_type =
+                    self.compare_types(from_type, to_type, Some(&TagInfo::IgnoreInvalidTypeCheck))?;
+                if !data_type.clone().is_int() {
+                    return Err(self.context.err_at_current(MiddleErr::InvalidType {
+                        expected: Box::new(ParserDataType::new(node.span, ParserInnerType::Int)),
+                        found: Box::new(data_type),
+                    }));
+                }
+
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::RangeDeclaration(MirRange {
+                        from: Box::new(self.evaluate(scope, *from)),
+                        to: Box::new(self.evaluate(scope, *to)),
+                        inclusive,
+                    }),
+                    span: node.span,
+                })
+            }
+            AstNodeType::Emit(EmitType::Channel { channel, value }) => {
+                let channel_ty = self.resolve_type_from_node(scope, &channel);
+                let expected = self.resolve_to_data_type(scope, &"Channel").ok();
+                let _ = self.compare_types(
+                    expected,
+                    channel_ty,
+                    Some(&TagInfo::IgnoreInvalidTypeCheck),
+                )?;
+
+                self.evaluate_inner(
+                    scope,
+                    AstNode::call(
+                        node.span,
+                        AstNode::member(node.span, *channel, "send"),
+                        vec![CallArg::Value(*value)],
+                    ),
+                )
+            }
             AstNodeType::Emit(EmitType::Scope(value)) => Ok(MiddleNode::new(
                 MiddleNodeType::Emit(MirEmit {
                     value: Box::new(self.evaluate(scope, *value)),
@@ -389,17 +451,30 @@ impl MiddleEnvironment {
                 comparison,
                 then,
                 otherwise,
-            } => self.evaluate_inner(
-                scope,
-                AstNode {
-                    node_type: AstNodeType::IfStatement {
-                        comparison: Box::new(IfComparisonType::If(*comparison)),
-                        then,
-                        otherwise: Some(otherwise),
+            } => {
+                let then_type = self.resolve_type_from_node(scope, &then);
+                let otherwise_type = self.resolve_type_from_node(scope, &otherwise);
+
+                if !then_type.as_ref().is_some_and(|x| x.is_null()) {
+                    let _ = self.compare_types(
+                        then_type,
+                        otherwise_type,
+                        Some(&TagInfo::IgnoreInvalidTypeCheck),
+                    )?;
+                }
+
+                self.evaluate_inner(
+                    scope,
+                    AstNode {
+                        node_type: AstNodeType::IfStatement {
+                            comparison: Box::new(IfComparisonType::If(*comparison)),
+                            then,
+                            otherwise: Some(otherwise),
+                        },
+                        span: node.span,
                     },
-                    span: node.span,
-                },
-            ),
+                )
+            }
             AstNodeType::MoveExpression { value } => match value.node_type {
                 AstNodeType::Identifier(x) => Ok(MiddleNode {
                     node_type: MiddleNodeType::Move(MirMove {
@@ -536,45 +611,58 @@ impl MiddleEnvironment {
                 comparison,
                 then,
                 otherwise,
-            } => match *comparison {
-                IfComparisonType::If(x) => Ok(MiddleNode {
-                    node_type: MiddleNodeType::Conditional(MirConditional {
-                        comparison: Box::new(self.evaluate(scope, x)),
-                        then: Box::new(self.evaluate(scope, *then)),
-                        otherwise: otherwise.map(|x| Box::new(self.evaluate(scope, *x))),
-                    }),
-                    span: node.span,
-                }),
-                IfComparisonType::IfLet { value, pattern } => self.evaluate_inner(
-                    scope,
-                    AstNode {
-                        node_type: AstNodeType::MatchStatement {
-                            value: Some(Box::new(value)),
-                            body: {
-                                let mut lst: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)> =
-                                    pattern
-                                        .0
-                                        .clone()
-                                        .into_iter()
-                                        .map(|x| (x, pattern.1.clone(), then.clone()))
-                                        .collect();
+            } => {
+                let then_type = self.resolve_type_from_node(scope, &then);
+                let otherwise_type = otherwise
+                    .as_ref()
+                    .and_then(|x| self.resolve_type_from_node(scope, x))
+                    .unwrap_or_else(|| ParserDataType::null(node.span));
+                let _ = self.compare_types(
+                    then_type,
+                    Some(otherwise_type),
+                    Some(&TagInfo::IgnoreInvalidTypeCheck),
+                )?;
 
-                                lst.push((
-                                    MatchArmType::Wildcard(Span::default()),
-                                    Vec::new(),
-                                    otherwise.unwrap_or(Box::new(AstNode {
-                                        node_type: AstNodeType::EmptyLine,
-                                        span: Span::default(),
-                                    })),
-                                ));
-
-                                lst
-                            },
-                        },
+                match *comparison {
+                    IfComparisonType::If(x) => Ok(MiddleNode {
+                        node_type: MiddleNodeType::Conditional(MirConditional {
+                            comparison: Box::new(self.evaluate(scope, x)),
+                            then: Box::new(self.evaluate(scope, *then)),
+                            otherwise: otherwise.map(|x| Box::new(self.evaluate(scope, *x))),
+                        }),
                         span: node.span,
-                    },
-                ),
-            },
+                    }),
+                    IfComparisonType::IfLet { value, pattern } => self.evaluate_inner(
+                        scope,
+                        AstNode {
+                            node_type: AstNodeType::MatchStatement {
+                                value: Some(Box::new(value)),
+                                body: {
+                                    let mut lst: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)> =
+                                        pattern
+                                            .0
+                                            .clone()
+                                            .into_iter()
+                                            .map(|x| (x, pattern.1.clone(), then.clone()))
+                                            .collect();
+
+                                    lst.push((
+                                        MatchArmType::Wildcard(Span::default()),
+                                        Vec::new(),
+                                        otherwise.unwrap_or(Box::new(AstNode {
+                                            node_type: AstNodeType::EmptyLine,
+                                            span: Span::default(),
+                                        })),
+                                    ));
+
+                                    lst
+                                },
+                            },
+                            span: node.span,
+                        },
+                    ),
+                }
+            }
             AstNodeType::Until { condition } => self.evaluate_inner(
                 scope,
                 AstNode {
@@ -1225,23 +1313,32 @@ impl MiddleEnvironment {
             AstNodeType::ListLiteral(data_type, x) => {
                 let mut value = MirListBuilder::default();
 
-                value.data_type(if data_type.is_auto() && !x.is_empty() {
-                    if let Some(first) = x.first() {
-                        self.resolve_type_from_node(scope, first).ok_or_else(|| {
-                            self.context.err_at_current(MiddleErr::InferImpossible)
-                        })?
-                    } else {
-                        return Err(self.context.err_at_current(MiddleErr::InferImpossible));
-                    }
+                let mut data_type = if data_type.is_auto() {
+                    None
                 } else {
-                    self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?
-                });
+                    Some(self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?)
+                };
 
                 value.values(
                     x.into_iter()
-                        .map(|item| self.evaluate(scope, item))
-                        .collect(),
+                        .map(|item| {
+                            let node_ty = self.resolve_type_from_node(scope, &item);
+                            data_type = Some(self.compare_types(
+                                data_type.clone(),
+                                node_ty,
+                                Some(&TagInfo::IgnoreInvalidTypeCheck),
+                            )?);
+                            self.evaluate_inner(scope, item)
+                        })
+                        .collect::<Result<Vec<_>, MiddleErr>>()?,
                 );
+
+                // Should theoretically be safe as long as values.len > 0
+                if let Some(x) = data_type {
+                    value.data_type(x);
+                } else {
+                    return Err(self.context.err_at_current(MiddleErr::InferImpossible));
+                }
 
                 Ok(MiddleNode {
                     node_type: MiddleNodeType::ListLiteral(value.build().unwrap()),
@@ -1269,12 +1366,19 @@ impl MiddleEnvironment {
 
                 let mut lst = MirListBuilder::default();
 
-                lst.data_type(if data_type.is_auto() && count > 0 {
-                    self.resolve_type_from_node(scope, &value)
-                        .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?
+                let node_ty = self.resolve_type_from_node(scope, &value);
+
+                let data_type = if data_type.is_auto() {
+                    None
                 } else {
-                    self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?
-                });
+                    Some(self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?)
+                };
+
+                lst.data_type(self.compare_types(
+                    data_type,
+                    node_ty,
+                    Some(&TagInfo::IgnoreInvalidTypeCheck),
+                )?);
 
                 let item = self.evaluate(scope, *value);
                 lst.values((0..count).map(|_| item.clone()).collect());
@@ -1452,6 +1556,14 @@ impl MiddleEnvironment {
                 ),
             ),
             AstNodeType::AssignmentExpression { identifier, value } => {
+                let identifier_type = self.resolve_type_from_node(scope, &identifier);
+                let value_type = self.resolve_type_from_node(scope, &value);
+                let _ = self.compare_types(
+                    identifier_type,
+                    value_type,
+                    Some(&TagInfo::IgnoreInvalidTypeCheck),
+                )?;
+
                 match identifier.node_type.clone() {
                     AstNodeType::Ternary {
                         comparison,
@@ -2270,35 +2382,49 @@ impl MiddleEnvironment {
                 is_temp,
             ),
             // TODO Handle generics
-            AstNodeType::StructLiteral { identifier, value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::AggregateExpression(MirAggregate {
-                    identifier: Some(
-                        self.resolve(scope, &identifier, ResolutionOptions::typing())
-                            .unwrap_or_else(|_| Ustr::from(&identifier.to_string())),
-                    ),
-                    value: ObjectMap(match value {
-                        ObjectType::Map(x) => {
-                            let mut map = Vec::new();
+            AstNodeType::StructLiteral { identifier, value } => {
+                let identifier = self.resolve(scope, &identifier, ResolutionOptions::typing())?;
+                let obj = self.typing.objects.get(&identifier);
 
-                            for itm in x {
-                                map.push((itm.0, self.evaluate(scope, itm.1)));
+                if obj.is_none()
+                    && !self
+                        .tagging
+                        .tag_info
+                        .contains(&TagInfo::IgnoreInvalidTypeCheck)
+                {
+                    return Err(MiddleErr::At(
+                        node.span,
+                        Box::new(MiddleErr::Object(identifier.to_string())),
+                    ));
+                };
+
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::AggregateExpression(MirAggregate {
+                        identifier: Some(identifier),
+                        value: ObjectMap(match value {
+                            ObjectType::Map(x) => {
+                                let mut map = Vec::new();
+
+                                for itm in x {
+                                    map.push((itm.0, self.evaluate(scope, itm.1)));
+                                }
+
+                                map
                             }
+                            ObjectType::Tuple(x) => {
+                                let mut map = Vec::new();
 
-                            map
-                        }
-                        ObjectType::Tuple(x) => {
-                            let mut map = Vec::new();
+                                for itm in x.into_iter().enumerate() {
+                                    map.push((itm.0.to_string(), self.evaluate(scope, itm.1)));
+                                }
 
-                            for itm in x.into_iter().enumerate() {
-                                map.push((itm.0.to_string(), self.evaluate(scope, itm.1)));
+                                map
                             }
-
-                            map
-                        }
+                        }),
                     }),
-                }),
-                span: node.span,
-            }),
+                    span: node.span,
+                })
+            }
             AstNodeType::EnumExpression {
                 identifier,
                 value,
@@ -2309,13 +2435,13 @@ impl MiddleEnvironment {
                 let raw_variant = value.to_string();
                 let obj = self.typing.objects.get(&identifier);
 
-                let value = if let Some(obj) = obj
+                let (value, data_type) = if let Some(obj) = obj
                     && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
                 {
                     variants
                         .iter()
                         .find(|(name, _)| name.eq_ignore_ascii_case(&raw_variant))
-                        .map(|(name, _)| name)
+                        .map(|(name, x)| (name, x.clone()))
                         .ok_or(MiddleErr::At(
                             node.span,
                             Box::new(MiddleErr::EnumVariant(raw_variant.clone())),
@@ -2332,6 +2458,12 @@ impl MiddleEnvironment {
                         identifier,
                         value: *value,
                         data: if let Some(data) = data {
+                            let node_ty = self.resolve_type_from_node(scope, &data);
+                            let _ = self.compare_types(
+                                node_ty,
+                                data_type,
+                                Some(&TagInfo::IgnoreInvalidTypeCheck),
+                            )?;
                             Some(Box::new(self.evaluate_inner(scope, *data)?))
                         } else {
                             None

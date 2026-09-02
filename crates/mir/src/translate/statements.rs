@@ -152,30 +152,7 @@ impl MiddleEnvironment {
             Some(self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?)
         };
 
-        let data_type = match (data_type, node_ty) {
-            (None, None) => return Err(self.context.err_at_current(MiddleErr::InferImpossible)),
-            (Some(x), None) => x,
-            (None, Some(x)) => x,
-            (Some(x), Some(_)) if self.tagging.tag_info.contains(&TagInfo::IgnoreInvalidLet) => x,
-            (Some(x), Some(y)) => {
-                // TODO Handle generics better
-                if x.loose_eq(&y)
-                    || self
-                        .scoping
-                        .all_time_generics
-                        .contains(&Ustr::from(&y.impl_name()))
-                {
-                    x
-                } else {
-                    return Err(self.context.err_at_current(
-                        MiddleErr::InvalidVarDeclarationType {
-                            expected: Box::new(x),
-                            found: Box::new(y),
-                        },
-                    ));
-                }
-            }
-        };
+        let data_type = self.compare_types(data_type, node_ty, Some(&TagInfo::IgnoreInvalidLet))?;
 
         let mut value = if function_decl.is_some() {
             self.register_variable(scope, identifier, new_name, data_type.clone(), var_type)?;

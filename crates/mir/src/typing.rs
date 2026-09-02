@@ -21,7 +21,6 @@ pub struct Typing {
     pub impls: UstrMap<MiddleImpl>,
     pub trait_defs: UstrMap<MiddleTrait>,
     pub generic_type_templates: UstrMap<(Vec<Ustr>, TypeDefType, Vec<Overload>)>,
-    pub type_specializations: UstrMap<Ustr>,
 }
 
 impl Typing {

@@ -279,6 +279,13 @@ impl ParserDataType {
         }
     }
 
+    pub fn is_int(self) -> bool {
+        matches!(
+            self.unwrap_all_refs().resolve_ffi().data_type,
+            ParserInnerType::Int | ParserInnerType::UInt | ParserInnerType::Byte
+        )
+    }
+
     pub fn default_node(&self) -> Option<AstNode> {
         match &self.data_type {
             ParserInnerType::Int => Some(AstNode::int(self.span, 0)),
@@ -436,14 +443,26 @@ impl ParserInnerType {
         matches!(self, Self::Null)
     }
 
+    pub fn is_host(&self) -> bool {
+        matches!(self, Self::Host)
+    }
+
     pub fn is_list(&self) -> bool {
         matches!(self, Self::List(_))
     }
 
+    pub fn is_tuple(&self) -> bool {
+        matches!(self, Self::Tuple(_))
+    }
+
     pub fn loose_eq(&self, other: &Self) -> bool {
         other.is_auto()
+            || other.is_tuple()
+            || other.is_host()
             || other.is_dyn()
             || other.is_dyn_trait()
+            || self.is_tuple()
+            || self.is_host()
             || self.is_dyn()
             || self.is_dyn_trait()
             || other == self

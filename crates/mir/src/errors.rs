@@ -47,8 +47,8 @@ pub enum MiddleErr {
     EnumVariant(String),
     #[error("`return` attempted out of a function scope")]
     ReturnOutOfFunction,
-    #[error("Attempted to assign value of type : {found} to a variable of type : {expected}")]
-    InvalidVarDeclarationType {
+    #[error("Attempted to use a value of type : {found}. Expected : {expected}")]
+    InvalidType {
         expected: Box<ParserDataType>,
         found: Box<ParserDataType>,
     },
@@ -107,7 +107,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::InvalidMember => 222,
             Self::ReturnOutOfFunction => 223,
             Self::InvalidReturnType { .. } => 224,
-            Self::InvalidVarDeclarationType { .. } => 225,
+            Self::InvalidType { .. } => 225,
             Self::UnexpectedMacroArgType(_) => 226,
         }
     }

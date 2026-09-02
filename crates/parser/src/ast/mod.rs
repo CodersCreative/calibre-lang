@@ -106,6 +106,12 @@ pub enum ObjectType<T> {
     Tuple(Vec<T>),
 }
 
+impl<T> ObjectType<T> {
+    pub fn is_map(&self) -> bool {
+        matches!(self, Self::Map(_))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ObjectMap<T>(pub Vec<(String, T)>);
 

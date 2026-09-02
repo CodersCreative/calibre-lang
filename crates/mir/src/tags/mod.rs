@@ -52,6 +52,7 @@ pub enum TagInfo {
     CallerContext,
     IgnoreInvalidReturn,
     IgnoreInvalidLet,
+    IgnoreInvalidTypeCheck,
     Suite(Ustr),
     Todo(Option<Ustr>),
     Deprecated(Option<Ustr>),
@@ -456,6 +457,26 @@ impl MiddleEnvironment {
             Ustr::from("ignore_invalid_let"),
             TagHandler {
                 handler: ignore_invalid_let_handler,
+            },
+        );
+
+        let ignore_invalid_type_check: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: ScopeId,
+             node: AstNode,
+             _tag: ParserText,
+             _args: Vec<AstNode>| {
+                env.tagging.tag_info.push(TagInfo::IgnoreInvalidTypeCheck);
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            Ustr::from("ignore_invalid_type_check"),
+            TagHandler {
+                handler: ignore_invalid_type_check,
             },
         );
 
