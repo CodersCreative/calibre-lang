@@ -21,3 +21,4 @@ indextree = { workspace = true }
 derive_builder = { workspace = true }
 wasm_sync = { workspace = true }
 ustr = { workspace = true }
+fastrand = { workspace = true }

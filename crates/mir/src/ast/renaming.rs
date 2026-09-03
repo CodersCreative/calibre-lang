@@ -7,16 +7,11 @@ use crate::{
         MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
     },
 };
-use calibre_parser::ast::ObjectMap;
-use ustr::{Ustr, UstrMap};
+use calibre_parser::{AlphaRenamable, AlphaRenameState, ast::ObjectMap};
+use ustr::Ustr;
 
-#[derive(Default)]
-pub struct AlphaRenameState {
-    pub data: UstrMap<Ustr>,
-}
-
-impl MiddleNode {
-    pub fn rename(self, state: &mut AlphaRenameState) -> Self {
+impl AlphaRenamable for MiddleNode {
+    fn rename(self, state: &mut AlphaRenameState) -> Self {
         Self {
             node_type: self.node_type.rename(state),
             span: self.span,
@@ -24,13 +19,8 @@ impl MiddleNode {
     }
 }
 
-#[inline]
-fn mapped_name_or_original(state: &AlphaRenameState, original: Ustr) -> Ustr {
-    state.data.get(&original).cloned().unwrap_or(original)
-}
-
-impl MiddleNodeType {
-    pub fn rename(self, state: &mut AlphaRenameState) -> Self {
+impl AlphaRenamable for MiddleNodeType {
+    fn rename(self, state: &mut AlphaRenameState) -> Self {
         match self {
             MiddleNodeType::Break(MirBreak {
                 label: _,
@@ -71,10 +61,10 @@ impl MiddleNodeType {
                 })
             }
             MiddleNodeType::Drop(MirDrop { identifier }) => MiddleNodeType::Drop(MirDrop {
-                identifier: mapped_name_or_original(state, identifier),
+                identifier: state.mapped_name_or_original(identifier),
             }),
             MiddleNodeType::Move(MirMove { identifier }) => MiddleNodeType::Move(MirMove {
-                identifier: mapped_name_or_original(state, identifier),
+                identifier: state.mapped_name_or_original(identifier),
             }),
             MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type,
@@ -82,15 +72,20 @@ impl MiddleNodeType {
                 value,
                 data_type,
             }) => {
-                let new_name =
-                    Ustr::from(&format!("{}->{}", identifier, fastrand::u32(0..u32::MAX)));
-                state.data.insert(identifier, new_name);
+                let new_name = if !state.dont_change_local {
+                    let name =
+                        Ustr::from(&format!("{}->{}", identifier, fastrand::u32(0..u32::MAX)));
+                    state.data.insert(identifier, name);
+                    name
+                } else {
+                    identifier
+                };
 
                 MiddleNodeType::VariableDeclaration(MirVarDecl {
                     var_type,
                     identifier: new_name,
                     value: Box::new(value.rename(state)),
-                    data_type,
+                    data_type: data_type.rename(state),
                 })
             }
             MiddleNodeType::EnumExpression(MirEnum {
@@ -98,7 +93,7 @@ impl MiddleNodeType {
                 value,
                 data: Some(data),
             }) => MiddleNodeType::EnumExpression(MirEnum {
-                identifier,
+                identifier: state.mapped_name_or_original(identifier),
                 value,
                 data: Some(Box::new(data.rename(state))),
             }),
@@ -163,7 +158,7 @@ impl MiddleNodeType {
             MiddleNodeType::IsExpression(MirIs { value, data_type }) => {
                 MiddleNodeType::IsExpression(MirIs {
                     value: Box::new(value.rename(state)),
-                    data_type,
+                    data_type: data_type.rename(state),
                 })
             }
             MiddleNodeType::RangeDeclaration(MirRange {
@@ -191,12 +186,12 @@ impl MiddleNodeType {
             }),
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
                 MiddleNodeType::Identifier(MirIdentifier {
-                    identifier: mapped_name_or_original(state, identifier),
+                    identifier: state.mapped_name_or_original(identifier),
                 })
             }
             MiddleNodeType::ListLiteral(MirList { data_type, values }) => {
                 MiddleNodeType::ListLiteral(MirList {
-                    data_type,
+                    data_type: data_type.rename(state),
                     values: values.into_iter().map(|x| x.rename(state)).collect(),
                 })
             }
@@ -247,7 +242,7 @@ impl MiddleNodeType {
             }),
             MiddleNodeType::AggregateExpression(MirAggregate { identifier, value }) => {
                 MiddleNodeType::AggregateExpression(MirAggregate {
-                    identifier,
+                    identifier: identifier.map(|x| state.mapped_name_or_original(x)),
                     value: ObjectMap(
                         value
                             .0

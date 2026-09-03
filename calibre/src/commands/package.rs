@@ -126,14 +126,22 @@ impl PackageSource {
                 .unwrap_or("0.0.0");
 
             let extension = if self.readable { "jcalp" } else { "calp" };
-            package_root.join(format!("{}-{}.{}", package_name, package_version, extension))
+            package_root.join(format!(
+                "{}-{}.{}",
+                package_name, package_version, extension
+            ))
         };
 
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent).await?;
         }
 
-        match engine.compile_and_package(self.contents.clone(), output_path.clone(), false, self.readable) {
+        match engine.compile_and_package(
+            self.contents.clone(),
+            output_path.clone(),
+            false,
+            self.readable,
+        ) {
             Ok(_) => {
                 if self.verbosity.is_level(&Verbosity::All) {
                     println!("Packaged to: {}", output_path.display());

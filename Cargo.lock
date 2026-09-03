@@ -444,6 +444,7 @@ dependencies = [
  "calibre-mir",
  "calibre-parser",
  "derive_builder",
+ "fastrand",
  "indextree",
  "rustc-hash",
  "serde",

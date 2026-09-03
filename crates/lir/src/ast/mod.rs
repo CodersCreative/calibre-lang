@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use ustr::Ustr;
 
+pub mod renaming;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LirNode {
     pub span: Span,

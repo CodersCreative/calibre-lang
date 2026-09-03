@@ -11,13 +11,38 @@ use std::{
 };
 use thiserror::Error;
 use tracing::{debug, info, instrument};
-use ustr::Ustr;
+use ustr::{Ustr, UstrMap};
 
 pub mod ast;
 pub mod native;
 pub mod parse;
 
 pub static COUNTER: LazyLock<RwLock<u64>> = LazyLock::new(|| RwLock::new(0));
+
+#[derive(Default)]
+pub struct AlphaRenameState {
+    pub data: UstrMap<Ustr>,
+    pub dont_change_local: bool,
+}
+
+impl AlphaRenameState {
+    #[inline]
+    pub fn mapped_name_or_original(&self, original: Ustr) -> Ustr {
+        self.data.get(&original).cloned().unwrap_or(original)
+    }
+
+    #[inline]
+    pub fn mapped_str_or_original(&self, original: &str) -> String {
+        self.data
+            .get(&Ustr::from(original))
+            .map(|x| x.to_string())
+            .unwrap_or_else(|| original.to_string())
+    }
+}
+
+pub trait AlphaRenamable {
+    fn rename(self, state: &mut AlphaRenameState) -> Self;
+}
 
 pub trait IdentifiersUsed {
     fn identifiers_used(&self) -> Vec<&String>;

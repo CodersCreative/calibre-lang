@@ -32,7 +32,11 @@ pub trait CalibreStandalone {
 
     fn run_file(self, path: impl AsRef<Path>) -> Result<RunResult, CalibreError>;
 
-    fn run_source(&self, source: impl Into<String>, readable: bool) -> Result<RunResult, CalibreError>;
+    fn run_source(
+        &self,
+        source: impl Into<String>,
+        readable: bool,
+    ) -> Result<RunResult, CalibreError>;
 
     fn stdlib_cache_tag() -> String;
 
@@ -98,7 +102,11 @@ impl CalibreStandalone for CalibreEngine {
     }
 
     #[instrument(skip_all, fields(source = ?self.source_path, entry = %self.entry_name))]
-    fn run_source(&self, source: impl Into<String>, readable: bool) -> Result<RunResult, CalibreError> {
+    fn run_source(
+        &self,
+        source: impl Into<String>,
+        readable: bool,
+    ) -> Result<RunResult, CalibreError> {
         let source = source.into();
         let full_source = self.compose_source(&source);
         let path = self
@@ -265,9 +273,9 @@ impl CalibreStandalone for CalibreEngine {
 
         let key = self.cache_key(full_source);
         let extension = if readable { "jcalb" } else { "calb" };
-        let path = root
-            .join(env!("CARGO_PKG_VERSION"))
-            .join(format!("{}.{}", key.to_hex(), extension));
+        let path =
+            root.join(env!("CARGO_PKG_VERSION"))
+                .join(format!("{}.{}", key.to_hex(), extension));
 
         let file = match File::open(&path) {
             Ok(file) => file,
