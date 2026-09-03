@@ -76,6 +76,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 no_cache,
                 sequential,
                 no_type_check,
+                readable,
             }) => {
                 RunBuilder::default()
                     .paths(paths)
@@ -86,6 +87,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .cache_enabled(!no_cache)
                     .parallel(!sequential)
                     .type_check(!no_type_check)
+                    .readable(readable)
                     .build()?
                     .execute()
                     .await
@@ -146,6 +148,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 no_std,
                 out,
                 sequential,
+                readable,
             }) => {
                 PackageBuilder::default()
                     .paths(paths)
@@ -154,6 +157,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .no_std(no_std)
                     .out(out)
                     .parallel(!sequential)
+                    .readable(readable)
                     .build()?
                     .execute()
                     .await

@@ -24,6 +24,7 @@ pub struct Run {
     program_args: Vec<String>,
     cache_enabled: bool,
     type_check: bool,
+    readable: bool,
 }
 
 impl Run {
@@ -66,6 +67,7 @@ impl Run {
             run.verbosity(self.verbosity.clone().unwrap_or_default());
             run.program_args(self.program_args.clone());
             run.type_check(self.type_check);
+            run.readable(self.readable);
             let run = run.build()?;
 
             if self.parallel {
@@ -105,6 +107,7 @@ struct RunSource {
     cache_base_dir: Option<PathBuf>,
     no_std: Option<bool>,
     type_check: bool,
+    readable: bool,
 }
 
 impl RunSource {
@@ -133,12 +136,10 @@ impl RunSource {
 
         engine = engine.with_type_check(self.type_check);
 
-        let mut artifacts = match if self.verbosity.is_level(&Verbosity::Ast)
-            || self.verbosity.is_level(&Verbosity::Mir)
-        {
-            engine.compile_source(self.contents.clone(), false)
+        let mut artifacts = match if self.cache {
+            engine.compile_cached_program_source(self.contents.clone(), self.readable)
         } else {
-            engine.compile_cached_program_source(self.contents.clone())
+            engine.compile_source(self.contents.clone(), false)
         } {
             Ok(artifacts) => artifacts,
             Err(CalibreError::Parse { errors, .. }) => {

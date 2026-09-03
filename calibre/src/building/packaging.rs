@@ -26,6 +26,7 @@ pub trait CalibrePackaging {
         path: impl AsRef<Path>,
         manifest: Manifest,
         program: LirRegistry,
+        readable: bool,
     ) -> Result<(), CalibreError>;
 
     fn compile_and_package(
@@ -33,6 +34,7 @@ pub trait CalibrePackaging {
         source: String,
         output_path: PathBuf,
         include_tests: bool,
+        readable: bool,
     ) -> Result<(), CalibreError>;
 }
 
@@ -57,6 +59,7 @@ impl CalibrePackaging for CalibreEngine {
         path: impl AsRef<Path>,
         manifest: Manifest,
         program: LirRegistry,
+        readable: bool,
     ) -> Result<(), CalibreError> {
         let file = File::create(path)?;
 
@@ -64,26 +67,44 @@ impl CalibrePackaging for CalibreEngine {
 
         let package = PackagedProgramBlob { manifest, program };
 
-        bincode::serialize_into(&mut writer, &package)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-            .map_err(CalibreError::Io)
+        if readable {
+            serde_json::to_writer_pretty(&mut writer, &package)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+                .map_err(CalibreError::Io)
+        } else {
+            bincode::serialize_into(&mut writer, &package)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+                .map_err(CalibreError::Io)
+        }
     }
 
     fn try_load_packaged_program(
         &self,
         path: impl AsRef<Path>,
     ) -> Result<Option<PackagedProgramBlob>, CalibreError> {
-        let file = match File::open(&path) {
+        let path_ref = path.as_ref();
+        let file = match File::open(path_ref) {
             Ok(file) => file,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(err) => return Err(CalibreError::Io(err)),
         };
 
         let mut reader = std::io::BufReader::new(file);
+
+        if path_ref.extension().and_then(|e| e.to_str()) == Some("jcalp") {
+            match serde_json::from_reader::<_, PackagedProgramBlob>(&mut reader) {
+                Ok(cache) => return Ok(Some(cache)),
+                Err(_) => {
+                    let _ = fs::remove_file(path_ref);
+                    return Ok(None);
+                }
+            }
+        }
+
         match bincode::deserialize_from::<_, PackagedProgramBlob>(&mut reader) {
             Ok(cache) => Ok(Some(cache)),
             Err(_) => {
-                let _ = fs::remove_file(path);
+                let _ = fs::remove_file(path_ref);
                 Ok(None)
             }
         }
@@ -94,6 +115,7 @@ impl CalibrePackaging for CalibreEngine {
         source: String,
         output_path: PathBuf,
         _include_tests: bool,
+        readable: bool,
     ) -> Result<(), CalibreError> {
         let full_source = self.compose_source(&source);
         let path = self
@@ -139,6 +161,6 @@ impl CalibrePackaging for CalibreEngine {
 
         let lir = LirEnvironment::lower(&env, mir);
 
-        self.package(output_path, Manifest::from(&env), lir)
+        self.package(output_path, Manifest::from(&env), lir, readable)
     }
 }

@@ -94,7 +94,7 @@ impl WasmCalibreEngine {
 
         let result = self
             .inner
-            .run_source(source)
+            .run_source(source, false)
             .map_err(|e| JsError::from(e.to_string()))?;
 
         let captured_output = result.vm.captured_output.clone();
@@ -305,7 +305,7 @@ impl JsError {
 pub fn run(source: String) -> Result<WasmValue, JsError> {
     let engine = CalibreEngine::default();
     engine
-        .run_source(source)
+        .run_source(source, false)
         .map(|result| WasmValue::from(result.return_value))
         .map_err(|e| JsError::from(e.to_string()))
 }

@@ -32,7 +32,7 @@ pub trait CalibreStandalone {
 
     fn run_file(self, path: impl AsRef<Path>) -> Result<RunResult, CalibreError>;
 
-    fn run_source(&self, source: impl Into<String>) -> Result<RunResult, CalibreError>;
+    fn run_source(&self, source: impl Into<String>, readable: bool) -> Result<RunResult, CalibreError>;
 
     fn stdlib_cache_tag() -> String;
 
@@ -43,17 +43,20 @@ pub trait CalibreStandalone {
     fn try_load_cached_program(
         &self,
         full_source: &str,
+        readable: bool,
     ) -> Result<Option<CachedProgramBlob>, CalibreError>;
 
     fn store_cached_program(
         &self,
         full_source: &str,
         artifacts: &CalibreArtifacts,
+        readable: bool,
     ) -> Result<(), CalibreError>;
 
     fn compile_cached_program_source(
         &self,
         source: impl Into<String>,
+        readable: bool,
     ) -> Result<CalibreArtifacts, CalibreError>;
 
     fn compile_source(
@@ -75,7 +78,7 @@ impl CalibreStandalone for CalibreEngine {
     fn run_file(self, path: impl AsRef<Path>) -> Result<RunResult, CalibreError> {
         let path = path.as_ref();
         self.with_source_path(path.to_path_buf())
-            .run_source(fs::read_to_string(path)?)
+            .run_source(fs::read_to_string(path)?, false)
     }
 
     #[cfg(not(feature = "cli"))]
@@ -95,7 +98,7 @@ impl CalibreStandalone for CalibreEngine {
     }
 
     #[instrument(skip_all, fields(source = ?self.source_path, entry = %self.entry_name))]
-    fn run_source(&self, source: impl Into<String>) -> Result<RunResult, CalibreError> {
+    fn run_source(&self, source: impl Into<String>, readable: bool) -> Result<RunResult, CalibreError> {
         let source = source.into();
         let full_source = self.compose_source(&source);
         let path = self
@@ -103,7 +106,7 @@ impl CalibreStandalone for CalibreEngine {
             .clone()
             .unwrap_or_else(|| PathBuf::from("<embedded>"));
 
-        let artifacts = self.compile_cached_program_source(source)?;
+        let artifacts = self.compile_cached_program_source(source, readable)?;
 
         let mut vm = VM::new(
             artifacts.registry.clone(),
@@ -254,15 +257,17 @@ impl CalibreStandalone for CalibreEngine {
     fn try_load_cached_program(
         &self,
         full_source: &str,
+        readable: bool,
     ) -> Result<Option<CachedProgramBlob>, CalibreError> {
         let Some(root) = self.cache_root() else {
             return Ok(None);
         };
 
         let key = self.cache_key(full_source);
+        let extension = if readable { "jcalb" } else { "calb" };
         let path = root
             .join(env!("CARGO_PKG_VERSION"))
-            .join(format!("{}.calb", key.to_hex()));
+            .join(format!("{}.{}", key.to_hex(), extension));
 
         let file = match File::open(&path) {
             Ok(file) => file,
@@ -271,10 +276,21 @@ impl CalibreStandalone for CalibreEngine {
         };
 
         let mut reader = std::io::BufReader::new(file);
+
+        if readable {
+            match serde_json::from_reader::<_, CachedProgramBlob>(&mut reader) {
+                Ok(cache) => return Ok(Some(cache)),
+                Err(_) => {
+                    let _ = fs::remove_file(&path);
+                    return Ok(None);
+                }
+            }
+        }
+
         match bincode::deserialize_from::<_, CachedProgramBlob>(&mut reader) {
             Ok(cache) => Ok(Some(cache)),
             Err(_) => {
-                let _ = fs::remove_file(path);
+                let _ = fs::remove_file(&path);
                 Ok(None)
             }
         }
@@ -284,6 +300,7 @@ impl CalibreStandalone for CalibreEngine {
     fn try_load_cached_program(
         &self,
         _full_source: &str,
+        _readable: bool,
     ) -> Result<Option<CachedProgramBlob>, CalibreError> {
         Ok(None)
     }
@@ -293,6 +310,7 @@ impl CalibreStandalone for CalibreEngine {
         &self,
         full_source: &str,
         artifacts: &CalibreArtifacts,
+        readable: bool,
     ) -> Result<(), CalibreError> {
         let Some(root) = self.cache_root() else {
             return Ok(());
@@ -301,7 +319,8 @@ impl CalibreStandalone for CalibreEngine {
         let key = self.cache_key(full_source);
         let dir = root.join(env!("CARGO_PKG_VERSION"));
         fs::create_dir_all(&dir)?;
-        let path = dir.join(format!("{}.calb", key.to_hex()));
+        let extension = if readable { "jcalb" } else { "calb" };
+        let path = dir.join(format!("{}.{}", key.to_hex(), extension));
         let file = File::create(path)?;
 
         let mut writer = std::io::BufWriter::new(file);
@@ -314,9 +333,15 @@ impl CalibreStandalone for CalibreEngine {
             testing: Some(artifacts.testing.clone()),
         };
 
-        bincode::serialize_into(&mut writer, &cache)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-            .map_err(CalibreError::Io)?;
+        if readable {
+            serde_json::to_writer_pretty(&mut writer, &cache)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+                .map_err(CalibreError::Io)?;
+        } else {
+            bincode::serialize_into(&mut writer, &cache)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+                .map_err(CalibreError::Io)?;
+        }
         Ok(())
     }
 
@@ -325,6 +350,7 @@ impl CalibreStandalone for CalibreEngine {
         &self,
         _full_source: &str,
         _artifacts: &CalibreArtifacts,
+        _readable: bool,
     ) -> Result<(), CalibreError> {
         Ok(())
     }
@@ -333,33 +359,34 @@ impl CalibreStandalone for CalibreEngine {
     fn compile_cached_program_source(
         &self,
         source: impl Into<String>,
+        readable: bool,
     ) -> Result<CalibreArtifacts, CalibreError> {
         let input = source.into();
         let full_source = self.compose_source(&input);
 
         if self.cache_enabled
-            && let Some(cached) = self.try_load_cached_program(&full_source)?
+            && let Some(cached) = self.try_load_cached_program(&full_source, readable)?
         {
             debug!("loaded program from cache");
             return Ok(CalibreArtifacts {
                 ast: None,
                 mir: None,
                 lir: None,
-                registry: cached.registry,
                 mappings: cached.mappings,
-                init_functions: cached
-                    .init_functions
-                    .unwrap_or_else(|| vec![(0, cached.entry_name)]),
+                registry: cached.registry,
                 entry_name: cached.entry_name,
+                init_functions: cached.init_functions.unwrap_or_default(),
                 fin_functions: cached.fin_functions.unwrap_or_default(),
                 testing: cached.testing.unwrap_or_default(),
             });
         }
 
-        let artifacts = self.compile_source(input, false)?;
+        let artifacts = self.compile_source(&input, true)?;
+
         if self.cache_enabled {
-            self.store_cached_program(&full_source, &artifacts)?;
+            self.store_cached_program(&full_source, &artifacts, readable)?;
         }
+
         Ok(artifacts)
     }
 

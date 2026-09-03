@@ -395,6 +395,7 @@ dependencies = [
  "rustc-hash",
  "rustyline",
  "serde",
+ "serde_json",
  "smol",
  "thiserror",
  "toml 1.1.2+spec-1.1.0",

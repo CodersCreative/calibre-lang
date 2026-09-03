@@ -60,7 +60,7 @@ pub trait CalibreEmbedded {
 
 impl CalibreEmbedded for CalibreEngine {
     fn run(&mut self, source: impl Into<String>) -> Result<RuntimeValue, CalibreError> {
-        self.run_source(source).map(|r| r.return_value)
+        self.run_source(source, false).map(|r| r.return_value)
     }
 
     fn run_with_output(
@@ -69,7 +69,7 @@ impl CalibreEmbedded for CalibreEngine {
     ) -> Result<(RuntimeValue, String), CalibreError> {
         let original_suppress = self.suppress_output;
         self.suppress_output = true;
-        let result = self.run_source(source)?;
+        let result = self.run_source(source, false)?;
         self.suppress_output = original_suppress;
         Ok((
             result.return_value,

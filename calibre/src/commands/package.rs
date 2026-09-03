@@ -20,6 +20,7 @@ pub struct Package {
     no_std: Option<bool>,
     out: Option<String>,
     parallel: bool,
+    readable: bool,
 }
 
 impl Package {
@@ -54,6 +55,7 @@ impl Package {
 
             package.no_std(self.no_std);
             package.verbosity(self.verbosity.clone().unwrap_or_default());
+            package.readable(self.readable);
             let package = package.build()?;
 
             if self.parallel {
@@ -89,6 +91,7 @@ struct PackageSource {
     package_metadata: Option<PackageMetadata>,
     no_std: Option<bool>,
     output_path: Option<String>,
+    readable: bool,
 }
 
 impl PackageSource {
@@ -122,14 +125,15 @@ impl PackageSource {
                 .map(|m| m.version.as_str())
                 .unwrap_or("0.0.0");
 
-            package_root.join(format!("{}-{}.calp", package_name, package_version))
+            let extension = if self.readable { "jcalp" } else { "calp" };
+            package_root.join(format!("{}-{}.{}", package_name, package_version, extension))
         };
 
         if let Some(parent) = output_path.parent() {
             fs::create_dir_all(parent).await?;
         }
 
-        match engine.compile_and_package(self.contents.clone(), output_path.clone(), false) {
+        match engine.compile_and_package(self.contents.clone(), output_path.clone(), false, self.readable) {
             Ok(_) => {
                 if self.verbosity.is_level(&Verbosity::All) {
                     println!("Packaged to: {}", output_path.display());

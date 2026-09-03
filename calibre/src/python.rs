@@ -172,7 +172,7 @@ impl PyCalibreEngine {
         self.inner.suppress_output = true;
         self.inner.input_buffer = self.input_buffer.clone();
 
-        match self.inner.run_source(source) {
+        match self.inner.run_source(source, false) {
             Ok(result) => {
                 let captured_output = result.vm.captured_output.clone();
                 if !captured_output.is_empty() {

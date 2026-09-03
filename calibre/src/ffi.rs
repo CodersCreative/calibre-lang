@@ -160,7 +160,7 @@ pub extern "C" fn calibre_engine_run_source(
 
     let source = unsafe { CStr::from_ptr(src).to_string_lossy().into_owned() };
 
-    match engine.run_source(source) {
+    match engine.run_source(source, false) {
         Ok(result) => {
             let mut vm = result.vm;
             let ret_display = result.return_value.display(&mut vm);
