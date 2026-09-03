@@ -11,7 +11,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use ustr::{Ustr, UstrMap, UstrSet};
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Manifest {
     pub metadata: Option<PackageMetadata>,
     pub scoping: ManifestScoping,
@@ -30,7 +30,7 @@ impl From<&MiddleEnvironment> for Manifest {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ManifestSymbols {
     pub variables: UstrMap<MiddleVariable>,
     pub native_mappings: UstrMap<Ustr>,
@@ -47,14 +47,14 @@ impl From<&Symbols> for ManifestSymbols {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ManifestScope {
     pub namespace: Ustr,
     pub mappings: UstrMap<Ustr>,
     pub type_mappings: UstrMap<ParserInnerType>,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ManifestScoping {
     pub all_time_generics: UstrSet,
     pub scopes: Arena<ManifestScope>,

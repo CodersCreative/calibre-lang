@@ -1,4 +1,4 @@
-use crate::standalone::CalibreStandalone;
+use super::standalone::CalibreStandalone;
 use crate::{CalibreEngine, CalibreError};
 use calibre_vm::{VM, error::RuntimeError, native::NativeFunction, value::RuntimeValue};
 use std::sync::Arc;

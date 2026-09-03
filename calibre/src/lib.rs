@@ -1,3 +1,4 @@
+use building::embedded::NativeBinding;
 use calibre_lir::environment::LirRegistry;
 use calibre_mir::{
     ast::MiddleNode, errors::MiddleErr, tags::context::PackageMetadata, testing::Testing,
@@ -9,14 +10,12 @@ use calibre_parser::{
 use calibre_vm::{
     VM, config::VMConfig, conversion::VMRegistry, error::RuntimeError, value::RuntimeValue,
 };
-use embedded::NativeBinding;
 use std::path::PathBuf;
 use thiserror::Error;
 use ustr::Ustr;
 
+pub mod building;
 pub mod config;
-pub mod embedded;
-pub mod standalone;
 
 #[cfg(all(feature = "wasm", target_family = "wasm"))]
 pub mod wasm;

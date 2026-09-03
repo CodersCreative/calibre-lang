@@ -4,7 +4,7 @@ use crate::commands::utils::{
     is_repl_file, package_metadata_from_project, resolve_run_targets, vm_config_from_project,
 };
 use crate::config::load_project_from;
-use calibre::{CalibreEngine, CalibreError, standalone::CalibreStandalone};
+use calibre::{CalibreEngine, CalibreError, building::standalone::CalibreStandalone};
 use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::{VM, config::VMConfig};
 use derive_builder::Builder;

@@ -5,7 +5,6 @@ use calibre_mir::{environment::MiddleEnvironment, errors::MiddleErr, testing::Te
 use calibre_parser::Parser;
 use calibre_std::{get_globals_path, get_stdlib_path};
 use calibre_vm::{VM, conversion::VMRegistry};
-
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::{debug, instrument};

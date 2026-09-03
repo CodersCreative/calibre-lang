@@ -1,6 +1,7 @@
 use calibre_mir::{environment::MiddleEnvironment, scoping::ScopeId};
 use calibre_parser::ast::types::ParserDataType;
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::sync::atomic::Ordering;
 use tracing::{debug, instrument};
@@ -11,7 +12,7 @@ use crate::{
     ast::{BlockId, LirBlock, LirNode, LirTerminator},
 };
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LirRegistry {
     pub functions: UstrMap<LirFunction>,
     pub globals: UstrMap<LirGlobal>,
@@ -46,7 +47,7 @@ impl Display for LirRegistry {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LirGlobal {
     pub name: Ustr,
     pub data_type: ParserDataType,
@@ -65,7 +66,7 @@ impl Display for LirGlobal {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LirFunction {
     pub name: Ustr,
     pub params: Box<[(Ustr, ParserDataType)]>,

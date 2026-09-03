@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use crate::{
     Span,
     ast::{
@@ -7,6 +6,7 @@ use crate::{
         types::ParserDataType,
     },
 };
+use serde::{Deserialize, Serialize};
 
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

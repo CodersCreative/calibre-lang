@@ -10,7 +10,7 @@ use crate::commands::utils::{
     collect_cal_sources, collect_project_sources, resolve_run_targets, vm_config_from_project,
 };
 use crate::config::load_project_from;
-use calibre::{CalibreEngine, CalibreError, CompileMode, standalone::CalibreStandalone};
+use calibre::{CalibreEngine, CalibreError, CompileMode, building::standalone::CalibreStandalone};
 use calibre_mir::testing::{Test, TestOrBench};
 use calibre_vm::conversion::VMRegistry;
 use derive_builder::Builder;
