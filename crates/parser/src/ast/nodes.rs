@@ -24,7 +24,7 @@ pub enum AsFailureMode {
     Option,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LoopType {
     Let {
         value: AstNode,
@@ -70,7 +70,7 @@ impl Display for VarType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TypeDefType {
     Enum {
         variants: Vec<(PotentialDollarIdentifier, Option<ParserDataType>)>,
@@ -146,7 +146,7 @@ impl IdentifiersUsed for TypeDefType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AstNode {
     pub node_type: AstNodeType,
     pub span: Span,
@@ -425,13 +425,13 @@ impl IdentifiersUsed for AstNode {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct NamedScope {
     pub name: PotentialDollarIdentifier,
     pub args: Vec<(PotentialDollarIdentifier, AstNode)>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Overload {
     pub operator: ParserText,
     pub body: Box<AstNode>,
@@ -487,7 +487,7 @@ impl Overload {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FunctionHeader {
     pub generics: GenericTypes,
     pub parameters: Vec<(
@@ -499,7 +499,7 @@ pub struct FunctionHeader {
     pub param_destructures: Vec<(usize, DestructurePattern)>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum CallArg {
     Value(AstNode),
     Named(PotentialDollarIdentifier, AstNode),
@@ -523,7 +523,7 @@ impl<'a> From<&'a CallArg> for &'a AstNode {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum EmitType {
     Scope(Box<AstNode>),
     Channel {
@@ -533,7 +533,7 @@ pub enum EmitType {
 }
 
 #[repr(u8)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum AstNodeType {
     Break {
         label: Option<PotentialDollarIdentifier>,
@@ -789,7 +789,7 @@ pub enum AstNodeType {
     },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum PipeSegment {
     Unnamed(AstNode),
     Named {
@@ -878,7 +878,7 @@ impl Display for LoopType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum IfComparisonType {
     IfLet {
         value: AstNode,

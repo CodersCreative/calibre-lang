@@ -353,12 +353,12 @@ pub struct ScopeMacro {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleScope {
+    pub namespace: Ustr,
     pub mappings: UstrMap<Ustr>,
     pub type_mappings: UstrMap<ParserInnerType>,
     pub macros: UstrMap<ScopeMacro>,
     pub macro_args: UstrMap<AstNode>,
     pub children: UstrMap<NodeId>,
-    pub namespace: Ustr,
     pub path: PathBuf,
     pub defers: Vec<AstNode>,
     pub built: bool,

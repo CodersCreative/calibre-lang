@@ -21,7 +21,7 @@ pub mod matching;
 pub mod nodes;
 pub mod types;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Operator {
     Binary(BinaryOperator),
     Comparison(ComparisonOperator),

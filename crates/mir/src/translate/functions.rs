@@ -873,7 +873,9 @@ impl MiddleEnvironment {
             .resolve_type_from_node(scope, &caller)
             .map(|x| x.unwrap_all_refs().data_type);
 
-            if !self.context.type_check && let Some(ParserInnerType::Function { parameters, .. }) = &data_type {
+        if !self.context.type_check
+            && let Some(ParserInnerType::Function { parameters, .. }) = &data_type
+        {
             let all_args: Vec<&AstNode> = args
                 .iter()
                 .map(|a| match a {

@@ -64,7 +64,7 @@ impl MiddleEnvironment {
             (Some(x), None) => Ok(x),
             (None, Some(x)) => Ok(x),
             (Some(x), Some(_))
-                if overload_tag.is_some_and(|x| self.tagging.tag_info.contains(&x)) =>
+                if overload_tag.is_some_and(|x| self.tagging.tag_info.contains(x)) =>
             {
                 Ok(x)
             }

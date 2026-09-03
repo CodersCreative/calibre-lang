@@ -11,11 +11,12 @@ use calibre_parser::{
     },
 };
 use rustc_hash::FxHashSet;
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use tracing::{debug, instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Typing {
     pub objects: UstrMap<MiddleObject>,
     pub impls: UstrMap<MiddleImpl>,
@@ -165,7 +166,7 @@ impl Typing {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MiddleObject {
     pub object_type: MiddleTypeDefType,
     pub variables: UstrMap<(Ustr, bool)>,
@@ -173,7 +174,7 @@ pub struct MiddleObject {
     pub location: Option<Location>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MiddleImplMember {
     pub symbol_name: Ustr,
     pub generic_params: Vec<Ustr>,
@@ -190,7 +191,7 @@ impl MiddleImplMember {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MiddleImpl {
     members: UstrMap<Vec<MiddleImplMember>>,
     pub traits: Vec<Ustr>,
@@ -275,20 +276,20 @@ impl MiddleImpl {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MiddleTraitMember {
     pub data_type: ParserDataType,
     pub default: Option<AstNode>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MiddleTrait {
     pub implied_traits: Vec<Ustr>,
     pub members: UstrMap<MiddleTraitMember>,
     pub assoc_types: UstrMap<ParserDataType>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum MiddleTypeDefType {
     Enum {
         variants: Vec<(Ustr, Option<ParserDataType>)>,

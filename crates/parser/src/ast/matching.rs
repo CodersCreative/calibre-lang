@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use crate::{
     Span,
     ast::{
@@ -8,7 +9,7 @@ use crate::{
 };
 
 #[repr(u8)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum MatchTupleItem {
     Rest(Span),
     Wildcard(Span),
@@ -34,7 +35,7 @@ pub enum MatchTupleItem {
     },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum MatchStructFieldPattern {
     Value {
         field: String,
@@ -47,7 +48,7 @@ pub enum MatchStructFieldPattern {
     },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum MatchStringPatternPart {
     Literal(ParserText),
     Binding {
@@ -58,7 +59,7 @@ pub enum MatchStringPatternPart {
 }
 
 #[repr(u8)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum MatchArmType {
     At {
         var_type: VarType,
@@ -213,20 +214,20 @@ impl MatchArmType {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TryCatch {
     pub name: Option<PotentialDollarIdentifier>,
     pub body: Box<AstNode>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SelectArmKind {
     Recv,
     Send,
     Default,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SelectArm {
     pub patterns: Vec<(SelectArmKind, Option<AstNode>, Option<AstNode>)>,
     pub conditionals: Vec<AstNode>,

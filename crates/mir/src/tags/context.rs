@@ -10,9 +10,10 @@ use calibre_parser::ast::{
     nodes::{AstNode, AstNodeType, VarType},
     types::ParserDataType,
 };
+use serde::{Deserialize, Serialize};
 use ustr::Ustr;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PackageMetadata {
     pub name: Ustr,
     pub version: Ustr,

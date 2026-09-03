@@ -747,10 +747,10 @@ impl Display for ParserInnerType {
 }
 
 // TODO Evaluate use of this
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct GenericTypes(pub Vec<GenericType>);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GenericType {
     pub identifier: PotentialDollarIdentifier,
     pub trait_constraints: Vec<PotentialDollarIdentifier>,

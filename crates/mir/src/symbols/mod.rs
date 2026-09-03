@@ -8,6 +8,7 @@ use calibre_parser::{
     },
 };
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use ustr::{Ustr, UstrMap};
 
@@ -34,14 +35,14 @@ pub struct FunctionParamDefault {
     pub implicit_none: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MiddleVariable {
     pub data_type: ParserDataType,
     pub var_type: VarType,
     pub location: Option<Location>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MiddleOverload {
     pub operator: Operator,
     pub parameters: Vec<ParserDataType>,

@@ -13,7 +13,7 @@ use std::{
 };
 use ustr::Ustr;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PotentialGenericTypeIdentifier {
     Identifier(PotentialDollarIdentifier),
     Generic {
