@@ -51,6 +51,8 @@ pub enum CalibreError {
     },
     #[error("missing entry point : {0}")]
     MissingEntryPoint(String),
+    #[error("missing package root")]
+    MissingPackageRoot,
 }
 
 #[derive(Clone, Debug)]
@@ -173,6 +175,10 @@ impl CalibreEngine {
     pub fn with_type_check(mut self, type_check: bool) -> Self {
         self.type_check = type_check;
         self
+    }
+
+    pub fn package_metadata(&self) -> Option<&PackageMetadata> {
+        self.package_metadata.as_ref()
     }
 
     pub fn add_input(&mut self, input: String) {

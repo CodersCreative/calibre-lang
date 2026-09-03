@@ -7,7 +7,7 @@ calibre = ">= 0.0.1"
 readme = "README.md"
 homepage = ""
 # source path to the projet defaults to src/
-src = "./examples/showcase"
+src = "./examples/bench/fib/"
 repository = "https://github.com/CodersCreative/calibre-lang"
 license = "MIT"
 

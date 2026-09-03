@@ -92,6 +92,19 @@ pub enum Commands {
         #[arg(long, default_value_t = false)]
         no_type_check: bool,
     },
+    Package {
+        paths: Vec<String>,
+        #[arg(short, long)]
+        example: Option<String>,
+        #[arg(long)]
+        verbosity: Option<Verbosity>,
+        #[arg(long)]
+        no_std: Option<bool>,
+        #[arg(long)]
+        out: Option<String>,
+        #[arg(long, default_value_t = false)]
+        sequential: bool,
+    },
     #[command(external_subcommand)]
     External(Vec<String>),
 }

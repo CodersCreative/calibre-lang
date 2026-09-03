@@ -2,7 +2,7 @@ use crate::{
     environment::MiddleEnvironment,
     scoping::Scoping,
     symbols::{MiddleOverload, MiddleVariable, Symbols},
-    tags::context::PackageMetadata,
+    tags::{Tagging, context::PackageMetadata},
     typing::Typing,
 };
 use calibre_parser::ast::types::ParserInnerType;
@@ -13,19 +13,42 @@ use ustr::{Ustr, UstrMap, UstrSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Manifest {
-    pub metadata: Option<PackageMetadata>,
+    pub metadata: PackageMetadata,
     pub scoping: ManifestScoping,
     pub symbols: ManifestSymbols,
     pub typing: Typing,
+    pub tagging: ManifestTagging,
 }
 
+// TODO Convert to a TryFrom
+// Makes the assertion that package_metadata is set... could be bad...
 impl From<&MiddleEnvironment> for Manifest {
     fn from(value: &MiddleEnvironment) -> Self {
         Self {
-            metadata: value.context.package_metadata.clone(),
+            metadata: value
+                .context
+                .package_metadata
+                .clone()
+                .expect("Package Metadata needs to be set to build a Manifest"),
             scoping: ManifestScoping::from(&value.scoping),
             symbols: ManifestSymbols::from(&value.symbols),
+            tagging: ManifestTagging::from(&value.tagging),
             typing: value.typing.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ManifestTagging {
+    pub init_functions: Vec<(i32, Ustr)>,
+    pub fin_functions: Vec<(i32, Ustr)>,
+}
+
+impl From<&Tagging> for ManifestTagging {
+    fn from(value: &Tagging) -> Self {
+        Self {
+            init_functions: value.init_functions.clone(),
+            fin_functions: value.fin_functions.clone(),
         }
     }
 }

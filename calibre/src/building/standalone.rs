@@ -238,11 +238,11 @@ impl CalibreStandalone for CalibreEngine {
         if let Some(path) = &self.source_path
             && let Ok(Some(project)) = crate::config::load_project_from(path)
         {
-            return Some(project.root.join("target").join("bins").join("calibre"));
+            return Some(project.root.join("target").join("calibre").join("bins"));
         }
 
         let cwd = std::env::current_dir().ok()?;
-        Some(cwd.join("target").join("bins").join("calibre"))
+        Some(cwd.join("target").join("calibre").join("bins"))
     }
 
     #[cfg(not(feature = "cli"))]
