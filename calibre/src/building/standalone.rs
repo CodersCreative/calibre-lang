@@ -3,15 +3,14 @@ use calibre_lir::environment::LirEnvironment;
 use calibre_mir::symbols::resolve::ResolutionOptions;
 use calibre_mir::{environment::MiddleEnvironment, errors::MiddleErr, testing::Testing};
 use calibre_parser::Parser;
-use calibre_std::{get_globals_path, get_stdlib_path};
+use calibre_std::STD_DIR;
 use calibre_vm::{VM, conversion::VMRegistry};
+use include_dir;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::{debug, instrument};
 use ustr::Ustr;
 
-#[cfg(feature = "cli")]
-use glob::glob;
 #[cfg(feature = "cli")]
 use std::fs::{self, File};
 
@@ -160,37 +159,26 @@ impl CalibreStandalone for CalibreEngine {
 
     #[cfg(feature = "cli")]
     fn stdlib_cache_tag() -> String {
-        let stdlib = get_stdlib_path();
-        let globals = get_globals_path();
-
         let mut hasher = blake3::Hasher::new();
-        let mut files: Vec<PathBuf> = Vec::new();
 
-        files.push(stdlib.clone());
-        files.push(globals);
-
-        let stdlib = stdlib
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or(stdlib.clone());
-
-        #[cfg(feature = "cli")]
-        let pattern = format!("{}/**/*.cal", stdlib.to_string_lossy());
-        #[cfg(feature = "cli")]
-        if let Ok(paths) = glob(&pattern) {
-            for entry in paths.flatten() {
-                files.push(entry);
+        fn hash_dir(dir: &include_dir::Dir, hasher: &mut blake3::Hasher, prefix: &str) {
+            for entry in dir.entries() {
+                let path = format!("{}/{}", prefix, entry.path().display());
+                match entry {
+                    include_dir::DirEntry::Dir(subdir) => {
+                        hash_dir(subdir, hasher, &path);
+                    }
+                    include_dir::DirEntry::File(file) => {
+                        hasher.update(path.as_bytes());
+                        if let Some(contents) = file.contents_utf8() {
+                            hasher.update(contents.as_bytes());
+                        }
+                    }
+                }
             }
         }
 
-        files.sort();
-
-        for path in files {
-            hasher.update(path.to_string_lossy().as_bytes());
-            if let Ok(contents) = fs::read_to_string(&path) {
-                hasher.update(contents.as_bytes());
-            }
-        }
+        hash_dir(&STD_DIR, &mut hasher, "src");
 
         hasher.finalize().to_string()
     }

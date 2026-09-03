@@ -13,3 +13,4 @@ readme.workspace = true
 
 [dependencies]
 tracing = { workspace = true }
+include_dir = "0.7"

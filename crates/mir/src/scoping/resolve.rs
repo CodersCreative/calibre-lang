@@ -8,6 +8,7 @@ use calibre_parser::{
     Parser,
     ast::nodes::{AstNode, AstNodeType},
 };
+use calibre_std::get_stdlib_file;
 use std::fs;
 use tracing::{debug, instrument};
 use ustr::Ustr;
@@ -110,11 +111,15 @@ impl MiddleEnvironment {
             } else {
                 let path = self.scoping.scope_or_err(scope)?.path.clone();
                 debug!(path = ?path, "reading source file");
-                let source = fs::read_to_string(&path).map_err(|err| {
-                    self.context.err_at_current(MiddleErr::Internal(format!(
-                        "failed to read {path:?}: {err}"
-                    )))
-                })?;
+                let source = if let Some(bundled) = get_stdlib_file(path.to_str().unwrap_or("")) {
+                    bundled.to_string()
+                } else {
+                    fs::read_to_string(&path).map_err(|err| {
+                        self.context.err_at_current(MiddleErr::Internal(format!(
+                            "failed to read {path:?}: {err}"
+                        )))
+                    })?
+                };
                 parser.set_source_path(Some(path.clone()));
                 let program = parser.produce_ast(&source);
 
@@ -166,11 +171,15 @@ impl MiddleEnvironment {
 
         debug!(path = ?path, "reading source file for import");
 
-        let source = fs::read_to_string(&path).map_err(|err| {
-            self.context.err_at_current(MiddleErr::Internal(format!(
-                "failed to read {path:?}: {err}"
-            )))
-        })?;
+        let source = if let Some(bundled) = get_stdlib_file(path.to_str().unwrap_or("")) {
+            bundled.to_string()
+        } else {
+            fs::read_to_string(&path).map_err(|err| {
+                self.context.err_at_current(MiddleErr::Internal(format!(
+                    "failed to read {path:?}: {err}"
+                )))
+            })?
+        };
 
         parser.set_source_path(Some(path.clone()));
         let mut program = parser.produce_ast(&source);

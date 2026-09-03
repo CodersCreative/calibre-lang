@@ -1,29 +1,35 @@
 use std::path::PathBuf;
 use tracing::{debug, instrument};
 
-#[instrument(skip_all)]
-pub fn get_path(path: &str) -> String {
-    debug!("getting std path: {}", path);
-    let mut new_path = env!("CARGO_MANIFEST_DIR").to_string();
-    new_path.push_str(&format!("/src/{}", path));
-    new_path
-}
+pub static STD_DIR: include_dir::Dir<'static> =
+    include_dir::include_dir!("$CARGO_MANIFEST_DIR/src");
 
 #[instrument(skip_all)]
 pub fn get_stdlib_path() -> PathBuf {
     debug!("getting stdlib path");
-    PathBuf::from(get_path("stdlib/main.cal"))
+    PathBuf::from("stdlib/main.cal")
 }
 
 #[instrument(skip_all)]
 pub fn get_stdlib_module_path(name: &str) -> PathBuf {
     debug!(name = %name, "getting stdlib module path");
-    let path = format!("stdlib/{}/main.cal", name);
-    PathBuf::from(get_path(&path))
+    PathBuf::from(format!("stdlib/{}/main.cal", name))
 }
 
 #[instrument(skip_all)]
 pub fn get_globals_path() -> PathBuf {
     debug!("getting globals path");
-    PathBuf::from(get_path("global/main.cal"))
+    PathBuf::from("global/main.cal")
+}
+
+#[instrument(skip_all)]
+pub fn get_stdlib_file(path: &str) -> Option<&'static str> {
+    debug!("getting stdlib file: {}", path);
+    STD_DIR.get_file(path).and_then(|f| f.contents_utf8())
+}
+
+#[instrument(skip_all)]
+pub fn get_stdlib_dir(path: &str) -> Option<&'static include_dir::Dir<'static>> {
+    debug!("getting stdlib dir: {}", path);
+    STD_DIR.get_dir(path)
 }

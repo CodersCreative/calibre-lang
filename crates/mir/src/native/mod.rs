@@ -11,8 +11,8 @@ use calibre_parser::{
         types::ParserDataType,
     },
 };
-use calibre_std::{get_globals_path, get_stdlib_module_path, get_stdlib_path};
-use std::{fs, path::PathBuf};
+use calibre_std::{get_globals_path, get_stdlib_file, get_stdlib_module_path, get_stdlib_path};
+use std::path::PathBuf;
 use ustr::{Ustr, UstrMap};
 
 impl Scoping {
@@ -69,14 +69,15 @@ impl MiddleEnvironment {
         self.context.stdlib_nodes.clear();
         let mut parser = Parser::default();
         let global_path = get_globals_path();
-        if let Ok(globals) = fs::read_to_string(global_path.clone()) {
-            let program = parser.produce_ast(&globals);
+        let globals = get_stdlib_file(global_path.to_str().unwrap_or("global/main.cal"));
+        if let Some(globals) = globals {
+            let program = parser.produce_ast(globals);
 
             if !parser.errors.is_empty() {
                 let errors = std::mem::take(&mut parser.errors);
                 self.context.errors.push(MiddleErr::ParserErrors {
                     path: global_path.clone(),
-                    contents: globals.clone(),
+                    contents: globals.to_string(),
                     errors,
                 });
             }
@@ -89,7 +90,7 @@ impl MiddleEnvironment {
                 for err in new_errors {
                     self.context.errors.push(MiddleErr::InFile {
                         path: global_path.clone(),
-                        contents: globals.clone(),
+                        contents: globals.to_string(),
                         error: Box::new(err),
                     });
                 }
@@ -132,44 +133,46 @@ impl MiddleEnvironment {
     pub fn setup_std(&mut self, scope: ScopeId) {
         let mut parser = Parser::default();
 
-        if let Ok(scope_ref) = self.scoping.scope_or_err(scope)
-            && let Ok(stdlib) = fs::read_to_string(&scope_ref.path)
-        {
+        if let Ok(scope_ref) = self.scoping.scope_or_err(scope) {
             let scope_path = scope_ref.path.clone();
-            let mut program = parser.produce_ast(&stdlib);
+            let stdlib = get_stdlib_file(scope_path.to_str().unwrap_or("stdlib/main.cal"));
+            if let Some(stdlib) = stdlib {
+                let mut program = parser.produce_ast(stdlib);
 
-            if !parser.errors.is_empty() {
-                let errors = std::mem::take(&mut parser.errors);
-                self.context.errors.push(MiddleErr::ParserErrors {
-                    path: scope_path.clone(),
-                    contents: stdlib.clone(),
-                    errors,
-                });
-            }
-
-            if let AstNodeType::ScopeDeclaration {
-                body: Some(body), ..
-            } = &mut program.node_type
-            {
-                self.predeclare_nodes(scope, body);
-            }
-
-            let error_count_before = self.context.errors.len();
-            let middle = self.evaluate(scope, program);
-            self.context.stdlib_nodes.push(middle);
-
-            if let Ok(x) = self.scoping.scope_mut_or_err(scope) {
-                x.built = true
-            };
-
-            if self.context.errors.len() > error_count_before {
-                let new_errors: Vec<_> = self.context.errors.drain(error_count_before..).collect();
-                for err in new_errors {
-                    self.context.errors.push(MiddleErr::InFile {
+                if !parser.errors.is_empty() {
+                    let errors = std::mem::take(&mut parser.errors);
+                    self.context.errors.push(MiddleErr::ParserErrors {
                         path: scope_path.clone(),
-                        contents: stdlib.clone(),
-                        error: Box::new(err),
+                        contents: stdlib.to_string(),
+                        errors,
                     });
+                }
+
+                if let AstNodeType::ScopeDeclaration {
+                    body: Some(body), ..
+                } = &mut program.node_type
+                {
+                    self.predeclare_nodes(scope, body);
+                }
+
+                let error_count_before = self.context.errors.len();
+                let middle = self.evaluate(scope, program);
+                self.context.stdlib_nodes.push(middle);
+
+                if let Ok(x) = self.scoping.scope_mut_or_err(scope) {
+                    x.built = true
+                };
+
+                if self.context.errors.len() > error_count_before {
+                    let new_errors: Vec<_> =
+                        self.context.errors.drain(error_count_before..).collect();
+                    for err in new_errors {
+                        self.context.errors.push(MiddleErr::InFile {
+                            path: scope_path.clone(),
+                            contents: stdlib.to_string(),
+                            error: Box::new(err),
+                        });
+                    }
                 }
             }
         }
@@ -232,15 +235,16 @@ impl MiddleEnvironment {
 
         if load_source {
             let mut parser = Parser::default();
-            if let Ok(stdlib) = fs::read_to_string(&scope_path) {
+            let stdlib = get_stdlib_file(scope_path.to_str().unwrap_or(""));
+            if let Some(stdlib) = stdlib {
                 let scope_path_clone = scope_path.clone();
                 parser.set_source_path(Some(scope_path.clone()));
-                let mut program = parser.produce_ast(&stdlib);
+                let mut program = parser.produce_ast(stdlib);
 
                 if !parser.errors.is_empty() {
                     self.context.errors.push(MiddleErr::ParserErrors {
                         path: scope_path.clone(),
-                        contents: stdlib,
+                        contents: stdlib.to_string(),
                         errors: std::mem::take(&mut parser.errors),
                     });
                     return;
@@ -267,7 +271,7 @@ impl MiddleEnvironment {
                     for err in new_errors {
                         self.context.errors.push(MiddleErr::InFile {
                             path: scope_path_clone.clone(),
-                            contents: stdlib.clone(),
+                            contents: stdlib.to_string(),
                             error: Box::new(err),
                         });
                     }
