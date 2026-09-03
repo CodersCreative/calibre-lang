@@ -238,11 +238,11 @@ impl CalibreStandalone for CalibreEngine {
         if let Some(path) = &self.source_path
             && let Ok(Some(project)) = crate::config::load_project_from(path)
         {
-            return Some(project.root.join("target").join("calibre"));
+            return Some(project.root.join("target").join("bins").join("calibre"));
         }
 
         let cwd = std::env::current_dir().ok()?;
-        Some(cwd.join("target").join("calibre"))
+        Some(cwd.join("target").join("bins").join("calibre"))
     }
 
     #[cfg(not(feature = "cli"))]
@@ -262,7 +262,7 @@ impl CalibreStandalone for CalibreEngine {
         let key = self.cache_key(full_source);
         let path = root
             .join(env!("CARGO_PKG_VERSION"))
-            .join(format!("{}.bin", key.to_hex()));
+            .join(format!("{}.calb", key.to_hex()));
 
         let file = match File::open(&path) {
             Ok(file) => file,
@@ -301,7 +301,7 @@ impl CalibreStandalone for CalibreEngine {
         let key = self.cache_key(full_source);
         let dir = root.join(env!("CARGO_PKG_VERSION"));
         fs::create_dir_all(&dir)?;
-        let path = dir.join(format!("{}.bin", key.to_hex()));
+        let path = dir.join(format!("{}.calb", key.to_hex()));
         let file = File::create(path)?;
 
         let mut writer = std::io::BufWriter::new(file);

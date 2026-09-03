@@ -3,7 +3,7 @@ use calibre_lir::environment::LirRegistry;
 use calibre_mir::manifest::Manifest;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 // I think I'm gonna use the LIR because its the last phase before specialization for the runtime selected
 #[derive(Clone, Serialize, Deserialize)]
@@ -13,6 +13,8 @@ pub struct PackagedProgramBlob {
 }
 
 pub trait CalibrePackaging {
+    fn package_root(&self) -> Option<PathBuf>;
+
     fn try_load_packaged_program(
         &self,
         path: impl AsRef<Path>,
@@ -27,6 +29,21 @@ pub trait CalibrePackaging {
 }
 
 impl CalibrePackaging for CalibreEngine {
+    fn package_root(&self) -> Option<PathBuf> {
+        if let Some(path) = &self.cache_dir {
+            return Some(path.clone());
+        }
+
+        if let Some(path) = &self.source_path
+            && let Ok(Some(project)) = crate::config::load_project_from(path)
+        {
+            return Some(project.root.join("target").join("packages").join("calibre"));
+        }
+
+        let cwd = std::env::current_dir().ok()?;
+        Some(cwd.join("target").join("packages").join("calibre"))
+    }
+
     fn package(
         &self,
         path: impl AsRef<Path>,
