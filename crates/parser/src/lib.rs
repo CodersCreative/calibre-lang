@@ -40,7 +40,11 @@ impl AlphaRenameState {
     }
 
     #[inline]
-    pub fn from_native_mappings(&mut self, new_mappings : &UstrMap<Ustr>, old_mappings : &UstrMap<Ustr>) {
+    pub fn from_native_mappings(
+        &mut self,
+        new_mappings: &UstrMap<Ustr>,
+        old_mappings: &UstrMap<Ustr>,
+    ) {
         for (k, v) in new_mappings {
             if let Some(old_v) = old_mappings.get(k) {
                 self.data.insert(*old_v, *v);
@@ -50,12 +54,22 @@ impl AlphaRenameState {
 }
 
 pub trait AlphaRenamable {
-    fn rename(self, state: &mut AlphaRenameState) -> Self;
+    fn rename(&mut self, state: &mut AlphaRenameState);
+
+    #[inline(always)]
+    fn rename_owned(mut self, state: &mut AlphaRenameState) -> Self
+    where
+        Self: Sized,
+    {
+        self.rename(state);
+        self
+    }
 }
 
 pub trait IdentifiersUsed {
     fn identifiers_used(&self) -> Vec<&String>;
 
+    #[inline(always)]
     fn owned_identifiers_used(&self) -> Vec<String> {
         self.identifiers_used().into_iter().cloned().collect()
     }
@@ -64,6 +78,7 @@ pub trait IdentifiersUsed {
 pub trait UstrIdentifiersUsed {
     fn identifiers_used(&self) -> Vec<&Ustr>;
 
+    #[inline(always)]
     fn owned_identifiers_used(&self) -> Vec<Ustr> {
         self.identifiers_used().into_iter().cloned().collect()
     }

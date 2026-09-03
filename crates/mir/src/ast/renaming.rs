@@ -2,25 +2,22 @@ use crate::{
     MiddleNode, MiddleNodeType,
     ast::{
         MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirBreak, MirCall,
-        MirComparison, MirConditional, MirDebug, MirDeref, MirDrop, MirEmit, MirEnum, MirField,
-        MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange,
-        MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
+        MirComparison, MirConditional, MirDebug, MirDeref, MirDrop, MirEnum, MirField, MirFunction,
+        MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
+        MirReturn, MirScopeDecl, MirVarDecl,
     },
 };
-use calibre_parser::{AlphaRenamable, AlphaRenameState, ast::ObjectMap};
+use calibre_parser::{AlphaRenamable, AlphaRenameState};
 use ustr::Ustr;
 
 impl AlphaRenamable for MiddleNode {
-    fn rename(self, state: &mut AlphaRenameState) -> Self {
-        Self {
-            node_type: self.node_type.rename(state),
-            span: self.span,
-        }
+    fn rename(&mut self, state: &mut AlphaRenameState) {
+        self.node_type.rename(state);
     }
 }
 
 impl AlphaRenamable for MiddleNodeType {
-    fn rename(self, state: &mut AlphaRenameState) -> Self {
+    fn rename(&mut self, state: &mut AlphaRenameState) {
         match self {
             MiddleNodeType::Break(MirBreak {
                 label: _,
@@ -35,39 +32,27 @@ impl AlphaRenamable for MiddleNodeType {
             | MiddleNodeType::BigLiteral(_)
             | MiddleNodeType::IntLiteral { .. }
             | MiddleNodeType::StringLiteral(_)
-            | MiddleNodeType::ExternFunction { .. } => self,
-            MiddleNodeType::Break(MirBreak {
-                label,
-                value: Some(value),
-            }) => MiddleNodeType::Break(MirBreak {
-                label,
-                value: Some(Box::new(value.rename(state))),
-            }),
-            MiddleNodeType::Emit(MirEmit { value }) => MiddleNodeType::Emit(MirEmit {
-                value: Box::new(value.rename(state)),
-            }),
-            MiddleNodeType::Spawn(MirSpawn { value }) => MiddleNodeType::Spawn(MirSpawn {
-                value: Box::new(value.rename(state)),
-            }),
-            MiddleNodeType::RefStatement(MirRef { mutability, value }) => {
-                MiddleNodeType::RefStatement(MirRef {
-                    mutability,
-                    value: Box::new(value.rename(state)),
-                })
+            | MiddleNodeType::ExternFunction { .. } => {}
+            MiddleNodeType::Break(MirBreak { label: _, value }) => {
+                if let Some(v) = value {
+                    v.rename(state);
+                }
             }
-            MiddleNodeType::DerefStatement(MirDeref { value }) => {
-                MiddleNodeType::DerefStatement(MirDeref {
-                    value: Box::new(value.rename(state)),
-                })
+            MiddleNodeType::Emit(value) => value.value.rename(state),
+            MiddleNodeType::Spawn(value) => value.value.rename(state),
+            MiddleNodeType::RefStatement(MirRef {
+                mutability: _,
+                value,
+            }) => value.rename(state),
+            MiddleNodeType::DerefStatement(MirDeref { value }) => value.rename(state),
+            MiddleNodeType::Drop(MirDrop { identifier }) => {
+                *identifier = state.mapped_name_or_original(*identifier);
             }
-            MiddleNodeType::Drop(MirDrop { identifier }) => MiddleNodeType::Drop(MirDrop {
-                identifier: state.mapped_name_or_original(identifier),
-            }),
-            MiddleNodeType::Move(MirMove { identifier }) => MiddleNodeType::Move(MirMove {
-                identifier: state.mapped_name_or_original(identifier),
-            }),
+            MiddleNodeType::Move(MirMove { identifier }) => {
+                *identifier = state.mapped_name_or_original(*identifier);
+            }
             MiddleNodeType::VariableDeclaration(MirVarDecl {
-                var_type,
+                var_type: _,
                 identifier,
                 value,
                 data_type,
@@ -75,192 +60,160 @@ impl AlphaRenamable for MiddleNodeType {
                 let new_name = if !state.dont_change_local {
                     let name =
                         Ustr::from(&format!("{}->{}", identifier, fastrand::u32(0..u32::MAX)));
-                    state.data.insert(identifier, name);
+                    state.data.insert(*identifier, name);
                     name
                 } else {
-                    identifier
+                    *identifier
                 };
-
-                MiddleNodeType::VariableDeclaration(MirVarDecl {
-                    var_type,
-                    identifier: new_name,
-                    value: Box::new(value.rename(state)),
-                    data_type: data_type.rename(state),
-                })
+                *identifier = new_name;
+                value.rename(state);
+                data_type.rename(state);
             }
             MiddleNodeType::EnumExpression(MirEnum {
                 identifier,
-                value,
-                data: Some(data),
-            }) => MiddleNodeType::EnumExpression(MirEnum {
-                identifier: state.mapped_name_or_original(identifier),
-                value,
-                data: Some(Box::new(data.rename(state))),
-            }),
+                value: _,
+                data,
+            }) => {
+                *identifier = state.mapped_name_or_original(*identifier);
+                if let Some(d) = data {
+                    d.rename(state);
+                }
+            }
             MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                 body,
-                create_new_scope,
-                is_temp,
-                scope_id,
-            }) => MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                body: body.into_iter().map(|x| x.rename(state)).collect(),
-                create_new_scope,
-                is_temp,
-                scope_id,
-            }),
+                create_new_scope: _,
+                is_temp: _,
+                scope_id: _,
+            }) => {
+                for node in body {
+                    node.rename(state);
+                }
+            }
             MiddleNodeType::FunctionDeclaration(MirFunction {
                 parameters,
                 body,
-                return_type,
-                scope_id,
-            }) => MiddleNodeType::FunctionDeclaration(MirFunction {
-                parameters: parameters
-                    .into_iter()
-                    .map(|x| {
-                        let new_name =
-                            Ustr::from(&format!("{}->{}", x.0, fastrand::u32(0..u32::MAX)));
-                        state.data.insert(x.0, new_name);
-
-                        (new_name, x.1, x.2.map(|x| Box::new(x.rename(state))))
-                    })
-                    .collect(),
-                body: Box::new(body.rename(state)),
-                return_type,
-                scope_id,
-            }),
+                return_type: _,
+                scope_id: _,
+            }) => {
+                for param in parameters {
+                    let new_name =
+                        Ustr::from(&format!("{}->{}", param.0, fastrand::u32(0..u32::MAX)));
+                    state.data.insert(param.0, new_name);
+                    param.0 = new_name;
+                    if let Some(default_value) = &mut param.2 {
+                        default_value.rename(state);
+                    }
+                }
+                body.rename(state);
+            }
             MiddleNodeType::AssignmentExpression(MirAssignment { identifier, value }) => {
-                MiddleNodeType::AssignmentExpression(MirAssignment {
-                    identifier: Box::new(identifier.rename(state)),
-                    value: Box::new(value.rename(state)),
-                })
+                identifier.rename(state);
+                value.rename(state);
             }
-            MiddleNodeType::NegExpression(MirNeg { value }) => {
-                MiddleNodeType::NegExpression(MirNeg {
-                    value: Box::new(value.rename(state)),
-                })
-            }
+            MiddleNodeType::NegExpression(MirNeg { value }) => value.rename(state),
             MiddleNodeType::DebugExpression(MirDebug {
-                pretty_printed_str,
+                pretty_printed_str: _,
                 value,
-            }) => MiddleNodeType::DebugExpression(MirDebug {
-                pretty_printed_str,
-                value: Box::new(value.rename(state)),
-            }),
+            }) => value.rename(state),
             MiddleNodeType::AsExpression(MirAs {
                 value,
                 data_type,
-                failure_mode,
-            }) => MiddleNodeType::AsExpression(MirAs {
-                value: Box::new(value.rename(state)),
-                data_type,
-                failure_mode,
-            }),
+                failure_mode: _,
+            }) => {
+                value.rename(state);
+                data_type.rename(state);
+            }
             MiddleNodeType::IsExpression(MirIs { value, data_type }) => {
-                MiddleNodeType::IsExpression(MirIs {
-                    value: Box::new(value.rename(state)),
-                    data_type: data_type.rename(state),
-                })
+                value.rename(state);
+                data_type.rename(state);
             }
             MiddleNodeType::RangeDeclaration(MirRange {
                 from,
                 to,
-                inclusive,
-            }) => MiddleNodeType::RangeDeclaration(MirRange {
-                from: Box::new(from.rename(state)),
-                to: Box::new(to.rename(state)),
-                inclusive,
-            }),
+                inclusive: _,
+            }) => {
+                from.rename(state);
+                to.rename(state);
+            }
             MiddleNodeType::LoopDeclaration(MirLoop {
-                state: s,
+                state: loop_state,
                 body,
-                scope_id,
-                label,
-            }) => MiddleNodeType::LoopDeclaration(MirLoop {
-                state: s.map(|value| Box::new(value.rename(state))),
-                body: Box::new(body.rename(state)),
-                scope_id,
-                label,
-            }),
-            MiddleNodeType::Return(MirReturn { value }) => MiddleNodeType::Return(MirReturn {
-                value: value.map(|value| Box::new(value.rename(state))),
-            }),
+                scope_id: _,
+                label: _,
+            }) => {
+                if let Some(s) = loop_state {
+                    s.rename(state);
+                }
+                body.rename(state);
+            }
+            MiddleNodeType::Return(MirReturn { value }) => {
+                if let Some(v) = value {
+                    v.rename(state);
+                }
+            }
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
-                MiddleNodeType::Identifier(MirIdentifier {
-                    identifier: state.mapped_name_or_original(identifier),
-                })
+                *identifier = state.mapped_name_or_original(*identifier);
             }
             MiddleNodeType::ListLiteral(MirList { data_type, values }) => {
-                MiddleNodeType::ListLiteral(MirList {
-                    data_type: data_type.rename(state),
-                    values: values.into_iter().map(|x| x.rename(state)).collect(),
-                })
+                for v in values {
+                    v.rename(state);
+                }
+                data_type.rename(state);
             }
-            MiddleNodeType::FieldAccess(MirField { base, field }) => {
-                MiddleNodeType::FieldAccess(MirField {
-                    base: Box::new(base.rename(state)),
-                    field,
-                })
-            }
+            MiddleNodeType::FieldAccess(MirField { base, field: _ }) => base.rename(state),
             MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
-                MiddleNodeType::IndexAccess(MirIndex {
-                    base: Box::new(base.rename(state)),
-                    index: Box::new(index.rename(state)),
-                })
+                base.rename(state);
+                index.rename(state);
             }
             MiddleNodeType::CallExpression(MirCall { caller, args }) => {
-                MiddleNodeType::CallExpression(MirCall {
-                    caller: Box::new(caller.rename(state)),
-                    args: args.into_iter().map(|x| x.rename(state)).collect(),
-                })
+                caller.rename(state);
+                for arg in args {
+                    arg.rename(state);
+                }
             }
             MiddleNodeType::BinaryExpression(MirBinary {
                 left,
                 right,
-                operator,
-            }) => MiddleNodeType::BinaryExpression(MirBinary {
-                left: Box::new(left.rename(state)),
-                right: Box::new(right.rename(state)),
-                operator,
-            }),
+                operator: _,
+            }) => {
+                left.rename(state);
+                right.rename(state);
+            }
             MiddleNodeType::ComparisonExpression(MirComparison {
                 left,
                 right,
-                operator,
-            }) => MiddleNodeType::ComparisonExpression(MirComparison {
-                left: Box::new(left.rename(state)),
-                right: Box::new(right.rename(state)),
-                operator,
-            }),
+                operator: _,
+            }) => {
+                left.rename(state);
+                right.rename(state);
+            }
             MiddleNodeType::BooleanExpression(MirBoolean {
                 left,
                 right,
-                operator,
-            }) => MiddleNodeType::BooleanExpression(MirBoolean {
-                left: Box::new(left.rename(state)),
-                right: Box::new(right.rename(state)),
-                operator,
-            }),
+                operator: _,
+            }) => {
+                left.rename(state);
+                right.rename(state);
+            }
             MiddleNodeType::AggregateExpression(MirAggregate { identifier, value }) => {
-                MiddleNodeType::AggregateExpression(MirAggregate {
-                    identifier: identifier.map(|x| state.mapped_name_or_original(x)),
-                    value: ObjectMap(
-                        value
-                            .0
-                            .into_iter()
-                            .map(|x| (x.0, x.1.rename(state)))
-                            .collect(),
-                    ),
-                })
+                if let Some(id) = identifier {
+                    *identifier = Some(state.mapped_name_or_original(*id));
+                }
+                for (_, v) in &mut value.0 {
+                    v.rename(state);
+                }
             }
             MiddleNodeType::Conditional(MirConditional {
                 comparison,
                 then,
                 otherwise,
-            }) => MiddleNodeType::Conditional(MirConditional {
-                comparison: Box::new(comparison.rename(state)),
-                then: Box::new(then.rename(state)),
-                otherwise: otherwise.map(|value| Box::new(value.rename(state))),
-            }),
+            }) => {
+                comparison.rename(state);
+                then.rename(state);
+                if let Some(otherwise) = otherwise {
+                    otherwise.rename(state);
+                }
+            }
         }
     }
 }

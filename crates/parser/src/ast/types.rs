@@ -18,11 +18,8 @@ pub struct ParserDataType {
 }
 
 impl AlphaRenamable for ParserDataType {
-    fn rename(self, state: &mut AlphaRenameState) -> Self {
-        Self {
-            data_type: self.data_type.rename(state),
-            span: self.span,
-        }
+    fn rename(&mut self, state: &mut AlphaRenameState) {
+        self.data_type.rename(state);
     }
 }
 
@@ -227,7 +224,7 @@ pub enum ParserInnerType {
 }
 
 impl AlphaRenamable for ParserInnerType {
-    fn rename(self, state: &mut AlphaRenameState) -> Self {
+    fn rename(&mut self, state: &mut AlphaRenameState) {
         match self {
             ParserInnerType::Auto(_)
             | ParserInnerType::Big
@@ -243,46 +240,56 @@ impl AlphaRenamable for ParserInnerType {
             | ParserInnerType::Range
             | ParserInnerType::UInt
             | ParserInnerType::Str
-            | ParserInnerType::Dynamic => self,
-            ParserInnerType::Struct(x) => ParserInnerType::Struct(state.mapped_str_or_original(&x)),
+            | ParserInnerType::Dynamic => {}
+            ParserInnerType::Struct(x) => {
+                *x = state.mapped_str_or_original(x);
+            }
             ParserInnerType::StructWithGenerics {
                 identifier,
                 generic_types,
-            } => ParserInnerType::StructWithGenerics {
-                identifier: state.mapped_str_or_original(&identifier),
-                generic_types: generic_types.into_iter().map(|x| x.rename(state)).collect(),
-            },
-            ParserInnerType::DynamicTraits(x) => ParserInnerType::DynamicTraits(
-                x.into_iter()
-                    .map(|x| state.mapped_str_or_original(&x))
-                    .collect(),
-            ),
-            ParserInnerType::List(x) => ParserInnerType::List(Box::new(x.rename(state))),
-            ParserInnerType::Option(x) => ParserInnerType::Option(Box::new(x.rename(state))),
-            ParserInnerType::Result { ok, err } => ParserInnerType::Result {
-                ok: Box::new(ok.rename(state)),
-                err: Box::new(err.rename(state)),
-            },
-            ParserInnerType::Ptr(x) => ParserInnerType::Ptr(Box::new(x.rename(state))),
+            } => {
+                *identifier = state.mapped_str_or_original(identifier);
+                for g in generic_types {
+                    g.rename(state);
+                }
+            }
+            ParserInnerType::DynamicTraits(x) => {
+                for item in x {
+                    *item = state.mapped_str_or_original(item);
+                }
+            }
+            ParserInnerType::List(x) => x.rename(state),
+            ParserInnerType::Option(x) => x.rename(state),
+            ParserInnerType::Result { ok, err } => {
+                ok.rename(state);
+                err.rename(state);
+            }
+            ParserInnerType::Ptr(x) => x.rename(state),
             ParserInnerType::NativeFunction {
                 return_type,
                 parameters,
-            } => ParserInnerType::NativeFunction {
-                return_type: Box::new(return_type.rename(state)),
-                parameters: parameters.into_iter().map(|x| x.rename(state)).collect(),
-            },
+            } => {
+                return_type.rename(state);
+                for p in parameters {
+                    p.rename(state);
+                }
+            }
             ParserInnerType::Function {
                 return_type,
                 parameters,
-            } => ParserInnerType::Function {
-                return_type: Box::new(return_type.rename(state)),
-                parameters: parameters.into_iter().map(|x| x.rename(state)).collect(),
-            },
-            ParserInnerType::Tuple(x) => {
-                ParserInnerType::Tuple(x.into_iter().map(|x| x.rename(state)).collect())
+            } => {
+                return_type.rename(state);
+                for p in parameters {
+                    p.rename(state);
+                }
             }
-            ParserInnerType::Gen(x) => ParserInnerType::Gen(Box::new(x.rename(state))),
-            ParserInnerType::Ref(x, y) => ParserInnerType::Ref(Box::new(x.rename(state)), y),
+            ParserInnerType::Tuple(x) => {
+                for item in x {
+                    item.rename(state);
+                }
+            }
+            ParserInnerType::Gen(x) => x.rename(state),
+            ParserInnerType::Ref(x, _) => x.rename(state),
             ParserInnerType::Scope(_) => unimplemented!(),
         }
     }

@@ -3,44 +3,42 @@ use crate::ast::{
     LirDeclare, LirDeref, LirDrop, LirEnum, LirIndex, LirIs, LirLValue, LirList, LirLoad,
     LirMember, LirMove, LirNode, LirNodeType, LirRange, LirRef, LirRefLoad, LirSpawn,
 };
-use calibre_parser::{AlphaRenamable, AlphaRenameState, ast::ObjectMap};
+use calibre_parser::{AlphaRenamable, AlphaRenameState};
 use ustr::Ustr;
 
 impl AlphaRenamable for LirNode {
-    fn rename(self, state: &mut AlphaRenameState) -> Self {
-        Self {
-            node_type: self.node_type.rename(state),
-            span: self.span,
-        }
+    fn rename(&mut self, state: &mut AlphaRenameState) {
+        self.node_type.rename(state);
     }
 }
 
 impl AlphaRenamable for LirLValue {
-    fn rename(self, state: &mut AlphaRenameState) -> Self {
+    fn rename(&mut self, state: &mut AlphaRenameState) {
         match self {
-            Self::Var(x) => Self::Var(state.mapped_name_or_original(x)),
-            Self::Ptr(x) => Self::Ptr(Box::new(x.rename(state))),
+            Self::Var(x) => {
+                *x = state.mapped_name_or_original(*x);
+            }
+            Self::Ptr(x) => x.rename(state),
         }
     }
 }
 
 impl AlphaRenamable for LirNodeType {
-    fn rename(self, state: &mut AlphaRenameState) -> Self {
+    fn rename(&mut self, state: &mut AlphaRenameState) {
         match self {
-            Self::Literal(_) | Self::Noop | Self::ExternFunction(_) => self,
+            Self::Literal(_) | Self::Noop | Self::ExternFunction(_) => {}
             Self::As(LirAs {
                 value,
                 data_type,
-                failure_mode,
-            }) => Self::As(LirAs {
-                value: Box::new(value.rename(state)),
-                data_type: data_type.rename(state),
-                failure_mode,
-            }),
-            Self::Assign(LirAssign { dest, value }) => Self::Assign(LirAssign {
-                dest: dest.rename(state),
-                value: Box::new(value.rename(state)),
-            }),
+                failure_mode: _,
+            }) => {
+                value.rename(state);
+                data_type.rename(state);
+            }
+            Self::Assign(LirAssign { dest, value }) => {
+                dest.rename(state);
+                value.rename(state);
+            }
             Self::Declare(LirDeclare {
                 dest,
                 value,
@@ -48,121 +46,107 @@ impl AlphaRenamable for LirNodeType {
             }) => {
                 let new_name = if !state.dont_change_local {
                     let name = Ustr::from(&format!("{}->{}", dest, fastrand::u32(0..u32::MAX)));
-                    state.data.insert(dest, name);
+                    state.data.insert(*dest, name);
                     name
                 } else {
-                    dest
+                    *dest
                 };
-
-                Self::Declare(LirDeclare {
-                    dest: new_name,
-                    value: Box::new(value.rename(state)),
-                    data_type: data_type.rename(state),
-                })
+                *dest = new_name;
+                value.rename(state);
+                data_type.rename(state);
             }
-            Self::Call(LirCall { caller, args }) => Self::Call(LirCall {
-                caller: Box::new(caller.rename(state)),
-                args: args.into_iter().map(|x| x.rename(state)).collect(),
-            }),
-            Self::Aggregate(LirAggregate { name, fields }) => Self::Aggregate(LirAggregate {
-                name: name.map(|x| state.mapped_name_or_original(x)),
-                fields: ObjectMap(
-                    fields
-                        .0
-                        .into_iter()
-                        .map(|x| (x.0, x.1.rename(state)))
-                        .collect(),
-                ),
-            }),
+            Self::Call(LirCall { caller, args }) => {
+                caller.rename(state);
+                for arg in args {
+                    arg.rename(state);
+                }
+            }
+            Self::Aggregate(LirAggregate { name, fields }) => {
+                if let Some(n) = name {
+                    *name = Some(state.mapped_name_or_original(*n));
+                }
+                for (_, v) in &mut fields.0 {
+                    v.rename(state);
+                }
+            }
             Self::Binary(LirBinary {
                 left,
                 right,
-                operator,
-            }) => Self::Binary(LirBinary {
-                left: Box::new(left.rename(state)),
-                right: Box::new(right.rename(state)),
-                operator,
-            }),
+                operator: _,
+            }) => {
+                left.rename(state);
+                right.rename(state);
+            }
             Self::Boolean(LirBoolean {
                 left,
                 right,
-                operator,
-            }) => Self::Boolean(LirBoolean {
-                left: Box::new(left.rename(state)),
-                right: Box::new(right.rename(state)),
-                operator,
-            }),
+                operator: _,
+            }) => {
+                left.rename(state);
+                right.rename(state);
+            }
             Self::Comparison(LirComparison {
                 left,
                 right,
-                operator,
-            }) => Self::Comparison(LirComparison {
-                left: Box::new(left.rename(state)),
-                right: Box::new(right.rename(state)),
-                operator,
-            }),
-            Self::Closure(LirClosure { label, captures }) => Self::Closure(LirClosure {
-                label: state.mapped_name_or_original(label),
-                captures: captures
-                    .into_iter()
-                    .map(|x| state.mapped_name_or_original(x))
-                    .collect(),
-            }),
-            Self::Deref(LirDeref { value }) => Self::Deref(LirDeref {
-                value: Box::new(value.rename(state)),
-            }),
-            Self::Drop(LirDrop { value }) => Self::Drop(LirDrop {
-                value: state.mapped_name_or_original(value),
-            }),
+                operator: _,
+            }) => {
+                left.rename(state);
+                right.rename(state);
+            }
+            Self::Closure(LirClosure { label, captures }) => {
+                *label = state.mapped_name_or_original(*label);
+                for c in captures {
+                    *c = state.mapped_name_or_original(*c);
+                }
+            }
+            Self::Deref(LirDeref { value }) => value.rename(state),
+            Self::Drop(LirDrop { value }) => {
+                *value = state.mapped_name_or_original(*value);
+            }
             Self::Enum(LirEnum {
                 name,
-                variant,
+                variant: _,
                 payload,
-            }) => Self::Enum(LirEnum {
-                name: state.mapped_name_or_original(name),
-                variant,
-                payload: payload.map(|x| Box::new(x.rename(state))),
-            }),
-            Self::Index(LirIndex { base, index }) => Self::Index(LirIndex {
-                base: Box::new(base.rename(state)),
-                index: Box::new(index.rename(state)),
-            }),
-            Self::Is(LirIs { value, data_type }) => Self::Is(LirIs {
-                value: Box::new(value.rename(state)),
-                data_type: data_type.rename(state),
-            }),
-            Self::List(LirList { values, data_type }) => Self::List(LirList {
-                values: values.into_iter().map(|x| x.rename(state)).collect(),
-                data_type: data_type.rename(state),
-            }),
-            Self::Move(LirMove { value }) => Self::Move(LirMove {
-                value: state.mapped_name_or_original(value),
-            }),
-            Self::Load(LirLoad { value }) => Self::Load(LirLoad {
-                value: state.mapped_name_or_original(value),
-            }),
-            Self::Member(LirMember { base, field }) => Self::Member(LirMember {
-                base: Box::new(base.rename(state)),
-                field,
-            }),
-            Self::Ref(LirRef { value }) => Self::Ref(LirRef {
-                value: Box::new(value.rename(state)),
-            }),
-            Self::RefLoad(LirRefLoad { value }) => Self::RefLoad(LirRefLoad {
-                value: state.mapped_name_or_original(value),
-            }),
+            }) => {
+                *name = state.mapped_name_or_original(*name);
+                if let Some(p) = payload {
+                    p.rename(state);
+                }
+            }
+            Self::Index(LirIndex { base, index }) => {
+                base.rename(state);
+                index.rename(state);
+            }
+            Self::Is(LirIs { value, data_type }) => {
+                value.rename(state);
+                data_type.rename(state);
+            }
+            Self::List(LirList { values, data_type }) => {
+                for v in values {
+                    v.rename(state);
+                }
+                data_type.rename(state);
+            }
+            Self::Move(LirMove { value }) => {
+                *value = state.mapped_name_or_original(*value);
+            }
+            Self::Load(LirLoad { value }) => {
+                *value = state.mapped_name_or_original(*value);
+            }
+            Self::Member(LirMember { base, field: _ }) => base.rename(state),
+            Self::Ref(LirRef { value }) => value.rename(state),
+            Self::RefLoad(LirRefLoad { value }) => {
+                *value = state.mapped_name_or_original(*value);
+            }
             Self::Range(LirRange {
                 from,
                 to,
-                inclusive,
-            }) => Self::Range(LirRange {
-                from: Box::new(from.rename(state)),
-                to: Box::new(to.rename(state)),
-                inclusive,
-            }),
-            Self::Spawn(LirSpawn { value }) => Self::Spawn(LirSpawn {
-                value: Box::new(value.rename(state)),
-            }),
+                inclusive: _,
+            }) => {
+                from.rename(state);
+                to.rename(state);
+            }
+            Self::Spawn(LirSpawn { value }) => value.rename(state),
         }
     }
 }
