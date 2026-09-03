@@ -253,6 +253,14 @@ impl MiddleEnvironment {
                 scope_ref.type_mappings.insert(identifier, inner.data_type);
             }
 
+            if let Some(x) = self.context.in_stdlib
+                && let Some(y) = target_name
+            {
+                self.symbols
+                    .native_mappings
+                    .insert(Ustr::from(&format!("{}.{}", x, identifier)), y);
+            }
+
             if !overloads.is_empty() {
                 for overload in overloads {
                     if let Some(processed) =
@@ -320,6 +328,7 @@ impl MiddleEnvironment {
             };
 
         let default_ident = self.resolve(scope, &"Default", ResolutionOptions::typing());
+
         self.typing.objects.insert(
             new_name,
             MiddleObject {
@@ -335,6 +344,12 @@ impl MiddleEnvironment {
                 location: self.context.current_location.clone(),
             },
         );
+
+        if let Some(x) = self.context.in_stdlib {
+            self.symbols
+                .native_mappings
+                .insert(Ustr::from(&format!("{}.{}", x, ident)), new_name);
+        }
 
         let previous_self_type = {
             let scope = self.scoping.scope_mut_or_err(scope)?;

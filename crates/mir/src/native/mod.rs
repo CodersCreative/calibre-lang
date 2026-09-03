@@ -49,6 +49,7 @@ impl MiddleEnvironment {
         namespace: Option<&Ustr>,
     ) -> ScopeId {
         self.register_tag_handlers();
+        self.context.in_stdlib = Some(Ustr::default());
         let scope = self.scoping.add_scope(
             MiddleScope {
                 macros: UstrMap::default(),
@@ -102,6 +103,7 @@ impl MiddleEnvironment {
             .new_scope(Some(scope), get_stdlib_path(), Some(&Ustr::from("std")));
 
         self.setup_std(std);
+        self.context.in_stdlib = None;
 
         self.scoping
             .new_scope(Some(scope), path, Some(&Ustr::from("root")))
@@ -198,6 +200,8 @@ impl MiddleEnvironment {
     }
 
     pub fn setup_std_module(&mut self, parent: ScopeId, name: Ustr, load_source: bool) {
+        self.context.in_stdlib = Some(name);
+
         let scope_path = get_stdlib_module_path(&name);
         let scope = self
             .scoping

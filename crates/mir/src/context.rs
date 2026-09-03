@@ -1,5 +1,6 @@
 use crate::{ast::MiddleNode, errors::MiddleErr, tags::context::PackageMetadata};
 use calibre_parser::{Location, Span};
+use ustr::Ustr;
 
 #[derive(Debug, Clone, Default)]
 pub struct MiddleContext {
@@ -8,6 +9,7 @@ pub struct MiddleContext {
     pub stdlib_nodes: Vec<MiddleNode>,
     pub package_metadata: Option<PackageMetadata>,
     pub type_check: bool,
+    pub in_stdlib: Option<Ustr>,
 }
 
 impl MiddleContext {

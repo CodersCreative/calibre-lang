@@ -19,24 +19,33 @@ pub mod parse;
 
 pub static COUNTER: LazyLock<RwLock<u64>> = LazyLock::new(|| RwLock::new(0));
 
-#[derive(Default)]
+#[derive(Default, Clone, Debug)]
 pub struct AlphaRenameState {
     pub data: UstrMap<Ustr>,
     pub dont_change_local: bool,
 }
 
 impl AlphaRenameState {
-    #[inline]
+    #[inline(always)]
     pub fn mapped_name_or_original(&self, original: Ustr) -> Ustr {
         self.data.get(&original).cloned().unwrap_or(original)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn mapped_str_or_original(&self, original: &str) -> String {
         self.data
             .get(&Ustr::from(original))
             .map(|x| x.to_string())
             .unwrap_or_else(|| original.to_string())
+    }
+
+    #[inline]
+    pub fn from_native_mappings(&mut self, new_mappings : &UstrMap<Ustr>, old_mappings : &UstrMap<Ustr>) {
+        for (k, v) in new_mappings {
+            if let Some(old_v) = old_mappings.get(k) {
+                self.data.insert(*old_v, *v);
+            }
+        }
     }
 }
 
