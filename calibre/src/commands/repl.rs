@@ -123,8 +123,13 @@ impl<'a> RunSource<'a> {
             return Err(String::from("parse failed").into());
         }
 
-        let (mut env, scope, middle_node) =
-            MiddleEnvironment::new_and_evaluate(program, self.path.to_path_buf(), false, true);
+        let (mut env, scope, middle_node) = MiddleEnvironment::new_and_evaluate(
+            program,
+            self.path.to_path_buf(),
+            Vec::new(),
+            false,
+            true,
+        );
 
         let mir_errors = env.context.take_errors();
         if !mir_errors.is_empty() {

@@ -1,4 +1,8 @@
-use crate::config::{ProjectContext, load_project_from, resolve_example_by_name, resolve_examples};
+use crate::config::{
+    ProjectContext, collect_project_include_files, load_project_from, resolve_example_by_name,
+    resolve_examples,
+};
+use calibre::PackagedProgramBlob;
 use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::{config::VMConfig, conversion::VMRegistry};
 use std::{
@@ -251,4 +255,29 @@ pub fn stddev_ms(samples: &[Duration], mean_ms: f64) -> f64 {
         .sum::<f64>()
         / samples.len() as f64;
     var.sqrt()
+}
+
+pub fn load_included(project: Option<&ProjectContext>) -> Vec<PackagedProgramBlob> {
+    let Some(project) = project else {
+        return Vec::new();
+    };
+
+    let include_paths = collect_project_include_files(project);
+    let mut included = Vec::new();
+
+    for path in include_paths {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if path.extension().and_then(|e| e.to_str()) == Some("jcalp") {
+                if let Ok(blob) = serde_json::from_str::<PackagedProgramBlob>(&content) {
+                    included.push(blob);
+                }
+            } else {
+                if let Ok(blob) = bincode::deserialize::<PackagedProgramBlob>(content.as_bytes()) {
+                    included.push(blob);
+                }
+            }
+        }
+    }
+
+    included
 }

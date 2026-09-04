@@ -213,15 +213,29 @@ impl CalibreStandalone for CalibreEngine {
             })
             .unwrap_or_default();
 
+        let include_hash = if self.included.is_empty() {
+            String::new()
+        } else {
+            let mut hasher = blake3::Hasher::new();
+
+            for manifest in &self.included {
+                let serialized = bincode::serialize(manifest).unwrap_or_default();
+                hasher.update(&serialized);
+            }
+
+            hasher.finalize().to_hex().to_string()
+        };
+
         blake3::hash(
             format!(
-                "{}:{}:{}:{}:{}:{}:{}",
+                "{}:{}:{}:{}:{}:{}:{}:{}",
                 CACHE_FORMAT_VERSION,
                 env!("CARGO_PKG_VERSION"),
                 self.entry_name,
                 path,
                 package,
                 Self::stdlib_cache_tag(),
+                include_hash,
                 full_source
             )
             .as_bytes(),
@@ -416,6 +430,7 @@ impl CalibreStandalone for CalibreEngine {
                 ast.clone(),
                 path.clone(),
                 Some(metadata.clone()),
+                self.included.iter().map(|x| x.manifest.clone()).collect(),
                 self.no_std,
                 self.type_check,
             )
@@ -423,6 +438,7 @@ impl CalibreStandalone for CalibreEngine {
             MiddleEnvironment::new_and_evaluate(
                 ast.clone(),
                 path.clone(),
+                self.included.iter().map(|x| x.manifest.clone()).collect(),
                 self.no_std,
                 self.type_check,
             )
@@ -458,7 +474,13 @@ impl CalibreStandalone for CalibreEngine {
 
         let testing = std::mem::take(&mut env.testing);
 
-        let lir = LirEnvironment::lower(&env, mir.clone()).eliminate_dead_code(
+        let mut lir = LirEnvironment::lower(&env, mir.clone());
+
+        for registry in &self.included {
+            lir.append(registry.program.clone());
+        }
+
+        lir = lir.eliminate_dead_code(
             init_functions
                 .clone()
                 .into_iter()

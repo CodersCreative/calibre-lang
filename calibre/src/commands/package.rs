@@ -1,8 +1,9 @@
 use crate::cli::Verbosity;
 use crate::commands::utils::{
-    package_metadata_from_project, resolve_run_targets, vm_config_from_project,
+    load_included, package_metadata_from_project, resolve_run_targets, vm_config_from_project,
 };
 use crate::config::load_project_from;
+use calibre::PackagedProgramBlob;
 use calibre::{CalibreEngine, CalibreError, building::packaging::CalibrePackaging};
 use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::config::VMConfig;
@@ -36,18 +37,19 @@ impl Package {
         for (index, path) in targets.into_iter().enumerate() {
             let contents = fs::read_to_string(&path).await?;
 
-            let mut package = PackageSourceBuilder::default();
             let project = load_project_from(&path).map_err(|e| format!("config error: {e}"))?;
 
             let Some(project) = project else {
                 return Err("calibre.toml is required for packaging".into());
             };
 
+            let mut package = PackageSourceBuilder::default();
             package.path(path);
             package.contents(contents);
             package.vm_config(vm_config_from_project(Some(&project)));
             package.package_metadata(package_metadata_from_project(Some(&project)));
             package.output_path(self.out.clone());
+            package.included(load_included(Some(&project)));
 
             if self.no_std.is_none() {
                 self.no_std = Some(project.config.no_std);
@@ -92,13 +94,15 @@ struct PackageSource {
     no_std: Option<bool>,
     output_path: Option<String>,
     readable: bool,
+    included: Vec<PackagedProgramBlob>,
 }
 
 impl PackageSource {
     async fn execute(self) -> Result<(), Box<dyn Error>> {
         let mut engine = CalibreEngine::default()
             .with_vm_config(self.vm_config.clone())
-            .with_source_path(self.path.to_path_buf());
+            .with_source_path(self.path.to_path_buf())
+            .with_included(self.included);
 
         if let Some(metadata) = self.package_metadata {
             engine = engine.with_package_metadata(metadata);

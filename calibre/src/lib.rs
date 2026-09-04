@@ -1,7 +1,8 @@
 use building::embedded::NativeBinding;
 use calibre_lir::environment::LirRegistry;
 use calibre_mir::{
-    ast::MiddleNode, errors::MiddleErr, tags::context::PackageMetadata, testing::Testing,
+    ast::MiddleNode, errors::MiddleErr, manifest::Manifest, tags::context::PackageMetadata,
+    testing::Testing,
 };
 use calibre_parser::{
     ParserError,
@@ -10,10 +11,10 @@ use calibre_parser::{
 use calibre_vm::{
     VM, config::VMConfig, conversion::VMRegistry, error::RuntimeError, value::RuntimeValue,
 };
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use thiserror::Error;
 use ustr::Ustr;
-
 pub mod building;
 pub mod config;
 
@@ -53,6 +54,12 @@ pub enum CalibreError {
     MissingEntryPoint(String),
     #[error("missing package root")]
     MissingPackageRoot,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PackagedProgramBlob {
+    pub manifest: Manifest,
+    pub program: LirRegistry,
 }
 
 #[derive(Clone, Debug)]
@@ -105,6 +112,7 @@ pub struct CalibreEngine {
     suppress_output: bool,
     input_buffer: Vec<String>,
     type_check: bool,
+    included: Vec<PackagedProgramBlob>,
 }
 
 impl Default for CalibreEngine {
@@ -122,6 +130,7 @@ impl Default for CalibreEngine {
             suppress_output: false,
             input_buffer: Vec::new(),
             type_check: true,
+            included: Vec::new(),
         }
     }
 }
@@ -174,6 +183,11 @@ impl CalibreEngine {
 
     pub fn with_type_check(mut self, type_check: bool) -> Self {
         self.type_check = type_check;
+        self
+    }
+
+    pub fn with_included(mut self, included: Vec<PackagedProgramBlob>) -> Self {
+        self.included = included;
         self
     }
 

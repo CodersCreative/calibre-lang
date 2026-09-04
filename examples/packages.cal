@@ -1,0 +1,5 @@
+import fib from the_first_project;
+
+const main := fn => {
+    print(fib(10));
+}

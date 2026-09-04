@@ -1,17 +1,11 @@
-use crate::{CalibreEngine, CalibreError};
+use crate::{CalibreEngine, CalibreError, PackagedProgramBlob};
 use calibre_lir::environment::{LirEnvironment, LirRegistry};
 use calibre_mir::{environment::MiddleEnvironment, manifest::Manifest};
 use calibre_parser::Parser;
-use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
 // I think I'm gonna use the LIR because its the last phase before specialization for the runtime selected
-#[derive(Clone, Serialize, Deserialize)]
-pub struct PackagedProgramBlob {
-    pub manifest: Manifest,
-    pub program: LirRegistry,
-}
 
 pub trait CalibrePackaging {
     fn package_root(&self) -> Option<PathBuf>;
@@ -140,6 +134,7 @@ impl CalibrePackaging for CalibreEngine {
                 ast.clone(),
                 path.clone(),
                 Some(metadata.clone()),
+                self.included.iter().map(|x| x.manifest.clone()).collect(),
                 self.no_std,
                 self.type_check,
             )

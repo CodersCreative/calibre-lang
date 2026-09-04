@@ -145,6 +145,7 @@ impl MiddleEnvironment {
         mut node: AstNode,
         path: PathBuf,
         package_metadata: Option<PackageMetadata>,
+        included: Vec<Manifest>,
         no_std: bool,
         type_check: bool,
     ) -> (Self, ScopeId, MiddleNode) {
@@ -157,6 +158,12 @@ impl MiddleEnvironment {
             },
             ..Default::default()
         };
+
+        for manifest in included {
+            if let Err(err) = env.import_manifest(manifest) {
+                env.context.push_error(err);
+            }
+        }
 
         let scope = if no_std {
             debug!("creating root scope without stdlib");
@@ -237,11 +244,12 @@ impl MiddleEnvironment {
     pub fn new_and_evaluate(
         node: AstNode,
         path: PathBuf,
+        included: Vec<Manifest>,
         no_std: bool,
         type_check: bool,
     ) -> (Self, ScopeId, MiddleNode) {
         debug!("starting MIR construction");
-        Self::new_and_evaluate_with_package(node, path, None, no_std, type_check)
+        Self::new_and_evaluate_with_package(node, path, None, included, no_std, type_check)
     }
 
     // TODO Reduce cloning
@@ -271,16 +279,18 @@ impl MiddleEnvironment {
 
             if let Some(existing) = self.typing.impls.get_mut(&renamed_name) {
                 for (member_name, member) in impl_data.get_all_members() {
-                    let renamed_member = MiddleImplMember {
-                        symbol_name: rename_state.mapped_name_or_original(member.symbol_name),
-                        generic_params: member
-                            .generic_params
-                            .iter()
-                            .map(|p| rename_state.mapped_name_or_original(*p))
-                            .collect(),
-                        dependant: member.dependant,
-                    };
-                    existing.insert_member(member_name, renamed_member);
+                    existing.insert_member(
+                        member_name,
+                        MiddleImplMember {
+                            symbol_name: rename_state.mapped_name_or_original(member.symbol_name),
+                            generic_params: member
+                                .generic_params
+                                .iter()
+                                .map(|p| rename_state.mapped_name_or_original(*p))
+                                .collect(),
+                            dependant: member.dependant,
+                        },
+                    );
                 }
 
                 existing.traits.extend(impl_data.traits);
@@ -336,12 +346,13 @@ impl MiddleEnvironment {
                 .members
                 .iter()
                 .map(|(k, v)| {
-                    let renamed_key = rename_state.mapped_name_or_original(*k);
-                    let renamed_member = MiddleTraitMember {
-                        data_type: v.data_type.clone().rename_owned(&mut rename_state),
-                        default: v.default.clone(),
-                    };
-                    (renamed_key, renamed_member)
+                    (
+                        rename_state.mapped_name_or_original(*k),
+                        MiddleTraitMember {
+                            data_type: v.data_type.clone().rename_owned(&mut rename_state),
+                            default: v.default.clone(),
+                        },
+                    )
                 })
                 .collect();
 
@@ -368,16 +379,19 @@ impl MiddleEnvironment {
                 name
             };
 
-            let renamed_params = template
-                .0
-                .iter()
-                .map(|p| rename_state.mapped_name_or_original(*p))
-                .collect();
-
             // TODO Ensure everything is being renamed here
-            self.typing
-                .generic_type_templates
-                .insert(renamed_name, (renamed_params, template.1, template.2));
+            self.typing.generic_type_templates.insert(
+                renamed_name,
+                (
+                    template
+                        .0
+                        .iter()
+                        .map(|p| rename_state.mapped_name_or_original(*p))
+                        .collect(),
+                    template.1,
+                    template.2,
+                ),
+            );
         }
 
         for overload in std::mem::take(&mut manifest.symbols.overloads) {

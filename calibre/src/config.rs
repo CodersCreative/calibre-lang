@@ -47,10 +47,16 @@ pub struct Package {
     pub repository: String,
     #[serde(default)]
     pub license: String,
+    #[serde(default = "default_include")]
+    pub include: String,
 }
 
 fn default_src() -> String {
     "src/main.cal".to_string()
+}
+
+fn default_include() -> String {
+    "include".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -277,4 +283,34 @@ pub fn resolve_example_by_name(ctx: &ProjectContext, name: &str) -> Option<PathB
         .into_iter()
         .find(|ex| ex.name == name)
         .map(|ex| ex.path)
+}
+
+fn collect_include_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    if !dir.exists() {
+        return;
+    }
+
+    let Ok(rd) = fs::read_dir(dir) else {
+        return;
+    };
+
+    for entry in rd.flatten() {
+        let p = entry.path();
+        if p.is_dir() {
+            collect_include_files(&p, out);
+        } else {
+            let ext = p.extension().and_then(|x| x.to_str());
+            if ext == Some("calp") || ext == Some("jcalp") {
+                out.push(p);
+            }
+        }
+    }
+}
+
+pub fn collect_project_include_files(ctx: &ProjectContext) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    let include_dir = ctx.root.join(&ctx.config.package.include);
+    collect_include_files(&include_dir, &mut files);
+    files.sort();
+    files
 }

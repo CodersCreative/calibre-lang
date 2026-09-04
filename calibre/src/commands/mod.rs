@@ -8,7 +8,8 @@ pub mod test;
 pub mod utils;
 
 use crate::commands::utils::{
-    collect_cal_sources, collect_project_sources, resolve_run_targets, vm_config_from_project,
+    collect_cal_sources, collect_project_sources, load_included, resolve_run_targets,
+    vm_config_from_project,
 };
 use crate::config::load_project_from;
 use calibre::{CalibreEngine, CalibreError, CompileMode, building::standalone::CalibreStandalone};
@@ -38,6 +39,7 @@ impl<'a> RunSuite<'a> {
         let package_metadata =
             crate::commands::utils::package_metadata_from_project(project.as_ref());
         let cache_base_dir = project.as_ref().map(|p| p.root.clone());
+        let included = load_included(project.as_ref());
 
         let mut files = Vec::new();
         if self.recursive {
@@ -70,7 +72,8 @@ impl<'a> RunSuite<'a> {
             let mut engine = CalibreEngine::default()
                 .with_vm_config(vm_config.clone())
                 .with_source_path(path.clone())
-                .with_cache_enabled(true);
+                .with_cache_enabled(true)
+                .with_included(included.clone());
 
             if let Some(metadata) = package_metadata.clone() {
                 engine = engine.with_package_metadata(metadata);

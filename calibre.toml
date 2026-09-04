@@ -1,5 +1,5 @@
 [package]
-name = "the-first-project"
+name = "the_first_project"
 description = "The fist ever project "
 version = "0.0.1"
 authors = ["Creative Coders <officialccoders@gmail.com>"]

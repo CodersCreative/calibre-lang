@@ -1,9 +1,11 @@
 use crate::cli::Verbosity;
 use crate::commands::repl::{Repl, ReplBuilder};
 use crate::commands::utils::{
-    is_repl_file, package_metadata_from_project, resolve_run_targets, vm_config_from_project,
+    is_repl_file, load_included, package_metadata_from_project, resolve_run_targets,
+    vm_config_from_project,
 };
 use crate::config::load_project_from;
+use calibre::PackagedProgramBlob;
 use calibre::{CalibreEngine, CalibreError, building::standalone::CalibreStandalone};
 use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::{VM, config::VMConfig};
@@ -47,14 +49,16 @@ impl Run {
                     .await;
             }
 
-            let mut run = RunSourceBuilder::default();
             let project = load_project_from(&path).map_err(|e| format!("config error: {e}"))?;
+
+            let mut run = RunSourceBuilder::default();
             run.path(path);
             run.contents(contents);
             run.entry_name(None);
             run.vm_config(vm_config_from_project(project.as_ref()));
             run.package_metadata(package_metadata_from_project(project.as_ref()));
             run.cache_base_dir(project.as_ref().map(|p| p.root.clone()));
+            run.included(load_included(project.as_ref()));
 
             if let Some(project) = project
                 && self.no_std.is_none()
@@ -108,6 +112,7 @@ struct RunSource {
     no_std: Option<bool>,
     type_check: bool,
     readable: bool,
+    included: Vec<PackagedProgramBlob>,
 }
 
 impl RunSource {
@@ -116,7 +121,8 @@ impl RunSource {
         let mut engine = CalibreEngine::default()
             .with_vm_config(self.vm_config.clone())
             .with_source_path(self.path.to_path_buf())
-            .with_cache_enabled(self.cache);
+            .with_cache_enabled(self.cache)
+            .with_included(self.included);
 
         if let Some(dir) = self.cache_base_dir {
             engine = engine.with_cache_dir(dir.join("target").join("calibre"));
