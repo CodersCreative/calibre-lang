@@ -156,12 +156,13 @@ pub fn run_external_subcommand(cmd: &[String]) -> Result<(), Box<dyn Error>> {
 
     let mut candidates = Vec::new();
     for name in names.iter() {
-    candidates.push(PathBuf::from(name));
-    if let Ok(exe) = std::env::current_exe()
-        && let Some(dir) = exe.parent()
-    {
-        candidates.push(dir.join(name));
-    }}
+        candidates.push(PathBuf::from(name));
+        if let Ok(exe) = std::env::current_exe()
+            && let Some(dir) = exe.parent()
+        {
+            candidates.push(dir.join(name));
+        }
+    }
 
     for candidate in candidates {
         match Command::new(&candidate).args(forward).status() {
