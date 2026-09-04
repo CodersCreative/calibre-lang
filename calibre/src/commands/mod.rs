@@ -1,4 +1,5 @@
 pub mod bench;
+pub mod check;
 pub mod clear;
 pub mod new;
 pub mod package;

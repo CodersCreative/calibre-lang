@@ -33,6 +33,19 @@ impl Verbosity {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+    // TODO
+    Add,
+    Check {
+        paths: Vec<String>,
+        #[arg(short, long)]
+        example: Option<String>,
+        #[arg(long)]
+        verbosity: Option<Verbosity>,
+        #[arg(long, default_value_t = false)]
+        sequential: bool,
+        #[arg(long)]
+        no_std: Option<bool>,
+    },
     New {
         path: Option<String>,
         #[arg(long, default_value_t = false)]
