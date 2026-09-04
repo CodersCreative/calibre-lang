@@ -1,13 +1,15 @@
 use crate::ast::{MiddleNode, MiddleNodeType, MirScopeDecl};
 use crate::context::MiddleContext;
 use crate::errors::MiddleErr;
+use crate::manifest::Manifest;
 use crate::scoping::{ScopeId, Scoping};
 use crate::symbols::resolve::ResolutionOptions;
 use crate::symbols::{MiddleOverload, MiddleVariable, Symbols};
 use crate::tags::Tagging;
 use crate::tags::context::PackageMetadata;
 use crate::testing::Testing;
-use crate::typing::Typing;
+use crate::typing::{MiddleObject, Typing};
+use calibre_parser::{AlphaRenamable, AlphaRenameState};
 use calibre_parser::{
     Span,
     ast::{
@@ -18,11 +20,12 @@ use calibre_parser::{
 };
 use indextree::{Arena, NodeId};
 use rustc_hash::FxHashMap;
+use std::default;
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::str::FromStr;
 use tracing::{debug, instrument};
-use ustr::Ustr;
+use ustr::{Ustr, UstrMap};
 
 #[derive(Debug, Clone, Default)]
 pub struct MiddleEnvironment {
@@ -237,5 +240,50 @@ impl MiddleEnvironment {
     ) -> (Self, ScopeId, MiddleNode) {
         debug!("starting MIR construction");
         Self::new_and_evaluate_with_package(node, path, None, no_std, type_check)
+    }
+
+    pub fn import_manifest(&mut self, mut manifest : Manifest) -> Result<(), MiddleErr> {
+        let mut rename_state = AlphaRenameState::default();
+        rename_state.from_native_mappings(&self.symbols.native_mappings, &manifest.symbols.native_mappings);
+
+        manifest.symbols.variables.retain(|name, _| {
+            rename_state.data.contains_key(name)
+        });
+
+        manifest.typing.objects.retain(|name, _| {
+            rename_state.data.contains_key(name)
+        });
+
+        // TODO Keep new trait impls
+        manifest.typing.impls.retain(|name, _| {
+            rename_state.data.contains_key(name)
+        });
+
+        // TODO Keep new trait definitions
+        manifest.typing.trait_defs.retain(|name, _| {
+            rename_state.data.contains_key(name)
+        });
+
+        // TODO Keep new type templates
+        manifest.typing.generic_type_templates.retain(|name, _| {
+            rename_state.data.contains_key(name)
+        });
+
+        // TODO Handle overloads
+
+        self.tagging.init_functions.append(&mut manifest.tagging.init_functions);
+        self.tagging.fin_functions.append(&mut manifest.tagging.fin_functions);
+        
+        for (name, var) in manifest.symbols.variables {
+            self.symbols.variables.insert(name, MiddleVariable { data_type: var.data_type.rename_owned(&mut rename_state), ..var });
+        }
+
+        for (name, obj) in manifest.typing.objects {
+            // TODO Complete
+        }
+
+        // TODO Complete for other stores
+        
+        Ok(())
     }
 }

@@ -124,7 +124,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         } else if args.all {
             default_all_entry_path(&cwd)
         } else {
-            PathBuf::from_str("./main.cal")?
+            let mut path = PathBuf::from_str("./main.cal")?;
+            if !path.exists() {
+                path = PathBuf::from_str("./src/main.cal")?;
+            }
+            path
         };
 
         if args.recursive {

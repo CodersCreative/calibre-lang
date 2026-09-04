@@ -151,15 +151,17 @@ pub fn run_external_subcommand(cmd: &[String]) -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    let bin_name = format!("calibre-{}", cmd[0]);
+    let names = [format!("calibre-{}", cmd[0]), format!("calibre_{}", cmd[0])];
     let forward = &cmd[1..];
 
-    let mut candidates = vec![PathBuf::from(&bin_name)];
+    let mut candidates = Vec::new();
+    for name in names.iter() {
+    candidates.push(PathBuf::from(name));
     if let Ok(exe) = std::env::current_exe()
         && let Some(dir) = exe.parent()
     {
-        candidates.push(dir.join(&bin_name));
-    }
+        candidates.push(dir.join(name));
+    }}
 
     for candidate in candidates {
         match Command::new(&candidate).args(forward).status() {
@@ -180,7 +182,7 @@ pub fn run_external_subcommand(cmd: &[String]) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    Err(format!("unable to find `{bin_name}` in PATH or next to calibre binary").into())
+    Err(format!("unable to find `{names:?}` in PATH or next to calibre binary").into())
 }
 
 pub fn is_repl_file(contents: &str) -> bool {
