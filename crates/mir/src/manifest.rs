@@ -26,12 +26,20 @@ pub struct Manifest {
 impl From<&MiddleEnvironment> for Manifest {
     fn from(value: &MiddleEnvironment) -> Self {
         Self {
+            scoping: ManifestScoping::from_scoping(
+                value
+                    .context
+                    .package_metadata
+                    .as_ref()
+                    .map(|x| x.name)
+                    .unwrap_or(Ustr::from("root")),
+                &value.scoping,
+            ),
             metadata: value
                 .context
                 .package_metadata
                 .clone()
                 .expect("Package Metadata needs to be set to build a Manifest"),
-            scoping: ManifestScoping::from(&value.scoping),
             symbols: ManifestSymbols::from(&value.symbols),
             tagging: ManifestTagging::from(&value.tagging),
             typing: value.typing.clone(),
@@ -93,8 +101,8 @@ pub struct ManifestScoping {
     pub scopes: Arena<ManifestScope>,
 }
 
-impl From<&Scoping> for ManifestScoping {
-    fn from(value: &Scoping) -> Self {
+impl ManifestScoping {
+    fn from_scoping(root_name: Ustr, value: &Scoping) -> Self {
         let mut scopes = Arena::default();
         let mut ids = FxHashMap::default();
 
@@ -103,7 +111,11 @@ impl From<&Scoping> for ManifestScoping {
             let scope = node.get();
 
             let manifest = ManifestScope {
-                namespace: scope.namespace,
+                namespace: if scope.namespace == "root" {
+                    root_name
+                } else {
+                    scope.namespace
+                },
                 mappings: scope.mappings.clone(),
                 type_mappings: scope.type_mappings.clone(),
                 children: scope.children.clone(),
@@ -147,7 +159,7 @@ impl From<&Scoping> for ManifestScoping {
 }
 
 impl Scoping {
-    pub fn append_manifest(&mut self, value: ManifestScoping) {
+    pub fn append_manifest(&mut self, root_name: Ustr, value: ManifestScoping) {
         let mut ids = FxHashMap::default();
 
         for node in value.scopes.iter() {
@@ -193,17 +205,21 @@ impl Scoping {
                 && let Some(new_parent_id) = ids.get(&original_parent)
             {
                 new_parent_id.append(*new_id, &mut self.scopes);
+
+                if node.get().namespace == root_name
+                    && let Some(parent) = self.get_root_parent()
+                {
+                    parent.append(*new_id, &mut self.scopes);
+                    self.scopes
+                        .get_mut(parent)
+                        .unwrap()
+                        .get_mut()
+                        .children
+                        .insert(root_name, *new_id);
+                }
             }
         }
 
         self.all_time_generics.extend(value.all_time_generics);
-    }
-}
-
-impl From<ManifestScoping> for Scoping {
-    fn from(value: ManifestScoping) -> Self {
-        let mut scoping = Self::default();
-        scoping.append_manifest(value);
-        scoping
     }
 }

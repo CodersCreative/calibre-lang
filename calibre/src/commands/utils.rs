@@ -7,6 +7,7 @@ use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::{config::VMConfig, conversion::VMRegistry};
 use std::{
     error::Error,
+    fs::File,
     path::{Path, PathBuf},
     process::Command,
     time::Duration,
@@ -266,17 +267,23 @@ pub fn load_included(project: Option<&ProjectContext>) -> Vec<PackagedProgramBlo
     let mut included = Vec::new();
 
     for path in include_paths {
-        if let Ok(content) = std::fs::read_to_string(&path) {
-            if path.extension().and_then(|e| e.to_str()) == Some("jcalp") {
-                if let Ok(blob) = serde_json::from_str::<PackagedProgramBlob>(&content) {
-                    included.push(blob);
-                }
-            } else {
-                if let Ok(blob) = bincode::deserialize::<PackagedProgramBlob>(content.as_bytes()) {
-                    included.push(blob);
-                }
-            }
-        }
+        let Ok(file) = File::open(&path) else {
+            continue;
+        };
+
+        let mut reader = std::io::BufReader::new(file);
+
+        included.push(
+            match bincode::deserialize_from::<_, PackagedProgramBlob>(&mut reader) {
+                Ok(content) => content,
+                Err(_) => match serde_json::from_reader::<_, PackagedProgramBlob>(&mut reader) {
+                    Ok(content) => content,
+                    Err(_) => {
+                        continue;
+                    }
+                },
+            },
+        );
     }
 
     included

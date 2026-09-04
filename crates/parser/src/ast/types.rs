@@ -290,7 +290,8 @@ impl AlphaRenamable for ParserInnerType {
             }
             ParserInnerType::Gen(x) => x.rename(state),
             ParserInnerType::Ref(x, _) => x.rename(state),
-            ParserInnerType::Scope(_) => unimplemented!(),
+            // TODO Implement
+            ParserInnerType::Scope(_) => {}
         }
     }
 }

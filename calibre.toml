@@ -1,4 +1,5 @@
 [package]
+# TODO enforce that name is a valid calibre identifier
 name = "the_first_project"
 description = "The fist ever project "
 version = "0.0.1"

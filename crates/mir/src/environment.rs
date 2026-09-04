@@ -159,12 +159,6 @@ impl MiddleEnvironment {
             ..Default::default()
         };
 
-        for manifest in included {
-            if let Err(err) = env.import_manifest(manifest) {
-                env.context.push_error(err);
-            }
-        }
-
         let scope = if no_std {
             debug!("creating root scope without stdlib");
             env.scoping.new_root_scope_no_std(None, path, None)
@@ -191,6 +185,12 @@ impl MiddleEnvironment {
                 }
             }
         };
+
+        for manifest in included {
+            if let Err(err) = env.import_manifest(manifest) {
+                env.context.push_error(err);
+            }
+        }
 
         if let AstNodeType::ScopeDeclaration {
             body: Some(body), ..
@@ -501,7 +501,8 @@ impl MiddleEnvironment {
             );
         }
 
-        self.scoping.append_manifest(manifest.scoping);
+        self.scoping
+            .append_manifest(manifest.metadata.name, manifest.scoping);
 
         for (name, (params, header, node)) in manifest.symbols.generic_fn_templates {
             let name = if let Some(new_name) = rename_state.data.get(&name) {

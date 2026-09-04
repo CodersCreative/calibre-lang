@@ -87,6 +87,11 @@ impl Scoping {
     }
 
     #[inline(always)]
+    pub fn get_root_parent(&self) -> Option<ScopeId> {
+        self.get_root_scope().and_then(|x| self.get_parent(x))
+    }
+
+    #[inline(always)]
     pub fn get_parent(&self, scope: ScopeId) -> Option<ScopeId> {
         scope.ancestors(&self.scopes).nth(1)
     }

@@ -154,7 +154,11 @@ impl CalibrePackaging for CalibreEngine {
 
         calibre_mir::inline::inline_small_calls(&mut mir, 20);
 
-        let lir = LirEnvironment::lower(&env, mir);
+        let mut lir = LirEnvironment::lower(&env, mir);
+
+        for registry in &self.included {
+            lir.append(registry.program.clone());
+        }
 
         self.package(output_path, Manifest::from(&env), lir, readable)
     }
