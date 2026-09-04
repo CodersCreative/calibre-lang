@@ -36,14 +36,14 @@ impl New {
         })
         .unwrap_or_default();
 
-        let config_path = path.join("calibre.toml");
         let main_path = path.join("src/main.cal");
 
         fs::create_dir_all(main_path.parent().unwrap()).await?;
-
         fs::write(main_path, DEFAULT_MAIN).await?;
+
+        fs::create_dir_all(path.join("include")).await?;
         fs::write(
-            config_path,
+            path.join("calibre.toml"),
             toml::to_string_pretty(&config).unwrap_or_default(),
         )
         .await?;

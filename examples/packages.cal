@@ -1,3 +1,4 @@
+// It is importing the built project from the include file
 import fib from the_first_project;
 
 const main := fn => {
