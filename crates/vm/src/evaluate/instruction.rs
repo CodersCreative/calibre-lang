@@ -718,7 +718,7 @@ impl VM {
             VMInstruction::List { dst, items } => {
                 let values = items
                     .iter()
-                    .map(|item| self.take_reg_value(*item))
+                    .map(|item| self.get_reg_value(*item).clone())
                     .collect();
                 self.set_reg_value(*dst, RuntimeValue::List(Gc::new(GcVec(values))));
             }
@@ -735,7 +735,7 @@ impl VM {
                     })?;
                 let mut entries = Vec::with_capacity(layout.members.len());
                 for (name, reg) in layout.members.iter().zip(fields.iter()) {
-                    let mut value = self.take_reg_value(*reg);
+                    let mut value = self.get_reg_value(*reg).clone();
                     if value.is_ref_like()
                         && let Ok(resolved) = self.resolve_value_for_op_ref(&value)
                     {
@@ -816,7 +816,7 @@ impl VM {
                 payload,
             } => {
                 let name = self.local_string(block, *name)?;
-                let payload = payload.map(|reg| Gc::new(self.take_reg_value(reg)));
+                let payload = payload.map(|reg| Gc::new(self.get_reg_value(reg).clone()));
                 self.set_reg_value(*dst, RuntimeValue::Enum(*name, *variant as usize, payload));
             }
             VMInstruction::CallSelf { dst, args } => {

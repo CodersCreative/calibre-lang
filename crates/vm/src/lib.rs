@@ -456,7 +456,7 @@ impl VM {
 
     #[inline(always)]
     #[instrument(skip_all)]
-    pub(crate) fn take_reg_value(&mut self, reg: Reg) -> RuntimeValue {
+    pub(crate) fn _take_reg_value(&mut self, reg: Reg) -> RuntimeValue {
         let frame = self.current_frame_mut();
         let idx = reg as usize;
         if idx < frame.reg_count {
