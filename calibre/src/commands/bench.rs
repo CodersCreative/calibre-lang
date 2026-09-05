@@ -1,9 +1,8 @@
 use crate::commands::RunSuiteBuilder;
-use crate::commands::utils::{
-    fmt_ms, fmt_ms_f64, run_named_function_once, stddev_ms, vm_config_from_project,
-};
-use crate::config::load_project_from;
+use crate::commands::utils::{fmt_ms, fmt_ms_f64, run_named_function_once, stddev_ms};
 use calibre::CompileMode;
+use calibre_frontend::config::ProjectContext;
+use calibre_vm::config::VMConfig;
 use derive_builder::Builder;
 use std::error::Error;
 use std::time::Duration;
@@ -28,8 +27,8 @@ impl<'a> Benchmarks<'a> {
     #[instrument]
     pub async fn execute(self) -> Result<(), Box<dyn Error>> {
         let cwd = std::env::current_dir()?;
-        let project = load_project_from(&cwd).map_err(|e| format!("config error: {e}"))?;
-        let vm_config = vm_config_from_project(project.as_ref());
+        let project = ProjectContext::load(&cwd).map_err(|e| format!("config error: {e}"))?;
+        let vm_config = project.as_ref().map(VMConfig::from).unwrap_or_default();
 
         let benches = RunSuiteBuilder::default()
             .compile_mode(CompileMode::Bench)

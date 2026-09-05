@@ -89,22 +89,25 @@ fn parse_errors(text: &str) -> Result<(), Vec<ParserError>> {
     }
 }
 
-#[instrument(skip_all, fields(path = ?path, output = ?output))]
+#[instrument(skip_all, fields(path = ?path.as_ref(), output = ?output.as_ref()))]
 pub fn format_file(
     formatter: &mut Formatter,
-    path: &PathBuf,
-    output: &PathBuf,
+    path: impl AsRef<Path>,
+    output: impl AsRef<Path>,
 ) -> Result<(), Box<dyn Error>> {
     debug!("formatting file");
+    let path = path.as_ref();
+    let output = output.as_ref();
+
     let contents = fs::read_to_string(path).map_err(|source| FormatError::Read {
-        path: path.clone(),
+        path: path.to_path_buf(),
         source,
     })?;
 
     if let Err(errors) = parse_errors(&contents) {
         debug!(error_count = errors.len(), "source parse failed");
         return Err(Box::new(FormatError::SourceParseFailed {
-            path: path.clone(),
+            path: path.to_path_buf(),
             contents,
             errors,
         }));
@@ -113,7 +116,7 @@ pub fn format_file(
     debug!("applying formatter");
     let out = formatter.start_format(&contents, None).map_err(|err| {
         Box::new(FormatError::FormatterFailed {
-            path: path.clone(),
+            path: path.to_path_buf(),
             message: err.to_string(),
         }) as Box<dyn Error>
     })?;
@@ -121,7 +124,7 @@ pub fn format_file(
     if let Err(errors) = parse_errors(&out) {
         debug!(error_count = errors.len(), "formatted parse failed");
         return Err(Box::new(FormatError::FormattedParseFailed {
-            path: path.clone(),
+            path: path.to_path_buf(),
             formatted: out,
             errors,
         }));
@@ -131,19 +134,19 @@ pub fn format_file(
     fs::File::create(output)
         .and_then(|mut file| file.write_all(out.as_bytes()))
         .map_err(|source| FormatError::Write {
-            path: output.clone(),
+            path: output.to_path_buf(),
             source,
         })?;
     Ok(())
 }
 
-#[instrument(skip_all, fields(path = ?path))]
-pub fn format_all(formatter: &mut Formatter, path: &PathBuf) -> Result<(), Box<dyn Error>> {
+#[instrument(skip_all, fields(path = ?path.as_ref()))]
+pub fn format_all(formatter: &mut Formatter, path: impl AsRef<Path>) -> Result<(), Box<dyn Error>> {
     debug!("formatting all imports");
-    let contents = fs::read_to_string(path)?;
+    let contents = fs::read_to_string(path.as_ref())?;
     let imports = formatter.get_imports(&contents)?;
 
-    let Some(base) = path.parent() else {
+    let Some(base) = path.as_ref().parent() else {
         debug!("no parent directory, skipping");
         return Ok(());
     };
@@ -173,11 +176,14 @@ pub fn format_all(formatter: &mut Formatter, path: &PathBuf) -> Result<(), Box<d
         }
     }
 
-    format_file(formatter, path, path)
+    format_file(formatter, path.as_ref(), path.as_ref())
 }
 
-#[instrument(skip_all, fields(root = ?root))]
-pub fn format_recursive(formatter: &mut Formatter, root: &PathBuf) -> Result<(), Box<dyn Error>> {
+#[instrument(skip_all, fields(root = ?root.as_ref()))]
+pub fn format_recursive(
+    formatter: &mut Formatter,
+    root: impl AsRef<Path>,
+) -> Result<(), Box<dyn Error>> {
     debug!("formatting recursively");
     fn walk(formatter: &mut Formatter, dir: &PathBuf) -> Result<(), Box<dyn Error>> {
         for entry in fs::read_dir(dir)? {
@@ -195,9 +201,9 @@ pub fn format_recursive(formatter: &mut Formatter, root: &PathBuf) -> Result<(),
         Ok(())
     }
 
-    let root = if root.is_dir() {
-        root.clone()
-    } else if let Some(parent) = root.parent() {
+    let root = if root.as_ref().is_dir() {
+        root.as_ref().to_path_buf()
+    } else if let Some(parent) = root.as_ref().parent() {
         parent.to_path_buf()
     } else {
         std::env::current_dir()?
@@ -230,22 +236,22 @@ fn parse_manifest_src(manifest: &str) -> Option<String> {
     None
 }
 
-pub fn default_all_entry_path(cwd: &Path) -> PathBuf {
-    let main = cwd.join("main.cal");
+pub fn default_all_entry_path(cwd: impl AsRef<Path>) -> PathBuf {
+    let main = cwd.as_ref().join("main.cal");
     if main.exists() {
         return main;
     }
 
-    let src_main = cwd.join("src/main.cal");
+    let src_main = cwd.as_ref().join("src/main.cal");
     if src_main.exists() {
         return src_main;
     }
 
-    let manifest = cwd.join("calibre.toml");
+    let manifest = cwd.as_ref().join("calibre.toml");
     if let Ok(text) = fs::read_to_string(&manifest)
         && let Some(src) = parse_manifest_src(&text)
     {
-        let base = cwd.join(src);
+        let base = cwd.as_ref().join(src);
         let candidate = if base.is_dir() {
             base.join("main.cal")
         } else {

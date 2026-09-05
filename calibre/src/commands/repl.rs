@@ -119,7 +119,11 @@ impl<'a> RunSource<'a> {
         let program = parser.produce_ast(&self.contents);
 
         if !parser.errors.is_empty() {
-            calibre_diagnostics::emit_calibre_errors(self.path, &self.contents, &parser.errors);
+            calibre_frontend::diagnostics::emit_calibre_errors(
+                self.path,
+                &self.contents,
+                &parser.errors,
+            );
             return Err(String::from("parse failed").into());
         }
 
@@ -133,7 +137,7 @@ impl<'a> RunSource<'a> {
 
         let mir_errors = env.context.take_errors();
         if !mir_errors.is_empty() {
-            calibre_diagnostics::emit_mir_error(
+            calibre_frontend::diagnostics::emit_mir_error(
                 self.path,
                 &self.contents,
                 &MiddleErr::Multiple(mir_errors),
@@ -163,13 +167,18 @@ impl<'a> RunSource<'a> {
 
         for (_, global) in globals {
             if let Err(err) = vm.run_global(&global) {
-                calibre_diagnostics::emit_calibre_error(self.path, &self.contents, &err, None);
+                calibre_frontend::diagnostics::emit_calibre_error(
+                    self.path,
+                    &self.contents,
+                    &err,
+                    None,
+                );
                 return Err(String::from("runtime error").into());
             }
         }
 
         let Some(repl_global) = repl_global else {
-            calibre_diagnostics::emit_error(
+            calibre_frontend::diagnostics::emit_error(
                 self.path,
                 &self.contents,
                 "Missing REPL scope".to_string(),
@@ -181,7 +190,12 @@ impl<'a> RunSource<'a> {
         let value = match vm.run_global(&repl_global) {
             Ok(value) => value,
             Err(err) => {
-                calibre_diagnostics::emit_calibre_error(self.path, &self.contents, &err, None);
+                calibre_frontend::diagnostics::emit_calibre_error(
+                    self.path,
+                    &self.contents,
+                    &err,
+                    None,
+                );
                 return Err(String::from("runtime error").into());
             }
         };

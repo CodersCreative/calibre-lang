@@ -1,10 +1,9 @@
 use crate::cli::Verbosity;
-use crate::commands::utils::{
-    load_included, package_metadata_from_project, resolve_run_targets, vm_config_from_project,
-};
-use crate::config::load_project_from;
+use crate::commands::utils::package_metadata_from_project;
 use calibre::PackagedProgramBlob;
 use calibre::{CalibreEngine, CalibreError, building::packaging::CalibrePackaging};
+use calibre_frontend::config::ProjectContext;
+use calibre_frontend::paths::resolve_run_targets;
 use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::config::VMConfig;
 use derive_builder::Builder;
@@ -27,7 +26,11 @@ pub struct Package {
 impl Package {
     #[instrument]
     pub async fn execute(mut self) -> Result<(), Box<dyn Error>> {
-        let targets = resolve_run_targets(self.paths, self.example)?;
+        let targets = resolve_run_targets(
+            ProjectContext::load_from_cwd().ok().flatten().as_ref(),
+            self.paths,
+            self.example,
+        )?;
         if targets.is_empty() {
             return Err("no targets to package".into());
         }
@@ -37,7 +40,7 @@ impl Package {
         for (index, path) in targets.into_iter().enumerate() {
             let contents = fs::read_to_string(&path).await?;
 
-            let project = load_project_from(&path).map_err(|e| format!("config error: {e}"))?;
+            let project = ProjectContext::load(&path).map_err(|e| format!("config error: {e}"))?;
 
             let Some(project) = project else {
                 return Err("calibre.toml is required for packaging".into());
@@ -46,10 +49,10 @@ impl Package {
             let mut package = PackageSourceBuilder::default();
             package.path(path);
             package.contents(contents);
-            package.vm_config(vm_config_from_project(Some(&project)));
+            package.vm_config(VMConfig::from(&project));
             package.package_metadata(package_metadata_from_project(Some(&project)));
             package.output_path(self.out.clone());
-            package.included(load_included(Some(&project)));
+            package.included(PackagedProgramBlob::load(Some(&project)));
 
             if self.no_std.is_none() {
                 self.no_std = Some(project.config.no_std);
@@ -153,11 +156,15 @@ impl PackageSource {
                 Ok(())
             }
             Err(CalibreError::Parse { errors, .. }) => {
-                calibre_diagnostics::emit_calibre_errors(&self.path, &self.contents, &errors);
+                calibre_frontend::diagnostics::emit_calibre_errors(
+                    &self.path,
+                    &self.contents,
+                    &errors,
+                );
                 Err("parse failed".into())
             }
             Err(CalibreError::Middle { error, .. }) => {
-                calibre_diagnostics::emit_mir_error(&self.path, &self.contents, &error);
+                calibre_frontend::diagnostics::emit_mir_error(&self.path, &self.contents, &error);
                 Err("compile failed".into())
             }
             Err(other) => Err(other.to_string().into()),

@@ -31,7 +31,7 @@ ffi = ["cbindgen"]
 [dependencies]
 clap = { workspace = true, optional = true }
 calibre-parser = { workspace = true }
-calibre-diagnostics = { workspace = true }
+calibre-frontend = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tracing-flame = { workspace = true, optional = true }

@@ -367,8 +367,11 @@ impl VM {
         self.program_args.as_ref()
     }
 
-    pub fn set_source_file_override(&mut self, path: &Path) {
-        let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    pub fn set_source_file_override(&mut self, path: impl AsRef<Path>) {
+        let path = path
+            .as_ref()
+            .canonicalize()
+            .unwrap_or_else(|_| path.as_ref().to_path_buf());
         self.source_file_override = Some(Ustr::from(&path.to_string_lossy()));
     }
 

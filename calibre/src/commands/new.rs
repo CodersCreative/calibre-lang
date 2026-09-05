@@ -1,4 +1,4 @@
-use crate::config::Config;
+use calibre_frontend::config::{Config, Package};
 use derive_builder::Builder;
 use smol::fs;
 use std::{error::Error, path::PathBuf, str::FromStr};
@@ -17,7 +17,7 @@ impl New {
     pub async fn execute(self) -> Result<(), Box<dyn Error>> {
         let config = Config {
             no_std: self.no_std,
-            package: crate::config::Package {
+            package: Package {
                 name: self.path.clone().unwrap_or_default(),
                 ..Default::default()
             },
@@ -44,7 +44,7 @@ impl New {
         fs::create_dir_all(path.join("include")).await?;
         fs::write(
             path.join("calibre.toml"),
-            toml::to_string_pretty(&config).unwrap_or_default(),
+            config.to_toml_string().unwrap_or_default(),
         )
         .await?;
         Ok(())

@@ -5,7 +5,7 @@ members = [
     "lsp",
     "crates/parser",
     "fmt", "crates/mir", "crates/std", "crates/lir", "crates/vm",
-    "crates/diagnostics",
+    "crates/frontend",
 ]
 
 [workspace.package]
@@ -25,7 +25,7 @@ license = "MIT"
 calibre-mir = {path="./crates/mir"}
 calibre-lir = {path="./crates/lir"}
 calibre-vm = {path="./crates/vm"}
-calibre-diagnostics = {path="./crates/diagnostics"}
+calibre-frontend = {path="./crates/frontend"}
 calibre-parser = {path="./crates/parser"}
 calibre-std = {path="./crates/std"}
 calibre-fmt = {path = "./fmt"}

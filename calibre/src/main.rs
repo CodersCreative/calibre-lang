@@ -13,7 +13,6 @@ use tracing_subscriber::{EnvFilter, Registry, fmt, layer::SubscriberExt};
 
 mod cli;
 mod commands;
-mod config;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();

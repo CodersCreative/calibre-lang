@@ -1,12 +1,10 @@
 use crate::cli::Verbosity;
 use crate::commands::repl::{Repl, ReplBuilder};
-use crate::commands::utils::{
-    is_repl_file, load_included, package_metadata_from_project, resolve_run_targets,
-    vm_config_from_project,
-};
-use crate::config::load_project_from;
+use crate::commands::utils::{is_repl_file, package_metadata_from_project};
 use calibre::PackagedProgramBlob;
 use calibre::{CalibreEngine, CalibreError, building::standalone::CalibreStandalone};
+use calibre_frontend::config::ProjectContext;
+use calibre_frontend::paths::resolve_run_targets;
 use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::config::VMConfig;
 use derive_builder::Builder;
@@ -27,7 +25,11 @@ pub struct Check {
 impl Check {
     #[instrument]
     pub async fn execute(mut self) -> Result<(), Box<dyn Error>> {
-        let targets = resolve_run_targets(self.paths, self.example)?;
+        let targets = resolve_run_targets(
+            ProjectContext::load_from_cwd().ok().flatten().as_ref(),
+            self.paths,
+            self.example,
+        )?;
         if targets.is_empty() {
             return Repl::default().execute().await;
         }
@@ -44,16 +46,16 @@ impl Check {
                     .await;
             }
 
-            let project = load_project_from(&path).map_err(|e| format!("config error: {e}"))?;
+            let project = ProjectContext::load(&path).map_err(|e| format!("config error: {e}"))?;
 
             let mut run = CheckSourceBuilder::default();
             run.path(path);
             run.contents(contents);
             run.entry_name(None);
-            run.vm_config(vm_config_from_project(project.as_ref()));
+            run.vm_config(project.as_ref().map(VMConfig::from).unwrap_or_default());
             run.package_metadata(package_metadata_from_project(project.as_ref()));
             run.cache_base_dir(project.as_ref().map(|p| p.root.clone()));
-            run.included(load_included(project.as_ref()));
+            run.included(PackagedProgramBlob::load(project.as_ref()));
 
             if let Some(project) = project
                 && self.no_std.is_none()
@@ -130,7 +132,11 @@ impl CheckSource {
         let mut artifacts = match engine.compile_source(self.contents.clone(), true) {
             Ok(artifacts) => artifacts,
             Err(CalibreError::Parse { errors, .. }) => {
-                calibre_diagnostics::emit_calibre_errors(&self.path, &self.contents, &errors);
+                calibre_frontend::diagnostics::emit_calibre_errors(
+                    &self.path,
+                    &self.contents,
+                    &errors,
+                );
                 return Err("parse failed".into());
             }
             Err(CalibreError::Middle {
@@ -144,11 +150,11 @@ impl CheckSource {
                     println!("{}", ast);
                 }
 
-                calibre_diagnostics::emit_mir_error(&self.path, &self.contents, &error);
+                calibre_frontend::diagnostics::emit_mir_error(&self.path, &self.contents, &error);
                 return Err("compile failed".into());
             }
             Err(CalibreError::MissingEntryPoint(name)) => {
-                calibre_diagnostics::emit_error(
+                calibre_frontend::diagnostics::emit_error(
                     &self.path,
                     &self.contents,
                     format!("Missing entry point: {name}"),
@@ -202,7 +208,7 @@ impl CheckSource {
         }
 
         if !ran {
-            calibre_diagnostics::emit_error(
+            calibre_frontend::diagnostics::emit_error(
                 &self.path,
                 &self.contents,
                 format!(

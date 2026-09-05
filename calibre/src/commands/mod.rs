@@ -8,14 +8,16 @@ pub mod run;
 pub mod test;
 pub mod utils;
 
-use crate::commands::utils::{
-    collect_cal_sources, collect_project_sources, load_included, resolve_run_targets,
-    vm_config_from_project,
+use calibre::{
+    CalibreEngine, CalibreError, CompileMode, PackagedProgramBlob,
+    building::standalone::CalibreStandalone,
 };
-use crate::config::load_project_from;
-use calibre::{CalibreEngine, CalibreError, CompileMode, building::standalone::CalibreStandalone};
+use calibre_frontend::{
+    config::ProjectContext,
+    paths::{collect_cal_sources, collect_project_sources, resolve_run_targets},
+};
 use calibre_mir::testing::{Test, TestOrBench};
-use calibre_vm::conversion::VMRegistry;
+use calibre_vm::{config::VMConfig, conversion::VMRegistry};
 use derive_builder::Builder;
 use smol::fs;
 use std::error::Error;
@@ -35,20 +37,23 @@ pub struct RunSuite<'a> {
 impl<'a> RunSuite<'a> {
     async fn execute(self) -> Result<Vec<(String, VMRegistry, Vec<Ustr>, Test)>, Box<dyn Error>> {
         let cwd = std::env::current_dir()?;
-        let project = load_project_from(&cwd).map_err(|e| format!("config error: {e}"))?;
-        let vm_config = vm_config_from_project(project.as_ref());
+        let project = ProjectContext::load(&cwd).map_err(|e| format!("config error: {e}"))?;
+        let vm_config = project.as_ref().map(VMConfig::from).unwrap_or_default();
         let package_metadata =
             crate::commands::utils::package_metadata_from_project(project.as_ref());
         let cache_base_dir = project.as_ref().map(|p| p.root.clone());
-        let included = load_included(project.as_ref());
+        let included = PackagedProgramBlob::load(project.as_ref());
 
         let mut files = Vec::new();
         if self.recursive {
             if self.path.is_none() && self.example.is_none() {
                 collect_project_sources(project.as_ref(), &cwd, &mut files);
-            } else if let Some(target) =
-                resolve_run_targets(self.path.map(|x| vec![x]).unwrap_or_default(), self.example)?
-                    .pop()
+            } else if let Some(target) = resolve_run_targets(
+                ProjectContext::load_from_cwd().ok().flatten().as_ref(),
+                self.path.map(|x| vec![x]).unwrap_or_default(),
+                self.example,
+            )?
+            .pop()
             {
                 if target.is_dir() {
                     collect_cal_sources(&target, &mut files);
@@ -56,8 +61,12 @@ impl<'a> RunSuite<'a> {
                     files.push(target);
                 }
             }
-        } else if let Some(target) =
-            resolve_run_targets(self.path.map(|x| vec![x]).unwrap_or_default(), self.example)?.pop()
+        } else if let Some(target) = resolve_run_targets(
+            ProjectContext::load_from_cwd().ok().flatten().as_ref(),
+            self.path.map(|x| vec![x]).unwrap_or_default(),
+            self.example,
+        )?
+        .pop()
         {
             files.push(target);
         }
@@ -89,11 +98,11 @@ impl<'a> RunSuite<'a> {
             let artifacts = match engine.compile_source(contents.clone(), true) {
                 Ok(artifacts) => artifacts,
                 Err(CalibreError::Parse { errors, .. }) => {
-                    calibre_diagnostics::emit_calibre_errors(&path, &contents, &errors);
+                    calibre_frontend::diagnostics::emit_calibre_errors(&path, &contents, &errors);
                     continue;
                 }
                 Err(CalibreError::Middle { error, .. }) => {
-                    calibre_diagnostics::emit_mir_error(&path, &contents, &error);
+                    calibre_frontend::diagnostics::emit_mir_error(&path, &contents, &error);
                     continue;
                 }
                 Err(other) => return Err(other.to_string().into()),

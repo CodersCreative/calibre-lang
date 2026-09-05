@@ -1,4 +1,5 @@
 use crate::{CalibreEngine, CalibreError, PackagedProgramBlob};
+use calibre_frontend::config::ProjectContext;
 use calibre_lir::environment::{LirEnvironment, LirRegistry};
 use calibre_mir::{environment::MiddleEnvironment, manifest::Manifest};
 use calibre_parser::Parser;
@@ -39,7 +40,7 @@ impl CalibrePackaging for CalibreEngine {
         }
 
         if let Some(path) = &self.source_path
-            && let Ok(Some(project)) = crate::config::load_project_from(path)
+            && let Ok(Some(project)) = ProjectContext::load(path)
         {
             return Some(project.root.join("target").join("calibre").join("packages"));
         }

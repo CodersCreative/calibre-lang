@@ -244,12 +244,14 @@ impl CalibreStandalone for CalibreEngine {
 
     #[cfg(feature = "cli")]
     fn cache_root(&self) -> Option<PathBuf> {
+        use calibre_frontend::config::ProjectContext;
+
         if let Some(path) = &self.cache_dir {
             return Some(path.clone());
         }
 
         if let Some(path) = &self.source_path
-            && let Ok(Some(project)) = crate::config::load_project_from(path)
+            && let Ok(Some(project)) = ProjectContext::load(path)
         {
             return Some(project.root.join("target").join("calibre").join("bins"));
         }

@@ -1,4 +1,5 @@
 use building::embedded::NativeBinding;
+use calibre_frontend::config::ProjectContext;
 use calibre_lir::environment::LirRegistry;
 use calibre_mir::{
     ast::MiddleNode, errors::MiddleErr, manifest::Manifest, tags::context::PackageMetadata,
@@ -16,7 +17,6 @@ use std::path::PathBuf;
 use thiserror::Error;
 use ustr::Ustr;
 pub mod building;
-pub mod config;
 
 #[cfg(all(feature = "wasm", target_family = "wasm"))]
 pub mod wasm;
@@ -60,6 +60,42 @@ pub enum CalibreError {
 pub struct PackagedProgramBlob {
     pub manifest: Manifest,
     pub program: LirRegistry,
+}
+
+impl PackagedProgramBlob {
+    pub fn load(project: Option<&ProjectContext>) -> Vec<PackagedProgramBlob> {
+        use std::fs::File;
+        let Some(project) = project else {
+            return Vec::new();
+        };
+
+        let include_paths = project.resolve_include_paths();
+        let mut included = Vec::new();
+
+        for path in include_paths {
+            let Ok(file) = File::open(&path) else {
+                continue;
+            };
+
+            let mut reader = std::io::BufReader::new(file);
+
+            included.push(
+                match bincode::deserialize_from::<_, PackagedProgramBlob>(&mut reader) {
+                    Ok(content) => content,
+                    Err(_) => {
+                        match serde_json::from_reader::<_, PackagedProgramBlob>(&mut reader) {
+                            Ok(content) => content,
+                            Err(_) => {
+                                continue;
+                            }
+                        }
+                    }
+                },
+            );
+        }
+
+        included
+    }
 }
 
 #[derive(Clone, Debug)]

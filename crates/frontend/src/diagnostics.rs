@@ -9,10 +9,13 @@ use codespan_reporting::{
 use std::path::Path;
 use tracing::{debug, instrument, warn};
 
-#[instrument(skip_all, fields(path = ?path, error_count = errors.len()))]
-pub fn emit_calibre_errors<T: CalibreError>(path: &Path, contents: &str, errors: &[T]) {
+#[instrument(skip_all, fields(path = ?path.as_ref(), error_count = errors.len()))]
+pub fn emit_calibre_errors<T: CalibreError>(path: impl AsRef<Path>, contents: &str, errors: &[T]) {
     let mut files = SimpleFiles::new();
-    let file_id = files.add(path.to_string_lossy().to_string(), contents.to_string());
+    let file_id = files.add(
+        path.as_ref().to_string_lossy().to_string(),
+        contents.to_string(),
+    );
     let writer = StandardStream::stderr(ColorChoice::Auto);
     let config = term::Config::default();
 
@@ -38,13 +41,16 @@ pub fn emit_calibre_errors<T: CalibreError>(path: &Path, contents: &str, errors:
 
 #[inline]
 fn get_diagnostic_and_files(
-    path: &Path,
+    path: impl AsRef<Path>,
     contents: &str,
     message: String,
     span: Option<Span>,
 ) -> (SimpleFiles<String, String>, Diagnostic<usize>) {
     let mut files = SimpleFiles::new();
-    let file_id = files.add(path.to_string_lossy().to_string(), contents.to_string());
+    let file_id = files.add(
+        path.as_ref().to_string_lossy().to_string(),
+        contents.to_string(),
+    );
 
     let mut diagnostic = Diagnostic::error().with_message(message);
     if let Some(span) = span {
@@ -56,8 +62,8 @@ fn get_diagnostic_and_files(
     (files, diagnostic)
 }
 
-#[instrument(skip_all, fields(path = ?path, message = %message))]
-pub fn emit_error(path: &Path, contents: &str, message: String, span: Option<Span>) {
+#[instrument(skip_all, fields(path = ?path.as_ref(), message = %message))]
+pub fn emit_error(path: impl AsRef<Path>, contents: &str, message: String, span: Option<Span>) {
     debug!("emitting generic error");
     let writer = StandardStream::stderr(ColorChoice::Auto);
     let config = term::Config::default();
@@ -68,14 +74,14 @@ pub fn emit_error(path: &Path, contents: &str, message: String, span: Option<Spa
     let _ = term::emit_to_io_write(&mut writer, &config, &files, &diagnostic);
 }
 
-#[instrument(skip_all, fields(path = ?path))]
-pub fn emit_mir_error(path: &Path, contents: &str, err: &MiddleErr) {
+#[instrument(skip_all, fields(path = ?path.as_ref()))]
+pub fn emit_mir_error(path: impl AsRef<Path>, contents: &str, err: &MiddleErr) {
     debug!(error = %err, "emitting MIR error");
     match err {
         MiddleErr::Multiple(errors) => {
             debug!(error_count = errors.len(), "emitting multiple MIR errors");
             for e in errors {
-                emit_mir_error(path, contents, e);
+                emit_mir_error(&path, contents, e);
             }
         }
         MiddleErr::At(span, inner) => {
@@ -105,16 +111,19 @@ pub fn emit_mir_error(path: &Path, contents: &str, err: &MiddleErr) {
     }
 }
 
-#[instrument(skip_all, fields(path = ?path, error_code = err.code()))]
+#[instrument(skip_all, fields(path = ?path.as_ref(), error_code = err.code()))]
 pub fn emit_calibre_error<T: CalibreError>(
-    path: &Path,
+    path: impl AsRef<Path>,
     contents: &str,
     err: &T,
     span: Option<Span>,
 ) {
     debug!(error = %err, span = ?span, "emitting calibre error");
     let mut files = SimpleFiles::new();
-    let file_id = files.add(path.to_string_lossy().to_string(), contents.to_string());
+    let file_id = files.add(
+        path.as_ref().to_string_lossy().to_string(),
+        contents.to_string(),
+    );
     let writer = StandardStream::stderr(ColorChoice::Auto);
     let config = term::Config::default();
 

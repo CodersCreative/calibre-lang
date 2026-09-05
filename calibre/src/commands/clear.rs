@@ -1,12 +1,11 @@
+use calibre_frontend::config::ProjectContext;
 use derive_builder::Builder;
 use rustc_hash::FxHashSet;
-use tracing::instrument;
-
-use crate::config::load_project_from;
 use std::{
     error::Error,
     path::{Path, PathBuf},
 };
+use tracing::instrument;
 
 #[derive(Builder, Default, Debug)]
 pub struct Clear {}
@@ -45,7 +44,7 @@ impl Clear {
         }
 
         let cwd = std::env::current_dir()?;
-        let project = load_project_from(&cwd).map_err(|e| format!("config error: {e}"))?;
+        let project = ProjectContext::load(&cwd).map_err(|e| format!("config error: {e}"))?;
         let mut targets_to_clear = FxHashSet::<PathBuf>::default();
 
         if let Some(project) = &project {

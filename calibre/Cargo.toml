@@ -37,7 +37,7 @@ rustflags = [
 
 [features]
 default = ["cli"]
-cli = ["clap", "rustyline", "glob", "smol", "tracing-flame", "tracing-appender", "tracing-subscriber", "calibre-vm/native", "calibre-parser/native"]
+cli = ["clap", "rustyline", "smol", "tracing-flame", "tracing-appender", "tracing-subscriber", "calibre-vm/native", "calibre-parser/native"]
 wasm = ["wasm-bindgen", "js-sys", "getrandom/js", "calibre-parser/wasm", "calibre-mir/wasm", "calibre-vm/wasm"]
 python = ["pyo3"]
 ffi = ["cbindgen"]
@@ -45,7 +45,7 @@ ffi = ["cbindgen"]
 [dependencies]
 clap = { workspace = true, optional = true }
 calibre-parser = {workspace = true}
-calibre-diagnostics = {workspace = true}
+calibre-frontend = {workspace = true}
 calibre-mir = { workspace = true }
 calibre-lir = { workspace = true }
 calibre-vm = { workspace = true }
@@ -66,8 +66,6 @@ derive_builder = { workspace = true }
 bincode = "1"
 serde_json = "1"
 blake3 = "1.6.1"
-toml = "1.0.1"
-glob = {version = "0.3.1", optional = true}
 ustr = { workspace = true }
 include_dir = "0.7"
 
