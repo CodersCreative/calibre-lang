@@ -3,6 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
+    symbols::resolve::ResolutionOptions,
 };
 use calibre_parser::ast::{
     idents::ParserText,
@@ -46,6 +47,7 @@ pub enum TagInfo {
     Init(i32),
     Fin(i32),
     Default,
+    Pure(bool),
     Builder,
     Panics,
     Bench,
@@ -477,6 +479,39 @@ impl MiddleEnvironment {
             Ustr::from("ignore_invalid_type_check"),
             TagHandler {
                 handler: ignore_invalid_type_check,
+            },
+        );
+
+        let pure_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: ScopeId,
+             node: AstNode,
+             _tag: ParserText,
+             args: Vec<AstNode>| {
+                let mut memo = false;
+
+                for arg in args {
+                    if let AstNodeType::Identifier(x) = arg.node_type {
+                        #[allow(clippy::single_match)]
+                        match x.get_ident().text().trim() {
+                            "memo" => memo = true,
+                            _ => {}
+                        }
+                    }
+                }
+
+                env.tagging.tag_info.push(TagInfo::Pure(memo));
+                let middle = env.evaluate_inner(scope, node)?;
+                let _ = env.tagging.tag_info.pop();
+
+                Ok(middle)
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            Ustr::from("pure"),
+            TagHandler {
+                handler: pure_handler,
             },
         );
 
