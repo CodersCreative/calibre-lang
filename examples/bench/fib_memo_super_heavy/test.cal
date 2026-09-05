@@ -1,0 +1,20 @@
+@pure(memo)
+const fib := fn (n : int) -> big => {
+    let mut a := 0g;
+    let mut b := 1g;
+    
+    for _ in n =>
+        b += (a := b);
+
+    return a;
+};
+
+const main := fn => {
+	for i in 0..=1000 => {
+		print(fib(i));
+	}
+};
+
+@bench test "fib" => main();
+
+test "fib_10" => assert(fib(10g) = 55g, "Fib 10 did not equal 55 as expected");

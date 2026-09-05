@@ -102,21 +102,27 @@ impl VM {
                     RuntimeValue::Result(Err(Gc::new(inner_val)))
                 }
                 RuntimeValue::HashMap(map) => {
+                    #[allow(clippy::mutable_key_type)]
                     let mut new_map = FxHashMap::default();
+
                     if let Ok(guard) = map.try_lock() {
                         for (k, v) in guard.iter() {
                             new_map.insert(k.clone(), transform(env, v.clone()));
                         }
                     }
+
                     RuntimeValue::HashMap(Arc::new(Mutex::new(new_map)))
                 }
                 RuntimeValue::HashSet(set) => {
+                    #[allow(clippy::mutable_key_type)]
                     let mut new_set = rustc_hash::FxHashSet::default();
+
                     if let Ok(guard) = set.try_lock() {
                         for k in guard.iter() {
                             new_set.insert(k.clone());
                         }
                     }
+
                     RuntimeValue::HashSet(Arc::new(Mutex::new(new_set)))
                 }
                 RuntimeValue::Generator { type_name, state } => {

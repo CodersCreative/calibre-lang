@@ -1,8 +1,9 @@
 use crate::{
     VM,
     error::RuntimeError,
-    value::{GcVec, RuntimeValue},
+    value::{BIG_PRECISION, GcVec, RuntimeValue},
 };
+use astro_float::BigFloat;
 use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
 use std::sync::Arc;
@@ -80,6 +81,9 @@ impl RuntimeValue {
             (RuntimeValue::UInt(x), ParserInnerType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
+            (RuntimeValue::UInt(x), ParserInnerType::Big) => {
+                Ok(RuntimeValue::Big(BigFloat::from_u64(x, BIG_PRECISION)))
+            }
             (RuntimeValue::Int(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x)),
             (RuntimeValue::Int(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
             (RuntimeValue::Int(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
@@ -91,6 +95,9 @@ impl RuntimeValue {
             (RuntimeValue::Int(x), ParserInnerType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
+            (RuntimeValue::Int(x), ParserInnerType::Big) => {
+                Ok(RuntimeValue::Big(BigFloat::from_i64(x, BIG_PRECISION)))
+            }
             (RuntimeValue::Float(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x)),
             (RuntimeValue::Float(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
             (RuntimeValue::Float(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0.0)),
@@ -101,6 +108,9 @@ impl RuntimeValue {
             }
             (RuntimeValue::Float(x), ParserInnerType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
+            }
+            (RuntimeValue::Float(x), ParserInnerType::Big) => {
+                Ok(RuntimeValue::Big(BigFloat::from_f64(x, BIG_PRECISION)))
             }
             (RuntimeValue::Range(from, to), ParserInnerType::Range) => {
                 Ok(RuntimeValue::Range(from, to))
@@ -122,6 +132,9 @@ impl RuntimeValue {
             (RuntimeValue::Bool(x), ParserInnerType::Byte) => {
                 Ok(RuntimeValue::Byte(if x { 1 } else { 0 }))
             }
+            (RuntimeValue::Bool(x), ParserInnerType::Big) => Ok(RuntimeValue::Big(
+                BigFloat::from_u8(if x { 1 } else { 0 }, BIG_PRECISION),
+            )),
             (RuntimeValue::Bool(x), ParserInnerType::Float) => {
                 Ok(RuntimeValue::Float(if x { 1.0 } else { 0.0 }))
             }
@@ -142,6 +155,9 @@ impl RuntimeValue {
             (RuntimeValue::Char(x), ParserInnerType::Float) => {
                 Ok(RuntimeValue::Float((x as u8) as f64))
             }
+            (RuntimeValue::Char(x), ParserInnerType::Big) => Ok(RuntimeValue::Big(
+                BigFloat::from_u16(x as u16, BIG_PRECISION),
+            )),
             (RuntimeValue::Char(x), ParserInnerType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
@@ -164,6 +180,9 @@ impl RuntimeValue {
             (RuntimeValue::Byte(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
             (RuntimeValue::Byte(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x as f64)),
             (RuntimeValue::Byte(x), ParserInnerType::Char) => Ok(RuntimeValue::Char(x as char)),
+            (RuntimeValue::Byte(x), ParserInnerType::Big) => {
+                Ok(RuntimeValue::Big(BigFloat::from_u8(x, BIG_PRECISION)))
+            }
             (RuntimeValue::Byte(x), ParserInnerType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }

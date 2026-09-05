@@ -13,6 +13,6 @@ fn fib(n) do
     result
 end
 
-for i in 0..31 do
-    print(fib(i))
-end
+let n = 28
+let result = fib(n)
+print(result)

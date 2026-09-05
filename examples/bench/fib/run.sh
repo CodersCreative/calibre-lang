@@ -24,11 +24,13 @@ hyperfine \
   "calibre_2 run --no-cache test.cal" \
   "rustpython test.py" \
   "python test.py" \
+  "python test_memo.py" \
   "rhai-run test.rhai" \
   "lua test.lua" \
   "ruby test.rb" \
   "perl test.pl" \
   "roc test.roc" \
   "revo test.rv" \
+  "revo test_memo.rv" \
   "cal --path test.cl" \
   --warmup 3

@@ -1,6 +1,15 @@
+let memo = {}
+
 fn fib(n) do
-	if n < 2 n
-	else fib(n-1) + fib(n-2)
+    if memo.contains(n) do
+        return memo[n]
+    end
+    
+    let result = if n < 2 n
+    else fib(n - 1) + fib(n - 2)
+    
+    memo[n] = result
+    result
 end
 
 let n = 28

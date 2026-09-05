@@ -32,7 +32,6 @@ blake3 = "1.5.4"
 hex = "0.4.3"
 dyn-hash = "1.0.0"
 
-
 ureq = {version = "3", optional = true }
 socket2 = {version = "0.6", optional = true }
 errno = { version = "0.3.14", optional = true }

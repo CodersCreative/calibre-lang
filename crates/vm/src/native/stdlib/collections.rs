@@ -46,6 +46,8 @@ impl NativeFunction for HashMapNew {
         let entries = args
             .pop()
             .unwrap_or(RuntimeValue::List(Gc::new(GcVec(Vec::new()))));
+
+        #[allow(clippy::mutable_key_type)]
         let mut map: FxHashMap<HashKey, RuntimeValue> = FxHashMap::default();
 
         let RuntimeValue::List(list) = env.resolve_value_for_op_ref(&entries)? else {
@@ -285,6 +287,8 @@ impl NativeFunction for HashSetNew {
         let entries = args
             .pop()
             .unwrap_or(RuntimeValue::List(Gc::new(GcVec(Vec::new()))));
+
+        #[allow(clippy::mutable_key_type)]
         let mut set: FxHashSet<HashKey> = FxHashSet::default();
 
         let RuntimeValue::List(list) = env.resolve_value_for_op_ref(&entries)? else {

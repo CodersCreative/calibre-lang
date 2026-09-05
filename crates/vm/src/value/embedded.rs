@@ -235,17 +235,21 @@ impl<K: Into<HashKey>, V: Into<RuntimeValue>> From<std::collections::HashMap<K, 
     for RuntimeValue
 {
     fn from(value: std::collections::HashMap<K, V>) -> Self {
+        #[allow(clippy::mutable_key_type)]
         let map = value
             .into_iter()
             .map(|(k, v)| (k.into(), v.into()))
             .collect();
+
         Self::HashMap(Arc::new(Mutex::new(map)))
     }
 }
 
 impl<K: Into<HashKey>> From<std::collections::HashSet<K>> for RuntimeValue {
     fn from(value: std::collections::HashSet<K>) -> Self {
+        #[allow(clippy::mutable_key_type)]
         let set = value.into_iter().map(|k| k.into()).collect();
+
         Self::HashSet(Arc::new(Mutex::new(set)))
     }
 }
