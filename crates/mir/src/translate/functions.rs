@@ -718,6 +718,8 @@ impl MiddleEnvironment {
             body
         };
         self.symbols.func_defers.append(&mut old_func_defers);
+        let memo = self.tagging.tag_info.contains(&TagInfo::Pure(true));
+        let pure = memo || self.tagging.tag_info.contains(&TagInfo::Pure(false));
 
         let fn_node = MiddleNode {
             node_type: MiddleNodeType::FunctionDeclaration(MirFunction {
@@ -725,6 +727,8 @@ impl MiddleEnvironment {
                 body: Box::new(body.clone()),
                 return_type: return_type.clone(),
                 scope_id: new_scope,
+                memo,
+                pure,
             }),
             span,
         };

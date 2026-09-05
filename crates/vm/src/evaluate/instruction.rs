@@ -833,6 +833,54 @@ impl VM {
                     return Ok(step);
                 }
 
+                if func.memo {
+                    let caller_frame = self.frames.len().saturating_sub(1);
+                    let mut key: Option<Vec<HashKey>> = Some(Vec::with_capacity(args.len()));
+
+                    for reg in args.iter() {
+                        let val = self.get_reg_value_in_frame(caller_frame, *reg).clone();
+                        match HashKey::try_from(val) {
+                            Ok(k) => key.as_mut().unwrap().push(k),
+                            Err(_) => {
+                                key = None;
+                                break;
+                            }
+                        }
+                    }
+
+                    if let Some(k) = key {
+                        if let Some(val) = {
+                            let cache_entry = self
+                                .caches
+                                .memo
+                                .entry(func.name)
+                                .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())));
+
+                            let guard = cache_entry.lock().unwrap();
+                            guard.get(&k).cloned()
+                        } {
+                            self.set_reg_value(*dst, val);
+                            return Ok(TerminateValue::None);
+                        }
+
+                        let value =
+                            self.run_function_from_regs(func, args, Self::empty_captures())?;
+
+                        {
+                            let cache_entry = self
+                                .caches
+                                .memo
+                                .entry(func.name)
+                                .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())));
+
+                            cache_entry.lock().unwrap().insert(k, value.clone());
+                        }
+
+                        self.set_reg_value(*dst, value);
+                        return Ok(TerminateValue::None);
+                    }
+                }
+
                 let value = self.run_function_from_regs(func, args, Self::empty_captures())?;
                 self.set_reg_value(*dst, value);
             }

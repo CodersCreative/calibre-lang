@@ -94,6 +94,8 @@ impl AlphaRenamable for MiddleNodeType {
                 body,
                 return_type: _,
                 scope_id: _,
+                memo: _,
+                pure: _,
             }) => {
                 for param in parameters {
                     let new_name =

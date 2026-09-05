@@ -74,14 +74,14 @@ pub fn emit_error(path: impl AsRef<Path>, contents: &str, message: String, span:
     let _ = term::emit_to_io_write(&mut writer, &config, &files, &diagnostic);
 }
 
-#[instrument(skip_all, fields(path = ?path.as_ref()))]
-pub fn emit_mir_error(path: impl AsRef<Path>, contents: &str, err: &MiddleErr) {
+#[instrument(skip_all, fields(path = ?path))]
+pub fn emit_mir_error(path: &Path, contents: &str, err: &MiddleErr) {
     debug!(error = %err, "emitting MIR error");
     match err {
         MiddleErr::Multiple(errors) => {
             debug!(error_count = errors.len(), "emitting multiple MIR errors");
             for e in errors {
-                emit_mir_error(&path, contents, e);
+                emit_mir_error(path, contents, e);
             }
         }
         MiddleErr::At(span, inner) => {

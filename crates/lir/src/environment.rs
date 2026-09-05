@@ -73,6 +73,8 @@ pub struct LirFunction {
     pub captures: Box<[(Ustr, ParserDataType)]>,
     pub return_type: ParserDataType,
     pub blocks: Box<[LirBlock]>,
+    pub pure: bool,
+    pub memo: bool,
 }
 
 impl Display for LirFunction {

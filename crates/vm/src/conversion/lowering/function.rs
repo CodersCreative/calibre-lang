@@ -14,6 +14,8 @@ impl VMFunction {
             captures: Vec::new().into_boxed_slice(),
             return_type: ParserDataType::new(Span::default(), ParserInnerType::Null),
             blocks: blocks.into_boxed_slice(),
+            pure: false,
+            memo: false,
         };
         let mut lower = FunctionLowering::new(func, true);
         lower.build_cfg();
@@ -46,6 +48,8 @@ impl VMFunction {
             block_map: lower.block_map,
             needs_param_vars,
             param_names: UstrSet::default(),
+            pure: false,
+            memo: false,
         }
     }
 }
@@ -121,6 +125,8 @@ impl FunctionLowering {
             block_map: lower.block_map,
             needs_param_vars,
             param_names,
+            pure: lower.func.pure,
+            memo: lower.func.memo,
         }
     }
 

@@ -56,8 +56,10 @@ impl LirLowering for MirScopeDecl {
                 if let MiddleNodeType::VariableDeclaration(MirVarDecl {
                     identifier,
                     data_type,
+                    value,
                     ..
                 }) = &stmt.node_type.clone()
+                    && !value.is_function()
                 {
                     let global_type = data_type.clone();
                     let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
@@ -178,6 +180,8 @@ impl LirLowering for MirFunction {
                 captures: captures_for_func.into_boxed_slice(),
                 return_type: self.return_type,
                 blocks: sub_lowerer.blocks.into_boxed_slice(),
+                pure: self.pure,
+                memo: self.memo,
             },
         );
 

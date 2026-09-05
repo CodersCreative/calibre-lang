@@ -3,7 +3,7 @@ use crate::{
     conversion::{VMBlock, VMFunction, VMGlobal, VMInstruction, VMLiteral},
     error::RuntimeError,
     value::{
-        RuntimeValue, TerminateValue, WaitGroupInner,
+        HashKey, RuntimeValue, TerminateValue, WaitGroupInner,
         operation::{binary, boolean, comparison},
     },
 };
@@ -11,9 +11,11 @@ use calibre_lir::ast::BlockId;
 use calibre_parser::ast::types::ParserInnerType;
 use calibre_parser::ast::{ObjectMap, idents::ParserText};
 use dumpster::sync::Gc;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::{debug, instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
+use wasm_sync::Mutex;
 
 mod instruction;
 mod tailcall;
@@ -363,6 +365,46 @@ impl VM {
                     refreshed_caps.push((*cap_name, value));
                 }
                 let refreshed = Arc::new(refreshed_caps);
+
+                if func.memo {
+                    let mut key: Option<Vec<HashKey>> = Some(Vec::with_capacity(args.len()));
+                    for a in args.iter() {
+                        match HashKey::try_from(a.clone()) {
+                            Ok(k) => key.as_mut().unwrap().push(k),
+                            Err(_) => {
+                                key = None;
+                                break;
+                            }
+                        }
+                    }
+
+                    if let Some(k) = key {
+                        {
+                            let cache_entry = self
+                                .caches
+                                .memo
+                                .entry(name)
+                                .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())));
+
+                            let guard = cache_entry.lock().unwrap();
+                            if let Some(val) = guard.get(&k) {
+                                return Ok(val.clone());
+                            }
+                        }
+
+                        let res = self.run_function(func.as_ref(), args, refreshed)?;
+                        let cache_entry = self
+                            .caches
+                            .memo
+                            .entry(name)
+                            .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())));
+
+                        cache_entry.lock().unwrap().insert(k, res.clone());
+
+                        return Ok(res);
+                    }
+                }
+
                 self.run_function(func.as_ref(), args, refreshed)
             }
             RuntimeValue::NativeFunction(func) => func.run(self, args),

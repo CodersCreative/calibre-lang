@@ -3,7 +3,7 @@ use crate::{
     conversion::{Reg, VMBlock, VMFunction, VMRegistry},
     error::RuntimeError,
     native::NativeFunction,
-    value::{GcMap, GcVec, RuntimeValue, WaitGroupInner},
+    value::{GcMap, GcVec, HashKey, RuntimeValue, WaitGroupInner},
     variables::VariableStore,
 };
 use astro_float::Consts;
@@ -21,6 +21,7 @@ use std::{
 use std::{fmt::Display, sync::OnceLock};
 use tracing::instrument;
 use ustr::{Ustr, UstrMap, UstrSet};
+use wasm_sync::Mutex;
 
 static NULL_RUNTIME_VALUE: RuntimeValue = RuntimeValue::Null;
 static EMPTY_FRAME: OnceLock<VMFrame> = OnceLock::new();
@@ -129,6 +130,8 @@ impl Clone for VM {
 pub struct VMCaches {
     call: UstrMap<Arc<VMFunction>>,
     callsite: FxHashMap<(usize, usize, u32), Arc<VMFunction>>,
+    #[allow(clippy::type_complexity)]
+    memo: UstrMap<Arc<Mutex<FxHashMap<Vec<HashKey>, RuntimeValue>>>>,
 }
 
 #[derive(Debug, Clone)]

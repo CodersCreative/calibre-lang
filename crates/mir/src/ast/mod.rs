@@ -43,6 +43,9 @@ impl MiddleNode {
         )
     }
 
+    pub fn is_function(&self) -> bool {
+        matches!(self.node_type, MiddleNodeType::FunctionDeclaration(_))
+    }
     pub fn member_field(&self) -> Result<Ustr, MiddleErr> {
         Ok(match &self.node_type {
             MiddleNodeType::Identifier(name) => name.identifier,
@@ -465,6 +468,8 @@ pub struct MirFunction {
     pub body: Box<MiddleNode>,
     pub return_type: ParserDataType,
     pub scope_id: ScopeId,
+    pub pure: bool,
+    pub memo: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]

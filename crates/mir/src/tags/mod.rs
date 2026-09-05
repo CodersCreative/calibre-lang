@@ -3,7 +3,6 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::resolve::ResolutionOptions,
 };
 use calibre_parser::ast::{
     idents::ParserText,

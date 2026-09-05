@@ -125,6 +125,8 @@ pub struct VMFunction {
     #[serde(with = "crate::serialization::serde_fxhashmap")]
     pub block_map: FxHashMap<BlockId, usize>,
     pub needs_param_vars: bool,
+    pub pure: bool,
+    pub memo: bool,
 }
 
 impl VMFunction {
