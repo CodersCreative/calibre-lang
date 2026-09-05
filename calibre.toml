@@ -12,10 +12,18 @@ src = "./examples/bench/fib/"
 repository = "https://github.com/CodersCreative/calibre-lang"
 license = "MIT"
 
+# members will be used to reference members who are a part of this package
+# [members]
+# ... = { path = "path from calibre.toml to other calibre.toml" }
+
 # [dependencies]
 # They use greater than and equal signs
+# Versioning will only really become useful when/if I create a package manager registry
 # ... = ">= 0.0.1 and < 2.0.0"
+# Right now we will rely on git
 # ... = { git = "git@...", ref = "main/a8b3c5d82" }
+# I think I'll also allow local path dependencies
+# ... = { path = "path from calibre.toml" }
 
 # [dev-dependencies]
 # Same syntax as dependencies

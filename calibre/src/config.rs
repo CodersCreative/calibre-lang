@@ -10,6 +10,8 @@ pub struct Config {
     #[serde(default)]
     pub package: Package,
     #[serde(default)]
+    pub members: Option<FxHashMap<String, Member>>,
+    #[serde(default)]
     pub dependencies: Option<FxHashMap<String, Dependency>>,
     #[serde(rename = "dev-dependencies", default)]
     pub dev_dependencies: Option<FxHashMap<String, Dependency>>,
@@ -63,10 +65,22 @@ fn default_include() -> String {
 #[serde(untagged)]
 pub enum Dependency {
     Simple(String),
-    Detailed {
+    Path{
+        path : PathBuf,
+    },
+    Git {
         git: String,
         #[serde(rename = "ref")]
         reference: String,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum Member {
+    // TODO Maybe allow for members from a seperate git repo
+    Path{
+        path : PathBuf,
     },
 }
 

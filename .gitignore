@@ -9,6 +9,7 @@ target/
 **.svg
 **test*.txt
 **.log
+**.idea
 
 # Node artifacts
 **/build/
