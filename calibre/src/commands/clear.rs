@@ -1,3 +1,4 @@
+use crate::commands::get::registry_file;
 use calibre_frontend::config::ProjectContext;
 use derive_builder::Builder;
 use rustc_hash::FxHashSet;
@@ -68,6 +69,13 @@ impl Clear {
             } else {
                 println!("Nothing to clear at {}", cwd.join("target").display());
             }
+        }
+
+        if let Some(reg) = registry_file()
+            && reg.exists()
+        {
+            let _ = std::fs::remove_file(&reg);
+            println!("Removed registry at {}", reg.display());
         }
 
         Ok(())

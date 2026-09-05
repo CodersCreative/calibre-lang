@@ -144,11 +144,14 @@ impl ProjectContext {
             return Ok(None);
         };
 
-        let config: Config = toml::from_str(
-            &fs::read_to_string(&manifest_path)
-                .map_err(|e| format!("failed to read {:?}: {e}", manifest_path))?,
-        )
-        .map_err(|e| format!("failed to parse {:?}: {e}", manifest_path))?;
+        let manifest_content = fs::read_to_string(&manifest_path)
+            .map_err(|e| format!("failed to read {:?}: {e}", manifest_path))?;
+
+        let config: Config = toml::from_str(&manifest_content)
+            .map_err(|e| format!("failed to parse {:?}: {e}", manifest_path))?;
+
+        let manifest_path = std::fs::canonicalize(&manifest_path)
+            .map_err(|e| format!("failed to canonicalize {:?}: {e}", manifest_path))?;
 
         let root = manifest_path
             .parent()

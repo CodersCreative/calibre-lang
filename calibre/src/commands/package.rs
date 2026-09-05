@@ -8,6 +8,7 @@ use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::config::VMConfig;
 use derive_builder::Builder;
 use smol::fs;
+use std::path::Path;
 use std::{error::Error, path::PathBuf};
 use tracing::instrument;
 use wasm_thread as thread;
@@ -75,7 +76,7 @@ impl Package {
                         })?,
                 );
             } else {
-                package.execute().await?
+                package.execute().await?;
             }
         }
 
@@ -101,7 +102,7 @@ struct PackageSource {
 }
 
 impl PackageSource {
-    async fn execute(self) -> Result<(), Box<dyn Error>> {
+    async fn execute(self) -> Result<PathBuf, Box<dyn Error>> {
         let mut engine = CalibreEngine::default()
             .with_vm_config(self.vm_config.clone())
             .with_source_path(self.path.to_path_buf())
@@ -153,7 +154,7 @@ impl PackageSource {
                 if self.verbosity.is_level(&Verbosity::All) {
                     println!("Packaged to: {}", output_path.display());
                 }
-                Ok(())
+                Ok(output_path)
             }
             Err(CalibreError::Parse { errors, .. }) => {
                 calibre_frontend::diagnostics::emit_calibre_errors(
@@ -170,4 +171,41 @@ impl PackageSource {
             Err(other) => Err(other.to_string().into()),
         }
     }
+}
+
+pub(crate) async fn package_project_targets(
+    start: impl AsRef<Path>,
+    readable: bool,
+) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+    let targets = resolve_run_targets(
+        ProjectContext::load(start).ok().flatten().as_ref(),
+        vec![],
+        None,
+    )?;
+
+    let mut packaged = Vec::new();
+
+    for target in targets {
+        let contents = fs::read_to_string(&target).await?;
+
+        let project = ProjectContext::load(&target).map_err(|e| format!("config error: {e}"))?;
+        let Some(project) = project else {
+            return Err("calibre.toml is required for packaging".into());
+        };
+
+        let mut package = PackageSourceBuilder::default();
+        package.path(target.clone());
+        package.contents(contents.clone());
+        package.vm_config(VMConfig::from(&project));
+        package.package_metadata(package_metadata_from_project(Some(&project)));
+        package.output_path(None);
+        package.included(PackagedProgramBlob::load(Some(&project)));
+        package.no_std(Some(project.config.no_std));
+        package.verbosity(Verbosity::default());
+        package.readable(readable);
+
+        packaged.push(package.build()?.execute().await?);
+    }
+
+    Ok(packaged)
 }
