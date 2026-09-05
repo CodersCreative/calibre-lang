@@ -62,11 +62,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                 path,
                 reference,
                 git,
+                all,
             }) => {
                 GetBuilder::default()
                     .path(path)
                     .reference(reference)
                     .git(git)
+                    .all(all)
                     .build()?
                     .execute()
                     .await

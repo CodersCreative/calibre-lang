@@ -33,7 +33,6 @@ impl Verbosity {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    // TODO
     Get {
         #[arg(short, long)]
         git: Option<String>,
@@ -41,6 +40,8 @@ pub enum Commands {
         path: Option<String>,
         #[arg(short, long = "ref")]
         reference: Option<String>,
+        #[arg(long, default_value_t = false)]
+        all: bool,
     },
     Check {
         paths: Vec<String>,

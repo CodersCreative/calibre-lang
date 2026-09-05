@@ -1,4 +1,5 @@
 use crate::commands::package::package_project_targets;
+use calibre_frontend::config::Dependency;
 use calibre_frontend::config::ProjectContext;
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
@@ -15,6 +16,7 @@ pub struct Get {
     git: Option<String>,
     path: Option<String>,
     reference: Option<String>,
+    all: bool,
 }
 
 impl Get {
@@ -155,7 +157,91 @@ impl Get {
                     );
                 }
             }
-            _ => return Err("either --git or --path is required".into()),
+            (None, None) => {
+                let deps_map = project.config.dependencies.clone().unwrap_or_default();
+
+                let pm_dir = project.root.join("include").join("pm");
+                if pm_dir.exists() {
+                    for entry in std::fs::read_dir(&pm_dir)? {
+                        let entry = entry?;
+                        let path = entry.path();
+
+                        if !path.is_file() {
+                            continue;
+                        }
+
+                        let fname = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                        if let Some(pos) = fname.rfind('-') {
+                            let name = &fname[..pos];
+                            if !deps_map.contains_key(name) {
+                                let _ = std::fs::remove_file(&path);
+                                println!("Removed unused package {}", fname);
+                            }
+                        }
+                    }
+                }
+
+                for (name, dep) in deps_map.iter() {
+                    match dep {
+                        Dependency::Path { path } => {
+                            let full = if path.is_absolute() {
+                                path.clone()
+                            } else {
+                                project.root.join(path)
+                            };
+                            let packaged = package_project_targets(&full, false).await?;
+
+                            if !packaged.is_empty() {
+                                let package_path = &packaged[0];
+
+                                let dest = project.root.join("include").join("pm");
+                                let _ = std::fs::create_dir_all(&dest);
+                                let dest = dest.join(package_path.file_name().unwrap());
+
+                                std::fs::copy(package_path, &dest)?;
+                                println!("Rebuilt path dependency {} -> {}", name, dest.display());
+                            }
+                        }
+                        Dependency::Git { git, reference } => {
+                            let is_specific = {
+                                let r = reference.as_str();
+                                let hex = r.chars().all(|c| c.is_ascii_hexdigit());
+                                (r.len() >= 7 && hex)
+                                    || r.starts_with("refs/tags/")
+                                    || r.starts_with("tags/")
+                            };
+
+                            if self.all || !is_specific {
+                                let ref_opt = if reference.is_empty() {
+                                    None
+                                } else {
+                                    Some(reference.clone())
+                                };
+                                let repo_dir = ensure_cloned_and_checked_out(git, &ref_opt).await?;
+                                let dir_str = repo_dir.to_str().ok_or("invalid path")?;
+                                let _ = run_git_cmd(&["-C", dir_str, "pull"]);
+
+                                let packaged = package_project_targets(&repo_dir, false).await?;
+                                if !packaged.is_empty() {
+                                    let package_path = &packaged[0];
+
+                                    let dest = project.root.join("include").join("pm");
+                                    let _ = std::fs::create_dir_all(&dest);
+                                    let dest = dest.join(package_path.file_name().unwrap());
+
+                                    std::fs::copy(package_path, &dest)?;
+                                    println!(
+                                        "Rebuilt git dependency {} -> {}",
+                                        name,
+                                        dest.display()
+                                    );
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
         }
 
         Ok(())
