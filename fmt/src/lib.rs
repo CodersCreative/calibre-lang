@@ -1,3 +1,4 @@
+use calibre_frontend::config::ProjectContext;
 use calibre_parser::{
     Parser, ParserError,
     ast::{formatter::Formatter, nodes::AstNodeType},
@@ -201,7 +202,9 @@ pub fn format_recursive(
         Ok(())
     }
 
-    let root = if root.as_ref().is_dir() {
+    let root = if let Ok(Some(project)) = ProjectContext::load(root.as_ref()) {
+        project.root.clone()
+    } else if root.as_ref().is_dir() {
         root.as_ref().to_path_buf()
     } else if let Some(parent) = root.as_ref().parent() {
         parent.to_path_buf()
@@ -212,31 +215,19 @@ pub fn format_recursive(
     walk(formatter, &root)
 }
 
-fn parse_manifest_src(manifest: &str) -> Option<String> {
-    let mut in_package = false;
-    for raw in manifest.lines() {
-        let line = raw.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if line.starts_with('[') && line.ends_with(']') {
-            in_package = line == "[package]";
-            continue;
-        }
-        if !in_package || !line.starts_with("src") {
-            continue;
-        }
-        let (_, rhs) = line.split_once('=')?;
-        let value = rhs.trim();
-        if let Some(rest) = value.strip_prefix('"') {
-            let end = rest.find('"')?;
-            return Some(rest[..end].to_string());
+pub fn default_all_entry_path(cwd: impl AsRef<Path>) -> PathBuf {
+    if let Ok(Some(project)) = ProjectContext::load(cwd.as_ref()) {
+        let base = project.root.join(&project.config.package.src);
+        let candidate = if base.is_dir() {
+            base.join("main.cal")
+        } else {
+            base.clone()
+        };
+        if candidate.exists() {
+            return candidate;
         }
     }
-    None
-}
 
-pub fn default_all_entry_path(cwd: impl AsRef<Path>) -> PathBuf {
     let main = cwd.as_ref().join("main.cal");
     if main.exists() {
         return main;
@@ -245,21 +236,6 @@ pub fn default_all_entry_path(cwd: impl AsRef<Path>) -> PathBuf {
     let src_main = cwd.as_ref().join("src/main.cal");
     if src_main.exists() {
         return src_main;
-    }
-
-    let manifest = cwd.as_ref().join("calibre.toml");
-    if let Ok(text) = fs::read_to_string(&manifest)
-        && let Some(src) = parse_manifest_src(&text)
-    {
-        let base = cwd.as_ref().join(src);
-        let candidate = if base.is_dir() {
-            base.join("main.cal")
-        } else {
-            base
-        };
-        if candidate.exists() {
-            return candidate;
-        }
     }
 
     main
