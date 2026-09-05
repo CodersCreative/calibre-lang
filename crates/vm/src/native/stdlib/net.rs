@@ -8,10 +8,13 @@ use crate::{
     value::RuntimeValue,
 };
 use dumpster::sync::Gc;
-use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, OnceLock};
 use std::{collections::HashMap, time::Duration};
+use std::{
+    hash::{Hash, Hasher},
+    io::{Read, Write},
+};
 use ustr::Ustr;
 use wasm_sync::Mutex;
 
@@ -22,6 +25,37 @@ fn port_redirects() -> &'static Mutex<HashMap<String, i64>> {
 
 fn key_for(host: &str, port: i64) -> String {
     format!("{host}:{port}")
+}
+
+#[derive(Debug)]
+pub struct HostTcpStream(pub TcpStream);
+
+impl Hash for HostTcpStream {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.local_addr().unwrap().hash(state);
+        self.0.peer_addr().unwrap().hash(state);
+    }
+}
+
+impl From<TcpStream> for HostTcpStream {
+    fn from(value: TcpStream) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug)]
+pub struct HostTcpListener(pub TcpListener);
+
+impl Hash for HostTcpListener {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.local_addr().unwrap().hash(state);
+    }
+}
+
+impl From<TcpListener> for HostTcpListener {
+    fn from(value: TcpListener) -> Self {
+        Self(value)
+    }
 }
 
 pub struct HttpRequest;
@@ -151,7 +185,9 @@ impl NativeFunction for TcpConnect {
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
         let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
         let _ = stream.set_write_timeout(Some(Duration::from_secs(3)));
-        Ok(RuntimeValue::Host(Arc::new(Mutex::new(stream))))
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(
+            HostTcpStream::from(stream),
+        ))))
     }
 }
 
@@ -218,7 +254,9 @@ impl NativeFunction for TcpListen {
                 redirects.remove(&key);
             }
         }
-        Ok(RuntimeValue::Host(Arc::new(Mutex::new(listener))))
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(
+            HostTcpListener::from(listener),
+        ))))
     }
 }
 
@@ -237,15 +275,19 @@ impl NativeFunction for TcpAccept {
         let (stream, _) = listener
             .lock()
             .unwrap()
-            .downcast_mut::<TcpListener>()
+            .as_any_mut()
+            .downcast_mut::<HostTcpListener>()
             .unwrap()
+            .0
             .accept()
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
 
         let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
         let _ = stream.set_write_timeout(Some(Duration::from_secs(3)));
 
-        Ok(RuntimeValue::Host(Arc::new(Mutex::new(stream))))
+        Ok(RuntimeValue::Host(Arc::new(Mutex::new(
+            HostTcpStream::from(stream),
+        ))))
     }
 }
 
@@ -264,7 +306,13 @@ impl NativeFunction for TcpRead {
 
         let mut buf = vec![0u8; len.max(0) as usize];
         let mut guard = stream.lock().unwrap();
-        match guard.downcast_mut::<TcpStream>().unwrap().read(&mut buf) {
+        match guard
+            .as_any_mut()
+            .downcast_mut::<HostTcpStream>()
+            .unwrap()
+            .0
+            .read(&mut buf)
+        {
             Ok(n) => {
                 buf.truncate(n);
                 let out = String::from_utf8_lossy(&buf).to_string();
@@ -298,8 +346,10 @@ impl NativeFunction for TcpWrite {
         let mut guard = stream.lock().unwrap();
 
         let n = guard
-            .downcast_mut::<TcpStream>()
+            .as_any_mut()
+            .downcast_mut::<HostTcpStream>()
             .unwrap()
+            .0
             .write(data.as_bytes())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
 

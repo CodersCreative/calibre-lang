@@ -522,6 +522,7 @@ dependencies = [
  "calibre-lir",
  "calibre-parser",
  "dumpster",
+ "dyn-hash",
  "errno",
  "fastrand",
  "hex",
@@ -864,6 +865,12 @@ dependencies = [
  "quote",
  "syn 2.0.117",
 ]
+
+[[package]]
+name = "dyn-hash"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fdab65db9274e0168143841eb8f864a0a21f8b1b8d2ba6812bbe6024346e99e"
 
 [[package]]
 name = "either"

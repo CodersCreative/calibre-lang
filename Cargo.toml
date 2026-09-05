@@ -50,6 +50,7 @@ wasm_sync = "0.1.2"
 ustr = {version = "1.1.0", features = ["serde"]}
 
 [workspace.lints.clippy]
+mutable_key_type = "allow"
 # Don't Panic - prevent panics from unwraps and unsafe slicing or indexing
 string_slice = "warn"
 indexing_slicing = "warn"

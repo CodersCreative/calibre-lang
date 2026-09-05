@@ -30,9 +30,13 @@ use std::os::raw::c_char;
 #[cfg(feature = "native")]
 use std::os::raw::c_void;
 
-use std::any::Any;
+use dyn_hash::DynHash;
 #[cfg(feature = "native")]
 use std::ffi::{CStr, CString};
+use std::{
+    any::Any,
+    hash::{Hash, Hasher},
+};
 use std::{
     cell::UnsafeCell,
     collections::VecDeque,
@@ -64,7 +68,7 @@ pub struct GcVec(pub Vec<RuntimeValue>);
 #[derive(Debug, Clone)]
 pub struct GcMap(pub ObjectMap<RuntimeValue>);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub enum HashKey {
     Null,
     Int(i64),
@@ -81,7 +85,74 @@ pub enum HashKey {
     Option(Option<Box<HashKey>>),
     Result(Box<HashKey>, bool),
     Function(Ustr, Option<Vec<HashKey>>),
+    Host(Host),
 }
+
+impl Hash for HashKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+
+        match self {
+            HashKey::Null => {}
+            HashKey::Int(v) => v.hash(state),
+            HashKey::UInt(v) => v.hash(state),
+            HashKey::Bool(v) => v.hash(state),
+            HashKey::Char(v) => v.hash(state),
+            HashKey::Str(v) => v.hash(state),
+            HashKey::Float(v) => v.hash(state),
+            HashKey::Big(v) => v.hash(state),
+            HashKey::Ptr(v) => v.hash(state),
+            HashKey::Range(a, b) => {
+                a.hash(state);
+                b.hash(state);
+            }
+            HashKey::List(v) => v.hash(state),
+            HashKey::Aggregate(name, fields) => {
+                name.hash(state);
+                fields.hash(state);
+            }
+            HashKey::Option(opt) => opt.hash(state),
+            HashKey::Result(res, b) => {
+                res.hash(state);
+                b.hash(state);
+            }
+            HashKey::Function(name, args) => {
+                name.hash(state);
+                args.hash(state);
+            }
+            HashKey::Host(host) => {
+                let guard = host.lock().unwrap();
+                dyn_hash::DynHash::dyn_hash(&*guard, state);
+            }
+        }
+    }
+}
+
+impl PartialEq for HashKey {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (HashKey::Null, HashKey::Null) => true,
+            (HashKey::Int(a), HashKey::Int(b)) => a == b,
+            (HashKey::UInt(a), HashKey::UInt(b)) => a == b,
+            (HashKey::Bool(a), HashKey::Bool(b)) => a == b,
+            (HashKey::Char(a), HashKey::Char(b)) => a == b,
+            (HashKey::Str(a), HashKey::Str(b)) => a == b,
+            (HashKey::Float(a), HashKey::Float(b)) => a == b,
+            (HashKey::Big(a), HashKey::Big(b)) => a == b,
+            (HashKey::Ptr(a), HashKey::Ptr(b)) => a == b,
+            (HashKey::Range(a1, a2), HashKey::Range(b1, b2)) => a1 == b1 && a2 == b2,
+            (HashKey::List(a), HashKey::List(b)) => a == b,
+            (HashKey::Aggregate(n1, f1), HashKey::Aggregate(n2, f2)) => n1 == n2 && f1 == f2,
+            (HashKey::Option(a), HashKey::Option(b)) => a == b,
+            (HashKey::Result(a1, a2), HashKey::Result(b1, b2)) => a1 == b1 && a2 == b2,
+            (HashKey::Function(n1, a1), HashKey::Function(n2, a2)) => n1 == n2 && a1 == a2,
+            (HashKey::Host(a), HashKey::Host(b)) => Arc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for HashKey {}
 
 impl TryFrom<RuntimeValue> for HashKey {
     type Error = RuntimeError;
@@ -143,6 +214,7 @@ impl TryFrom<RuntimeValue> for HashKey {
             },
             RuntimeValue::Ptr(id) => Ok(Self::Ptr(id)),
             RuntimeValue::Range(a, b) => Ok(Self::Range(a, b)),
+            RuntimeValue::Host(x) => Ok(Self::Host(x)),
             other => Err(RuntimeError::UnexpectedType(Box::new(other))),
         }
     }
@@ -197,6 +269,7 @@ impl From<HashKey> for RuntimeValue {
                         .unwrap_or_default(),
                 ),
             },
+            HashKey::Host(x) => RuntimeValue::Host(x),
         }
     }
 }
@@ -334,8 +407,24 @@ unsafe impl<V: Visitor> TraceWith<V> for GcMap {
     }
 }
 
-pub type HostInner = dyn Any + Send;
-pub type Host = Arc<Mutex<HostInner>>;
+pub trait HostInner: Debug + Any + Send + DynHash {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+impl<T: Debug + Any + Send + DynHash> HostInner for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+dyn_hash::hash_trait_object!(HostInner);
+
+pub type Host = Arc<Mutex<dyn HostInner + Send>>;
+
 pub type RuntimeHashMap = Arc<Mutex<FxHashMap<HashKey, RuntimeValue>>>;
 pub type RuntimeHashSet = Arc<Mutex<FxHashSet<HashKey>>>;
 
