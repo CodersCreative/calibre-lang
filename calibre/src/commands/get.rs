@@ -2,7 +2,12 @@ use crate::commands::package::package_project_targets;
 use calibre_frontend::config::ProjectContext;
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
-use std::{error::Error, path::PathBuf, process::Command};
+use std::{
+    error::Error,
+    path::{Path, PathBuf},
+    process::Command,
+};
+use toml_edit::{Document, Item, Table, value};
 use tracing::instrument;
 
 #[derive(Builder, Debug)]
@@ -71,6 +76,35 @@ impl Get {
                 if let Some(p) = registry_path {
                     registry.save(&p)?;
                 }
+
+                if let Ok(Some(dep_proj)) = ProjectContext::load(&repo_dir) {
+                    let dep_name = if !dep_proj.config.package.name.is_empty() {
+                        dep_proj.config.package.name.clone()
+                    } else {
+                        repo_dir
+                            .file_name()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("dependency")
+                            .to_string()
+                    };
+
+                    if project.manifest_path.to_str().is_some() {
+                        let _ = add_dependency(
+                            project.manifest_path.as_path(),
+                            &dep_name,
+                            Item::Table({
+                                let mut t = Table::new();
+
+                                t["git"] = value(git.clone());
+                                if let Some(r) = &reference {
+                                    t["ref"] = value(r.clone());
+                                }
+
+                                t
+                            }),
+                        );
+                    }
+                }
             }
             (_, Some(path)) => {
                 let pathbuf = PathBuf::from(path.clone());
@@ -88,6 +122,38 @@ impl Get {
 
                 std::fs::copy(&package_path, &dest)?;
                 println!("Installed package to {}", dest.display());
+
+                if let Ok(Some(dep_proj)) = ProjectContext::load(&pathbuf) {
+                    let dep_name = if !dep_proj.config.package.name.is_empty() {
+                        dep_proj.config.package.name.clone()
+                    } else {
+                        pathbuf
+                            .file_name()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("dependency")
+                            .to_string()
+                    };
+
+                    let _ = add_dependency(
+                        project.manifest_path.as_path(),
+                        &dep_name,
+                        Item::Table({
+                            let mut t = Table::new();
+
+                            t["path"] = value(
+                                if pathbuf.is_absolute()
+                                    && let Ok(rel) = pathbuf.strip_prefix(&project.root)
+                                {
+                                    rel.to_string_lossy().to_string()
+                                } else {
+                                    pathbuf.to_string_lossy().to_string()
+                                },
+                            );
+
+                            t
+                        }),
+                    );
+                }
             }
             _ => return Err("either --git or --path is required".into()),
         }
@@ -242,4 +308,29 @@ pub async fn ensure_cloned_and_checked_out(
     }
 
     Ok(repo_dir)
+}
+
+fn add_dependency(path: impl AsRef<Path>, name: &str, item: Item) -> Result<(), Box<dyn Error>> {
+    let s = std::fs::read_to_string(path.as_ref())?;
+    let mut doc = s.parse::<Document<_>>()?.into_mut();
+    let table = doc.as_table_mut();
+
+    if !table.contains_key("dependencies") {
+        table.insert("dependencies", Item::Table(Table::new()));
+    }
+
+    let deps_item = table
+        .get_mut("dependencies")
+        .ok_or("failed to get dependencies table")?;
+
+    let deps_table = deps_item
+        .as_table_mut()
+        .ok_or("dependencies is not a table")?;
+
+    if deps_table.get(name).is_none() {
+        deps_table.insert(name, item);
+        std::fs::write(path, doc.to_string())?;
+    }
+
+    Ok(())
 }
