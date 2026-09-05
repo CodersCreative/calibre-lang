@@ -1,9 +1,17 @@
+use crate::config::ProjectContext;
+use directories::ProjectDirs;
 use std::{
     error::Error,
     path::{Path, PathBuf},
 };
 
-use crate::config::ProjectContext;
+pub fn get_cache_dir() -> Option<PathBuf> {
+    ProjectDirs::from("", "", "Calibre").map(|x| x.cache_dir().to_path_buf())
+}
+
+pub fn get_config_dir() -> Option<PathBuf> {
+    ProjectDirs::from("", "", "Calibre").map(|x| x.config_dir().to_path_buf())
+}
 
 pub fn collect_cal_sources(dir: impl AsRef<Path>, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {

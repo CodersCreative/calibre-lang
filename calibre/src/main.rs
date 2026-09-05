@@ -1,5 +1,5 @@
 use crate::commands::{
-    bench::BenchmarksBuilder, check::CheckBuilder, clear::Clear, new::NewBuilder,
+    bench::BenchmarksBuilder, check::CheckBuilder, clear::Clear, get::GetBuilder, new::NewBuilder,
     package::PackageBuilder, repl::Repl, run::RunBuilder, test::TestingBuilder,
 };
 use clap::Parser;
@@ -58,7 +58,19 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     smol::block_on(async move {
         match args.command {
-            Some(Commands::Add) => unimplemented!(),
+            Some(Commands::Get {
+                path,
+                reference,
+                git,
+            }) => {
+                GetBuilder::default()
+                    .path(path)
+                    .reference(reference)
+                    .git(git)
+                    .build()?
+                    .execute()
+                    .await
+            }
             Some(Commands::Check {
                 paths,
                 example,
