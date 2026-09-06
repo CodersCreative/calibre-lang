@@ -77,10 +77,16 @@ impl VM {
             && let Some(RuntimeValue::RegRef { frame, .. }) = self.variables.get_by_id(id)
             && *frame != current_frame
         {
+            if let Some(value) = self.variables.get_by_id(id) {
+                return self.resolve_saveable_runtime_value_ref(value);
+            }
             return RuntimeValue::VarRef(id);
         }
 
         if let Some(id) = self.variables.id_of(name) {
+            if let Some(value) = self.variables.get_by_id(id) {
+                return self.resolve_saveable_runtime_value_ref(value);
+            }
             return RuntimeValue::VarRef(id);
         }
 

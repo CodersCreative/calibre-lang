@@ -964,15 +964,13 @@ impl VM {
             self.set_reg_value(*reg, arg);
         }
 
-        if function.needs_param_vars {
-            for (name, reg) in function
-                .params
-                .iter()
-                .zip(function.param_regs.iter().copied())
-            {
-                let value = self.get_reg_value(reg).clone();
-                let _ = self.variables.insert(*name, value);
-            }
+        for (name, reg) in function
+            .params
+            .iter()
+            .zip(function.param_regs.iter().copied())
+        {
+            let value = self.get_reg_value(reg).clone();
+            let _ = self.variables.insert(*name, value);
         }
 
         let prev_vars = if captures.is_empty() {
@@ -1039,10 +1037,8 @@ impl VM {
         self.pop_frame();
         self.restore_captures(prev_vars);
 
-        if function.needs_param_vars {
-            for name in function.params.iter() {
-                self.variables.remove(name);
-            }
+        for name in function.params.iter() {
+            self.variables.remove(name);
         }
 
         Ok(result)

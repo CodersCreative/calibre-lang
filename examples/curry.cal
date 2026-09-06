@@ -1,3 +1,12 @@
+const addtest3 := fn (a b c : int) -> int => {
+    print("a " & a);
+    print("b " & b);
+    print("c " & c)
+    let sum := a + b + c
+    print("test : " & sum)
+    return sum;
+};
+
 const add3 := fn (a b c : int) -> int => return a + b + c;
 const mul2 := fn (a b : int) -> int => returnb a * b;
 const TEN := 10;
@@ -11,6 +20,24 @@ const main := fn => {
         return fn (b : int) -> fn (int) -> int =>
             return fn (c : int) -> int =>
                 return a + b + c;
+
+    print(add_curried(10)(20)(30));
+
+    let add_curried := fn (a : int) -> fn (int) -> fn (int) -> int =>
+        return fn (b : int) -> fn (int) -> int =>
+            return fn (c : int) -> int =>
+                return addtest3(a, b, c);
+
+    print(add_curried(10)(20)(30));
+
+    let add_curried := curry addtest3;
+    print(add_curried(10)(20)(30));
+
+    let add_curried := fn (a : int) -> fn (int) -> fn (int) -> int =>
+        return fn (b : int) -> fn (int) -> int =>
+            return fn (c : int) -> int =>
+                return add3(a, b, c);
+
     print(add_curried(10)(20)(30));
 
     let add_curried := curry add3;
