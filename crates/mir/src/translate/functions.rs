@@ -882,17 +882,20 @@ impl MiddleEnvironment {
             }
             AstNodeType::Identifier(caller_ident) => {
                 match caller_ident.to_string().as_str() {
-                    "tuple" => return Ok(self.aggregate_from_call_nodes(
-                        scope,
-                        span,
-                        None,
-                        args,
-                        reverse_args,
-                    )),
+                    "tuple" => {
+                        return Ok(self.aggregate_from_call_nodes(
+                            scope,
+                            span,
+                            None,
+                            args,
+                            reverse_args,
+                        ));
+                    }
                     "curry" if args.len() == 1 && reverse_args.is_empty() => {
-                        let rewritten = self.rewrite_curry_call(scope, span, args.pop().unwrap().into())?;
+                        let rewritten =
+                            self.rewrite_curry_call(scope, span, args.pop().unwrap().into())?;
                         return Ok(self.evaluate(scope, rewritten));
-                    },
+                    }
                     _ => {}
                 }
 

@@ -242,7 +242,9 @@ pub fn parse_program_with_source(
                             let sp = span(ls.as_ref(), r);
                             AstNode::new(
                                 sp,
-                                AstNodeType::CurryExpression { value: Box::new(value) },
+                                AstNodeType::CurryExpression {
+                                    value: Box::new(value),
+                                },
                             )
                         }
                     }),

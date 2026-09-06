@@ -1,0 +1,13 @@
+const add3 := fn (a b c d e : int) -> int => return a + b + c + d + e;
+const mul2 := fn (a b c d : int) -> int => returnb a * b * c * d;
+const TEN := 10;
+
+const main := fn => {
+    let ten := curry TEN;
+    print(ten);
+    print(ten());
+
+    let add_curried := curry add5;
+
+    print(add_curried(10)(20)(30)(40)(curry(mul4)(5)(6)(7)(8)))
+}

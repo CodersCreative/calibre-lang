@@ -35,6 +35,7 @@ use calibre_parser::{
 use tracing::{debug, instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
 
+pub mod curry;
 pub mod functions;
 pub mod iter;
 pub mod loops;
@@ -42,7 +43,6 @@ pub mod matches;
 pub mod member;
 pub mod scopes;
 pub mod statements;
-pub mod curry;
 
 impl MiddleEnvironment {
     pub fn compare_types(
@@ -176,7 +176,7 @@ impl MiddleEnvironment {
             }
             AstNodeType::CurryExpression { value } => {
                 let value = self.rewrite_curry_call(scope, node.span, *value)?;
-                return Ok(self.evaluate(scope, value));
+                Ok(self.evaluate(scope, value))
             }
             AstNodeType::Identifier(x) => Ok(MiddleNode::identifier(
                 node.span,

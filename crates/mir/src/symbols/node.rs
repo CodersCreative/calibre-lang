@@ -33,41 +33,33 @@ impl MiddleEnvironment {
         })
     }
 
-    fn resolve_curried_type(
-        &mut self,
-        scope: ScopeId,
-        value: &AstNode,
-    ) -> Option<ParserDataType> {
-        let ParserInnerType::Function {
-            return_type,
-            parameters,
-        } = self.resolve_type_from_node(scope, value)?.data_type
-        else {
-            return None;
-        };
+    fn resolve_curried_type(&mut self, scope: ScopeId, value: &AstNode) -> Option<ParserDataType> {
+        match self.resolve_type_from_node(scope, value)?.data_type {
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+            } => {
+                if parameters.is_empty() {
+                    return Some(ParserDataType::function(
+                        value.span,
+                        parameters,
+                        *return_type,
+                    ));
+                }
 
-        if parameters.is_empty() {
-            return Some(ParserDataType {
-                data_type: ParserInnerType::Function {
-                    return_type,
-                    parameters,
-                },
-                span: value.span,
-            });
+                let mut result = *return_type;
+                for parameter in parameters.iter().rev() {
+                    result = ParserDataType::function(value.span, vec![parameter.clone()], result);
+                }
+
+                Some(result)
+            }
+            other => Some(ParserDataType::function(
+                value.span,
+                Vec::new(),
+                ParserDataType::new(value.span, other),
+            )),
         }
-
-        let mut result = *return_type;
-        for parameter in parameters.iter().rev() {
-            result = ParserDataType {
-                data_type: ParserInnerType::Function {
-                    return_type: Box::new(result),
-                    parameters: vec![parameter.clone()],
-                },
-                span: value.span,
-            };
-        }
-
-        Some(result)
     }
 
     pub fn resolve_type_from_node(
@@ -427,7 +419,6 @@ impl MiddleEnvironment {
                 reverse_args,
                 ..
             } => {
-
                 if let AstNodeType::FieldAccess { base, field } = &caller.node_type {
                     let member_name = self
                         .resolve(scope, field, ResolutionOptions::default().with_dollar())
@@ -455,15 +446,15 @@ impl MiddleEnvironment {
                         "tuple" => {
                             let mut lst = Vec::new();
 
-                        for arg in args {
-                            let ty = self.resolve_type_from_node(scope, &arg.clone().into())?;
-                            lst.push(ty);
+                            for arg in args {
+                                let ty = self.resolve_type_from_node(scope, &arg.clone().into())?;
+                                lst.push(ty);
+                            }
+                            return Some(ParserDataType {
+                                data_type: ParserInnerType::Tuple(lst),
+                                span: node.span,
+                            });
                         }
-                        return Some(ParserDataType {
-                            data_type: ParserInnerType::Tuple(lst),
-                            span: node.span,
-                        });
-                        },
                         "curry" if args.len() == 1 && reverse_args.is_empty() => {
                             return self.resolve_curried_type(scope, &args[0].clone().into());
                         }
