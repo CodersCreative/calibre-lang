@@ -425,7 +425,6 @@ impl VM {
                             },
                         );
                     }
-
                     #[cfg(feature = "native")]
                     VMLiteral::ExternFunction {
                         abi,
@@ -433,7 +432,12 @@ impl VM {
                         symbol,
                         parameters,
                         return_type,
+                        pure,
+                        memo,
+                        memo_params,
                     } => {
+                        use crate::value::ExternFunction;
+
                         let abi_lower = abi.to_ascii_lowercase();
                         if abi_lower != "c" && abi_lower != "zig" {
                             return Err(RuntimeError::Ffi(format!("unsupported ABI \"{}\"", abi)));
@@ -460,25 +464,22 @@ impl VM {
                             ))
                         })?;
 
-                        let func = crate::value::ExternFunction {
+                        let func = ExternFunction {
                             abi,
                             library,
                             symbol,
                             parameters,
                             return_type,
+                            pure,
+                            memo,
+                            memo_params,
                             handle: Arc::new(handle),
                         };
 
                         self.set_reg_value(*dst, RuntimeValue::ExternFunction(Arc::new(func)));
                     }
                     #[cfg(feature = "wasm")]
-                    VMLiteral::ExternFunction {
-                        abi,
-                        library,
-                        symbol,
-                        parameters,
-                        return_type,
-                    } => {}
+                    VMLiteral::ExternFunction { .. } => {}
                     other => {
                         self.set_reg_value(*dst, RuntimeValue::from(other));
                     }

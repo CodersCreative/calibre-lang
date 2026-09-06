@@ -1,0 +1,11 @@
+extern "c" const fib := fn (@i64) -> @i64 from "./libtest.so" as "fib";
+
+const main := fn => {
+	for i in 0..=30 => {
+		print(fib(i));
+	}
+};
+
+@bench test "fib" => main();
+
+test "fib_10" => assert(fib(10) = 55, "Fib 10 did not equal 55 as expected");

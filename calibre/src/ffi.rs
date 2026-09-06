@@ -1,5 +1,5 @@
 use crate::CalibreEngine;
-use crate::standalone::CalibreStandalone;
+use crate::building::standalone::CalibreStandalone;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
@@ -93,13 +93,13 @@ pub extern "C" fn calibre_compile_source(
 
     match engine.compile_source(source, false) {
         Ok(arts) => {
-            let entry = CString::new(arts.entry_name).unwrap();
+            let entry = CString::new(arts.entry_name.to_string()).unwrap();
             let entry_ptr = entry.into_raw();
 
             let mut mapping_ptrs: Vec<*mut c_char> = arts
                 .mappings
                 .into_iter()
-                .map(|m| CString::new(m).unwrap().into_raw())
+                .map(|m| CString::new(m.to_string()).unwrap().into_raw())
                 .collect();
 
             let mappings_len = mapping_ptrs.len();
@@ -168,7 +168,15 @@ pub extern "C" fn calibre_engine_run_source(
 
             let r = CalibreRunResult {
                 return_value: CString::new(ret_display).unwrap().into_raw(),
-                captured_output: CString::new(captured).unwrap().into_raw(),
+                captured_output: CString::new(
+                    captured
+                        .into_iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(""),
+                )
+                .unwrap()
+                .into_raw(),
             };
 
             Box::into_raw(Box::new(r))

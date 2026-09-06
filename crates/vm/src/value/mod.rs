@@ -548,6 +548,9 @@ pub struct ExternFunction {
     pub parameters: Vec<ParserDataType>,
     pub return_type: ParserDataType,
     pub handle: Arc<Library>,
+    pub memo_params: usize,
+    pub memo: bool,
+    pub pure: bool,
 }
 
 #[cfg(feature = "native")]

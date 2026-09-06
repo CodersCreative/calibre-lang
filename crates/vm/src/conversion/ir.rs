@@ -280,6 +280,9 @@ pub enum VMLiteral {
         symbol: Ustr,
         parameters: Vec<ParserDataType>,
         return_type: ParserDataType,
+        memo_params: usize,
+        memo: bool,
+        pure: bool,
     },
 }
 
@@ -302,6 +305,7 @@ impl Display for VMLiteral {
                 symbol,
                 parameters,
                 return_type,
+                ..
             } => {
                 let mut txt = format!("EXTERN \"{}\" {}(", abi, symbol);
                 for (i, param) in parameters.iter().enumerate() {

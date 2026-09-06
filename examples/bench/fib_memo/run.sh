@@ -1,4 +1,12 @@
 hyperfine \
+  "calibre run test_ffi.cal" \
+  "calibre run --no-cache test_ffi.cal" \
+  "calibre run --no-type-check test_ffi.cal" \
+  "calibre run --no-type-check --no-cache test_ffi.cal" \
+  "calibre run test_none_ffi.cal" \
+  "calibre run --no-cache test_none_ffi.cal" \
+  "calibre run --no-type-check test_none_ffi.cal" \
+  "calibre run --no-type-check --no-cache test_none_ffi.cal" \
   "calibre run test.cal" \
   "calibre run --no-cache test.cal" \
   "calibre run --no-type-check test.cal" \

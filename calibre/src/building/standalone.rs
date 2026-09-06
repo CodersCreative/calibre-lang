@@ -14,7 +14,7 @@ use ustr::Ustr;
 #[cfg(feature = "cli")]
 use std::fs::{self, File};
 
-const CACHE_FORMAT_VERSION: &str = "v6";
+const CACHE_FORMAT_VERSION: &str = "v7";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedProgramBlob {

@@ -196,6 +196,53 @@ impl ExternFunction {
         env: &mut VM,
         args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
+        if self.memo {
+            let mut key: Option<Vec<HashKey>> = Some(Vec::with_capacity(args.len()));
+            for (i, a) in args.iter().enumerate() {
+                if self.memo_params == 0 || self.memo_params & (1 << i) != 0 {
+                    match HashKey::try_from(a.clone()) {
+                        Ok(k) => key.as_mut().unwrap().push(k),
+                        Err(_) => {
+                            key = None;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if let Some(k) = key {
+                let cache_entry = env
+                    .caches
+                    .memo
+                    .entry(self.symbol)
+                    .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())));
+
+                let guard = cache_entry.lock().unwrap();
+                if let Some(value) = guard.get(&k) {
+                    return Ok(value.clone());
+                }
+                drop(guard);
+
+                let result = self.call_inner(env, args.clone())?;
+                env.caches
+                    .memo
+                    .entry(self.symbol)
+                    .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())))
+                    .lock()
+                    .unwrap()
+                    .insert(k, result.clone());
+                return Ok(result);
+            }
+        }
+
+        self.call_inner(env, args)
+    }
+
+    fn call_inner(
+        &self,
+        env: &mut VM,
+        args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, RuntimeError> {
         let mut arg_types = Vec::with_capacity(self.parameters.len());
         let mut ffi_args: Vec<FfiArg> = Vec::with_capacity(self.parameters.len());
 

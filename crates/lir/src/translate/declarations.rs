@@ -203,12 +203,24 @@ impl LirLowering for MirFunction {
 impl LirLowering for MirExtern {
     #[inline(always)]
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
+        let mut memo_params = 0;
+        for entry in &self.memo_params {
+            if let Ok(index) = entry.parse::<usize>()
+                && index < self.parameters.len()
+            {
+                memo_params |= 1 << index;
+            }
+        }
+
         LirNodeType::ExternFunction(LirExtern {
             abi: self.abi,
             library: self.library,
             symbol: self.symbol,
             parameters: self.parameters,
             return_type: self.return_type,
+            memo: self.memo,
+            pure: self.pure,
+            memo_params,
         })
     }
 }

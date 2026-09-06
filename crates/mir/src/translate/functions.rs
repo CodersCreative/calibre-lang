@@ -474,6 +474,18 @@ impl MiddleEnvironment {
             return_type.clone(),
         );
 
+        let mut pure = false;
+        let mut memo = false;
+        let mut memo_params = Vec::new();
+
+        for tag in self.tagging.tag_info.iter() {
+            if let TagInfo::Pure(x) = tag {
+                pure = true;
+                memo = x.memo;
+                memo_params.append(&mut x.params.clone());
+            }
+        }
+
         self.register_variable(scope, ident, new_name, fn_type.clone(), VarType::Constant)?;
 
         Ok(MiddleNode {
@@ -487,6 +499,9 @@ impl MiddleEnvironment {
                         symbol: symbol.map(|x| Ustr::from(&x)).unwrap_or_else(|| ident),
                         parameters: params,
                         return_type,
+                        pure,
+                        memo,
+                        memo_params,
                     }),
                     self.context.current_span(),
                 )),

@@ -506,6 +506,11 @@ impl MiddleEnvironment {
                                 _ => {}
                             }
                         }
+                        AstNodeType::IntLiteral(x) => {
+                            if memo {
+                                params.push(Ustr::from(&x.to_string()));
+                            }
+                        }
                         AstNodeType::CallExpression {
                             string_fn: None,
                             caller,
@@ -526,10 +531,15 @@ impl MiddleEnvironment {
                                     let CallArg::Value(x) = arg else {
                                         continue;
                                     };
-                                    let AstNodeType::Identifier(x) = x.node_type else {
-                                        continue;
-                                    };
-                                    params.push(Ustr::from(x.get_ident().text().trim()));
+                                    match x.node_type {
+                                        AstNodeType::Identifier(x) => {
+                                            params.push(Ustr::from(x.get_ident().text().trim()));
+                                        }
+                                        AstNodeType::IntLiteral(x) => {
+                                            params.push(Ustr::from(&x.to_string()));
+                                        }
+                                        _ => {}
+                                    }
                                 }
                             }
                         }

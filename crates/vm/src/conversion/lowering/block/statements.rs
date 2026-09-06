@@ -61,6 +61,9 @@ impl VMLowering for LirExtern {
             symbol: self.symbol,
             parameters: self.parameters,
             return_type: self.return_type,
+            memo: self.memo,
+            pure: self.pure,
+            memo_params: self.memo_params,
         });
         let lit = (env.block.local_literals.len() - 1) as u16;
         let dst = env.alloc_reg();

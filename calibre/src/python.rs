@@ -1,5 +1,5 @@
 use super::*;
-use crate::standalone::CalibreStandalone;
+use crate::building::standalone::CalibreStandalone;
 use pyo3::prelude::*;
 
 #[pyclass]
@@ -13,8 +13,12 @@ struct PyCalibreArtifacts {
 impl From<CalibreArtifacts> for PyCalibreArtifacts {
     fn from(a: CalibreArtifacts) -> Self {
         Self {
-            entry_name: a.entry_name,
-            mappings: a.mappings,
+            entry_name: a.entry_name.to_string(),
+            mappings: a
+                .mappings
+                .into_iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>(),
         }
     }
 }
@@ -50,7 +54,7 @@ impl PyValue {
 
     fn as_string(&self) -> String {
         match &self.inner {
-            RuntimeValue::Str(s) => s.lock().unwrap().clone(),
+            RuntimeValue::Str(s) => s.to_string(),
             _ => String::new(),
         }
     }
@@ -123,18 +127,16 @@ impl PyCalibreEngine {
             String,
         ),
     ) {
-        let (name, version, description, license, repository, homepage, src, root) = metadata;
-        let pkg_metadata = PackageMetadata {
-            name,
-            version,
-            description,
-            license,
-            repository,
-            homepage,
-            src,
-            root,
-        };
-        self.inner.package_metadata = Some(pkg_metadata);
+        self.inner.package_metadata = Some(PackageMetadata {
+            name: Ustr::from(&metadata.0),
+            version: Ustr::from(&metadata.1),
+            description: Ustr::from(&metadata.2),
+            license: Ustr::from(&metadata.3),
+            repository: Ustr::from(&metadata.4),
+            homepage: Ustr::from(&metadata.5),
+            src: Ustr::from(&metadata.6),
+            root: Ustr::from(&metadata.7),
+        });
     }
 
     fn set_cache_enabled(&mut self, enabled: bool) {
@@ -175,16 +177,29 @@ impl PyCalibreEngine {
         match self.inner.run_source(source, false) {
             Ok(result) => {
                 let captured_output = result.vm.captured_output.clone();
-                if !captured_output.is_empty() {
-                    if let Some(cb) = &self.output_callback {
-                        let _ = cb.call1(py, (captured_output.clone(),));
-                    }
+
+                if !captured_output.is_empty()
+                    && let Some(cb) = &self.output_callback
+                {
+                    let _ = cb.call1(
+                        py,
+                        (captured_output
+                            .iter()
+                            .map(|x| x.to_string())
+                            .collect::<Vec<_>>()
+                            .join(""),),
+                    );
                 }
+
                 Ok(PyRunResult {
                     return_value: PyValue {
                         inner: result.return_value,
                     },
-                    captured_output,
+                    captured_output: captured_output
+                        .into_iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(""),
                 })
             }
             Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
@@ -195,7 +210,7 @@ impl PyCalibreEngine {
 #[pyfunction]
 fn run(source: &str) -> PyResult<PyValue> {
     let engine = CalibreEngine::default();
-    match engine.run_source(source.to_string()) {
+    match engine.run_source(source.to_string(), false) {
         Ok(result) => Ok(PyValue {
             inner: result.return_value,
         }),

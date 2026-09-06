@@ -469,8 +469,8 @@ pub struct MirFunction {
     pub return_type: ParserDataType,
     pub scope_id: ScopeId,
     pub memo_params: Vec<Ustr>,
-    pub pure: bool,
     pub memo: bool,
+    pub pure: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -480,6 +480,9 @@ pub struct MirExtern {
     pub symbol: Ustr,
     pub parameters: Vec<ParserDataType>,
     pub return_type: ParserDataType,
+    pub memo_params: Vec<Ustr>,
+    pub memo: bool,
+    pub pure: bool,
 }
 
 #[repr(u8)]

@@ -202,6 +202,9 @@ pub struct LirExtern {
     pub symbol: Ustr,
     pub parameters: Vec<ParserDataType>,
     pub return_type: ParserDataType,
+    pub memo_params: usize,
+    pub memo: bool,
+    pub pure: bool,
 }
 
 #[repr(u8)]
@@ -346,6 +349,9 @@ impl Display for LirNodeType {
                     symbol,
                     parameters,
                     return_type,
+                    memo: _,
+                    pure: _,
+                    memo_params: _,
                 }) => {
                     format!(
                         "extern \"{}\" {}({}) -> {} from {}",
