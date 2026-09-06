@@ -6,7 +6,7 @@ use crate::{
 };
 use calibre_parser::ast::{
     idents::ParserText,
-    nodes::{AstNode, AstNodeType},
+    nodes::{AstNode, AstNodeType, CallArg},
 };
 use std::{fmt::Debug, sync::Arc};
 use ustr::{Ustr, UstrMap};
@@ -46,7 +46,7 @@ pub enum TagInfo {
     Init(i32),
     Fin(i32),
     Default,
-    Pure(bool),
+    Pure(MemoInfo),
     Builder,
     Panics,
     Bench,
@@ -58,6 +58,12 @@ pub enum TagInfo {
     Todo(Option<Ustr>),
     Deprecated(Option<Ustr>),
     Skip(Option<Ustr>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MemoInfo {
+    pub memo: bool,
+    pub params: Vec<Ustr>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -488,18 +494,52 @@ impl MiddleEnvironment {
              _tag: ParserText,
              args: Vec<AstNode>| {
                 let mut memo = false;
+                let mut params = Vec::new();
 
                 for arg in args {
-                    if let AstNodeType::Identifier(x) = arg.node_type {
-                        #[allow(clippy::single_match)]
-                        match x.get_ident().text().trim() {
-                            "memo" => memo = true,
-                            _ => {}
+                    match arg.node_type {
+                        AstNodeType::Identifier(x) =>
+                        {
+                            #[allow(clippy::single_match)]
+                            match x.get_ident().text().trim() {
+                                "memo" => memo = true,
+                                _ => {}
+                            }
                         }
+                        AstNodeType::CallExpression {
+                            string_fn: None,
+                            caller,
+                            args,
+                            ..
+                        } => {
+                            let AstNodeType::Identifier(x) = caller.node_type else {
+                                continue;
+                            };
+                            #[allow(clippy::single_match)]
+                            match x.get_ident().text().trim() {
+                                "memo" => memo = true,
+                                _ => {}
+                            }
+
+                            if memo {
+                                for arg in args {
+                                    let CallArg::Value(x) = arg else {
+                                        continue;
+                                    };
+                                    let AstNodeType::Identifier(x) = x.node_type else {
+                                        continue;
+                                    };
+                                    params.push(Ustr::from(x.get_ident().text().trim()));
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
 
-                env.tagging.tag_info.push(TagInfo::Pure(memo));
+                env.tagging
+                    .tag_info
+                    .push(TagInfo::Pure(MemoInfo { memo, params }));
                 let middle = env.evaluate_inner(scope, node)?;
                 let _ = env.tagging.tag_info.pop();
 

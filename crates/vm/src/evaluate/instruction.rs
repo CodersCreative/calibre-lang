@@ -837,13 +837,15 @@ impl VM {
                     let caller_frame = self.frames.len().saturating_sub(1);
                     let mut key: Option<Vec<HashKey>> = Some(Vec::with_capacity(args.len()));
 
-                    for reg in args.iter() {
-                        let val = self.get_reg_value_in_frame(caller_frame, *reg).clone();
-                        match HashKey::try_from(val) {
-                            Ok(k) => key.as_mut().unwrap().push(k),
-                            Err(_) => {
-                                key = None;
-                                break;
+                    for (i, reg) in args.iter().enumerate() {
+                        if func.memo_params == 0 || func.memo_params & (1 << i) != 0 {
+                            let val = self.get_reg_value_in_frame(caller_frame, *reg).clone();
+                            match HashKey::try_from(val) {
+                                Ok(k) => key.as_mut().unwrap().push(k),
+                                Err(_) => {
+                                    key = None;
+                                    break;
+                                }
                             }
                         }
                     }

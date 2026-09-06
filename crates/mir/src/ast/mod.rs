@@ -468,6 +468,7 @@ pub struct MirFunction {
     pub body: Box<MiddleNode>,
     pub return_type: ParserDataType,
     pub scope_id: ScopeId,
+    pub memo_params: Vec<Ustr>,
     pub pure: bool,
     pub memo: bool,
 }

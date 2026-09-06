@@ -127,6 +127,7 @@ pub struct VMFunction {
     pub needs_param_vars: bool,
     pub pure: bool,
     pub memo: bool,
+    pub memo_params: usize,
 }
 
 impl VMFunction {

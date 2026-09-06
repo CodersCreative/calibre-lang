@@ -718,8 +718,24 @@ impl MiddleEnvironment {
             body
         };
         self.symbols.func_defers.append(&mut old_func_defers);
-        let memo = self.tagging.tag_info.contains(&TagInfo::Pure(true));
-        let pure = memo || self.tagging.tag_info.contains(&TagInfo::Pure(false));
+
+        let mut memo = false;
+        let mut memo_params = Vec::new();
+        let mut pure = false;
+
+        for tag in self.tagging.tag_info.iter() {
+            #[allow(clippy::single_match)]
+            match tag {
+                TagInfo::Pure(x) => {
+                    pure = true;
+                    if x.memo {
+                        memo = true
+                    };
+                    memo_params.append(&mut x.params.clone());
+                }
+                _ => {}
+            }
+        }
 
         let fn_node = MiddleNode {
             node_type: MiddleNodeType::FunctionDeclaration(MirFunction {
@@ -728,10 +744,12 @@ impl MiddleEnvironment {
                 return_type: return_type.clone(),
                 scope_id: new_scope,
                 memo,
+                memo_params,
                 pure,
             }),
             span,
         };
+
         let _ = self.scoping.return_type_stack.pop();
 
         if !header.generics.0.is_empty() {

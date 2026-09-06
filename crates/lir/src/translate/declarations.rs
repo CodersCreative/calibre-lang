@@ -167,6 +167,13 @@ impl LirLowering for MirFunction {
             captures_for_func.push((n, t));
         }
 
+        let mut memo_params = 0;
+        for (i, param) in self.parameters.iter().enumerate() {
+            if self.memo_params.contains(&param.0) {
+                memo_params |= 1 << i;
+            }
+        }
+
         env.registry.functions.insert(
             internal_name,
             LirFunction {
@@ -181,6 +188,7 @@ impl LirLowering for MirFunction {
                 return_type: self.return_type,
                 blocks: sub_lowerer.blocks.into_boxed_slice(),
                 pure: self.pure,
+                memo_params,
                 memo: self.memo,
             },
         );

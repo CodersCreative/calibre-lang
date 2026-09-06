@@ -368,12 +368,14 @@ impl VM {
 
                 if func.memo {
                     let mut key: Option<Vec<HashKey>> = Some(Vec::with_capacity(args.len()));
-                    for a in args.iter() {
-                        match HashKey::try_from(a.clone()) {
-                            Ok(k) => key.as_mut().unwrap().push(k),
-                            Err(_) => {
-                                key = None;
-                                break;
+                    for (i, a) in args.iter().enumerate() {
+                        if func.memo_params == 0 || func.memo_params & (1 << i) != 0 {
+                            match HashKey::try_from(a.clone()) {
+                                Ok(k) => key.as_mut().unwrap().push(k),
+                                Err(_) => {
+                                    key = None;
+                                    break;
+                                }
                             }
                         }
                     }

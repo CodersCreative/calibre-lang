@@ -74,6 +74,8 @@ pub struct LirFunction {
     pub return_type: ParserDataType,
     pub blocks: Box<[LirBlock]>,
     pub pure: bool,
+    // Highkey probably overkill having this be a usize but it guarantees nothing goes wrong unless some idiot has over 32 args...
+    pub memo_params: usize,
     pub memo: bool,
 }
 

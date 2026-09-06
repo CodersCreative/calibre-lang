@@ -95,12 +95,18 @@ impl AlphaRenamable for MiddleNodeType {
                 return_type: _,
                 scope_id: _,
                 memo: _,
+                memo_params,
                 pure: _,
             }) => {
                 for param in parameters {
                     let new_name =
                         Ustr::from(&format!("{}->{}", param.0, fastrand::u32(0..u32::MAX)));
                     state.data.insert(param.0, new_name);
+
+                    if let Some(x) = memo_params.iter_mut().find(|x| x == &&param.0) {
+                        *x = new_name;
+                    }
+
                     param.0 = new_name;
                     if let Some(default_value) = &mut param.2 {
                         default_value.rename(state);

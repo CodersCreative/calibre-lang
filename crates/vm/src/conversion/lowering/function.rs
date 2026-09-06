@@ -16,6 +16,7 @@ impl VMFunction {
             blocks: blocks.into_boxed_slice(),
             pure: false,
             memo: false,
+            memo_params: 0,
         };
         let mut lower = FunctionLowering::new(func, true);
         lower.build_cfg();
@@ -50,6 +51,7 @@ impl VMFunction {
             param_names: UstrSet::default(),
             pure: false,
             memo: false,
+            memo_params: 0,
         }
     }
 }
@@ -127,6 +129,7 @@ impl FunctionLowering {
             param_names,
             pure: lower.func.pure,
             memo: lower.func.memo,
+            memo_params: lower.func.memo_params,
         }
     }
 
