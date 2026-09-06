@@ -105,9 +105,6 @@ pub trait NodeVisitor {
             AstNodeType::NegExpression { value } => AstNodeType::NegExpression {
                 value: Box::new(self.visit(*value)),
             },
-            AstNodeType::DebugExpression { value } => AstNodeType::DebugExpression {
-                value: Box::new(self.visit(*value)),
-            },
             AstNodeType::CurryExpression { value } => AstNodeType::CurryExpression {
                 value: Box::new(self.visit(*value)),
             },
@@ -507,7 +504,7 @@ pub trait NodeAnalyzer {
             AstNodeType::ParenExpression { value }
             | AstNodeType::NotExpression { value }
             | AstNodeType::NegExpression { value }
-            | AstNodeType::DebugExpression { value }
+            | AstNodeType::CurryExpression { value }
             | AstNodeType::AsExpression { value, .. }
             | AstNodeType::IsExpression { value, .. }
             | AstNodeType::FieldAccess { base: value, .. }

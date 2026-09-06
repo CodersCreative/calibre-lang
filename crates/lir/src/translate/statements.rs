@@ -16,8 +16,8 @@ use crate::{
 };
 use calibre_mir::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAggregate, MirAssignment, MirDebug, MirDeref, MirEnum,
-        MirField, MirIdentifier, MirIndex,
+        MiddleNode, MiddleNodeType, MirAggregate, MirAssignment, MirDeref, MirEnum, MirField,
+        MirIdentifier, MirIndex,
     },
     typing::MiddleTypeDefType,
 };
@@ -144,12 +144,6 @@ impl LirLowering for MirAssignment {
         }
 
         LirNodeType::Load(LirLoad { value: temp })
-    }
-}
-
-impl LirLowering for MirDebug {
-    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        env.lower_node(*self.value)
     }
 }
 

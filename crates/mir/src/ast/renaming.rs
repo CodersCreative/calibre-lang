@@ -2,7 +2,7 @@ use crate::{
     MiddleNode, MiddleNodeType,
     ast::{
         MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirBreak, MirCall,
-        MirComparison, MirConditional, MirDebug, MirDeref, MirDrop, MirEnum, MirField, MirFunction,
+        MirComparison, MirConditional, MirDeref, MirDrop, MirEnum, MirField, MirFunction,
         MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
         MirReturn, MirScopeDecl, MirVarDecl,
     },
@@ -119,10 +119,6 @@ impl AlphaRenamable for MiddleNodeType {
                 value.rename(state);
             }
             MiddleNodeType::NegExpression(MirNeg { value }) => value.rename(state),
-            MiddleNodeType::DebugExpression(MirDebug {
-                pretty_printed_str: _,
-                value,
-            }) => value.rename(state),
             MiddleNodeType::AsExpression(MirAs {
                 value,
                 data_type,

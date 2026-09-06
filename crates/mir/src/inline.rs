@@ -1,7 +1,7 @@
 use crate::ast::{
     MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBinary, MirBoolean, MirCall,
-    MirComparison, MirDebug, MirDeref, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex,
-    MirIs, MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
+    MirComparison, MirDeref, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex, MirIs,
+    MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
 };
 use ustr::{Ustr, UstrMap};
 
@@ -109,7 +109,6 @@ fn inline_in_node(node: &mut MiddleNode, map: &UstrMap<InlineFn>) {
         | MiddleNodeType::RefStatement(MirRef { value, .. })
         | MiddleNodeType::DerefStatement(MirDeref { value })
         | MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. })
-        | MiddleNodeType::DebugExpression(MirDebug { value, .. })
         | MiddleNodeType::FieldAccess(MirField { base: value, .. }) => inline_in_node(value, map),
         MiddleNodeType::ListLiteral(MirList {
             data_type: _,

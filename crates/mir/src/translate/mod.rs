@@ -1,9 +1,9 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBig, MirBinary,
-        MirBoolean, MirBreak, MirChar, MirComparison, MirConditional, MirContinue, MirDebug,
-        MirDeref, MirDrop, MirEmit, MirEnum, MirFloat, MirInt, MirIs, MirListBuilder, MirMove,
-        MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirString, MirVarDecl,
+        MirBoolean, MirBreak, MirChar, MirComparison, MirConditional, MirContinue, MirDeref,
+        MirDrop, MirEmit, MirEnum, MirFloat, MirInt, MirIs, MirListBuilder, MirMove, MirNeg,
+        MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirString, MirVarDecl,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -1374,13 +1374,6 @@ impl MiddleEnvironment {
                     ),
                 )
             }
-            AstNodeType::DebugExpression { value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::DebugExpression(MirDebug {
-                    pretty_printed_str: Ustr::from(&value.to_string()),
-                    value: Box::new(self.evaluate_inner(scope, *value)?),
-                }),
-                span: node.span,
-            }),
             AstNodeType::ListLiteral(data_type, x) => {
                 let mut value = MirListBuilder::default();
 

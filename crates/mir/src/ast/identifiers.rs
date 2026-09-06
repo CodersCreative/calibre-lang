@@ -2,9 +2,9 @@ use crate::{
     MiddleNode, MiddleNodeType,
     ast::{
         MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirBreak, MirCall,
-        MirComparison, MirConditional, MirDebug, MirDeref, MirDrop, MirEmit, MirEnum, MirField,
-        MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange,
-        MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
+        MirComparison, MirConditional, MirDeref, MirDrop, MirEmit, MirEnum, MirField, MirFunction,
+        MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
+        MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
     },
 };
 use calibre_parser::UstrIdentifiersUsed;
@@ -57,10 +57,6 @@ impl UstrIdentifiersUsed for MiddleNode {
             | MiddleNodeType::IsExpression(MirIs {
                 value,
                 data_type: _,
-            })
-            | MiddleNodeType::DebugExpression(MirDebug {
-                pretty_printed_str: _,
-                value,
             })
             | MiddleNodeType::Return(MirReturn { value: Some(value) })
             | MiddleNodeType::EnumExpression(MirEnum {
@@ -210,10 +206,6 @@ impl MiddleNode {
             | MiddleNodeType::IsExpression(MirIs {
                 value,
                 data_type: _,
-            })
-            | MiddleNodeType::DebugExpression(MirDebug {
-                pretty_printed_str: _,
-                value,
             })
             | MiddleNodeType::LoopDeclaration(MirLoop { body: value, .. })
             | MiddleNodeType::Return(MirReturn { value: Some(value) })

@@ -1,5 +1,5 @@
-const add3 := fn (a b c d e : int) -> int => return a + b + c + d + e;
-const mul2 := fn (a b c d : int) -> int => returnb a * b * c * d;
+const add3 := fn (a b c : int) -> int => return a + b + c;
+const mul2 := fn (a b : int) -> int => returnb a * b;
 const TEN := 10;
 
 const main := fn => {
@@ -7,7 +7,14 @@ const main := fn => {
     print(ten);
     print(ten());
 
-    let add_curried := curry add5;
+    let add_curried := fn (a : int) -> fn (int) -> fn (int) -> int =>
+        return fn (b : int) -> fn (int) -> int =>
+            return fn (c : int) -> int =>
+                return a + b + c;
+    print(add_curried(10)(20)(30));
 
-    print(add_curried(10)(20)(30)(40)(curry(mul4)(5)(6)(7)(8)))
+    let add_curried := curry add3;
+    print(add_curried(10)(20)(30));
+
+    print(add_curried(10)(20)((curry mul2)(5)(6)))
 }

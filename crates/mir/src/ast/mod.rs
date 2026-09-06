@@ -95,7 +95,6 @@ impl MiddleNode {
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
-            | MiddleNodeType::DebugExpression(MirDebug { value, .. })
             | MiddleNodeType::Return(MirReturn { value: Some(value) })
             | MiddleNodeType::EnumExpression(MirEnum {
                 data: Some(value), ..
@@ -169,7 +168,6 @@ impl MiddleNode {
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
-            | MiddleNodeType::DebugExpression(MirDebug { value, .. })
             | MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. }) => {
                 value.substitute(repl)
             }
@@ -233,7 +231,6 @@ impl MiddleNode {
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
             | MiddleNodeType::DerefStatement(MirDeref { value })
-            | MiddleNodeType::DebugExpression(MirDebug { value, .. })
             | MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. }) => {
                 value.calls_self(name)
             }
@@ -428,12 +425,6 @@ pub struct MirAssignment {
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
-pub struct MirDebug {
-    pub pretty_printed_str: Ustr,
-    pub value: Box<MiddleNode>,
-}
-
-#[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirAggregate {
     pub identifier: Option<Ustr>,
     pub value: ObjectMap<MiddleNode>,
@@ -525,7 +516,6 @@ pub enum MiddleNodeType {
     CallExpression(MirCall),
 
     AssignmentExpression(MirAssignment),
-    DebugExpression(MirDebug),
     AggregateExpression(MirAggregate),
     EnumExpression(MirEnum),
 
@@ -667,9 +657,6 @@ impl From<MiddleNodeType> for AstNodeType {
             },
             MiddleNodeType::AssignmentExpression(value) => AstNodeType::AssignmentExpression {
                 identifier: Box::new((*value.identifier).into()),
-                value: Box::new((*value.value).into()),
-            },
-            MiddleNodeType::DebugExpression(value) => AstNodeType::DebugExpression {
                 value: Box::new((*value.value).into()),
             },
             MiddleNodeType::NegExpression(value) => AstNodeType::NotExpression {

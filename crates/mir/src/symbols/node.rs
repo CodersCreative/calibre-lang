@@ -38,6 +38,10 @@ impl MiddleEnvironment {
             ParserInnerType::Function {
                 return_type,
                 parameters,
+            }
+            | ParserInnerType::NativeFunction {
+                return_type,
+                parameters,
             } => {
                 if parameters.is_empty() {
                     return Some(ParserDataType::function(
@@ -340,9 +344,9 @@ impl MiddleEnvironment {
                 )),
                 span: node.span,
             }),
-            AstNodeType::NegExpression { value }
-            | AstNodeType::DebugExpression { value }
-            | AstNodeType::Ternary { then: value, .. } => self.resolve_type_from_node(scope, value),
+            AstNodeType::NegExpression { value } | AstNodeType::Ternary { then: value, .. } => {
+                self.resolve_type_from_node(scope, value)
+            }
             AstNodeType::CurryExpression { value } => self.resolve_curried_type(scope, value),
             AstNodeType::AsExpression {
                 value: _,

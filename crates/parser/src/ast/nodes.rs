@@ -660,9 +660,6 @@ pub enum AstNodeType {
     NegExpression {
         value: Box<AstNode>,
     },
-    DebugExpression {
-        value: Box<AstNode>,
-    },
     CurryExpression {
         value: Box<AstNode>,
     },

@@ -1,7 +1,4 @@
-use crate::{
-    environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
-    symbols::resolve::ResolutionOptions,
-};
+use crate::{environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId};
 use calibre_parser::{
     Span,
     ast::{
@@ -10,7 +7,6 @@ use calibre_parser::{
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
-use ustr::Ustr;
 
 impl MiddleEnvironment {
     #[allow(clippy::type_complexity)]
@@ -40,47 +36,9 @@ impl MiddleEnvironment {
         result
     }
 
-    fn build_curried_body(
-        span: Span,
-        params: Vec<(
-            PotentialDollarIdentifier,
-            Option<ParserDataType>,
-            Option<Box<AstNode>>,
-        )>,
-        return_type: ParserDataType,
-        body: AstNode,
-    ) -> AstNode {
-        let mut params = params.into_iter();
-
-        let Some((first_name, first_type, first_default)) = params.next() else {
-            return body;
-        };
-
-        let params = params.collect::<Vec<_>>();
-
-        AstNode::new(
-            span,
-            AstNodeType::FunctionDeclaration {
-                header: FunctionHeader {
-                    generics: GenericTypes::default(),
-                    parameters: vec![(first_name, first_type, first_default)],
-                    return_type: Self::build_curried_return_type(
-                        span,
-                        &params,
-                        return_type.clone(),
-                    ),
-                    param_destructures: Vec::new(),
-                },
-                body: Box::new(AstNode::new_temp_scope(vec![AstNode::ret(
-                    Self::build_curried_body(span, params, return_type, body),
-                )])),
-            },
-        )
-    }
-
     fn build_curried_call(
         span: Span,
-        target_name: Ustr,
+        target: AstNode,
         params: Vec<(
             PotentialDollarIdentifier,
             Option<ParserDataType>,
@@ -94,7 +52,7 @@ impl MiddleEnvironment {
         let Some((first_name, first_type, first_default)) = params.next() else {
             return AstNode::call(
                 span,
-                AstNode::identifier(span, target_name),
+                target,
                 bound.into_iter().map(CallArg::Value).collect::<Vec<_>>(),
             );
         };
@@ -102,7 +60,7 @@ impl MiddleEnvironment {
         let Some(first_type) = first_type else {
             return AstNode::call(
                 span,
-                AstNode::identifier(span, target_name),
+                target,
                 bound.into_iter().map(CallArg::Value).collect::<Vec<_>>(),
             );
         };
@@ -124,7 +82,7 @@ impl MiddleEnvironment {
                     param_destructures: Vec::new(),
                 },
                 body: Box::new(AstNode::new_temp_scope(vec![AstNode::ret(
-                    Self::build_curried_call(span, target_name, params, return_type, bound),
+                    Self::build_curried_call(span, target, params, return_type, bound),
                 )])),
             },
         )
@@ -158,34 +116,24 @@ impl MiddleEnvironment {
         span: Span,
         target: AstNode,
     ) -> Result<AstNode, MiddleErr> {
-        match target.node_type {
-            AstNodeType::FunctionDeclaration { header, body } => Ok(Self::build_curried_body(
-                span,
-                header.parameters,
-                header.return_type,
-                *body,
-            )),
-            AstNodeType::Identifier(ref name) => {
-                let resolved = self.resolve(scope, name, ResolutionOptions::idents())?;
-                let (data_type, return_type) = match self
-                    .resolve_type_from_node(scope, &target)
-                    .map(|x| x.unwrap_all_refs().data_type)
-                {
-                    Some(ParserInnerType::Function {
-                        return_type,
-                        parameters,
-                    }) => (parameters, *return_type),
-                    _ => return self.rewrite_identity_curry(scope, span, target),
-                };
+        let ty = self
+            .resolve_type_from_node(scope, &target)
+            .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?;
 
-                let defaults = self
-                    .symbols
-                    .function_param_defaults
-                    .get(&resolved)
-                    .map(|x| x.iter().collect::<Box<[_]>>())
-                    .unwrap_or_default();
+        match ty.unwrap_all_refs().data_type {
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+            }
+            | ParserInnerType::NativeFunction {
+                return_type,
+                parameters,
+            } => {
+                // TODO Deal with defaults
+                let defaults: Box<[&crate::symbols::FunctionParamDefault]> =
+                    Vec::new().into_boxed_slice();
 
-                let params = data_type
+                let params = parameters
                     .into_iter()
                     .enumerate()
                     .map(|(index, param)| {
@@ -205,9 +153,9 @@ impl MiddleEnvironment {
 
                 Ok(Self::build_curried_call(
                     span,
-                    resolved,
+                    target,
                     params,
-                    return_type,
+                    *return_type,
                     Vec::new(),
                 ))
             }

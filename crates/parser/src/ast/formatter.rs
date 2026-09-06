@@ -723,7 +723,6 @@ impl Formatter {
 
                 txt
             }
-            AstNodeType::DebugExpression { value } => format!("debug {{{}}}", self.format(value)),
             AstNodeType::CurryExpression { value } => format!("curry {}", self.format(value)),
             AstNodeType::Until { condition } => format!("until {}", self.format(condition)),
             AstNodeType::Return { value: Some(value) } => format!("return {}", self.format(value)),

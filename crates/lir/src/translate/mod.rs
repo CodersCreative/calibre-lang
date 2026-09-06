@@ -255,7 +255,6 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::IsExpression(x) => x.lower(self, span),
             MiddleNodeType::NegExpression(x) => x.lower(self, span),
             MiddleNodeType::RangeDeclaration(x) => x.lower(self, span),
-            MiddleNodeType::DebugExpression(x) => x.lower(self, span),
         }
     }
 
