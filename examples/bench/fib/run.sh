@@ -32,5 +32,7 @@ hyperfine \
   "roc test.roc" \
   "revo test.rv" \
   "revo test_memo.rv" \
+  "php test.php" \
+  "php test_memo.php" \
   "cal --path test.cl" \
   --warmup 3

@@ -28,4 +28,6 @@ hyperfine \
   "perl test.pl" \
   "revo test.rv" \
   "revo test_none.rv" \
+  "php test.php" \
+  "php test_none.php" \
   --warmup 3
