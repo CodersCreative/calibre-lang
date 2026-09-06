@@ -234,6 +234,18 @@ pub fn parse_program_with_source(
                             )
                         }
                     }),
+                lex(pad.clone(), just("curry"))
+                    .ignore_then(expr.clone())
+                    .map_with_span({
+                        let ls = line_starts.clone();
+                        move |value: AstNode, r| {
+                            let sp = span(ls.as_ref(), r);
+                            AstNode::new(
+                                sp,
+                                AstNodeType::CurryExpression { value: Box::new(value) },
+                            )
+                        }
+                    }),
                 lex(pad.clone(), just("list"))
                     .ignore_then(lex(pad.clone(), just(":<")))
                     .ignore_then(type_name.clone())

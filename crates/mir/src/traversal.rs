@@ -108,6 +108,9 @@ pub trait NodeVisitor {
             AstNodeType::DebugExpression { value } => AstNodeType::DebugExpression {
                 value: Box::new(self.visit(*value)),
             },
+            AstNodeType::CurryExpression { value } => AstNodeType::CurryExpression {
+                value: Box::new(self.visit(*value)),
+            },
             AstNodeType::AsExpression {
                 value,
                 data_type,

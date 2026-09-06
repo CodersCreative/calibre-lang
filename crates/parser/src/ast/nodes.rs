@@ -663,6 +663,9 @@ pub enum AstNodeType {
     DebugExpression {
         value: Box<AstNode>,
     },
+    CurryExpression {
+        value: Box<AstNode>,
+    },
     AsExpression {
         value: Box<AstNode>,
         data_type: ParserDataType,

@@ -33,6 +33,43 @@ impl MiddleEnvironment {
         })
     }
 
+    fn resolve_curried_type(
+        &mut self,
+        scope: ScopeId,
+        value: &AstNode,
+    ) -> Option<ParserDataType> {
+        let ParserInnerType::Function {
+            return_type,
+            parameters,
+        } = self.resolve_type_from_node(scope, value)?.data_type
+        else {
+            return None;
+        };
+
+        if parameters.is_empty() {
+            return Some(ParserDataType {
+                data_type: ParserInnerType::Function {
+                    return_type,
+                    parameters,
+                },
+                span: value.span,
+            });
+        }
+
+        let mut result = *return_type;
+        for parameter in parameters.iter().rev() {
+            result = ParserDataType {
+                data_type: ParserInnerType::Function {
+                    return_type: Box::new(result),
+                    parameters: vec![parameter.clone()],
+                },
+                span: value.span,
+            };
+        }
+
+        Some(result)
+    }
+
     pub fn resolve_type_from_node(
         &mut self,
         scope: ScopeId,
@@ -314,6 +351,7 @@ impl MiddleEnvironment {
             AstNodeType::NegExpression { value }
             | AstNodeType::DebugExpression { value }
             | AstNodeType::Ternary { then: value, .. } => self.resolve_type_from_node(scope, value),
+            AstNodeType::CurryExpression { value } => self.resolve_curried_type(scope, value),
             AstNodeType::AsExpression {
                 value: _,
                 data_type,
@@ -386,8 +424,10 @@ impl MiddleEnvironment {
                 caller,
                 generic_types: _generic_types,
                 args,
+                reverse_args,
                 ..
             } => {
+
                 if let AstNodeType::FieldAccess { base, field } = &caller.node_type {
                     let member_name = self
                         .resolve(scope, field, ResolutionOptions::default().with_dollar())
@@ -411,8 +451,9 @@ impl MiddleEnvironment {
 
                 let mut caller_type = None;
                 if let AstNodeType::Identifier(caller) = &caller.node_type {
-                    if &caller.to_string() == "tuple" {
-                        let mut lst = Vec::new();
+                    match caller.to_string().as_str() {
+                        "tuple" => {
+                            let mut lst = Vec::new();
 
                         for arg in args {
                             let ty = self.resolve_type_from_node(scope, &arg.clone().into())?;
@@ -422,6 +463,11 @@ impl MiddleEnvironment {
                             data_type: ParserInnerType::Tuple(lst),
                             span: node.span,
                         });
+                        },
+                        "curry" if args.len() == 1 && reverse_args.is_empty() => {
+                            return self.resolve_curried_type(scope, &args[0].clone().into());
+                        }
+                        _ => {}
                     }
 
                     if let Ok(caller_ty) = self.resolve_to_data_type(scope, caller) {
