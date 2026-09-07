@@ -138,6 +138,7 @@ impl LirLowering for MirFunction {
             .collect();
 
         let internal_name = env.next_function_label();
+
         let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
 
         let body_span = self.body.span;

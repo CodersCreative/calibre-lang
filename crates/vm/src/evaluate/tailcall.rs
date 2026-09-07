@@ -15,6 +15,13 @@ impl VM {
         *ret_reg == dst
     }
 
+    fn would_cycle_in_active_call_stack(&self, func: &VMFunction) -> bool {
+        let target = func as *const VMFunction as usize;
+        self.frames
+            .iter()
+            .any(|frame| frame.func_ptr != 0 && frame.func_ptr == target)
+    }
+
     fn prepare_frame_for_tail_call(&mut self, func: &VMFunction) {
         let start = self.current_frame().reg_start;
         let reg_count = func.reg_count as usize;
@@ -79,6 +86,20 @@ impl VM {
         }
 
         if args.len() != func.param_regs.len() {
+            return None;
+        }
+
+        if self.would_cycle_in_active_call_stack(func) {
+            return None;
+        }
+
+        if block.id == func.entry && self.current_frame().func_ptr == func as *const VMFunction as usize {
+            return None;
+        }
+
+        // TODO Remove this because its a bit sketch and way too restrictive but...
+        // It does still stop any unchecked recursion here
+        if func.entry.0 == block.id.0 {
             return None;
         }
 

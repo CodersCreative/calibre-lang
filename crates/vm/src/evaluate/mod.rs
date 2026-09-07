@@ -999,7 +999,7 @@ impl VM {
         let mut result = RuntimeValue::Null;
         let mut returned = false;
 
-        loop {
+        for _ in 0..512 {
             match self.run_block(block, prev_block)? {
                 TerminateValue::Jump(target) => {
                     prev_block = Some(block.id);
@@ -1099,6 +1099,7 @@ impl VM {
         let mut prev_block: Option<BlockId> = state.prev_block;
         let mut result = RuntimeValue::Null;
         let mut returned = false;
+
         loop {
             let slice_budget = if budget == usize::MAX {
                 None
@@ -1207,12 +1208,15 @@ impl VM {
         if start_ip == 0 {
             self.apply_phis(block, prev)?;
         }
+        
         let mut fuel = budget.unwrap_or(usize::MAX);
+
         for (ip, instruction) in block.instructions.iter().enumerate().skip(start_ip) {
             tracing::trace!(ip, instruction = ?instruction, "executing instruction");
             if (ip & 0x3f) == 0 {
                 self.maybe_collect_garbage();
             }
+
             let step = match self.run_instruction(instruction, block, ip as u32, prev) {
                 Ok(step) => step,
                 Err(e) => {

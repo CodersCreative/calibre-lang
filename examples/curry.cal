@@ -42,6 +42,7 @@ const main := fn => {
 
     let add_curried := curry add3;
     print(add_curried(10)(20)(30));
+    print("all basic examples done");
 
     print(add_curried(10)(20)((curry mul2)(5)(6)))
 }

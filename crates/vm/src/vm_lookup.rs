@@ -72,35 +72,6 @@ impl VM {
     }
 
     pub(crate) fn capture_value(&self, name: &Ustr, seen: &mut UstrSet) -> RuntimeValue {
-        let current_frame = self.frames.len().saturating_sub(1);
-        if let Some(id) = self.variables.id_of(name)
-            && let Some(RuntimeValue::RegRef { frame, .. }) = self.variables.get_by_id(id)
-            && *frame != current_frame
-        {
-            if let Some(value) = self.variables.get_by_id(id) {
-                return self.resolve_saveable_runtime_value_ref(value);
-            }
-            return RuntimeValue::VarRef(id);
-        }
-
-        if let Some(id) = self.variables.id_of(name) {
-            if let Some(value) = self.variables.get_by_id(id) {
-                return self.resolve_saveable_runtime_value_ref(value);
-            }
-            return RuntimeValue::VarRef(id);
-        }
-
-        if let Some(value) = self.variables.get(name) {
-            return self.resolve_saveable_runtime_value_ref(value);
-        }
-
-        if let Ok(value) = self.resolve_value_for_op_ref(&RuntimeValue::Ref(*name))
-            && !value.is_null()
-        {
-            return self.resolve_saveable_runtime_value_ref(&value);
-        }
-
-        // TODO Handle unresolved names
         match self.resolve_var_name(*name) {
             Some(VarName::Var(var)) => {
                 if let Some(value) = self.variables.get(&var) {
@@ -109,12 +80,14 @@ impl VM {
                     unreachable!()
                 }
             }
-            Some(VarName::Func(func)) => self
+            Some(VarName::Func(func)) => {
+                self
                 .registry
                 .functions
                 .get(&func)
                 .map(|f| self.make_runtime_function_inner(f, seen))
-                .unwrap_or_else(|| RuntimeValue::Null),
+                .unwrap_or_else(|| RuntimeValue::Null)
+            },
             _ => RuntimeValue::Null,
         }
     }
@@ -125,14 +98,19 @@ impl VM {
         captures: &[Ustr],
         seen: &mut UstrSet,
     ) -> Vec<(Ustr, RuntimeValue)> {
+        if captures.is_empty() {
+            return Vec::new();
+        }
+
         let mut out = Vec::with_capacity(captures.len());
         let mut seen_names = UstrSet::default();
+        
         for name in captures {
-            if !seen_names.insert(*name) {
-                continue;
+            if seen_names.insert(*name) {
+                out.push((*name, self.capture_value(name, seen)));
             }
-            out.push((*name, self.capture_value(name, seen)));
         }
+        
         out
     }
 
@@ -143,12 +121,14 @@ impl VM {
 
     fn make_runtime_function_inner(&self, func: &VMFunction, seen: &mut UstrSet) -> RuntimeValue {
         let name = func.name;
-        if !seen.insert(name) {
+        
+        if !seen.insert(name) || func.captures.is_empty() {
             return RuntimeValue::Function {
                 name,
                 captures: Arc::new(Vec::new()),
             };
         }
+
         RuntimeValue::Function {
             name,
             captures: Arc::new(self.capture_values(&func.captures, seen)),

@@ -2,6 +2,7 @@ use tracing::instrument;
 
 use super::*;
 
+#[derive(Debug)]
 pub enum TerminateValue {
     None,
     Jump(BlockId),
