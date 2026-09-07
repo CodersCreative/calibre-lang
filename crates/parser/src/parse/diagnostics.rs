@@ -11,7 +11,12 @@ pub(super) fn to_parser_errors(
             let err = if e.found().is_none() {
                 SyntaxErr::UnexpectedEOF
             } else {
-                let mut expected: Vec<String> = e
+                let found = e
+                    .found()
+                    .map(|c| format!("`{c}`"))
+                    .unwrap_or_else(|| "EOF".to_string());
+
+                let expected: Vec<String> = e
                     .expected()
                     .filter_map(|p| match p {
                         RichPattern::Token(tok) => Some(format!("`{:?}`", tok)),
@@ -20,27 +25,42 @@ pub(super) fn to_parser_errors(
                         _ => None,
                     })
                     .collect();
-                expected.sort();
-                expected.dedup();
 
-                if expected.len() > 12 {
-                    expected.truncate(12);
-                    expected.push("...".to_string());
-                }
-
-                let found = e
-                    .found()
-                    .map(|c| format!("`{c}`"))
-                    .unwrap_or_else(|| "EOF".to_string());
-
-                if expected.is_empty() {
-                    SyntaxErr::ExpectedToken(format!("unexpected token: found {found}"))
+                if expected.iter().any(|t| t.contains("')'")) && found == "`;`" {
+                    SyntaxErr::UnclosedParen(
+                        span(line_starts, (*e.span()).into_range()).from.line as usize,
+                    )
+                } else if expected.iter().any(|t| t.contains("']'")) && found == "`;`" {
+                    SyntaxErr::UnclosedBracket(
+                        span(line_starts, (*e.span()).into_range()).from.line as usize,
+                    )
+                } else if expected.iter().any(|t| t.contains("'}'")) && found == "`;`" {
+                    SyntaxErr::UnclosedBrace(
+                        span(line_starts, (*e.span()).into_range()).from.line as usize,
+                    )
+                } else if expected.iter().any(|t| t.contains("`;`")) && found != "`;`" {
+                    SyntaxErr::MissingSemicolon
+                } else if expected.iter().any(|t| t.contains("`,`")) && found != "`,`" {
+                    SyntaxErr::MissingComma
                 } else {
-                    SyntaxErr::ExpectedToken(format!(
-                        "expected one of {}, found {}",
-                        expected.join(", "),
-                        found
-                    ))
+                    let mut expected_sorted = expected.clone();
+                    expected_sorted.sort();
+                    expected_sorted.dedup();
+
+                    if expected_sorted.len() > 12 {
+                        expected_sorted.truncate(12);
+                        expected_sorted.push("...".to_string());
+                    }
+
+                    if expected_sorted.is_empty() {
+                        SyntaxErr::ExpectedToken(format!("unexpected token: found {found}"))
+                    } else {
+                        SyntaxErr::ExpectedToken(format!(
+                            "expected one of {}, found {}",
+                            expected_sorted.join(", "),
+                            found
+                        ))
+                    }
                 }
             };
             ParserError::Syntax {

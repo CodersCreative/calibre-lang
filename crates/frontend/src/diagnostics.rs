@@ -81,7 +81,8 @@ pub fn emit_error(path: impl AsRef<Path>, contents: &str, message: String, span:
 
 #[instrument(skip_all, fields(path = ?path))]
 pub fn emit_mir_error(path: &Path, contents: &str, err: &MiddleErr) {
-    debug!(error = %err, "emitting MIR error");
+    debug!("emitting MIR error");
+
     match err {
         MiddleErr::Multiple(errors) => {
             debug!(error_count = errors.len(), "emitting multiple MIR errors");

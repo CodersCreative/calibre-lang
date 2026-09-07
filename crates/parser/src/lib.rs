@@ -202,7 +202,7 @@ impl Parser {
 }
 
 pub trait CalibreError: Display {
-    fn code(&self) -> usize;
+    fn code(&self) -> &'static str;
     fn hint(&self) -> Option<String>;
     fn step(&self) -> &'static str;
     fn span(&self) -> Span;
@@ -224,7 +224,7 @@ pub enum ParserError {
 }
 
 impl CalibreError for ParserError {
-    fn code(&self) -> usize {
+    fn code(&self) -> &'static str {
         match self {
             Self::Syntax { err, .. } => err.code(),
         }
@@ -253,6 +253,16 @@ pub enum SyntaxErr {
     ExpectedOpeningBracket(Bracket),
     #[error("expected closing bracket: {0:?}")]
     ExpectedClosingBracket(Bracket),
+    #[error("unclosed parenthesis: missing ')' to match opening '(' at line {0}")]
+    UnclosedParen(usize),
+    #[error("unclosed bracket: missing ']' to match opening '[' at line {0}")]
+    UnclosedBracket(usize),
+    #[error("unclosed brace: missing '}}' to match opening '{{' at line {0}")]
+    UnclosedBrace(usize),
+    #[error("missing semicolon after statement")]
+    MissingSemicolon,
+    #[error("missing comma between items")]
+    MissingComma,
     #[error("{0}")]
     ExpectedToken(String),
     #[error("expected identifier")]
@@ -284,24 +294,29 @@ pub enum SyntaxErr {
 }
 
 impl CalibreError for SyntaxErr {
-    fn code(&self) -> usize {
+    fn code(&self) -> &'static str {
         match self {
-            Self::ExpectedOpeningBracket(_) => 1,
-            Self::ExpectedClosingBracket(_) => 2,
-            Self::ExpectedToken(_) => 3,
-            Self::ExpectedIdentifier => 4,
-            Self::ExpectedName => 5,
-            Self::UnexpectedToken => 6,
-            Self::InvalidLiteral(_) => 7,
-            Self::ExpectedKeyword(_) => 8,
-            Self::ExpectedKey => 9,
-            Self::ExpectedType => 10,
-            Self::ExpectedFunctions => 11,
-            Self::UnexpectedWhileLoop => 12,
-            Self::UnexpectedEOF => 13,
-            Self::NullConstant => 14,
-            Self::This => 15,
-            Self::ExpectedChar(_) => 16,
+            Self::ExpectedOpeningBracket(_) => "P001",
+            Self::ExpectedClosingBracket(_) => "P002",
+            Self::UnclosedParen(_) => "P017",
+            Self::UnclosedBracket(_) => "P018",
+            Self::UnclosedBrace(_) => "P019",
+            Self::MissingSemicolon => "P020",
+            Self::MissingComma => "P021",
+            Self::ExpectedToken(_) => "P003",
+            Self::ExpectedIdentifier => "P004",
+            Self::ExpectedName => "P005",
+            Self::UnexpectedToken => "P006",
+            Self::InvalidLiteral(_) => "P007",
+            Self::ExpectedKeyword(_) => "P008",
+            Self::ExpectedKey => "P009",
+            Self::ExpectedType => "P010",
+            Self::ExpectedFunctions => "P011",
+            Self::UnexpectedWhileLoop => "P012",
+            Self::UnexpectedEOF => "P013",
+            Self::NullConstant => "P014",
+            Self::This => "P015",
+            Self::ExpectedChar(_) => "P016",
         }
     }
 
@@ -315,6 +330,19 @@ impl CalibreError for SyntaxErr {
                 "insert the missing closing {:?} bracket to finish the current construct",
                 bracket
             )),
+            Self::UnclosedParen(line) => Some(format!(
+                "add a closing ')' to match the opening '(' at line {line}"
+            )),
+            Self::UnclosedBracket(line) => Some(format!(
+                "add a closing ']' to match the opening '[' at line {line}"
+            )),
+            Self::UnclosedBrace(line) => Some(format!(
+                "add a closing '}}' to match the opening '{{' at line {line}"
+            )),
+            Self::MissingSemicolon => {
+                Some("add ';' or a newline to terminate the previous statement".to_string())
+            }
+            Self::MissingComma => Some("add ',' between items/arguments".to_string()),
             Self::ExpectedToken(token) => {
                 let lower = token.to_lowercase();
                 if lower.contains("eof") {

@@ -1,10 +1,10 @@
 use crate::value::RuntimeValue;
+use calibre_parser::Span;
 use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
     types::ParserInnerType,
 };
-use calibre_parser::{CalibreError, Span};
 use std::num::{ParseFloatError, ParseIntError};
 
 #[derive(Debug)]
@@ -288,68 +288,70 @@ impl std::fmt::Display for RuntimeError {
                 write!(f, "Cannot convert float to integer: {value:?}")
             }
             // Fallback
-            RuntimeError::UnexpectedType(value) => write!(f, "Unexpected value type: {value:?}"),
+            RuntimeError::UnexpectedType(value) => {
+                write!(f, "Unexpected type: {value:?}")
+            }
         }
     }
 }
 
-impl CalibreError for RuntimeError {
-    fn code(&self) -> usize {
+impl calibre_parser::CalibreError for RuntimeError {
+    fn code(&self) -> &'static str {
         match self {
             Self::At(_, inner) => inner.code(),
-            Self::Boolean(_, _, _) => 401,
-            Self::Comparison(_, _, _) => 402,
-            Self::Binary(_, _, _) => 403,
-            Self::MissingMember { .. } => 404,
-            Self::ParseFloat(_) => 405,
-            Self::ParseInt(_) => 406,
-            Self::CantConvert(_, _) => 407,
-            Self::StackUnderflow => 408,
-            Self::FunctionNotFound(_) => 409,
-            Self::InvalidFunctionCall => 490,
-            Self::InvalidFunctionCallValue(_) => 491,
-            Self::InvalidNativeFunctionCall(_) => 492,
-            Self::Ffi(_) => 493,
-            Self::DanglingRef(_) => 494,
-            Self::InvalidBytecode(_) => 495,
-            Self::Io(_) => 496,
-            Self::Panic(_) => 497,
-            // Boolean operation type errors (codes 410-419)
-            Self::UnexpectedTypeInBooleanOp { .. } => 410,
-            Self::ExpectedBoolFound { .. } => 411,
-            Self::ExpectedBoolFoundInCondition { .. } => 412,
-            // Comparison operation type errors (codes 420-429)
-            Self::UnexpectedTypeInComparison { .. } => 420,
-            Self::IncomparableTypes { .. } => 421,
-            // Binary operation type errors (codes 430-439)
-            Self::UnexpectedTypeInBinaryOp { .. } => 430,
-            Self::ExpectedNumericFound { .. } => 431,
-            Self::ExpectedIntFound { .. } => 432,
-            Self::ExpectedFloatFound { .. } => 433,
-            // Index access type errors (codes 440-449)
-            Self::UnexpectedTypeInIndexAccess { .. } => 440,
-            Self::ExpectedListOrStrFound { .. } => 441,
-            Self::ExpectedAggregateFound { .. } => 442,
-            Self::ExpectedIntIndexFound { .. } => 443,
-            // Member access type errors (codes 450-459)
-            Self::UnexpectedTypeInMemberAccess { .. } => 450,
-            Self::ExpectedStructOrAggregateFound { .. } => 451,
-            Self::ExpectedEnumFound { .. } => 452,
-            // Generator operation type errors (codes 460-469)
-            Self::UnexpectedTypeInGeneratorIndex { .. } => 460,
-            Self::ExpectedGeneratorFound { .. } => 461,
-            Self::ExpectedIntForGeneratorIndex { .. } => 462,
-            Self::ExpectedBoolForGeneratorDone { .. } => 463,
-            // Function call type errors (codes 470-479)
-            Self::UnexpectedTypeInFunctionCall { .. } => 470,
-            Self::ExpectedFunctionFound { .. } => 471,
-            Self::ExpectedNativeFunctionFound { .. } => 472,
-            // Type conversion errors (codes 480-489)
-            Self::UnexpectedTypeInConversion { .. } => 480,
-            Self::CannotConvertIntToFloat { .. } => 481,
-            Self::CannotConvertFloatToInt { .. } => 482,
+            Self::Boolean(_, _, _) => "V001",
+            Self::Comparison(_, _, _) => "V002",
+            Self::Binary(_, _, _) => "V003",
+            Self::MissingMember { .. } => "V004",
+            Self::ParseFloat(_) => "V005",
+            Self::ParseInt(_) => "V006",
+            Self::CantConvert(_, _) => "V007",
+            Self::StackUnderflow => "V008",
+            Self::FunctionNotFound(_) => "V009",
+            Self::InvalidFunctionCall => "V090",
+            Self::InvalidFunctionCallValue(_) => "V091",
+            Self::InvalidNativeFunctionCall(_) => "V092",
+            Self::Ffi(_) => "V093",
+            Self::DanglingRef(_) => "V094",
+            Self::InvalidBytecode(_) => "V095",
+            Self::Io(_) => "V096",
+            Self::Panic(_) => "V097",
+            // Boolean operation type errors (codes V010-V019)
+            Self::UnexpectedTypeInBooleanOp { .. } => "V010",
+            Self::ExpectedBoolFound { .. } => "V011",
+            Self::ExpectedBoolFoundInCondition { .. } => "V012",
+            // Comparison operation type errors (codes V020-V029)
+            Self::UnexpectedTypeInComparison { .. } => "V020",
+            Self::IncomparableTypes { .. } => "V021",
+            // Binary operation type errors (codes V030-V039)
+            Self::UnexpectedTypeInBinaryOp { .. } => "V030",
+            Self::ExpectedNumericFound { .. } => "V031",
+            Self::ExpectedIntFound { .. } => "V032",
+            Self::ExpectedFloatFound { .. } => "V033",
+            // Index access type errors (codes V040-V049)
+            Self::UnexpectedTypeInIndexAccess { .. } => "V040",
+            Self::ExpectedListOrStrFound { .. } => "V041",
+            Self::ExpectedAggregateFound { .. } => "V042",
+            Self::ExpectedIntIndexFound { .. } => "V043",
+            // Member access type errors (codes V050-V059)
+            Self::UnexpectedTypeInMemberAccess { .. } => "V050",
+            Self::ExpectedStructOrAggregateFound { .. } => "V051",
+            Self::ExpectedEnumFound { .. } => "V052",
+            // Generator operation type errors (codes V060-V069)
+            Self::UnexpectedTypeInGeneratorIndex { .. } => "V060",
+            Self::ExpectedGeneratorFound { .. } => "V061",
+            Self::ExpectedIntForGeneratorIndex { .. } => "V062",
+            Self::ExpectedBoolForGeneratorDone { .. } => "V063",
+            // Function call type errors (codes V070-V079)
+            Self::UnexpectedTypeInFunctionCall { .. } => "V070",
+            Self::ExpectedFunctionFound { .. } => "V071",
+            Self::ExpectedNativeFunctionFound { .. } => "V072",
+            // Type conversion errors (codes V080-V089)
+            Self::UnexpectedTypeInConversion { .. } => "V080",
+            Self::CannotConvertIntToFloat { .. } => "V081",
+            Self::CannotConvertFloatToInt { .. } => "V082",
             // Fallback
-            Self::UnexpectedType(_) => 499,
+            Self::UnexpectedType(_) => "V099",
         }
     }
 
