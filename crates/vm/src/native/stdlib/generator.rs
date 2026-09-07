@@ -50,6 +50,7 @@ impl NativeFunction for GeneratorResumeFn {
             captures,
             usize::MAX,
             &mut task_state,
+            true,
         )?;
         state.task_state = task_state;
 

@@ -1,23 +1,5 @@
-use calibre_parser::ast::idents::ParserText;
-
 use super::*;
-
-fn print_list_from_iter<I>(mut iter: I, open: char, close: char) -> String
-where
-    I: Iterator<Item = String>,
-{
-    let mut txt = String::new();
-    txt.push(open);
-    if let Some(first) = iter.next() {
-        txt.push_str(&first);
-        for s in iter {
-            txt.push_str(", ");
-            txt.push_str(&s);
-        }
-    }
-    txt.push(close);
-    txt
-}
+use calibre_parser::ast::idents::ParserText;
 
 impl RuntimeValue {
     pub fn repr(&self, vm: &mut VM) -> String {
@@ -66,8 +48,13 @@ impl RuntimeValue {
                 }
             }
             Self::List(x) => {
-                let iter = x.0.iter().map(|item| item.repr(vm));
-                print_list_from_iter(iter, '[', ']')
+                format!(
+                    "[{}]",
+                    x.0.iter()
+                        .map(|x| x.repr(vm))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
             Self::Generator { type_name, .. } => format!(
                 "{} {{ ... }}",
@@ -90,8 +77,16 @@ impl RuntimeValue {
             ),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
-                    let iter = data.as_ref().0.0.iter().map(|x| x.1.repr(vm));
-                    print_list_from_iter(iter, '(', ')')
+                    format!(
+                        "({})",
+                        data.as_ref()
+                            .0
+                            .0
+                            .iter()
+                            .map(|x| x.1.repr(vm))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
                 } else if data.as_ref().0.is_empty() {
                     let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
                         .unwrap_or_default();
@@ -184,8 +179,13 @@ impl RuntimeValue {
                 }
             }
             Self::List(x) => {
-                let iter = x.0.iter().map(|item| item.display(vm));
-                print_list_from_iter(iter, '[', ']')
+                format!(
+                    "[{}]",
+                    x.0.iter()
+                        .map(|x| x.display(vm))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
             Self::Generator { type_name, .. } => format!(
                 "{} {{ ... }}",
@@ -208,8 +208,16 @@ impl RuntimeValue {
             ),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
-                    let iter = data.as_ref().0.0.iter().map(|x| x.1.display(vm));
-                    print_list_from_iter(iter, '(', ')')
+                    format!(
+                        "({})",
+                        data.as_ref()
+                            .0
+                            .0
+                            .iter()
+                            .map(|x| x.1.display(vm))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
                 } else if data.as_ref().0.is_empty() {
                     let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
                         .unwrap_or_default();
@@ -287,16 +295,17 @@ impl Display for RuntimeValue {
             Self::Bool(x) => write!(f, "{}", if *x { "true" } else { "false" }),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
-                    let mut txt = String::new();
-                    txt.push('(');
-                    for (i, val) in data.as_ref().0.0.iter().enumerate() {
-                        if i > 0 {
-                            txt.push_str(", ");
-                        }
-                        let _ = write!(txt, "{}", val.1);
-                    }
-                    txt.push(')');
-                    write!(f, "{}", txt)
+                    write!(
+                        f,
+                        "({})",
+                        data.as_ref()
+                            .0
+                            .0
+                            .iter()
+                            .map(|x| x.1.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
                 } else if data.as_ref().0.is_empty() {
                     let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
                         .unwrap_or_default();
@@ -316,9 +325,16 @@ impl Display for RuntimeValue {
                     write!(f, "{}", txt)
                 }
             }
+
             Self::List(x) => {
-                let iter = x.as_ref().0.iter().map(|x| x.to_string());
-                write!(f, "{}", print_list_from_iter(iter, '[', ']'))
+                write!(
+                    f,
+                    "[{}]",
+                    x.0.iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
             Self::NativeFunction(x) => write!(f, "fn {} ...", x.name()),
             #[cfg(feature = "native")]

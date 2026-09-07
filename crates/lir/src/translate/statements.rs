@@ -80,39 +80,34 @@ impl LirLowering for MirAssignment {
                 )
             }
             MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
-                let base_expr = env.lower_node(*base);
-                let base_tmp = env.get_temp();
-                env.add_instr(LirNode::new(
-                    ident_span,
-                    LirNodeType::Declare(LirDeclare {
-                        dest: base_tmp,
-                        data_type: ParserDataType::auto(ident_span),
-                        value: Box::new(base_expr),
-                    }),
-                ));
-                let base_load = LirNodeType::Load(LirLoad { value: base_tmp });
+                let base_load = if let MiddleNodeType::Identifier(MirIdentifier { identifier }) =
+                    &base.node_type
+                {
+                    LirNodeType::Load(LirLoad { value: *identifier })
+                } else {
+                    let base_expr = env.lower_node(*base);
+                    let base_tmp = env.get_temp();
+                    env.add_instr(LirNode::new(
+                        ident_span,
+                        LirNodeType::Declare(LirDeclare {
+                            dest: base_tmp,
+                            data_type: ParserDataType::auto(ident_span),
+                            value: Box::new(base_expr),
+                        }),
+                    ));
+                    LirNodeType::Load(LirLoad { value: base_tmp })
+                };
 
-                let index_expr = env.lower_node(*index);
-                let index_tmp = env.get_temp();
-                env.add_instr(LirNode::new(
-                    ident_span,
-                    LirNodeType::Declare(LirDeclare {
-                        dest: index_tmp,
-                        data_type: ParserDataType::auto(ident_span),
-                        value: Box::new(index_expr),
-                    }),
-                ));
-
-                let index_load = LirNodeType::Load(LirLoad { value: index_tmp });
+                let index = env.lower_node(*index);
 
                 (
                     Some(LirLValue::Ptr(Box::new(LirNodeType::Index(LirIndex {
                         base: Box::new(base_load.clone()),
-                        index: Box::new(index_load.clone()),
+                        index: Box::new(index.clone()),
                     })))),
                     Some(LirNodeType::Index(LirIndex {
                         base: Box::new(base_load),
-                        index: Box::new(index_load),
+                        index: Box::new(index),
                     })),
                 )
             }

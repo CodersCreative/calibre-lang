@@ -45,7 +45,7 @@ impl VM {
                     resolved_receiver,
                 );
             }
-            self.call_runtime_callable_at(callee, Vec::new(), block.id.0 as usize, ip)?
+            self.call_runtime_callable_at(callee, Vec::new(), block.id.0 as usize, ip, true)?
         } else {
             resolved
         };
@@ -157,6 +157,7 @@ impl VM {
         args: &[u16],
         block: &VMBlock,
         ip: u32,
+        get_result: bool,
     ) -> Result<RuntimeValue, RuntimeError> {
         let _ = self.resolve_value_for_op_ref(&receiver)?;
 
@@ -168,7 +169,8 @@ impl VM {
 
         let mut full_args = vec![receiver];
         full_args.extend(self.collect_call_args_vec(args));
-        let out = self.call_runtime_callable_at(callee, full_args, block.id.0 as usize, ip)?;
+        let out =
+            self.call_runtime_callable_at(callee, full_args, block.id.0 as usize, ip, get_result)?;
 
         if let Some((frame_idx, reg)) = receiver_reg {
             let current = self.frames.len().saturating_sub(1);
@@ -228,7 +230,7 @@ impl VM {
 
     fn handle_call_result(
         &mut self,
-        dst: u16,
+        dst: Option<u16>,
         func: &Arc<dyn crate::NativeFunction>,
         args: &[u16],
         block: &VMBlock,
@@ -239,7 +241,9 @@ impl VM {
 
         if let RuntimeValue::GeneratorSuspend(value) = result {
             let yielded = *value;
-            self.set_reg_value(dst, yielded.clone());
+            if let Some(dst) = dst {
+                self.set_reg_value(dst, yielded.clone());
+            }
             let frame_idx = self.frames.len().saturating_sub(1);
             self.propagate_member_source_args(args, frame_idx)?;
 
@@ -250,14 +254,15 @@ impl VM {
                 yielded: Some(yielded),
             }));
         }
-
-        self.set_reg_value(dst, result);
+        if let Some(dst) = dst {
+            self.set_reg_value(dst, result);
+        }
         Ok(None)
     }
 
     fn run_call_instruction(
         &mut self,
-        dst: u16,
+        dst: Option<u16>,
         callee: u16,
         args: &[u16],
         block: &VMBlock,
@@ -344,8 +349,12 @@ impl VM {
                     args,
                     block,
                     ip,
+                    dst.is_some(),
                 )?;
-                self.set_reg_value(dst, value);
+
+                if let Some(dst) = dst {
+                    self.set_reg_value(dst, value);
+                }
             }
             RuntimeValue::Function { name, captures } => {
                 let callsite = (self.current_frame().func_ptr, block.id.0 as usize, ip);
@@ -370,8 +379,13 @@ impl VM {
                 }
 
                 let refreshed = Arc::new(refreshed_caps);
-                let value = self.run_function_from_regs(func.as_ref(), args, refreshed)?;
-                self.set_reg_value(dst, value);
+                let value =
+                    self.run_function_from_regs(func.as_ref(), args, refreshed, dst.is_some())?;
+
+                if let Some(dst) = dst {
+                    self.set_reg_value(dst, value);
+                }
+
                 return Ok(None);
             }
             RuntimeValue::NativeFunction(func) => {
@@ -384,7 +398,9 @@ impl VM {
             #[cfg(feature = "native")]
             RuntimeValue::ExternFunction(func) => {
                 let value = func.call(self, self.collect_call_args_vec(args))?;
-                self.set_reg_value(dst, value);
+                if let Some(dst) = dst {
+                    self.set_reg_value(dst, value);
+                }
             }
             other => return Err(RuntimeError::InvalidFunctionCallValue(Box::new(other))),
         }
@@ -827,7 +843,13 @@ impl VM {
                 }
                 let func = unsafe { &*func_ptr };
 
-                if func.memo {
+                if func.pure && (dst.is_none() || !func.returns_value) {
+                    return Ok(TerminateValue::None);
+                }
+
+                if let Some(dst) = dst
+                    && func.memo
+                {
                     let caller_frame = self.frames.len().saturating_sub(1);
                     let mut key: Option<Vec<HashKey>> = Some(Vec::with_capacity(args.len()));
 
@@ -860,7 +882,7 @@ impl VM {
                         }
 
                         let value =
-                            self.run_function_from_regs(func, args, Self::empty_captures())?;
+                            self.run_function_from_regs(func, args, Self::empty_captures(), true)?;
 
                         {
                             let cache_entry = self
@@ -877,8 +899,11 @@ impl VM {
                     }
                 }
 
-                let value = self.run_function_from_regs(func, args, Self::empty_captures())?;
-                self.set_reg_value(*dst, value);
+                let value =
+                    self.run_function_from_regs(func, args, Self::empty_captures(), dst.is_some())?;
+                if let Some(dst) = dst {
+                    self.set_reg_value(*dst, value);
+                }
             }
             VMInstruction::Call { dst, callee, args } => {
                 if let Some(step) =

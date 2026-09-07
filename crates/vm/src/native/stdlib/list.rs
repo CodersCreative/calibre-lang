@@ -98,6 +98,7 @@ impl NativeFunction for ListSortBy {
                     vec![a.clone(), b.clone()],
                     usize::MAX,
                     u32::MAX.saturating_sub(2),
+                    true,
                 )
                 .and_then(|x| compare_callback_result(env, &x))
             {
@@ -141,6 +142,7 @@ impl NativeFunction for ListBinarySearchBy {
                     vec![probe, needle.clone()],
                     usize::MAX,
                     u32::MAX.saturating_sub(3),
+                    true,
                 )
                 .and_then(|x| compare_callback_result(env, &x))?;
             match ordering {

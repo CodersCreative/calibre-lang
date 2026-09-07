@@ -439,12 +439,12 @@ pub enum VMInstruction {
         payload: Option<Reg>,
     },
     Call {
-        dst: Reg,
+        dst: Option<Reg>,
         callee: Reg,
         args: Vec<Reg>,
     },
     CallSelf {
-        dst: Reg,
+        dst: Option<Reg>,
         args: Vec<Reg>,
     },
     Spawn {
@@ -503,8 +503,8 @@ impl Display for VMInstruction {
             VMInstruction::MoveVar { dst, name } => write!(f, "%r{dst} = MOVE {name}"),
             VMInstruction::DropVar { name } => write!(f, "DROP {name}"),
             VMInstruction::StoreVar { name, src } => write!(f, "STORE {name} <- %r{src}"),
-            VMInstruction::LoadVarRef { dst, name } => write!(f, "%r{dst} = REF {name}"),
-            VMInstruction::LoadRegRef { dst, src } => write!(f, "%r{dst} = REF %r{src}"),
+            VMInstruction::LoadVarRef { dst, name } => write!(f, "%r{dst} = VARREF {name}"),
+            VMInstruction::LoadRegRef { dst, src } => write!(f, "%r{dst} = REGREF %r{src}"),
             VMInstruction::Copy { dst, src } => write!(f, "%r{dst} = %r{src}"),
             VMInstruction::As {
                 dst,
@@ -569,10 +569,22 @@ impl Display for VMInstruction {
             } => {
                 write!(f, "%r{dst} = ENUM {name}:{variant}")
             }
-            VMInstruction::Call { dst, callee, args } => {
+            VMInstruction::Call {
+                dst: Some(dst),
+                callee,
+                args,
+            } => {
                 write!(f, "%r{dst} = CALL %r{callee} {:?}", args)
             }
-            VMInstruction::CallSelf { dst, .. } => write!(f, "%r{dst} = CALL_SELF"),
+            VMInstruction::Call {
+                dst: _,
+                callee,
+                args,
+            } => {
+                write!(f, "CALL %r{callee} {:?}", args)
+            }
+            VMInstruction::CallSelf { dst: Some(dst), .. } => write!(f, "%r{dst} = CALL_SELF"),
+            VMInstruction::CallSelf { .. } => write!(f, "CALL_SELF"),
             VMInstruction::Spawn { dst, callee } => write!(f, "SPAWN %r{dst}, %r{callee}"),
             VMInstruction::LoadMember { dst, value, member } => {
                 write!(f, "%r{dst} = LOADMEMBER %r{value}.{member}")

@@ -756,6 +756,7 @@ impl VM {
                 args,
                 0,
                 0,
+                true,
             )
         } else {
             Err(RuntimeError::InvalidFunctionCall)

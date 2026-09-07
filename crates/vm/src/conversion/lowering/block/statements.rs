@@ -10,7 +10,7 @@ use crate::conversion::{
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{
-    LirAssign, LirDeclare, LirExtern, LirIndex, LirLValue, LirMember, LirNodeType,
+    LirAssign, LirDeclare, LirExtern, LirIndex, LirLValue, LirLoad, LirMember, LirNodeType,
 };
 use calibre_parser::Span;
 
@@ -34,16 +34,7 @@ impl VMLowering for LirDeclare {
             let target = assigned.unwrap_or_else(|| env.alloc_reg());
 
             env.lower_node_to(*self.value, target, span);
-            let name_idx = env.add_string(self.dest);
             env.map.insert(self.dest, target);
-
-            env.emit(
-                VMInstruction::StoreVar {
-                    name: name_idx,
-                    src: target,
-                },
-                span,
-            );
         } else {
             let reg = env.lower_node(*self.value, span);
             let name = env.add_string(self.dest);
@@ -104,7 +95,7 @@ impl VMLowering for LirAssign {
                         },
                         span,
                     );
-                } else {
+                } else if env.is_global {
                     let reg = env.lower_node(*self.value, span);
                     env.emit(
                         VMInstruction::StoreVar {
@@ -164,6 +155,43 @@ impl VMLowering for LirAssign {
                                     },
                                     span,
                                 );
+                            }
+                            LirNodeType::Load(LirLoad { value }) => {
+                                let base_reg = env.alloc_reg();
+                                if let Some(value) = env.map.get(&value) {
+                                    env.emit(
+                                        VMInstruction::LoadRegRef {
+                                            dst: base_reg,
+                                            src: *value,
+                                        },
+                                        span,
+                                    );
+                                    env.emit(
+                                        VMInstruction::SetIndex {
+                                            target: base_reg,
+                                            index: index_reg,
+                                            value: value_reg,
+                                        },
+                                        span,
+                                    );
+                                } else {
+                                    let idx = env.add_string(value);
+                                    env.emit(
+                                        VMInstruction::LoadVarRef {
+                                            dst: base_reg,
+                                            name: idx,
+                                        },
+                                        span,
+                                    );
+                                    env.emit(
+                                        VMInstruction::SetIndex {
+                                            target: base_reg,
+                                            index: index_reg,
+                                            value: value_reg,
+                                        },
+                                        span,
+                                    );
+                                }
                             }
                             other_base => {
                                 let base_reg = env.lower_node(other_base, span);

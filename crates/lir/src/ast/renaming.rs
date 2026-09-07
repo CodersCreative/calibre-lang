@@ -55,7 +55,11 @@ impl AlphaRenamable for LirNodeType {
                 value.rename(state);
                 data_type.rename(state);
             }
-            Self::Call(LirCall { caller, args }) => {
+            Self::Call(LirCall {
+                caller,
+                args,
+                returns_value: _,
+            }) => {
                 caller.rename(state);
                 for arg in args {
                     arg.rename(state);

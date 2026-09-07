@@ -133,6 +133,7 @@ pub struct LirComparison {
 pub struct LirCall {
     pub caller: Box<LirNodeType>,
     pub args: Vec<LirNodeType>,
+    pub returns_value: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
@@ -387,7 +388,7 @@ impl Display for LirNodeType {
                     operator,
                 }) => format!("{} {} {}", left, operator, right),
                 Self::Load(LirLoad { value }) => format!("{}", value),
-                Self::Call(LirCall { caller, args }) => {
+                Self::Call(LirCall { caller, args, .. }) => {
                     let mut txt = format!("{}(", caller);
                     for arg in args {
                         txt.push_str(&format!("{}, ", arg));

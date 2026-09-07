@@ -282,7 +282,7 @@ impl LirNodeType {
                     worklist.push_global(*value);
                 }
             }
-            LirNodeType::Call(LirCall { caller, args }) => {
+            LirNodeType::Call(LirCall { caller, args, .. }) => {
                 caller.collect_references(
                     registry,
                     reachable_functions,

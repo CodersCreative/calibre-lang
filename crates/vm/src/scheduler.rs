@@ -253,6 +253,7 @@ fn run_task_slice(
                 resolved_captures,
                 quantum,
                 &mut state,
+                true,
             );
 
             task.vm.store_task_state(state);

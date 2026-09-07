@@ -378,6 +378,7 @@ impl NativeFunction for MutexWith {
             vec![current],
             usize::MAX,
             u32::MAX.saturating_sub(4),
+            true,
         )?;
 
         guard.set_value(result.clone());

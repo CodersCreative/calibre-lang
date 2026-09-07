@@ -1,6 +1,6 @@
 use super::ssa::SSABuilder;
 use super::*;
-use calibre_lir::ast::{LirAssign, LirDeclare};
+use calibre_lir::ast::{LirAssign, LirDeclare, LirLoad};
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap, UstrSet};
 
@@ -213,6 +213,7 @@ impl FunctionLowering {
             for (name, _) in &func.params {
                 locals.insert(*name);
             }
+
             for block in &func.blocks {
                 for instr in &block.instructions {
                     match &instr.node_type {

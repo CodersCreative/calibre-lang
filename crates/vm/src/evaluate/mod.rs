@@ -338,6 +338,7 @@ impl VM {
         args: Vec<RuntimeValue>,
         callsite_block: usize,
         callsite_tag: u32,
+        get_result: bool,
     ) -> Result<RuntimeValue, RuntimeError> {
         trace!("calling runtime callable");
         match self.resolve_value_for_op_ref(&callable)? {
@@ -346,6 +347,11 @@ impl VM {
                 let Some(func) = self.resolve_callable_cached(name, callsite) else {
                     return Err(RuntimeError::FunctionNotFound(name.to_string()));
                 };
+
+                if func.pure && (!get_result || !func.returns_value) {
+                    return Ok(RuntimeValue::Null);
+                }
+
                 let mut seen = UstrSet::default();
                 let mut refreshed_caps = Vec::with_capacity(captures.len());
                 let mut seen_names = UstrSet::default();
@@ -393,7 +399,7 @@ impl VM {
                             }
                         }
 
-                        let res = self.run_function(func.as_ref(), args, refreshed)?;
+                        let res = self.run_function(func.as_ref(), args, refreshed, get_result)?;
                         let cache_entry = self
                             .caches
                             .memo
@@ -406,7 +412,7 @@ impl VM {
                     }
                 }
 
-                self.run_function(func.as_ref(), args, refreshed)
+                self.run_function(func.as_ref(), args, refreshed, get_result)
             }
             RuntimeValue::NativeFunction(func) => func.run(self, args),
             #[cfg(feature = "native")]
@@ -437,6 +443,7 @@ impl VM {
                     full_args,
                     callsite_block,
                     callsite_tag.saturating_sub(1),
+                    get_result,
                 )
             }
             other => Err(RuntimeError::InvalidFunctionCallValue(Box::new(other))),
@@ -862,7 +869,7 @@ impl VM {
         args: Vec<RuntimeValue>,
     ) -> Result<RuntimeValue, RuntimeError> {
         self.run_globals()?;
-        self.run_function(function, args, Self::empty_captures())
+        self.run_function(function, args, Self::empty_captures(), true)
     }
 
     #[instrument(skip_all, fields(count = self.registry.globals.len()))]
@@ -932,6 +939,7 @@ impl VM {
         function: &VMFunction,
         args: I,
         captures: Arc<Vec<(Ustr, RuntimeValue)>>,
+        get_result: bool,
     ) -> Result<RuntimeValue, RuntimeError>
     where
         I: IntoIterator<Item = RuntimeValue>,
@@ -939,7 +947,14 @@ impl VM {
         trace!("entering function");
         self.in_global = false;
         let mut state = crate::TaskState::default();
-        match self.run_function_with_budget(function, args, captures, usize::MAX, &mut state)? {
+        match self.run_function_with_budget(
+            function,
+            args,
+            captures,
+            usize::MAX,
+            &mut state,
+            get_result,
+        )? {
             Some(value) => Ok(value),
             None => Ok(RuntimeValue::Null),
         }
@@ -952,6 +967,7 @@ impl VM {
         function: &VMFunction,
         args: &[u16],
         captures: Arc<Vec<(Ustr, RuntimeValue)>>,
+        get_result: bool,
     ) -> Result<RuntimeValue, RuntimeError> {
         let caller_frame = self.frames.len().saturating_sub(1);
 
@@ -1023,7 +1039,7 @@ impl VM {
             }
         }
 
-        if function.returns_value && !returned {
+        if function.returns_value && !returned && get_result {
             result = self.get_reg_value(function.ret_reg).clone();
         }
 
@@ -1051,6 +1067,7 @@ impl VM {
         captures: Arc<Vec<(Ustr, RuntimeValue)>>,
         budget: usize,
         state: &mut crate::TaskState,
+        get_result: bool,
     ) -> Result<Option<RuntimeValue>, RuntimeError>
     where
         I: IntoIterator<Item = RuntimeValue>,
@@ -1144,7 +1161,7 @@ impl VM {
             }
         }
 
-        if function.returns_value && !returned {
+        if function.returns_value && !returned && get_result {
             result = self.get_reg_value(function.ret_reg).clone();
         }
 

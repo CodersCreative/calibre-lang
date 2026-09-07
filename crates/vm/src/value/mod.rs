@@ -40,7 +40,7 @@ use std::{
 use std::{
     cell::UnsafeCell,
     collections::VecDeque,
-    fmt::{Debug, Display, Write},
+    fmt::{Debug, Display},
     sync::{
         Arc, OnceLock,
         atomic::{AtomicBool, AtomicIsize, Ordering},
