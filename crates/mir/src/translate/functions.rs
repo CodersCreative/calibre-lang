@@ -763,6 +763,13 @@ impl MiddleEnvironment {
             }
         }
 
+        if pure && return_type.is_null() {
+            self.context.push_error(
+                self.context
+                    .err_at_current(MiddleErr::PureFunctionNoReturnType),
+            );
+        }
+
         let fn_node = MiddleNode {
             node_type: MiddleNodeType::FunctionDeclaration(MirFunction {
                 parameters: params.clone(),

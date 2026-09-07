@@ -37,6 +37,8 @@ pub enum MiddleErr {
     MacroArg(String),
     #[error("Unexpected macro arg type from : ${0}")]
     UnexpectedMacroArgType(String),
+    #[error("Function marked as @pure but has no return type.")]
+    PureFunctionNoReturnType,
     #[error("Overload Invalid : {0:?}")]
     Overload(String),
     #[error("Unable to find object : {0:?}")]
@@ -196,6 +198,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::MacroArg(_) => "M022",
             Self::InvalidMember => "M023",
             Self::UnexpectedMacroArgType(_) => "M024",
+            Self::PureFunctionNoReturnType => "M025",
             // Type inference failures (codes M030-M049)
             Self::CannotInferVariableType(_) => "M030",
             Self::CannotInferReturnType(_) => "M031",
@@ -288,6 +291,9 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::UnexpectedMacroArgType(x) => {
                 Some(format!("macro arg `{x}` needs to be an identifier"))
             }
+            Self::PureFunctionNoReturnType => Some(String::from(
+                "Add a return type to the function signature or remove @pure because a pure function with no return type would be optimized out at compile time",
+            )),
             Self::EnumVariant(variant) => Some(format!("enum variant `{variant}` does not exist")),
             Self::InvalidType { expected, found } => {
                 Some(format!("expected type `{expected}` but found `{found}`"))
