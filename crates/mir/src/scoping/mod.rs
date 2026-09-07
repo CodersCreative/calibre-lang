@@ -25,7 +25,7 @@ impl Scoping {
         self.scopes
             .get(scope)
             .map(|x| x.get())
-            .ok_or_else(|| MiddleErr::Internal(format!("missing scope {scope}")))
+            .ok_or_else(|| MiddleErr::Scope(format!("{scope}")))
     }
 
     #[inline(always)]
@@ -33,7 +33,7 @@ impl Scoping {
         self.scopes
             .get_mut(scope)
             .map(|x| x.get_mut())
-            .ok_or_else(|| MiddleErr::Internal(format!("missing scope {scope}")))
+            .ok_or_else(|| MiddleErr::Scope(format!("{scope}")))
     }
 
     #[inline(always)]
@@ -274,23 +274,24 @@ impl Scoping {
 
         let path = self.scope_or_err(parent)?.path.clone();
 
-        let parent_name = path.file_name().ok_or_else(|| {
-            MiddleErr::Internal(format!("missing parent filename for scope {parent}"))
-        })?;
+        let parent_name = path
+            .file_name()
+            .ok_or_else(|| MiddleErr::InternalInvalidParentFilename(format!("{parent}")))?;
 
-        let folder = path.parent().ok_or_else(|| {
-            MiddleErr::Internal(format!("missing parent directory for scope {parent}"))
-        })?;
+        let folder = path
+            .parent()
+            .ok_or_else(|| MiddleErr::InternalInvalidParentDirectory(format!("{parent}")))?;
 
         let extra = if parent_name == "main.cal" || parent_name == "mod.cal" {
             String::new()
         } else {
-            let parent_str = parent_name.to_str().ok_or_else(|| {
-                MiddleErr::Internal(format!("invalid parent filename for scope {parent}"))
-            })?;
-            let base = parent_str.split('.').next().ok_or_else(|| {
-                MiddleErr::Internal(format!("invalid parent filename for scope {parent}"))
-            })?;
+            let parent_str = parent_name
+                .to_str()
+                .ok_or_else(|| MiddleErr::InternalInvalidParentFilename(format!("{parent}")))?;
+            let base = parent_str
+                .split('.')
+                .next()
+                .ok_or_else(|| MiddleErr::InternalInvalidParentFilename(format!("{parent}")))?;
             format!("{base}/")
         };
 

@@ -373,9 +373,7 @@ impl MiddleEnvironment {
                     );
                     return Err(self
                         .context
-                        .err_at_current(MiddleErr::Internal(String::from(
-                            "No dollar resolution allowed but dollar ident provided",
-                        ))));
+                        .err_at_current(MiddleErr::InternalNoDollarResolutionAllowed));
                 }
                 let resolved = self
                     .scoping

@@ -100,9 +100,10 @@ impl MiddleEnvironment {
                 header: FunctionHeader {
                     generics: GenericTypes::default(),
                     parameters: Vec::new(),
-                    return_type: self
-                        .resolve_type_from_node(scope, &target)
-                        .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?,
+                    return_type: self.resolve_type_from_node(scope, &target).ok_or_else(|| {
+                        self.context
+                            .err_at_current(MiddleErr::CannotInferCurryTargetType)
+                    })?,
                     param_destructures: Vec::new(),
                 },
                 body: Box::new(AstNode::new_temp_scope(vec![AstNode::ret(target)])),
@@ -116,9 +117,10 @@ impl MiddleEnvironment {
         span: Span,
         target: AstNode,
     ) -> Result<AstNode, MiddleErr> {
-        let ty = self
-            .resolve_type_from_node(scope, &target)
-            .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?;
+        let ty = self.resolve_type_from_node(scope, &target).ok_or_else(|| {
+            self.context
+                .err_at_current(MiddleErr::CannotInferCurryTargetType)
+        })?;
 
         match ty.unwrap_all_refs().data_type {
             ParserInnerType::Function {

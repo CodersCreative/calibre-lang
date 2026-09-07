@@ -7,6 +7,7 @@ use crate::{
     },
     value::{GcVec, RuntimeValue},
 };
+use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -58,7 +59,10 @@ impl NativeFunction for FsPathAsStr {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .to_string_lossy(),
         )))
     }
@@ -81,7 +85,10 @@ impl NativeFunction for FsPathExists {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .exists(),
         ))
     }
@@ -104,7 +111,10 @@ impl NativeFunction for FsPathIsFile {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .is_file(),
         ))
     }
@@ -127,7 +137,10 @@ impl NativeFunction for FsPathIsDir {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .is_dir(),
         ))
     }
@@ -310,7 +323,10 @@ impl NativeFunction for FsPathWithExtension {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .with_extension(other.as_str()),
         ))))
     }
@@ -334,7 +350,10 @@ impl NativeFunction for FsPathWithFileName {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .with_file_name(other.as_str()),
         ))))
     }
@@ -357,7 +376,10 @@ impl NativeFunction for FsPathReadDir {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?,
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?,
         ) {
             Ok(entries) => {
                 let mut out = Vec::new();
@@ -436,7 +458,10 @@ impl NativeFunction for FsDirEntryPath {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<HostDirEntry>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .0
                 .path(),
         ))))
@@ -461,7 +486,10 @@ impl NativeFunction for FsDirEntryFileName {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<HostDirEntry>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .0
                 .file_name()
                 .to_string_lossy(),
@@ -550,7 +578,10 @@ impl NativeFunction for FsFileTypeIsFile {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<FileType>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .is_file(),
         ))
     }
@@ -573,7 +604,10 @@ impl NativeFunction for FsFileTypeIsDir {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<FileType>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .is_dir(),
         ))
     }
@@ -596,7 +630,10 @@ impl NativeFunction for FsFileTypeIsSymlink {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<FileType>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .is_symlink(),
         ))
     }
@@ -621,7 +658,10 @@ impl NativeFunction for FsMetadataIsFile {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<HostMetadata>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .0
                 .is_file(),
         ))
@@ -645,7 +685,10 @@ impl NativeFunction for FsMetadataIsDir {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<HostMetadata>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .0
                 .is_dir(),
         ))
@@ -669,7 +712,10 @@ impl NativeFunction for FsMetadataLen {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<HostMetadata>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .0
                 .len(),
         ))
@@ -801,7 +847,10 @@ impl NativeFunction for FsMetadataIsReadOnly {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<HostMetadata>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?
                 .0
                 .permissions()
                 .readonly(),
@@ -859,7 +908,10 @@ impl NativeFunction for FsFileOpen {
                 .unwrap()
                 .as_any()
                 .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?,
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host,
+                })?,
         ) {
             Ok(file) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
                 Arc::new(Mutex::new(HostFile::from(file))),
@@ -951,7 +1003,10 @@ impl NativeFunction for FsFileWriteLine {
                 .unwrap()
                 .as_any_mut()
                 .downcast_mut::<HostFile>()
-                .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Host
+                })?
                 .0,
             "{}",
             content

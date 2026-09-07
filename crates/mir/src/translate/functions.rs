@@ -550,9 +550,20 @@ impl MiddleEnvironment {
                 self.resolve_data_type(new_scope, &x, ResolutionOptions::typing())?
             } else if let Some(node) = &param.2 {
                 self.resolve_type_from_node(new_scope, node)
-                    .ok_or_else(|| self.context.err_at_current(MiddleErr::InferImpossible))?
+                    .ok_or_else(|| {
+                        self.context
+                            .err_at_current(MiddleErr::CannotInferParameterType(
+                                og_name.to_string(),
+                                "function".to_string(),
+                            ))
+                    })?
             } else {
-                return Err(self.context.err_at_current(MiddleErr::InferImpossible));
+                return Err(self
+                    .context
+                    .err_at_current(MiddleErr::CannotInferParameterType(
+                        og_name.to_string(),
+                        "function".to_string(),
+                    )));
             };
 
             self.register_variable(

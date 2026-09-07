@@ -30,7 +30,12 @@ pub fn emit_calibre_errors<T: CalibreError>(path: impl AsRef<Path>, contents: &s
         ]);
 
         if let Some(hint) = err.hint() {
-            diagnostic = diagnostic.with_notes(vec![format!("hint: {hint}")]);
+            diagnostic = diagnostic.with_notes(vec![
+                format!("hint: {hint}"),
+                format!("step: {}", err.step()),
+            ]);
+        } else {
+            diagnostic = diagnostic.with_notes(vec![format!("step: {}", err.step())]);
         }
 
         let mut writer = writer.lock();
@@ -143,7 +148,12 @@ pub fn emit_calibre_error<T: CalibreError>(
     }
 
     if let Some(hint) = err.hint() {
-        diagnostic = diagnostic.with_notes(vec![format!("hint: {hint}")]);
+        diagnostic = diagnostic.with_notes(vec![
+            format!("hint: {hint}"),
+            format!("step: {}", err.step()),
+        ]);
+    } else {
+        diagnostic = diagnostic.with_notes(vec![format!("step: {}", err.step())]);
     }
 
     let mut writer = writer.lock();

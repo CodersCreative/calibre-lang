@@ -215,7 +215,10 @@ impl TryFrom<RuntimeValue> for HashKey {
             RuntimeValue::Ptr(id) => Ok(Self::Ptr(id)),
             RuntimeValue::Range(a, b) => Ok(Self::Range(a, b)),
             RuntimeValue::Host(x) => Ok(Self::Host(x)),
-            other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+            other => Err(RuntimeError::UnexpectedTypeInConversion {
+                value: Box::new(other),
+                target_type: ParserInnerType::Str,
+            }),
         }
     }
 }

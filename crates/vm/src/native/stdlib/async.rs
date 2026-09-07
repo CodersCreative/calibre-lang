@@ -10,6 +10,7 @@ use crate::{
     },
     value::{ChannelInner, MutexInner, RuntimeValue, WaitGroupInner},
 };
+use calibre_parser::ast::types::ParserInnerType;
 use std::sync::Arc;
 
 pub struct ChannelNew;
@@ -41,7 +42,12 @@ impl NativeFunction for ChannelSend {
             match (first, second) {
                 (RuntimeValue::Channel(ch), value) => (ch, value),
                 (value, RuntimeValue::Channel(ch)) => (ch, value),
-                (left, _) => return Err(RuntimeError::UnexpectedType(Box::new(left))),
+                (left, _) => {
+                    return Err(RuntimeError::UnexpectedTypeInConversion {
+                        value: Box::new(left),
+                        target_type: ParserInnerType::Host,
+                    });
+                }
             }
         };
 
@@ -77,7 +83,12 @@ impl NativeFunction for ChannelTrySend {
             match (first, second) {
                 (RuntimeValue::Channel(ch), value) => (ch, value),
                 (value, RuntimeValue::Channel(ch)) => (ch, value),
-                (left, _) => return Err(RuntimeError::UnexpectedType(Box::new(left))),
+                (left, _) => {
+                    return Err(RuntimeError::UnexpectedTypeInConversion {
+                        value: Box::new(left),
+                        target_type: ParserInnerType::Host,
+                    });
+                }
             }
         };
 

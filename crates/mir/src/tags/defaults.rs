@@ -66,17 +66,13 @@ impl MiddleEnvironment {
                     } else {
                         return Err(MiddleErr::At(
                             span,
-                            Box::new(MiddleErr::Internal(
-                                "Invalid default variant index".to_string(),
-                            )),
+                            Box::new(MiddleErr::InternalInvalidDefaultVariantIndex),
                         ));
                     }
                 } else {
                     return Err(MiddleErr::At(
                         span,
-                        Box::new(MiddleErr::Internal(
-                            "Enum marked with @default but no default variant".to_string(),
-                        )),
+                        Box::new(MiddleErr::InternalMissingDefaultVariant),
                     ));
                 }
             }
@@ -143,9 +139,7 @@ impl MiddleEnvironment {
             _ => {
                 return Err(MiddleErr::At(
                     span,
-                    Box::new(MiddleErr::Internal(
-                        "Cannot generate Default impl for this type".to_string(),
-                    )),
+                    Box::new(MiddleErr::InternalCannotGenerateDefaultImpl),
                 ));
             }
         };

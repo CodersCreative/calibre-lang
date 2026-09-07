@@ -1989,14 +1989,13 @@ impl MiddleEnvironment {
                                     value: if reference.is_some()
                                         && reference != Some(RefMutability::Value)
                                     {
-                                        let mutability = reference.ok_or_else(|| {
-                                            MiddleErr::At(
-                                                value.span,
-                                                Box::new(MiddleErr::Internal(
-                                                    "missing reference mutability".to_string(),
-                                                )),
-                                            )
-                                        })?;
+                                        let mutability =
+                                            reference.ok_or_else(|| {
+                                                MiddleErr::At(
+                                            value.span,
+                                            Box::new(MiddleErr::InternalMissingReferenceMutability),
+                                        )
+                                            })?;
                                         Box::new(AstNode::new(
                                             self.context.current_span(),
                                             AstNodeType::RefStatement {

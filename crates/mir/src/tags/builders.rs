@@ -27,9 +27,7 @@ impl MiddleEnvironment {
         let MiddleTypeDefType::Struct(fields) = object_type else {
             return Err(MiddleErr::At(
                 span,
-                Box::new(MiddleErr::Internal(
-                    "@builder can only be used on structs".into(),
-                )),
+                Box::new(MiddleErr::InternalBuilderOnlyForStructs),
             ));
         };
 

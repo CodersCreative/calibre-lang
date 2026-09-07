@@ -4,7 +4,7 @@ use crate::{
     native::NativeFunction,
     value::{GcMap, RuntimeValue},
 };
-use calibre_parser::ast::ObjectMap;
+use calibre_parser::ast::{ObjectMap, types::ParserInnerType};
 use dumpster::sync::Gc;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -30,7 +30,12 @@ fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<Ustr>, RuntimeError>
         let value = env.resolve_value_for_op_ref(value)?;
         match value {
             RuntimeValue::Str(v) => out.push(v),
-            other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
+            other => {
+                return Err(RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(other),
+                    target_type: ParserInnerType::Str,
+                });
+            }
         }
     }
 
@@ -59,7 +64,10 @@ fn required_str_field(env: &VM, map: &Gc<GcMap>, key: &str) -> Result<Ustr, Runt
     };
     match value {
         RuntimeValue::Str(v) => Ok(v),
-        other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+        other => Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(other),
+            target_type: ParserInnerType::Str,
+        }),
     }
 }
 
@@ -68,10 +76,16 @@ fn parse_optional_string(value: RuntimeValue) -> Result<Option<Ustr>, RuntimeErr
         RuntimeValue::Option(None) => Ok(None),
         RuntimeValue::Option(Some(v)) => match v.as_ref() {
             RuntimeValue::Str(v) => Ok(Some(*v)),
-            other => Err(RuntimeError::UnexpectedType(Box::new(other.clone()))),
+            other => Err(RuntimeError::UnexpectedTypeInConversion {
+                value: Box::new(other.clone()),
+                target_type: ParserInnerType::Str,
+            }),
         },
         RuntimeValue::Str(v) => Ok(Some(v)),
-        other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+        other => Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(other),
+            target_type: ParserInnerType::Str,
+        }),
     }
 }
 
@@ -94,7 +108,11 @@ fn parse_options(env: &VM, options: RuntimeValue) -> Result<RawExecOptions, Runt
 
     let shell = match resolve_field(env, &map, "shell")? {
         Some(RuntimeValue::Bool(v)) => v,
-        Some(other) => return Err(RuntimeError::UnexpectedType(Box::new(other))),
+        Some(other) => {
+            return Err(RuntimeError::ExpectedBoolFound {
+                found: Box::new(other),
+            });
+        }
         None => false,
     };
 
@@ -105,7 +123,11 @@ fn parse_options(env: &VM, options: RuntimeValue) -> Result<RawExecOptions, Runt
 
     let check = match resolve_field(env, &map, "check")? {
         Some(RuntimeValue::Bool(v)) => v,
-        Some(other) => return Err(RuntimeError::UnexpectedType(Box::new(other))),
+        Some(other) => {
+            return Err(RuntimeError::ExpectedBoolFound {
+                found: Box::new(other),
+            });
+        }
         None => false,
     };
 

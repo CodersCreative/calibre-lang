@@ -56,12 +56,22 @@ impl MiddleEnvironment {
                 (Some(x), None) => Ok(x),
                 (None, Some(x)) => Ok(x),
                 (Some(x), _) => Ok(x),
-                (None, None) => Err(self.context.err_at_current(MiddleErr::InferImpossible)),
+                (None, None) => {
+                    Err(self
+                        .context
+                        .err_at_current(MiddleErr::CannotInferFromExpression(
+                            "type resolution".to_string(),
+                        )))
+                }
             };
         }
 
         match (type1, type2) {
-            (None, None) => Err(self.context.err_at_current(MiddleErr::InferImpossible)),
+            (None, None) => Err(self
+                .context
+                .err_at_current(MiddleErr::CannotInferFromExpression(
+                    "type resolution".to_string(),
+                ))),
             (Some(x), None) => Ok(x),
             (None, Some(x)) => Ok(x),
             (Some(x), Some(_))
@@ -103,7 +113,11 @@ impl MiddleEnvironment {
         }
 
         match (type1, type2) {
-            (None, None) => Err(self.context.err_at_current(MiddleErr::InferImpossible)),
+            (None, None) => Err(self
+                .context
+                .err_at_current(MiddleErr::CannotInferFromExpression(
+                    "type comparison".to_string(),
+                ))),
             (Some(_), None) => Ok(()),
             (None, Some(_)) => Ok(()),
             (Some(_), Some(_))
@@ -190,9 +204,7 @@ impl MiddleEnvironment {
                     value: ParsedIntLiteral::parse(text.clone()).ok_or_else(|| {
                         MiddleErr::At(
                             node.span,
-                            Box::new(MiddleErr::Internal(format!(
-                                "invalid integer literal {text}"
-                            ))),
+                            Box::new(MiddleErr::InvalidIntegerLiteral(text.to_string())),
                         )
                     })?,
                 }),
@@ -1400,7 +1412,11 @@ impl MiddleEnvironment {
                 if let Some(x) = data_type {
                     value.data_type(x);
                 } else {
-                    return Err(self.context.err_at_current(MiddleErr::InferImpossible));
+                    return Err(self
+                        .context
+                        .err_at_current(MiddleErr::CannotInferFromExpression(
+                            "list literal".to_string(),
+                        )));
                 }
 
                 Ok(MiddleNode {
@@ -1420,9 +1436,7 @@ impl MiddleEnvironment {
                     _ => {
                         return Err(MiddleErr::At(
                             count.span,
-                            Box::new(MiddleErr::Internal(
-                                "list repeat count must be an int literal".to_string(),
-                            )),
+                            Box::new(MiddleErr::InvalidListRepeatCount),
                         ));
                     }
                 };
@@ -1829,7 +1843,7 @@ impl MiddleEnvironment {
                     let impl_ref = self.typing.impls.get_mut(&impl_key).ok_or_else(|| {
                         MiddleErr::At(
                             node.span,
-                            Box::new(MiddleErr::Internal(format!("missing impl {impl_key:?}"))),
+                            Box::new(MiddleErr::InternalMissingImpl(format!("{impl_key:?}"))),
                         )
                     })?;
 
@@ -1947,9 +1961,7 @@ impl MiddleEnvironment {
                         AstNodeType::TypeDeclaration { .. } => Ok(None),
                         _ => Err(MiddleErr::At(
                             var.span,
-                            Box::new(MiddleErr::Internal(
-                                "expected variable declaration in impl".to_string(),
-                            )),
+                            Box::new(MiddleErr::InternalExpectedVariableInImpl),
                         )),
                     }
                 }
@@ -1970,9 +1982,7 @@ impl MiddleEnvironment {
                         _ => {
                             return Err(MiddleErr::At(
                                 dec.span,
-                                Box::new(MiddleErr::Internal(
-                                    "impl body did not lower to variable declaration".to_string(),
-                                )),
+                                Box::new(MiddleErr::InternalImplBodyNotVariableDeclaration),
                             ));
                         }
                     };
@@ -1983,7 +1993,7 @@ impl MiddleEnvironment {
                         .ok_or_else(|| {
                             MiddleErr::At(
                                 dec.span,
-                                Box::new(MiddleErr::Internal(format!("missing impl {impl_key:?}"))),
+                                Box::new(MiddleErr::InternalMissingImpl(format!("{impl_key:?}"))),
                             )
                         })?
                         .insert_member(
@@ -2132,7 +2142,7 @@ impl MiddleEnvironment {
                         let impl_ref = self.typing.impls.get_mut(&impl_key).ok_or_else(|| {
                             MiddleErr::At(
                                 node.span,
-                                Box::new(MiddleErr::Internal(format!("missing impl {impl_key:?}"))),
+                                Box::new(MiddleErr::InternalMissingImpl(format!("{impl_key:?}"))),
                             )
                         })?;
 
@@ -2144,7 +2154,7 @@ impl MiddleEnvironment {
                     let impl_ref = self.typing.impls.get_mut(&impl_key).ok_or_else(|| {
                         MiddleErr::At(
                             node.span,
-                            Box::new(MiddleErr::Internal(format!("missing impl {impl_key:?}"))),
+                            Box::new(MiddleErr::InternalMissingImpl(format!("{impl_key:?}"))),
                         )
                     })?;
                     for var in &all_vars {
@@ -2233,9 +2243,7 @@ impl MiddleEnvironment {
                         _ => {
                             return Err(MiddleErr::At(
                                 var.span,
-                                Box::new(MiddleErr::Internal(
-                                    "expected variable declaration in impl trait".to_string(),
-                                )),
+                                Box::new(MiddleErr::InternalExpectedVariableInImpl),
                             ));
                         }
                     };
@@ -2249,10 +2257,7 @@ impl MiddleEnvironment {
                         _ => {
                             return Err(MiddleErr::At(
                                 var.span,
-                                Box::new(MiddleErr::Internal(
-                                    "impl trait body did not lower to variable declaration"
-                                        .to_string(),
-                                )),
+                                Box::new(MiddleErr::InternalImplBodyNotVariableDeclaration),
                             ));
                         }
                     };
@@ -2260,7 +2265,7 @@ impl MiddleEnvironment {
                     let impl_ref = self.typing.impls.get_mut(&impl_key).ok_or_else(|| {
                         MiddleErr::At(
                             var.span,
-                            Box::new(MiddleErr::Internal(format!("missing impl {impl_key:?}"))),
+                            Box::new(MiddleErr::InternalMissingImpl(format!("{impl_key:?}"))),
                         )
                     })?;
 

@@ -14,7 +14,9 @@ fn compare_callback_result(env: &VM, result: &RuntimeValue) -> Result<Ordering, 
         RuntimeValue::Int(v) => Ok(v.cmp(&0)),
         RuntimeValue::UInt(v) => Ok((v as i128).cmp(&0)),
         RuntimeValue::Float(v) => Ok(v.partial_cmp(&0.0).unwrap_or(Ordering::Equal)),
-        other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+        other => Err(RuntimeError::ExpectedNumericFound {
+            found: Box::new(other),
+        }),
     }
 }
 
@@ -177,7 +179,9 @@ fn remove_from_target(
     match target {
         RuntimeValue::Ref(name) => {
             let Some(current) = env.variables.get(&name).cloned() else {
-                return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+                return Err(RuntimeError::ExpectedListOrStrFound {
+                    found: Box::new(RuntimeValue::Null),
+                });
             };
             match current {
                 RuntimeValue::List(mut list) => {
@@ -190,12 +194,16 @@ fn remove_from_target(
                 alias @ (RuntimeValue::Ref(_)
                 | RuntimeValue::VarRef(_)
                 | RuntimeValue::RegRef { .. }) => remove_from_target(env, alias, idx),
-                other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+                other => Err(RuntimeError::ExpectedListOrStrFound {
+                    found: Box::new(other),
+                }),
             }
         }
         RuntimeValue::VarRef(id) => {
             let Some(current) = env.variables.get_by_id(id).cloned() else {
-                return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+                return Err(RuntimeError::ExpectedListOrStrFound {
+                    found: Box::new(RuntimeValue::Null),
+                });
             };
             match current {
                 RuntimeValue::List(mut list) => {
@@ -208,7 +216,9 @@ fn remove_from_target(
                 alias @ (RuntimeValue::Ref(_)
                 | RuntimeValue::VarRef(_)
                 | RuntimeValue::RegRef { .. }) => remove_from_target(env, alias, idx),
-                other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+                other => Err(RuntimeError::ExpectedListOrStrFound {
+                    found: Box::new(other),
+                }),
             }
         }
         RuntimeValue::RegRef { frame, reg } => {
@@ -228,13 +238,17 @@ fn remove_from_target(
                 alias @ (RuntimeValue::Ref(_)
                 | RuntimeValue::VarRef(_)
                 | RuntimeValue::RegRef { .. }) => remove_from_target(env, alias, idx),
-                other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+                other => Err(RuntimeError::ExpectedListOrStrFound {
+                    found: Box::new(other),
+                }),
             }
         }
         other => {
             let resolved = env.resolve_value_for_op_ref(&other)?;
             let RuntimeValue::List(mut list) = resolved else {
-                return Err(RuntimeError::UnexpectedType(Box::new(other)));
+                return Err(RuntimeError::ExpectedListOrStrFound {
+                    found: Box::new(other),
+                });
             };
             Ok(remove_from_list_value(&mut list, idx))
         }

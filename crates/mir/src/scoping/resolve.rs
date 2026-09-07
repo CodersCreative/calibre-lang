@@ -115,9 +115,11 @@ impl MiddleEnvironment {
                     bundled.to_string()
                 } else {
                     fs::read_to_string(&path).map_err(|err| {
-                        self.context.err_at_current(MiddleErr::Internal(format!(
-                            "failed to read {path:?}: {err}"
-                        )))
+                        self.context
+                            .err_at_current(MiddleErr::InternalFileReadFailed {
+                                path: path.clone(),
+                                error: err.to_string(),
+                            })
                     })?
                 };
                 parser.set_source_path(Some(path.clone()));
@@ -175,9 +177,11 @@ impl MiddleEnvironment {
             bundled.to_string()
         } else {
             fs::read_to_string(&path).map_err(|err| {
-                self.context.err_at_current(MiddleErr::Internal(format!(
-                    "failed to read {path:?}: {err}"
-                )))
+                self.context
+                    .err_at_current(MiddleErr::InternalFileReadFailed {
+                        path: path.clone(),
+                        error: err.to_string(),
+                    })
             })?
         };
 

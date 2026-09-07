@@ -7,6 +7,7 @@ use crate::{
     },
     value::{GcVec, HashKey, RuntimeValue},
 };
+use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
@@ -15,21 +16,24 @@ use wasm_sync::Mutex;
 fn tuple_pair(value: RuntimeValue) -> Result<(RuntimeValue, RuntimeValue), RuntimeError> {
     match value {
         RuntimeValue::Aggregate(_, map) => {
-            let left = map
-                .as_ref()
-                .0
-                .get("0")
-                .cloned()
-                .ok_or(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
-            let right = map
-                .as_ref()
-                .0
-                .get("1")
-                .cloned()
-                .ok_or(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
+            let left = map.as_ref().0.get("0").cloned().ok_or(
+                RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Str,
+                },
+            )?;
+            let right = map.as_ref().0.get("1").cloned().ok_or(
+                RuntimeError::UnexpectedTypeInConversion {
+                    value: Box::new(RuntimeValue::Null),
+                    target_type: ParserInnerType::Str,
+                },
+            )?;
             Ok((left, right))
         }
-        other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+        other => Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(other),
+            target_type: ParserInnerType::Str,
+        }),
     }
 }
 
@@ -51,7 +55,10 @@ impl NativeFunction for HashMapNew {
         let mut map: FxHashMap<HashKey, RuntimeValue> = FxHashMap::default();
 
         let RuntimeValue::List(list) = env.resolve_value_for_op_ref(&entries)? else {
-            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+            return Err(RuntimeError::UnexpectedTypeInConversion {
+                value: Box::new(RuntimeValue::Null),
+                target_type: ParserInnerType::Str,
+            });
         };
 
         for item in list.as_ref().0.iter().cloned() {
@@ -292,7 +299,10 @@ impl NativeFunction for HashSetNew {
         let mut set: FxHashSet<HashKey> = FxHashSet::default();
 
         let RuntimeValue::List(list) = env.resolve_value_for_op_ref(&entries)? else {
-            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+            return Err(RuntimeError::UnexpectedTypeInConversion {
+                value: Box::new(RuntimeValue::Null),
+                target_type: ParserInnerType::Str,
+            });
         };
 
         for item in list.as_ref().0.iter() {

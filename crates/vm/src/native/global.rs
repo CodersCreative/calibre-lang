@@ -7,6 +7,7 @@ use crate::{
     },
     value::{GcMap, RuntimeValue},
 };
+use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
 use std::{
     io::{self, BufRead, Write},
@@ -223,7 +224,10 @@ impl NativeFunction for AssertFn {
                 let msg = args.first().map(panic_message_arg);
                 Err(RuntimeError::Panic(msg))
             }
-            other => Err(RuntimeError::UnexpectedType(Box::new(other.clone()))),
+            other => Err(RuntimeError::UnexpectedTypeInConversion {
+                value: Box::new(other.clone()),
+                target_type: ParserInnerType::Bool,
+            }),
         }
     }
 }
@@ -250,7 +254,12 @@ impl NativeFunction for Len {
                 RuntimeValue::Int(x) => x as u64,
                 RuntimeValue::UInt(x) => x,
                 RuntimeValue::Float(x) => x as u64,
-                other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
+                other => {
+                    return Err(RuntimeError::UnexpectedTypeInConversion {
+                        value: Box::new(other),
+                        target_type: ParserInnerType::Str,
+                    });
+                }
             },
         ))
     }
@@ -287,7 +296,10 @@ impl NativeFunction for Trim {
 
         match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Ustr::from(s.trim()))),
-            other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+            other => Err(RuntimeError::UnexpectedTypeInConversion {
+                value: Box::new(other),
+                target_type: ParserInnerType::Str,
+            }),
         }
     }
 }
@@ -304,7 +316,10 @@ impl NativeFunction for TrimStart {
 
         match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Ustr::from(s.trim_start()))),
-            other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+            other => Err(RuntimeError::UnexpectedTypeInConversion {
+                value: Box::new(other),
+                target_type: ParserInnerType::Str,
+            }),
         }
     }
 }
@@ -321,7 +336,10 @@ impl NativeFunction for TrimEnd {
 
         match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Ustr::from(s.trim_end()))),
-            other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+            other => Err(RuntimeError::UnexpectedTypeInConversion {
+                value: Box::new(other),
+                target_type: ParserInnerType::Str,
+            }),
         }
     }
 }
@@ -338,7 +356,10 @@ impl NativeFunction for IsWhitespace {
         match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Bool(s.chars().all(|c| c.is_whitespace()))),
             RuntimeValue::Char(c) => Ok(RuntimeValue::Bool(c.is_whitespace())),
-            other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+            other => Err(RuntimeError::UnexpectedTypeInConversion {
+                value: Box::new(other),
+                target_type: ParserInnerType::Str,
+            }),
         }
     }
 }

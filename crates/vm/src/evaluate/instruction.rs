@@ -52,7 +52,9 @@ impl VM {
 
         match value {
             RuntimeValue::Bool(v) => Ok(v),
-            other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+            other => Err(RuntimeError::ExpectedBoolFound {
+                found: Box::new(other),
+            }),
         }
     }
 
@@ -698,7 +700,9 @@ impl VM {
                         RuntimeValue::Aggregate(_, v) => Ok(v.as_ref().0.0.len() as i64),
                         RuntimeValue::Str(v) => Ok(v.len() as i64),
                         RuntimeValue::Range(from, to) => Ok((to - from).max(0)),
-                        other => Err(RuntimeError::UnexpectedType(Box::new(other))),
+                        other => Err(RuntimeError::ExpectedNumericFound {
+                            found: Box::new(other),
+                        }),
                     }
                 };
                 let from = as_range_bound(from)?;
@@ -1040,8 +1044,9 @@ impl VM {
                         }
                     }
                     RuntimeValue::Aggregate(None, map) => {
-                        let idx = tuple_index
-                            .ok_or(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?;
+                        let idx = tuple_index.ok_or(RuntimeError::ExpectedIntIndexFound {
+                            found: Box::new(RuntimeValue::Null),
+                        })?;
                         if let Some((_, value)) = map.as_ref().0.0.get(idx) {
                             value.clone()
                         } else {
@@ -1287,7 +1292,9 @@ impl VM {
                         if let Some(type_name) = other.impl_name() {
                             bind_assoc(self, type_name.as_str(), other)?
                         } else {
-                            return Err(RuntimeError::UnexpectedType(Box::new(other)));
+                            return Err(RuntimeError::ExpectedStructOrAggregateFound {
+                                found: Box::new(other),
+                            });
                         }
                     }
                 };
@@ -1343,7 +1350,9 @@ impl VM {
                             }
                         }
                         _ => {
-                            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+                            return Err(RuntimeError::ExpectedAggregateFound {
+                                found: Box::new(RuntimeValue::Null),
+                            });
                         }
                     }
                     Ok(map)
@@ -1351,7 +1360,9 @@ impl VM {
                 let update_generator =
                     |generator_value: RuntimeValue| -> Result<RuntimeValue, RuntimeError> {
                         let RuntimeValue::Generator { type_name, state } = generator_value else {
-                            return Err(RuntimeError::UnexpectedType(Box::new(generator_value)));
+                            return Err(RuntimeError::ExpectedGeneratorFound {
+                                found: Box::new(generator_value),
+                            });
                         };
 
                         let member_key = short_name.unwrap_or(name);
@@ -1368,17 +1379,17 @@ impl VM {
                                 RuntimeValue::Int(x) => guard.index = (*x).max(0),
                                 RuntimeValue::UInt(x) => guard.index = *x as i64,
                                 other => {
-                                    return Err(RuntimeError::UnexpectedType(Box::new(
-                                        (*other).clone(),
-                                    )));
+                                    return Err(RuntimeError::ExpectedIntForGeneratorIndex {
+                                        found: Box::new((*other).clone()),
+                                    });
                                 }
                             },
                             "done" => match &value {
                                 RuntimeValue::Bool(x) => guard.completed = *x,
                                 other => {
-                                    return Err(RuntimeError::UnexpectedType(Box::new(
-                                        (*other).clone(),
-                                    )));
+                                    return Err(RuntimeError::ExpectedBoolForGeneratorDone {
+                                        found: Box::new((*other).clone()),
+                                    });
                                 }
                             },
                             _ => {}
@@ -1418,7 +1429,11 @@ impl VM {
                                 RuntimeValue::Generator { .. } => {
                                     self.variables.insert(ref_name, update_generator(current)?);
                                 }
-                                other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
+                                other => {
+                                    return Err(RuntimeError::ExpectedGeneratorFound {
+                                        found: Box::new(other),
+                                    });
+                                }
                             }
                             handled = true;
                             break;
@@ -1449,7 +1464,11 @@ impl VM {
                                     let _ =
                                         self.variables.set_by_id(id, update_generator(current)?);
                                 }
-                                other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
+                                other => {
+                                    return Err(RuntimeError::ExpectedGeneratorFound {
+                                        found: Box::new(other),
+                                    });
+                                }
                             }
                             handled = true;
                             break;
@@ -1504,7 +1523,11 @@ impl VM {
                                         update_generator(current)?,
                                     );
                                 }
-                                other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
+                                other => {
+                                    return Err(RuntimeError::ExpectedGeneratorFound {
+                                        found: Box::new(other),
+                                    });
+                                }
                             }
                             handled = true;
                             break;
@@ -1545,7 +1568,11 @@ impl VM {
                             handled = true;
                             break;
                         }
-                        other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
+                        other => {
+                            return Err(RuntimeError::ExpectedGeneratorFound {
+                                found: Box::new(other),
+                            });
+                        }
                     }
                 }
 
@@ -1601,7 +1628,9 @@ impl VM {
                             let slice = list.as_ref().0[s..e].to_vec();
                             Ok(RuntimeValue::List(Gc::new(GcVec(slice))))
                         }
-                        _ => Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))),
+                        _ => Err(RuntimeError::ExpectedListOrStrFound {
+                            found: Box::new(RuntimeValue::Null),
+                        }),
                     }
                 };
 
@@ -1639,7 +1668,9 @@ impl VM {
                             RuntimeValue::Range(start + s as i64, start + e as i64)
                         }
                         _ => {
-                            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+                            return Err(RuntimeError::ExpectedIntIndexFound {
+                                found: Box::new(RuntimeValue::Null),
+                            });
                         }
                     },
                     RuntimeValue::Aggregate(None, tuple) => match &index_val {
@@ -1665,7 +1696,9 @@ impl VM {
                             )
                         }
                         _ => {
-                            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+                            return Err(RuntimeError::ExpectedIntIndexFound {
+                                found: Box::new(RuntimeValue::Null),
+                            });
                         }
                     },
                     RuntimeValue::Aggregate(Some(_), tuple) => match &index_val {
@@ -1695,7 +1728,9 @@ impl VM {
                             .map(|(_, v)| v.clone())
                             .unwrap_or_else(|| RuntimeValue::Null),
                         _ => {
-                            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+                            return Err(RuntimeError::ExpectedIntIndexFound {
+                                found: Box::new(RuntimeValue::Null),
+                            });
                         }
                     },
                     RuntimeValue::Str(s) => match &index_val {
@@ -1723,14 +1758,21 @@ impl VM {
                             RuntimeValue::Str(Ustr::from(&slice))
                         }
                         _ => {
-                            return Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)));
+                            return Err(RuntimeError::ExpectedIntIndexFound {
+                                found: Box::new(RuntimeValue::Null),
+                            });
                         }
                     },
                     RuntimeValue::Enum(_, _, Some(x)) => x.as_ref().clone(),
                     RuntimeValue::Option(Some(x)) => x.as_ref().clone(),
                     RuntimeValue::Result(Ok(x)) => x.as_ref().clone(),
                     RuntimeValue::Result(Err(x)) => x.as_ref().clone(),
-                    other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
+                    other => {
+                        return Err(RuntimeError::UnexpectedTypeInIndexAccess {
+                            target: Box::new(other),
+                            index: Box::new(index_val.clone()),
+                        });
+                    }
                 };
 
                 self.set_reg_value(*dst, val);
@@ -1753,7 +1795,9 @@ impl VM {
                 let numeric_index = || match index_val.clone() {
                     RuntimeValue::Int(index) => Ok(index),
                     RuntimeValue::UInt(index) => Ok(index as i64),
-                    _ => Err(RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null))),
+                    _ => Err(RuntimeError::ExpectedIntIndexFound {
+                        found: Box::new(RuntimeValue::Null),
+                    }),
                 };
 
                 let hash_index = || crate::value::HashKey::try_from(index_val.clone());
@@ -1779,9 +1823,9 @@ impl VM {
                                 RuntimeValue::List(mut list) => {
                                     let index = numeric_index()?;
                                     if index < 0 {
-                                        return Err(RuntimeError::UnexpectedType(Box::new(
-                                            RuntimeValue::Null,
-                                        )));
+                                        return Err(RuntimeError::ExpectedListOrStrFound {
+                                            found: Box::new(RuntimeValue::Null),
+                                        });
                                     }
 
                                     let vec = &mut Gc::make_mut(&mut list).0;
@@ -1802,9 +1846,9 @@ impl VM {
                                     guard.insert(key, value);
                                 }
                                 _ => {
-                                    return Err(RuntimeError::UnexpectedType(Box::new(
-                                        RuntimeValue::Null,
-                                    )));
+                                    return Err(RuntimeError::ExpectedListOrStrFound {
+                                        found: Box::new(RuntimeValue::Null),
+                                    });
                                 }
                             }
                             handled = true;
@@ -1826,9 +1870,9 @@ impl VM {
                                 RuntimeValue::List(mut list) => {
                                     let index = numeric_index()?;
                                     if index < 0 {
-                                        return Err(RuntimeError::UnexpectedType(Box::new(
-                                            RuntimeValue::Null,
-                                        )));
+                                        return Err(RuntimeError::ExpectedListOrStrFound {
+                                            found: Box::new(RuntimeValue::Null),
+                                        });
                                     }
 
                                     let vec = &mut Gc::make_mut(&mut list).0;
@@ -1849,9 +1893,9 @@ impl VM {
                                     guard.insert(key, value);
                                 }
                                 _ => {
-                                    return Err(RuntimeError::UnexpectedType(Box::new(
-                                        RuntimeValue::Null,
-                                    )));
+                                    return Err(RuntimeError::ExpectedListOrStrFound {
+                                        found: Box::new(RuntimeValue::Null),
+                                    });
                                 }
                             }
                             handled = true;
@@ -1870,9 +1914,9 @@ impl VM {
                                     let index = numeric_index()?;
 
                                     if index < 0 {
-                                        return Err(RuntimeError::UnexpectedType(Box::new(
-                                            RuntimeValue::Null,
-                                        )));
+                                        return Err(RuntimeError::ExpectedListOrStrFound {
+                                            found: Box::new(RuntimeValue::Null),
+                                        });
                                     }
 
                                     let vec = &mut Gc::make_mut(&mut list).0;
@@ -1906,9 +1950,9 @@ impl VM {
                                     guard.insert(key, value);
                                 }
                                 _ => {
-                                    return Err(RuntimeError::UnexpectedType(Box::new(
-                                        RuntimeValue::Null,
-                                    )));
+                                    return Err(RuntimeError::ExpectedListOrStrFound {
+                                        found: Box::new(RuntimeValue::Null),
+                                    });
                                 }
                             }
                             handled = true;
@@ -1918,9 +1962,9 @@ impl VM {
                             let index = numeric_index()?;
 
                             if index < 0 {
-                                return Err(RuntimeError::UnexpectedType(Box::new(
-                                    RuntimeValue::Null,
-                                )));
+                                return Err(RuntimeError::ExpectedListOrStrFound {
+                                    found: Box::new(RuntimeValue::Null),
+                                });
                             }
 
                             let vec = &mut Gc::make_mut(&mut list).0;
@@ -1954,7 +1998,11 @@ impl VM {
                             handled = true;
                             break;
                         }
-                        other => return Err(RuntimeError::UnexpectedType(Box::new(other))),
+                        other => {
+                            return Err(RuntimeError::ExpectedListOrStrFound {
+                                found: Box::new(other),
+                            });
+                        }
                     }
                 }
                 if !handled {

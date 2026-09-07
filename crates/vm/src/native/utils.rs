@@ -6,6 +6,7 @@ use crate::{
         WaitGroupInner,
     },
 };
+use calibre_parser::ast::types::ParserInnerType;
 use std::ops::Range;
 use std::sync::Arc;
 use ustr::Ustr;
@@ -54,7 +55,10 @@ pub fn resolve_str(env: &VM, value: &RuntimeValue) -> Result<Ustr, RuntimeError>
     if let RuntimeValue::Str(s) = value {
         Ok(s)
     } else {
-        Err(RuntimeError::UnexpectedType(Box::new(value)))
+        Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(value),
+            target_type: ParserInnerType::Str,
+        })
     }
 }
 
@@ -64,7 +68,10 @@ pub fn resolve_host(env: &VM, value: &RuntimeValue) -> Result<Host, RuntimeError
     if let RuntimeValue::Host(v) = value {
         Ok(v)
     } else {
-        Err(RuntimeError::UnexpectedType(Box::new(value)))
+        Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(value),
+            target_type: ParserInnerType::Host,
+        })
     }
 }
 
@@ -76,7 +83,7 @@ pub fn resolve_int(env: &VM, value: &RuntimeValue) -> Result<i64, RuntimeError> 
         RuntimeValue::UInt(v) => v as i64,
         RuntimeValue::Byte(v) => v as i64,
         RuntimeValue::Float(v) => v as i64,
-        v => return Err(RuntimeError::UnexpectedType(Box::new(v))),
+        v => return Err(RuntimeError::ExpectedIntFound { found: Box::new(v) }),
     })
 }
 
@@ -84,7 +91,12 @@ pub fn resolve_int(env: &VM, value: &RuntimeValue) -> Result<i64, RuntimeError> 
 pub fn resolve_range(env: &VM, value: &RuntimeValue) -> Result<Range<i64>, RuntimeError> {
     Ok(match env.resolve_value_for_op_ref(value)? {
         RuntimeValue::Range(from, to) => from..to,
-        v => return Err(RuntimeError::UnexpectedType(Box::new(v))),
+        v => {
+            return Err(RuntimeError::UnexpectedTypeInConversion {
+                value: Box::new(v),
+                target_type: ParserInnerType::Range,
+            });
+        }
     })
 }
 
@@ -94,7 +106,10 @@ pub fn resolve_char(env: &VM, value: &RuntimeValue) -> Result<char, RuntimeError
     if let RuntimeValue::Char(v) = value {
         Ok(v)
     } else {
-        Err(RuntimeError::UnexpectedType(Box::new(value)))
+        Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(value),
+            target_type: ParserInnerType::Char,
+        })
     }
 }
 
@@ -105,7 +120,10 @@ pub fn resolve_channel(env: &VM, value: &RuntimeValue) -> Result<Arc<ChannelInne
     if let RuntimeValue::Channel(ch) = value {
         Ok(ch)
     } else {
-        Err(RuntimeError::UnexpectedType(Box::new(value)))
+        Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(value),
+            target_type: ParserInnerType::Host,
+        })
     }
 }
 
@@ -118,7 +136,10 @@ pub fn resolve_waitgroup(
     if let RuntimeValue::WaitGroup(wg) = value {
         Ok(wg)
     } else {
-        Err(RuntimeError::UnexpectedType(Box::new(value)))
+        Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(value),
+            target_type: ParserInnerType::Host,
+        })
     }
 }
 
@@ -128,7 +149,10 @@ pub fn resolve_mutex(env: &VM, value: &RuntimeValue) -> Result<Arc<MutexInner>, 
     if let RuntimeValue::Mutex(mutex) = value {
         Ok(mutex)
     } else {
-        Err(RuntimeError::UnexpectedType(Box::new(value)))
+        Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(value),
+            target_type: ParserInnerType::Host,
+        })
     }
 }
 
@@ -145,7 +169,10 @@ pub fn resolve_hashmap(env: &mut VM, value: &RuntimeValue) -> Result<RuntimeHash
     if let RuntimeValue::HashMap(map) = resolved {
         Ok(map)
     } else {
-        Err(RuntimeError::UnexpectedType(Box::new(resolved)))
+        Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(resolved),
+            target_type: ParserInnerType::Str,
+        })
     }
 }
 
@@ -155,6 +182,9 @@ pub fn resolve_hashset(env: &mut VM, value: &RuntimeValue) -> Result<RuntimeHash
     if let RuntimeValue::HashSet(set) = resolved {
         Ok(set)
     } else {
-        Err(RuntimeError::UnexpectedType(Box::new(resolved)))
+        Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(resolved),
+            target_type: ParserInnerType::Str,
+        })
     }
 }

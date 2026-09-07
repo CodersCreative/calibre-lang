@@ -71,12 +71,12 @@ impl MiddleEnvironment {
 
         let result_raw = result_raw.ok_or_else(|| {
             self.context
-                .err_at_current(MiddleErr::Internal("loop result missing".to_string()))
+                .err_at_current(MiddleErr::InternalLoopResultMissing)
         })?;
 
         let broke_raw = broke_raw.ok_or_else(|| {
             self.context
-                .err_at_current(MiddleErr::Internal("loop broke missing".to_string()))
+                .err_at_current(MiddleErr::InternalLoopBrokeMissing)
         })?;
 
         let result_ident = ParserText::from(result_raw);
