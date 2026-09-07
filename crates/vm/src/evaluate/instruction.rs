@@ -352,12 +352,6 @@ impl VM {
                     return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
                 };
 
-                if let Some(step) =
-                    self.try_tail_call(block, ip, dst, args, func.as_ref(), &captures)
-                {
-                    return Ok(Some(step));
-                }
-
                 let mut refreshed_caps = Vec::with_capacity(captures.len());
                 let mut seen = UstrSet::default();
 
@@ -828,11 +822,6 @@ impl VM {
                     ));
                 }
                 let func = unsafe { &*func_ptr };
-
-                let empty_caps = Self::empty_captures();
-                if let Some(step) = self.try_tail_call(block, ip, *dst, args, func, &empty_caps) {
-                    return Ok(step);
-                }
 
                 if func.memo {
                     let caller_frame = self.frames.len().saturating_sub(1);

@@ -18,7 +18,6 @@ use ustr::{Ustr, UstrMap, UstrSet};
 use wasm_sync::Mutex;
 
 mod instruction;
-mod tailcall;
 
 #[derive(Debug)]
 enum CaptureRestore {
