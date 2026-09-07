@@ -1208,7 +1208,7 @@ impl VM {
         if start_ip == 0 {
             self.apply_phis(block, prev)?;
         }
-        
+
         let mut fuel = budget.unwrap_or(usize::MAX);
 
         for (ip, instruction) in block.instructions.iter().enumerate().skip(start_ip) {

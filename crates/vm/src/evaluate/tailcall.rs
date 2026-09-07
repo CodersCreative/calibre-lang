@@ -93,13 +93,15 @@ impl VM {
             return None;
         }
 
-        if block.id == func.entry && self.current_frame().func_ptr == func as *const VMFunction as usize {
+        if block.id == func.entry
+            && self.current_frame().func_ptr == func as *const VMFunction as usize
+        {
             return None;
         }
 
         // TODO Remove this because its a bit sketch and way too restrictive but...
         // It does still stop any unchecked recursion here
-        if func.entry.0 == block.id.0 {
+        if func.entry == block.id {
             return None;
         }
 

@@ -80,14 +80,12 @@ impl VM {
                     unreachable!()
                 }
             }
-            Some(VarName::Func(func)) => {
-                self
+            Some(VarName::Func(func)) => self
                 .registry
                 .functions
                 .get(&func)
                 .map(|f| self.make_runtime_function_inner(f, seen))
-                .unwrap_or_else(|| RuntimeValue::Null)
-            },
+                .unwrap_or_else(|| RuntimeValue::Null),
             _ => RuntimeValue::Null,
         }
     }
@@ -104,13 +102,13 @@ impl VM {
 
         let mut out = Vec::with_capacity(captures.len());
         let mut seen_names = UstrSet::default();
-        
+
         for name in captures {
             if seen_names.insert(*name) {
                 out.push((*name, self.capture_value(name, seen)));
             }
         }
-        
+
         out
     }
 
@@ -121,7 +119,7 @@ impl VM {
 
     fn make_runtime_function_inner(&self, func: &VMFunction, seen: &mut UstrSet) -> RuntimeValue {
         let name = func.name;
-        
+
         if !seen.insert(name) || func.captures.is_empty() {
             return RuntimeValue::Function {
                 name,
