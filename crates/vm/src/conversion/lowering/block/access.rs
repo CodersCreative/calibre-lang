@@ -43,7 +43,7 @@ impl VMLowering for LirCall {
             }
         }
 
-        env.null_reg
+        dst.unwrap_or(env.null_reg)
     }
 }
 
