@@ -642,8 +642,7 @@ impl VM {
                 src,
                 data_type,
             } => {
-                let value = self.get_reg_value(*src).clone();
-                let resolved = self.resolve_operand_value(value)?;
+                let resolved = self.resolve_operand_value(self.get_reg_value(*src).clone())?;
                 let out = self.runtime_matches_type(&resolved, &data_type.data_type);
                 self.set_reg_value(*dst, RuntimeValue::Bool(out));
             }

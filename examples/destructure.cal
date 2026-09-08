@@ -133,7 +133,7 @@ const main := fn => {
 		print("for let matched => " & item);
 	};
 	
-	print(classify_list([]));
+	print(classify_list(list:<int>[]));
 	print(classify_list([1]));
 	print(classify_list([4, 9, 11]));
 	print(classify_list([8, 3]));

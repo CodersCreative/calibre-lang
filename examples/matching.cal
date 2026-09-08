@@ -1,0 +1,87 @@
+type Point := struct { x y : int };
+
+type Shape := enum {
+    Circle : int,
+    Rectangle : <Point, Point>,
+    Unknown,
+};
+
+const describe_shape := fn match Shape -> str {
+    .Circle : r => return "Circle with radius : " & r,
+    .Rectangle : p1, p2 => return "Rectangle with p1 : " & p1 & " and p2 : " & p2,
+    .Unknown => return "Unknown shape",
+};
+
+const main := fn => {
+    let score := 94;
+    let grade := match score {
+        100 => emit "Perfect",
+        90 | 91 | 92 | 93 | 94 | 95 | 96 | 97 | 98 | 99 => emit "A+",
+        in 80..90 => emit "B",
+        in 70..80 => emit "C",
+        _ => emit "Needs Improvement",
+    };
+    
+    print("grade : " & grade);
+
+    let val : dyn = 150;
+    let category := match val {
+        v @ is int if v > 100 => emit "Large Integer",
+        v @ is int => emit "Standard Integer",
+        _ => emit "Not an int",
+    };
+
+    print("category : " & category);
+
+    let s := Shape.Rectangle : (Point { x: 0, y: 0 }, Point { x: 10, y: 5 });
+    let desc := match s {
+        .Circle : r if r > 5 => emit "Big Circle",
+        .Rectangle : { x: x1, y: y1 }, { x: x2, y: y2 } => {
+            let width := x2 - x1;
+            let height := y2 - y1;
+            emit fmt"Rectangle with height {height} and width {width}"
+        },
+        _ => emit "Unknown",
+    };
+
+    print(desc);
+
+    let opt : int? = some(42);
+    match opt {
+        .Some : v => print("Found value"),
+        .None => print("No value"),
+    };
+
+    let res : str!int = ok(200);
+    match res {
+        .Ok : v => print("Success : " & v),
+        .Err : e => print("Error encountered : " & e),
+    };
+
+    let numbers := [1, 2, 3, 4];
+    match numbers {
+        [] => print("Empty list"),
+        [x] => print("Single element"),
+        [1, 2, ..] => print("Starts with 1, 2"),
+        _ => print("Other list"),
+    };
+
+    let path := "/api/v1/users";
+    match path {
+        "http" & _ => print("URL"),
+        "/api/" & _ => print("API Route"),
+        _ => print("Unknown path"),
+    };
+
+    let temperature := 32;
+    match {
+        temperature >= 100 => print("Boiling"),
+        temperature <= 0 => print("Freezing"),
+        _ => print("Moderate"),
+    };
+
+    let point := Point { x: 5, y: 12 };
+    if let Point { x, y } <- point => {
+        print("Successs!!!");
+    };
+};
