@@ -44,9 +44,7 @@ impl ParserDataType {
             let lst: Vec<(&str, Vec<ParserInnerType>, ParserInnerType)> = vec![
                 (
                     "console_output",
-                    vec![ParserInnerType::List(Box::new(Self::native_type(
-                        ParserInnerType::Dynamic,
-                    )))],
+                    vec![ParserInnerType::Int, ParserInnerType::Dynamic],
                     ParserInnerType::Null,
                 ),
                 ("console_input", Vec::new(), ParserInnerType::Str),
@@ -446,7 +444,9 @@ impl ParserDataType {
                 ),
                 (
                     "collections.hashmap_new",
-                    vec![],
+                    vec![ParserInnerType::List(Box::new(Self::native_type(
+                        ParserInnerType::Dynamic,
+                    )))],
                     ParserInnerType::StructWithGenerics {
                         identifier: String::from("HashMap"),
                         generic_types: vec![
@@ -455,61 +455,95 @@ impl ParserDataType {
                         ],
                     },
                 ),
-                ("collections.hashmap_set", vec![], ParserInnerType::Null),
+                (
+                    "collections.hashmap_set",
+                    vec![
+                        ParserInnerType::Dynamic,
+                        ParserInnerType::Dynamic,
+                        ParserInnerType::Dynamic,
+                    ],
+                    ParserInnerType::Null,
+                ),
                 (
                     "collections.hashmap_get",
-                    vec![],
+                    vec![ParserInnerType::Dynamic, ParserInnerType::Dynamic],
                     ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Dynamic))),
                 ),
                 (
                     "collections.hashmap_remove",
-                    vec![],
+                    vec![ParserInnerType::Dynamic, ParserInnerType::Dynamic],
                     ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Dynamic))),
                 ),
                 (
                     "collections.hashmap_contains",
-                    vec![],
+                    vec![ParserInnerType::Dynamic, ParserInnerType::Dynamic],
                     ParserInnerType::Bool,
                 ),
-                ("collections.hashmap_len", vec![], ParserInnerType::Int),
+                (
+                    "collections.hashmap_len",
+                    vec![ParserInnerType::Dynamic],
+                    ParserInnerType::Int,
+                ),
                 (
                     "collections.hashmap_keys",
-                    vec![],
+                    vec![ParserInnerType::Dynamic],
                     ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Dynamic))),
                 ),
                 (
                     "collections.hashmap_values",
-                    vec![],
+                    vec![ParserInnerType::Dynamic],
                     ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Dynamic))),
                 ),
                 (
                     "collections.hashmap_entries",
-                    vec![],
+                    vec![ParserInnerType::Dynamic],
                     ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Dynamic))),
                 ),
-                ("collections.hashmap_clear", vec![], ParserInnerType::Null),
+                (
+                    "collections.hashmap_clear",
+                    vec![ParserInnerType::Dynamic],
+                    ParserInnerType::Null,
+                ),
                 (
                     "collections.hashset_new",
-                    vec![],
+                    vec![ParserInnerType::List(Box::new(Self::native_type(
+                        ParserInnerType::Dynamic,
+                    )))],
                     ParserInnerType::StructWithGenerics {
                         identifier: String::from("HashSet"),
                         generic_types: vec![Self::native_type(ParserInnerType::Dynamic)],
                     },
                 ),
-                ("collections.hashset_add", vec![], ParserInnerType::Bool),
-                ("collections.hashset_remove", vec![], ParserInnerType::Bool),
                 (
-                    "collections.hashset_contains",
-                    vec![],
+                    "collections.hashset_add",
+                    vec![ParserInnerType::Dynamic, ParserInnerType::Dynamic],
                     ParserInnerType::Bool,
                 ),
-                ("collections.hashset_len", vec![], ParserInnerType::Int),
+                (
+                    "collections.hashset_remove",
+                    vec![ParserInnerType::Dynamic, ParserInnerType::Dynamic],
+                    ParserInnerType::Bool,
+                ),
+                (
+                    "collections.hashset_contains",
+                    vec![ParserInnerType::Dynamic, ParserInnerType::Dynamic],
+                    ParserInnerType::Bool,
+                ),
+                (
+                    "collections.hashset_len",
+                    vec![ParserInnerType::Dynamic],
+                    ParserInnerType::Int,
+                ),
                 (
                     "collections.hashset_values",
-                    vec![],
+                    vec![ParserInnerType::Dynamic],
                     ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Dynamic))),
                 ),
-                ("collections.hashset_clear", vec![], ParserInnerType::Null),
+                (
+                    "collections.hashset_clear",
+                    vec![ParserInnerType::Dynamic],
+                    ParserInnerType::Null,
+                ),
                 (
                     "list.sort_by",
                     vec![],

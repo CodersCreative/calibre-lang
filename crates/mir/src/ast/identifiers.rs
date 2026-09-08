@@ -133,9 +133,7 @@ impl UstrIdentifiersUsed for MiddleNode {
                 amt.append(&mut index.identifiers_used());
                 amt
             }
-            MiddleNodeType::FunctionDeclaration(MirFunction { body, .. }) => {
-                body.identifiers_used()
-            }
+            MiddleNodeType::FunctionDeclaration(MirFunction { .. }) => Vec::new(),
             MiddleNodeType::LoopDeclaration(MirLoop { body, .. }) => body.identifiers_used(),
             MiddleNodeType::Conditional(MirConditional {
                 comparison,

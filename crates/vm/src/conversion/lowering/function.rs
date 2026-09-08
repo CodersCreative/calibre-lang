@@ -1,6 +1,6 @@
 use super::ssa::SSABuilder;
 use super::*;
-use calibre_lir::ast::{LirAssign, LirDeclare, LirLoad};
+use calibre_lir::ast::LirDeclare;
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap, UstrSet};
 
@@ -219,12 +219,6 @@ impl FunctionLowering {
                     match &instr.node_type {
                         LirNodeType::Declare(LirDeclare { dest, .. }) => {
                             locals.insert(*dest);
-                        }
-                        LirNodeType::Assign(LirAssign {
-                            dest: LirLValue::Var(name),
-                            ..
-                        }) => {
-                            locals.insert(*name);
                         }
                         _ => {}
                     }

@@ -158,11 +158,11 @@ impl VMLowering for LirAssign {
                             }
                             LirNodeType::Load(LirLoad { value }) => {
                                 let base_reg = env.alloc_reg();
-                                if let Some(value) = env.map.get(&value) {
+                                if let Some(reg) = env.map.get(&value) {
                                     env.emit(
-                                        VMInstruction::LoadRegRef {
+                                        VMInstruction::Copy {
                                             dst: base_reg,
-                                            src: *value,
+                                            src: *reg,
                                         },
                                         span,
                                     );

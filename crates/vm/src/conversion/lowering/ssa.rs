@@ -47,7 +47,7 @@ impl SSABuilder {
         }
     }
 
-    pub fn build_cfg(&mut self, blocks: &[LirBlock], _entry: BlockId) {
+    pub fn build_cfg(&mut self, blocks: &[LirBlock], entry: BlockId) {
         let block_len = blocks.len();
         self.preds = vec![Vec::new(); block_len];
         self.infos = vec![SSABlockInfo::default(); block_len];
@@ -76,7 +76,7 @@ impl SSABuilder {
                     LirTerminator::Return { .. } => {}
                 }
             }
-            if idx == 0 {
+            if block.id == entry {
                 self.preds[idx].push(BlockId(u32::MAX));
             }
         }
