@@ -13,7 +13,7 @@ use calibre_vm::{
     VM, config::VMConfig, conversion::VMRegistry, error::RuntimeError, value::RuntimeValue,
 };
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{fmt::Debug, path::PathBuf, time::Duration};
 use thiserror::Error;
 use ustr::Ustr;
 pub mod building;
@@ -99,10 +99,17 @@ impl PackagedProgramBlob {
 }
 
 #[derive(Clone, Debug)]
+pub struct Timed<T: Clone + Debug> {
+    pub data: T,
+    pub elapsed: Duration,
+}
+
+#[derive(Clone, Debug)]
 pub struct CalibreArtifacts {
-    pub ast: Option<AstNode>,
-    pub mir: Option<MiddleNode>,
-    pub lir: Option<LirRegistry>,
+    pub cache_elapsed: Option<Duration>,
+    pub ast: Option<Timed<AstNode>>,
+    pub mir: Option<Timed<MiddleNode>>,
+    pub lir: Option<Timed<LirRegistry>>,
     pub registry: VMRegistry,
     pub mappings: Vec<Ustr>,
     pub entry_name: Ustr,

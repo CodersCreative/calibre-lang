@@ -3,8 +3,11 @@ use calibre_frontend::config::ProjectContext;
 use calibre_lir::environment::{LirEnvironment, LirRegistry};
 use calibre_mir::{environment::MiddleEnvironment, manifest::Manifest};
 use calibre_parser::Parser;
-use std::fs::{self, File};
 use std::path::{Path, PathBuf};
+use std::{
+    fs::{self, File},
+    io,
+};
 
 // I think I'm gonna use the LIR because its the last phase before specialization for the runtime selected
 
@@ -58,17 +61,17 @@ impl CalibrePackaging for CalibreEngine {
     ) -> Result<(), CalibreError> {
         let file = File::create(path)?;
 
-        let mut writer = std::io::BufWriter::new(file);
+        let mut writer = io::BufWriter::new(file);
 
         let package = PackagedProgramBlob { manifest, program };
 
         if readable {
             serde_json::to_writer_pretty(&mut writer, &package)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
                 .map_err(CalibreError::Io)
         } else {
             bincode::serialize_into(&mut writer, &package)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
                 .map_err(CalibreError::Io)
         }
     }
@@ -80,11 +83,11 @@ impl CalibrePackaging for CalibreEngine {
         let path_ref = path.as_ref();
         let file = match File::open(path_ref) {
             Ok(file) => file,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(err) => return Err(CalibreError::Io(err)),
         };
 
-        let mut reader = std::io::BufReader::new(file);
+        let mut reader = io::BufReader::new(file);
 
         if path_ref.extension().and_then(|e| e.to_str()) == Some("jcalp") {
             match serde_json::from_reader::<_, PackagedProgramBlob>(&mut reader) {

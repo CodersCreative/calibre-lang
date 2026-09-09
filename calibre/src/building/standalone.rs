@@ -1,4 +1,4 @@
-use crate::{CalibreArtifacts, CalibreEngine, CalibreError, RunResult};
+use crate::{CalibreArtifacts, CalibreEngine, CalibreError, RunResult, Timed};
 use calibre_lir::environment::LirEnvironment;
 use calibre_mir::symbols::resolve::ResolutionOptions;
 use calibre_mir::{environment::MiddleEnvironment, errors::MiddleErr, testing::Testing};
@@ -373,6 +373,8 @@ impl CalibreStandalone for CalibreEngine {
         source: impl Into<String>,
         readable: bool,
     ) -> Result<CalibreArtifacts, CalibreError> {
+        let start = std::time::Instant::now();
+
         let input = source.into();
         let full_source = self.compose_source(&input);
 
@@ -381,6 +383,7 @@ impl CalibreStandalone for CalibreEngine {
         {
             debug!("loaded program from cache");
             return Ok(CalibreArtifacts {
+                cache_elapsed: Some(start.elapsed()),
                 ast: None,
                 mir: None,
                 lir: None,
@@ -393,11 +396,17 @@ impl CalibreStandalone for CalibreEngine {
             });
         }
 
-        let artifacts = self.compile_source(&input, true)?;
+        let cache_elapsed = start.elapsed();
+
+        let mut artifacts = self.compile_source(&input, true)?;
+
+        let start = std::time::Instant::now();
 
         if self.cache_enabled {
             self.store_cached_program(&full_source, &artifacts, readable)?;
         }
+
+        artifacts.cache_elapsed = Some(start.elapsed() + cache_elapsed);
 
         Ok(artifacts)
     }
@@ -408,6 +417,8 @@ impl CalibreStandalone for CalibreEngine {
         source: impl Into<String>,
         include_tests: bool,
     ) -> Result<CalibreArtifacts, CalibreError> {
+        let start = std::time::Instant::now();
+
         let input = source.into();
         let full_source = self.compose_source(&input);
         let path = self
@@ -419,6 +430,7 @@ impl CalibreStandalone for CalibreEngine {
         parser.set_source_path(Some(path.clone()));
 
         let ast = parser.produce_ast(&full_source);
+        let ast_elapsed = start.elapsed();
         if !parser.errors.is_empty() {
             return Err(CalibreError::Parse {
                 path,
@@ -445,6 +457,8 @@ impl CalibreStandalone for CalibreEngine {
                 self.type_check,
             )
         };
+
+        let mir_elapsed = start.elapsed() - ast_elapsed;
 
         let mir_errors = env.context.take_errors();
         if !mir_errors.is_empty() {
@@ -492,10 +506,22 @@ impl CalibreStandalone for CalibreEngine {
             include_tests,
         );
 
+        let lir_elapsed = start.elapsed() - mir_elapsed;
+
         Ok(CalibreArtifacts {
-            ast: Some(ast),
-            mir: Some(mir),
-            lir: Some(lir.clone()),
+            cache_elapsed: None,
+            ast: Some(Timed {
+                data: ast,
+                elapsed: ast_elapsed,
+            }),
+            mir: Some(Timed {
+                data: mir,
+                elapsed: mir_elapsed,
+            }),
+            lir: Some(Timed {
+                data: lir.clone(),
+                elapsed: lir_elapsed,
+            }),
             mappings: env.symbols.variables.keys().cloned().collect(),
             registry: VMRegistry::from(lir),
             entry_name,

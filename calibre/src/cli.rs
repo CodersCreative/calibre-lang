@@ -51,6 +51,8 @@ pub enum Commands {
         verbosity: Option<Verbosity>,
         #[arg(long, default_value_t = false)]
         sequential: bool,
+        #[arg(long, default_value_t = false)]
+        time: bool,
         #[arg(long)]
         no_std: Option<bool>,
     },
@@ -69,6 +71,8 @@ pub enum Commands {
         no_cache: bool,
         #[arg(long, default_value_t = false)]
         sequential: bool,
+        #[arg(long, default_value_t = false)]
+        time: bool,
         #[arg(long)]
         no_std: Option<bool>,
         #[arg(long, default_value_t = false)]

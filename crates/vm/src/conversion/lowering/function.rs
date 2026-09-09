@@ -135,6 +135,7 @@ impl FunctionLowering {
 
     // So I made this to see if potentially manually removing certain copies could provide a speedup.
     // Results have been inconclusive so I may remove it in the future
+    #[instrument(skip_all)]
     fn optimize_blocks(blocks: &mut [VMBlock]) {
         for block in blocks.iter_mut() {
             let mut i = 0;

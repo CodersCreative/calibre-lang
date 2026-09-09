@@ -20,6 +20,7 @@ pub struct Check {
     verbosity: Option<Verbosity>,
     no_std: Option<bool>,
     parallel: bool,
+    time: bool,
 }
 
 impl Check {
@@ -56,6 +57,7 @@ impl Check {
             run.package_metadata(package_metadata_from_project(project.as_ref()));
             run.cache_base_dir(project.as_ref().map(|p| p.root.clone()));
             run.included(PackagedProgramBlob::load(project.as_ref()));
+            run.time(self.time);
 
             if let Some(project) = project
                 && self.no_std.is_none()
@@ -101,6 +103,7 @@ struct CheckSource {
     package_metadata: Option<PackageMetadata>,
     cache_base_dir: Option<PathBuf>,
     no_std: Option<bool>,
+    time: bool,
     included: Vec<PackagedProgramBlob>,
 }
 
@@ -165,32 +168,52 @@ impl CheckSource {
             Err(other) => return Err(other.to_string().into()),
         };
 
-        if self.verbosity.is_level(&Verbosity::Ast) {
-            println!("Parser - elapsed {}ms:", start.elapsed().as_millis());
-            if let Some(ast) = &artifacts.ast {
-                println!("{}\nStarting mir...", ast);
-            } else {
-                println!("<AST unavailable: loaded from cache>");
-            }
+        if let Some(elapsed) = &artifacts.cache_elapsed
+            && self.time
+        {
+            println!("Cache - elapsed {}ms", elapsed.as_millis());
         }
 
-        if self.verbosity.is_level(&Verbosity::Mir) {
-            println!("Mir - elapsed {}ms:", start.elapsed().as_millis());
-            if let Some(mir) = &artifacts.mir {
-                println!("{}", mir);
-                println!("Starting vm...");
-            } else {
-                println!("<MIR unavailable: loaded from cache>");
+        if let Some(ast) = &artifacts.ast {
+            if self.time {
+                println!("Parser - elapsed {}ms", ast.elapsed.as_millis());
             }
+
+            if self.verbosity.is_level(&Verbosity::Ast) {
+                println!("AST : ");
+                println!("{}", ast.data);
+                println!("Starting MIR...");
+            }
+        } else if self.verbosity.is_level(&Verbosity::Ast) {
+            println!("AST - unavailable: loaded from cache");
         }
 
-        if self.verbosity.is_level(&Verbosity::Lir) {
-            println!("Lir - elapsed {}ms:", start.elapsed().as_millis());
-            if let Some(lir) = &artifacts.lir {
-                println!("{}", lir);
-            } else {
-                println!("<LIR unavailable: loaded from cache>");
+        if let Some(mir) = &artifacts.mir {
+            if self.time {
+                println!("MIR - elapsed {}ms", mir.elapsed.as_millis());
             }
+
+            if self.verbosity.is_level(&Verbosity::Mir) {
+                println!("MIR : ");
+                println!("{}", mir.data);
+                println!("Starting LIR...");
+            }
+        } else if self.verbosity.is_level(&Verbosity::Mir) {
+            println!("MIR - unavailable: loaded from cache");
+        }
+
+        if let Some(lir) = &artifacts.lir {
+            if self.time {
+                println!("LIR - elapsed {}ms", lir.elapsed.as_millis());
+            }
+
+            if self.verbosity.is_level(&Verbosity::Lir) {
+                println!("LIR : ");
+                println!("{}", lir.data);
+                println!("Starting VM...");
+            }
+        } else if self.verbosity.is_level(&Verbosity::Lir) {
+            println!("LIR - unavailable: loaded from cache");
         }
 
         let mut ran = false;
@@ -199,6 +222,7 @@ impl CheckSource {
                 .lir
                 .as_ref()
                 .expect("LIR should be present")
+                .data
                 .functions
                 .contains_key(&func_name)
             {

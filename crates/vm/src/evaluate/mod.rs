@@ -862,7 +862,6 @@ impl VM {
             .map(|var| self.resolve_saveable_runtime_value_ref(&var))
     }
 
-    #[instrument(skip_all, fields(function = %function.name, args = args.len()))]
     pub fn run(
         &mut self,
         function: &VMFunction,
@@ -880,11 +879,13 @@ impl VM {
 
         let registry = Arc::clone(&self.registry);
         self.in_global = true;
+
         for (name, global) in registry.globals.iter() {
             if !self.registry.functions.contains_key(name) && !self.variables.contains_key(name) {
                 self.run_global(global)?;
             }
         }
+
         self.in_global = false;
 
         Ok(())
@@ -933,7 +934,6 @@ impl VM {
         Ok(RuntimeValue::Null)
     }
 
-    #[instrument(skip_all, fields(function = %function.name))]
     pub fn run_function<I>(
         &mut self,
         function: &VMFunction,
@@ -1204,7 +1204,6 @@ impl VM {
     }
 
     #[inline]
-    #[instrument(skip_all)]
     pub fn run_block(
         &mut self,
         block: &VMBlock,

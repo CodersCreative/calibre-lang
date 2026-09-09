@@ -148,7 +148,6 @@ impl MiddleEnvironment {
         }
     }
 
-    #[instrument(skip_all)]
     pub fn evaluate(&mut self, scope: ScopeId, node: AstNode) -> MiddleNode {
         let span = node.span;
         match self.evaluate_inner(scope, node) {

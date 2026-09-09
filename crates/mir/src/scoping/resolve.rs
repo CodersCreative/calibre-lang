@@ -26,7 +26,6 @@ impl MiddleEnvironment {
         }
     }
 
-    #[instrument(skip_all)]
     pub fn import_scope_list(
         &mut self,
         scope: ScopeId,

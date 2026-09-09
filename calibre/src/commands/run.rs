@@ -25,6 +25,7 @@ pub struct Run {
     cache_enabled: bool,
     type_check: bool,
     readable: bool,
+    time: bool,
 }
 
 impl Run {
@@ -74,6 +75,8 @@ impl Run {
             run.program_args(self.program_args.clone());
             run.type_check(self.type_check);
             run.readable(self.readable);
+            run.time(self.time);
+
             let run = run.build()?;
 
             if self.parallel {
@@ -114,6 +117,7 @@ struct RunSource {
     no_std: Option<bool>,
     type_check: bool,
     readable: bool,
+    time: bool,
     included: Vec<PackagedProgramBlob>,
 }
 
@@ -184,33 +188,55 @@ impl RunSource {
             Err(other) => return Err(other.to_string().into()),
         };
 
-        if self.verbosity.is_level(&Verbosity::Ast) {
-            println!("Parser - elapsed {}ms:", start.elapsed().as_millis());
-            if let Some(ast) = &artifacts.ast {
-                println!("{}\nStarting mir...", ast);
-            } else {
-                println!("<AST unavailable: loaded from cache>");
-            }
+        if let Some(elapsed) = &artifacts.cache_elapsed
+            && self.time
+        {
+            println!("Cache - elapsed {}ms", elapsed.as_millis());
         }
 
-        if self.verbosity.is_level(&Verbosity::Mir) {
-            println!("Mir - elapsed {}ms:", start.elapsed().as_millis());
-            if let Some(mir) = &artifacts.mir {
-                println!("{}", mir);
-                println!("Starting vm...");
-            } else {
-                println!("<MIR unavailable: loaded from cache>");
+        if let Some(ast) = &artifacts.ast {
+            if self.time {
+                println!("Parser - elapsed {}ms", ast.elapsed.as_millis());
             }
+
+            if self.verbosity.is_level(&Verbosity::Ast) {
+                println!("AST : ");
+                println!("{}", ast.data);
+                println!("Starting MIR...");
+            }
+        } else if self.verbosity.is_level(&Verbosity::Ast) {
+            println!("AST - unavailable: loaded from cache");
         }
 
-        if self.verbosity.is_level(&Verbosity::Lir) {
-            println!("Lir - elapsed {}ms:", start.elapsed().as_millis());
-            if let Some(lir) = &artifacts.lir {
-                println!("{}", lir);
-            } else {
-                println!("<LIR unavailable: loaded from cache>");
+        if let Some(mir) = &artifacts.mir {
+            if self.time {
+                println!("MIR - elapsed {}ms", mir.elapsed.as_millis());
             }
+
+            if self.verbosity.is_level(&Verbosity::Mir) {
+                println!("MIR : ");
+                println!("{}", mir.data);
+                println!("Starting LIR...");
+            }
+        } else if self.verbosity.is_level(&Verbosity::Mir) {
+            println!("MIR - unavailable: loaded from cache");
         }
+
+        if let Some(lir) = &artifacts.lir {
+            if self.time {
+                println!("LIR - elapsed {}ms", lir.elapsed.as_millis());
+            }
+
+            if self.verbosity.is_level(&Verbosity::Lir) {
+                println!("LIR : ");
+                println!("{}", lir.data);
+                println!("Starting VM...");
+            }
+        } else if self.verbosity.is_level(&Verbosity::Lir) {
+            println!("LIR - unavailable: loaded from cache");
+        }
+
+        let vm_begin = start.elapsed();
 
         let entry_name = std::mem::take(&mut artifacts.entry_name);
         let mut vm: VM = VM::new(artifacts.registry, artifacts.mappings, self.vm_config);
@@ -222,10 +248,19 @@ impl RunSource {
                 .collect(),
         );
 
+        if self.time {
+            println!(
+                "Bytecode - elapsed {}ms",
+                (start.elapsed() - vm_begin).as_millis()
+            );
+        }
+
         if self.verbosity.is_level(&Verbosity::Byte) {
-            println!("Bytecode - elapsed {}ms:", start.elapsed().as_millis());
+            println!("Bytecode : ");
             println!("{}", vm.registry.as_ref());
         };
+
+        let vm_begin = start.elapsed();
 
         let mut ran = false;
         for (_, func_name) in artifacts.init_functions {
@@ -267,7 +302,11 @@ impl RunSource {
             }
         }
 
-        if !self.verbosity.is_level(&Verbosity::None) {
+        if self.time {
+            println!(
+                "VM - elapsed {}ms",
+                (start.elapsed() - vm_begin).as_millis()
+            );
             println!("Finished - elapsed {}ms", start.elapsed().as_millis());
         }
 

@@ -240,7 +240,6 @@ impl MiddleEnvironment {
         (env, scope, middle)
     }
 
-    #[instrument(skip_all, fields(path = ?path, no_std = no_std))]
     pub fn new_and_evaluate(
         node: AstNode,
         path: PathBuf,

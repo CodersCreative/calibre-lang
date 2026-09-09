@@ -79,6 +79,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 verbosity,
                 no_std,
                 sequential,
+                time,
             }) => {
                 CheckBuilder::default()
                     .paths(paths)
@@ -86,6 +87,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .verbosity(verbosity)
                     .no_std(no_std)
                     .parallel(!sequential)
+                    .time(time)
                     .build()?
                     .execute()
                     .await
@@ -108,6 +110,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 sequential,
                 no_type_check,
                 readable,
+                time,
             }) => {
                 RunBuilder::default()
                     .paths(paths)
@@ -119,6 +122,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .parallel(!sequential)
                     .type_check(!no_type_check)
                     .readable(readable)
+                    .time(time)
                     .build()?
                     .execute()
                     .await
