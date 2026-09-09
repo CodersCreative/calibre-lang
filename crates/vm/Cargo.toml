@@ -25,7 +25,7 @@ wasm_sync = { workspace = true }
 ustr = { workspace = true }
 dumpster = "2.0.0"
 libloading = {version = "0.9", optional = true }
-libffi = {version = "5", optional = true }
+libffi = {version = "5", features = ["system"], optional = true }
 regex = "1.10.6"
 sha2 = "0.10.8"
 blake3 = "1.5.4"
@@ -39,5 +39,5 @@ astro-float = "=0.9.6"
 
 [features]
 default = ["native"]
-native = ["errno", "libffi", "libloading", "ureq", "socket2"]
-wasm = []
+native = ["errno", "libffi", "libloading", "ureq", "socket2", "calibre-parser/native", "calibre-lir/native"]
+wasm = ["calibre-parser/wasm", "calibre-lir/wasm"]

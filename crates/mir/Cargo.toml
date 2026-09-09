@@ -26,5 +26,5 @@ ustr = { workspace = true }
 
 [features]
 default = ["native"]
-native = []
-wasm = []
+native = ["calibre-parser/native"]
+wasm = ["calibre-parser/wasm"]

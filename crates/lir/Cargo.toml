@@ -22,3 +22,8 @@ derive_builder = { workspace = true }
 wasm_sync = { workspace = true }
 ustr = { workspace = true }
 fastrand = { workspace = true }
+
+[features]
+default = ["native"]
+native = ["calibre-parser/native", "calibre-mir/native"]
+wasm = ["calibre-parser/wasm", "calibre-mir/wasm"]

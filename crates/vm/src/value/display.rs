@@ -141,6 +141,19 @@ impl RuntimeValue {
         }
 
         match self {
+            Self::DynObject {
+                value,
+                ..
+            } => 
+                value.display(vm),
+            Self::Str(x) => format!("{}", x),
+            Self::Char(x) => format!("{}", x),
+            Self::Big(x) => format!("{}", x),
+            Self::Float(x) => format!("{}", x),
+            Self::UInt(x) => format!("{}", x),
+            Self::Byte(x) => format!("{}", x),
+            Self::Ptr(x) => format!("{:x}", x),
+            Self::Int(x) => format!("{}", x),
             Self::Ref(x) => match vm.variables.get(x) {
                 Some(value) => value.clone().display(vm),
                 None => RuntimeValue::Null.display(vm),
@@ -350,8 +363,8 @@ impl Display for RuntimeValue {
             Self::HashMap(_) => write!(f, "HashMap"),
             Self::HashSet(_) => write!(f, "HashSet"),
             Self::Host(_) => write!(f, "Host"),
-            Self::Str(x) => write!(f, "{}", x),
-            Self::Char(x) => write!(f, "{}", x),
+            Self::Str(x) => write!(f, "{:?}", x),
+            Self::Char(x) => write!(f, "{:?}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
             Self::Generator { type_name: x, .. } => write!(
                 f,
@@ -361,15 +374,17 @@ impl Display for RuntimeValue {
             Self::DynObject {
                 type_name,
                 constraints,
+                value,
                 ..
             } => write!(
                 f,
-                "dyn:<{}>({})",
+                "dyn:<{}> = {} is {}",
                 constraints
                     .iter()
                     .map(|x| x.to_string())
                     .collect::<Vec<_>>()
                     .join(", "),
+                value.to_string(),
                 type_name
             ),
             Self::BoundMethod { .. } => write!(f, "<bound-method>"),

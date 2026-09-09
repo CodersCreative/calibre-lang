@@ -1,18 +1,19 @@
 use crate::{
-    VM,
     conversion::{Reg, VMLiteral},
     error::RuntimeError,
     native::{
-        self, NativeFunction,
+        self,
         stdlib::{self, generator::GeneratorState},
+        NativeFunction,
     },
+    VM,
 };
 use astro_float::{BigFloat, RoundingMode};
 use calibre_lir::ast::BlockId;
 use calibre_parser::ast::{
-    ObjectMap,
     ffi::ParserFfiInnerType,
     types::{ParserDataType, ParserInnerType},
+    ObjectMap,
 };
 use dumpster::sync::Gc;
 use dumpster::{TraceWith, Visitor};
@@ -42,8 +43,8 @@ use std::{
     collections::VecDeque,
     fmt::{Debug, Display},
     sync::{
-        Arc, OnceLock,
         atomic::{AtomicBool, AtomicIsize, Ordering},
+        Arc, OnceLock,
     },
 };
 use wasm_sync::{Condvar, Mutex};
@@ -186,9 +187,9 @@ impl TryFrom<RuntimeValue> for HashKey {
                 Ok(Self::List(out))
             }
             RuntimeValue::Aggregate(name, map) => {
-                let mut entries = Vec::with_capacity(map.as_ref().0.0.len());
+                let mut entries = Vec::with_capacity(map.as_ref().0 .0.len());
 
-                for (k, v) in map.as_ref().0.0.iter() {
+                for (k, v) in map.as_ref().0 .0.iter() {
                     let key = Ustr::from(k.as_str());
                     let hk = HashKey::try_from(v.clone())?;
                     entries.push((key, hk));
@@ -403,7 +404,7 @@ unsafe impl<V: Visitor> TraceWith<V> for GcVec {
 
 unsafe impl<V: Visitor> TraceWith<V> for GcMap {
     fn accept(&self, visitor: &mut V) -> Result<(), ()> {
-        for (_, value) in self.0.0.iter() {
+        for (_, value) in self.0 .0.iter() {
             value.accept(visitor)?;
         }
         Ok(())

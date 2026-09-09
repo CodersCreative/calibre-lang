@@ -12,7 +12,9 @@ repository.workspace = true
 readme.workspace = true
 
 [features]
-default = ["fs"]
+default = ["native"]
+native = ["calibre-parser/native", "calibre-mir/native", "calibre-vm/native", "fs"]
+wasm = ["calibre-parser/wasm", "calibre-mir/wasm", "calibre-vm/wasm"]
 fs = ["glob"]
 
 [dependencies]

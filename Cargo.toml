@@ -22,13 +22,13 @@ license = "MIT"
 
 [workspace.dependencies]
 # Internal packages
-calibre-mir = {path="./crates/mir"}
-calibre-lir = {path="./crates/lir"}
-calibre-vm = {path="./crates/vm"}
-calibre-frontend = {path="./crates/frontend"}
-calibre-parser = {path="./crates/parser"}
-calibre-std = {path="./crates/std"}
-calibre-fmt = {path = "./fmt"}
+calibre-mir = { path="./crates/mir", default-features = false }
+calibre-lir = { path="./crates/lir", default-features = false }
+calibre-vm = { path="./crates/vm", default-features = false }
+calibre-frontend = { path="./crates/frontend", default-features = false }
+calibre-parser = { path="./crates/parser", default-features = false }
+calibre-std = { path="./crates/std" }
+calibre-fmt = { path = "./fmt" }
 
 # Other common packages
 fastrand = "2"
