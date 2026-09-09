@@ -141,11 +141,7 @@ impl RuntimeValue {
         }
 
         match self {
-            Self::DynObject {
-                value,
-                ..
-            } => 
-                value.display(vm),
+            Self::DynObject { value, .. } => value.display(vm),
             Self::Str(x) => format!("{}", x),
             Self::Char(x) => format!("{}", x),
             Self::Big(x) => format!("{}", x),
@@ -371,6 +367,7 @@ impl Display for RuntimeValue {
                 "{}{{ ... }}",
                 ParserText::get_temp_name_suffix(x).unwrap_or_default()
             ),
+            #[allow(clippy::to_string_in_format_args)]
             Self::DynObject {
                 type_name,
                 constraints,

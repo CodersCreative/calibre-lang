@@ -5,8 +5,7 @@ use crate::{
     tags::{Tagging, context::PackageMetadata},
     typing::Typing,
 };
-use calibre_parser::ast::nodes::AstNode;
-use calibre_parser::ast::types::ParserInnerType;
+use calibre_parser::ast::{nodes::AstNode, types::ParserInnerType};
 use indextree::Arena;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};

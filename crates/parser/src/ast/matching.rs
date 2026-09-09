@@ -29,10 +29,30 @@ pub enum MatchTupleItem {
         destructure: Option<DestructurePattern>,
         pattern: Option<Box<MatchArmType>>,
     },
+    StructPattern(Vec<MatchStructFieldPattern>),
     Binding {
         var_type: VarType,
         name: PotentialDollarIdentifier,
     },
+}
+
+impl MatchTupleItem {
+    pub fn alias_bindings(self) -> (Self, Vec<(VarType, PotentialDollarIdentifier)>) {
+        let mut aliases = Vec::new();
+        let mut current = self;
+
+        while let MatchTupleItem::At {
+            var_type,
+            name,
+            pattern: inner,
+        } = current
+        {
+            aliases.push((var_type, name));
+            current = *inner;
+        }
+
+        (current, aliases)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -112,6 +132,8 @@ impl MatchArmType {
                 }
                 MatchTupleItem::Enum { value, .. } => return Some(value.span()),
                 MatchTupleItem::Binding { name, .. } => return Some(name.span()),
+                // TODO
+                MatchTupleItem::StructPattern(_) => return None,
             }
         }
         None
@@ -211,6 +233,23 @@ impl MatchArmType {
             Self::IsType(x) => &x.span,
             Self::Wildcard(x) => x,
         }
+    }
+
+    pub fn alias_bindings(self) -> (Self, Vec<(VarType, PotentialDollarIdentifier)>) {
+        let mut aliases = Vec::new();
+        let mut current = self;
+
+        while let MatchArmType::At {
+            var_type,
+            name,
+            pattern: inner,
+        } = current
+        {
+            aliases.push((var_type, name));
+            current = *inner;
+        }
+
+        (current, aliases)
     }
 }
 

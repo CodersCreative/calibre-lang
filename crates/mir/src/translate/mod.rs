@@ -39,7 +39,7 @@ pub mod curry;
 pub mod functions;
 pub mod iter;
 pub mod loops;
-pub mod matches;
+pub mod matching;
 pub mod member;
 pub mod scopes;
 pub mod statements;

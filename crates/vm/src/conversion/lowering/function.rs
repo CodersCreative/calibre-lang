@@ -216,11 +216,8 @@ impl FunctionLowering {
 
             for block in &func.blocks {
                 for instr in &block.instructions {
-                    match &instr.node_type {
-                        LirNodeType::Declare(LirDeclare { dest, .. }) => {
-                            locals.insert(*dest);
-                        }
-                        _ => {}
+                    if let LirNodeType::Declare(LirDeclare { dest, .. }) = &instr.node_type {
+                        locals.insert(*dest);
                     }
                 }
             }

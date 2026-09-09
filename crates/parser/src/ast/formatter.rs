@@ -2288,6 +2288,8 @@ impl Formatter {
                     format!("{} {}", var_type.print_only_ends(), name)
                 }
             }
+            // TODO
+            MatchTupleItem::StructPattern(_) => String::new(),
         }
     }
 

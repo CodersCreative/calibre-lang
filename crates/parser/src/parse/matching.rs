@@ -213,6 +213,58 @@ pub fn build_match_parsers<'a>(
                 }
             })
             .boxed(),
+        lex(pad.clone(), just('{'))
+            .ignore_then(
+                ident
+                    .clone()
+                    .then(
+                        lex(pad.clone(), just(':'))
+                            .ignore_then(
+                                match_var_type
+                                    .clone()
+                                    .then(ident.clone())
+                                    .map(|(var_type, (name, sp))| {
+                                        MatchStructFieldPattern::Binding {
+                                            field: String::new(),
+                                            var_type,
+                                            name: PotentialDollarIdentifier::Identifier(
+                                                ParserText::new(sp, name),
+                                            ),
+                                        }
+                                    })
+                                    .or(expr.clone().map(|value| MatchStructFieldPattern::Value {
+                                        field: String::new(),
+                                        value,
+                                    })),
+                            )
+                            .or_not(),
+                    )
+                    .map(|((field, sp), maybe)| match maybe {
+                        Some(MatchStructFieldPattern::Binding { var_type, name, .. }) => {
+                            MatchStructFieldPattern::Binding {
+                                field,
+                                var_type,
+                                name,
+                            }
+                        }
+                        Some(MatchStructFieldPattern::Value { value, .. }) => {
+                            MatchStructFieldPattern::Value { field, value }
+                        }
+                        None => MatchStructFieldPattern::Binding {
+                            field: field.clone(),
+                            var_type: VarType::Immutable,
+                            name: PotentialDollarIdentifier::Identifier(ParserText::new(sp, field)),
+                        },
+                    })
+                    .separated_by(comma.clone())
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .or_not()
+                    .map(|x| x.unwrap_or_default()),
+            )
+            .then_ignore(lex(pad.clone(), just('}')))
+            .map(MatchTupleItem::StructPattern)
+            .boxed(),
         expr.clone().map(MatchTupleItem::Value),
     ))
     .boxed();
