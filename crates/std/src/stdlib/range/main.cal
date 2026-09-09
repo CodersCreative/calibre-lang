@@ -13,18 +13,12 @@ impl range {
 		return value >= s && value < e;
 	};
 
-	const to_list := fn (self : range) -> list:<int> => {
-		let mut out := list:<int>[];
-		
-		// TODO Fix range iter
-		for i in self => out <<= i;
-		return out;
-	};
+	const to_list := fn (self : range) -> list:<int> =>
+		return list:<int>[i for i in self];
 
 	const sum := fn (self : range) -> int => {
 		let mut acc := 0;
 		
-		// TODO Fix range iter
 		for i in self => acc += i;
 		return acc;
 	};

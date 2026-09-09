@@ -196,10 +196,10 @@ impl NativeFunction for FsPathParent {
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .parent()
         {
-            Some(parent) => Ok(RuntimeValue::Host(Arc::new(Mutex::new(
-                parent.to_path_buf(),
-            )))),
-            None => Ok(RuntimeValue::Null),
+            Some(parent) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Host(
+                Arc::new(Mutex::new(parent.to_path_buf())),
+            ))))),
+            None => Ok(RuntimeValue::Option(None)),
         }
     }
 }
@@ -224,8 +224,10 @@ impl NativeFunction for FsPathFileName {
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .file_name()
         {
-            Some(name) => Ok(RuntimeValue::Str(Ustr::from(&name.to_string_lossy()))),
-            None => Ok(RuntimeValue::Null),
+            Some(name) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
+                Ustr::from(&name.to_string_lossy()),
+            ))))),
+            None => Ok(RuntimeValue::Option(None)),
         }
     }
 }
@@ -250,8 +252,10 @@ impl NativeFunction for FsPathExtension {
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .extension()
         {
-            Some(ext) => Ok(RuntimeValue::Str(Ustr::from(&ext.to_string_lossy()))),
-            None => Ok(RuntimeValue::Null),
+            Some(ext) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
+                Ustr::from(&ext.to_string_lossy()),
+            ))))),
+            None => Ok(RuntimeValue::Option(None)),
         }
     }
 }
@@ -276,8 +280,10 @@ impl NativeFunction for FsPathStem {
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .file_stem()
         {
-            Some(stem) => Ok(RuntimeValue::Str(Ustr::from(&stem.to_string_lossy()))),
-            None => Ok(RuntimeValue::Null),
+            Some(stem) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
+                Ustr::from(&stem.to_string_lossy()),
+            ))))),
+            None => Ok(RuntimeValue::Option(None)),
         }
     }
 }

@@ -10,7 +10,6 @@ use crate::{
     },
     value::{ChannelInner, MutexInner, RuntimeValue, WaitGroupInner},
 };
-use calibre_parser::ast::types::ParserInnerType;
 use std::sync::Arc;
 
 pub struct ChannelNew;
@@ -35,23 +34,8 @@ impl NativeFunction for ChannelSend {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let (ch, value) = {
-            let first = env.resolve_value_for_op_ref(&pop_or_null(&mut args))?;
-            let second = env.resolve_value_for_op_ref(&pop_or_null(&mut args))?;
-
-            match (first, second) {
-                (RuntimeValue::Channel(ch), value) => (ch, value),
-                (value, RuntimeValue::Channel(ch)) => (ch, value),
-                (left, _) => {
-                    return Err(RuntimeError::UnexpectedTypeInConversion {
-                        value: Box::new(left),
-                        target_type: ParserInnerType::Host,
-                    });
-                }
-            }
-        };
-
-        let value = env.convert_runtime_var_into_saveable(value);
+        let value = env.resolve_value_for_op_ref(&pop_or_null(&mut args))?;
+        let ch = resolve_channel(env, &pop_or_null(&mut args))?;
 
         if ch.closed.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(RuntimeValue::Null);
@@ -76,23 +60,8 @@ impl NativeFunction for ChannelTrySend {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let (ch, value) = {
-            let first = env.resolve_value_for_op_ref(&pop_or_null(&mut args))?;
-            let second = env.resolve_value_for_op_ref(&pop_or_null(&mut args))?;
-
-            match (first, second) {
-                (RuntimeValue::Channel(ch), value) => (ch, value),
-                (value, RuntimeValue::Channel(ch)) => (ch, value),
-                (left, _) => {
-                    return Err(RuntimeError::UnexpectedTypeInConversion {
-                        value: Box::new(left),
-                        target_type: ParserInnerType::Host,
-                    });
-                }
-            }
-        };
-
-        let value = env.convert_runtime_var_into_saveable(value);
+        let value = env.resolve_value_for_op_ref(&pop_or_null(&mut args))?;
+        let ch = resolve_channel(env, &pop_or_null(&mut args))?;
 
         if ch.closed.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(RuntimeValue::Bool(false));

@@ -64,8 +64,8 @@ impl NativeFunction for EnvSetVar {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let name = resolve_str(env, &pop_or_null(&mut args))?;
         let value = resolve_str(env, &pop_or_null(&mut args))?;
+        let name = resolve_str(env, &pop_or_null(&mut args))?;
 
         unsafe { std::env::set_var(name.as_str(), value.as_str()) };
 
