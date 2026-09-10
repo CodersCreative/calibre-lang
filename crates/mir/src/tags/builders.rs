@@ -10,7 +10,7 @@ use calibre_parser::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::TryCatch,
-        nodes::{AstNode, AstNodeType, CallArg, FunctionHeader, TypeDefType, VarType},
+        nodes::{AstNode, AstNodeType, AstTry, CallArg, FunctionHeader, TypeDefType, VarType},
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
@@ -141,7 +141,7 @@ impl MiddleEnvironment {
                     field.clone(),
                     AstNode::new(
                         span,
-                        AstNodeType::Try {
+                        AstNodeType::Try(AstTry {
                             value: Box::new(AstNode::member(span, self_id.clone(), field)),
                             catch: Some(TryCatch {
                                 name: None,
@@ -168,7 +168,7 @@ impl MiddleEnvironment {
                                     )))
                                 },
                             }),
-                        },
+                        }),
                     ),
                 )
             })

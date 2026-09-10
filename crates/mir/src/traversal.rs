@@ -1,6 +1,9 @@
 use calibre_parser::ast::{
     ObjectType,
-    nodes::{AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, PipeSegment},
+    nodes::{
+        AstBreak, AstContinue, AstDefer, AstNode, AstNodeType, AstReturn, AstTry, CallArg,
+        IfComparisonType, LoopType, PipeSegment,
+    },
 };
 
 pub trait NodeVisitor {
@@ -257,14 +260,16 @@ pub trait NodeVisitor {
                 library,
                 symbol,
             },
-            AstNodeType::Return { value } => AstNodeType::Return {
+            AstNodeType::Return(AstReturn { value }) => AstNodeType::Return(AstReturn {
                 value: value.map(|n| Box::new(self.visit(*n))),
-            },
-            AstNodeType::Break { label, value } => AstNodeType::Break {
+            }),
+            AstNodeType::Break(AstBreak { label, value }) => AstNodeType::Break(AstBreak {
                 label,
                 value: value.map(|n| Box::new(self.visit(*n))),
-            },
-            AstNodeType::Continue { label } => AstNodeType::Continue { label },
+            }),
+            AstNodeType::Continue(AstContinue { label }) => {
+                AstNodeType::Continue(AstContinue { label })
+            }
             AstNodeType::EmptyLine => AstNodeType::EmptyLine,
             AstNodeType::Null => AstNodeType::Null,
             AstNodeType::Identifier(_)
@@ -281,10 +286,10 @@ pub trait NodeVisitor {
             },
             AstNodeType::DataType { data_type } => AstNodeType::DataType { data_type },
             AstNodeType::Drop(identifier) => AstNodeType::Drop(identifier),
-            AstNodeType::Defer { value, function } => AstNodeType::Defer {
+            AstNodeType::Defer(AstDefer { value, function }) => AstNodeType::Defer(AstDefer {
                 value: Box::new(self.visit(*value)),
                 function,
-            },
+            }),
             AstNodeType::ImplDeclaration {
                 generics,
                 target,
@@ -386,10 +391,10 @@ pub trait NodeVisitor {
                 identifier,
                 body: Box::new(self.visit(*body)),
             },
-            AstNodeType::Try { value, catch } => AstNodeType::Try {
+            AstNodeType::Try(AstTry { value, catch }) => AstNodeType::Try(AstTry {
                 value: Box::new(self.visit(*value)),
                 catch,
-            },
+            }),
             AstNodeType::Until { condition } => AstNodeType::Until {
                 condition: Box::new(self.visit(*condition)),
             },
@@ -552,7 +557,8 @@ pub trait NodeAnalyzer {
                 otherwise,
             } => self.analyze(comparison) && self.analyze(then) && self.analyze(otherwise),
             AstNodeType::Spawn { items, .. } => items.iter().all(|n| self.analyze(n)),
-            AstNodeType::Return { value } | AstNodeType::Break { value, .. } => {
+            AstNodeType::Return(AstReturn { value })
+            | AstNodeType::Break(AstBreak { value, .. }) => {
                 value.as_ref().is_none_or(|n| self.analyze(n))
             }
             _ => true,

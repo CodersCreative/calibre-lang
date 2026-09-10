@@ -3,7 +3,7 @@ use crate::{
     ast::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{AstNode, AstNodeType, CallArg, EmitType},
+        nodes::{AstEmit, AstNode, AstNodeType, CallArg},
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -224,12 +224,12 @@ pub fn parse_program_with_source(
                             AstNode::new(
                                 sp,
                                 AstNodeType::Emit(if let Some(value) = args.1 {
-                                    EmitType::Channel {
+                                    AstEmit::Channel {
                                         channel: Box::new(args.0),
                                         value: Box::new(value),
                                     }
                                 } else {
-                                    EmitType::Scope(Box::new(args.0))
+                                    AstEmit::Scope(Box::new(args.0))
                                 }),
                             )
                         }

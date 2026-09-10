@@ -6,7 +6,7 @@ use crate::ast::generics::{TraitMember, TraitMemberKind};
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier};
 use crate::ast::matching::{SelectArm, SelectArmKind};
 use crate::ast::nodes::{
-    AstNode, AstNodeType, DestructurePattern, NamedScope, Overload, TypeDefType, VarType,
+    AstNode, AstNodeType, AstReturn, DestructurePattern, NamedScope, Overload, TypeDefType, VarType,
 };
 use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{
@@ -927,9 +927,9 @@ pub fn build_statement_parser<'a>(
             move |value, r| {
                 AstNode::new(
                     span(ls.as_ref(), r),
-                    AstNodeType::Return {
+                    AstNodeType::Return(AstReturn {
                         value: value.map(Box::new),
-                    },
+                    }),
                 )
             }
         });

@@ -6,8 +6,8 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialGenericTypeIdentifier},
         nodes::{
-            AsFailureMode, AstNode, AstNodeType, CallArg, EmitType, FunctionHeader,
-            IfComparisonType, LoopType, VarType,
+            AsFailureMode, AstBreak, AstContinue, AstEmit, AstNode, AstNodeType, AstReturn,
+            CallArg, FunctionHeader, IfComparisonType, LoopType, VarType,
         },
         types::{GenericTypes, ParserDataType},
     },
@@ -572,7 +572,7 @@ impl From<MiddleNodeType> for AstNodeType {
     fn from(val: MiddleNodeType) -> Self {
         match val {
             MiddleNodeType::Emit(value) => {
-                AstNodeType::Emit(EmitType::Scope(Box::new((*value.value).into())))
+                AstNodeType::Emit(AstEmit::Scope(Box::new((*value.value).into())))
             }
             MiddleNodeType::Spawn(value) => AstNodeType::Spawn {
                 items: vec![(*value.value).into()],
@@ -585,13 +585,13 @@ impl From<MiddleNodeType> for AstNodeType {
                     AstNodeType::Identifier(value.identifier.into()),
                 )),
             },
-            MiddleNodeType::Break(value) => AstNodeType::Break {
+            MiddleNodeType::Break(value) => AstNodeType::Break(AstBreak {
                 label: value.label.map(Into::into),
                 value: value.value.map(|v| Box::new((*v).into())),
-            },
-            MiddleNodeType::Continue(value) => AstNodeType::Continue {
+            }),
+            MiddleNodeType::Continue(value) => AstNodeType::Continue(AstContinue {
                 label: value.label.map(Into::into),
-            },
+            }),
             MiddleNodeType::EmptyLine => AstNodeType::EmptyLine,
             MiddleNodeType::Null => AstNodeType::Null,
             MiddleNodeType::RefStatement(value) => AstNodeType::RefStatement {
@@ -709,9 +709,9 @@ impl From<MiddleNodeType> for AstNodeType {
                 create_new_scope: Some(false),
                 define: false,
             },
-            MiddleNodeType::Return(value) => AstNodeType::Return {
+            MiddleNodeType::Return(value) => AstNodeType::Return(AstReturn {
                 value: value.value.map(|x| Box::new((*x).into())),
-            },
+            }),
             MiddleNodeType::Identifier(value) => AstNodeType::Identifier(value.identifier.into()),
             MiddleNodeType::StringLiteral(value) => {
                 AstNodeType::StringLiteral(ParserText::from(value.value))

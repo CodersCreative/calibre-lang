@@ -3,12 +3,13 @@ use crate::{
     errors::MiddleErr,
     scoping::ScopeId,
     symbols::resolve::{ResolutionOptions, StrOrAstNode},
+    translate::MirLowering,
     typing::MiddleTypeDefType,
 };
 use calibre_parser::ast::{
     Operator,
     idents::ParsedIntLiteral,
-    nodes::{AsFailureMode, AstNode, AstNodeType, EmitType},
+    nodes::{AsFailureMode, AstEmit, AstNode, AstNodeType},
     types::{ParserDataType, ParserInnerType},
 };
 use ustr::Ustr;
@@ -23,7 +24,7 @@ impl MiddleEnvironment {
             AstNodeType::IfStatement { .. } | AstNodeType::MatchStatement { .. } => {
                 self.resolve_type_from_node(scope, node)
             }
-            AstNodeType::Emit(EmitType::Scope(x)) => self.resolve_type_from_node(scope, x),
+            AstNodeType::Emit(AstEmit::Scope(x)) => self.resolve_type_from_node(scope, x),
             _ => None,
         };
 
@@ -72,6 +73,8 @@ impl MiddleEnvironment {
         node: &AstNode,
     ) -> Option<ParserDataType> {
         let typ = match &node.node_type {
+            AstNodeType::Emit(x) => x.type_of(self, scope, node.span),
+            AstNodeType::Try(x) => x.type_of(self, scope, node.span),
             AstNodeType::Break { .. }
             | AstNodeType::Continue { .. }
             | AstNodeType::VariableDeclaration { .. }
@@ -93,9 +96,7 @@ impl MiddleEnvironment {
             | AstNodeType::ScopeAlias { .. }
             | AstNodeType::DataType { .. }
             | AstNodeType::Until { .. }
-            | AstNodeType::SelectStatement { .. }
-            | AstNodeType::Emit(EmitType::Scope(_)) => None,
-            AstNodeType::Emit(_) => Some(ParserDataType::new(node.span, ParserInnerType::Bool)),
+            | AstNodeType::SelectStatement { .. } => None,
             AstNodeType::Spawn { auto_wait, .. } => Some(ParserDataType::new(
                 node.span,
                 if *auto_wait {
@@ -405,17 +406,6 @@ impl MiddleEnvironment {
                 data_type: ParserInnerType::Float,
                 span: node.span,
             }),
-            AstNodeType::Try { value, .. } => match self.resolve_type_from_node(scope, value) {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Result { ok: x, err: _ },
-                    ..
-                })
-                | Some(ParserDataType {
-                    data_type: ParserInnerType::Option(x),
-                    ..
-                }) => Some(*x),
-                x => x,
-            },
             AstNodeType::CallExpression {
                 caller,
                 generic_types: _generic_types,

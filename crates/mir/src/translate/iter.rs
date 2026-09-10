@@ -9,7 +9,10 @@ use calibre_parser::{
         comparison::BooleanOperator,
         idents::{ParserText, PotentialDollarIdentifier},
         matching::MatchArmType,
-        nodes::{AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, VarType},
+        nodes::{
+            AstBreak, AstContinue, AstNode, AstNodeType, CallArg, IfComparisonType, LoopType,
+            VarType,
+        },
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -47,7 +50,7 @@ pub fn transform_spawn_iter(
                     then: Box::new(AstNode::new(span, AstNodeType::EmptyLine)),
                     otherwise: Some(Box::new(AstNode::new(
                         span,
-                        AstNodeType::Continue { label: None },
+                        AstNodeType::Continue(AstContinue { label: None }),
                     ))),
                 },
             )
@@ -144,10 +147,10 @@ pub fn transform_spawn_iter(
                             Vec::new(),
                             Box::new(AstNode::new(
                                 span,
-                                AstNodeType::Break {
+                                AstNodeType::Break(AstBreak {
                                     label: None,
                                     value: None,
-                                },
+                                }),
                             )),
                         ),
                     ],

@@ -1,9 +1,9 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBig, MirBinary,
-        MirBoolean, MirBreak, MirChar, MirComparison, MirConditional, MirContinue, MirDeref,
-        MirDrop, MirEmit, MirEnum, MirFloat, MirInt, MirIs, MirListBuilder, MirMove, MirNeg,
-        MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirString, MirVarDecl,
+        MirBoolean, MirChar, MirComparison, MirConditional, MirDeref, MirDrop, MirEnum, MirFloat,
+        MirInt, MirIs, MirListBuilder, MirMove, MirNeg, MirRange, MirRef, MirScopeDecl, MirSpawn,
+        MirString, MirVarDecl,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -21,13 +21,12 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         generics::TraitMemberKind,
         idents::{
-            IntLiteralType, ParsedIntLiteral, ParserText, PotentialDollarIdentifier,
-            PotentialGenericTypeIdentifier,
+            ParsedIntLiteral, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
         },
         matching::{MatchArmType, SelectArmKind, TryCatch},
         nodes::{
-            AsFailureMode, AstNode, AstNodeType, CallArg, EmitType, FunctionHeader,
-            IfComparisonType, LoopType, PipeSegment, TypeDefType, VarType,
+            AsFailureMode, AstBreak, AstEmit, AstNode, AstNodeType, AstTry, CallArg,
+            FunctionHeader, IfComparisonType, LoopType, PipeSegment, TypeDefType, VarType,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -36,6 +35,7 @@ use tracing::{debug, instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
 
 pub mod curry;
+pub mod flow;
 pub mod functions;
 pub mod iter;
 pub mod loops;
@@ -43,6 +43,58 @@ pub mod matching;
 pub mod member;
 pub mod scopes;
 pub mod statements;
+
+pub trait MirLowering {
+    fn lower(
+        self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr>;
+
+    fn lower_or_empty(self, env: &mut MiddleEnvironment, scope: ScopeId, span: Span) -> MiddleNode
+    where
+        Self: Sized,
+    {
+        match self.lower(env, scope, span) {
+            Ok(node) => node,
+            Err(err) => {
+                debug!(error = %err, "evaluation failed, pushing error");
+                env.context.push_error(err);
+                MiddleNode::new(MiddleNodeType::EmptyLine, span)
+            }
+        }
+    }
+
+    fn type_of(
+        &self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        _span: Span,
+    ) -> Option<ParserDataType> {
+        None
+    }
+}
+
+impl MirLowering for AstNode {
+    fn lower(
+        self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        _span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        env.evaluate_inner(scope, self)
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        _span: Span,
+    ) -> Option<ParserDataType> {
+        env.resolve_type_from_node(scope, self)
+    }
+}
 
 impl MiddleEnvironment {
     pub fn compare_types(
@@ -175,18 +227,15 @@ impl MiddleEnvironment {
                 node_type: MiddleNodeType::Null,
                 span: node.span,
             }),
-            AstNodeType::Defer { value, function } => {
-                if function {
-                    self.symbols.func_defers.push(*value);
-                } else {
-                    let scope_data = self.scoping.scope_mut_or_err(scope)?;
-                    scope_data.defers.push(*value);
-                }
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::EmptyLine,
-                    span: node.span,
-                })
-            }
+
+            // Flow
+            AstNodeType::Break(x) => x.lower(self, scope, node.span),
+            AstNodeType::Emit(x) => x.lower(self, scope, node.span),
+            AstNodeType::Defer(x) => x.lower(self, scope, node.span),
+            AstNodeType::Try(x) => x.lower(self, scope, node.span),
+            AstNodeType::Continue(x) => x.lower(self, scope, node.span),
+            AstNodeType::Return(x) => x.lower(self, scope, node.span),
+
             AstNodeType::CurryExpression { value } => {
                 let value = self.rewrite_curry_call(scope, node.span, *value)?;
                 Ok(self.evaluate(scope, value))
@@ -267,32 +316,6 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-            AstNodeType::Emit(EmitType::Channel { channel, value }) => {
-                if !self.context.type_check {
-                    let channel_ty = self.resolve_type_from_node(scope, &channel);
-                    let expected = self.resolve_to_data_type(scope, &"Channel").ok();
-                    self.compare_types_ref(
-                        expected.as_ref(),
-                        channel_ty.as_ref(),
-                        Some(&TagInfo::IgnoreInvalidTypeCheck),
-                    )?;
-                }
-
-                self.evaluate_inner(
-                    scope,
-                    AstNode::call(
-                        node.span,
-                        AstNode::member(node.span, *channel, "send"),
-                        vec![CallArg::Value(*value)],
-                    ),
-                )
-            }
-            AstNodeType::Emit(EmitType::Scope(value)) => Ok(MiddleNode::new(
-                MiddleNodeType::Emit(MirEmit {
-                    value: Box::new(self.evaluate(scope, *value)),
-                }),
-                node.span,
-            )),
             AstNodeType::FieldAccess { base, field } => {
                 self.evaluate_field_access(scope, node.span, *base, field)
             }
@@ -439,7 +462,7 @@ impl MiddleEnvironment {
                                 loop_node,
                                 AstNode::new(
                                     node.span,
-                                    AstNodeType::Emit(EmitType::Scope(Box::new(
+                                    AstNodeType::Emit(AstEmit::Scope(Box::new(
                                         AstNode::identifier(node.span, ident),
                                     ))),
                                 ),
@@ -507,7 +530,7 @@ impl MiddleEnvironment {
 
                 body.push(AstNode::new(
                     span,
-                    AstNodeType::Emit(EmitType::Scope(Box::new(AstNode::identifier(span, ident)))),
+                    AstNodeType::Emit(AstEmit::Scope(Box::new(AstNode::identifier(span, ident)))),
                 ));
 
                 self.evaluate_inner(
@@ -751,10 +774,10 @@ impl MiddleEnvironment {
                     node_type: AstNodeType::IfStatement {
                         comparison: Box::new(IfComparisonType::If(*condition)),
                         then: Box::new(AstNode {
-                            node_type: AstNodeType::Break {
+                            node_type: AstNodeType::Break(AstBreak {
                                 label: None,
                                 value: None,
-                            },
+                            }),
                             span: node.span,
                         }),
                         otherwise: None,
@@ -762,259 +785,8 @@ impl MiddleEnvironment {
                     span: node.span,
                 },
             ),
-            AstNodeType::Break { label, value } => Ok(MiddleNode {
-                node_type: {
-                    let mut lst = Vec::new();
-
-                    let raw_label_text = label.as_ref().map(|l| l.to_string());
-                    let label_text = label.as_ref().and_then(|l| {
-                        self.resolve(scope, l, ResolutionOptions::default().with_dollar())
-                            .ok()
-                    });
-
-                    let (result_target, broke_target, target_scope) = {
-                        let target_ctx = if label.is_some() {
-                            self.scoping.loop_stack.iter().rev().find(|ctx| {
-                                label_text
-                                    .as_ref()
-                                    .is_some_and(|l| ctx.label.as_deref() == Some(l.as_str()))
-                                    || raw_label_text
-                                        .as_ref()
-                                        .is_some_and(|l| ctx.label.as_deref() == Some(l.as_str()))
-                            })
-                        } else {
-                            self.scoping.loop_stack.last()
-                        };
-                        (
-                            target_ctx.and_then(|ctx| ctx.result_target),
-                            target_ctx.and_then(|ctx| ctx.broke_target),
-                            target_ctx.map(|ctx| ctx.scope_id),
-                        )
-                    };
-                    let has_break_value = value.is_some();
-                    let value_node = value.map(|v| self.evaluate(scope, *v));
-
-                    if has_break_value && let Some(result_target) = result_target {
-                        let assign = MiddleNode::new(
-                            MiddleNodeType::AssignmentExpression(MirAssignment {
-                                identifier: Box::new(MiddleNode::identifier(
-                                    self.context.current_span(),
-                                    result_target,
-                                )),
-                                value: Box::new(value_node.unwrap_or(MiddleNode::new(
-                                    MiddleNodeType::Null,
-                                    self.context.current_span(),
-                                ))),
-                            }),
-                            self.context.current_span(),
-                        );
-                        lst.push(assign);
-                    } else if let Some(val) = value_node {
-                        lst.push(val);
-                    }
-
-                    if has_break_value && let Some(broke_target) = broke_target {
-                        let assign = MiddleNode::new(
-                            MiddleNodeType::AssignmentExpression(MirAssignment {
-                                identifier: Box::new(MiddleNode::identifier(
-                                    self.context.current_span(),
-                                    broke_target,
-                                )),
-                                value: Box::new(MiddleNode::new(
-                                    MiddleNodeType::IntLiteral(MirInt {
-                                        value: ParsedIntLiteral {
-                                            value: 1,
-                                            int_type: IntLiteralType::Int,
-                                        },
-                                    }),
-                                    self.context.current_span(),
-                                )),
-                            }),
-                            self.context.current_span(),
-                        );
-                        lst.push(assign);
-                    }
-
-                    if let Some(target_scope) = target_scope {
-                        let chain_defers =
-                            self.scoping.collect_defers_until(scope, Some(target_scope));
-
-                        for x in chain_defers {
-                            lst.push(self.evaluate(scope, x));
-                        }
-                    } else if let Ok(s) = self.scoping.scope_or_err(scope) {
-                        for x in s.defers.clone() {
-                            lst.push(self.evaluate(scope, x));
-                        }
-                    }
-
-                    let break_node = MiddleNode::new(
-                        MiddleNodeType::Break(MirBreak {
-                            label: label_text.or(raw_label_text.map(|x| Ustr::from(&x))),
-                            value: None,
-                        }),
-                        self.context.current_span(),
-                    );
-
-                    if lst.is_empty() {
-                        return Ok(MiddleNode::new(break_node.node_type, node.span));
-                    }
-
-                    lst.push(break_node);
-
-                    MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                        body: lst,
-                        create_new_scope: false,
-                        is_temp: true,
-                        scope_id: scope,
-                    })
-                },
-                span: node.span,
-            }),
-            AstNodeType::Continue { label } => Ok(MiddleNode {
-                node_type: {
-                    let mut lst = Vec::new();
-
-                    let raw_label_text = label.as_ref().map(|l| l.to_string());
-                    let label_text = label.as_ref().and_then(|l| {
-                        self.resolve(scope, l, ResolutionOptions::default().with_dollar())
-                            .ok()
-                    });
-
-                    let continue_ctx = if label.is_some() {
-                        self.scoping
-                            .loop_stack
-                            .iter()
-                            .rev()
-                            .find(|ctx| {
-                                label_text
-                                    .as_ref()
-                                    .is_some_and(|l| ctx.label.as_deref() == Some(l.as_str()))
-                                    || raw_label_text
-                                        .as_ref()
-                                        .is_some_and(|l| ctx.label.as_deref() == Some(l.as_str()))
-                            })
-                            .cloned()
-                    } else {
-                        self.scoping.loop_stack.last().cloned()
-                    };
-
-                    if let Some(ctx) = continue_ctx.as_ref() {
-                        let chain_defers =
-                            self.scoping.collect_defers_until(scope, Some(ctx.scope_id));
-
-                        for x in chain_defers {
-                            lst.push(self.evaluate(scope, x));
-                        }
-                    } else if let Ok(s) = self.scoping.scope_or_err(scope) {
-                        for x in s.defers.clone() {
-                            lst.push(self.evaluate(scope, x));
-                        }
-                    }
-
-                    if let Some(ctx) = continue_ctx.clone()
-                        && let Some(inject) = ctx.continue_inject.clone()
-                    {
-                        lst.push(self.evaluate(scope, inject));
-                    }
-
-                    let cont_node = MiddleNode::new(
-                        MiddleNodeType::Continue(MirContinue {
-                            label: label_text.or(raw_label_text.map(|x| Ustr::from(&x))),
-                        }),
-                        self.context.current_span(),
-                    );
-
-                    if lst.is_empty() {
-                        return Ok(MiddleNode::new(cont_node.node_type, node.span));
-                    }
-
-                    lst.push(cont_node);
-
-                    MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                        body: lst,
-                        create_new_scope: false,
-                        is_temp: true,
-                        scope_id: scope,
-                    })
-                },
-                span: node.span,
-            }),
             AstNodeType::EmptyLine => Ok(MiddleNode {
                 node_type: MiddleNodeType::EmptyLine,
-                span: node.span,
-            }),
-            AstNodeType::Return { value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::Return(MirReturn {
-                    value: {
-                        let mut lst = Vec::new();
-
-                        if !self
-                            .tagging
-                            .tag_info
-                            .contains(&TagInfo::IgnoreInvalidReturn)
-                        {
-                            if let Some(ret_ty) = self.scoping.return_type_stack.last().cloned() {
-                                let node_ty = if let Some(value) = &value {
-                                    if let Some(x) = self.resolve_type_from_node(scope, value) {
-                                        x.key()
-                                    } else {
-                                        ParserInnerType::Dynamic
-                                    }
-                                } else {
-                                    ParserInnerType::Null
-                                };
-
-                                // TODO Properly check for the generators inner type
-                                if !node_ty.loose_eq(&ret_ty) && !ret_ty.is_gen() {
-                                    return Err(self.context.err_at_current(
-                                        MiddleErr::InvalidReturnType {
-                                            expected: Box::new(ParserDataType::new(
-                                                node.span, ret_ty,
-                                            )),
-                                            found: Box::new(ParserDataType::new(
-                                                node.span, node_ty,
-                                            )),
-                                        },
-                                    ));
-                                }
-                            } else {
-                                return Err(self
-                                    .context
-                                    .err_at_current(MiddleErr::ReturnOutOfFunction));
-                            }
-                        }
-
-                        let value = value.map(|x| self.evaluate(scope, *x));
-
-                        let chain_defers = self.scoping.collect_defers_until(scope, None);
-                        for x in chain_defers {
-                            lst.push(self.evaluate(scope, x));
-                        }
-
-                        for x in self.symbols.func_defers.clone() {
-                            lst.push(self.evaluate(scope, x));
-                        }
-
-                        if lst.is_empty() {
-                            value.map(Box::new)
-                        } else {
-                            if let Some(x) = value {
-                                lst.push(x);
-                            }
-
-                            Some(Box::new(MiddleNode::new(
-                                MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                                    body: lst,
-                                    create_new_scope: false,
-                                    is_temp: true,
-                                    scope_id: scope,
-                                }),
-                                node.span,
-                            )))
-                        }
-                    },
-                }),
                 span: node.span,
             }),
             AstNodeType::RefStatement { mutability, value } => Ok(MiddleNode {
@@ -1213,7 +985,7 @@ impl MiddleEnvironment {
                             return self.evaluate_inner(
                                 scope,
                                 AstNode {
-                                    node_type: AstNodeType::Try {
+                                    node_type: AstNodeType::Try(AstTry {
                                         value: Box::new(AstNode {
                                             node_type: AstNodeType::AsExpression {
                                                 value,
@@ -1236,7 +1008,7 @@ impl MiddleEnvironment {
                                                 ))],
                                             )),
                                         }),
-                                    },
+                                    }),
                                     span: node.span,
                                 },
                             );
@@ -1463,88 +1235,6 @@ impl MiddleEnvironment {
                     node_type: MiddleNodeType::ListLiteral(lst.build().unwrap()),
                     span: node.span,
                 })
-            }
-            AstNodeType::Try { value, catch } => {
-                let resolved_type = self.resolve_type_from_node(scope, &value);
-                let is_option_try = matches!(
-                    resolved_type.as_ref().map(|t| t.key()),
-                    Some(ParserInnerType::Option(_))
-                );
-
-                let enum_arm = |variant: &str, name: Option<PotentialDollarIdentifier>, body| {
-                    (
-                        MatchArmType::Enum {
-                            var_type: VarType::Immutable,
-                            value: ParserText::from(variant.to_string()).into(),
-                            name,
-                            destructure: None,
-                            pattern: None,
-                        },
-                        Vec::new(),
-                        Box::new(body),
-                    )
-                };
-
-                let return_call = |name: &str, args: Vec<CallArg>| {
-                    AstNode::new(
-                        Span::default(),
-                        AstNodeType::Return {
-                            value: Some(Box::new(AstNode::call(
-                                self.context.current_span(),
-                                AstNode::identifier(self.context.current_span(), name),
-                                args,
-                            ))),
-                        },
-                    )
-                };
-
-                self.evaluate_inner(
-                    scope,
-                    AstNode {
-                        node_type: AstNodeType::MatchStatement {
-                            value: Some(value),
-                            body: if is_option_try {
-                                let ok_name = "anon_ok_value";
-                                let ok_arm = enum_arm(
-                                    "Some",
-                                    Some(ParserText::from(ok_name.to_string()).into()),
-                                    AstNode::identifier(self.context.current_span(), ok_name),
-                                );
-                                let err_arm = if let Some(catch) = catch {
-                                    enum_arm("None", catch.name, *catch.body)
-                                } else {
-                                    enum_arm("None", None, return_call("none", Vec::new()))
-                                };
-                                vec![ok_arm, err_arm]
-                            } else {
-                                let ok_name = "anon_ok_value";
-                                let ok_arm = enum_arm(
-                                    "Ok",
-                                    Some(ParserText::from(ok_name.to_string()).into()),
-                                    AstNode::identifier(self.context.current_span(), ok_name),
-                                );
-                                let err_arm = if let Some(catch) = catch {
-                                    enum_arm("Err", catch.name, *catch.body)
-                                } else {
-                                    let err_name = "anon_err_value";
-                                    enum_arm(
-                                        "Err",
-                                        Some(ParserText::from(err_name.to_string()).into()),
-                                        return_call(
-                                            "err",
-                                            vec![CallArg::Value(AstNode::identifier(
-                                                self.context.current_span(),
-                                                err_name,
-                                            ))],
-                                        ),
-                                    )
-                                };
-                                vec![ok_arm, err_arm]
-                            },
-                        },
-                        span: node.span,
-                    },
-                )
             }
             AstNodeType::LoopDeclaration {
                 loop_type,
@@ -2778,10 +2468,10 @@ impl MiddleEnvironment {
                 let break_node = || {
                     AstNode::new(
                         node.span,
-                        AstNodeType::Break {
+                        AstNodeType::Break(AstBreak {
                             label: None,
                             value: None,
-                        },
+                        }),
                     )
                 };
 

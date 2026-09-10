@@ -9,11 +9,12 @@ use crate::{
             SelectArmKind,
         },
         nodes::{
-            AsFailureMode, AstNode, AstNodeType, CallArg, DestructurePattern, EmitType,
-            IfComparisonType, LoopType, Overload, PipeSegment, TypeDefType, VarType,
+            AsFailureMode, AstNode, AstNodeType, CallArg, DestructurePattern, IfComparisonType,
+            LoopType, Overload, PipeSegment, TypeDefType, VarType,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
+    formatter::AstFormatting,
 };
 use rustc_hash::FxHashMap;
 use std::error::Error;
@@ -78,6 +79,12 @@ impl Default for Formatter {
             max_values: 3,
             tab: Tab::default(),
         }
+    }
+}
+
+impl AstFormatting for AstNode {
+    fn narrow_format(&self, formatter: &mut Formatter) -> String {
+        formatter.format(self)
     }
 }
 
@@ -309,7 +316,7 @@ impl Formatter {
         text.lines().any(|line| line.len() > self.max_width)
     }
 
-    fn wrap_if_wide(&self, single: String, multiline: &str) -> String {
+    pub fn wrap_if_wide(&self, single: String, multiline: &str) -> String {
         self.wrap_if_wide_or_if(single, multiline, false)
     }
 
@@ -355,34 +362,15 @@ impl Formatter {
     pub fn format(&mut self, node: &AstNode) -> String {
         match &node.node_type {
             AstNodeType::Null => String::from("null"),
-            AstNodeType::Break { label, value } => {
-                let mut txt = String::from("break");
-                if let Some(label) = label {
-                    txt.push_str(&format!(" @{}", label));
-                }
-                if let Some(value) = value {
-                    txt.push(' ');
-                    txt.push_str(&self.format(value));
-                }
-                txt
-            }
-            AstNodeType::Emit(EmitType::Scope(x)) => format!("emit {}", self.format(x)),
-            AstNodeType::Emit(EmitType::Channel { channel, value }) => {
-                format!("emit {} {}", self.format(channel), self.format(value))
-            }
-            AstNodeType::Continue { label } => {
-                let mut txt = String::from("continue");
-                if let Some(label) = label {
-                    txt.push_str(&format!(" @{}", label));
-                }
-                txt
-            }
             AstNodeType::EmptyLine => String::new(),
-            AstNodeType::Defer { value, function } => format!(
-                "defer {}{}",
-                if *function { "return " } else { "" },
-                self.format(value)
-            ),
+
+            AstNodeType::Break(x) => x.format(self),
+            AstNodeType::Emit(x) => x.format(self),
+            AstNodeType::Continue(x) => x.format(self),
+            AstNodeType::Defer(x) => x.format(self),
+            AstNodeType::Return(x) => x.format(self),
+            AstNodeType::Try(x) => x.format(self),
+
             AstNodeType::Spawn { items, auto_wait } => {
                 let prefix = if *auto_wait { "spawn@" } else { "spawn" };
                 if items.len() == 1 {
@@ -711,22 +699,8 @@ impl Formatter {
             AstNodeType::TestDeclaration { identifier, body } => {
                 format!("test {:?} {}", identifier.text, self.format(body))
             }
-            AstNodeType::Try { value, catch } => {
-                let mut txt = format!("try {}", self.format(value));
-                if let Some(catch) = catch {
-                    if let Some(name) = &catch.name {
-                        txt.push_str(&format!(" : {}", name));
-                    }
-
-                    txt.push_str(&format!(" {}", self.format(&catch.body)));
-                }
-
-                txt
-            }
             AstNodeType::CurryExpression { value } => format!("curry {}", self.format(value)),
             AstNodeType::Until { condition } => format!("until {}", self.format(condition)),
-            AstNodeType::Return { value: Some(value) } => format!("return {}", self.format(value)),
-            AstNodeType::Return { value: _ } => String::from("return"),
             AstNodeType::AssignmentExpression { identifier, value } => match &value.node_type {
                 AstNodeType::BinaryExpression {
                     left,

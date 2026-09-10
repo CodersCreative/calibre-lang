@@ -3,7 +3,8 @@ use crate::ast::RefMutability;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::matching::{MatchArmType, TryCatch};
 use crate::ast::nodes::{
-    AsFailureMode, AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, PipeSegment,
+    AsFailureMode, AstBreak, AstContinue, AstDefer, AstNode, AstNodeType, AstTry, CallArg,
+    IfComparisonType, LoopType, PipeSegment,
 };
 use crate::ast::types::{ParserDataType, ParserInnerType};
 use crate::parse::util::{
@@ -917,10 +918,10 @@ pub fn build_tail_expression_parser<'a>(
         .map(|(value, catch)| {
             AstNode::new(
                 value.span,
-                AstNodeType::Try {
+                AstNodeType::Try(AstTry {
                     value: Box::new(value),
                     catch,
-                },
+                }),
             )
         })
         .boxed();
@@ -936,10 +937,10 @@ pub fn build_tail_expression_parser<'a>(
         .map(|(function, value)| {
             AstNode::new(
                 value.span,
-                AstNodeType::Defer {
+                AstNodeType::Defer(AstDefer {
                     value: Box::new(value),
                     function,
-                },
+                }),
             )
         })
         .boxed();
@@ -968,10 +969,10 @@ pub fn build_tail_expression_parser<'a>(
             move |(label, value), r| {
                 AstNode::new(
                     span(ls.as_ref(), r),
-                    AstNodeType::Break {
+                    AstNodeType::Break(AstBreak {
                         label,
                         value: value.map(Box::new),
-                    },
+                    }),
                 )
             }
         })
@@ -986,7 +987,12 @@ pub fn build_tail_expression_parser<'a>(
         )
         .map_with_span({
             let ls = line_starts.clone();
-            move |label, r| AstNode::new(span(ls.as_ref(), r), AstNodeType::Continue { label })
+            move |label, r| {
+                AstNode::new(
+                    span(ls.as_ref(), r),
+                    AstNodeType::Continue(AstContinue { label }),
+                )
+            }
         })
         .boxed();
 

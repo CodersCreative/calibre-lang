@@ -10,7 +10,7 @@ use calibre_parser::{
     ast::{
         binary::BinaryOperator,
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, VarType},
+        nodes::{AstBreak, AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, VarType},
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -204,10 +204,10 @@ impl MiddleEnvironment {
                         ))),
                         then: Box::new(AstNode::new(
                             span,
-                            AstNodeType::Break {
+                            AstNodeType::Break(AstBreak {
                                 label: None,
                                 value: None,
-                            },
+                            }),
                         )),
                         otherwise: None,
                     },
@@ -243,10 +243,10 @@ impl MiddleEnvironment {
                             then: Box::new(body),
                             otherwise: Some(Box::new(AstNode::new(
                                 span,
-                                AstNodeType::Break {
+                                AstNodeType::Break(AstBreak {
                                     label: None,
                                     value: None,
-                                },
+                                }),
                             ))),
                         },
                     ),
@@ -435,10 +435,10 @@ impl MiddleEnvironment {
                         ))),
                         then: Box::new(AstNode::new(
                             span,
-                            AstNodeType::Break {
+                            AstNodeType::Break(AstBreak {
                                 label: None,
                                 value: None,
-                            },
+                            }),
                         )),
                         otherwise: None,
                     },

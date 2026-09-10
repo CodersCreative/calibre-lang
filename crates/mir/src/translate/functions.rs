@@ -17,7 +17,8 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
-            AstNode, AstNodeType, CallArg, FunctionHeader, IfComparisonType, LoopType, VarType,
+            AstContinue, AstNode, AstNodeType, AstReturn, CallArg, FunctionHeader,
+            IfComparisonType, LoopType, VarType,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -30,16 +31,16 @@ impl NodeVisitor for GeneratorReturnsRewriter {
     fn visit(&mut self, node: AstNode) -> AstNode {
         let span = node.span;
         match node.node_type {
-            AstNodeType::Return { value: Some(value) } => AstNode::call(
+            AstNodeType::Return(AstReturn { value: Some(value) }) => AstNode::call(
                 span,
                 AstNode::identifier(span, "gen_suspend"),
                 vec![CallArg::Value(*value)],
             ),
-            AstNodeType::Return { value: None } => AstNode::new(
+            AstNodeType::Return(AstReturn { value: None }) => AstNode::new(
                 span,
-                AstNodeType::Return {
+                AstNodeType::Return(AstReturn {
                     value: Some(Box::new(AstNode::identifier(span, "none"))),
-                },
+                }),
             ),
             _ => {
                 let node_type = self.visit_children(node.node_type);
@@ -394,9 +395,9 @@ impl MiddleEnvironment {
         let mut loop_body_items = Vec::new();
         let yield_node = AstNode::new(
             span,
-            AstNodeType::Return {
+            AstNodeType::Return(AstReturn {
                 value: Some(Box::new(map)),
-            },
+            }),
         );
 
         if let Some(guard) = guard {
@@ -407,7 +408,7 @@ impl MiddleEnvironment {
                     then: Box::new(yield_node),
                     otherwise: Some(Box::new(AstNode::new(
                         span,
-                        AstNodeType::Continue { label: None },
+                        AstNodeType::Continue(AstContinue { label: None }),
                     ))),
                 },
             ));

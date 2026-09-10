@@ -228,17 +228,14 @@ impl AstNode {
     pub fn ret(node: AstNode) -> Self {
         Self::new(
             node.span,
-            AstNodeType::Return {
+            AstNodeType::Return(AstReturn {
                 value: Some(Box::new(node)),
-            },
+            }),
         )
     }
 
     pub fn emit(node: AstNode) -> Self {
-        Self::new(
-            node.span,
-            AstNodeType::Emit(EmitType::Scope(Box::new(node))),
-        )
+        Self::new(node.span, AstNodeType::Emit(AstEmit::Scope(Box::new(node))))
     }
 
     pub fn null(span: Span) -> Self {
@@ -374,8 +371,10 @@ impl AstNode {
                     body: Some(
                         body.into_iter()
                             .map(|x| match x.node_type {
-                                AstNodeType::Emit(EmitType::Scope(value)) => AstNode {
-                                    node_type: AstNodeType::Return { value: Some(value) },
+                                AstNodeType::Emit(AstEmit::Scope(value)) => AstNode {
+                                    node_type: AstNodeType::Return(AstReturn {
+                                        value: Some(value),
+                                    }),
                                     span: self.span,
                                 },
                                 _ => x,
@@ -389,8 +388,8 @@ impl AstNode {
                 },
                 span: self.span,
             },
-            AstNodeType::Emit(EmitType::Scope(value)) => AstNode {
-                node_type: AstNodeType::Return { value: Some(value) },
+            AstNodeType::Emit(AstEmit::Scope(value)) => AstNode {
+                node_type: AstNodeType::Return(AstReturn { value: Some(value) }),
                 span: self.span,
             },
             _ => self,
@@ -538,8 +537,10 @@ impl<'a> From<&'a CallArg> for &'a AstNode {
     }
 }
 
+// Flow
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum EmitType {
+pub enum AstEmit {
     Scope(Box<AstNode>),
     Channel {
         channel: Box<AstNode>,
@@ -547,18 +548,49 @@ pub enum EmitType {
     },
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstBreak {
+    pub label: Option<PotentialDollarIdentifier>,
+    pub value: Option<Box<AstNode>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstContinue {
+    pub label: Option<PotentialDollarIdentifier>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstTry {
+    pub value: Box<AstNode>,
+    pub catch: Option<TryCatch>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstReturn {
+    pub value: Option<Box<AstNode>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstDefer {
+    pub value: Box<AstNode>,
+    pub function: bool,
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum AstNodeType {
-    Break {
-        label: Option<PotentialDollarIdentifier>,
-        value: Option<Box<AstNode>>,
-    },
-    Continue {
-        label: Option<PotentialDollarIdentifier>,
-    },
     EmptyLine,
     Null,
+
+    // Flow
+    Emit(AstEmit),
+    Break(AstBreak),
+    Continue(AstContinue),
+    Try(AstTry),
+    Return(AstReturn),
+    Defer(AstDefer),
+
+    // TODO Convert
     Spawn {
         items: Vec<AstNode>,
         auto_wait: bool,
@@ -566,7 +598,6 @@ pub enum AstNodeType {
     SelectStatement {
         arms: Vec<SelectArm>,
     },
-    Emit(EmitType),
     RefStatement {
         mutability: RefMutability,
         value: Box<AstNode>,
@@ -581,10 +612,6 @@ pub enum AstNodeType {
     Drop(PotentialDollarIdentifier),
     MoveExpression {
         value: Box<AstNode>,
-    },
-    Defer {
-        value: Box<AstNode>,
-        function: bool,
     },
     ParenExpression {
         value: Box<AstNode>,
@@ -721,13 +748,6 @@ pub enum AstNodeType {
     TestDeclaration {
         identifier: ParserText,
         body: Box<AstNode>,
-    },
-    Try {
-        value: Box<AstNode>,
-        catch: Option<TryCatch>,
-    },
-    Return {
-        value: Option<Box<AstNode>>,
     },
     Until {
         condition: Box<AstNode>,

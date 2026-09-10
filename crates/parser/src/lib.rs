@@ -14,6 +14,7 @@ use tracing::{debug, info, instrument};
 use ustr::{Ustr, UstrMap};
 
 pub mod ast;
+pub mod formatter;
 pub mod native;
 pub mod parse;
 

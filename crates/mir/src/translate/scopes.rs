@@ -9,7 +9,7 @@ use calibre_parser::{
     Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{AstNode, AstNodeType, LoopType, NamedScope},
+        nodes::{AstBreak, AstNode, AstNodeType, LoopType, NamedScope},
     },
 };
 use ustr::Ustr;
@@ -153,10 +153,10 @@ impl MiddleEnvironment {
                 let break_value = last.map(Box::new);
                 body_nodes.push(AstNode::new(
                     span,
-                    AstNodeType::Break {
+                    AstNodeType::Break(AstBreak {
                         label: Some(named.name.clone()),
                         value: break_value,
-                    },
+                    }),
                 ));
 
                 let loop_body =
