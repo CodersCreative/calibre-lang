@@ -4,7 +4,7 @@ use crate::{
     symbols::resolve::ResolutionOptions,
 };
 use calibre_parser::ast::{
-    comparison::ComparisonOperator,
+    comparison::{BooleanOperator, ComparisonOperator},
     matching::{MatchArmType, MatchStructFieldPattern},
     nodes::{AstNode, AstNodeType},
 };
@@ -64,6 +64,54 @@ impl PatternTranslator for StructPatternTranslator {
                             },
                         ),
                     );
+                }
+                MatchStructFieldPattern::AlternativeValues {
+                    field: field_name,
+                    values,
+                } => {
+                    let current = AstNode::member(
+                        env.context.current_span(),
+                        value.clone(),
+                        field_name.clone(),
+                    );
+
+                    let cond = if values.is_empty() {
+                        AstNode::bool(env.context.current_span(), true)
+                    } else {
+                        let mut iter = values.into_iter();
+
+                        let first = iter.next().unwrap();
+                        let mut cond = AstNode::new(
+                            env.context.current_span(),
+                            AstNodeType::ComparisonExpression {
+                                left: Box::new(current.clone()),
+                                right: Box::new(first),
+                                operator: ComparisonOperator::Equal,
+                            },
+                        );
+
+                        for value in iter {
+                            cond = AstNode::new(
+                                env.context.current_span(),
+                                AstNodeType::BooleanExpression {
+                                    left: Box::new(cond),
+                                    right: Box::new(AstNode::new(
+                                        env.context.current_span(),
+                                        AstNodeType::ComparisonExpression {
+                                            left: Box::new(current.clone()),
+                                            right: Box::new(value),
+                                            operator: ComparisonOperator::Equal,
+                                        },
+                                    )),
+                                    operator: BooleanOperator::Or,
+                                },
+                            );
+                        }
+
+                        cond
+                    };
+
+                    condition = env.bool_and_nodes(condition, cond);
                 }
                 MatchStructFieldPattern::Binding {
                     field: field_name,

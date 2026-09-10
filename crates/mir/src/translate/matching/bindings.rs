@@ -85,6 +85,7 @@ impl BindingExtractor {
                             });
                         }
                         MatchStructFieldPattern::Value { .. } => {}
+                        MatchStructFieldPattern::AlternativeValues { .. } => {}
                     }
                 }
             }

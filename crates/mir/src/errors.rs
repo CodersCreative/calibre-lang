@@ -155,8 +155,8 @@ pub enum MiddleErr {
     InternalBuilderOnlyForStructs,
     #[error("Internal error: cannot generate Default impl for this type")]
     InternalCannotGenerateDefaultImpl,
-    #[error("Internal error: failed to read {path:?}: {error}")]
-    InternalFileReadFailed { path: PathBuf, error: String },
+    #[error("failed to read {path:?}: {error}")]
+    FileReadFailed { path: PathBuf, error: String },
     #[error("Internal error: missing parent filename for scope {0}")]
     InternalInvalidParentFilename(String),
     #[error("Internal error: missing parent directory for scope {0}")]
@@ -240,7 +240,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::InternalNoDollarResolutionAllowed => "M066",
             Self::InternalBuilderOnlyForStructs => "M067",
             Self::InternalCannotGenerateDefaultImpl => "M068",
-            Self::InternalFileReadFailed { .. } => "M069",
+            Self::FileReadFailed { .. } => "M069",
             Self::InternalInvalidParentFilename(_) => "M070",
             Self::InternalInvalidParentDirectory(_) => "M071",
             Self::InternalUnexpectedState { .. } => "M072",
@@ -392,7 +392,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             | Self::InternalNoDollarResolutionAllowed
             | Self::InternalBuilderOnlyForStructs
             | Self::InternalCannotGenerateDefaultImpl
-            | Self::InternalFileReadFailed { .. }
+            | Self::FileReadFailed { .. }
             | Self::InternalInvalidParentFilename(_)
             | Self::InternalInvalidParentDirectory(_)
             | Self::InternalUnexpectedState { .. } => {

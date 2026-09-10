@@ -2354,6 +2354,17 @@ impl Formatter {
                         MatchStructFieldPattern::Value { field, value } => {
                             format!("{} : {}", field, self.format(value))
                         }
+                        MatchStructFieldPattern::AlternativeValues { field, values } => {
+                            format!(
+                                "{} : {}",
+                                field,
+                                values
+                                    .iter()
+                                    .map(|v| self.format(v))
+                                    .collect::<Vec<_>>()
+                                    .join(" | ")
+                            )
+                        }
                         MatchStructFieldPattern::Binding {
                             field,
                             var_type,

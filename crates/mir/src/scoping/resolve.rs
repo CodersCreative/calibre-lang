@@ -115,7 +115,7 @@ impl MiddleEnvironment {
                 } else {
                     fs::read_to_string(&path).map_err(|err| {
                         self.context
-                            .err_at_current(MiddleErr::InternalFileReadFailed {
+                            .err_at_current(MiddleErr::FileReadFailed {
                                 path: path.clone(),
                                 error: err.to_string(),
                             })
@@ -177,7 +177,7 @@ impl MiddleEnvironment {
         } else {
             fs::read_to_string(&path).map_err(|err| {
                 self.context
-                    .err_at_current(MiddleErr::InternalFileReadFailed {
+                    .err_at_current(MiddleErr::FileReadFailed {
                         path: path.clone(),
                         error: err.to_string(),
                     })

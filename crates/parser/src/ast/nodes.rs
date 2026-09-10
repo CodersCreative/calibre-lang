@@ -346,6 +346,21 @@ impl AstNode {
         )
     }
 
+    pub fn unwrap_bit_ors(self) -> Vec<Self> {
+        match self.node_type {
+            AstNodeType::BinaryExpression {
+                left,
+                right,
+                operator: BinaryOperator::BitOr,
+            } => {
+                let mut left = left.unwrap_bit_ors();
+                left.append(&mut right.unwrap_bit_ors());
+                left
+            }
+            _ => vec![self],
+        }
+    }
+
     pub fn rewrite_main_emits_to_returns(self) -> Self {
         match self.node_type {
             AstNodeType::ScopeDeclaration {

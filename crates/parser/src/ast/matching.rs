@@ -61,6 +61,10 @@ pub enum MatchStructFieldPattern {
         field: String,
         value: AstNode,
     },
+    AlternativeValues {
+        field: String,
+        values: Vec<AstNode>,
+    },
     Binding {
         field: String,
         var_type: VarType,
@@ -222,6 +226,13 @@ impl MatchArmType {
                 if let Some(field) = fields.first() {
                     match field {
                         MatchStructFieldPattern::Value { value, .. } => &value.span,
+                        MatchStructFieldPattern::AlternativeValues { values, .. } => {
+                            if let Some(v) = values.first() {
+                                &v.span
+                            } else {
+                                Self::default_span()
+                            }
+                        }
                         MatchStructFieldPattern::Binding { name, .. } => name.span(),
                     }
                 } else {

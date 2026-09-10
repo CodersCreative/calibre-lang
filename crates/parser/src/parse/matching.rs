@@ -220,18 +220,30 @@ pub fn build_match_parsers<'a>(
                     .then(
                         lex(pad.clone(), just(':'))
                             .ignore_then(
-                                match_var_type
-                                    .clone()
-                                    .then(ident.clone())
-                                    .map(|(var_type, (name, sp))| {
-                                        MatchStructFieldPattern::Binding {
+                                expr.clone()
+                                    .then(
+                                        lex(pad.clone(), just('|'))
+                                            .ignore_then(expr.clone())
+                                            .repeated()
+                                            .collect::<Vec<_>>(),
+                                    )
+                                    .map(|(first, rest)| {
+                                        let mut values = vec![first];
+                                        values.extend(rest);
+                                        MatchStructFieldPattern::AlternativeValues {
+                                            field: String::new(),
+                                            values,
+                                        }
+                                    })
+                                    .or(match_var_type.clone().then(ident.clone()).map(
+                                        |(var_type, (name, sp))| MatchStructFieldPattern::Binding {
                                             field: String::new(),
                                             var_type,
                                             name: PotentialDollarIdentifier::Identifier(
                                                 ParserText::new(sp, name),
                                             ),
-                                        }
-                                    })
+                                        },
+                                    ))
                                     .or(expr.clone().map(|value| MatchStructFieldPattern::Value {
                                         field: String::new(),
                                         value,
@@ -248,7 +260,18 @@ pub fn build_match_parsers<'a>(
                             }
                         }
                         Some(MatchStructFieldPattern::Value { value, .. }) => {
-                            MatchStructFieldPattern::Value { field, value }
+                            let mut values = value.unwrap_bit_ors();
+                            if values.len() == 1 {
+                                MatchStructFieldPattern::Value {
+                                    field,
+                                    value: values.pop().unwrap(),
+                                }
+                            } else {
+                                MatchStructFieldPattern::AlternativeValues { field, values }
+                            }
+                        }
+                        Some(MatchStructFieldPattern::AlternativeValues { values, .. }) => {
+                            MatchStructFieldPattern::AlternativeValues { field, values }
                         }
                         None => MatchStructFieldPattern::Binding {
                             field: field.clone(),
@@ -320,16 +343,30 @@ pub fn build_match_parsers<'a>(
                 .then(
                     lex(pad.clone(), just(':'))
                         .ignore_then(
-                            match_var_type
-                                .clone()
-                                .then(ident.clone())
-                                .map(|(var_type, (name, sp))| MatchStructFieldPattern::Binding {
-                                    field: String::new(),
-                                    var_type,
-                                    name: PotentialDollarIdentifier::Identifier(ParserText::new(
-                                        sp, name,
-                                    )),
+                            expr.clone()
+                                .then(
+                                    lex(pad.clone(), just('|'))
+                                        .ignore_then(expr.clone())
+                                        .repeated()
+                                        .collect::<Vec<_>>(),
+                                )
+                                .map(|(first, rest)| {
+                                    let mut values = vec![first];
+                                    values.extend(rest);
+                                    MatchStructFieldPattern::AlternativeValues {
+                                        field: String::new(),
+                                        values,
+                                    }
                                 })
+                                .or(match_var_type.clone().then(ident.clone()).map(
+                                    |(var_type, (name, sp))| MatchStructFieldPattern::Binding {
+                                        field: String::new(),
+                                        var_type,
+                                        name: PotentialDollarIdentifier::Identifier(
+                                            ParserText::new(sp, name),
+                                        ),
+                                    },
+                                ))
                                 .or(expr.clone().map(|value| MatchStructFieldPattern::Value {
                                     field: String::new(),
                                     value,
@@ -346,7 +383,18 @@ pub fn build_match_parsers<'a>(
                         }
                     }
                     Some(MatchStructFieldPattern::Value { value, .. }) => {
-                        MatchStructFieldPattern::Value { field, value }
+                        let mut values = value.unwrap_bit_ors();
+                        if values.len() == 1 {
+                            MatchStructFieldPattern::Value {
+                                field,
+                                value: values.pop().unwrap(),
+                            }
+                        } else {
+                            MatchStructFieldPattern::AlternativeValues { field, values }
+                        }
+                    }
+                    Some(MatchStructFieldPattern::AlternativeValues { values, .. }) => {
+                        MatchStructFieldPattern::AlternativeValues { field, values }
                     }
                     None => MatchStructFieldPattern::Binding {
                         field: field.clone(),
@@ -509,7 +557,18 @@ pub fn build_match_parsers<'a>(
                         }
                     }
                     Some(MatchStructFieldPattern::Value { value, .. }) => {
-                        MatchStructFieldPattern::Value { field, value }
+                        let mut values = value.unwrap_bit_ors();
+                        if values.len() == 1 {
+                            MatchStructFieldPattern::Value {
+                                field,
+                                value: values.pop().unwrap(),
+                            }
+                        } else {
+                            MatchStructFieldPattern::AlternativeValues { field, values }
+                        }
+                    }
+                    Some(MatchStructFieldPattern::AlternativeValues { values, .. }) => {
+                        MatchStructFieldPattern::AlternativeValues { field, values }
                     }
                     None => MatchStructFieldPattern::Binding {
                         field: field.clone(),
@@ -605,7 +664,7 @@ pub fn build_match_parsers<'a>(
                         destructure,
                         pattern,
                         ..
-                    } if *var_type != VarType::Immutable
+                    } if var_type != &VarType::Immutable
                         || name.is_some()
                         || destructure.is_some()
                         || pattern.is_some() =>
@@ -631,7 +690,7 @@ pub fn build_match_parsers<'a>(
                             pattern,
                             ..
                         } = value
-                            && *var_type == VarType::Immutable
+                            && var_type == &VarType::Immutable
                             && name.is_none()
                             && destructure.is_none()
                             && pattern.is_none()

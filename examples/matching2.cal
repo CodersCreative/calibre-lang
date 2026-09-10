@@ -1,0 +1,40 @@
+type Point := struct { x y : int };
+
+const main := fn => {
+    let p1 := Point { x: 10, y: 20 };
+    match p1 {
+        { x: 0, y: 0 } => print("Origin"),
+        { x, y } => print("Point at (" & x & ", " & y & ")"),
+    };
+
+    let p2 := Point { x: 100, y: 200 };
+    match p2 {
+        { x, y } if x > 50 && y > 50 => print("Large point"),
+        { x, y } => print("Small point"),
+    };
+
+    let p3 := Point { x: 0, y: 0 };
+    match p3 {
+        { x: 0 | 1, y: 0 | 1 } => print("Special point"),
+        { x : x1, y : y1 } => print("Other point at (" & x1 & ", " & y1 & ")"),
+    };
+
+    let p3 : Point? = some(p3);
+    match p3 {
+        .Some : { x: 0 | 1, y: 0 | 1 } | { x: 6 | 4, y: 6 | 4 } => print("Special point"),
+        .Some : { x, y } => print("Other point at (" & x & ", " & y & ")"),
+    };
+
+    let p4 := Point { x: 5, y: 5 };
+    match p4 {
+        { x: 0, y: 0 } | { x: 1, y: 1 } | { x: 5, y: 5 } => print("Special point"),
+        _ => print("Other point"),
+    };
+
+    let val := 1;
+    match val {
+        0 | 1 | 2 => print("Small number"),
+        42 => print("Answer to everything"),
+        _ => print("Invalid number"),
+    };
+};
