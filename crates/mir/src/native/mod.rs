@@ -97,6 +97,8 @@ impl MiddleEnvironment {
             }
 
             self.context.stdlib_nodes.push(middle);
+        } else {
+            self.context.errors.push(MiddleErr::CantImport(global_path.to_string_lossy().to_string()));
         }
 
         let std = self
@@ -174,6 +176,8 @@ impl MiddleEnvironment {
                         });
                     }
                 }
+            } else {
+                self.context.errors.push(MiddleErr::CantImport(scope_ref.namespace.to_string()));
             }
         }
 
@@ -276,6 +280,8 @@ impl MiddleEnvironment {
                         });
                     }
                 }
+            } else {
+                self.context.errors.push(MiddleErr::CantImport(scope_path.to_string_lossy().to_string()));
             }
         }
     }

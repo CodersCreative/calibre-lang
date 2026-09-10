@@ -1,0 +1,37 @@
+// Should fail
+import std::consolez;
+import * from std::azync;
+import * from importshouldntfail;
+
+@default type Stack := struct { values : list:<int> };
+
+impl Stack {
+	@current_context const smth := fn (self : &Self) => {
+		print(current_context);
+		print(self);
+	};
+};
+
+type Stack2 := struct (Stack);
+
+type StackList := struct (list:<Stack2>);
+
+@init @fin(100) const main := fn => {
+	print("\nNew");
+	let mut arr := Stack { values : [0; 30] };
+	
+	print([list:<int>[1 + i for i in 100 until i > 70]]);
+	// arr.smth();
+	arr.values[10] := 100;
+	let mut arr2 := Stack2(move arr);
+	print("arr2.0.values[9] = " & arr2.0.values[9]);
+	arr2.0.values[9] := 90;
+	print("arr2.0.values[9] = " & arr2.0.values[9]);
+	let mut stacks := StackList(list:<Stack2>[move arr2]);
+	stacks.0[0].0.values[2] := 80;
+	print("stacks.0[0].0.values[2] = " & stacks.0[0].0.values[2]);
+	let mut hashmap : HashMap:<str, str> = HashMap:<str, str>.new(("hello", "world"), ("world", "hello"));
+	if let .Some : x <- HashMap:<str, str>.get(hashmap.&, "hello") => print(x);
+	if let .Some : x <- hashmap.get("world") => print(x);
+	if let .None <- hashmap.get("") => print("none");
+};
