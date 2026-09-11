@@ -19,7 +19,10 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::ParserText,
         matching::MatchArmType,
-        nodes::{AstNode, AstNodeType, CallArg, IfComparisonType, VarType},
+        nodes::{
+            AstNode, AstNodeType, CallArg, VarType,
+            conditionals::{AstIf, IfComparisonType},
+        },
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -190,11 +193,11 @@ impl MiddleEnvironment {
 
                 ifs.push(AstNode::new(
                     self.context.current_span(),
-                    AstNodeType::IfStatement {
+                    AstNodeType::IfStatement(AstIf {
                         comparison: Box::new(IfComparisonType::If(final_cond)),
                         then: Box::new(AstNode::new_temp_scope(body_nodes)),
                         otherwise: None,
-                    },
+                    }),
                 ));
             } else {
                 ifs.push(*pattern.2);
@@ -203,7 +206,7 @@ impl MiddleEnvironment {
 
         let ifs = if let Some(mut current) = ifs.pop() {
             while let Some(mut prev) = ifs.pop() {
-                if let AstNodeType::IfStatement { otherwise, .. } = &mut prev.node_type {
+                if let AstNodeType::IfStatement(AstIf { otherwise, .. }) = &mut prev.node_type {
                     *otherwise = Some(Box::new(current));
                 }
                 current = prev;

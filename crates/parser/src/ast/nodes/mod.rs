@@ -9,6 +9,7 @@ use crate::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::{MatchArmType, SelectArm},
         nodes::{
+            conditionals::{AstIf, AstTernary},
             flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
             literals::{
                 AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstRange, AstString,
@@ -600,19 +601,8 @@ pub enum AstNodeType {
     ListRepeatLiteral(AstListRepeat),
 
     // Conditionals
-    IfStatement {
-        comparison: Box<IfComparisonType>,
-        then: Box<AstNode>,
-        otherwise: Option<Box<AstNode>>,
-    },
-    Ternary {
-        comparison: Box<AstNode>,
-        then: Box<AstNode>,
-        otherwise: Box<AstNode>,
-    },
-    Until {
-        condition: Box<AstNode>,
-    },
+    IfStatement(AstIf),
+    Ternary(AstTernary),
 
     // Functions
     FunctionDeclaration {
@@ -869,13 +859,4 @@ impl Display for LoopType {
         let mut formatter = Formatter::default();
         write!(f, "{}", formatter.fmt_loop_type(self))
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum IfComparisonType {
-    IfLet {
-        value: AstNode,
-        pattern: (Vec<MatchArmType>, Vec<AstNode>),
-    },
-    If(AstNode),
 }

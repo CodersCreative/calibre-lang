@@ -10,7 +10,8 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier},
         matching::MatchArmType,
         nodes::{
-            AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, VarType,
+            AstNode, AstNodeType, CallArg, LoopType, VarType,
+            conditionals::{AstIf, IfComparisonType},
             flow::{AstBreak, AstContinue},
             loops::AstList,
         },
@@ -46,14 +47,14 @@ pub fn transform_spawn_iter(
         .map(|condition| {
             AstNode::new(
                 span,
-                AstNodeType::IfStatement {
+                AstNodeType::IfStatement(AstIf {
                     comparison: Box::new(IfComparisonType::If(condition)),
                     then: Box::new(AstNode::new(span, AstNodeType::EmptyLine)),
                     otherwise: Some(Box::new(AstNode::new(
                         span,
                         AstNodeType::Continue(AstContinue { label: None }),
                     ))),
-                },
+                }),
             )
         })
         .collect();
@@ -298,11 +299,11 @@ impl MiddleEnvironment {
         let block = if let Some(cond) = guard {
             AstNode::new_temp_scope(vec![AstNode::new(
                 span,
-                AstNodeType::IfStatement {
+                AstNodeType::IfStatement(AstIf {
                     comparison: Box::new(IfComparisonType::If(cond)),
                     then: Box::new(block),
                     otherwise: None,
-                },
+                }),
             )])
         } else {
             block

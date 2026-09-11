@@ -6,8 +6,8 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialGenericTypeIdentifier},
         nodes::{
-            AsFailureMode, AstNode, AstNodeType, CallArg, FunctionHeader, IfComparisonType,
-            LoopType, VarType,
+            AsFailureMode, AstNode, AstNodeType, CallArg, FunctionHeader, LoopType, VarType,
+            conditionals::{AstIf, IfComparisonType},
             flow::{AstBreak, AstContinue, AstEmit, AstReturn},
             literals::{
                 AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
@@ -676,13 +676,13 @@ impl From<MiddleNodeType> for AstNodeType {
                 value: Box::new((*value.value).into()),
                 data_type: value.data_type,
             },
-            MiddleNodeType::Conditional(value) => AstNodeType::IfStatement {
+            MiddleNodeType::Conditional(value) => AstNodeType::IfStatement(AstIf {
                 comparison: Box::new(IfComparisonType::If((*value.comparison).into())),
                 then: Box::new((*value.then).into()),
                 otherwise: value
                     .otherwise
                     .map(|otherwise| Box::new((*otherwise).into())),
-            },
+            }),
             MiddleNodeType::RangeDeclaration(value) => AstNodeType::RangeDeclaration(AstRange {
                 from: Box::new((*value.from).into()),
                 to: Box::new((*value.to).into()),

@@ -9,8 +9,8 @@ use crate::{
             SelectArmKind,
         },
         nodes::{
-            AsFailureMode, AstNode, AstNodeType, CallArg, DestructurePattern, IfComparisonType,
-            LoopType, Overload, TypeDefType, VarType,
+            AsFailureMode, AstNode, AstNodeType, CallArg, DestructurePattern, LoopType, Overload,
+            TypeDefType, VarType,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -391,6 +391,10 @@ impl Formatter {
             AstNodeType::ListLiteral(x) => x.format(self),
             AstNodeType::ListRepeatLiteral(x) => x.format(self),
 
+            // Conditionals
+            AstNodeType::IfStatement(x) => x.format(self),
+            AstNodeType::Ternary(x) => x.format(self),
+
             AstNodeType::Spawn { items, auto_wait } => {
                 let prefix = if *auto_wait { "spawn@" } else { "spawn" };
                 if items.len() == 1 {
@@ -567,24 +571,7 @@ impl Formatter {
                     get_module(module)
                 )
             }
-            AstNodeType::Ternary {
-                comparison,
-                then,
-                otherwise,
-            } => {
-                let cmp = self.format(comparison);
-                let cmp = if cmp.starts_with('(') && cmp.ends_with(')') {
-                    cmp
-                } else {
-                    format!("({cmp})")
-                };
-                format!(
-                    "{} ? {} : {}",
-                    cmp,
-                    self.format(then),
-                    self.format(otherwise)
-                )
-            }
+
             AstNodeType::BooleanExpression {
                 left,
                 right,
@@ -720,7 +707,6 @@ impl Formatter {
                 format!("test {:?} {}", identifier.text, self.format(body))
             }
             AstNodeType::CurryExpression { value } => format!("curry {}", self.format(value)),
-            AstNodeType::Until { condition } => format!("until {}", self.format(condition)),
             AstNodeType::AssignmentExpression { identifier, value } => match &value.node_type {
                 AstNodeType::BinaryExpression {
                     left,
@@ -1118,57 +1104,7 @@ impl Formatter {
 
                 txt
             }
-            AstNodeType::IfStatement {
-                comparison,
-                then,
-                otherwise,
-            } => {
-                let mut txt = String::from("if");
-                match &**comparison {
-                    IfComparisonType::If(x) => {
-                        txt.push_str(&format!(" {}", self.format(x)));
-                    }
-                    IfComparisonType::IfLet { value, pattern } => {
-                        txt.push_str(" let ");
-                        txt.push_str(&self.fmt_match_arm(&pattern.0[0], false));
-                        for node in pattern.0.iter().skip(1) {
-                            txt.push_str(&format!(" | {}", self.fmt_match_arm(node, false)));
-                        }
 
-                        match &pattern.0[0] {
-                            MatchArmType::Enum {
-                                value: _,
-                                var_type: VarType::Immutable,
-                                name: Some(name),
-                                ..
-                            } => txt.push_str(&format!(" : {}", name)),
-                            MatchArmType::Enum {
-                                value: _,
-                                var_type,
-                                name: Some(name),
-                                ..
-                            } => {
-                                txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name))
-                            }
-                            _ => {}
-                        }
-
-                        if !pattern.1.is_empty() {
-                            txt.push_str(&format!(" {}", self.fmt_conditionals(&pattern.1)));
-                        };
-
-                        txt.push_str(&format!(" <- {}", self.format(value)));
-                    }
-                }
-
-                txt.push_str(&format!(" {}", self.format(then)));
-
-                if let Some(otherwise) = otherwise {
-                    txt.push_str(&format!(" else {}", self.format(otherwise)));
-                }
-
-                txt
-            }
             AstNodeType::MatchStatement { value, body } => {
                 format!(
                     "match {}{}",
@@ -2196,7 +2132,7 @@ impl Formatter {
         }
     }
 
-    fn fmt_conditionals(&mut self, conditionals: &[AstNode]) -> String {
+    pub fn fmt_conditionals(&mut self, conditionals: &[AstNode]) -> String {
         let mut txt = String::new();
 
         for node in conditionals {

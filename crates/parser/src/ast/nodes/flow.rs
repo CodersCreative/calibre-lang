@@ -1,9 +1,8 @@
-use serde::{Deserialize, Serialize};
-
 use crate::{
     Span,
     ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
 };
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum AstEmit {

@@ -93,6 +93,10 @@ impl MiddleEnvironment {
             AstNodeType::ListLiteral(x) => x.type_of(self, scope, node.span),
             AstNodeType::ListRepeatLiteral(x) => x.type_of(self, scope, node.span),
 
+            // Conditionals
+            AstNodeType::Ternary(x) => x.type_of(self, scope, node.span),
+            AstNodeType::IfStatement(x) => x.type_of(self, scope, node.span),
+
             // TODO
             AstNodeType::Break { .. }
             | AstNodeType::Continue { .. }
@@ -114,7 +118,6 @@ impl MiddleEnvironment {
             | AstNodeType::ScopeDeclaration { define: true, .. }
             | AstNodeType::ScopeAlias { .. }
             | AstNodeType::DataType { .. }
-            | AstNodeType::Until { .. }
             | AstNodeType::SelectStatement { .. } => None,
             AstNodeType::Spawn { auto_wait, .. } => Some(ParserDataType::new(
                 node.span,
@@ -182,31 +185,6 @@ impl MiddleEnvironment {
                     .last()?
                     .clone();
                 self.resolve_type_from_node(scope, &resolved)
-            }
-            AstNodeType::IfStatement {
-                comparison: _,
-                then,
-                otherwise,
-            } => {
-                if let Some(otherwise) = otherwise {
-                    let otherwise =
-                        if let AstNodeType::IfStatement { then, .. } = &otherwise.node_type {
-                            then
-                        } else {
-                            otherwise
-                        };
-
-                    let then_ty = self.resolve_type_from_node(scope, then);
-                    let else_ty = self.resolve_type_from_node(scope, otherwise);
-                    match (then_ty, else_ty) {
-                        (Some(a), Some(b)) if a.data_type == b.data_type => Some(a),
-                        (Some(a), Some(b)) if a.data_type == ParserInnerType::Null => Some(b),
-                        (Some(a), Some(b)) if b.data_type == ParserInnerType::Null => Some(a),
-                        _ => None,
-                    }
-                } else {
-                    Some(ParserDataType::new(node.span, ParserInnerType::Null))
-                }
             }
 
             AstNodeType::LoopDeclaration {
@@ -336,9 +314,7 @@ impl MiddleEnvironment {
                     Some(list_type)
                 }
             }
-            AstNodeType::NegExpression { value } | AstNodeType::Ternary { then: value, .. } => {
-                self.resolve_type_from_node(scope, value)
-            }
+            AstNodeType::NegExpression { value } => self.resolve_type_from_node(scope, value),
             AstNodeType::CurryExpression { value } => self.resolve_curried_type(scope, value),
             AstNodeType::AsExpression {
                 value: _,

@@ -2,12 +2,13 @@ use super::{LegacySpanMapExt, filter, setup::StrParser};
 use crate::ast::RefMutability;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::matching::MatchArmType;
+use crate::ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType};
 use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstPipe, AstTry, PipeSegment, TryCatch,
 };
 use crate::ast::nodes::literals::{AstEnum, AstRange, AstString};
 use crate::ast::nodes::loops::{AstList, AstListRepeat};
-use crate::ast::nodes::{AsFailureMode, AstNode, AstNodeType, CallArg, IfComparisonType, LoopType};
+use crate::ast::nodes::{AsFailureMode, AstNode, AstNodeType, CallArg, LoopType};
 use crate::ast::types::{ParserDataType, ParserInnerType};
 use crate::parse::util::{
     ensure_scope_node, lex, parse_embedded_expr, parse_splits, span, span_from_nodes_or,
@@ -771,11 +772,11 @@ pub fn build_tail_expression_parser<'a>(
                 if let Some((then, otherwise)) = then_otherwise {
                     AstNode::new(
                         Span::new_from_spans(comparison.span, otherwise.span),
-                        AstNodeType::Ternary {
+                        AstNodeType::Ternary(AstTernary {
                             comparison: Box::new(comparison),
                             then: Box::new(then),
                             otherwise: Box::new(otherwise),
-                        },
+                        }),
                     )
                 } else {
                     comparison
@@ -1209,11 +1210,11 @@ pub fn build_tail_expression_parser<'a>(
                         cond_span,
                         otherwise.as_ref().map(|x| x.span).unwrap_or(then_node.span),
                     ),
-                    AstNodeType::IfStatement {
+                    AstNodeType::IfStatement(AstIf {
                         comparison: Box::new(cond),
                         then: Box::new(then_node),
                         otherwise: otherwise.map(Box::new),
-                    },
+                    }),
                 )
             })
             .boxed()

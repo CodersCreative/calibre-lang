@@ -17,7 +17,8 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
-            AstNode, AstNodeType, CallArg, FunctionHeader, IfComparisonType, LoopType, VarType,
+            AstNode, AstNodeType, CallArg, FunctionHeader, LoopType, VarType,
+            conditionals::{AstIf, AstTernary, IfComparisonType},
             flow::{AstContinue, AstReturn},
             literals::{AstString, AstStruct},
             loops::AstList,
@@ -57,7 +58,7 @@ impl MiddleEnvironment {
     fn unwrap_option_or_default_expr(span: Span, value: AstNode, default: AstNode) -> AstNode {
         AstNode::new(
             span,
-            AstNodeType::Ternary {
+            AstNodeType::Ternary(AstTernary {
                 comparison: Box::new(AstNode::new(
                     span,
                     AstNodeType::ComparisonExpression {
@@ -74,7 +75,7 @@ impl MiddleEnvironment {
                         field: PotentialDollarIdentifier::new(span, "next"),
                     },
                 )),
-            },
+            }),
         )
     }
 
@@ -405,14 +406,14 @@ impl MiddleEnvironment {
         if let Some(guard) = guard {
             loop_body_items.push(AstNode::new(
                 span,
-                AstNodeType::IfStatement {
+                AstNodeType::IfStatement(AstIf {
                     comparison: Box::new(IfComparisonType::If(guard)),
                     then: Box::new(yield_node),
                     otherwise: Some(Box::new(AstNode::new(
                         span,
                         AstNodeType::Continue(AstContinue { label: None }),
                     ))),
-                },
+                }),
             ));
         } else {
             loop_body_items.push(yield_node);

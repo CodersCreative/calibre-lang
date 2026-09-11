@@ -1,7 +1,8 @@
 use calibre_parser::ast::{
     ObjectType,
     nodes::{
-        AstNode, AstNodeType, CallArg, IfComparisonType, LoopType,
+        AstNode, AstNodeType, CallArg, LoopType,
+        conditionals::{AstIf, AstTernary, IfComparisonType},
         flow::{AstBreak, AstContinue, AstDefer, AstPipe, AstReturn, AstTry, PipeSegment},
         literals::{AstDataType, AstEnum, AstRange, AstStruct, AstTuple},
         loops::{AstList, AstListRepeat},
@@ -73,11 +74,11 @@ pub trait NodeVisitor {
                     .collect(),
                 reverse_args: reverse_args.into_iter().map(|n| self.visit(n)).collect(),
             },
-            AstNodeType::IfStatement {
+            AstNodeType::IfStatement(AstIf {
                 comparison,
                 then,
                 otherwise,
-            } => AstNodeType::IfStatement {
+            }) => AstNodeType::IfStatement(AstIf {
                 comparison: Box::new(match *comparison {
                     IfComparisonType::If(n) => IfComparisonType::If(self.visit(n)),
                     IfComparisonType::IfLet { value, pattern } => IfComparisonType::IfLet {
@@ -87,7 +88,7 @@ pub trait NodeVisitor {
                 }),
                 then: Box::new(self.visit(*then)),
                 otherwise: otherwise.map(|n| Box::new(self.visit(*n))),
-            },
+            }),
             AstNodeType::ScopeDeclaration {
                 body,
                 named,
@@ -204,15 +205,15 @@ pub trait NodeVisitor {
                     })
                     .collect(),
             },
-            AstNodeType::Ternary {
+            AstNodeType::Ternary(AstTernary {
                 comparison,
                 then,
                 otherwise,
-            } => AstNodeType::Ternary {
+            }) => AstNodeType::Ternary(AstTernary {
                 comparison: Box::new(self.visit(*comparison)),
                 then: Box::new(self.visit(*then)),
                 otherwise: Box::new(self.visit(*otherwise)),
-            },
+            }),
             AstNodeType::FieldAccess { base, field } => AstNodeType::FieldAccess {
                 base: Box::new(self.visit(*base)),
                 field,
@@ -403,9 +404,6 @@ pub trait NodeVisitor {
                 value: Box::new(self.visit(*value)),
                 catch,
             }),
-            AstNodeType::Until { condition } => AstNodeType::Until {
-                condition: Box::new(self.visit(*condition)),
-            },
             AstNodeType::ListRepeatLiteral(AstListRepeat {
                 data_type,
                 value,
@@ -502,11 +500,11 @@ pub trait NodeAnalyzer {
                     })
                     && reverse_args.iter().all(|n| self.analyze(n))
             }
-            AstNodeType::IfStatement {
+            AstNodeType::IfStatement(AstIf {
                 comparison,
                 then,
                 otherwise,
-            } => {
+            }) => {
                 let comp_ok = match comparison.as_ref() {
                     IfComparisonType::If(n) => self.analyze(n),
                     IfComparisonType::IfLet { value, .. } => self.analyze(value),
@@ -565,11 +563,11 @@ pub trait NodeAnalyzer {
                 });
                 value_ok && body_ok
             }
-            AstNodeType::Ternary {
+            AstNodeType::Ternary(AstTernary {
                 comparison,
                 then,
                 otherwise,
-            } => self.analyze(comparison) && self.analyze(then) && self.analyze(otherwise),
+            }) => self.analyze(comparison) && self.analyze(then) && self.analyze(otherwise),
             AstNodeType::Spawn { items, .. } => items.iter().all(|n| self.analyze(n)),
             AstNodeType::Return(AstReturn { value })
             | AstNodeType::Break(AstBreak { value, .. }) => {

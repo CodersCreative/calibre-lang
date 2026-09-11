@@ -11,7 +11,9 @@ use calibre_parser::{
         binary::BinaryOperator,
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
-            AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, VarType, flow::AstBreak,
+            AstNode, AstNodeType, CallArg, LoopType, VarType,
+            conditionals::{AstIf, IfComparisonType},
+            flow::AstBreak,
             literals::AstRange,
         },
         types::{ParserDataType, ParserInnerType},
@@ -162,7 +164,20 @@ impl MiddleEnvironment {
         });
 
         if let Some(until) = until {
-            let until_node = AstNode::new(span, AstNodeType::Until { condition: until });
+            let until_node = AstNode::new(
+                span,
+                AstNodeType::IfStatement(AstIf {
+                    comparison: Box::new(IfComparisonType::If(*until)),
+                    then: Box::new(AstNode::new_temp_scope(vec![AstNode::new(
+                        span,
+                        AstNodeType::Break(AstBreak {
+                            value: None,
+                            label: None,
+                        }),
+                    )])),
+                    otherwise: None,
+                }),
+            );
             body = self.wrap_loop_body(body, until_node, false);
         }
 
@@ -198,7 +213,7 @@ impl MiddleEnvironment {
             LoopType::While(condition) => {
                 let break_if_not = AstNode::new(
                     span,
-                    AstNodeType::IfStatement {
+                    AstNodeType::IfStatement(AstIf {
                         comparison: Box::new(IfComparisonType::If(AstNode::new(
                             span,
                             AstNodeType::NotExpression {
@@ -213,7 +228,7 @@ impl MiddleEnvironment {
                             }),
                         )),
                         otherwise: None,
-                    },
+                    }),
                 );
 
                 let wrapped = self.wrap_loop_body(body, break_if_not, true);
@@ -241,7 +256,7 @@ impl MiddleEnvironment {
                     None,
                     AstNode::new(
                         span,
-                        AstNodeType::IfStatement {
+                        AstNodeType::IfStatement(AstIf {
                             comparison: Box::new(IfComparisonType::IfLet { value, pattern }),
                             then: Box::new(body),
                             otherwise: Some(Box::new(AstNode::new(
@@ -251,7 +266,7 @@ impl MiddleEnvironment {
                                     value: None,
                                 }),
                             ))),
-                        },
+                        }),
                     ),
                 )?;
 
@@ -410,7 +425,7 @@ impl MiddleEnvironment {
 
                 let break_node = AstNode::new(
                     span,
-                    AstNodeType::IfStatement {
+                    AstNodeType::IfStatement(AstIf {
                         comparison: Box::new(IfComparisonType::If(AstNode::new(
                             span,
                             if is_indexable_loop {
@@ -444,7 +459,7 @@ impl MiddleEnvironment {
                             }),
                         )),
                         otherwise: None,
-                    },
+                    }),
                 );
 
                 let next_assign_node = if is_indexable_loop {

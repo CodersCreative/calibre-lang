@@ -1,8 +1,7 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBinary, MirBoolean, MirComparison,
-        MirConditional, MirDeref, MirDrop, MirIs, MirMove, MirNeg, MirRef, MirScopeDecl, MirSpawn,
-        MirVarDecl,
+        MirDeref, MirDrop, MirIs, MirMove, MirNeg, MirRef, MirScopeDecl, MirSpawn, MirVarDecl,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -20,10 +19,11 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         generics::TraitMemberKind,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        matching::{MatchArmType, SelectArmKind},
+        matching::SelectArmKind,
         nodes::{
-            AsFailureMode, AstNode, AstNodeType, CallArg, FunctionHeader, IfComparisonType,
-            LoopType, TypeDefType, VarType,
+            AsFailureMode, AstNode, AstNodeType, CallArg, FunctionHeader, LoopType, TypeDefType,
+            VarType,
+            conditionals::{AstIf, AstTernary, IfComparisonType},
             flow::{AstBreak, AstEmit, AstTry, TryCatch},
             literals::AstRange,
             loops::AstList,
@@ -34,6 +34,7 @@ use calibre_parser::{
 use tracing::{debug, instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
 
+pub mod conditionals;
 pub mod curry;
 pub mod flow;
 pub mod functions;
@@ -253,6 +254,10 @@ impl MiddleEnvironment {
             // Lists
             AstNodeType::ListLiteral(x) => x.lower(self, scope, node.span),
             AstNodeType::ListRepeatLiteral(x) => x.lower(self, scope, node.span),
+
+            // Conditionals
+            AstNodeType::Ternary(x) => x.lower(self, scope, node.span),
+            AstNodeType::IfStatement(x) => x.lower(self, scope, node.span),
 
             AstNodeType::CurryExpression { value } => {
                 let value = self.rewrite_curry_call(scope, node.span, *value)?;
@@ -497,36 +502,6 @@ impl MiddleEnvironment {
                     ),
                 )
             }
-            AstNodeType::Ternary {
-                comparison,
-                then,
-                otherwise,
-            } => {
-                if !self.context.type_check {
-                    let then_type = self.resolve_type_from_node(scope, &then);
-                    let otherwise_type = self.resolve_type_from_node(scope, &otherwise);
-
-                    if !then_type.as_ref().is_some_and(|x| x.is_null()) {
-                        self.compare_types_ref(
-                            then_type.as_ref(),
-                            otherwise_type.as_ref(),
-                            Some(&TagInfo::IgnoreInvalidTypeCheck),
-                        )?;
-                    }
-                }
-
-                self.evaluate_inner(
-                    scope,
-                    AstNode {
-                        node_type: AstNodeType::IfStatement {
-                            comparison: Box::new(IfComparisonType::If(*comparison)),
-                            then,
-                            otherwise: Some(otherwise),
-                        },
-                        span: node.span,
-                    },
-                )
-            }
             AstNodeType::MoveExpression { value } => match value.node_type {
                 AstNodeType::Identifier(x) => Ok(MiddleNode {
                     node_type: MiddleNodeType::Move(MirMove {
@@ -647,82 +622,6 @@ impl MiddleEnvironment {
                 }),
                 span: node.span,
             }),
-            AstNodeType::IfStatement {
-                comparison,
-                then,
-                otherwise,
-            } => {
-                if !self.context.type_check {
-                    let then_type = self.resolve_type_from_node(scope, &then);
-                    let otherwise_type = otherwise
-                        .as_ref()
-                        .and_then(|x| self.resolve_type_from_node(scope, x))
-                        .unwrap_or_else(|| ParserDataType::null(node.span));
-
-                    self.compare_types_ref(
-                        then_type.as_ref(),
-                        Some(&otherwise_type),
-                        Some(&TagInfo::IgnoreInvalidTypeCheck),
-                    )?;
-                }
-
-                match *comparison {
-                    IfComparisonType::If(x) => Ok(MiddleNode {
-                        node_type: MiddleNodeType::Conditional(MirConditional {
-                            comparison: Box::new(self.evaluate(scope, x)),
-                            then: Box::new(self.evaluate(scope, *then)),
-                            otherwise: otherwise.map(|x| Box::new(self.evaluate(scope, *x))),
-                        }),
-                        span: node.span,
-                    }),
-                    IfComparisonType::IfLet { value, pattern } => self.evaluate_inner(
-                        scope,
-                        AstNode {
-                            node_type: AstNodeType::MatchStatement {
-                                value: Some(Box::new(value)),
-                                body: {
-                                    let mut lst: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)> =
-                                        pattern
-                                            .0
-                                            .clone()
-                                            .into_iter()
-                                            .map(|x| (x, pattern.1.clone(), then.clone()))
-                                            .collect();
-
-                                    lst.push((
-                                        MatchArmType::Wildcard(Span::default()),
-                                        Vec::new(),
-                                        otherwise.unwrap_or(Box::new(AstNode {
-                                            node_type: AstNodeType::EmptyLine,
-                                            span: Span::default(),
-                                        })),
-                                    ));
-
-                                    lst
-                                },
-                            },
-                            span: node.span,
-                        },
-                    ),
-                }
-            }
-            AstNodeType::Until { condition } => self.evaluate_inner(
-                scope,
-                AstNode {
-                    node_type: AstNodeType::IfStatement {
-                        comparison: Box::new(IfComparisonType::If(*condition)),
-                        then: Box::new(AstNode {
-                            node_type: AstNodeType::Break(AstBreak {
-                                label: None,
-                                value: None,
-                            }),
-                            span: node.span,
-                        }),
-                        otherwise: None,
-                    },
-                    span: node.span,
-                },
-            ),
             AstNodeType::EmptyLine => Ok(MiddleNode {
                 node_type: MiddleNodeType::EmptyLine,
                 span: node.span,
@@ -1192,14 +1091,14 @@ impl MiddleEnvironment {
                 }
 
                 match identifier.node_type.clone() {
-                    AstNodeType::Ternary {
+                    AstNodeType::Ternary(AstTernary {
                         comparison,
                         then,
                         otherwise,
-                    } => self.evaluate_inner(
+                    }) => self.evaluate_inner(
                         scope,
                         AstNode {
-                            node_type: AstNodeType::IfStatement {
+                            node_type: AstNodeType::IfStatement(AstIf {
                                 comparison: Box::new(IfComparisonType::If(*comparison)),
                                 then: Box::new(AstNode::new(
                                     self.context.current_span(),
@@ -1215,7 +1114,7 @@ impl MiddleEnvironment {
                                         value,
                                     },
                                 ))),
-                            },
+                            }),
                             span: node.span,
                         },
                     ),
@@ -2332,11 +2231,11 @@ impl MiddleEnvironment {
                                     }
                                     body_items.push(AstNode::new(
                                         node.span,
-                                        AstNodeType::IfStatement {
+                                        AstNodeType::IfStatement(AstIf {
                                             comparison: Box::new(IfComparisonType::If(guard_cond)),
                                             then: Box::new(done_and_arm),
                                             otherwise: None,
-                                        },
+                                        }),
                                     ));
                                 }
 
@@ -2353,11 +2252,11 @@ impl MiddleEnvironment {
 
                                 loop_body.push(AstNode::new(
                                     node.span,
-                                    AstNodeType::IfStatement {
+                                    AstNodeType::IfStatement(AstIf {
                                         comparison: Box::new(IfComparisonType::If(cond)),
                                         then: Box::new(body),
                                         otherwise: None,
-                                    },
+                                    }),
                                 ));
                             }
                             SelectArmKind::Send => {
@@ -2390,11 +2289,11 @@ impl MiddleEnvironment {
 
                                 loop_body.push(AstNode::new(
                                     node.span,
-                                    AstNodeType::IfStatement {
+                                    AstNodeType::IfStatement(AstIf {
                                         comparison: Box::new(IfComparisonType::If(cond)),
                                         then: Box::new(body),
                                         otherwise: None,
-                                    },
+                                    }),
                                 ));
                             }
                             SelectArmKind::Default => {
@@ -2429,11 +2328,11 @@ impl MiddleEnvironment {
                                 );
                                 loop_body.push(AstNode::new(
                                     node.span,
-                                    AstNodeType::IfStatement {
+                                    AstNodeType::IfStatement(AstIf {
                                         comparison: Box::new(IfComparisonType::If(cond)),
                                         then: Box::new(default_body),
                                         otherwise: None,
-                                    },
+                                    }),
                                 ));
                             }
                         }
@@ -2442,17 +2341,17 @@ impl MiddleEnvironment {
 
                 loop_body.push(AstNode::new(
                     node.span,
-                    AstNodeType::IfStatement {
+                    AstNodeType::IfStatement(AstIf {
                         comparison: Box::new(IfComparisonType::If(done_ident_node())),
                         then: Box::new(break_node()),
                         otherwise: None,
-                    },
+                    }),
                 ));
 
                 if !has_default {
                     loop_body.push(AstNode::new(
                         node.span,
-                        AstNodeType::IfStatement {
+                        AstNodeType::IfStatement(AstIf {
                             comparison: Box::new(IfComparisonType::If(AstNode::new(
                                 node.span,
                                 AstNodeType::NotExpression {
@@ -2465,7 +2364,7 @@ impl MiddleEnvironment {
                                 vec![CallArg::Value(AstNode::int(node.span, 1))],
                             )),
                             otherwise: None,
-                        },
+                        }),
                     ));
                 }
 
