@@ -10,7 +10,9 @@ use calibre_parser::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::TryCatch,
-        nodes::{AstNode, AstNodeType, AstTry, CallArg, FunctionHeader, TypeDefType, VarType},
+        nodes::{
+            AstNode, AstNodeType, AstStruct, AstTry, CallArg, FunctionHeader, TypeDefType, VarType,
+        },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
@@ -118,13 +120,13 @@ impl MiddleEnvironment {
                             body: Box::new(AstNode::new_temp_scope(vec![AstNode::ret(
                                 AstNode::new(
                                     span,
-                                    AstNodeType::StructLiteral {
+                                    AstNodeType::StructLiteral(AstStruct {
                                         identifier: PotentialGenericTypeIdentifier::new(
                                             span,
                                             &builder_name,
                                         ),
                                         value: ObjectType::Map(setter_fields),
-                                    },
+                                    }),
                                 ),
                             )])),
                         },
@@ -229,10 +231,10 @@ impl MiddleEnvironment {
                                 AstNode::identifier(span, "ok"),
                                 vec![CallArg::Value(AstNode::new(
                                     span,
-                                    AstNodeType::StructLiteral {
+                                    AstNodeType::StructLiteral(AstStruct {
                                         identifier: identifier.clone().into(),
                                         value: ObjectType::Map(built_fields),
-                                    },
+                                    }),
                                 ))],
                             )),
                         ])),

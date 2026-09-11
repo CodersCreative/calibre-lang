@@ -4,7 +4,9 @@ use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::matching::{
     MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem,
 };
-use crate::ast::nodes::{AstNode, AstNodeType, DestructurePattern, FunctionHeader, VarType};
+use crate::ast::nodes::{
+    AstNode, AstNodeType, AstTuple, DestructurePattern, FunctionHeader, VarType,
+};
 use crate::ast::types::{GenericTypes, ParserDataType};
 use crate::parse::util::{lex, span, struct_destructure_fields_parser};
 use chumsky::prelude::*;
@@ -798,7 +800,7 @@ pub fn build_match_parsers<'a>(
                 let mut values = Vec::with_capacity(rest.len() + 1);
                 values.push(first);
                 values.extend(rest);
-                AstNode::new(span, AstNodeType::TupleLiteral { values })
+                AstNode::new(span, AstNodeType::TupleLiteral(AstTuple { values }))
             }
         })
         .boxed();

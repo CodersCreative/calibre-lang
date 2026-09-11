@@ -4,7 +4,7 @@ use crate::{
         RefMutability,
         ffi::ParserFfiInnerType,
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{AstNode, AstNodeType, CallArg},
+        nodes::{AstNode, AstNodeType, AstTuple, CallArg},
     },
 };
 use rustc_hash::FxHashMap;
@@ -394,9 +394,9 @@ impl ParserDataType {
             ParserInnerType::Bool => Some(AstNode::bool(self.span, false)),
             ParserInnerType::Tuple(values) => Some(AstNode::new(
                 self.span,
-                AstNodeType::TupleLiteral {
+                AstNodeType::TupleLiteral(AstTuple {
                     values: values.iter().filter_map(|x| x.default_node()).collect(),
-                },
+                }),
             )),
             ParserInnerType::Option(_) => Some(AstNode::none(self.span)),
             ParserInnerType::Result { ok, .. } => Some(AstNode::call(

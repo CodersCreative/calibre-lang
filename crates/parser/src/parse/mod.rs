@@ -3,7 +3,7 @@ use crate::{
     ast::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{AstEmit, AstNode, AstNodeType, CallArg},
+        nodes::{AstEmit, AstNode, AstNodeType, AstStruct, AstTuple, CallArg},
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -181,10 +181,10 @@ pub fn parse_program_with_source(
                     let sp = *identifier.span();
                     AstNode::new(
                         sp,
-                        AstNodeType::StructLiteral {
+                        AstNodeType::StructLiteral(AstStruct {
                             identifier,
                             value: ObjectType::Map(fields),
-                        },
+                        }),
                     )
                 })
                 .boxed();
@@ -493,7 +493,7 @@ pub fn parse_program_with_source(
                                     .cloned()
                                     .unwrap_or_else(|| AstNode::new(sp, AstNodeType::EmptyLine))
                             } else {
-                                AstNode::new(sp, AstNodeType::TupleLiteral { values })
+                                AstNode::new(sp, AstNodeType::TupleLiteral(AstTuple { values }))
                             };
                             AstNode::new(
                                 sp,

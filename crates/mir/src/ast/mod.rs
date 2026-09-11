@@ -6,8 +6,8 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialGenericTypeIdentifier},
         nodes::{
-            AsFailureMode, AstBreak, AstContinue, AstEmit, AstNode, AstNodeType, AstReturn,
-            CallArg, FunctionHeader, IfComparisonType, LoopType, VarType,
+            AsFailureMode, AstBreak, AstContinue, AstEmit, AstEnum, AstNode, AstNodeType,
+            AstReturn, AstStruct, CallArg, FunctionHeader, IfComparisonType, LoopType, VarType,
         },
         types::{GenericTypes, ParserDataType},
     },
@@ -607,11 +607,11 @@ impl From<MiddleNodeType> for AstNodeType {
                 value: Box::new((*value.value).into()),
                 data_type: value.data_type,
             },
-            MiddleNodeType::EnumExpression(value) => AstNodeType::EnumExpression {
+            MiddleNodeType::EnumExpression(value) => AstNodeType::EnumExpression(AstEnum {
                 identifier: value.identifier.into(),
                 value: value.value.into(),
                 data: value.data.map(|data| Box::new((*data).into())),
-            },
+            }),
             MiddleNodeType::ScopeDeclaration(value) => AstNodeType::ScopeDeclaration {
                 body: {
                     let mut lst = Vec::new();
@@ -809,7 +809,7 @@ impl From<MiddleNodeType> for AstNodeType {
                         reverse_args: Vec::new(),
                     }
                 } else {
-                    AstNodeType::StructLiteral {
+                    AstNodeType::StructLiteral(AstStruct {
                         identifier: PotentialGenericTypeIdentifier::new(
                             Span::default(),
                             value
@@ -825,7 +825,7 @@ impl From<MiddleNodeType> for AstNodeType {
                                 .map(|x| (x.0, x.1.into()))
                                 .collect(),
                         ),
-                    }
+                    })
                 }
             }
         }

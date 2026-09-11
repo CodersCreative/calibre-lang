@@ -6,7 +6,8 @@ use crate::ast::generics::{TraitMember, TraitMemberKind};
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier};
 use crate::ast::matching::{SelectArm, SelectArmKind};
 use crate::ast::nodes::{
-    AstNode, AstNodeType, AstReturn, DestructurePattern, NamedScope, Overload, TypeDefType, VarType,
+    AstEnum, AstNode, AstNodeType, AstReturn, AstTuple, DestructurePattern, NamedScope, Overload,
+    TypeDefType, VarType,
 };
 use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{
@@ -561,7 +562,7 @@ pub fn build_statement_parser<'a>(
                 );
                 let mut values = vec![first_value];
                 values.extend(rest_values);
-                AstNode::new(sp, AstNodeType::TupleLiteral { values })
+                AstNode::new(sp, AstNodeType::TupleLiteral(AstTuple { values }))
             };
             AstNode::new(
                 value.span,
@@ -636,14 +637,14 @@ pub fn build_statement_parser<'a>(
                 );
 
                 match first_value.node_type {
-                    AstNodeType::EnumExpression {
+                    AstNodeType::EnumExpression(AstEnum {
                         identifier,
                         value,
                         data,
-                    } => {
+                    }) => {
                         let mut payload_values = if let Some(existing) = data {
                             match existing.node_type {
-                                AstNodeType::TupleLiteral { values } => values,
+                                AstNodeType::TupleLiteral(AstTuple { values }) => values,
                                 other => vec![AstNode::new(existing.span, other)],
                             }
                         } else {
@@ -659,25 +660,25 @@ pub fn build_statement_parser<'a>(
                                     payload_values.first().map(|n| n.span).unwrap_or(tuple_span),
                                     payload_values.last().map(|n| n.span).unwrap_or(tuple_span),
                                 ),
-                                AstNodeType::TupleLiteral {
+                                AstNodeType::TupleLiteral(AstTuple {
                                     values: payload_values,
-                                },
+                                }),
                             ))
                         };
 
                         AstNode::new(
                             tuple_span,
-                            AstNodeType::EnumExpression {
+                            AstNodeType::EnumExpression(AstEnum {
                                 identifier,
                                 value,
                                 data: payload.map(Box::new),
-                            },
+                            }),
                         )
                     }
                     other => {
                         let mut values = vec![AstNode::new(first_span, other)];
                         values.extend(rest_values);
-                        AstNode::new(tuple_span, AstNodeType::TupleLiteral { values })
+                        AstNode::new(tuple_span, AstNodeType::TupleLiteral(AstTuple { values }))
                     }
                 }
             };

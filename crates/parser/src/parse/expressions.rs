@@ -3,7 +3,7 @@ use crate::ast::RefMutability;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::matching::{MatchArmType, TryCatch};
 use crate::ast::nodes::{
-    AsFailureMode, AstBreak, AstContinue, AstDefer, AstNode, AstNodeType, AstTry, CallArg,
+    AsFailureMode, AstBreak, AstContinue, AstDefer, AstEnum, AstNode, AstNodeType, AstTry, CallArg,
     IfComparisonType, LoopType, PipeSegment,
 };
 use crate::ast::types::{ParserDataType, ParserInnerType};
@@ -348,11 +348,11 @@ pub fn build_tail_expression_parser<'a>(
             let ident = identifier;
             AstNode::new(
                 Span::new_from_spans(*ident.span(), data.span),
-                AstNodeType::EnumExpression {
+                AstNodeType::EnumExpression(AstEnum {
                     identifier: ident.into(),
                     value,
                     data: Some(Box::new(data)),
-                },
+                }),
             )
         })
         .boxed();

@@ -7,7 +7,7 @@ use crate::{
 use calibre_parser::ast::{
     ObjectType,
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-    nodes::{AstNode, AstNodeType, VarType},
+    nodes::{AstNode, AstNodeType, AstStruct, VarType},
     types::ParserDataType,
 };
 use serde::{Deserialize, Serialize};
@@ -90,7 +90,7 @@ impl MiddleEnvironment {
                 data_type: ParserDataType::object(sp, "Package"),
                 value: Box::new(AstNode::new(
                     sp,
-                    AstNodeType::StructLiteral {
+                    AstNodeType::StructLiteral(AstStruct {
                         identifier: PotentialGenericTypeIdentifier::new(sp, "Package"),
                         value: ObjectType::Map(vec![
                             ("name".to_string(), value(meta.name)),
@@ -102,7 +102,7 @@ impl MiddleEnvironment {
                             ("src".to_string(), value(meta.src)),
                             ("root".to_string(), value(meta.root)),
                         ]),
-                    },
+                    }),
                 )),
             },
         )];
@@ -156,7 +156,7 @@ impl MiddleEnvironment {
                 data_type: ParserDataType::object(sp, "ExecContext"),
                 value: Box::new(AstNode::new(
                     sp,
-                    AstNodeType::StructLiteral {
+                    AstNodeType::StructLiteral(AstStruct {
                         identifier: PotentialGenericTypeIdentifier::new(sp, "ExecContext"),
                         value: ObjectType::Map(vec![
                             ("function_name".to_string(), value(function_name)),
@@ -180,7 +180,7 @@ impl MiddleEnvironment {
                                 AstNode::int(sp, format!("{}u", sp.from.col)),
                             ),
                         ]),
-                    },
+                    }),
                 )),
             },
         )];

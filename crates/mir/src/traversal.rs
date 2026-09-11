@@ -1,8 +1,8 @@
 use calibre_parser::ast::{
     ObjectType,
     nodes::{
-        AstBreak, AstContinue, AstDefer, AstNode, AstNodeType, AstReturn, AstTry, CallArg,
-        IfComparisonType, LoopType, PipeSegment,
+        AstBreak, AstContinue, AstDefer, AstEnum, AstNode, AstNodeType, AstReturn, AstStruct,
+        AstTry, AstTuple, CallArg, IfComparisonType, LoopType, PipeSegment,
     },
 };
 
@@ -124,23 +124,25 @@ pub trait NodeVisitor {
                 value: Box::new(self.visit(*value)),
                 data_type,
             },
-            AstNodeType::TupleLiteral { values } => AstNodeType::TupleLiteral {
+            AstNodeType::TupleLiteral(AstTuple { values }) => AstNodeType::TupleLiteral(AstTuple {
                 values: values.into_iter().map(|n| self.visit(n)).collect(),
-            },
-            AstNodeType::StructLiteral { identifier, value } => AstNodeType::StructLiteral {
-                identifier,
-                value: match value {
-                    ObjectType::Map(fields) => ObjectType::Map(
-                        fields
-                            .into_iter()
-                            .map(|(k, v)| (k, self.visit(v)))
-                            .collect(),
-                    ),
-                    ObjectType::Tuple(values) => {
-                        ObjectType::Tuple(values.into_iter().map(|n| self.visit(n)).collect())
-                    }
-                },
-            },
+            }),
+            AstNodeType::StructLiteral(AstStruct { identifier, value }) => {
+                AstNodeType::StructLiteral(AstStruct {
+                    identifier,
+                    value: match value {
+                        ObjectType::Map(fields) => ObjectType::Map(
+                            fields
+                                .into_iter()
+                                .map(|(k, v)| (k, self.visit(v)))
+                                .collect(),
+                        ),
+                        ObjectType::Tuple(values) => {
+                            ObjectType::Tuple(values.into_iter().map(|n| self.visit(n)).collect())
+                        }
+                    },
+                })
+            }
             AstNodeType::ListLiteral(data_type, values) => AstNodeType::ListLiteral(
                 data_type,
                 values.into_iter().map(|n| self.visit(n)).collect(),
@@ -319,15 +321,15 @@ pub trait NodeVisitor {
                 implied_traits,
                 members,
             },
-            AstNodeType::EnumExpression {
+            AstNodeType::EnumExpression(AstEnum {
                 identifier,
                 value,
                 data,
-            } => AstNodeType::EnumExpression {
+            }) => AstNodeType::EnumExpression(AstEnum {
                 identifier,
                 value,
                 data: data.map(|n| Box::new(self.visit(*n))),
-            },
+            }),
             AstNodeType::ScopeAlias {
                 identifier,
                 value,
@@ -518,8 +520,10 @@ pub trait NodeAnalyzer {
             | AstNodeType::DestructureDeclaration { value, .. }
             | AstNodeType::DestructureAssignment { value, .. }
             | AstNodeType::MoveExpression { value } => self.analyze(value),
-            AstNodeType::TupleLiteral { values } => values.iter().all(|n| self.analyze(n)),
-            AstNodeType::StructLiteral { value, .. } => match value {
+            AstNodeType::TupleLiteral(AstTuple { values }) => {
+                values.iter().all(|n| self.analyze(n))
+            }
+            AstNodeType::StructLiteral(AstStruct { value, .. }) => match value {
                 ObjectType::Map(fields) => fields.iter().all(|(_, n)| self.analyze(n)),
                 ObjectType::Tuple(values) => values.iter().all(|n| self.analyze(n)),
             },

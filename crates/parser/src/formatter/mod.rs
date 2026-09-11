@@ -1,6 +1,7 @@
 use crate::ast::formatter::Formatter;
 
 pub mod flow;
+pub mod literals;
 
 pub trait AstFormatting {
     fn format(&self, formatter: &mut Formatter) -> String {

@@ -17,7 +17,7 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
-            AstContinue, AstNode, AstNodeType, AstReturn, CallArg, FunctionHeader,
+            AstContinue, AstNode, AstNodeType, AstReturn, AstStruct, CallArg, FunctionHeader,
             IfComparisonType, LoopType, VarType,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
@@ -354,7 +354,7 @@ impl MiddleEnvironment {
 
         let gen_value = AstNode::new(
             span,
-            AstNodeType::StructLiteral {
+            AstNodeType::StructLiteral(AstStruct {
                 identifier: PotentialGenericTypeIdentifier::Generic {
                     identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                         span,
@@ -367,7 +367,7 @@ impl MiddleEnvironment {
                     (String::from("index"), AstNode::int(span, 0)),
                     (String::from("done"), AstNode::identifier(span, "false")),
                 ]),
-            },
+            }),
         );
 
         AstNode::new_temp_scope_with_create(vec![next_decl, gen_value], Some(false))
@@ -823,7 +823,7 @@ impl MiddleEnvironment {
 
         Some(AstNode::new(
             span,
-            AstNodeType::StructLiteral {
+            AstNodeType::StructLiteral(AstStruct {
                 identifier: PotentialGenericTypeIdentifier::new(span, "ExecContext"),
                 value: ObjectType::Map(vec![
                     ("function_name".to_string(), value(current_function_name)),
@@ -847,7 +847,7 @@ impl MiddleEnvironment {
                         AstNode::int(span, format!("{}u", span.from.col)),
                     ),
                 ]),
-            },
+            }),
         ))
     }
 

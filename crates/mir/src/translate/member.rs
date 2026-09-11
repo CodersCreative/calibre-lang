@@ -11,7 +11,7 @@ use calibre_parser::{
     ast::{
         Operator,
         idents::PotentialDollarIdentifier,
-        nodes::{AstNode, AstNodeType, CallArg},
+        nodes::{AstEnum, AstNode, AstNodeType, CallArg},
         types::ParserDataType,
     },
 };
@@ -47,11 +47,11 @@ impl MiddleEnvironment {
                     scope,
                     AstNode::new(
                         span,
-                        AstNodeType::EnumExpression {
+                        AstNodeType::EnumExpression(AstEnum {
                             identifier: ident.clone(),
                             value: PotentialDollarIdentifier::new(span, field_name),
                             data: None,
-                        },
+                        }),
                     ),
                 );
             }

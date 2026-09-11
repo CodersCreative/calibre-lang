@@ -73,8 +73,16 @@ impl MiddleEnvironment {
         node: &AstNode,
     ) -> Option<ParserDataType> {
         let typ = match &node.node_type {
+            // Flow
             AstNodeType::Emit(x) => x.type_of(self, scope, node.span),
             AstNodeType::Try(x) => x.type_of(self, scope, node.span),
+
+            // Literals
+            AstNodeType::StructLiteral(x) => x.type_of(self, scope, node.span),
+            AstNodeType::EnumExpression(x) => x.type_of(self, scope, node.span),
+            AstNodeType::TupleLiteral(x) => x.type_of(self, scope, node.span),
+
+            // TODO
             AstNodeType::Break { .. }
             | AstNodeType::Continue { .. }
             | AstNodeType::VariableDeclaration { .. }
@@ -125,22 +133,6 @@ impl MiddleEnvironment {
             AstNodeType::MoveExpression { value } | AstNodeType::ParenExpression { value } => self
                 .resolve_type_from_node(scope, value)
                 .map(|x| x.unwrap_all_refs()),
-            AstNodeType::TupleLiteral { values } => {
-                let mut types = Vec::new();
-                for value in values {
-                    types.push(
-                        self.resolve_type_from_node(scope, value)
-                            .unwrap_or(ParserDataType::new(
-                                value.span,
-                                ParserInnerType::Auto(None),
-                            )),
-                    );
-                }
-                Some(ParserDataType::new(
-                    node.span,
-                    ParserInnerType::Tuple(types),
-                ))
-            }
             AstNodeType::RefStatement { mutability, value } => Some(ParserDataType {
                 data_type: ParserInnerType::Ref(
                     Box::new(self.resolve_type_from_node(scope, value)?.unwrap_all_refs()),
@@ -216,10 +208,6 @@ impl MiddleEnvironment {
                 } else {
                     None
                 }
-            }
-            AstNodeType::EnumExpression { identifier, .. }
-            | AstNodeType::StructLiteral { identifier, .. } => {
-                self.resolve_to_data_type(scope, identifier).ok()
             }
             AstNodeType::FunctionDeclaration { header, .. }
             | AstNodeType::FnMatchDeclaration { header, .. } => {

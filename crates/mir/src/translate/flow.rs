@@ -1,16 +1,3 @@
-use calibre_parser::{
-    Span,
-    ast::{
-        idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialDollarIdentifier},
-        matching::MatchArmType,
-        nodes::{
-            AstBreak, AstContinue, AstDefer, AstEmit, AstNode, AstNodeType, AstReturn, AstTry,
-            CallArg, VarType,
-        },
-        types::{ParserDataType, ParserInnerType},
-    },
-};
-
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAssignment, MirBreak, MirContinue, MirEmit, MirInt,
@@ -22,6 +9,18 @@ use crate::{
     symbols::resolve::ResolutionOptions,
     tags::TagInfo,
     translate::MirLowering,
+};
+use calibre_parser::{
+    Span,
+    ast::{
+        idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialDollarIdentifier},
+        matching::MatchArmType,
+        nodes::{
+            AstBreak, AstContinue, AstDefer, AstEmit, AstNode, AstNodeType, AstReturn, AstTry,
+            CallArg, VarType,
+        },
+        types::{ParserDataType, ParserInnerType},
+    },
 };
 
 impl MirLowering for AstEmit {

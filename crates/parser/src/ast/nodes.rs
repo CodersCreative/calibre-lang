@@ -576,6 +576,24 @@ pub struct AstDefer {
     pub function: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstStruct {
+    pub identifier: PotentialGenericTypeIdentifier,
+    pub value: ObjectType<AstNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstEnum {
+    pub identifier: PotentialGenericTypeIdentifier,
+    pub value: PotentialDollarIdentifier,
+    pub data: Option<Box<AstNode>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstTuple {
+    pub values: Vec<AstNode>,
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum AstNodeType {
@@ -589,6 +607,11 @@ pub enum AstNodeType {
     Try(AstTry),
     Return(AstReturn),
     Defer(AstDefer),
+
+    // Literals
+    StructLiteral(AstStruct),
+    EnumExpression(AstEnum),
+    TupleLiteral(AstTuple),
 
     // TODO Convert
     Spawn {
@@ -642,14 +665,6 @@ pub enum AstNodeType {
         identifier: PotentialGenericTypeIdentifier,
         object: TypeDefType,
         overloads: Vec<Overload>,
-    },
-    EnumExpression {
-        identifier: PotentialGenericTypeIdentifier,
-        value: PotentialDollarIdentifier,
-        data: Option<Box<AstNode>>,
-    },
-    TupleLiteral {
-        values: Vec<AstNode>,
     },
     ScopeAlias {
         identifier: PotentialDollarIdentifier,
@@ -812,10 +827,6 @@ pub enum AstNodeType {
         module: Vec<PotentialDollarIdentifier>,
         alias: Option<PotentialDollarIdentifier>,
         values: Vec<PotentialDollarIdentifier>,
-    },
-    StructLiteral {
-        identifier: PotentialGenericTypeIdentifier,
-        value: ObjectType<AstNode>,
     },
     Tag {
         node: Box<AstNode>,

@@ -146,6 +146,8 @@ macro_rules! handle_comment {
     }};
 }
 
+pub(crate) use handle_comment;
+
 impl Formatter {
     fn slice_by_span(text: &str, span: Span) -> String {
         fn offset_for(text: &str, line: u32, col: u32) -> usize {
@@ -363,13 +365,18 @@ impl Formatter {
         match &node.node_type {
             AstNodeType::Null => String::from("null"),
             AstNodeType::EmptyLine => String::new(),
-
+            // Flow
             AstNodeType::Break(x) => x.format(self),
             AstNodeType::Emit(x) => x.format(self),
             AstNodeType::Continue(x) => x.format(self),
             AstNodeType::Defer(x) => x.format(self),
             AstNodeType::Return(x) => x.format(self),
             AstNodeType::Try(x) => x.format(self),
+
+            // Literals
+            AstNodeType::StructLiteral(x) => x.format(self),
+            AstNodeType::EnumExpression(x) => x.format(self),
+            AstNodeType::TupleLiteral(x) => x.format(self),
 
             AstNodeType::Spawn { items, auto_wait } => {
                 let prefix = if *auto_wait { "spawn@" } else { "spawn" };
@@ -724,7 +731,7 @@ impl Formatter {
                 ),
                 _ => {
                     let lhs = self.format(identifier);
-                    let rhs = self.fmt_value_preserving_bare_tuple(value);
+                    let rhs = value.format(self);
                     let single = format!("{} := {}", lhs, rhs);
                     let multi = format!("{} :=\n{}", lhs, self.fmt_txt_with_tab(&rhs, 1, true));
                     self.wrap_if_wide(single, &multi)
@@ -742,7 +749,7 @@ impl Formatter {
                     txt.push_str(&format!(" : {}", data_type));
                 }
 
-                let rhs = self.fmt_value_preserving_bare_tuple(value);
+                let rhs = value.format(self);
                 let assign = if data_type.is_auto() { ":=" } else { "=" };
                 let single = format!("{} {} {}", txt, assign, rhs);
                 let multi = format!(
@@ -832,9 +839,6 @@ impl Formatter {
 
                 txt
             }
-            AstNodeType::StructLiteral { identifier, value } => {
-                format!("{} {}", identifier, self.fmt_struct_literal(value))
-            }
             AstNodeType::Tag {
                 node,
                 tag,
@@ -857,19 +861,6 @@ impl Formatter {
                 let multi_line = format!("@{}{}\n{}", tag, args_str, node_formatted);
                 self.wrap_if_wide(single_line, &multi_line)
             }
-            AstNodeType::EnumExpression {
-                identifier,
-                value,
-                data: Some(data),
-            } => {
-                format!("{}.{} : {}", identifier, value, data)
-            }
-            AstNodeType::EnumExpression {
-                identifier, value, ..
-            } => {
-                format!("{}.{}", identifier, value)
-            }
-            AstNodeType::TupleLiteral { values } => self.fmt_tuple_literal(values, false),
             AstNodeType::RangeDeclaration {
                 from,
                 to,
@@ -1098,13 +1089,13 @@ impl Formatter {
                 txt.push(' ');
                 txt.push_str(&self.fmt_destructure_pattern(pattern, false));
                 txt.push_str(" := ");
-                txt.push_str(&self.fmt_value_preserving_bare_tuple(value));
+                txt.push_str(&value.format(self));
                 txt
             }
             AstNodeType::DestructureAssignment { pattern, value } => {
                 let mut txt = self.fmt_destructure_pattern(pattern, false);
                 txt.push_str(" := ");
-                txt.push_str(&self.fmt_value_preserving_bare_tuple(value));
+                txt.push_str(&value.format(self));
                 txt
             }
             AstNodeType::LoopDeclaration {
@@ -2092,98 +2083,6 @@ impl Formatter {
         txt
     }
 
-    fn fmt_struct_literal(&mut self, object_type: &ObjectType<AstNode>) -> String {
-        let allow_new_line = false;
-        match object_type {
-            ObjectType::Map(map) => {
-                let mut single = String::from("{ ");
-                let mut entries = Vec::new();
-                for (key, value) in map.iter() {
-                    if let AstNodeType::Identifier(x) = &value.node_type
-                        && &x.to_string() == key
-                    {
-                        single.push_str(&format!("{}, ", key));
-                        entries.push((
-                            key.clone(),
-                            None,
-                            self.get_potential_comment(&value.span),
-                            self.get_trailing_comment(&value.span),
-                        ));
-                        continue;
-                    }
-                    single.push_str(&format!("{} : {}, ", key, self.format(value)));
-                    entries.push((
-                        key.clone(),
-                        Some(self.format(value)),
-                        self.get_potential_comment(&value.span),
-                        self.get_trailing_comment(&value.span),
-                    ));
-                }
-                single = single.trim_end().trim_end_matches(",").to_string();
-                single.push_str(" }");
-
-                let mut txt = format!("{{{}", if allow_new_line { "\n" } else { "" });
-                let has_comments = entries
-                    .iter()
-                    .any(|(_, _, l, t)| l.is_some() || t.is_some());
-                for (key, value, leading, trailing) in entries {
-                    let base = if let Some(value) = value {
-                        format!("{} : {}", key, value)
-                    } else {
-                        key
-                    };
-                    let mut temp = handle_comment!(leading, base);
-                    if let Some(trailing) = trailing {
-                        temp.push(' ');
-                        temp.push_str(&trailing);
-                    }
-                    txt.push_str(&self.fmt_txt_with_tab(
-                        &format!("{},{}", temp, if allow_new_line { "\n" } else { " " }),
-                        1,
-                        false,
-                    ));
-                }
-
-                txt = txt.trim_end().trim_end_matches(",").to_string();
-                txt.push_str(&format!("{}}}", if allow_new_line { "\n" } else { "" }));
-                if has_comments {
-                    txt
-                } else {
-                    self.wrap_if_wide_or_if(single, &txt, map.len() > self.max_values)
-                }
-            }
-            ObjectType::Tuple(lst) => {
-                let mut txt = String::from("(");
-                let mut has_comments = false;
-                for value in lst.iter() {
-                    let leading = self.get_potential_comment(&value.span);
-                    let trailing = self.get_trailing_comment(&value.span);
-                    if leading.is_some() || trailing.is_some() {
-                        has_comments = true;
-                    }
-                    let mut temp = handle_comment!(leading, self.format(value));
-                    if let Some(trailing) = trailing {
-                        temp.push(' ');
-                        temp.push_str(&trailing);
-                    }
-                    txt.push_str(&self.fmt_txt_with_tab(&format!("{}, ", temp), 1, false));
-                }
-
-                txt = txt.trim_end().trim_end_matches(",").to_string();
-                txt.push(')');
-                let mut single_vals = Vec::new();
-                for v in lst.iter() {
-                    single_vals.push(self.format(v));
-                }
-                let single = format!("({})", single_vals.join(", "));
-                if has_comments {
-                    txt
-                } else {
-                    self.wrap_if_wide_or_if(single, &txt, lst.len() > self.max_values)
-                }
-            }
-        }
-    }
     fn fmt_match_string_parts(&self, parts: &[MatchStringPatternPart]) -> String {
         parts
             .iter()
@@ -2422,31 +2321,6 @@ impl Formatter {
         let rhs = self.format(right);
         let op = operator.to_string();
         format!("{} {} {}", lhs, op, rhs)
-    }
-
-    fn fmt_tuple_literal(&mut self, values: &[AstNode], bare: bool) -> String {
-        let mut single_values = Vec::new();
-        for value in values {
-            single_values.push(self.format(value));
-        }
-
-        if bare {
-            return single_values.join(", ");
-        }
-
-        let single = single_values.join(", ");
-        let multi = format!(
-            "\n{}",
-            self.fmt_txt_with_tab(&single_values.join(",\n"), 1, true)
-        );
-        self.wrap_if_wide_or_if(single, &multi, values.len() > self.max_values)
-    }
-
-    fn fmt_value_preserving_bare_tuple(&mut self, value: &AstNode) -> String {
-        match &value.node_type {
-            AstNodeType::TupleLiteral { values } => self.fmt_tuple_literal(values, true),
-            _ => self.format(value),
-        }
     }
 
     fn has_comment_between_spans(&self, outer: &Span, end: &Span) -> bool {

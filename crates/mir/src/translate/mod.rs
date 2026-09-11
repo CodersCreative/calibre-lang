@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBig, MirBinary,
-        MirBoolean, MirChar, MirComparison, MirConditional, MirDeref, MirDrop, MirEnum, MirFloat,
+        MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBig, MirBinary,
+        MirBoolean, MirChar, MirComparison, MirConditional, MirDeref, MirDrop, MirFloat,
         MirInt, MirIs, MirListBuilder, MirMove, MirNeg, MirRange, MirRef, MirScopeDecl, MirSpawn,
         MirString, MirVarDecl,
     },
@@ -17,7 +17,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        ObjectMap, ObjectType, Operator, RefMutability,
+        Operator, RefMutability,
         comparison::{BooleanOperator, ComparisonOperator},
         generics::TraitMemberKind,
         idents::{
@@ -38,6 +38,7 @@ pub mod curry;
 pub mod flow;
 pub mod functions;
 pub mod iter;
+pub mod literals;
 pub mod loops;
 pub mod matching;
 pub mod member;
@@ -235,6 +236,13 @@ impl MiddleEnvironment {
             AstNodeType::Try(x) => x.lower(self, scope, node.span),
             AstNodeType::Continue(x) => x.lower(self, scope, node.span),
             AstNodeType::Return(x) => x.lower(self, scope, node.span),
+
+            // Literals
+
+            // TODO Handle generics
+            AstNodeType::StructLiteral(x) => x.lower(self, scope, node.span),
+            AstNodeType::EnumExpression(x) => x.lower(self, scope, node.span),
+            AstNodeType::TupleLiteral(x) => x.lower(self, scope, node.span),
 
             AstNodeType::CurryExpression { value } => {
                 let value = self.rewrite_curry_call(scope, node.span, *value)?;
@@ -691,18 +699,6 @@ impl MiddleEnvironment {
                 }
                 _ => self.evaluate_inner(scope, *value),
             },
-            AstNodeType::TupleLiteral { values } => {
-                let span = node.span;
-
-                self.evaluate_inner(
-                    scope,
-                    AstNode::call(
-                        span,
-                        AstNode::identifier(span, "tuple"),
-                        values.into_iter().map(CallArg::Value).collect(),
-                    ),
-                )
-            }
             AstNodeType::Drop(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::Drop(MirDrop {
                     identifier: self.resolve(scope, &x, ResolutionOptions::idents())?,
@@ -2140,132 +2136,6 @@ impl MiddleEnvironment {
                 define,
                 is_temp,
             ),
-            // TODO Handle generics
-            AstNodeType::StructLiteral { identifier, value } => {
-                let identifier = self.resolve(scope, &identifier, ResolutionOptions::typing())?;
-                let obj = self.typing.objects.get(&identifier).cloned();
-
-                if obj.is_none()
-                    && !self
-                        .tagging
-                        .tag_info
-                        .contains(&TagInfo::IgnoreInvalidTypeCheck)
-                {
-                    return Err(MiddleErr::At(
-                        node.span,
-                        Box::new(MiddleErr::Object(identifier.to_string())),
-                    ));
-                };
-
-                let value = match value {
-                    ObjectType::Map(x) => {
-                        let mut map = Vec::new();
-
-                        for itm in x {
-                            if !self.context.type_check {
-                                let node_ty = self.resolve_type_from_node(scope, &itm.1);
-                                if let Some(obj) = &obj
-                                    && let MiddleTypeDefType::Struct(fields) = &obj.object_type
-                                    && let Some((_, (expected_ty, _))) =
-                                        fields.0.iter().find(|(name, _)| name == &itm.0)
-                                {
-                                    self.compare_types_ref(
-                                        Some(expected_ty),
-                                        node_ty.as_ref(),
-                                        Some(&TagInfo::IgnoreInvalidTypeCheck),
-                                    )?;
-                                }
-                            }
-                            map.push((itm.0, self.evaluate(scope, itm.1)));
-                        }
-
-                        map
-                    }
-                    ObjectType::Tuple(x) => {
-                        let mut map = Vec::new();
-
-                        for (idx, itm) in x.into_iter().enumerate() {
-                            if !self.context.type_check {
-                                let node_ty = self.resolve_type_from_node(scope, &itm);
-                                if let Some(obj) = &obj
-                                    && let MiddleTypeDefType::Struct(fields) = &obj.object_type
-                                {
-                                    let field_name = idx.to_string();
-                                    if let Some((_, (expected_ty, _))) =
-                                        fields.0.iter().find(|(name, _)| name == &field_name)
-                                    {
-                                        self.compare_types_ref(
-                                            Some(expected_ty),
-                                            node_ty.as_ref(),
-                                            Some(&TagInfo::IgnoreInvalidTypeCheck),
-                                        )?;
-                                    }
-                                }
-                            }
-                            map.push((idx.to_string(), self.evaluate(scope, itm)));
-                        }
-
-                        map
-                    }
-                };
-
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::AggregateExpression(MirAggregate {
-                        identifier: Some(identifier),
-                        value: ObjectMap(value),
-                    }),
-                    span: node.span,
-                })
-            }
-            AstNodeType::EnumExpression {
-                identifier,
-                value,
-                data,
-            } => {
-                let identifier = self.resolve(scope, &identifier, ResolutionOptions::typing())?;
-
-                let raw_variant = value.to_string();
-                let obj = self.typing.objects.get(&identifier);
-
-                let (value, data_type) = if let Some(obj) = obj
-                    && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
-                {
-                    variants
-                        .iter()
-                        .find(|(name, _)| name.eq_ignore_ascii_case(&raw_variant))
-                        .map(|(name, x)| (name, x.clone()))
-                        .ok_or(MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::EnumVariant(raw_variant.clone())),
-                        ))?
-                } else {
-                    return Err(MiddleErr::At(
-                        node.span,
-                        Box::new(MiddleErr::Object(identifier.to_string())),
-                    ));
-                };
-
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::EnumExpression(MirEnum {
-                        identifier,
-                        value: *value,
-                        data: if let Some(data) = data {
-                            if !self.context.type_check {
-                                let node_ty = self.resolve_type_from_node(scope, &data);
-                                self.compare_types_ref(
-                                    node_ty.as_ref(),
-                                    data_type.as_ref(),
-                                    Some(&TagInfo::IgnoreInvalidTypeCheck),
-                                )?;
-                            }
-                            Some(Box::new(self.evaluate_inner(scope, *data)?))
-                        } else {
-                            None
-                        },
-                    }),
-                    span: node.span,
-                })
-            }
             AstNodeType::MatchStatement { value, body } => {
                 self.evaluate_match_statement(scope, node.span, value, body)
             }
