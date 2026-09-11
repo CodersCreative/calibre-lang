@@ -1,9 +1,9 @@
 use calibre_parser::ast::{
     ObjectType,
     nodes::{
-        AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, PipeSegment,
-        flow::{AstBreak, AstContinue, AstDefer, AstReturn, AstTry},
-        literals::{AstEnum, AstRange, AstStruct, AstTuple},
+        AstNode, AstNodeType, CallArg, IfComparisonType, LoopType,
+        flow::{AstBreak, AstContinue, AstDefer, AstPipe, AstReturn, AstTry, PipeSegment},
+        literals::{AstDataType, AstEnum, AstRange, AstStruct, AstTuple},
     },
 };
 
@@ -287,7 +287,9 @@ pub trait NodeVisitor {
                 mutability,
                 value: Box::new(self.visit(*value)),
             },
-            AstNodeType::DataType { data_type } => AstNodeType::DataType { data_type },
+            AstNodeType::DataType(AstDataType { data_type }) => {
+                AstNodeType::DataType(AstDataType { data_type })
+            }
             AstNodeType::Drop(identifier) => AstNodeType::Drop(identifier),
             AstNodeType::Defer(AstDefer { value, function }) => AstNodeType::Defer(AstDefer {
                 value: Box::new(self.visit(*value)),
@@ -410,18 +412,20 @@ pub trait NodeVisitor {
                 value: Box::new(self.visit(*value)),
                 count: Box::new(self.visit(*count)),
             },
-            AstNodeType::PipeExpression(segments) => AstNodeType::PipeExpression(
-                segments
-                    .into_iter()
-                    .map(|s| match s {
-                        PipeSegment::Unnamed(n) => PipeSegment::Unnamed(self.visit(n)),
-                        PipeSegment::Named { identifier, node } => PipeSegment::Named {
-                            identifier,
-                            node: self.visit(node),
-                        },
-                    })
-                    .collect(),
-            ),
+            AstNodeType::PipeExpression(AstPipe { values }) => {
+                AstNodeType::PipeExpression(AstPipe {
+                    values: values
+                        .into_iter()
+                        .map(|s| match s {
+                            PipeSegment::Unnamed(n) => PipeSegment::Unnamed(self.visit(n)),
+                            PipeSegment::Named { identifier, node } => PipeSegment::Named {
+                                identifier,
+                                node: self.visit(node),
+                            },
+                        })
+                        .collect(),
+                })
+            }
             AstNodeType::ImportStatement {
                 module,
                 alias,

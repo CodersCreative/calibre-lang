@@ -4,7 +4,7 @@ use crate::{
         idents::{
             ParsedIntLiteral, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
         },
-        nodes::{AstNode, AstNodeType, NamedScope, VarType},
+        nodes::{AstNode, AstNodeType, NamedScope, VarType, literals::AstInt},
     },
 };
 use chumsky::prelude::*;
@@ -291,7 +291,9 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<AstN
     if ParsedIntLiteral::parse(trimmed).is_some() {
         return Ok(AstNode::new(
             fallback_span,
-            AstNodeType::IntLiteral(ParserText::from(trimmed.to_string())),
+            AstNodeType::IntLiteral(AstInt {
+                value: ParserText::from(trimmed.to_string()),
+            }),
         ));
     }
 

@@ -3,7 +3,7 @@ use crate::Span;
 use crate::ast::RefMutability;
 use crate::ast::ffi::ParserFfiInnerType;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
-use crate::ast::nodes::literals::AstString;
+use crate::ast::nodes::literals::{AstBig, AstChar, AstFloat, AstInt, AstString};
 use crate::ast::nodes::{AstNode, AstNodeType};
 use crate::ast::types::{GenericType, GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{is_keyword, lex, span, unescape_char_literal, unescape_string};
@@ -195,7 +195,10 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
         move |parts: Vec<String>, parser_sp| {
             let sp = span(ls.as_ref(), parser_sp.into_range());
             match unescape_char_literal(&parts.concat()) {
-                Some(ch) => Ok(AstNode::new(sp, AstNodeType::CharLiteral(ch))),
+                Some(value) => Ok(AstNode::new(
+                    sp,
+                    AstNodeType::CharLiteral(AstChar { value }),
+                )),
                 None => Err(Rich::custom(
                     parser_sp,
                     "invalid char literal escape sequence",
@@ -254,7 +257,12 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
         let ls = line_starts.clone();
         move |number: String, r| {
             let sp = span(ls.as_ref(), r);
-            AstNode::new(sp, AstNodeType::IntLiteral(ParserText::new(sp, number)))
+            AstNode::new(
+                sp,
+                AstNodeType::IntLiteral(AstInt {
+                    value: ParserText::new(sp, number),
+                }),
+            )
         }
     })
     .boxed();
@@ -291,11 +299,13 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
             AstNode::new(
                 sp,
                 if typ == Some('g') {
-                    AstNodeType::BigLiteral(ParserText::new(sp, number.replace('_', "")))
+                    AstNodeType::BigLiteral(AstBig {
+                        value: ParserText::new(sp, number.replace('_', "")),
+                    })
                 } else {
-                    AstNodeType::FloatLiteral(
-                        number.replace('_', "").parse::<f64>().unwrap_or_default(),
-                    )
+                    AstNodeType::FloatLiteral(AstFloat {
+                        value: number.replace('_', "").parse::<f64>().unwrap_or_default(),
+                    })
                 },
             )
         }

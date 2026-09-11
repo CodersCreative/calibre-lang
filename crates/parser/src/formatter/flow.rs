@@ -1,7 +1,10 @@
 use crate::{
     ast::{
         formatter::Formatter,
-        nodes::flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstReturn, AstTry, TryCatch},
+        nodes::flow::{
+            AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment,
+            TryCatch,
+        },
     },
     formatter::AstFormatting,
 };
@@ -91,5 +94,53 @@ impl AstFormatting for AstTry {
         }
 
         txt
+    }
+}
+
+impl AstFormatting for AstPipe {
+    fn narrow_format(&self, formatter: &mut Formatter) -> String {
+        let mut single = self.values[0].get_node().format(formatter);
+
+        for value in self.values.iter().skip(1) {
+            match value {
+                PipeSegment::Unnamed(x) => {
+                    single.push_str(&format!(" |> {}", x.format(formatter)));
+                }
+                PipeSegment::Named { identifier, node } => {
+                    single.push_str(&format!(" |: {} > {}", identifier, node.format(formatter)));
+                }
+            }
+        }
+
+        single
+    }
+
+    fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
+        let mut lines = vec![self.values[0].get_node().format(formatter)];
+
+        for value in self.values.iter().skip(1) {
+            match value {
+                PipeSegment::Unnamed(x) => {
+                    lines.push(format!("|> {}", x.format(formatter)));
+                }
+                PipeSegment::Named { identifier, node } => {
+                    lines.push(format!("|: {} > {}", identifier, node.format(formatter)));
+                }
+            }
+        }
+
+        let head = lines.first().cloned().unwrap_or_default();
+        let tail = lines
+            .iter()
+            .skip(1)
+            .map(|line| formatter.fmt_txt_with_tab(line, 1, true))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        Some(if tail.is_empty() {
+            format!("({})", head)
+        } else {
+            format!("({}\n{})", head, tail)
+        })
     }
 }

@@ -17,11 +17,14 @@ use calibre_parser::{
         matching::MatchArmType,
         nodes::{
             AstNode, AstNodeType, CallArg, VarType,
-            flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstReturn, AstTry},
+            flow::{
+                AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment,
+            },
         },
         types::{ParserDataType, ParserInnerType},
     },
 };
+use ustr::{Ustr, UstrMap};
 
 impl MirLowering for AstEmit {
     fn lower(
@@ -159,7 +162,7 @@ impl MirLowering for AstBreak {
                         label: label_text,
                         value: None,
                     }),
-                    env.context.current_span(),
+                    span,
                 );
 
                 if lst.is_empty() {
@@ -233,8 +236,8 @@ impl MirLowering for AstTry {
                 Span::default(),
                 AstNodeType::Return(AstReturn {
                     value: Some(Box::new(AstNode::call(
-                        env.context.current_span(),
-                        AstNode::identifier(env.context.current_span(), name),
+                        span,
+                        AstNode::identifier(span, name),
                         args,
                     ))),
                 }),
@@ -249,7 +252,7 @@ impl MirLowering for AstTry {
                     let ok_arm = enum_arm(
                         "Some",
                         Some(ParserText::from(ok_name.to_string()).into()),
-                        AstNode::identifier(env.context.current_span(), ok_name),
+                        AstNode::identifier(span, ok_name),
                     );
                     let err_arm = if let Some(catch) = self.catch {
                         enum_arm("None", catch.name, *catch.body)
@@ -262,7 +265,7 @@ impl MirLowering for AstTry {
                     let ok_arm = enum_arm(
                         "Ok",
                         Some(ParserText::from(ok_name.to_string()).into()),
-                        AstNode::identifier(env.context.current_span(), ok_name),
+                        AstNode::identifier(span, ok_name),
                     );
                     let err_arm = if let Some(catch) = self.catch {
                         enum_arm("Err", catch.name, *catch.body)
@@ -273,10 +276,7 @@ impl MirLowering for AstTry {
                             Some(ParserText::from(err_name.to_string()).into()),
                             return_call(
                                 "err",
-                                vec![CallArg::Value(AstNode::identifier(
-                                    env.context.current_span(),
-                                    err_name,
-                                ))],
+                                vec![CallArg::Value(AstNode::identifier(span, err_name))],
                             ),
                         )
                     };
@@ -359,7 +359,7 @@ impl MirLowering for AstContinue {
 
                 let cont_node = MiddleNode::new(
                     MiddleNodeType::Continue(MirContinue { label: label_text }),
-                    env.context.current_span(),
+                    span,
                 );
 
                 if lst.is_empty() {
@@ -450,5 +450,214 @@ impl MirLowering for AstReturn {
             }),
             span,
         })
+    }
+}
+
+// TODO Probably rewrite it to be more iterator heavy
+impl MirLowering for AstPipe {
+    fn lower(
+        mut self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        if self.values.is_empty() {
+            return Ok(MiddleNode::new(MiddleNodeType::EmptyLine, span));
+        }
+
+        let mut value = self.values.remove(0).into();
+        let mut prior_mappings = UstrMap::default();
+
+        let is_callable_point = |env: &mut MiddleEnvironment, point: &PipeSegment| {
+            if let AstNodeType::Identifier(id) = &point.get_node().node_type
+                && let Ok(resolved) = env.resolve(scope, id, ResolutionOptions::idents())
+                && env
+                    .symbols
+                    .variables
+                    .get(&resolved)
+                    .is_some_and(|var| var.data_type.is_callable())
+            {
+                return true;
+            }
+
+            let from_type = point
+                .get_node()
+                .type_of(env, scope, span)
+                .map(|x| x.unwrap_all_refs().data_type);
+
+            from_type.map(|x| x.is_callable()).unwrap_or_default()
+        };
+
+        let get_mapping =
+            |env: &MiddleEnvironment, key: &Ustr| -> Result<Option<Ustr>, MiddleErr> {
+                Ok(env.scoping.scope_or_err(scope)?.mappings.get(key).cloned())
+            };
+
+        let restore_mapping = |env: &mut MiddleEnvironment,
+                               key: Ustr,
+                               value: Option<Ustr>|
+         -> Result<(), MiddleErr> {
+            let scope_ref = env.scoping.scope_mut_or_err(scope)?;
+            if let Some(v) = value {
+                scope_ref.mappings.insert(key, v);
+            } else {
+                scope_ref.mappings.remove(&key);
+            }
+            Ok(())
+        };
+
+        prior_mappings.insert(Ustr::from("$"), get_mapping(env, &Ustr::from("$"))?);
+
+        let mut idx = 0usize;
+        while idx < self.values.len() {
+            let point = self.values[idx].clone();
+            let next_point = self.values.get(idx + 1).cloned();
+            let point_callable = is_callable_point(env, &point);
+            let point_is_identifier =
+                matches!(point.get_node().node_type, AstNodeType::Identifier(_));
+
+            if !point.is_named()
+                && !point.get_node().node_type.is_call()
+                && !point_callable
+                && let Some(next) = next_point
+                && !next.is_named()
+                && !next.get_node().node_type.is_call()
+                && is_callable_point(env, &next)
+            {
+                value = AstNode::call(
+                    span,
+                    next.into(),
+                    vec![CallArg::Value(value), CallArg::Value(point.into())],
+                );
+                idx += 2;
+                continue;
+            }
+
+            match point_callable || point_is_identifier {
+                true if !point.is_named() && !point.get_node().node_type.is_call() => {
+                    value = AstNode::call(span, point.into(), vec![CallArg::Value(value)])
+                }
+                _ => {
+                    let keep_scope = point.is_named();
+                    let var_dec = match &point {
+                        PipeSegment::Named { identifier, .. } => {
+                            let ident = env.resolve(
+                                scope,
+                                identifier,
+                                ResolutionOptions::default().with_dollar(),
+                            )?;
+
+                            prior_mappings.insert(ident, get_mapping(env, &ident)?);
+
+                            AstNode::new(
+                                span,
+                                AstNodeType::VariableDeclaration {
+                                    var_type: VarType::Mutable,
+                                    identifier: PotentialDollarIdentifier::new(span, ident),
+                                    value: Box::new(value),
+                                    data_type: ParserDataType::auto(span),
+                                },
+                            )
+                        }
+                        _ => AstNode::new(
+                            span,
+                            AstNodeType::VariableDeclaration {
+                                var_type: VarType::Mutable,
+                                identifier: ParserText::from("$".to_string()).into(),
+                                value: Box::new(value),
+                                data_type: ParserDataType::auto(span),
+                            },
+                        ),
+                    };
+
+                    let point: AstNode = point.into();
+                    value = match point.node_type {
+                        AstNodeType::ScopeDeclaration {
+                            body: Some(mut body),
+                            named: None,
+                            is_temp,
+                            create_new_scope: _,
+                            define,
+                        } => {
+                            body.insert(0, var_dec);
+
+                            AstNode {
+                                node_type: AstNodeType::ScopeDeclaration {
+                                    body: Some(body),
+                                    named: None,
+                                    is_temp,
+                                    create_new_scope: Some(!keep_scope),
+                                    define,
+                                },
+                                ..point
+                            }
+                        }
+                        _ => AstNode::new(
+                            span,
+                            AstNodeType::ScopeDeclaration {
+                                body: Some(vec![var_dec, point]),
+                                named: None,
+                                is_temp: true,
+                                create_new_scope: Some(!keep_scope),
+                                define: false,
+                            },
+                        ),
+                    }
+                }
+            }
+            idx += 1;
+        }
+
+        for (k, v) in prior_mappings {
+            restore_mapping(env, k, v)?;
+        }
+
+        value.lower(env, scope, span)
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        let mut iter = self.values.iter();
+        let first = iter.next()?;
+        let mut current = first.get_node().type_of(env, scope, span)?;
+
+        let mut idx = 1usize;
+        while idx < self.values.len() {
+            let point = &self.values[idx];
+            let point_ty = point.get_node().type_of(env, scope, span);
+            let point_callable = point_ty.as_ref().is_some_and(|ty| {
+                ty.is_callable() && !point.is_named() && !point.get_node().node_type.is_call()
+            });
+
+            if !point_callable && let Some(next) = self.values.get(idx + 1) {
+                let next_ty = next.get_node().type_of(env, scope, span);
+                let next_callable = next_ty.as_ref().is_some_and(|ty| {
+                    ty.is_callable() && !next.is_named() && !next.get_node().node_type.is_call()
+                });
+
+                if next_callable {
+                    current = next_ty
+                        .and_then(|x| x.apply_callable())
+                        .unwrap_or(ParserDataType::auto(span));
+                    idx += 2;
+                    continue;
+                }
+            }
+
+            current = if point_callable {
+                point_ty
+                    .and_then(|x| x.apply_callable())
+                    .unwrap_or(ParserDataType::auto(span))
+            } else {
+                point_ty.unwrap_or(ParserDataType::new(span, ParserInnerType::Auto(None)))
+            };
+            idx += 1;
+        }
+
+        Some(current)
     }
 }

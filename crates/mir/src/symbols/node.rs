@@ -76,6 +76,7 @@ impl MiddleEnvironment {
             // Flow
             AstNodeType::Emit(x) => x.type_of(self, scope, node.span),
             AstNodeType::Try(x) => x.type_of(self, scope, node.span),
+            AstNodeType::PipeExpression(x) => x.type_of(self, scope, node.span),
 
             // Literals
             AstNodeType::StructLiteral(x) => x.type_of(self, scope, node.span),
@@ -83,6 +84,10 @@ impl MiddleEnvironment {
             AstNodeType::TupleLiteral(x) => x.type_of(self, scope, node.span),
             AstNodeType::StringLiteral(x) => x.type_of(self, scope, node.span),
             AstNodeType::RangeDeclaration(x) => x.type_of(self, scope, node.span),
+            AstNodeType::IntLiteral(x) => x.type_of(self, scope, node.span),
+            AstNodeType::CharLiteral(x) => x.type_of(self, scope, node.span),
+            AstNodeType::BigLiteral(x) => x.type_of(self, scope, node.span),
+            AstNodeType::FloatLiteral(x) => x.type_of(self, scope, node.span),
 
             // TODO
             AstNodeType::Break { .. }
@@ -366,28 +371,6 @@ impl MiddleEnvironment {
                 data_type: ParserInnerType::Bool,
                 span: node.span,
             }),
-            AstNodeType::IntLiteral(number) => Some(ParserDataType {
-                data_type: if number.ends_with('b') {
-                    ParserInnerType::Byte
-                } else if number.ends_with('u') {
-                    ParserInnerType::UInt
-                } else {
-                    ParserInnerType::Int
-                },
-                span: node.span,
-            }),
-            AstNodeType::CharLiteral(_) => Some(ParserDataType {
-                data_type: ParserInnerType::Char,
-                span: node.span,
-            }),
-            AstNodeType::BigLiteral(_) => Some(ParserDataType {
-                data_type: ParserInnerType::Big,
-                span: node.span,
-            }),
-            AstNodeType::FloatLiteral(_) => Some(ParserDataType {
-                data_type: ParserInnerType::Float,
-                span: node.span,
-            }),
             AstNodeType::CallExpression {
                 caller,
                 generic_types: _generic_types,
@@ -556,7 +539,7 @@ impl MiddleEnvironment {
                         | ParserInnerType::Option(inner)
                         | ParserInnerType::Ptr(inner) => *inner,
                         ParserInnerType::Tuple(values) => match &index.node_type {
-                            AstNodeType::IntLiteral(i) => ParsedIntLiteral::parse(i)
+                            AstNodeType::IntLiteral(i) => ParsedIntLiteral::parse(&i.value)
                                 .and_then(|idx| values.get(idx.value as usize).cloned())
                                 .unwrap_or_else(|| {
                                     ParserDataType::new(node.span, ParserInnerType::Auto(None))
@@ -576,51 +559,6 @@ impl MiddleEnvironment {
                 } else {
                     Some(ParserDataType::auto(node.span))
                 }
-            }
-            AstNodeType::PipeExpression(path) => {
-                let mut iter = path.iter();
-                let first = iter.next()?;
-                let mut current = self.resolve_type_from_node(scope, first.get_node())?;
-
-                let mut idx = 1usize;
-                while idx < path.len() {
-                    let point = &path[idx];
-                    let point_ty = self.resolve_type_from_node(scope, point.get_node());
-                    let point_callable = point_ty.as_ref().is_some_and(|ty| {
-                        ty.is_callable()
-                            && !point.is_named()
-                            && !point.get_node().node_type.is_call()
-                    });
-
-                    if !point_callable && let Some(next) = path.get(idx + 1) {
-                        let next_ty = self.resolve_type_from_node(scope, next.get_node());
-                        let next_callable = next_ty.as_ref().is_some_and(|ty| {
-                            ty.is_callable()
-                                && !next.is_named()
-                                && !next.get_node().node_type.is_call()
-                        });
-
-                        if next_callable {
-                            current = next_ty
-                                .and_then(|x| x.apply_callable())
-                                .unwrap_or(ParserDataType::auto(node.span));
-                            idx += 2;
-                            continue;
-                        }
-                    }
-
-                    current = if point_callable {
-                        point_ty
-                            .and_then(|x| x.apply_callable())
-                            .unwrap_or(ParserDataType::auto(node.span))
-                    } else {
-                        point_ty
-                            .unwrap_or(ParserDataType::new(node.span, ParserInnerType::Auto(None)))
-                    };
-                    idx += 1;
-                }
-
-                Some(current)
             }
             AstNodeType::DerefStatement { value } => self
                 .resolve_type_from_node(scope, value)

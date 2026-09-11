@@ -1,5 +1,8 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirAggregate, MirEnum, MirRange, MirString},
+    ast::{
+        MiddleNode, MiddleNodeType, MirAggregate, MirBig, MirChar, MirEnum, MirFloat, MirInt,
+        MirRange, MirString,
+    },
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -12,9 +15,13 @@ use calibre_parser::{
     Span,
     ast::{
         ObjectMap, ObjectType,
+        idents::ParsedIntLiteral,
         nodes::{
             AstNode, CallArg,
-            literals::{AstEnum, AstRange, AstString, AstStruct, AstTuple},
+            literals::{
+                AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
+                AstTuple,
+            },
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -276,6 +283,130 @@ impl MirLowering for AstString {
     ) -> Option<ParserDataType> {
         Some(ParserDataType {
             data_type: ParserInnerType::Str,
+            span,
+        })
+    }
+}
+
+impl MirLowering for AstInt {
+    fn lower(
+        self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        Ok(MiddleNode {
+            node_type: MiddleNodeType::IntLiteral(MirInt {
+                value: ParsedIntLiteral::parse(self.value.clone()).ok_or_else(|| {
+                    MiddleErr::At(
+                        span,
+                        Box::new(MiddleErr::InvalidIntegerLiteral(self.value.to_string())),
+                    )
+                })?,
+            }),
+            span,
+        })
+    }
+
+    fn type_of(
+        &self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        Some(ParserDataType {
+            data_type: if self.value.ends_with('b') {
+                ParserInnerType::Byte
+            } else if self.value.ends_with('u') {
+                ParserInnerType::UInt
+            } else {
+                ParserInnerType::Int
+            },
+            span,
+        })
+    }
+}
+
+impl MirLowering for AstBig {
+    fn lower(
+        self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        Ok(MiddleNode {
+            node_type: MiddleNodeType::BigLiteral(MirBig {
+                value: self
+                    .value
+                    .text
+                    .strip_suffix('g')
+                    .map(Ustr::from)
+                    .unwrap_or(Ustr::from(&self.value.text)),
+            }),
+            span,
+        })
+    }
+
+    fn type_of(
+        &self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        Some(ParserDataType {
+            data_type: ParserInnerType::Big,
+            span,
+        })
+    }
+}
+
+impl MirLowering for AstFloat {
+    fn lower(
+        self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        Ok(MiddleNode {
+            node_type: MiddleNodeType::FloatLiteral(MirFloat { value: self.value }),
+            span,
+        })
+    }
+
+    fn type_of(
+        &self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        Some(ParserDataType {
+            data_type: ParserInnerType::Float,
+            span,
+        })
+    }
+}
+
+impl MirLowering for AstChar {
+    fn lower(
+        self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        Ok(MiddleNode {
+            node_type: MiddleNodeType::CharLiteral(MirChar { value: self.value }),
+            span,
+        })
+    }
+
+    fn type_of(
+        &self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        Some(ParserDataType {
+            data_type: ParserInnerType::Char,
             span,
         })
     }

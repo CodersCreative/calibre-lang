@@ -1,8 +1,8 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBig, MirBinary, MirBoolean, MirChar,
-        MirComparison, MirConditional, MirDeref, MirDrop, MirFloat, MirInt, MirIs, MirListBuilder,
-        MirMove, MirNeg, MirRef, MirScopeDecl, MirSpawn, MirVarDecl,
+        MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBinary, MirBoolean, MirComparison,
+        MirConditional, MirDeref, MirDrop, MirIs, MirListBuilder, MirMove, MirNeg, MirRef,
+        MirScopeDecl, MirSpawn, MirVarDecl,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -19,13 +19,11 @@ use calibre_parser::{
         Operator, RefMutability,
         comparison::{BooleanOperator, ComparisonOperator},
         generics::TraitMemberKind,
-        idents::{
-            ParsedIntLiteral, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        },
+        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::{MatchArmType, SelectArmKind},
         nodes::{
             AsFailureMode, AstNode, AstNodeType, CallArg, FunctionHeader, IfComparisonType,
-            LoopType, PipeSegment, TypeDefType, VarType,
+            LoopType, TypeDefType, VarType,
             flow::{AstBreak, AstEmit, AstTry, TryCatch},
             literals::AstRange,
         },
@@ -237,15 +235,18 @@ impl MiddleEnvironment {
             AstNodeType::Try(x) => x.lower(self, scope, node.span),
             AstNodeType::Continue(x) => x.lower(self, scope, node.span),
             AstNodeType::Return(x) => x.lower(self, scope, node.span),
+            AstNodeType::PipeExpression(x) => x.lower(self, scope, node.span),
 
             // Literals
-
-            // TODO Handle generics
             AstNodeType::StructLiteral(x) => x.lower(self, scope, node.span),
             AstNodeType::EnumExpression(x) => x.lower(self, scope, node.span),
             AstNodeType::TupleLiteral(x) => x.lower(self, scope, node.span),
             AstNodeType::StringLiteral(x) => x.lower(self, scope, node.span),
             AstNodeType::RangeDeclaration(x) => x.lower(self, scope, node.span),
+            AstNodeType::IntLiteral(x) => x.lower(self, scope, node.span),
+            AstNodeType::BigLiteral(x) => x.lower(self, scope, node.span),
+            AstNodeType::FloatLiteral(x) => x.lower(self, scope, node.span),
+            AstNodeType::CharLiteral(x) => x.lower(self, scope, node.span),
 
             AstNodeType::CurryExpression { value } => {
                 let value = self.rewrite_curry_call(scope, node.span, *value)?;
@@ -258,35 +259,7 @@ impl MiddleEnvironment {
                     StrOrAstNode::Node(x) => return self.evaluate_inner(scope, *x),
                 },
             )),
-            AstNodeType::IntLiteral(text) => Ok(MiddleNode {
-                node_type: MiddleNodeType::IntLiteral(MirInt {
-                    value: ParsedIntLiteral::parse(text.clone()).ok_or_else(|| {
-                        MiddleErr::At(
-                            node.span,
-                            Box::new(MiddleErr::InvalidIntegerLiteral(text.to_string())),
-                        )
-                    })?,
-                }),
-                span: node.span,
-            }),
-            AstNodeType::BigLiteral(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::BigLiteral(MirBig {
-                    value: x
-                        .text
-                        .strip_suffix('g')
-                        .map(Ustr::from)
-                        .unwrap_or(Ustr::from(&x.text)),
-                }),
-                span: node.span,
-            }),
-            AstNodeType::FloatLiteral(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::FloatLiteral(MirFloat { value: x }),
-                span: node.span,
-            }),
-            AstNodeType::CharLiteral(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::CharLiteral(MirChar { value: x }),
-                span: node.span,
-            }),
+
             AstNodeType::FieldAccess { base, field } => {
                 self.evaluate_field_access(scope, node.span, *base, field)
             }
@@ -2605,165 +2578,6 @@ impl MiddleEnvironment {
                     ),
                 )
             }
-            AstNodeType::PipeExpression(mut path) if !path.is_empty() => {
-                let mut value = path.remove(0).into();
-                let mut prior_mappings = UstrMap::default();
-
-                let is_callable_point = |env: &mut Self, point: &PipeSegment| {
-                    if let AstNodeType::Identifier(id) = &point.get_node().node_type
-                        && let Ok(resolved) = env.resolve(scope, id, ResolutionOptions::idents())
-                        && env
-                            .symbols
-                            .variables
-                            .get(&resolved)
-                            .is_some_and(|var| var.data_type.is_callable())
-                    {
-                        return true;
-                    }
-                    let from_type = env
-                        .resolve_type_from_node(scope, point.get_node())
-                        .map(|x| x.unwrap_all_refs().data_type);
-
-                    from_type.map(|x| x.is_callable()).unwrap_or_default()
-                };
-
-                let get_mapping = |env: &Self, key: &Ustr| -> Result<Option<Ustr>, MiddleErr> {
-                    Ok(env.scoping.scope_or_err(scope)?.mappings.get(key).cloned())
-                };
-
-                let restore_mapping =
-                    |env: &mut Self, key: Ustr, value: Option<Ustr>| -> Result<(), MiddleErr> {
-                        let scope_ref = env.scoping.scope_mut_or_err(scope)?;
-                        if let Some(v) = value {
-                            scope_ref.mappings.insert(key, v);
-                        } else {
-                            scope_ref.mappings.remove(&key);
-                        }
-                        Ok(())
-                    };
-
-                prior_mappings.insert(Ustr::from("$"), get_mapping(self, &Ustr::from("$"))?);
-
-                let mut idx = 0usize;
-                while idx < path.len() {
-                    let point = path[idx].clone();
-                    let next_point = path.get(idx + 1).cloned();
-                    let point_callable = is_callable_point(self, &point);
-                    let point_is_identifier =
-                        matches!(point.get_node().node_type, AstNodeType::Identifier(_));
-
-                    if !point.is_named()
-                        && !point.get_node().node_type.is_call()
-                        && !point_callable
-                        && let Some(next) = next_point
-                        && !next.is_named()
-                        && !next.get_node().node_type.is_call()
-                        && is_callable_point(self, &next)
-                    {
-                        value = AstNode::call(
-                            self.context.current_span(),
-                            next.into(),
-                            vec![CallArg::Value(value), CallArg::Value(point.into())],
-                        );
-                        idx += 2;
-                        continue;
-                    }
-
-                    match point_callable || point_is_identifier {
-                        true if !point.is_named() && !point.get_node().node_type.is_call() => {
-                            value = AstNode::call(
-                                self.context.current_span(),
-                                point.into(),
-                                vec![CallArg::Value(value)],
-                            )
-                        }
-                        _ => {
-                            let keep_scope = point.is_named();
-                            let var_dec = match &point {
-                                PipeSegment::Named { identifier, .. } => {
-                                    let ident = self.resolve(
-                                        scope,
-                                        identifier,
-                                        ResolutionOptions::default().with_dollar(),
-                                    )?;
-
-                                    prior_mappings.insert(ident, get_mapping(self, &ident)?);
-
-                                    AstNode::new(
-                                        self.context.current_span(),
-                                        AstNodeType::VariableDeclaration {
-                                            var_type: VarType::Mutable,
-                                            identifier: PotentialDollarIdentifier::new(
-                                                node.span, ident,
-                                            ),
-                                            value: Box::new(value),
-                                            data_type: ParserDataType::auto(
-                                                self.context.current_span(),
-                                            ),
-                                        },
-                                    )
-                                }
-                                _ => AstNode::new(
-                                    self.context.current_span(),
-                                    AstNodeType::VariableDeclaration {
-                                        var_type: VarType::Mutable,
-                                        identifier: ParserText::from("$".to_string()).into(),
-                                        value: Box::new(value),
-                                        data_type: ParserDataType::auto(
-                                            self.context.current_span(),
-                                        ),
-                                    },
-                                ),
-                            };
-
-                            let point: AstNode = point.into();
-                            value = match point.node_type {
-                                AstNodeType::ScopeDeclaration {
-                                    body: Some(mut body),
-                                    named: None,
-                                    is_temp,
-                                    create_new_scope: _,
-                                    define,
-                                } => {
-                                    body.insert(0, var_dec);
-
-                                    AstNode {
-                                        node_type: AstNodeType::ScopeDeclaration {
-                                            body: Some(body),
-                                            named: None,
-                                            is_temp,
-                                            create_new_scope: Some(!keep_scope),
-                                            define,
-                                        },
-                                        ..point
-                                    }
-                                }
-                                _ => AstNode::new(
-                                    self.context.current_span(),
-                                    AstNodeType::ScopeDeclaration {
-                                        body: Some(vec![var_dec, point]),
-                                        named: None,
-                                        is_temp: true,
-                                        create_new_scope: Some(!keep_scope),
-                                        define: false,
-                                    },
-                                ),
-                            }
-                        }
-                    }
-                    idx += 1;
-                }
-
-                for (k, v) in prior_mappings {
-                    restore_mapping(self, k, v)?;
-                }
-
-                self.evaluate_inner(scope, value)
-            }
-            AstNodeType::PipeExpression(_) => Ok(MiddleNode::new(
-                MiddleNodeType::EmptyLine,
-                self.context.current_span(),
-            )),
         }
     }
 }

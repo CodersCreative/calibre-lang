@@ -4,6 +4,7 @@ use crate::ast::{
     ObjectType,
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::AstNode,
+    types::ParserDataType,
 };
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -34,4 +35,29 @@ pub struct AstRange {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstString {
     pub value: ParserText,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstChar {
+    pub value: char,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstFloat {
+    pub value: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstInt {
+    pub value: ParserText,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstBig {
+    pub value: ParserText,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstDataType {
+    pub data_type: ParserDataType,
 }

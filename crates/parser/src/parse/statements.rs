@@ -6,7 +6,7 @@ use crate::ast::generics::{TraitMember, TraitMemberKind};
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier};
 use crate::ast::matching::{SelectArm, SelectArmKind};
 use crate::ast::nodes::flow::AstReturn;
-use crate::ast::nodes::literals::{AstEnum, AstTuple};
+use crate::ast::nodes::literals::{AstDataType, AstEnum, AstTuple};
 use crate::ast::nodes::{
     AstNode, AstNodeType, DestructurePattern, NamedScope, Overload, TypeDefType, VarType,
 };
@@ -800,7 +800,10 @@ pub fn build_statement_parser<'a>(
                         .ignore_then(lex(pad.clone(), just(':')))
                         .ignore_then(type_name.clone())
                         .map(|data_type| {
-                            AstNode::new(data_type.span, AstNodeType::DataType { data_type })
+                            AstNode::new(
+                                data_type.span,
+                                AstNodeType::DataType(AstDataType { data_type }),
+                            )
                         })
                         .or(expr.clone()),
                 )

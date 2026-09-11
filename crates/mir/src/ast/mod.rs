@@ -9,7 +9,9 @@ use calibre_parser::{
             AsFailureMode, AstNode, AstNodeType, CallArg, FunctionHeader, IfComparisonType,
             LoopType, VarType,
             flow::{AstBreak, AstContinue, AstEmit, AstReturn},
-            literals::{AstEnum, AstRange, AstString, AstStruct},
+            literals::{
+                AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
+            },
         },
         types::{GenericTypes, ParserDataType},
     },
@@ -727,11 +729,15 @@ impl From<MiddleNodeType> for AstNodeType {
 
                 lst
             }),
-            MiddleNodeType::CharLiteral(value) => AstNodeType::CharLiteral(value.value),
-            MiddleNodeType::FloatLiteral(value) => AstNodeType::FloatLiteral(value.value),
-            MiddleNodeType::BigLiteral(value) => {
-                AstNodeType::BigLiteral(ParserText::from(value.value))
+            MiddleNodeType::CharLiteral(value) => {
+                AstNodeType::CharLiteral(AstChar { value: value.value })
             }
+            MiddleNodeType::FloatLiteral(value) => {
+                AstNodeType::FloatLiteral(AstFloat { value: value.value })
+            }
+            MiddleNodeType::BigLiteral(value) => AstNodeType::BigLiteral(AstBig {
+                value: ParserText::from(value.value),
+            }),
             MiddleNodeType::IntLiteral(value) => {
                 let mut out = value.value.value.to_string();
                 match value.value.int_type {
@@ -739,7 +745,9 @@ impl From<MiddleNodeType> for AstNodeType {
                     IntLiteralType::UInt => out.push('u'),
                     IntLiteralType::Byte => out.push('b'),
                 }
-                AstNodeType::IntLiteral(ParserText::from(out))
+                AstNodeType::IntLiteral(AstInt {
+                    value: ParserText::from(out),
+                })
             }
             MiddleNodeType::FieldAccess(value) => AstNodeType::FieldAccess {
                 base: Box::new((*value.base).into()),

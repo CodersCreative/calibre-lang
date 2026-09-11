@@ -4,7 +4,10 @@ use crate::{
         formatter::{Formatter, handle_comment},
         nodes::{
             AstNodeType,
-            literals::{AstEnum, AstRange, AstString, AstStruct, AstTuple},
+            literals::{
+                AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstRange, AstString,
+                AstStruct, AstTuple,
+            },
         },
     },
     formatter::AstFormatting,
@@ -206,5 +209,47 @@ impl AstFormatting for AstRange {
             if self.inclusive { "=" } else { "" },
             self.to.format(formatter)
         )
+    }
+}
+
+impl AstFormatting for AstChar {
+    fn narrow_format(&self, _formatter: &mut Formatter) -> String {
+        format!("'{}'", Self::escape_char_literal(&self.value))
+    }
+}
+
+impl AstChar {
+    fn escape_char_literal(value: &char) -> String {
+        AstString::escape_string_literal(&value.to_string())
+    }
+}
+
+impl AstFormatting for AstFloat {
+    fn narrow_format(&self, _formatter: &mut Formatter) -> String {
+        let mut temp = self.value.to_string();
+        if temp.contains(".") {
+            temp
+        } else {
+            temp.push('f');
+            temp
+        }
+    }
+}
+
+impl AstFormatting for AstInt {
+    fn narrow_format(&self, _formatter: &mut Formatter) -> String {
+        self.value.to_string()
+    }
+}
+
+impl AstFormatting for AstBig {
+    fn narrow_format(&self, _formatter: &mut Formatter) -> String {
+        format!("{}g", self.value)
+    }
+}
+
+impl AstFormatting for AstDataType {
+    fn narrow_format(&self, _formatter: &mut Formatter) -> String {
+        format!("type : {}", self.data_type)
     }
 }

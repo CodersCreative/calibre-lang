@@ -10,7 +10,7 @@ use crate::{
         },
         nodes::{
             AsFailureMode, AstNode, AstNodeType, CallArg, DestructurePattern, IfComparisonType,
-            LoopType, Overload, PipeSegment, TypeDefType, VarType, literals::AstString,
+            LoopType, Overload, TypeDefType, VarType,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -373,6 +373,7 @@ impl Formatter {
             AstNodeType::Defer(x) => x.format(self),
             AstNodeType::Return(x) => x.format(self),
             AstNodeType::Try(x) => x.format(self),
+            AstNodeType::PipeExpression(x) => x.format(self),
 
             // Literals
             AstNodeType::StructLiteral(x) => x.format(self),
@@ -380,6 +381,11 @@ impl Formatter {
             AstNodeType::TupleLiteral(x) => x.format(self),
             AstNodeType::StringLiteral(x) => x.format(self),
             AstNodeType::RangeDeclaration(x) => x.format(self),
+            AstNodeType::IntLiteral(x) => x.format(self),
+            AstNodeType::BigLiteral(x) => x.format(self),
+            AstNodeType::FloatLiteral(x) => x.format(self),
+            AstNodeType::CharLiteral(x) => x.format(self),
+            AstNodeType::DataType(x) => x.format(self),
 
             AstNodeType::Spawn { items, auto_wait } => {
                 let prefix = if *auto_wait { "spawn@" } else { "spawn" };
@@ -1203,18 +1209,6 @@ impl Formatter {
                 format!("{}[{}]", self.format(base), self.format(index))
             }
             AstNodeType::Identifier(x) => x.to_string(),
-            AstNodeType::IntLiteral(x) => x.to_string(),
-            AstNodeType::BigLiteral(x) => format!("{}g", x),
-            AstNodeType::FloatLiteral(x) => {
-                let mut temp = x.to_string();
-                if temp.contains(".") {
-                    temp
-                } else {
-                    temp.push('f');
-                    temp
-                }
-            }
-            AstNodeType::CharLiteral(x) => format!("'{}'", self.escape_char_literal(x)),
             AstNodeType::ListLiteral(data_type, values) => {
                 let prefix = if !data_type.is_auto() {
                     format!("list:<{}>[", data_type)
@@ -1267,9 +1261,6 @@ impl Formatter {
                     "[".to_string()
                 };
                 format!("{}{}; {}]", prefix, self.format(value), self.format(count))
-            }
-            AstNodeType::DataType { data_type } => {
-                format!("type : {}", data_type)
             }
             AstNodeType::ScopeAlias {
                 identifier,
@@ -1392,41 +1383,6 @@ impl Formatter {
                 }
 
                 txt.trim_end().trim_end_matches("\n").to_string()
-            }
-
-            AstNodeType::PipeExpression(values) => {
-                let mut single = self.format(values[0].get_node());
-                let mut multi_lines = vec![self.format(values[0].get_node())];
-
-                for value in values.iter().skip(1) {
-                    match value {
-                        PipeSegment::Unnamed(x) => {
-                            let formatted = self.format(x);
-                            single.push_str(&format!(" |> {}", formatted));
-                            multi_lines.push(format!("|> {}", formatted));
-                        }
-                        PipeSegment::Named { identifier, node } => {
-                            let formatted = self.format(node);
-                            single.push_str(&format!(" |: {} > {}", identifier, formatted));
-                            multi_lines.push(format!("|: {} > {}", identifier, formatted));
-                        }
-                    }
-                }
-
-                let head = multi_lines.first().cloned().unwrap_or_default();
-                let tail = multi_lines
-                    .iter()
-                    .skip(1)
-                    .map(|line| self.fmt_txt_with_tab(line, 1, true))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                let multi = if tail.is_empty() {
-                    format!("({})", head)
-                } else {
-                    format!("({}\n{})", head, tail)
-                };
-
-                self.wrap_if_wide_or_if(single, &multi, values.len() > self.max_values)
             }
             AstNodeType::ParenExpression { value } => format!("({})", self.format(value)),
             AstNodeType::TypeDeclaration {
@@ -2315,10 +2271,6 @@ impl Formatter {
         self.comments
             .iter()
             .any(|comment| comment.span.from >= outer.from && comment.span.to <= end.from)
-    }
-
-    fn escape_char_literal(&self, value: &char) -> String {
-        AstString::escape_string_literal(&value.to_string())
     }
 
     fn fmt_ffi_type(&mut self, data_type: &ParserDataType) -> String {

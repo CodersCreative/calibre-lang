@@ -2,11 +2,11 @@ use super::{LegacySpanMapExt, filter, setup::StrParser};
 use crate::ast::RefMutability;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::matching::MatchArmType;
-use crate::ast::nodes::flow::{AstBreak, AstContinue, AstDefer, AstTry, TryCatch};
-use crate::ast::nodes::literals::{AstEnum, AstRange, AstString};
-use crate::ast::nodes::{
-    AsFailureMode, AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, PipeSegment,
+use crate::ast::nodes::flow::{
+    AstBreak, AstContinue, AstDefer, AstPipe, AstTry, PipeSegment, TryCatch,
 };
+use crate::ast::nodes::literals::{AstEnum, AstRange, AstString};
+use crate::ast::nodes::{AsFailureMode, AstNode, AstNodeType, CallArg, IfComparisonType, LoopType};
 use crate::ast::types::{ParserDataType, ParserInnerType};
 use crate::parse::util::{
     ensure_scope_node, lex, parse_embedded_expr, parse_splits, span, span_from_nodes_or,
@@ -267,10 +267,10 @@ pub fn build_tail_expression_parser<'a>(
                         );
                     } else if let AstNodeType::IntLiteral(value) = node.node_type {
                         current = AstNode::new(
-                            Span::new_from_spans(current.span, value.span),
+                            Span::new_from_spans(current.span, value.value.span),
                             AstNodeType::FieldAccess {
                                 base: Box::new(current),
-                                field: value.into(),
+                                field: value.value.into(),
                             },
                         );
                     } else if let AstNodeType::CallExpression {
@@ -796,38 +796,42 @@ pub fn build_tail_expression_parser<'a>(
             }
 
             let head_span = head.span;
-            let mut items = vec![PipeSegment::Unnamed(head)];
+            let mut values = vec![PipeSegment::Unnamed(head)];
             for seg in rest {
                 match seg {
                     PipeSegment::Unnamed(node) => {
-                        if let AstNodeType::PipeExpression(mut nested) = node.node_type {
-                            items.append(&mut nested);
+                        if let AstNodeType::PipeExpression(AstPipe { values: mut nested }) =
+                            node.node_type
+                        {
+                            values.append(&mut nested);
                         } else {
-                            items.push(PipeSegment::Unnamed(node));
+                            values.push(PipeSegment::Unnamed(node));
                         }
                     }
                     PipeSegment::Named { identifier, node } => {
-                        if let AstNodeType::PipeExpression(mut nested) = node.node_type {
+                        if let AstNodeType::PipeExpression(AstPipe { values: mut nested }) =
+                            node.node_type
+                        {
                             if let Some(first) = nested.first_mut() {
                                 *first = PipeSegment::Named {
                                     identifier,
                                     node: first.get_node().clone(),
                                 };
                             }
-                            items.append(&mut nested);
+                            values.append(&mut nested);
                         } else {
-                            items.push(PipeSegment::Named { identifier, node });
+                            values.push(PipeSegment::Named { identifier, node });
                         }
                     }
                 }
             }
 
             let sp = span_from_nodes_or(
-                items[0].get_node(),
-                items.last().map(|seg| seg.get_node()),
+                values[0].get_node(),
+                values.last().map(|seg| seg.get_node()),
                 head_span,
             );
-            AstNode::new(sp, AstNodeType::PipeExpression(items))
+            AstNode::new(sp, AstNodeType::PipeExpression(AstPipe { values }))
         })
         .boxed();
 

@@ -86,7 +86,7 @@ impl MiddleEnvironment {
                 let priority = if let Some(AstNodeType::IntLiteral(val)) =
                     args.first().map(|x| &x.node_type)
                 {
-                    val.parse::<i32>().unwrap_or(100)
+                    val.value.parse::<i32>().unwrap_or(100)
                 } else {
                     100
                 };
@@ -185,7 +185,7 @@ impl MiddleEnvironment {
                 let priority = if let Some(AstNodeType::IntLiteral(val)) =
                     args.first().map(|x| &x.node_type)
                 {
-                    val.parse::<i32>().unwrap_or(100)
+                    val.value.parse::<i32>().unwrap_or(100)
                 } else {
                     100
                 };
@@ -508,7 +508,7 @@ impl MiddleEnvironment {
                         }
                         AstNodeType::IntLiteral(x) => {
                             if memo {
-                                params.push(Ustr::from(&x.to_string()));
+                                params.push(Ustr::from(&x.value.to_string()));
                             }
                         }
                         AstNodeType::CallExpression {
@@ -536,7 +536,7 @@ impl MiddleEnvironment {
                                             params.push(Ustr::from(x.get_ident().text().trim()));
                                         }
                                         AstNodeType::IntLiteral(x) => {
-                                            params.push(Ustr::from(&x.to_string()));
+                                            params.push(Ustr::from(&x.value.to_string()));
                                         }
                                         _ => {}
                                     }

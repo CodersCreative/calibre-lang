@@ -9,8 +9,11 @@ use crate::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::{MatchArmType, SelectArm},
         nodes::{
-            flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstReturn, AstTry},
-            literals::{AstEnum, AstRange, AstString, AstStruct, AstTuple},
+            flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
+            literals::{
+                AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstRange, AstString,
+                AstStruct, AstTuple,
+            },
         },
         types::{GenericTypes, ParserDataType},
     },
@@ -187,7 +190,9 @@ impl AstNode {
     pub fn int(span: Span, value: impl ToString) -> Self {
         AstNode::new(
             span,
-            AstNodeType::IntLiteral(ParserText::new(span, value.to_string())),
+            AstNodeType::IntLiteral(AstInt {
+                value: ParserText::new(span, value.to_string()),
+            }),
         )
     }
 
@@ -575,7 +580,7 @@ pub enum AstNodeType {
     Try(AstTry),
     Return(AstReturn),
     Defer(AstDefer),
-    PipeExpression(Vec<PipeSegment>),
+    PipeExpression(AstPipe),
 
     // Literals
     StructLiteral(AstStruct),
@@ -583,15 +588,11 @@ pub enum AstNodeType {
     TupleLiteral(AstTuple),
     RangeDeclaration(AstRange),
     StringLiteral(AstString),
-
-    // TODO Convert
-    CharLiteral(char),
-    FloatLiteral(f64),
-    IntLiteral(ParserText),
-    BigLiteral(ParserText),
-    DataType {
-        data_type: ParserDataType,
-    },
+    CharLiteral(AstChar),
+    FloatLiteral(AstFloat),
+    IntLiteral(AstInt),
+    BigLiteral(AstBig),
+    DataType(AstDataType),
 
     // Lists
     ListLiteral(ParserDataType, Vec<AstNode>),
@@ -829,53 +830,6 @@ pub enum AstNodeType {
         tag: ParserText,
         arguments: Vec<AstNode>,
     },
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum PipeSegment {
-    Unnamed(AstNode),
-    Named {
-        identifier: PotentialDollarIdentifier,
-        node: AstNode,
-    },
-}
-
-impl PipeSegment {
-    pub fn is_named(&self) -> bool {
-        !matches!(self, Self::Unnamed(_))
-    }
-
-    pub fn span(&self) -> &Span {
-        match self {
-            Self::Unnamed(x) => &x.span,
-            Self::Named {
-                identifier: _,
-                node,
-            } => &node.span,
-        }
-    }
-
-    pub fn get_node(&self) -> &AstNode {
-        match self {
-            Self::Unnamed(x) => x,
-            Self::Named {
-                identifier: _,
-                node,
-            } => node,
-        }
-    }
-}
-
-impl From<PipeSegment> for AstNode {
-    fn from(val: PipeSegment) -> AstNode {
-        match val {
-            PipeSegment::Unnamed(x) => x,
-            PipeSegment::Named {
-                identifier: _,
-                node,
-            } => node,
-        }
-    }
 }
 
 impl AstNodeType {

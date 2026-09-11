@@ -6,7 +6,7 @@ use crate::{
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
             AstNode, AstNodeType, CallArg,
-            literals::{AstRange, AstString, AstTuple},
+            literals::{AstChar, AstFloat, AstRange, AstString, AstTuple},
         },
     },
 };
@@ -379,8 +379,14 @@ impl ParserDataType {
                     value: ParserText::new(self.span, ""),
                 }),
             )),
-            ParserInnerType::Char => Some(AstNode::new(self.span, AstNodeType::CharLiteral('\0'))),
-            ParserInnerType::Float => Some(AstNode::new(self.span, AstNodeType::FloatLiteral(0.0))),
+            ParserInnerType::Char => Some(AstNode::new(
+                self.span,
+                AstNodeType::CharLiteral(AstChar { value: '\0' }),
+            )),
+            ParserInnerType::Float => Some(AstNode::new(
+                self.span,
+                AstNodeType::FloatLiteral(AstFloat { value: 0.0 }),
+            )),
             ParserInnerType::Auto(_) => Some(AstNode::new(self.span, AstNodeType::Null)),
             ParserInnerType::Dynamic => Some(AstNode::new(self.span, AstNodeType::Null)),
             ParserInnerType::Null => Some(AstNode::new(self.span, AstNodeType::Null)),

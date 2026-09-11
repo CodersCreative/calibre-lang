@@ -8,7 +8,7 @@ use calibre_parser::{
     Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{AstNode, AstNodeType},
+        nodes::{AstNode, AstNodeType, literals::AstDataType},
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -769,7 +769,8 @@ impl MiddleEnvironment {
             }
             ParserInnerType::DollarIdentifier(x) => {
                 if let Some(node) = self.scoping.resolve_macro_arg(scope, &Ustr::from(x)) {
-                    let AstNodeType::DataType { data_type } = node.node_type.clone() else {
+                    let AstNodeType::DataType(AstDataType { data_type }) = node.node_type.clone()
+                    else {
                         unimplemented!()
                     };
 
