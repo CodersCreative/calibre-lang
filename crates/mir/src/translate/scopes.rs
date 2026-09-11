@@ -9,7 +9,7 @@ use calibre_parser::{
     Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{AstBreak, AstNode, AstNodeType, LoopType, NamedScope},
+        nodes::{AstNode, AstNodeType, LoopType, NamedScope, flow::AstBreak},
     },
 };
 use ustr::Ustr;

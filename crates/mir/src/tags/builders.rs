@@ -9,10 +9,10 @@ use calibre_parser::{
     ast::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        matching::TryCatch,
         nodes::{
-            AstNode, AstNodeType, AstString, AstStruct, AstTry, CallArg, FunctionHeader,
-            TypeDefType, VarType,
+            AstNode, AstNodeType, CallArg, FunctionHeader, TypeDefType, VarType,
+            flow::{AstTry, TryCatch},
+            literals::{AstString, AstStruct},
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },

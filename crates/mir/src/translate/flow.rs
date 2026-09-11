@@ -16,8 +16,8 @@ use calibre_parser::{
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialDollarIdentifier},
         matching::MatchArmType,
         nodes::{
-            AstBreak, AstContinue, AstDefer, AstEmit, AstNode, AstNodeType, AstReturn, AstTry,
-            CallArg, VarType,
+            AstNode, AstNodeType, CallArg, VarType,
+            flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstReturn, AstTry},
         },
         types::{ParserDataType, ParserInnerType},
     },

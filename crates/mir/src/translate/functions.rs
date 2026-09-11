@@ -17,8 +17,9 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
-            AstContinue, AstNode, AstNodeType, AstReturn, AstString, AstStruct, CallArg,
-            FunctionHeader, IfComparisonType, LoopType, VarType,
+            AstNode, AstNodeType, CallArg, FunctionHeader, IfComparisonType, LoopType, VarType,
+            flow::{AstContinue, AstReturn},
+            literals::{AstString, AstStruct},
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },

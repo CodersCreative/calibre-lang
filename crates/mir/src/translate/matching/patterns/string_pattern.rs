@@ -7,7 +7,7 @@ use calibre_parser::ast::{
     comparison::ComparisonOperator,
     idents::ParserText,
     matching::{MatchArmType, MatchStringPatternPart},
-    nodes::{AstNode, AstNodeType, AstString, CallArg},
+    nodes::{AstNode, AstNodeType, CallArg, literals::AstString},
     types::{ParserDataType, ParserInnerType},
 };
 

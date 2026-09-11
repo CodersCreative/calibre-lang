@@ -7,7 +7,10 @@ use crate::{
 use calibre_parser::ast::{
     ObjectType,
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-    nodes::{AstNode, AstNodeType, AstString, AstStruct, VarType},
+    nodes::{
+        AstNode, AstNodeType, VarType,
+        literals::{AstString, AstStruct},
+    },
     types::ParserDataType,
 };
 use serde::{Deserialize, Serialize};

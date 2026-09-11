@@ -4,7 +4,10 @@ use crate::{
         RefMutability,
         ffi::ParserFfiInnerType,
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{AstNode, AstNodeType, AstRange, AstString, AstTuple, CallArg},
+        nodes::{
+            AstNode, AstNodeType, CallArg,
+            literals::{AstRange, AstString, AstTuple},
+        },
     },
 };
 use rustc_hash::FxHashMap;

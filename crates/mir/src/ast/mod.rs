@@ -6,9 +6,10 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialGenericTypeIdentifier},
         nodes::{
-            AsFailureMode, AstBreak, AstContinue, AstEmit, AstEnum, AstNode, AstNodeType, AstRange,
-            AstReturn, AstString, AstStruct, CallArg, FunctionHeader, IfComparisonType, LoopType,
-            VarType,
+            AsFailureMode, AstNode, AstNodeType, CallArg, FunctionHeader, IfComparisonType,
+            LoopType, VarType,
+            flow::{AstBreak, AstContinue, AstEmit, AstReturn},
+            literals::{AstEnum, AstRange, AstString, AstStruct},
         },
         types::{GenericTypes, ParserDataType},
     },

@@ -3,7 +3,11 @@ use crate::{
     ast::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{AstEmit, AstNode, AstNodeType, AstStruct, AstTuple, CallArg},
+        nodes::{
+            AstNode, AstNodeType, CallArg,
+            flow::AstEmit,
+            literals::{AstStruct, AstTuple},
+        },
         types::{ParserDataType, ParserInnerType},
     },
 };

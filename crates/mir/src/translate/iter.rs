@@ -10,8 +10,8 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier},
         matching::MatchArmType,
         nodes::{
-            AstBreak, AstContinue, AstNode, AstNodeType, CallArg, IfComparisonType, LoopType,
-            VarType,
+            AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, VarType,
+            flow::{AstBreak, AstContinue},
         },
         types::{ParserDataType, ParserInnerType},
     },

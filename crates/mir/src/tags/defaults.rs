@@ -6,7 +6,8 @@ use calibre_parser::ast::idents::{
     ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
 };
 use calibre_parser::ast::nodes::{
-    AstEnum, AstNode, AstNodeType, AstStruct, FunctionHeader, VarType,
+    AstNode, AstNodeType, FunctionHeader, VarType,
+    literals::{AstEnum, AstStruct},
 };
 use calibre_parser::ast::types::{GenericTypes, ParserDataType};
 use calibre_parser::{

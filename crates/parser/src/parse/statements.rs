@@ -5,9 +5,10 @@ use crate::ast::ffi::ParserFfiInnerType;
 use crate::ast::generics::{TraitMember, TraitMemberKind};
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier};
 use crate::ast::matching::{SelectArm, SelectArmKind};
+use crate::ast::nodes::flow::AstReturn;
+use crate::ast::nodes::literals::{AstEnum, AstTuple};
 use crate::ast::nodes::{
-    AstEnum, AstNode, AstNodeType, AstReturn, AstTuple, DestructurePattern, NamedScope, Overload,
-    TypeDefType, VarType,
+    AstNode, AstNodeType, DestructurePattern, NamedScope, Overload, TypeDefType, VarType,
 };
 use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{

@@ -7,7 +7,11 @@ use crate::{
         formatter::Formatter,
         generics::TraitMember,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        matching::{MatchArmType, SelectArm, TryCatch},
+        matching::{MatchArmType, SelectArm},
+        nodes::{
+            flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstReturn, AstTry},
+            literals::{AstEnum, AstRange, AstString, AstStruct, AstTuple},
+        },
         types::{GenericTypes, ParserDataType},
     },
 };
@@ -15,6 +19,25 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, matches, str::FromStr};
 use ustr::Ustr;
+
+pub mod access;
+pub mod assignment;
+pub mod binary;
+pub mod conditionals;
+pub mod declaration;
+pub mod flow;
+pub mod functions;
+pub mod generator;
+pub mod lists;
+pub mod literals;
+pub mod loops;
+pub mod matching;
+pub mod memory;
+pub mod misc;
+pub mod scopes;
+pub mod spawn;
+pub mod types;
+pub mod unary;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -539,73 +562,6 @@ impl<'a> From<&'a CallArg> for &'a AstNode {
 
 // Flow
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum AstEmit {
-    Scope(Box<AstNode>),
-    Channel {
-        channel: Box<AstNode>,
-        value: Box<AstNode>,
-    },
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstBreak {
-    pub label: Option<PotentialDollarIdentifier>,
-    pub value: Option<Box<AstNode>>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstContinue {
-    pub label: Option<PotentialDollarIdentifier>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstTry {
-    pub value: Box<AstNode>,
-    pub catch: Option<TryCatch>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstReturn {
-    pub value: Option<Box<AstNode>>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstDefer {
-    pub value: Box<AstNode>,
-    pub function: bool,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstStruct {
-    pub identifier: PotentialGenericTypeIdentifier,
-    pub value: ObjectType<AstNode>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstEnum {
-    pub identifier: PotentialGenericTypeIdentifier,
-    pub value: PotentialDollarIdentifier,
-    pub data: Option<Box<AstNode>>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstTuple {
-    pub values: Vec<AstNode>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstRange {
-    pub from: Box<AstNode>,
-    pub to: Box<AstNode>,
-    pub inclusive: bool,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstString {
-    pub value: ParserText,
-}
-
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum AstNodeType {
@@ -619,6 +575,7 @@ pub enum AstNodeType {
     Try(AstTry),
     Return(AstReturn),
     Defer(AstDefer),
+    PipeExpression(Vec<PipeSegment>),
 
     // Literals
     StructLiteral(AstStruct),
@@ -628,17 +585,110 @@ pub enum AstNodeType {
     StringLiteral(AstString),
 
     // TODO Convert
+    CharLiteral(char),
+    FloatLiteral(f64),
+    IntLiteral(ParserText),
+    BigLiteral(ParserText),
+    DataType {
+        data_type: ParserDataType,
+    },
+
+    // Lists
     ListLiteral(ParserDataType, Vec<AstNode>),
     ListRepeatLiteral {
         data_type: ParserDataType,
         value: Box<AstNode>,
         count: Box<AstNode>,
     },
-    CharLiteral(char),
-    FloatLiteral(f64),
-    IntLiteral(ParserText),
-    BigLiteral(ParserText),
 
+    // Conditionals
+    IfStatement {
+        comparison: Box<IfComparisonType>,
+        then: Box<AstNode>,
+        otherwise: Option<Box<AstNode>>,
+    },
+    Ternary {
+        comparison: Box<AstNode>,
+        then: Box<AstNode>,
+        otherwise: Box<AstNode>,
+    },
+    Until {
+        condition: Box<AstNode>,
+    },
+
+    // Functions
+    FunctionDeclaration {
+        header: FunctionHeader,
+        body: Box<AstNode>,
+    },
+    ExternFunctionDeclaration {
+        abi: String,
+        identifier: PotentialDollarIdentifier,
+        parameters: Vec<ParserDataType>,
+        return_type: ParserDataType,
+        library: String,
+        symbol: Option<String>,
+    },
+    CallExpression {
+        string_fn: Option<ParserText>,
+        caller: Box<AstNode>,
+        generic_types: Vec<ParserDataType>,
+        args: Vec<CallArg>,
+        reverse_args: Vec<AstNode>,
+    },
+    CurryExpression {
+        value: Box<AstNode>,
+    },
+
+    // Matching
+    FnMatchDeclaration {
+        header: FunctionHeader,
+        body: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)>,
+    },
+    MatchStatement {
+        value: Option<Box<AstNode>>,
+        body: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)>,
+    },
+
+    // Unary
+    NotExpression {
+        value: Box<AstNode>,
+    },
+    NegExpression {
+        value: Box<AstNode>,
+    },
+
+    // Binary
+    BinaryExpression {
+        left: Box<AstNode>,
+        right: Box<AstNode>,
+        operator: BinaryOperator,
+    },
+    ComparisonExpression {
+        left: Box<AstNode>,
+        right: Box<AstNode>,
+        operator: ComparisonOperator,
+    },
+    BooleanExpression {
+        left: Box<AstNode>,
+        right: Box<AstNode>,
+        operator: BooleanOperator,
+    },
+    AsExpression {
+        value: Box<AstNode>,
+        data_type: ParserDataType,
+        failure_mode: AsFailureMode,
+    },
+    IsExpression {
+        value: Box<AstNode>,
+        data_type: ParserDataType,
+    },
+    InDeclaration {
+        identifier: Box<AstNode>,
+        value: Box<AstNode>,
+    },
+
+    // Async
     Spawn {
         items: Vec<AstNode>,
         auto_wait: bool,
@@ -646,30 +696,31 @@ pub enum AstNodeType {
     SelectStatement {
         arms: Vec<SelectArm>,
     },
-    RefStatement {
-        mutability: RefMutability,
-        value: Box<AstNode>,
-    },
-    Identifier(PotentialGenericTypeIdentifier),
-    DataType {
-        data_type: ParserDataType,
-    },
-    DerefStatement {
-        value: Box<AstNode>,
-    },
-    Drop(PotentialDollarIdentifier),
-    MoveExpression {
-        value: Box<AstNode>,
-    },
-    ParenExpression {
-        value: Box<AstNode>,
-    },
+
+    // Declaration
     VariableDeclaration {
         var_type: VarType,
         identifier: PotentialDollarIdentifier,
         value: Box<AstNode>,
         data_type: ParserDataType,
     },
+    DestructureDeclaration {
+        var_type: VarType,
+        pattern: DestructurePattern,
+        value: Box<AstNode>,
+    },
+
+    // Assignment
+    AssignmentExpression {
+        identifier: Box<AstNode>,
+        value: Box<AstNode>,
+    },
+    DestructureAssignment {
+        pattern: DestructurePattern,
+        value: Box<AstNode>,
+    },
+
+    // Types
     ImplDeclaration {
         generics: GenericTypes,
         target: ParserDataType,
@@ -691,102 +742,22 @@ pub enum AstNodeType {
         object: TypeDefType,
         overloads: Vec<Overload>,
     },
-    ScopeAlias {
-        identifier: PotentialDollarIdentifier,
-        value: NamedScope,
-        create_new_scope: Option<bool>,
-    },
-    ScopeDeclaration {
-        body: Option<Vec<AstNode>>,
-        named: Option<NamedScope>,
-        is_temp: bool,
-        create_new_scope: Option<bool>,
-        define: bool,
-    },
-    MatchStatement {
-        value: Option<Box<AstNode>>,
-        body: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)>,
-    },
-    FnMatchDeclaration {
-        header: FunctionHeader,
-        body: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)>,
-    },
-    FunctionDeclaration {
-        header: FunctionHeader,
-        body: Box<AstNode>,
-    },
-    ExternFunctionDeclaration {
-        abi: String,
-        identifier: PotentialDollarIdentifier,
-        parameters: Vec<ParserDataType>,
-        return_type: ParserDataType,
-        library: String,
-        symbol: Option<String>,
-    },
-    AssignmentExpression {
-        identifier: Box<AstNode>,
+
+    // Memory
+    RefStatement {
+        mutability: RefMutability,
         value: Box<AstNode>,
     },
-    DestructureDeclaration {
-        var_type: VarType,
-        pattern: DestructurePattern,
+    DerefStatement {
         value: Box<AstNode>,
     },
-    DestructureAssignment {
-        pattern: DestructurePattern,
+    Drop(PotentialDollarIdentifier),
+    MoveExpression {
         value: Box<AstNode>,
     },
-    NotExpression {
-        value: Box<AstNode>,
-    },
-    NegExpression {
-        value: Box<AstNode>,
-    },
-    CurryExpression {
-        value: Box<AstNode>,
-    },
-    AsExpression {
-        value: Box<AstNode>,
-        data_type: ParserDataType,
-        failure_mode: AsFailureMode,
-    },
-    IsExpression {
-        value: Box<AstNode>,
-        data_type: ParserDataType,
-    },
-    InDeclaration {
-        identifier: Box<AstNode>,
-        value: Box<AstNode>,
-    },
-    IterExpression {
-        data_type: ParserDataType,
-        map: Box<AstNode>,
-        spawned: bool,
-        loop_type: Box<LoopType>,
-        conditionals: Vec<AstNode>,
-        until: Option<Box<AstNode>>,
-    },
-    InlineGenerator {
-        map: Box<AstNode>,
-        data_type: Option<ParserDataType>,
-        loop_type: Box<LoopType>,
-        conditionals: Vec<AstNode>,
-        until: Option<Box<AstNode>>,
-    },
-    LoopDeclaration {
-        loop_type: Box<LoopType>,
-        body: Box<AstNode>,
-        until: Option<Box<AstNode>>,
-        label: Option<PotentialDollarIdentifier>,
-        else_body: Option<Box<AstNode>>,
-    },
-    TestDeclaration {
-        identifier: ParserText,
-        body: Box<AstNode>,
-    },
-    Until {
-        condition: Box<AstNode>,
-    },
+
+    // Access
+    Identifier(PotentialGenericTypeIdentifier),
     FieldAccess {
         base: Box<AstNode>,
         field: PotentialDollarIdentifier,
@@ -799,38 +770,54 @@ pub enum AstNodeType {
         base: Box<AstNode>,
         index: Box<AstNode>,
     },
-    CallExpression {
-        string_fn: Option<ParserText>,
-        caller: Box<AstNode>,
-        generic_types: Vec<ParserDataType>,
-        args: Vec<CallArg>,
-        reverse_args: Vec<AstNode>,
+
+    // Loops
+    LoopDeclaration {
+        loop_type: Box<LoopType>,
+        body: Box<AstNode>,
+        until: Option<Box<AstNode>>,
+        label: Option<PotentialDollarIdentifier>,
+        else_body: Option<Box<AstNode>>,
     },
-    BinaryExpression {
-        left: Box<AstNode>,
-        right: Box<AstNode>,
-        operator: BinaryOperator,
+    IterExpression {
+        data_type: ParserDataType,
+        map: Box<AstNode>,
+        spawned: bool,
+        loop_type: Box<LoopType>,
+        conditionals: Vec<AstNode>,
+        until: Option<Box<AstNode>>,
     },
-    ComparisonExpression {
-        left: Box<AstNode>,
-        right: Box<AstNode>,
-        operator: ComparisonOperator,
+
+    // Scopes
+    ScopeAlias {
+        identifier: PotentialDollarIdentifier,
+        value: NamedScope,
+        create_new_scope: Option<bool>,
     },
-    PipeExpression(Vec<PipeSegment>),
-    BooleanExpression {
-        left: Box<AstNode>,
-        right: Box<AstNode>,
-        operator: BooleanOperator,
+    ScopeDeclaration {
+        body: Option<Vec<AstNode>>,
+        named: Option<NamedScope>,
+        is_temp: bool,
+        create_new_scope: Option<bool>,
+        define: bool,
     },
-    IfStatement {
-        comparison: Box<IfComparisonType>,
-        then: Box<AstNode>,
-        otherwise: Option<Box<AstNode>>,
+
+    // Generator
+    InlineGenerator {
+        map: Box<AstNode>,
+        data_type: Option<ParserDataType>,
+        loop_type: Box<LoopType>,
+        conditionals: Vec<AstNode>,
+        until: Option<Box<AstNode>>,
     },
-    Ternary {
-        comparison: Box<AstNode>,
-        then: Box<AstNode>,
-        otherwise: Box<AstNode>,
+
+    // Misc
+    ParenExpression {
+        value: Box<AstNode>,
+    },
+    TestDeclaration {
+        identifier: ParserText,
+        body: Box<AstNode>,
     },
     ImportStatement {
         module: Vec<PotentialDollarIdentifier>,

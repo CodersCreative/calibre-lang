@@ -12,7 +12,10 @@ use calibre_parser::{
     Span,
     ast::{
         ObjectMap, ObjectType,
-        nodes::{AstEnum, AstNode, AstRange, AstString, AstStruct, AstTuple, CallArg},
+        nodes::{
+            AstNode, CallArg,
+            literals::{AstEnum, AstRange, AstString, AstStruct, AstTuple},
+        },
         types::{ParserDataType, ParserInnerType},
     },
 };

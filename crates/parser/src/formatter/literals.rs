@@ -2,7 +2,10 @@ use crate::{
     ast::{
         ObjectType,
         formatter::{Formatter, handle_comment},
-        nodes::{AstEnum, AstNodeType, AstRange, AstString, AstStruct, AstTuple},
+        nodes::{
+            AstNodeType,
+            literals::{AstEnum, AstRange, AstString, AstStruct, AstTuple},
+        },
     },
     formatter::AstFormatting,
 };

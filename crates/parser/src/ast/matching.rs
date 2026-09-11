@@ -264,12 +264,6 @@ impl MatchArmType {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct TryCatch {
-    pub name: Option<PotentialDollarIdentifier>,
-    pub body: Box<AstNode>,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SelectArmKind {
     Recv,

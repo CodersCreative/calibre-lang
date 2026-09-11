@@ -9,8 +9,8 @@ use crate::{
             SelectArmKind,
         },
         nodes::{
-            AsFailureMode, AstNode, AstNodeType, AstString, CallArg, DestructurePattern,
-            IfComparisonType, LoopType, Overload, PipeSegment, TypeDefType, VarType,
+            AsFailureMode, AstNode, AstNodeType, CallArg, DestructurePattern, IfComparisonType,
+            LoopType, Overload, PipeSegment, TypeDefType, VarType, literals::AstString,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },

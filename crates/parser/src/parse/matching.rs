@@ -4,9 +4,8 @@ use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::matching::{
     MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem,
 };
-use crate::ast::nodes::{
-    AstNode, AstNodeType, AstTuple, DestructurePattern, FunctionHeader, VarType,
-};
+use crate::ast::nodes::literals::AstTuple;
+use crate::ast::nodes::{AstNode, AstNodeType, DestructurePattern, FunctionHeader, VarType};
 use crate::ast::types::{GenericTypes, ParserDataType};
 use crate::parse::util::{lex, span, struct_destructure_fields_parser};
 use chumsky::prelude::*;

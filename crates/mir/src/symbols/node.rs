@@ -9,7 +9,7 @@ use crate::{
 use calibre_parser::ast::{
     Operator,
     idents::ParsedIntLiteral,
-    nodes::{AsFailureMode, AstEmit, AstNode, AstNodeType},
+    nodes::{AsFailureMode, AstNode, AstNodeType, flow::AstEmit},
     types::{ParserDataType, ParserInnerType},
 };
 use ustr::Ustr;
