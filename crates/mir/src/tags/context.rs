@@ -7,7 +7,7 @@ use crate::{
 use calibre_parser::ast::{
     ObjectType,
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-    nodes::{AstNode, AstNodeType, AstStruct, VarType},
+    nodes::{AstNode, AstNodeType, AstString, AstStruct, VarType},
     types::ParserDataType,
 };
 use serde::{Deserialize, Serialize};
@@ -80,7 +80,14 @@ impl MiddleEnvironment {
 
         let sp = node.span;
         let meta = self.package_metadata_for_scope(scope_ref);
-        let value = |v: Ustr| AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, v)));
+        let value = |v: Ustr| {
+            AstNode::new(
+                sp,
+                AstNodeType::StringLiteral(AstString {
+                    value: ParserText::new(sp, v),
+                }),
+            )
+        };
 
         let mut prefix = vec![AstNode::new(
             sp,
@@ -138,7 +145,14 @@ impl MiddleEnvironment {
         };
 
         let sp = node.span;
-        let value = |v: Ustr| AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, v)));
+        let value = |v: Ustr| {
+            AstNode::new(
+                sp,
+                AstNodeType::StringLiteral(AstString {
+                    value: ParserText::new(sp, v),
+                }),
+            )
+        };
 
         let function_name = match &node.node_type {
             AstNodeType::VariableDeclaration { identifier, .. } => Ustr::from(match identifier {

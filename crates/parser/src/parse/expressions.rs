@@ -3,8 +3,8 @@ use crate::ast::RefMutability;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::matching::{MatchArmType, TryCatch};
 use crate::ast::nodes::{
-    AsFailureMode, AstBreak, AstContinue, AstDefer, AstEnum, AstNode, AstNodeType, AstTry, CallArg,
-    IfComparisonType, LoopType, PipeSegment,
+    AsFailureMode, AstBreak, AstContinue, AstDefer, AstEnum, AstNode, AstNodeType, AstRange,
+    AstString, AstTry, CallArg, IfComparisonType, LoopType, PipeSegment,
 };
 use crate::ast::types::{ParserDataType, ParserInnerType};
 use crate::parse::util::{
@@ -92,7 +92,14 @@ pub fn build_tail_expression_parser<'a>(
 
             let text_nodes = texts
                 .into_iter()
-                .map(|txt| AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, txt))))
+                .map(|txt| {
+                    AstNode::new(
+                        sp,
+                        AstNodeType::StringLiteral(AstString {
+                            value: ParserText::new(sp, txt),
+                        }),
+                    )
+                })
                 .collect::<Vec<_>>();
 
             let mut call_args = vec![CallArg::Value(AstNode::new(
@@ -655,11 +662,11 @@ pub fn build_tail_expression_parser<'a>(
             if let Some((inc, to)) = tail {
                 AstNode::new(
                     Span::new_from_spans(from.span, to.span),
-                    AstNodeType::RangeDeclaration {
+                    AstNodeType::RangeDeclaration(AstRange {
                         from: Box::new(from),
                         to: Box::new(to),
                         inclusive: inc.is_some(),
-                    },
+                    }),
                 )
             } else {
                 from

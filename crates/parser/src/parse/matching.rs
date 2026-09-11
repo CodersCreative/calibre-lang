@@ -71,7 +71,7 @@ pub fn build_match_parsers<'a>(
     let match_string_literal_part = string_lit
         .clone()
         .try_map(|node, sp| match node.node_type {
-            AstNodeType::StringLiteral(text) => Ok(MatchStringPatternPart::Literal(text)),
+            AstNodeType::StringLiteral(text) => Ok(MatchStringPatternPart::Literal(text.value)),
             _ => Err(Rich::custom(
                 sp,
                 "internal parser error: expected string literal",

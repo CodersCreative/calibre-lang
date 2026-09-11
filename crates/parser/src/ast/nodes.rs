@@ -594,6 +594,18 @@ pub struct AstTuple {
     pub values: Vec<AstNode>,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstRange {
+    pub from: Box<AstNode>,
+    pub to: Box<AstNode>,
+    pub inclusive: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AstString {
+    pub value: ParserText,
+}
+
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum AstNodeType {
@@ -612,8 +624,21 @@ pub enum AstNodeType {
     StructLiteral(AstStruct),
     EnumExpression(AstEnum),
     TupleLiteral(AstTuple),
+    RangeDeclaration(AstRange),
+    StringLiteral(AstString),
 
     // TODO Convert
+    ListLiteral(ParserDataType, Vec<AstNode>),
+    ListRepeatLiteral {
+        data_type: ParserDataType,
+        value: Box<AstNode>,
+        count: Box<AstNode>,
+    },
+    CharLiteral(char),
+    FloatLiteral(f64),
+    IntLiteral(ParserText),
+    BigLiteral(ParserText),
+
     Spawn {
         items: Vec<AstNode>,
         auto_wait: bool,
@@ -733,11 +758,6 @@ pub enum AstNodeType {
         identifier: Box<AstNode>,
         value: Box<AstNode>,
     },
-    RangeDeclaration {
-        from: Box<AstNode>,
-        to: Box<AstNode>,
-        inclusive: bool,
-    },
     IterExpression {
         data_type: ParserDataType,
         map: Box<AstNode>,
@@ -767,17 +787,6 @@ pub enum AstNodeType {
     Until {
         condition: Box<AstNode>,
     },
-    StringLiteral(ParserText),
-    ListLiteral(ParserDataType, Vec<AstNode>),
-    ListRepeatLiteral {
-        data_type: ParserDataType,
-        value: Box<AstNode>,
-        count: Box<AstNode>,
-    },
-    CharLiteral(char),
-    FloatLiteral(f64),
-    IntLiteral(ParserText),
-    BigLiteral(ParserText),
     FieldAccess {
         base: Box<AstNode>,
         field: PotentialDollarIdentifier,

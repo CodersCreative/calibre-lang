@@ -121,7 +121,7 @@ impl MiddleEnvironment {
 
                 for arg in args {
                     if let AstNodeType::StringLiteral(val) = arg.node_type
-                        && val.text == backend
+                        && val.value.text == backend
                     {
                         build = true;
                         break;
@@ -154,7 +154,7 @@ impl MiddleEnvironment {
 
                 for arg in args {
                     if let AstNodeType::StringLiteral(val) = arg.node_type
-                        && val.text == os
+                        && val.value.text == os
                     {
                         build = true;
                         break;
@@ -273,7 +273,7 @@ impl MiddleEnvironment {
              mut args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Todo(args.pop().and_then(
                     |x| match x.node_type {
-                        AstNodeType::StringLiteral(x) => Some(Ustr::from(&x.text)),
+                        AstNodeType::StringLiteral(x) => Some(Ustr::from(&x.value.text)),
                         _ => None,
                     },
                 )));
@@ -300,7 +300,7 @@ impl MiddleEnvironment {
                     .tag_info
                     .push(TagInfo::Deprecated(args.pop().and_then(
                         |x| match &x.node_type {
-                            AstNodeType::StringLiteral(x) => Some(Ustr::from(&x.text)),
+                            AstNodeType::StringLiteral(x) => Some(Ustr::from(&x.value.text)),
                             _ => None,
                         },
                     )));
@@ -325,7 +325,7 @@ impl MiddleEnvironment {
              mut args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Skip(args.pop().and_then(
                     |x| match &x.node_type {
-                        AstNodeType::StringLiteral(x) => Some(Ustr::from(&x.text)),
+                        AstNodeType::StringLiteral(x) => Some(Ustr::from(&x.value.text)),
                         _ => None,
                     },
                 )));
@@ -371,7 +371,7 @@ impl MiddleEnvironment {
                 env.tagging.tag_info.push(TagInfo::Suite(
                     args.pop()
                         .map(|x| match &x.node_type {
-                            AstNodeType::StringLiteral(x) => Ustr::from(&x.text),
+                            AstNodeType::StringLiteral(x) => Ustr::from(&x.value.text),
                             _ => Ustr::default(),
                         })
                         .unwrap_or_default(),

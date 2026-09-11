@@ -6,8 +6,9 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialGenericTypeIdentifier},
         nodes::{
-            AsFailureMode, AstBreak, AstContinue, AstEmit, AstEnum, AstNode, AstNodeType,
-            AstReturn, AstStruct, CallArg, FunctionHeader, IfComparisonType, LoopType, VarType,
+            AsFailureMode, AstBreak, AstContinue, AstEmit, AstEnum, AstNode, AstNodeType, AstRange,
+            AstReturn, AstString, AstStruct, CallArg, FunctionHeader, IfComparisonType, LoopType,
+            VarType,
         },
         types::{GenericTypes, ParserDataType},
     },
@@ -678,11 +679,11 @@ impl From<MiddleNodeType> for AstNodeType {
                     .otherwise
                     .map(|otherwise| Box::new((*otherwise).into())),
             },
-            MiddleNodeType::RangeDeclaration(value) => AstNodeType::RangeDeclaration {
+            MiddleNodeType::RangeDeclaration(value) => AstNodeType::RangeDeclaration(AstRange {
                 from: Box::new((*value.from).into()),
                 to: Box::new((*value.to).into()),
                 inclusive: value.inclusive,
-            },
+            }),
             MiddleNodeType::LoopDeclaration(value) => AstNodeType::ScopeDeclaration {
                 body: {
                     let mut lst = Vec::new();
@@ -713,9 +714,9 @@ impl From<MiddleNodeType> for AstNodeType {
                 value: value.value.map(|x| Box::new((*x).into())),
             }),
             MiddleNodeType::Identifier(value) => AstNodeType::Identifier(value.identifier.into()),
-            MiddleNodeType::StringLiteral(value) => {
-                AstNodeType::StringLiteral(ParserText::from(value.value))
-            }
+            MiddleNodeType::StringLiteral(value) => AstNodeType::StringLiteral(AstString {
+                value: ParserText::from(value.value),
+            }),
             MiddleNodeType::ListLiteral(value) => AstNodeType::ListLiteral(value.data_type, {
                 let mut lst = Vec::new();
 

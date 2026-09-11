@@ -10,7 +10,9 @@ use calibre_parser::{
     ast::{
         binary::BinaryOperator,
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{AstBreak, AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, VarType},
+        nodes::{
+            AstBreak, AstNode, AstNodeType, AstRange, CallArg, IfComparisonType, LoopType, VarType,
+        },
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -279,11 +281,11 @@ impl MiddleEnvironment {
                 let range_dt = self.resolve_type_from_node(scope, &range);
 
                 let explicit_range = match &range.node_type {
-                    AstNodeType::RangeDeclaration {
+                    AstNodeType::RangeDeclaration(AstRange {
                         from,
                         to,
                         inclusive,
-                    } => Some(((*from.clone()), (*to.clone()), *inclusive)),
+                    }) => Some(((*from.clone()), (*to.clone()), *inclusive)),
                     _ => None,
                 };
 

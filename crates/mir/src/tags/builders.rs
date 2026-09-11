@@ -11,7 +11,8 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::TryCatch,
         nodes::{
-            AstNode, AstNodeType, AstStruct, AstTry, CallArg, FunctionHeader, TypeDefType, VarType,
+            AstNode, AstNodeType, AstString, AstStruct, AstTry, CallArg, FunctionHeader,
+            TypeDefType, VarType,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -159,13 +160,15 @@ impl MiddleEnvironment {
                                         AstNode::identifier(span, "err"),
                                         vec![CallArg::Value(AstNode::new(
                                             span,
-                                            AstNodeType::StringLiteral(ParserText::new(
-                                                span,
-                                                format!(
-                                                    "Unable to build {}, field {} was None",
-                                                    self_ty, field
+                                            AstNodeType::StringLiteral(AstString {
+                                                value: ParserText::new(
+                                                    span,
+                                                    format!(
+                                                        "Unable to build {}, field {} was None",
+                                                        self_ty, field
+                                                    ),
                                                 ),
-                                            )),
+                                            }),
                                         ))],
                                     )))
                                 },

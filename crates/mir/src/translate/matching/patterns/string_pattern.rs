@@ -7,7 +7,7 @@ use calibre_parser::ast::{
     comparison::ComparisonOperator,
     idents::ParserText,
     matching::{MatchArmType, MatchStringPatternPart},
-    nodes::{AstNode, AstNodeType, CallArg},
+    nodes::{AstNode, AstNodeType, AstString, CallArg},
     types::{ParserDataType, ParserInnerType},
 };
 
@@ -48,8 +48,12 @@ impl PatternTranslator for StringPatternTranslator {
         for part in parts {
             match part {
                 MatchStringPatternPart::Literal(text) => {
-                    let literal_node =
-                        AstNode::new(text.span, AstNodeType::StringLiteral(text.clone()));
+                    let literal_node = AstNode::new(
+                        text.span,
+                        AstNodeType::StringLiteral(AstString {
+                            value: text.clone(),
+                        }),
+                    );
 
                     let starts_with_call = AstNode::call(
                         env.context.current_span(),
@@ -114,7 +118,9 @@ impl PatternTranslator for StringPatternTranslator {
                         left: Box::new(current),
                         right: Box::new(AstNode::new(
                             env.context.current_span(),
-                            AstNodeType::StringLiteral(ParserText::from(String::new())),
+                            AstNodeType::StringLiteral(AstString {
+                                value: ParserText::from(String::new()),
+                            }),
                         )),
                         operator: ComparisonOperator::Equal,
                     },

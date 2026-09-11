@@ -17,8 +17,8 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
-            AstContinue, AstNode, AstNodeType, AstReturn, AstStruct, CallArg, FunctionHeader,
-            IfComparisonType, LoopType, VarType,
+            AstContinue, AstNode, AstNodeType, AstReturn, AstString, AstStruct, CallArg,
+            FunctionHeader, IfComparisonType, LoopType, VarType,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -806,8 +806,14 @@ impl MiddleEnvironment {
     pub fn get_caller_context(&self, scope: ScopeId, span: Span) -> Option<AstNode> {
         let scope_ref = self.scoping.scope_or_err(scope).ok()?;
 
-        let value =
-            |v: Ustr| AstNode::new(span, AstNodeType::StringLiteral(ParserText::new(span, v)));
+        let value = |v: Ustr| {
+            AstNode::new(
+                span,
+                AstNodeType::StringLiteral(AstString {
+                    value: ParserText::new(span, v),
+                }),
+            )
+        };
 
         let current_function_name = if scope_ref.namespace.parse::<u64>().is_ok() {
             Ustr::from("main")

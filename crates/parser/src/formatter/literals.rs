@@ -2,9 +2,7 @@ use crate::{
     ast::{
         ObjectType,
         formatter::{Formatter, handle_comment},
-        nodes::{
-            AstEnum, AstNodeType, AstStruct, AstTuple,
-        },
+        nodes::{AstEnum, AstNodeType, AstRange, AstString, AstStruct, AstTuple},
     },
     formatter::AstFormatting,
 };
@@ -93,7 +91,7 @@ impl AstFormatting for AstStruct {
 
                         if let Some(trailing) = trailing {
                             temp.push(' ');
-                            temp.push_str(&trailing);
+                            temp.push_str(trailing);
                         }
 
                         formatter.fmt_txt_with_tab(&format!("{},\n", temp,), 1, false)
@@ -168,5 +166,42 @@ impl AstFormatting for AstTuple {
             .join(",\n");
 
         Some(format!("\n{}", formatter.fmt_txt_with_tab(&txt, 1, true)))
+    }
+}
+
+impl AstFormatting for AstString {
+    fn narrow_format(&self, _formatter: &mut Formatter) -> String {
+        format!("\"{}\"", Self::escape_string_literal(&self.value.text))
+    }
+}
+
+impl AstString {
+    pub fn escape_string_literal(input: &str) -> String {
+        let mut out = String::with_capacity(input.len());
+        for ch in input.chars() {
+            match ch {
+                '\\' => out.push_str("\\\\"),
+                '"' => out.push_str("\\\""),
+                '\'' => out.push_str("\\'"),
+                '\n' => out.push_str("\\n"),
+                '\r' => out.push_str("\\r"),
+                '\t' => out.push_str("\\t"),
+                '\0' => out.push_str("\\0"),
+                c if c.is_control() => out.push_str(&format!("\\u{{{:x}}}", c as u32)),
+                c => out.push(c),
+            }
+        }
+        out
+    }
+}
+
+impl AstFormatting for AstRange {
+    fn narrow_format(&self, formatter: &mut Formatter) -> String {
+        format!(
+            "{}..{}{}",
+            self.from.format(formatter),
+            if self.inclusive { "=" } else { "" },
+            self.to.format(formatter)
+        )
     }
 }

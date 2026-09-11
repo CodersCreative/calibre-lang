@@ -1,8 +1,5 @@
 use crate::{
-    ast::{
-        MiddleNode, MiddleNodeType, MirAggregate,
-        MirEnum,
-    },
+    ast::{MiddleNode, MiddleNodeType, MirAggregate, MirEnum, MirRange, MirString},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -15,13 +12,11 @@ use calibre_parser::{
     Span,
     ast::{
         ObjectMap, ObjectType,
-        nodes::{
-            AstEnum, AstNode,
-            AstStruct, AstTuple, CallArg,
-        },
+        nodes::{AstEnum, AstNode, AstRange, AstString, AstStruct, AstTuple, CallArg},
         types::{ParserDataType, ParserInnerType},
     },
 };
+use ustr::Ustr;
 
 impl MirLowering for AstStruct {
     fn lower(
@@ -207,5 +202,78 @@ impl MirLowering for AstTuple {
         }
 
         Some(ParserDataType::new(span, ParserInnerType::Tuple(types)))
+    }
+}
+
+impl MirLowering for AstRange {
+    fn lower(
+        self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        if !env.context.type_check {
+            let from_type = self.from.type_of(env, scope, span);
+            let to_type = self.to.type_of(env, scope, span);
+
+            let data_type =
+                env.compare_types(from_type, to_type, Some(&TagInfo::IgnoreInvalidTypeCheck))?;
+
+            if !data_type.clone().is_int() {
+                return Err(env.context.err_at_current(MiddleErr::InvalidType {
+                    expected: Box::new(ParserDataType::new(span, ParserInnerType::Int)),
+                    found: Box::new(data_type),
+                }));
+            }
+        }
+
+        Ok(MiddleNode {
+            node_type: MiddleNodeType::RangeDeclaration(MirRange {
+                from: Box::new(self.from.lower_or_empty(env, scope, span)),
+                to: Box::new(self.to.lower_or_empty(env, scope, span)),
+                inclusive: self.inclusive,
+            }),
+            span,
+        })
+    }
+
+    fn type_of(
+        &self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        Some(ParserDataType {
+            data_type: ParserInnerType::Range,
+            span,
+        })
+    }
+}
+
+impl MirLowering for AstString {
+    fn lower(
+        self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        Ok(MiddleNode {
+            node_type: MiddleNodeType::StringLiteral(MirString {
+                value: Ustr::from(&self.value.text),
+            }),
+            span,
+        })
+    }
+
+    fn type_of(
+        &self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        Some(ParserDataType {
+            data_type: ParserInnerType::Str,
+            span,
+        })
     }
 }

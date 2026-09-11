@@ -81,6 +81,8 @@ impl MiddleEnvironment {
             AstNodeType::StructLiteral(x) => x.type_of(self, scope, node.span),
             AstNodeType::EnumExpression(x) => x.type_of(self, scope, node.span),
             AstNodeType::TupleLiteral(x) => x.type_of(self, scope, node.span),
+            AstNodeType::StringLiteral(x) => x.type_of(self, scope, node.span),
+            AstNodeType::RangeDeclaration(x) => x.type_of(self, scope, node.span),
 
             // TODO
             AstNodeType::Break { .. }
@@ -364,10 +366,6 @@ impl MiddleEnvironment {
                 data_type: ParserInnerType::Bool,
                 span: node.span,
             }),
-            AstNodeType::RangeDeclaration { .. } => Some(ParserDataType {
-                data_type: ParserInnerType::Range,
-                span: node.span,
-            }),
             AstNodeType::IntLiteral(number) => Some(ParserDataType {
                 data_type: if number.ends_with('b') {
                     ParserInnerType::Byte
@@ -384,10 +382,6 @@ impl MiddleEnvironment {
             }),
             AstNodeType::BigLiteral(_) => Some(ParserDataType {
                 data_type: ParserInnerType::Big,
-                span: node.span,
-            }),
-            AstNodeType::StringLiteral(_) => Some(ParserDataType {
-                data_type: ParserInnerType::Str,
                 span: node.span,
             }),
             AstNodeType::FloatLiteral(_) => Some(ParserDataType {

@@ -1,9 +1,8 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBig, MirBinary,
-        MirBoolean, MirChar, MirComparison, MirConditional, MirDeref, MirDrop, MirFloat,
-        MirInt, MirIs, MirListBuilder, MirMove, MirNeg, MirRange, MirRef, MirScopeDecl, MirSpawn,
-        MirString, MirVarDecl,
+        MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBig, MirBinary, MirBoolean, MirChar,
+        MirComparison, MirConditional, MirDeref, MirDrop, MirFloat, MirInt, MirIs, MirListBuilder,
+        MirMove, MirNeg, MirRef, MirScopeDecl, MirSpawn, MirVarDecl,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -25,7 +24,7 @@ use calibre_parser::{
         },
         matching::{MatchArmType, SelectArmKind, TryCatch},
         nodes::{
-            AsFailureMode, AstBreak, AstEmit, AstNode, AstNodeType, AstTry, CallArg,
+            AsFailureMode, AstBreak, AstEmit, AstNode, AstNodeType, AstRange, AstTry, CallArg,
             FunctionHeader, IfComparisonType, LoopType, PipeSegment, TypeDefType, VarType,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
@@ -243,6 +242,8 @@ impl MiddleEnvironment {
             AstNodeType::StructLiteral(x) => x.lower(self, scope, node.span),
             AstNodeType::EnumExpression(x) => x.lower(self, scope, node.span),
             AstNodeType::TupleLiteral(x) => x.lower(self, scope, node.span),
+            AstNodeType::StringLiteral(x) => x.lower(self, scope, node.span),
+            AstNodeType::RangeDeclaration(x) => x.lower(self, scope, node.span),
 
             AstNodeType::CurryExpression { value } => {
                 let value = self.rewrite_curry_call(scope, node.span, *value)?;
@@ -280,50 +281,10 @@ impl MiddleEnvironment {
                 node_type: MiddleNodeType::FloatLiteral(MirFloat { value: x }),
                 span: node.span,
             }),
-            AstNodeType::StringLiteral(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::StringLiteral(MirString {
-                    value: Ustr::from(&x.text),
-                }),
-                span: node.span,
-            }),
             AstNodeType::CharLiteral(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::CharLiteral(MirChar { value: x }),
                 span: node.span,
             }),
-            AstNodeType::RangeDeclaration {
-                from,
-                to,
-                inclusive,
-            } => {
-                if !self.context.type_check {
-                    let from_type = self.resolve_type_from_node(scope, &from);
-                    let to_type = self.resolve_type_from_node(scope, &to);
-
-                    let data_type = self.compare_types(
-                        from_type,
-                        to_type,
-                        Some(&TagInfo::IgnoreInvalidTypeCheck),
-                    )?;
-                    if !data_type.clone().is_int() {
-                        return Err(self.context.err_at_current(MiddleErr::InvalidType {
-                            expected: Box::new(ParserDataType::new(
-                                node.span,
-                                ParserInnerType::Int,
-                            )),
-                            found: Box::new(data_type),
-                        }));
-                    }
-                }
-
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::RangeDeclaration(MirRange {
-                        from: Box::new(self.evaluate(scope, *from)),
-                        to: Box::new(self.evaluate(scope, *to)),
-                        inclusive,
-                    }),
-                    span: node.span,
-                })
-            }
             AstNodeType::FieldAccess { base, field } => {
                 self.evaluate_field_access(scope, node.span, *base, field)
             }
@@ -1049,11 +1010,11 @@ impl MiddleEnvironment {
                     return Ok(x);
                 }
 
-                if let AstNodeType::RangeDeclaration {
+                if let AstNodeType::RangeDeclaration(AstRange {
                     from,
                     to,
                     inclusive,
-                } = value.node_type.clone()
+                }) = value.node_type.clone()
                 {
                     let lower = AstNode::new(
                         self.context.current_span(),

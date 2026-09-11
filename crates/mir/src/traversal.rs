@@ -1,8 +1,8 @@
 use calibre_parser::ast::{
     ObjectType,
     nodes::{
-        AstBreak, AstContinue, AstDefer, AstEnum, AstNode, AstNodeType, AstReturn, AstStruct,
-        AstTry, AstTuple, CallArg, IfComparisonType, LoopType, PipeSegment,
+        AstBreak, AstContinue, AstDefer, AstEnum, AstNode, AstNodeType, AstRange, AstReturn,
+        AstStruct, AstTry, AstTuple, CallArg, IfComparisonType, LoopType, PipeSegment,
     },
 };
 
@@ -352,15 +352,15 @@ pub trait NodeVisitor {
                     })
                     .collect(),
             },
-            AstNodeType::RangeDeclaration {
+            AstNodeType::RangeDeclaration(AstRange {
                 from,
                 to,
                 inclusive,
-            } => AstNodeType::RangeDeclaration {
+            }) => AstNodeType::RangeDeclaration(AstRange {
                 from: Box::new(self.visit(*from)),
                 to: Box::new(self.visit(*to)),
                 inclusive,
-            },
+            }),
             AstNodeType::IterExpression {
                 data_type,
                 map,

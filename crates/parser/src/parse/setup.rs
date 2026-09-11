@@ -3,7 +3,7 @@ use crate::Span;
 use crate::ast::RefMutability;
 use crate::ast::ffi::ParserFfiInnerType;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
-use crate::ast::nodes::{AstNode, AstNodeType};
+use crate::ast::nodes::{AstNode, AstNodeType, AstString};
 use crate::ast::types::{GenericType, GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{is_keyword, lex, span, unescape_char_literal, unescape_string};
 use chumsky::error::Rich;
@@ -165,7 +165,12 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
             let ls = line_starts.clone();
             move |text: String, r| {
                 let sp = span(ls.as_ref(), r);
-                AstNode::new(sp, AstNodeType::StringLiteral(ParserText::new(sp, text)))
+                AstNode::new(
+                    sp,
+                    AstNodeType::StringLiteral(AstString {
+                        value: ParserText::new(sp, text),
+                    }),
+                )
             }
         })
         .boxed();

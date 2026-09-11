@@ -9,8 +9,8 @@ use crate::{
             SelectArmKind,
         },
         nodes::{
-            AsFailureMode, AstNode, AstNodeType, CallArg, DestructurePattern, IfComparisonType,
-            LoopType, Overload, PipeSegment, TypeDefType, VarType,
+            AsFailureMode, AstNode, AstNodeType, AstString, CallArg, DestructurePattern,
+            IfComparisonType, LoopType, Overload, PipeSegment, TypeDefType, VarType,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -365,6 +365,7 @@ impl Formatter {
         match &node.node_type {
             AstNodeType::Null => String::from("null"),
             AstNodeType::EmptyLine => String::new(),
+
             // Flow
             AstNodeType::Break(x) => x.format(self),
             AstNodeType::Emit(x) => x.format(self),
@@ -377,6 +378,8 @@ impl Formatter {
             AstNodeType::StructLiteral(x) => x.format(self),
             AstNodeType::EnumExpression(x) => x.format(self),
             AstNodeType::TupleLiteral(x) => x.format(self),
+            AstNodeType::StringLiteral(x) => x.format(self),
+            AstNodeType::RangeDeclaration(x) => x.format(self),
 
             AstNodeType::Spawn { items, auto_wait } => {
                 let prefix = if *auto_wait { "spawn@" } else { "spawn" };
@@ -861,18 +864,6 @@ impl Formatter {
                 let multi_line = format!("@{}{}\n{}", tag, args_str, node_formatted);
                 self.wrap_if_wide(single_line, &multi_line)
             }
-            AstNodeType::RangeDeclaration {
-                from,
-                to,
-                inclusive,
-            } => {
-                format!(
-                    "{}..{}{}",
-                    self.format(from),
-                    if *inclusive { "=" } else { "" },
-                    self.format(to)
-                )
-            }
             AstNodeType::IterExpression {
                 data_type,
                 map,
@@ -1224,9 +1215,6 @@ impl Formatter {
                 }
             }
             AstNodeType::CharLiteral(x) => format!("'{}'", self.escape_char_literal(x)),
-            AstNodeType::StringLiteral(x) => {
-                format!("\"{}\"", self.escape_string_literal(&x.to_string()))
-            }
             AstNodeType::ListLiteral(data_type, values) => {
                 let prefix = if !data_type.is_auto() {
                     format!("list:<{}>[", data_type)
@@ -2330,25 +2318,7 @@ impl Formatter {
     }
 
     fn escape_char_literal(&self, value: &char) -> String {
-        self.escape_string_literal(&value.to_string())
-    }
-
-    fn escape_string_literal(&self, input: &str) -> String {
-        let mut out = String::with_capacity(input.len());
-        for ch in input.chars() {
-            match ch {
-                '\\' => out.push_str("\\\\"),
-                '"' => out.push_str("\\\""),
-                '\'' => out.push_str("\\'"),
-                '\n' => out.push_str("\\n"),
-                '\r' => out.push_str("\\r"),
-                '\t' => out.push_str("\\t"),
-                '\0' => out.push_str("\\0"),
-                c if c.is_control() => out.push_str(&format!("\\u{{{:x}}}", c as u32)),
-                c => out.push(c),
-            }
-        }
-        out
+        AstString::escape_string_literal(&value.to_string())
     }
 
     fn fmt_ffi_type(&mut self, data_type: &ParserDataType) -> String {
