@@ -67,7 +67,7 @@ impl MirLowering for AstList {
         scope: ScopeId,
         span: Span,
     ) -> Option<ParserDataType> {
-        if self.data_type.is_auto() {
+        if !self.data_type.is_auto() {
             Some(ParserDataType {
                 data_type: ParserInnerType::List(Box::new(
                     env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
@@ -135,7 +135,7 @@ impl MirLowering for AstListRepeat {
         scope: ScopeId,
         span: Span,
     ) -> Option<ParserDataType> {
-        if self.data_type.is_auto() {
+        if !self.data_type.is_auto() {
             Some(ParserDataType {
                 data_type: ParserInnerType::List(Box::new(
                     env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
