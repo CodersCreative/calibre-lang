@@ -7,6 +7,7 @@ use crate::{
         nodes::{
             AstNode, AstNodeType, CallArg,
             literals::{AstChar, AstFloat, AstRange, AstString, AstTuple},
+            loops::AstList,
         },
     },
 };
@@ -392,7 +393,10 @@ impl ParserDataType {
             ParserInnerType::Null => Some(AstNode::new(self.span, AstNodeType::Null)),
             ParserInnerType::List(t) => Some(AstNode::new(
                 self.span,
-                AstNodeType::ListLiteral(*t.clone(), Vec::new()),
+                AstNodeType::ListLiteral(AstList {
+                    data_type: *t.clone(),
+                    values: Vec::new(),
+                }),
             )),
             ParserInnerType::Range => Some(AstNode::new(
                 self.span,

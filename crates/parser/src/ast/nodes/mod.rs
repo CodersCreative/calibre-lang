@@ -14,6 +14,7 @@ use crate::{
                 AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstRange, AstString,
                 AstStruct, AstTuple,
             },
+            loops::{AstList, AstListRepeat},
         },
         types::{GenericTypes, ParserDataType},
     },
@@ -595,12 +596,8 @@ pub enum AstNodeType {
     DataType(AstDataType),
 
     // Lists
-    ListLiteral(ParserDataType, Vec<AstNode>),
-    ListRepeatLiteral {
-        data_type: ParserDataType,
-        value: Box<AstNode>,
-        count: Box<AstNode>,
-    },
+    ListLiteral(AstList),
+    ListRepeatLiteral(AstListRepeat),
 
     // Conditionals
     IfStatement {

@@ -12,6 +12,7 @@ use calibre_parser::{
             literals::{
                 AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
             },
+            loops::AstList,
         },
         types::{GenericTypes, ParserDataType},
     },
@@ -720,14 +721,17 @@ impl From<MiddleNodeType> for AstNodeType {
             MiddleNodeType::StringLiteral(value) => AstNodeType::StringLiteral(AstString {
                 value: ParserText::from(value.value),
             }),
-            MiddleNodeType::ListLiteral(value) => AstNodeType::ListLiteral(value.data_type, {
-                let mut lst = Vec::new();
+            MiddleNodeType::ListLiteral(value) => AstNodeType::ListLiteral(AstList {
+                data_type: value.data_type,
+                values: {
+                    let mut lst = Vec::new();
 
-                for node in value.values {
-                    lst.push(node.into());
-                }
+                    for node in value.values {
+                        lst.push(node.into());
+                    }
 
-                lst
+                    lst
+                },
             }),
             MiddleNodeType::CharLiteral(value) => {
                 AstNodeType::CharLiteral(AstChar { value: value.value })

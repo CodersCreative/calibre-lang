@@ -1,11 +1,10 @@
-use serde::{Deserialize, Serialize};
-
 use crate::ast::{
     ObjectType,
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::AstNode,
     types::ParserDataType,
 };
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstStruct {

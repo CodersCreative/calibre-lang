@@ -7,6 +7,7 @@ use crate::{
             AstNode, AstNodeType, CallArg,
             flow::AstEmit,
             literals::{AstStruct, AstTuple},
+            loops::{AstList, AstListRepeat},
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -326,14 +327,20 @@ pub fn parse_program_with_source(
                             let list = if let Some((value, count)) = values.0 {
                                 AstNode::new(
                                     sp,
-                                    AstNodeType::ListRepeatLiteral {
+                                    AstNodeType::ListRepeatLiteral(AstListRepeat {
                                         data_type: _open_ty,
                                         value: Box::new(value),
                                         count: Box::new(count),
-                                    },
+                                    }),
                                 )
                             } else {
-                                AstNode::new(sp, AstNodeType::ListLiteral(_open_ty, values.1))
+                                AstNode::new(
+                                    sp,
+                                    AstNodeType::ListLiteral(AstList {
+                                        data_type: _open_ty,
+                                        values: values.1,
+                                    }),
+                                )
                             };
 
                             tails.into_iter().fold(list, |current, (node, is_index)| {

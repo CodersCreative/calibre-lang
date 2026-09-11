@@ -1,8 +1,8 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBinary, MirBoolean, MirComparison,
-        MirConditional, MirDeref, MirDrop, MirIs, MirListBuilder, MirMove, MirNeg, MirRef,
-        MirScopeDecl, MirSpawn, MirVarDecl,
+        MirConditional, MirDeref, MirDrop, MirIs, MirMove, MirNeg, MirRef, MirScopeDecl, MirSpawn,
+        MirVarDecl,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -26,6 +26,7 @@ use calibre_parser::{
             LoopType, TypeDefType, VarType,
             flow::{AstBreak, AstEmit, AstTry, TryCatch},
             literals::AstRange,
+            loops::AstList,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -37,6 +38,7 @@ pub mod curry;
 pub mod flow;
 pub mod functions;
 pub mod iter;
+pub mod lists;
 pub mod literals;
 pub mod loops;
 pub mod matching;
@@ -247,6 +249,10 @@ impl MiddleEnvironment {
             AstNodeType::BigLiteral(x) => x.lower(self, scope, node.span),
             AstNodeType::FloatLiteral(x) => x.lower(self, scope, node.span),
             AstNodeType::CharLiteral(x) => x.lower(self, scope, node.span),
+
+            // Lists
+            AstNodeType::ListLiteral(x) => x.lower(self, scope, node.span),
+            AstNodeType::ListRepeatLiteral(x) => x.lower(self, scope, node.span),
 
             AstNodeType::CurryExpression { value } => {
                 let value = self.rewrite_curry_call(scope, node.span, *value)?;
@@ -1026,7 +1032,7 @@ impl MiddleEnvironment {
                     );
                 }
 
-                if let AstNodeType::ListLiteral(_, values) = value.node_type.clone() {
+                if let AstNodeType::ListLiteral(AstList { values, .. }) = value.node_type.clone() {
                     let mut comparisons = values.into_iter().map(|item| {
                         AstNode::new(
                             self.context.current_span(),
@@ -1088,85 +1094,6 @@ impl MiddleEnvironment {
                         vec![CallArg::Value(*value), CallArg::Value(*identifier)],
                     ),
                 )
-            }
-            AstNodeType::ListLiteral(data_type, x) => {
-                let mut value = MirListBuilder::default();
-
-                let mut data_type = if data_type.is_auto() {
-                    None
-                } else {
-                    Some(self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?)
-                };
-
-                value.values(
-                    x.into_iter()
-                        .map(|item| {
-                            let node_ty = self.resolve_type_from_node(scope, &item);
-                            data_type = Some(self.compare_types(
-                                data_type.clone(),
-                                node_ty,
-                                Some(&TagInfo::IgnoreInvalidTypeCheck),
-                            )?);
-                            self.evaluate_inner(scope, item)
-                        })
-                        .collect::<Result<Vec<_>, MiddleErr>>()?,
-                );
-
-                if let Some(x) = data_type {
-                    value.data_type(x);
-                } else {
-                    return Err(self
-                        .context
-                        .err_at_current(MiddleErr::CannotInferFromExpression(
-                            "list literal".to_string(),
-                        )));
-                }
-
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::ListLiteral(value.build().unwrap()),
-                    span: node.span,
-                })
-            }
-            // TODO Give a dedicated instruction to this for optimisation
-            AstNodeType::ListRepeatLiteral {
-                data_type,
-                value,
-                count,
-            } => {
-                let count = self.evaluate(scope, *count);
-                let count = match count.node_type {
-                    MiddleNodeType::IntLiteral(value) => value.value.value as usize,
-                    _ => {
-                        return Err(MiddleErr::At(
-                            count.span,
-                            Box::new(MiddleErr::InvalidListRepeatCount),
-                        ));
-                    }
-                };
-
-                let mut lst = MirListBuilder::default();
-
-                let node_ty = self.resolve_type_from_node(scope, &value);
-
-                let data_type = if data_type.is_auto() {
-                    None
-                } else {
-                    Some(self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?)
-                };
-
-                lst.data_type(self.compare_types(
-                    data_type,
-                    node_ty,
-                    Some(&TagInfo::IgnoreInvalidTypeCheck),
-                )?);
-
-                let item = self.evaluate(scope, *value);
-                lst.values((0..count).map(|_| item.clone()).collect());
-
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::ListLiteral(lst.build().unwrap()),
-                    span: node.span,
-                })
             }
             AstNodeType::LoopDeclaration {
                 loop_type,

@@ -12,6 +12,7 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType, CallArg, IfComparisonType, LoopType, VarType,
             flow::{AstBreak, AstContinue},
+            loops::AstList,
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -207,7 +208,10 @@ pub fn transform_spawn_iter(
                 identifier: list_ident.clone(),
                 value: Box::new(AstNode::new(
                     span,
-                    AstNodeType::ListLiteral(data_type.clone(), Vec::new()),
+                    AstNodeType::ListLiteral(AstList {
+                        data_type: data_type.clone(),
+                        values: Vec::new(),
+                    }),
                 )),
                 data_type: list_type.clone(),
             },
@@ -325,7 +329,10 @@ impl MiddleEnvironment {
                         identifier: list_ident.clone(),
                         value: Box::new(AstNode::new(
                             span,
-                            AstNodeType::ListLiteral(data_type.clone(), Vec::new()),
+                            AstNodeType::ListLiteral(AstList {
+                                data_type: data_type.clone(),
+                                values: Vec::new(),
+                            }),
                         )),
                         data_type: list_type,
                     },

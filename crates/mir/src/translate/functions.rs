@@ -20,6 +20,7 @@ use calibre_parser::{
             AstNode, AstNodeType, CallArg, FunctionHeader, IfComparisonType, LoopType, VarType,
             flow::{AstContinue, AstReturn},
             literals::{AstString, AstStruct},
+            loops::AstList,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -1028,7 +1029,7 @@ impl MiddleEnvironment {
                             let list_arg = if args.len() == 1 {
                                 let arg: AstNode = args.remove(0).into();
                                 let is_already_list =
-                                    matches!(arg.node_type, AstNodeType::ListLiteral(_, _))
+                                    matches!(arg.node_type, AstNodeType::ListLiteral(_))
                                         || self
                                             .resolve_type_from_node(scope, &arg)
                                             .is_some_and(|dt| dt.is_list());
@@ -1037,8 +1038,8 @@ impl MiddleEnvironment {
                                 } else {
                                     AstNode::new(
                                         self.context.current_span(),
-                                        AstNodeType::ListLiteral(
-                                            match parameters
+                                        AstNodeType::ListLiteral(AstList {
+                                            data_type: match parameters
                                                 .last()
                                                 .cloned()
                                                 .map(|p| p.unwrap_all_refs().data_type)
@@ -1048,15 +1049,15 @@ impl MiddleEnvironment {
                                                     self.context.current_span(),
                                                 ),
                                             },
-                                            vec![arg],
-                                        ),
+                                            values: vec![arg],
+                                        }),
                                     )
                                 }
                             } else {
                                 AstNode::new(
                                     self.context.current_span(),
-                                    AstNodeType::ListLiteral(
-                                        match parameters
+                                    AstNodeType::ListLiteral(AstList {
+                                        data_type: match parameters
                                             .last()
                                             .cloned()
                                             .map(|p| p.unwrap_all_refs().data_type)
@@ -1064,8 +1065,8 @@ impl MiddleEnvironment {
                                             Some(ParserInnerType::List(x)) => *x,
                                             _ => ParserDataType::auto(self.context.current_span()),
                                         },
-                                        args.into_iter().map(|x| x.into()).collect(),
-                                    ),
+                                        values: args.into_iter().map(|x| x.into()).collect(),
+                                    }),
                                 )
                             };
 

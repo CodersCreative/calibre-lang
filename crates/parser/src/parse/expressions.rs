@@ -6,6 +6,7 @@ use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstPipe, AstTry, PipeSegment, TryCatch,
 };
 use crate::ast::nodes::literals::{AstEnum, AstRange, AstString};
+use crate::ast::nodes::loops::{AstList, AstListRepeat};
 use crate::ast::nodes::{AsFailureMode, AstNode, AstNodeType, CallArg, IfComparisonType, LoopType};
 use crate::ast::types::{ParserDataType, ParserInnerType};
 use crate::parse::util::{
@@ -105,7 +106,10 @@ pub fn build_tail_expression_parser<'a>(
 
             let mut call_args = vec![CallArg::Value(AstNode::new(
                 sp,
-                AstNodeType::ListLiteral(ParserDataType::new(sp, ParserInnerType::Str), text_nodes),
+                AstNodeType::ListLiteral(AstList {
+                    data_type: ParserDataType::new(sp, ParserInnerType::Str),
+                    values: text_nodes,
+                }),
             ))];
 
             for arg in args {
@@ -400,14 +404,20 @@ pub fn build_tail_expression_parser<'a>(
                 let list = if let Some((value, count)) = values.0 {
                     AstNode::new(
                         sp,
-                        AstNodeType::ListRepeatLiteral {
+                        AstNodeType::ListRepeatLiteral(AstListRepeat {
                             data_type,
                             value: Box::new(value),
                             count: Box::new(count),
-                        },
+                        }),
                     )
                 } else {
-                    AstNode::new(sp, AstNodeType::ListLiteral(data_type, values.1))
+                    AstNode::new(
+                        sp,
+                        AstNodeType::ListLiteral(AstList {
+                            data_type,
+                            values: values.1,
+                        }),
+                    )
                 };
                 apply_postfix_suffixes(list, tails)
             }

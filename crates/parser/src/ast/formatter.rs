@@ -387,6 +387,10 @@ impl Formatter {
             AstNodeType::CharLiteral(x) => x.format(self),
             AstNodeType::DataType(x) => x.format(self),
 
+            // Lists
+            AstNodeType::ListLiteral(x) => x.format(self),
+            AstNodeType::ListRepeatLiteral(x) => x.format(self),
+
             AstNodeType::Spawn { items, auto_wait } => {
                 let prefix = if *auto_wait { "spawn@" } else { "spawn" };
                 if items.len() == 1 {
@@ -1209,59 +1213,6 @@ impl Formatter {
                 format!("{}[{}]", self.format(base), self.format(index))
             }
             AstNodeType::Identifier(x) => x.to_string(),
-            AstNodeType::ListLiteral(data_type, values) => {
-                let prefix = if !data_type.is_auto() {
-                    format!("list:<{}>[", data_type)
-                } else {
-                    "[".to_string()
-                };
-                let mut items = Vec::new();
-                let mut has_comments = false;
-                for value in values {
-                    let leading = self.get_potential_comment(&value.span);
-                    let trailing = self.get_trailing_comment(&value.span);
-                    if leading.is_some() || trailing.is_some() {
-                        has_comments = true;
-                    }
-                    let mut piece = handle_comment!(leading, self.format(value));
-                    if let Some(trailing) = trailing {
-                        piece.push(' ');
-                        piece.push_str(&trailing);
-                    }
-                    items.push(piece);
-                }
-
-                if has_comments {
-                    if items.is_empty() {
-                        return format!("{}]", prefix);
-                    }
-                    return format!(
-                        "{}\n{}\n]",
-                        prefix,
-                        self.fmt_txt_with_tab(&items.join(",\n"), 1, true)
-                    );
-                }
-
-                let single = format!("{}{}]", prefix, items.join(", "));
-                let multi = format!(
-                    "{}\n{}\n]",
-                    prefix,
-                    self.fmt_txt_with_tab(&items.join(",\n"), 1, true)
-                );
-                self.wrap_if_wide_or_if(single, &multi, values.len() > self.max_values)
-            }
-            AstNodeType::ListRepeatLiteral {
-                data_type,
-                value,
-                count,
-            } => {
-                let prefix = if !data_type.is_auto() {
-                    format!("list:<{}>[", data_type)
-                } else {
-                    "[".to_string()
-                };
-                format!("{}{}; {}]", prefix, self.format(value), self.format(count))
-            }
             AstNodeType::ScopeAlias {
                 identifier,
                 value,

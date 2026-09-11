@@ -89,6 +89,10 @@ impl MiddleEnvironment {
             AstNodeType::BigLiteral(x) => x.type_of(self, scope, node.span),
             AstNodeType::FloatLiteral(x) => x.type_of(self, scope, node.span),
 
+            // Lists
+            AstNodeType::ListLiteral(x) => x.type_of(self, scope, node.span),
+            AstNodeType::ListRepeatLiteral(x) => x.type_of(self, scope, node.span),
+
             // TODO
             AstNodeType::Break { .. }
             | AstNodeType::Continue { .. }
@@ -332,14 +336,6 @@ impl MiddleEnvironment {
                     Some(list_type)
                 }
             }
-            AstNodeType::ListLiteral(data_type, _)
-            | AstNodeType::ListRepeatLiteral { data_type, .. } => Some(ParserDataType {
-                data_type: ParserInnerType::List(Box::new(
-                    self.resolve_data_type(scope, data_type, ResolutionOptions::typing())
-                        .ok()?,
-                )),
-                span: node.span,
-            }),
             AstNodeType::NegExpression { value } | AstNodeType::Ternary { then: value, .. } => {
                 self.resolve_type_from_node(scope, value)
             }

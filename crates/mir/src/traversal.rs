@@ -4,6 +4,7 @@ use calibre_parser::ast::{
         AstNode, AstNodeType, CallArg, IfComparisonType, LoopType,
         flow::{AstBreak, AstContinue, AstDefer, AstPipe, AstReturn, AstTry, PipeSegment},
         literals::{AstDataType, AstEnum, AstRange, AstStruct, AstTuple},
+        loops::{AstList, AstListRepeat},
     },
 };
 
@@ -144,10 +145,12 @@ pub trait NodeVisitor {
                     },
                 })
             }
-            AstNodeType::ListLiteral(data_type, values) => AstNodeType::ListLiteral(
-                data_type,
-                values.into_iter().map(|n| self.visit(n)).collect(),
-            ),
+            AstNodeType::ListLiteral(AstList { data_type, values }) => {
+                AstNodeType::ListLiteral(AstList {
+                    data_type,
+                    values: values.into_iter().map(|n| self.visit(n)).collect(),
+                })
+            }
             AstNodeType::DerefStatement { value } => AstNodeType::DerefStatement {
                 value: Box::new(self.visit(*value)),
             },
@@ -403,15 +406,15 @@ pub trait NodeVisitor {
             AstNodeType::Until { condition } => AstNodeType::Until {
                 condition: Box::new(self.visit(*condition)),
             },
-            AstNodeType::ListRepeatLiteral {
+            AstNodeType::ListRepeatLiteral(AstListRepeat {
                 data_type,
                 value,
                 count,
-            } => AstNodeType::ListRepeatLiteral {
+            }) => AstNodeType::ListRepeatLiteral(AstListRepeat {
                 data_type,
                 value: Box::new(self.visit(*value)),
                 count: Box::new(self.visit(*count)),
-            },
+            }),
             AstNodeType::PipeExpression(AstPipe { values }) => {
                 AstNodeType::PipeExpression(AstPipe {
                     values: values
@@ -532,7 +535,9 @@ pub trait NodeAnalyzer {
                 ObjectType::Map(fields) => fields.iter().all(|(_, n)| self.analyze(n)),
                 ObjectType::Tuple(values) => values.iter().all(|n| self.analyze(n)),
             },
-            AstNodeType::ListLiteral(_, values) => values.iter().all(|n| self.analyze(n)),
+            AstNodeType::ListLiteral(AstList { values, .. }) => {
+                values.iter().all(|n| self.analyze(n))
+            }
             AstNodeType::VariableDeclaration { value, .. } => self.analyze(value),
             AstNodeType::FunctionDeclaration { body, .. } => self.analyze(body),
             AstNodeType::LoopDeclaration {

@@ -1,6 +1,7 @@
 use crate::ast::formatter::Formatter;
 
 pub mod flow;
+pub mod lists;
 pub mod literals;
 
 pub trait AstFormatting {
