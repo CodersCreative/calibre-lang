@@ -700,7 +700,7 @@ impl MirLowering for AstFunction {
             let data_type = if let Some(x) = param.1 {
                 env.resolve_data_type(new_scope, &x, ResolutionOptions::typing())?
             } else if let Some(node) = &param.2 {
-                node.type_of(env, scope, span).ok_or_else(|| {
+                node.type_of(env, new_scope, span).ok_or_else(|| {
                     env.context
                         .err_at_current(MiddleErr::CannotInferParameterType(
                             og_name.to_string(),
@@ -729,7 +729,7 @@ impl MirLowering for AstFunction {
                 data_type,
                 param
                     .2
-                    .map(|x| Box::new(x.lower_or_empty(env, scope, span))),
+                    .map(|x| Box::new(x.lower_or_empty(env, new_scope, span))),
             ));
         }
 
@@ -801,7 +801,7 @@ impl MirLowering for AstFunction {
             body = MiddleEnvironment::wrap_generator_body(body, elem_type, span);
         }
 
-        let body = body.lower(env, scope, span)?;
+        let body = body.lower(env, new_scope, span)?;
         let mut func_defers = Vec::new();
         func_defers.append(&mut env.symbols.func_defers);
 
