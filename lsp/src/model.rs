@@ -5,8 +5,8 @@ pub(crate) const CLEANUP_MS: u64 = 150;
 
 pub(crate) const KEYWORDS: &[&str] = &[
     "fn", "let", "mut", "const", "struct", "enum", "trait", "impl", "if", "else", "match", "for",
-    "while", "in", "return", "break", "continue", "try", "as", "extern", "type", "range", "test",
-    "move", "spawn", "defer", "import", "is", "select",
+    "in", "return", "break", "continue", "try", "as", "extern", "type", "test", "move", "spawn",
+    "defer", "import", "is", "from", "select", "until", "curry", "emit",
 ];
 
 pub(crate) fn keyword_doc(keyword: &str) -> &'static str {
@@ -26,7 +26,6 @@ pub(crate) fn keyword_doc(keyword: &str) -> &'static str {
         "else" => "Alternative branch for if.",
         "match" => "Pattern matching expression.",
         "for" => "Iteration loop.",
-        "while" => "Condition-based loop.",
         "in" => "Iterator membership in loops/patterns.",
         "return" => "Return from the current function.",
         "break" => "Exit the nearest loop.",
@@ -36,7 +35,6 @@ pub(crate) fn keyword_doc(keyword: &str) -> &'static str {
         "is" => "Check the type of a value",
         "extern" => "Declare external functions and types.",
         "type" => "Declare a type alias/new type.",
-        "range" => "Construct a range expression.",
         "spawn" => "Create a new async worker, returns a WaitGroup.",
         "import" => "Import constants and types from a module",
         _ => "Language keyword.",

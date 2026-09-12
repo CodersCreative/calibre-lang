@@ -15,6 +15,7 @@ use ustr::{Ustr, UstrMap};
 
 pub mod ast;
 pub mod formatter;
+pub mod lexer;
 pub mod native;
 pub mod parse;
 
