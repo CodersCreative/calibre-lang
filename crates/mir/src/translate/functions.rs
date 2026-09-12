@@ -19,6 +19,7 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, LoopType, VarType,
+            access::AstField,
             binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, AstTernary, IfComparisonType},
             flow::{AstContinue, AstReturn},
@@ -73,10 +74,10 @@ impl MiddleEnvironment {
                 then: Box::new(default),
                 otherwise: Box::new(AstNode::new(
                     span,
-                    AstNodeType::FieldAccess {
+                    AstNodeType::FieldAccess(AstField {
                         base: Box::new(value),
                         field: PotentialDollarIdentifier::new(span, "next"),
-                    },
+                    }),
                 )),
             }),
         )
@@ -116,7 +117,7 @@ impl MiddleEnvironment {
         let name = self
             .resolve(
                 scope,
-                name.get_ident(),
+                name.value.get_ident(),
                 ResolutionOptions::default().with_dollar(),
             )
             .ok()?;
@@ -976,7 +977,7 @@ impl MirLowering for AstCall {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         match self.caller.node_type.clone() {
-            AstNodeType::FieldAccess { base, field } => {
+            AstNodeType::FieldAccess(AstField { base, field }) => {
                 let field_name = env
                     .resolve(scope, &field, ResolutionOptions::default().with_dollar())
                     .unwrap_or(Ustr::from(field.text()));
@@ -996,8 +997,11 @@ impl MirLowering for AstCall {
                     .lower(env, scope, span);
                 }
 
-                if let Ok(resolved) =
-                    env.evaluate_field_access(scope, span, *base.clone(), field.clone())
+                if let Ok(resolved) = (AstField {
+                    base: base.clone(),
+                    field: field.clone(),
+                }
+                .lower(env, scope, span))
                     && let MiddleNodeType::Identifier(symbol) = resolved.node_type
                 {
                     return AstCall {
@@ -1009,7 +1013,7 @@ impl MirLowering for AstCall {
                 }
             }
             AstNodeType::Identifier(caller_ident) => {
-                match caller_ident.to_string().as_str() {
+                match caller_ident.value.get_ident().text().as_str() {
                     "tuple" => {
                         return Ok(env.aggregate_from_call_nodes(
                             scope,
@@ -1027,7 +1031,8 @@ impl MirLowering for AstCall {
                     _ => {}
                 }
 
-                if let Ok(caller) = env.resolve(scope, &caller_ident, ResolutionOptions::typing())
+                if let Ok(caller) =
+                    env.resolve(scope, &caller_ident.value, ResolutionOptions::typing())
                     && env.typing.objects.contains_key(&caller)
                 {
                     return Ok(env.aggregate_from_call_nodes(
@@ -1073,7 +1078,11 @@ impl MirLowering for AstCall {
         }
 
         let caller_name = if let AstNodeType::Identifier(ident) = &self.caller.node_type {
-            env.resolve(scope, ident, ResolutionOptions::default().with_dollar())?
+            env.resolve(
+                scope,
+                &ident.value,
+                ResolutionOptions::default().with_dollar(),
+            )?
         } else {
             Ustr::default()
         };
@@ -1196,7 +1205,7 @@ impl MirLowering for AstCall {
         scope: ScopeId,
         span: Span,
     ) -> Option<ParserDataType> {
-        if let AstNodeType::FieldAccess { base, field } = &self.caller.node_type {
+        if let AstNodeType::FieldAccess(AstField { base, field }) = &self.caller.node_type {
             let member_name = env
                 .resolve(scope, field, ResolutionOptions::default().with_dollar())
                 .unwrap_or(Ustr::from(field.text()));
@@ -1204,7 +1213,7 @@ impl MirLowering for AstCall {
             if !member_name.is_empty() {
                 if let Some(ty) = &base.type_of(env, scope, span).or_else(|| {
                     if let AstNodeType::Identifier(id) = &base.node_type {
-                        env.resolve_to_data_type(scope, id).ok()
+                        env.resolve_to_data_type(scope, &id.value).ok()
                     } else {
                         None
                     }
@@ -1219,7 +1228,7 @@ impl MirLowering for AstCall {
 
         let mut caller_type = None;
         if let AstNodeType::Identifier(caller) = &self.caller.node_type {
-            match caller.to_string().as_str() {
+            match caller.value.get_ident().text().as_str() {
                 "tuple" => {
                     let mut lst = Vec::new();
 
@@ -1238,7 +1247,7 @@ impl MirLowering for AstCall {
                 _ => {}
             }
 
-            if let Ok(caller_ty) = env.resolve_to_data_type(scope, caller) {
+            if let Ok(caller_ty) = env.resolve_to_data_type(scope, &caller.value) {
                 match &caller_ty.data_type {
                     ParserInnerType::Struct(name)
                         if env.typing.objects.contains_key(&Ustr::from(name)) =>

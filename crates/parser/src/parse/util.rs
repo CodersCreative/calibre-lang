@@ -1,10 +1,8 @@
 use crate::{
     CalibreError, Position, Span,
     ast::{
-        idents::{
-            ParsedIntLiteral, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-        },
-        nodes::{AstNode, AstNodeType, NamedScope, VarType, literals::AstInt},
+        idents::{ParsedIntLiteral, ParserText, PotentialDollarIdentifier},
+        nodes::{AstNode, AstNodeType, NamedScope, VarType, access::AstField, literals::AstInt},
     },
 };
 use chumsky::prelude::*;
@@ -253,12 +251,7 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<AstN
 
     if is_ident(trimmed) {
         debug!(ident = %trimmed, "parsed as identifier");
-        return Ok(AstNode::new(
-            fallback_span,
-            AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                ParserText::from(trimmed.to_string()).into(),
-            )),
-        ));
+        return Ok(AstNode::identifier(fallback_span, trimmed));
     }
 
     if trimmed
@@ -268,20 +261,15 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<AstN
         let sp = fallback_span;
         let parts: Vec<&str> = trimmed.split('.').collect();
 
-        let mut current = AstNode::new(
-            sp,
-            AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                ParserText::from(parts[0].to_string()).into(),
-            )),
-        );
+        let mut current = AstNode::identifier(sp, parts[0]);
 
         for part in parts.iter().skip(1) {
             current = AstNode::new(
                 sp,
-                AstNodeType::FieldAccess {
+                AstNodeType::FieldAccess(AstField {
                     base: Box::new(current),
                     field: PotentialDollarIdentifier::new(sp, part),
-                },
+                }),
             );
         }
 

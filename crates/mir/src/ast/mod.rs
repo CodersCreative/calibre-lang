@@ -7,6 +7,7 @@ use calibre_parser::{
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, LoopType, VarType,
+            access::{AstField, AstIdentifier, AstIndex},
             binary::{AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIs},
             conditionals::{AstIf, IfComparisonType},
             flow::{AstBreak, AstContinue, AstEmit, AstReturn},
@@ -15,6 +16,7 @@ use calibre_parser::{
                 AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
             },
             loops::AstList,
+            memory::{AstDeref, AstDrop, AstMove, AstRef},
             unary::AstNot,
         },
         types::{GenericTypes, ParserDataType},
@@ -586,13 +588,17 @@ impl From<MiddleNodeType> for AstNodeType {
                 items: vec![(*value.value).into()],
                 auto_wait: false,
             },
-            MiddleNodeType::Drop(value) => AstNodeType::Drop(value.identifier.into()),
-            MiddleNodeType::Move(value) => AstNodeType::MoveExpression {
+            MiddleNodeType::Drop(value) => AstNodeType::Drop(AstDrop {
+                value: value.identifier.into(),
+            }),
+            MiddleNodeType::Move(value) => AstNodeType::MoveExpression(AstMove {
                 value: Box::new(AstNode::new(
                     Span::default(),
-                    AstNodeType::Identifier(value.identifier.into()),
+                    AstNodeType::Identifier(AstIdentifier {
+                        value: value.identifier.into(),
+                    }),
                 )),
-            },
+            }),
             MiddleNodeType::Break(value) => AstNodeType::Break(AstBreak {
                 label: value.label.map(Into::into),
                 value: value.value.map(|v| Box::new((*v).into())),
@@ -602,13 +608,13 @@ impl From<MiddleNodeType> for AstNodeType {
             }),
             MiddleNodeType::EmptyLine => AstNodeType::EmptyLine,
             MiddleNodeType::Null => AstNodeType::Null,
-            MiddleNodeType::RefStatement(value) => AstNodeType::RefStatement {
+            MiddleNodeType::RefStatement(value) => AstNodeType::RefStatement(AstRef {
                 mutability: value.mutability,
                 value: Box::new((*value.value).into()),
-            },
-            MiddleNodeType::DerefStatement(value) => AstNodeType::DerefStatement {
+            }),
+            MiddleNodeType::DerefStatement(value) => AstNodeType::DerefStatement(AstDeref {
                 value: Box::new((*value.value).into()),
-            },
+            }),
             MiddleNodeType::VariableDeclaration(value) => AstNodeType::VariableDeclaration {
                 var_type: value.var_type,
                 identifier: value.identifier.into(),
@@ -724,7 +730,9 @@ impl From<MiddleNodeType> for AstNodeType {
             MiddleNodeType::Return(value) => AstNodeType::Return(AstReturn {
                 value: value.value.map(|x| Box::new((*x).into())),
             }),
-            MiddleNodeType::Identifier(value) => AstNodeType::Identifier(value.identifier.into()),
+            MiddleNodeType::Identifier(value) => AstNodeType::Identifier(AstIdentifier {
+                value: value.identifier.into(),
+            }),
             MiddleNodeType::StringLiteral(value) => AstNodeType::StringLiteral(AstString {
                 value: ParserText::from(value.value),
             }),
@@ -760,14 +768,14 @@ impl From<MiddleNodeType> for AstNodeType {
                     value: ParserText::from(out),
                 })
             }
-            MiddleNodeType::FieldAccess(value) => AstNodeType::FieldAccess {
+            MiddleNodeType::FieldAccess(value) => AstNodeType::FieldAccess(AstField {
                 base: Box::new((*value.base).into()),
                 field: value.field.into(),
-            },
-            MiddleNodeType::IndexAccess(value) => AstNodeType::IndexAccess {
+            }),
+            MiddleNodeType::IndexAccess(value) => AstNodeType::IndexAccess(AstIndex {
                 base: Box::new((*value.base).into()),
                 index: Box::new((*value.index).into()),
-            },
+            }),
             MiddleNodeType::CallExpression(value) => AstNodeType::CallExpression(AstCall {
                 string_fn: None,
                 generic_types: Vec::new(),

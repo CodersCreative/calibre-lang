@@ -15,6 +15,7 @@ use calibre_parser::{
             AstNode, AstNodeType, Overload, TypeDefType, VarType,
             binary::AsFailureMode,
             functions::{AstCall, AstFunction},
+            memory::AstRef,
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -49,12 +50,12 @@ impl MiddleEnvironment {
             ..
         }) = value.clone().node_type
             && let AstNodeType::Identifier(callee_ident) = &caller.node_type
-            && callee_ident.to_string() == identifier
+            && callee_ident.value.get_ident().text() == identifier
             && let Some(first_arg) = args.first().cloned().map(|a| -> AstNode { a.into() })
         {
             let first_ty = self.resolve_type_from_node(scope, &first_arg).or_else(|| {
                 match &first_arg.node_type {
-                    AstNodeType::RefStatement { value, .. } => {
+                    AstNodeType::RefStatement(AstRef { value, .. }) => {
                         self.resolve_type_from_node(scope, value.as_ref())
                     }
                     _ => None,
@@ -62,9 +63,11 @@ impl MiddleEnvironment {
             });
 
             if let Some(first_ty) = first_ty
-                && let Some(mapped_name) = self
-                    .resolve_member_fn_name(&first_ty.unwrap_all_refs(), &callee_ident.to_string())
-                && mapped_name != callee_ident.to_string()
+                && let Some(mapped_name) = self.resolve_member_fn_name(
+                    &first_ty.unwrap_all_refs(),
+                    &callee_ident.value.get_ident().text(),
+                )
+                && mapped_name != callee_ident.value.get_ident().text()
             {
                 value = AstNode::new(
                     value.span,

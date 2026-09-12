@@ -1,11 +1,13 @@
 use crate::ast::formatter::Formatter;
 
+pub mod access;
 pub mod binary;
 pub mod conditionals;
 pub mod flow;
 pub mod functions;
 pub mod lists;
 pub mod literals;
+pub mod memory;
 pub mod unary;
 
 pub trait AstFormatting {

@@ -2,6 +2,7 @@ use super::{LegacySpanMapExt, filter, setup::StrParser};
 use crate::ast::RefMutability;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::matching::MatchArmType;
+use crate::ast::nodes::access::{AstField, AstIndex};
 use crate::ast::nodes::binary::{
     AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
 };
@@ -12,6 +13,7 @@ use crate::ast::nodes::flow::{
 use crate::ast::nodes::functions::{AstCall, CallArg};
 use crate::ast::nodes::literals::{AstEnum, AstRange, AstString};
 use crate::ast::nodes::loops::{AstList, AstListRepeat};
+use crate::ast::nodes::memory::{AstDeref, AstMove, AstRef};
 use crate::ast::nodes::unary::{AstNeg, AstNot};
 use crate::ast::nodes::{AstNode, AstNodeType, LoopType};
 use crate::ast::types::{ParserDataType, ParserInnerType};
@@ -141,10 +143,10 @@ pub fn build_tail_expression_parser<'a>(
             indexes.into_iter().fold(head, |current, index| {
                 AstNode::new(
                     Span::new_from_spans(current.span, index.span),
-                    AstNodeType::IndexAccess {
+                    AstNodeType::IndexAccess(AstIndex {
                         base: Box::new(current),
                         index: Box::new(index),
-                    },
+                    }),
                 )
             })
         })
@@ -186,10 +188,10 @@ pub fn build_tail_expression_parser<'a>(
                     indexes.into_iter().fold(head, |current, index| {
                         AstNode::new(
                             Span::new_from_spans(current.span, index.span),
-                            AstNodeType::IndexAccess {
+                            AstNodeType::IndexAccess(AstIndex {
                                 base: Box::new(current),
                                 index: Box::new(index),
-                            },
+                            }),
                         )
                     })
                 })
@@ -262,26 +264,26 @@ pub fn build_tail_expression_parser<'a>(
                     if is_index {
                         current = AstNode::new(
                             Span::new_from_spans(current.span, node.span),
-                            AstNodeType::IndexAccess {
+                            AstNodeType::IndexAccess(AstIndex {
                                 base: Box::new(current),
                                 index: node,
-                            },
+                            }),
                         );
                     } else if let AstNodeType::Identifier(ident) = node.node_type {
                         current = AstNode::new(
                             Span::new_from_spans(current.span, node.span),
-                            AstNodeType::FieldAccess {
+                            AstNodeType::FieldAccess(AstField {
                                 base: Box::new(current),
-                                field: ident.into(),
-                            },
+                                field: ident.value.into(),
+                            }),
                         );
                     } else if let AstNodeType::IntLiteral(value) = node.node_type {
                         current = AstNode::new(
                             Span::new_from_spans(current.span, value.value.span),
-                            AstNodeType::FieldAccess {
+                            AstNodeType::FieldAccess(AstField {
                                 base: Box::new(current),
                                 field: value.value.into(),
-                            },
+                            }),
                         );
                     } else if let AstNodeType::CallExpression(AstCall {
                         caller,
@@ -294,10 +296,10 @@ pub fn build_tail_expression_parser<'a>(
                     {
                         current = AstNode::new(
                             Span::new_from_spans(current.span, node.span),
-                            AstNodeType::FieldAccess {
+                            AstNodeType::FieldAccess(AstField {
                                 base: Box::new(current),
-                                field: ident.clone().into(),
-                            },
+                                field: ident.value.clone().into(),
+                            }),
                         );
                         current = AstNode::new(
                             Span::new_from_spans(current.span, node.span),
@@ -316,18 +318,18 @@ pub fn build_tail_expression_parser<'a>(
                 PostfixSuffix::Ref(mutability) => {
                     current = AstNode::new(
                         current.span,
-                        AstNodeType::RefStatement {
+                        AstNodeType::RefStatement(AstRef {
                             mutability,
                             value: Box::new(current),
-                        },
+                        }),
                     );
                 }
                 PostfixSuffix::Deref => {
                     current = AstNode::new(
                         current.span,
-                        AstNodeType::DerefStatement {
+                        AstNodeType::DerefStatement(AstDeref {
                             value: Box::new(current),
-                        },
+                        }),
                     );
                 }
             }
@@ -983,9 +985,9 @@ pub fn build_tail_expression_parser<'a>(
         .map(|value| {
             AstNode::new(
                 value.span,
-                AstNodeType::MoveExpression {
+                AstNodeType::MoveExpression(AstMove {
                     value: Box::new(value),
-                },
+                }),
             )
         })
         .boxed();
@@ -1258,9 +1260,9 @@ pub fn build_tail_expression_parser<'a>(
             stars.into_iter().rev().fold(node, |value, _| {
                 AstNode::new(
                     value.span,
-                    AstNodeType::DerefStatement {
+                    AstNodeType::DerefStatement(AstDeref {
                         value: Box::new(value),
-                    },
+                    }),
                 )
             })
         })

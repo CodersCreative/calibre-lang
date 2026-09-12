@@ -471,7 +471,7 @@ impl MirLowering for AstPipe {
 
         let is_callable_point = |env: &mut MiddleEnvironment, point: &PipeSegment| {
             if let AstNodeType::Identifier(id) = &point.get_node().node_type
-                && let Ok(resolved) = env.resolve(scope, id, ResolutionOptions::idents())
+                && let Ok(resolved) = env.resolve(scope, &id.value, ResolutionOptions::idents())
                 && env
                     .symbols
                     .variables

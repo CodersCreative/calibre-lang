@@ -384,7 +384,7 @@ impl MiddleEnvironment {
                     })?;
 
                 match &resolved.node_type {
-                    AstNodeType::Identifier(x) => match x.get_ident() {
+                    AstNodeType::Identifier(x) => match x.value.get_ident() {
                         PotentialDollarIdentifier::Identifier(x) => Ustr::from(&x.text),
                         PotentialDollarIdentifier::DollarIdentifier(x) => Ustr::from(&x.text),
                     },

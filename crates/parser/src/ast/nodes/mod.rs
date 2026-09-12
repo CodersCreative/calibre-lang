@@ -1,13 +1,14 @@
 use crate::{
     IdentifiersUsed, Span,
     ast::{
-        ObjectType, Operator, RefMutability,
+        ObjectType, Operator,
         binary::BinaryOperator,
         formatter::Formatter,
         generics::TraitMember,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::{MatchArmType, SelectArm},
         nodes::{
+            access::{AstField, AstIdentifier, AstIndex, AstScope},
             binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
             conditionals::{AstIf, AstTernary},
             flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
@@ -17,6 +18,7 @@ use crate::{
                 AstStruct, AstTuple,
             },
             loops::{AstList, AstListRepeat},
+            memory::{AstDeref, AstDrop, AstMove, AstRef},
             unary::{AstNeg, AstNot},
         },
         types::{GenericTypes, ParserDataType},
@@ -204,10 +206,10 @@ impl AstNode {
     pub fn scope_access_path(&self, path: &mut Vec<Ustr>) -> bool {
         match &self.node_type {
             AstNodeType::Identifier(identifier) => {
-                path.push(Ustr::from(identifier.get_ident().text()));
+                path.push(Ustr::from(identifier.value.get_ident().text()));
                 true
             }
-            AstNodeType::ScopeAccess { base, field } => {
+            AstNodeType::ScopeAccess(AstScope { base, field }) => {
                 if !base.scope_access_path(path) {
                     return false;
                 }
@@ -275,9 +277,9 @@ impl AstNode {
         match &self.node_type {
             AstNodeType::CallExpression(AstCall { caller, .. }) => matches!(
                 &caller.node_type,
-                AstNodeType::Identifier(x) if x.to_string() == "some"
+                AstNodeType::Identifier(x) if x.value.get_ident().text() == "some"
             ),
-            AstNodeType::Identifier(x) => x.to_string() == "none",
+            AstNodeType::Identifier(x) => x.value.get_ident().text() == "none",
             _ => false,
         }
     }
@@ -285,19 +287,21 @@ impl AstNode {
     pub fn identifier(span: Span, text: impl ToString) -> Self {
         Self::new(
             span,
-            AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                ParserText::from(text.to_string()).into(),
-            )),
+            AstNodeType::Identifier(AstIdentifier {
+                value: PotentialGenericTypeIdentifier::Identifier(
+                    ParserText::from(text.to_string()).into(),
+                ),
+            }),
         )
     }
 
     pub fn member(span: Span, base: Self, member: impl ToString) -> Self {
         Self::new(
             span,
-            AstNodeType::FieldAccess {
+            AstNodeType::FieldAccess(AstField {
                 base: Box::new(base),
                 field: PotentialDollarIdentifier::new(span, member),
-            },
+            }),
         )
     }
 
@@ -363,7 +367,7 @@ impl AstNode {
     pub fn is_none(&self) -> bool {
         matches!(
             &self.node_type,
-            AstNodeType::Identifier(id) if id.to_string() == "none"
+            AstNodeType::Identifier(id) if id.value.get_ident().text() == "none"
         )
     }
 
@@ -425,16 +429,16 @@ impl IdentifiersUsed for AstNode {
     fn identifiers_used(&self) -> Vec<&String> {
         let mut names = Vec::new();
         match &self.node_type {
-            AstNodeType::Identifier(text) => {
-                names.push(text.get_ident().text());
+            AstNodeType::Identifier(AstIdentifier { value }) => {
+                names.push(value.get_ident().text());
             }
-            AstNodeType::FieldAccess { base, .. } => {
+            AstNodeType::FieldAccess(AstField { base, .. }) => {
                 names.extend(base.identifiers_used());
             }
-            AstNodeType::ScopeAccess { base, .. } => {
+            AstNodeType::ScopeAccess(AstScope { base, .. }) => {
                 names.extend(base.identifiers_used());
             }
-            AstNodeType::IndexAccess { base, index } => {
+            AstNodeType::IndexAccess(AstIndex { base, index }) => {
                 names.extend(base.identifiers_used());
                 names.extend(index.identifiers_used());
             }
@@ -590,6 +594,18 @@ pub enum AstNodeType {
     IsExpression(AstIs),
     InDeclaration(AstIn),
 
+    // Memory
+    RefStatement(AstRef),
+    DerefStatement(AstDeref),
+    Drop(AstDrop),
+    MoveExpression(AstMove),
+
+    // Access
+    Identifier(AstIdentifier),
+    FieldAccess(AstField),
+    ScopeAccess(AstScope),
+    IndexAccess(AstIndex),
+
     // Async
     Spawn {
         items: Vec<AstNode>,
@@ -643,34 +659,6 @@ pub enum AstNodeType {
         identifier: PotentialGenericTypeIdentifier,
         object: TypeDefType,
         overloads: Vec<Overload>,
-    },
-
-    // Memory
-    RefStatement {
-        mutability: RefMutability,
-        value: Box<AstNode>,
-    },
-    DerefStatement {
-        value: Box<AstNode>,
-    },
-    Drop(PotentialDollarIdentifier),
-    MoveExpression {
-        value: Box<AstNode>,
-    },
-
-    // Access
-    Identifier(PotentialGenericTypeIdentifier),
-    FieldAccess {
-        base: Box<AstNode>,
-        field: PotentialDollarIdentifier,
-    },
-    ScopeAccess {
-        base: Box<AstNode>,
-        field: PotentialDollarIdentifier,
-    },
-    IndexAccess {
-        base: Box<AstNode>,
-        index: Box<AstNode>,
     },
 
     // Loops
@@ -741,7 +729,7 @@ impl AstNodeType {
     pub fn is_call(&self) -> bool {
         match self {
             Self::CallExpression { .. } => true,
-            Self::RefStatement { value, .. } | Self::DerefStatement { value } => {
+            Self::RefStatement(AstRef { value, .. }) | Self::DerefStatement(AstDeref { value }) => {
                 value.node_type.is_call()
             }
 

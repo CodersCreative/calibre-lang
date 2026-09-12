@@ -1,12 +1,9 @@
 use crate::{
-    ast::{
-        MiddleNode, MiddleNodeType, MirAssignment, MirDeref, MirDrop, MirMove, MirRef,
-        MirScopeDecl, MirSpawn, MirVarDecl,
-    },
+    ast::{MiddleNode, MiddleNodeType, MirAssignment, MirScopeDecl, MirSpawn, MirVarDecl},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::resolve::{ResolutionOptions, StrOrAstNode},
+    symbols::resolve::ResolutionOptions,
     tags::TagInfo,
     typing::{
         MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType, Typing,
@@ -22,10 +19,12 @@ use calibre_parser::{
         matching::SelectArmKind,
         nodes::{
             AstNode, AstNodeType, LoopType, TypeDefType, VarType,
+            access::{AstField, AstIndex, AstScope},
             binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, AstTernary, IfComparisonType},
             flow::{AstBreak, AstEmit},
             functions::{AstFunction, CallArg, FunctionHeader},
+            memory::{AstDeref, AstRef},
             unary::AstNot,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
@@ -34,6 +33,7 @@ use calibre_parser::{
 use tracing::{debug, instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
 
+pub mod access;
 pub mod binary;
 pub mod conditionals;
 pub mod curry;
@@ -44,7 +44,7 @@ pub mod lists;
 pub mod literals;
 pub mod loops;
 pub mod matching;
-pub mod member;
+pub mod memory;
 pub mod scopes;
 pub mod statements;
 pub mod unary;
@@ -279,23 +279,18 @@ impl MiddleEnvironment {
             AstNodeType::ExternFunctionDeclaration(x) => x.lower(self, scope, node.span),
             AstNodeType::CallExpression(x) => x.lower(self, scope, node.span),
 
-            AstNodeType::Identifier(x) => Ok(MiddleNode::identifier(
-                node.span,
-                match self.resolve_potential_node(scope, &x, ResolutionOptions::idents())? {
-                    StrOrAstNode::Str(x) => x,
-                    StrOrAstNode::Node(x) => return self.evaluate_inner(scope, *x),
-                },
-            )),
+            // Access
+            AstNodeType::Identifier(x) => x.lower(self, scope, node.span),
+            AstNodeType::FieldAccess(x) => x.lower(self, scope, node.span),
+            AstNodeType::ScopeAccess(x) => x.lower(self, scope, node.span),
+            AstNodeType::IndexAccess(x) => x.lower(self, scope, node.span),
 
-            AstNodeType::FieldAccess { base, field } => {
-                self.evaluate_field_access(scope, node.span, *base, field)
-            }
-            AstNodeType::ScopeAccess { base, field } => {
-                self.evaluate_scope_access(scope, node.span, *base, field)
-            }
-            AstNodeType::IndexAccess { base, index } => {
-                self.evaluate_index_access(scope, node.span, *base, *index)
-            }
+            // Memory
+            AstNodeType::RefStatement(x) => x.lower(self, scope, node.span),
+            AstNodeType::DerefStatement(x) => x.lower(self, scope, node.span),
+            AstNodeType::Drop(x) => x.lower(self, scope, node.span),
+            AstNodeType::MoveExpression(x) => x.lower(self, scope, node.span),
+
             AstNodeType::Spawn {
                 items,
                 auto_wait: true,
@@ -488,10 +483,10 @@ impl MiddleEnvironment {
                         vec![
                             CallArg::Value(AstNode::new(
                                 span,
-                                AstNodeType::RefStatement {
+                                AstNodeType::RefStatement(AstRef {
                                     mutability: RefMutability::MutRef,
                                     value: Box::new(AstNode::identifier(span, &ident)),
-                                },
+                                }),
                             )),
                             CallArg::Value(item),
                         ],
@@ -518,141 +513,8 @@ impl MiddleEnvironment {
                     ),
                 )
             }
-            AstNodeType::MoveExpression { value } => match value.node_type {
-                AstNodeType::Identifier(x) => Ok(MiddleNode {
-                    node_type: MiddleNodeType::Move(MirMove {
-                        identifier: self.resolve(scope, &x, ResolutionOptions::idents())?,
-                    }),
-                    span: node.span,
-                }),
-                AstNodeType::FieldAccess { base, field } => {
-                    let tmp_ident: PotentialDollarIdentifier =
-                        ParserText::temp_name_with_suffix("move", node.span).into();
-
-                    let tmp_decl = AstNode::new(
-                        node.span,
-                        AstNodeType::VariableDeclaration {
-                            var_type: VarType::Immutable,
-                            identifier: tmp_ident.clone(),
-                            data_type: ParserDataType::auto(node.span),
-                            value: Box::new(AstNode::new(
-                                node.span,
-                                AstNodeType::MoveExpression {
-                                    value: Box::new(*base),
-                                },
-                            )),
-                        },
-                    );
-
-                    let moved_base = AstNode::new(
-                        node.span,
-                        AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                            tmp_ident,
-                        )),
-                    );
-                    let member = AstNode::new(
-                        node.span,
-                        AstNodeType::FieldAccess {
-                            base: Box::new(moved_base),
-                            field,
-                        },
-                    );
-
-                    self.evaluate_inner(scope, AstNode::new_temp_scope(vec![tmp_decl, member]))
-                }
-                AstNodeType::ScopeAccess { base, field } => {
-                    let tmp_ident: PotentialDollarIdentifier =
-                        ParserText::temp_name_with_suffix("move", node.span).into();
-
-                    let tmp_decl = AstNode::new(
-                        node.span,
-                        AstNodeType::VariableDeclaration {
-                            var_type: VarType::Immutable,
-                            identifier: tmp_ident.clone(),
-                            data_type: ParserDataType::auto(node.span),
-                            value: Box::new(AstNode::new(
-                                node.span,
-                                AstNodeType::MoveExpression {
-                                    value: Box::new(*base),
-                                },
-                            )),
-                        },
-                    );
-
-                    let moved_base = AstNode::new(
-                        node.span,
-                        AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                            tmp_ident,
-                        )),
-                    );
-                    let member = AstNode::new(
-                        node.span,
-                        AstNodeType::ScopeAccess {
-                            base: Box::new(moved_base),
-                            field,
-                        },
-                    );
-
-                    self.evaluate_inner(scope, AstNode::new_temp_scope(vec![tmp_decl, member]))
-                }
-                AstNodeType::IndexAccess { base, index } => {
-                    let tmp_ident: PotentialDollarIdentifier =
-                        ParserText::temp_name_with_suffix("move", node.span).into();
-
-                    let tmp_decl = AstNode::new(
-                        node.span,
-                        AstNodeType::VariableDeclaration {
-                            var_type: VarType::Immutable,
-                            identifier: tmp_ident.clone(),
-                            data_type: ParserDataType::auto(node.span),
-                            value: Box::new(AstNode::new(
-                                node.span,
-                                AstNodeType::MoveExpression {
-                                    value: Box::new(*base),
-                                },
-                            )),
-                        },
-                    );
-
-                    let moved_base = AstNode::new(
-                        node.span,
-                        AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                            tmp_ident,
-                        )),
-                    );
-                    let member = AstNode::new(
-                        node.span,
-                        AstNodeType::IndexAccess {
-                            base: Box::new(moved_base),
-                            index,
-                        },
-                    );
-
-                    self.evaluate_inner(scope, AstNode::new_temp_scope(vec![tmp_decl, member]))
-                }
-                _ => self.evaluate_inner(scope, *value),
-            },
-            AstNodeType::Drop(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::Drop(MirDrop {
-                    identifier: self.resolve(scope, &x, ResolutionOptions::idents())?,
-                }),
-                span: node.span,
-            }),
             AstNodeType::EmptyLine => Ok(MiddleNode {
                 node_type: MiddleNodeType::EmptyLine,
-                span: node.span,
-            }),
-            AstNodeType::RefStatement { mutability, value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::RefStatement(MirRef {
-                    mutability,
-                    value: Box::new(self.evaluate_inner(scope, *value)?),
-                }),
-                span: node.span,
-            }),
-            AstNodeType::DerefStatement { value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::DerefStatement(MirDeref {
-                    value: Box::new(self.evaluate_inner(scope, *value)?),
-                }),
                 span: node.span,
             }),
             AstNodeType::ParenExpression { value } => self.evaluate_inner(scope, *value),
@@ -855,44 +717,50 @@ impl MiddleEnvironment {
                             span: node.span,
                         },
                     ),
-                    AstNodeType::DerefStatement {
+                    AstNodeType::DerefStatement(AstDeref {
                         value: deref_target,
-                    } => Ok(MiddleNode {
+                    }) => Ok(MiddleNode {
                         node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
                             identifier: Box::new(self.evaluate(
                                 scope,
                                 AstNode::new(
                                     node.span,
-                                    AstNodeType::DerefStatement {
+                                    AstNodeType::DerefStatement(AstDeref {
                                         value: deref_target,
-                                    },
+                                    }),
                                 ),
                             )),
                             value: Box::new(self.evaluate(scope, *value)),
                         }),
                         span: node.span,
                     }),
-                    AstNodeType::FieldAccess { base, field } => Ok(MiddleNode {
+                    AstNodeType::FieldAccess(AstField { base, field }) => Ok(MiddleNode {
                         node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
                             identifier: Box::new(self.evaluate(
                                 scope,
-                                AstNode::new(node.span, AstNodeType::FieldAccess { base, field }),
+                                AstNode::new(
+                                    node.span,
+                                    AstNodeType::FieldAccess(AstField { base, field }),
+                                ),
                             )),
                             value: Box::new(self.evaluate(scope, *value)),
                         }),
                         span: node.span,
                     }),
-                    AstNodeType::ScopeAccess { base, field } => Ok(MiddleNode {
+                    AstNodeType::ScopeAccess(AstScope { base, field }) => Ok(MiddleNode {
                         node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
                             identifier: Box::new(self.evaluate(
                                 scope,
-                                AstNode::new(node.span, AstNodeType::ScopeAccess { base, field }),
+                                AstNode::new(
+                                    node.span,
+                                    AstNodeType::ScopeAccess(AstScope { base, field }),
+                                ),
                             )),
                             value: Box::new(self.evaluate(scope, *value)),
                         }),
                         span: node.span,
                     }),
-                    AstNodeType::IndexAccess { base, index } => {
+                    AstNodeType::IndexAccess(AstIndex { base, index }) => {
                         if let Some(overloaded) = self.handle_index_assign_overload(
                             scope,
                             node.span,
@@ -909,7 +777,7 @@ impl MiddleEnvironment {
                                     scope,
                                     AstNode::new(
                                         node.span,
-                                        AstNodeType::IndexAccess { base, index },
+                                        AstNodeType::IndexAccess(AstIndex { base, index }),
                                     ),
                                 )),
                                 value: Box::new(self.evaluate(scope, *value)),
@@ -1880,13 +1748,13 @@ impl MiddleEnvironment {
 
                                 let extracted = AstNode::new(
                                     node.span,
-                                    AstNodeType::FieldAccess {
+                                    AstNodeType::FieldAccess(AstField {
                                         base: Box::new(AstNode::new(
                                             node.span,
                                             AstNodeType::Identifier(tmp_ident.clone().into()),
                                         )),
                                         field: PotentialDollarIdentifier::new(node.span, "next"),
-                                    },
+                                    }),
                                 );
 
                                 let bind_node = match left.node_type {
@@ -1894,7 +1762,7 @@ impl MiddleEnvironment {
                                         node.span,
                                         AstNodeType::VariableDeclaration {
                                             var_type: VarType::Immutable,
-                                            identifier: ident.into(),
+                                            identifier: ident.value.into(),
                                             data_type: ParserDataType::auto(node.span),
                                             value: Box::new(extracted),
                                         },

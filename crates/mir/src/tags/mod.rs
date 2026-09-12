@@ -504,7 +504,7 @@ impl MiddleEnvironment {
                         AstNodeType::Identifier(x) =>
                         {
                             #[allow(clippy::single_match)]
-                            match x.get_ident().text().trim() {
+                            match x.value.get_ident().text().trim() {
                                 "memo" => memo = true,
                                 _ => {}
                             }
@@ -524,7 +524,7 @@ impl MiddleEnvironment {
                                 continue;
                             };
                             #[allow(clippy::single_match)]
-                            match x.get_ident().text().trim() {
+                            match x.value.get_ident().text().trim() {
                                 "memo" => memo = true,
                                 _ => {}
                             }
@@ -536,7 +536,9 @@ impl MiddleEnvironment {
                                     };
                                     match x.node_type {
                                         AstNodeType::Identifier(x) => {
-                                            params.push(Ustr::from(x.get_ident().text().trim()));
+                                            params.push(Ustr::from(
+                                                x.value.get_ident().text().trim(),
+                                            ));
                                         }
                                         AstNodeType::IntLiteral(x) => {
                                             params.push(Ustr::from(&x.value.to_string()));

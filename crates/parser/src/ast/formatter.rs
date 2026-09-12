@@ -414,6 +414,18 @@ impl Formatter {
             AstNodeType::CurryExpression(x) => x.format(self),
             AstNodeType::CallExpression(x) => x.format(self),
 
+            // Memory
+            AstNodeType::Drop(x) => x.format(self),
+            AstNodeType::RefStatement(x) => x.format(self),
+            AstNodeType::DerefStatement(x) => x.format(self),
+            AstNodeType::MoveExpression(x) => x.format(self),
+
+            // Access
+            AstNodeType::FieldAccess(x) => x.format(self),
+            AstNodeType::ScopeAccess(x) => x.format(self),
+            AstNodeType::IndexAccess(x) => x.format(self),
+            AstNodeType::Identifier(x) => x.format(self),
+
             AstNodeType::Spawn { items, auto_wait } => {
                 let prefix = if *auto_wait { "spawn@" } else { "spawn" };
                 if items.len() == 1 {
@@ -525,8 +537,6 @@ impl Formatter {
                 txt.push_str("\n}");
                 txt
             }
-            AstNodeType::Drop(x) => format!("drop {}", x),
-            AstNodeType::MoveExpression { value } => format!("move {}", self.format(value)),
             AstNodeType::ImportStatement {
                 module,
                 alias,
@@ -590,10 +600,6 @@ impl Formatter {
                     get_module(module)
                 )
             }
-            AstNodeType::RefStatement { mutability, value } => {
-                format!("{}.{}", self.format(value), mutability)
-            }
-            AstNodeType::DerefStatement { value } => format!("{}.*", self.format(value)),
             AstNodeType::ImplDeclaration {
                 generics,
                 target,
@@ -915,16 +921,6 @@ impl Formatter {
 
                 txt
             }
-            AstNodeType::FieldAccess { base, field } => {
-                format!("{}.{}", self.format(base), field)
-            }
-            AstNodeType::ScopeAccess { base, field } => {
-                format!("{}::{}", self.format(base), field)
-            }
-            AstNodeType::IndexAccess { base, index } => {
-                format!("{}[{}]", self.format(base), self.format(index))
-            }
-            AstNodeType::Identifier(x) => x.to_string(),
             AstNodeType::ScopeAlias {
                 identifier,
                 value,

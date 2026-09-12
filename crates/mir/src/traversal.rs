@@ -2,12 +2,14 @@ use calibre_parser::ast::{
     ObjectType,
     nodes::{
         AstNode, AstNodeType, LoopType,
+        access::{AstField, AstIndex, AstScope},
         binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
         conditionals::{AstIf, AstTernary, IfComparisonType},
         flow::{AstBreak, AstContinue, AstDefer, AstPipe, AstReturn, AstTry, PipeSegment},
         functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
         literals::{AstDataType, AstEnum, AstRange, AstStruct, AstTuple},
         loops::{AstList, AstListRepeat},
+        memory::{AstDeref, AstMove, AstRef},
         unary::{AstNeg, AstNot},
     },
 };
@@ -159,9 +161,11 @@ pub trait NodeVisitor {
                     values: values.into_iter().map(|n| self.visit(n)).collect(),
                 })
             }
-            AstNodeType::DerefStatement { value } => AstNodeType::DerefStatement {
-                value: Box::new(self.visit(*value)),
-            },
+            AstNodeType::DerefStatement(AstDeref { value }) => {
+                AstNodeType::DerefStatement(AstDeref {
+                    value: Box::new(self.visit(*value)),
+                })
+            }
             AstNodeType::VariableDeclaration {
                 var_type,
                 identifier,
@@ -223,18 +227,24 @@ pub trait NodeVisitor {
                 then: Box::new(self.visit(*then)),
                 otherwise: Box::new(self.visit(*otherwise)),
             }),
-            AstNodeType::FieldAccess { base, field } => AstNodeType::FieldAccess {
-                base: Box::new(self.visit(*base)),
-                field,
-            },
-            AstNodeType::ScopeAccess { base, field } => AstNodeType::ScopeAccess {
-                base: Box::new(self.visit(*base)),
-                field,
-            },
-            AstNodeType::IndexAccess { base, index } => AstNodeType::IndexAccess {
-                base: Box::new(self.visit(*base)),
-                index: Box::new(self.visit(*index)),
-            },
+            AstNodeType::FieldAccess(AstField { base, field }) => {
+                AstNodeType::FieldAccess(AstField {
+                    base: Box::new(self.visit(*base)),
+                    field,
+                })
+            }
+            AstNodeType::ScopeAccess(AstScope { base, field }) => {
+                AstNodeType::ScopeAccess(AstScope {
+                    base: Box::new(self.visit(*base)),
+                    field,
+                })
+            }
+            AstNodeType::IndexAccess(AstIndex { base, index }) => {
+                AstNodeType::IndexAccess(AstIndex {
+                    base: Box::new(self.visit(*base)),
+                    index: Box::new(self.visit(*index)),
+                })
+            }
             AstNodeType::DestructureDeclaration {
                 var_type,
                 pattern,
@@ -254,9 +264,11 @@ pub trait NodeVisitor {
                 items: items.into_iter().map(|n| self.visit(n)).collect(),
                 auto_wait,
             },
-            AstNodeType::MoveExpression { value } => AstNodeType::MoveExpression {
-                value: Box::new(self.visit(*value)),
-            },
+            AstNodeType::MoveExpression(AstMove { value }) => {
+                AstNodeType::MoveExpression(AstMove {
+                    value: Box::new(self.visit(*value)),
+                })
+            }
             AstNodeType::InDeclaration(AstIn { identifier, value }) => {
                 AstNodeType::InDeclaration(AstIn {
                     identifier: Box::new(self.visit(*identifier)),
@@ -298,10 +310,12 @@ pub trait NodeVisitor {
             | AstNodeType::CharLiteral(_) => node_type,
             AstNodeType::SelectStatement { arms } => AstNodeType::SelectStatement { arms },
             AstNodeType::Emit(emit_type) => AstNodeType::Emit(emit_type),
-            AstNodeType::RefStatement { mutability, value } => AstNodeType::RefStatement {
-                mutability,
-                value: Box::new(self.visit(*value)),
-            },
+            AstNodeType::RefStatement(AstRef { mutability, value }) => {
+                AstNodeType::RefStatement(AstRef {
+                    mutability,
+                    value: Box::new(self.visit(*value)),
+                })
+            }
             AstNodeType::DataType(AstDataType { data_type }) => {
                 AstNodeType::DataType(AstDataType { data_type })
             }
@@ -490,10 +504,10 @@ pub trait NodeAnalyzer {
                 value: right,
             }
             | AstNodeType::ComparisonExpression(AstComparison { left, right, .. })
-            | AstNodeType::IndexAccess {
+            | AstNodeType::IndexAccess(AstIndex {
                 base: left,
                 index: right,
-            }
+            })
             | AstNodeType::InDeclaration(AstIn {
                 identifier: left,
                 value: right,
@@ -531,12 +545,12 @@ pub trait NodeAnalyzer {
             | AstNodeType::CurryExpression(AstCurry { value })
             | AstNodeType::AsExpression(AstAs { value, .. })
             | AstNodeType::IsExpression(AstIs { value, .. })
-            | AstNodeType::FieldAccess { base: value, .. }
-            | AstNodeType::ScopeAccess { base: value, .. }
-            | AstNodeType::DerefStatement { value }
+            | AstNodeType::FieldAccess(AstField { base: value, .. })
+            | AstNodeType::ScopeAccess(AstScope { base: value, .. })
+            | AstNodeType::DerefStatement(AstDeref { value })
             | AstNodeType::DestructureDeclaration { value, .. }
             | AstNodeType::DestructureAssignment { value, .. }
-            | AstNodeType::MoveExpression { value } => self.analyze(value),
+            | AstNodeType::MoveExpression(AstMove { value }) => self.analyze(value),
             AstNodeType::TupleLiteral(AstTuple { values }) => {
                 values.iter().all(|n| self.analyze(n))
             }

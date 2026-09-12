@@ -5,6 +5,7 @@ use crate::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType,
+            access::{AstField, AstIdentifier, AstIndex, AstScope},
             flow::AstEmit,
             functions::{AstCurry, CallArg},
             literals::{AstStruct, AstTuple},
@@ -348,18 +349,18 @@ pub fn parse_program_with_source(
                                 if is_index {
                                     AstNode::new(
                                         Span::new_from_spans(current.span, node.span),
-                                        AstNodeType::IndexAccess {
+                                        AstNodeType::IndexAccess(AstIndex {
                                             base: Box::new(current),
                                             index: Box::new(node),
-                                        },
+                                        }),
                                     )
                                 } else if let AstNodeType::Identifier(ident) = node.node_type {
                                     AstNode::new(
                                         Span::new_from_spans(current.span, node.span),
-                                        AstNodeType::FieldAccess {
+                                        AstNodeType::FieldAccess(AstField {
                                             base: Box::new(current),
-                                            field: ident.into(),
-                                        },
+                                            field: ident.value.into(),
+                                        }),
                                     )
                                 } else {
                                     current
@@ -376,7 +377,9 @@ pub fn parse_program_with_source(
                     let sp = *id.span();
                     AstNode::new(
                         sp,
-                        AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(id)),
+                        AstNodeType::Identifier(AstIdentifier {
+                            value: PotentialGenericTypeIdentifier::Identifier(id),
+                        }),
                     )
                 }),
                 lex(pad.clone(), just("$("))
@@ -413,13 +416,13 @@ pub fn parse_program_with_source(
                     .map(|(base, field)| {
                         AstNode::new(
                             Span::new_from_spans(base.span, field.span),
-                            AstNodeType::FieldAccess {
+                            AstNodeType::FieldAccess(AstField {
                                 base: Box::new(base),
                                 field: match field.node_type {
-                                    AstNodeType::Identifier(identifier) => identifier.into(),
+                                    AstNodeType::Identifier(identifier) => identifier.value.into(),
                                     _ => unreachable!(),
                                 },
-                            },
+                            }),
                         )
                     }),
                 ident
@@ -444,20 +447,20 @@ pub fn parse_program_with_source(
                         for segment in segments {
                             current = AstNode::new(
                                 Span::new_from_spans(current.span, segment.span),
-                                AstNodeType::ScopeAccess {
+                                AstNodeType::ScopeAccess(AstScope {
                                     base: Box::new(current),
                                     field: segment.into(),
-                                },
+                                }),
                             );
                         }
 
                         let sp = Span::new_from_spans(current.span, value_span);
                         AstNode::new(
                             sp,
-                            AstNodeType::ScopeAccess {
+                            AstNodeType::ScopeAccess(AstScope {
                                 base: Box::new(current),
                                 field: value_text.into(),
-                            },
+                            }),
                         )
                     }),
                 struct_lit,
@@ -470,20 +473,23 @@ pub fn parse_program_with_source(
                     .map(|(base, field)| {
                         AstNode::new(
                             Span::new_from_spans(*base.span(), field.span),
-                            AstNodeType::FieldAccess {
+                            AstNodeType::FieldAccess(AstField {
                                 base: Box::new(AstNode::new(
                                     *base.span(),
-                                    AstNodeType::Identifier(base),
+                                    AstNodeType::Identifier(AstIdentifier { value: base }),
                                 )),
                                 field: match field.node_type {
-                                    AstNodeType::Identifier(identifier) => identifier.into(),
+                                    AstNodeType::Identifier(identifier) => identifier.value.into(),
                                     _ => unreachable!(),
                                 },
-                            },
+                            }),
                         )
                     }),
                 generic_ident.map(|identifier| {
-                    AstNode::new(*identifier.span(), AstNodeType::Identifier(identifier))
+                    AstNode::new(
+                        *identifier.span(),
+                        AstNodeType::Identifier(AstIdentifier { value: identifier }),
+                    )
                 }),
                 lex(pad.clone(), just('('))
                     .ignore_then(

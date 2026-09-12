@@ -28,7 +28,7 @@ impl AstFormatting for AstStruct {
                     map.iter()
                         .map(|(key, value)| {
                             if let AstNodeType::Identifier(x) = &value.node_type
-                                && &x.to_string() == key
+                                && x.value.get_ident().text() == key
                             {
                                 key.to_string()
                             } else {
@@ -67,7 +67,7 @@ impl AstFormatting for AstStruct {
                     .iter()
                     .map(|(key, value)| {
                         if let AstNodeType::Identifier(x) = &value.node_type
-                            && &x.to_string() == key
+                            && x.value.get_ident().text() == key
                         {
                             (
                                 key.clone(),

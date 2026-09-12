@@ -14,7 +14,7 @@ impl<'a> NodeVisitor for GuardRewriter<'a> {
                 if let Some((_, replacement)) = self
                     .bindings
                     .iter()
-                    .find(|(name, _)| *name == id.get_ident().text())
+                    .find(|(name, _)| *name == id.value.get_ident().text())
                 {
                     replacement.node_type.clone()
                 } else {

@@ -13,11 +13,13 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
             AstNode, AstNodeType, LoopType, VarType,
+            access::{AstField, AstIndex},
             binary::{AstBinary, AstComparison},
             conditionals::{AstIf, IfComparisonType},
             flow::AstBreak,
             functions::CallArg,
             literals::AstRange,
+            memory::AstRef,
             unary::AstNot,
         },
         types::{ParserDataType, ParserInnerType},
@@ -288,15 +290,15 @@ impl MiddleEnvironment {
             }
 
             LoopType::For(name, range) => {
-                let iter_target = if let AstNodeType::RefStatement { value, .. } = &range.node_type
-                {
-                    match value.node_type {
-                        AstNodeType::Identifier(_) => Some(*value.clone()),
-                        _ => None,
-                    }
-                } else {
-                    None
-                };
+                let iter_target =
+                    if let AstNodeType::RefStatement(AstRef { value, .. }) = &range.node_type {
+                        match value.node_type {
+                            AstNodeType::Identifier(_) => Some(*value.clone()),
+                            _ => None,
+                        }
+                    } else {
+                        None
+                    };
 
                 let range_dt = self.resolve_type_from_node(scope, &range);
 
@@ -352,7 +354,9 @@ impl MiddleEnvironment {
                 } else {
                     (
                         if is_indexable_loop {
-                            if let AstNodeType::RefStatement { value, .. } = &range.node_type {
+                            if let AstNodeType::RefStatement(AstRef { value, .. }) =
+                                &range.node_type
+                            {
                                 *value.clone()
                             } else {
                                 range.clone()
@@ -483,18 +487,18 @@ impl MiddleEnvironment {
 
                 let indexed_value_node = AstNode::new(
                     span,
-                    AstNodeType::IndexAccess {
+                    AstNodeType::IndexAccess(AstIndex {
                         base: Box::new(iter_node.clone()),
                         index: Box::new(AstNode::identifier(span, &idx_id)),
-                    },
+                    }),
                 );
 
                 let next_value_node = AstNode::new(
                     span,
-                    AstNodeType::FieldAccess {
+                    AstNodeType::FieldAccess(AstField {
                         base: Box::new(AstNode::identifier(span, &next_id)),
                         field: PotentialDollarIdentifier::new(span, "next"),
-                    },
+                    }),
                 );
                 let loop_item_value = if is_count_loop {
                     AstNode::identifier(span, &idx_id)

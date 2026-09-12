@@ -1,16 +1,11 @@
 use crate::{
-    environment::MiddleEnvironment,
-    scoping::ScopeId,
-    symbols::resolve::{ResolutionOptions, StrOrAstNode},
+    environment::MiddleEnvironment, scoping::ScopeId, symbols::resolve::ResolutionOptions,
     translate::MirLowering,
-    typing::MiddleTypeDefType,
 };
 use calibre_parser::ast::{
-    idents::ParsedIntLiteral,
     nodes::{AstNode, AstNodeType, flow::AstEmit},
     types::{ParserDataType, ParserInnerType},
 };
-use ustr::Ustr;
 
 impl MiddleEnvironment {
     pub fn resolve_emit_type_from_node(
@@ -120,6 +115,17 @@ impl MiddleEnvironment {
                 header.type_of(self, scope, node.span)
             }
 
+            // Access
+            AstNodeType::FieldAccess(x) => x.type_of(self, scope, node.span),
+            AstNodeType::ScopeAccess(x) => x.type_of(self, scope, node.span),
+            AstNodeType::IndexAccess(x) => x.type_of(self, scope, node.span),
+            AstNodeType::Identifier(x) => x.type_of(self, scope, node.span),
+
+            // Memory
+            AstNodeType::MoveExpression(x) => x.type_of(self, scope, node.span),
+            AstNodeType::RefStatement(x) => x.type_of(self, scope, node.span),
+            AstNodeType::DerefStatement(x) => x.type_of(self, scope, node.span),
+
             // TODO
             AstNodeType::Break { .. }
             | AstNodeType::Continue { .. }
@@ -166,16 +172,9 @@ impl MiddleEnvironment {
             | AstNodeType::Defer { .. }
             | AstNodeType::Drop(_)
             | AstNodeType::EmptyLine => Some(ParserDataType::new(node.span, ParserInnerType::Null)),
-            AstNodeType::MoveExpression { value } | AstNodeType::ParenExpression { value } => self
+            AstNodeType::ParenExpression { value } => self
                 .resolve_type_from_node(scope, value)
                 .map(|x| x.unwrap_all_refs()),
-            AstNodeType::RefStatement { mutability, value } => Some(ParserDataType {
-                data_type: ParserInnerType::Ref(
-                    Box::new(self.resolve_type_from_node(scope, value)?.unwrap_all_refs()),
-                    *mutability,
-                ),
-                span: node.span,
-            }),
             AstNodeType::ScopeDeclaration {
                 body: Some(body), ..
             } => {
@@ -242,118 +241,6 @@ impl MiddleEnvironment {
                     Some(list_type)
                 }
             }
-            AstNodeType::Identifier(x) => {
-                match self
-                    .resolve_potential_node(scope, x, ResolutionOptions::idents())
-                    .ok()?
-                {
-                    StrOrAstNode::Str(iden) => self
-                        .symbols
-                        .variables
-                        .get(&iden)
-                        .map(|x| x.data_type.clone()),
-                    StrOrAstNode::Node(x) => return self.resolve_type_from_node(scope, &x),
-                }
-            }
-            AstNodeType::FieldAccess { base, field } => {
-                let ty = self.resolve_type_from_node(scope, base).or_else(|| {
-                    if let AstNodeType::Identifier(id) = &base.node_type {
-                        self.resolve_to_data_type(scope, id).ok()
-                    } else {
-                        None
-                    }
-                })?;
-
-                let member = self
-                    .resolve(scope, field, ResolutionOptions::default().with_dollar())
-                    .unwrap_or_else(|_| Ustr::from(field.text()));
-
-                if let Some(member_type) = self.resolve_member_fn_type(&ty, &member) {
-                    return Some(member_type);
-                }
-
-                if let Some(MiddleTypeDefType::Enum { .. }) = self
-                    .typing
-                    .find_object_for_struct_name(&Ustr::from(&ty.impl_name()))
-                    .map(|x| &x.object_type)
-                {
-                    return Some(ty);
-                }
-
-                self.resolve_member_field_type(scope, &ty, &member, node.span)
-            }
-            AstNodeType::ScopeAccess { base, field } => {
-                let mut module_path = Vec::new();
-                if base.scope_access_path(&mut module_path) {
-                    let member = self
-                        .resolve(scope, field, ResolutionOptions::default().with_dollar())
-                        .unwrap_or_else(|_| Ustr::from(field.text()));
-
-                    if let Ok(member_scope) = self
-                        .get_scope_list(scope, &module_path.clone())
-                        .or_else(|_| self.import_scope_list(scope, &module_path).map(|x| x.0))
-                    {
-                        let resolved = self
-                            .resolve(member_scope, field, ResolutionOptions::idents())
-                            .unwrap_or(member);
-                        return self
-                            .symbols
-                            .variables
-                            .get(&resolved)
-                            .map(|x| x.data_type.clone());
-                    }
-                }
-
-                None
-            }
-            AstNodeType::IndexAccess { base, index } => {
-                let base_type = self.resolve_type_from_node(scope, base).or_else(|| {
-                    if let AstNodeType::Identifier(id) = &base.node_type {
-                        self.resolve_to_data_type(scope, id).ok()
-                    } else {
-                        None
-                    }
-                });
-
-                if let Some(base_type) = base_type {
-                    let resolved_type = match self.resolve_data_type(
-                        scope,
-                        &base_type,
-                        ResolutionOptions::typing(),
-                    ) {
-                        Ok(ty) => ty.unwrap_all_refs(),
-                        Err(_) => return Some(ParserDataType::auto(node.span)),
-                    };
-
-                    let index_type = match resolved_type.data_type {
-                        ParserInnerType::List(inner)
-                        | ParserInnerType::Option(inner)
-                        | ParserInnerType::Ptr(inner) => *inner,
-                        ParserInnerType::Tuple(values) => match &index.node_type {
-                            AstNodeType::IntLiteral(i) => ParsedIntLiteral::parse(&i.value)
-                                .and_then(|idx| values.get(idx.value as usize).cloned())
-                                .unwrap_or_else(|| {
-                                    ParserDataType::new(node.span, ParserInnerType::Auto(None))
-                                }),
-                            _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
-                        },
-                        ParserInnerType::Result { ok, err } => {
-                            if ok.data_type == err.data_type {
-                                *ok
-                            } else {
-                                ParserDataType::new(node.span, ParserInnerType::Dynamic)
-                            }
-                        }
-                        _ => ParserDataType::new(node.span, ParserInnerType::Auto(None)),
-                    };
-                    Some(index_type)
-                } else {
-                    Some(ParserDataType::auto(node.span))
-                }
-            }
-            AstNodeType::DerefStatement { value } => self
-                .resolve_type_from_node(scope, value)
-                .map(|x| x.unwrap_all_refs()),
             AstNodeType::ScopeDeclaration { .. } => unreachable!(),
             AstNodeType::Tag { .. } => {
                 Some(ParserDataType::new(node.span, ParserInnerType::Auto(None)))

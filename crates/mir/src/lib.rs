@@ -4,7 +4,11 @@ use calibre_parser::{
     ast::{
         binary::BinaryOperator,
         idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{AstNode, AstNodeType, DestructurePattern, VarType, binary::AstBinary},
+        nodes::{
+            AstNode, AstNodeType, DestructurePattern, VarType,
+            access::{AstField, AstIdentifier, AstIndex},
+            binary::AstBinary,
+        },
         types::ParserDataType,
     },
 };
@@ -43,9 +47,9 @@ impl MiddleEnvironment {
         let tmp_member_base = || {
             AstNode::new(
                 span,
-                AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                    tmp_ident.clone(),
-                )),
+                AstNodeType::Identifier(AstIdentifier {
+                    value: PotentialGenericTypeIdentifier::Identifier(tmp_ident.clone()),
+                }),
             )
         };
 
@@ -69,9 +73,9 @@ impl MiddleEnvironment {
                     AstNodeType::AssignmentExpression {
                         identifier: Box::new(AstNode::new(
                             span,
-                            AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(
-                                name.clone(),
-                            )),
+                            AstNodeType::Identifier(AstIdentifier {
+                                value: PotentialGenericTypeIdentifier::Identifier(name.clone()),
+                            }),
                         )),
                         value: Box::new(member),
                     },
@@ -104,10 +108,10 @@ impl MiddleEnvironment {
                             let index_node = AstNode::int(span, idx);
                             AstNode::new(
                                 span,
-                                AstNodeType::IndexAccess {
+                                AstNodeType::IndexAccess(AstIndex {
                                     base: Box::new(tmp_member_base()),
                                     index: Box::new(index_node),
-                                },
+                                }),
                             )
                         });
                     }
@@ -122,11 +126,11 @@ impl MiddleEnvironment {
                                     span,
                                     AstNode::new(
                                         span,
-                                        AstNodeType::Identifier(
-                                            PotentialGenericTypeIdentifier::Identifier(
+                                        AstNodeType::Identifier(AstIdentifier {
+                                            value: PotentialGenericTypeIdentifier::Identifier(
                                                 tmp_ident.clone(),
                                             ),
-                                        ),
+                                        }),
                                     ),
                                 )),
                                 right: Box::new(AstNode::int(span, total_tail - i as i64)),
@@ -140,10 +144,10 @@ impl MiddleEnvironment {
                             name,
                             AstNode::new(
                                 span,
-                                AstNodeType::IndexAccess {
+                                AstNodeType::IndexAccess(AstIndex {
                                     base: Box::new(tmp_member_base()),
                                     index: Box::new(index_expr),
-                                },
+                                }),
                             ),
                         );
                     }
@@ -157,10 +161,10 @@ impl MiddleEnvironment {
                         name,
                         AstNode::new(
                             span,
-                            AstNodeType::FieldAccess {
+                            AstNodeType::FieldAccess(AstField {
                                 base: Box::new(tmp_member_base()),
                                 field: PotentialDollarIdentifier::new(span, field),
-                            },
+                            }),
                         ),
                     );
                 }

@@ -14,6 +14,7 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
             AstNode, AstNodeType,
+            access::AstField,
             binary::{AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
             flow::{AstTry, TryCatch},
             functions::CallArg,
@@ -370,10 +371,10 @@ impl MirLowering for AstIn {
         {
             let member = AstNode::new(
                 span,
-                AstNodeType::FieldAccess {
+                AstNodeType::FieldAccess(AstField {
                     base: Box::new(*self.value.clone()),
                     field: PotentialDollarIdentifier::new(span, "contains"),
-                },
+                }),
             );
 
             return AstNode::call(span, member, vec![CallArg::Value(*self.identifier)])

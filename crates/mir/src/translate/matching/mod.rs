@@ -21,6 +21,7 @@ use calibre_parser::{
         matching::MatchArmType,
         nodes::{
             AstNode, AstNodeType, VarType,
+            access::AstIndex,
             binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, IfComparisonType},
             functions::CallArg,
@@ -34,10 +35,10 @@ impl MiddleEnvironment {
     pub fn match_index_access(&self, base: AstNode, index: usize) -> AstNode {
         AstNode::new(
             self.context.current_span(),
-            AstNodeType::IndexAccess {
+            AstNodeType::IndexAccess(AstIndex {
                 base: Box::new(base),
                 index: Box::new(AstNode::int(self.context.current_span(), index)),
-            },
+            }),
         )
     }
 
@@ -159,12 +160,12 @@ impl MiddleEnvironment {
                 ..
             }) = &pattern.0
                 && self
-                    .resolve(scope, id, ResolutionOptions::idents())
+                    .resolve(scope, &id.value, ResolutionOptions::idents())
                     .is_err()
             {
                 pattern.0 = MatchArmType::Let {
                     var_type: VarType::Immutable,
-                    name: id.get_ident().clone(),
+                    name: id.value.get_ident().clone(),
                 };
             }
 

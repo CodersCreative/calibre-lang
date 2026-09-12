@@ -1,7 +1,7 @@
 use crate::{
     COUNTER, ParserError, Span,
     ast::{
-        nodes::{AstNode, AstNodeType},
+        nodes::{AstNode, AstNodeType, access::AstIdentifier},
         types::ParserDataType,
     },
 };
@@ -94,7 +94,7 @@ impl From<PotentialGenericTypeIdentifier> for AstNode {
     fn from(val: PotentialGenericTypeIdentifier) -> AstNode {
         AstNode {
             span: *val.span(),
-            node_type: AstNodeType::Identifier(val),
+            node_type: AstNodeType::Identifier(AstIdentifier { value: val }),
         }
     }
 }
@@ -149,11 +149,21 @@ impl From<PotentialDollarIdentifier> for PotentialGenericTypeIdentifier {
     }
 }
 
+impl From<PotentialDollarIdentifier> for AstIdentifier {
+    fn from(value: PotentialDollarIdentifier) -> Self {
+        Self {
+            value: PotentialGenericTypeIdentifier::Identifier(value),
+        }
+    }
+}
+
 impl From<PotentialDollarIdentifier> for AstNode {
     fn from(val: PotentialDollarIdentifier) -> AstNode {
         AstNode {
             span: *val.span(),
-            node_type: AstNodeType::Identifier(PotentialGenericTypeIdentifier::Identifier(val)),
+            node_type: AstNodeType::Identifier(AstIdentifier {
+                value: PotentialGenericTypeIdentifier::Identifier(val),
+            }),
         }
     }
 }
