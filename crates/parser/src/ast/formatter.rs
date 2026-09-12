@@ -9,15 +9,13 @@ use crate::{
             SelectArmKind,
         },
         nodes::{
-            AstNode, AstNodeType, CallArg, DestructurePattern, LoopType, Overload, TypeDefType,
-            VarType,
+            AstNode, AstNodeType, DestructurePattern, LoopType, Overload, TypeDefType, VarType,
             binary::{AstBinary, AstBoolean},
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
     formatter::AstFormatting,
 };
-use rustc_hash::FxHashMap;
 use std::error::Error;
 
 pub struct Tab {
@@ -84,6 +82,8 @@ impl Default for Formatter {
 }
 
 impl AstFormatting for AstNode {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         formatter.format(self)
     }
@@ -319,11 +319,11 @@ impl Formatter {
         text.lines().any(|line| line.len() > self.max_width)
     }
 
-    pub fn wrap_if_wide(&self, single: String, multiline: &str) -> String {
+    fn wrap_if_wide(&self, single: String, multiline: &str) -> String {
         self.wrap_if_wide_or_if(single, multiline, false)
     }
 
-    fn wrap_if_wide_or_if(&self, single: String, multiline: &str, condition: bool) -> String {
+    pub fn wrap_if_wide_or_if(&self, single: String, multiline: &str, condition: bool) -> String {
         if self.should_wrap_width_only(&single) || condition {
             multiline.to_string()
         } else {
@@ -407,6 +407,12 @@ impl Formatter {
             // Unary
             AstNodeType::NegExpression(x) => x.format(self),
             AstNodeType::NotExpression(x) => x.format(self),
+
+            // Functions
+            AstNodeType::FunctionDeclaration(x) => x.format(self),
+            AstNodeType::ExternFunctionDeclaration(x) => x.format(self),
+            AstNodeType::CurryExpression(x) => x.format(self),
+            AstNodeType::CallExpression(x) => x.format(self),
 
             AstNodeType::Spawn { items, auto_wait } => {
                 let prefix = if *auto_wait { "spawn@" } else { "spawn" };
@@ -701,7 +707,6 @@ impl Formatter {
             AstNodeType::TestDeclaration { identifier, body } => {
                 format!("test {:?} {}", identifier.text, self.format(body))
             }
-            AstNodeType::CurryExpression { value } => format!("curry {}", self.format(value)),
             AstNodeType::AssignmentExpression { identifier, value } => match &value.node_type {
                 AstNodeType::BinaryExpression(AstBinary {
                     left,
@@ -753,64 +758,6 @@ impl Formatter {
                     self.fmt_txt_with_tab(&rhs, 1, true)
                 );
                 self.wrap_if_wide(single, &multi)
-            }
-
-            AstNodeType::CallExpression {
-                string_fn,
-                caller,
-                generic_types,
-                args,
-                reverse_args,
-            } => {
-                let mut txt = self.format(caller);
-
-                if !generic_types.is_empty() {
-                    txt.push_str(&format!(
-                        ":<{}>",
-                        generic_types
-                            .iter()
-                            .map(|x| x.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                    ));
-                }
-
-                if let Some(sfn) = string_fn {
-                    txt.push_str(&format!("{:?}", sfn.text));
-                } else {
-                    txt.push('(');
-
-                    let mut arg_txt = Vec::new();
-                    for arg in args {
-                        match arg {
-                            CallArg::Value(x) => arg_txt.push(self.format(x)),
-                            CallArg::Named(x, y) => {
-                                arg_txt.push(format!("{} : {}", x, self.format(y)))
-                            }
-                        }
-                    }
-                    let single = format!("{}{})", txt, arg_txt.join(", "));
-                    let multi = format!(
-                        "{}\n{}\n{})",
-                        txt,
-                        self.fmt_txt_with_tab(&arg_txt.join(",\n"), 1, true),
-                        self.tab.get_tab_from_amt(0)
-                    );
-                    txt = self.wrap_if_wide_or_if(single, &multi, args.len() > self.max_values);
-                };
-
-                if !reverse_args.is_empty() {
-                    txt.push_str(&format!(
-                        "<({})",
-                        reverse_args
-                            .iter()
-                            .map(|x| self.format(x))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ));
-                }
-
-                txt
             }
             AstNodeType::Tag {
                 node,
@@ -893,151 +840,6 @@ impl Formatter {
                 txt.push(')');
                 if let Some(data_type) = data_type {
                     txt.push_str(&format!(" -> gen:<{}>", data_type));
-                }
-                txt
-            }
-
-            AstNodeType::FunctionDeclaration { header, body } => {
-                let mut txt = String::from("fn");
-
-                if !header.generics.0.is_empty() {
-                    txt.push_str(&format!(" {}", self.fmt_generic_types(&header.generics)));
-                }
-
-                if !header.parameters.is_empty() {
-                    txt.push_str(" (");
-
-                    let mut adjusted_params = header
-                        .parameters
-                        .first()
-                        .map(|x| vec![vec![x]])
-                        .unwrap_or(Vec::new());
-
-                    for param in header.parameters.iter().skip(1) {
-                        let should_group = adjusted_params
-                            .last()
-                            .and_then(|v| v.first())
-                            .map(|last| last.1 == param.1 && last.2 == param.2)
-                            .unwrap_or(false);
-                        if should_group {
-                            if let Some(group) = adjusted_params.last_mut() {
-                                group.push(param);
-                            } else {
-                                adjusted_params.push(vec![param]);
-                            }
-                        } else {
-                            adjusted_params.push(vec![param]);
-                        }
-                    }
-
-                    let mut destructure_map = FxHashMap::default();
-                    for (idx, pattern) in header.param_destructures.iter() {
-                        destructure_map.insert(*idx, pattern);
-                    }
-
-                    let mut param_txt = Vec::new();
-                    let mut param_txt_expanded = Vec::new();
-                    let mut param_index = 0usize;
-                    for params in &adjusted_params {
-                        let mut chunk = String::new();
-                        for id in params {
-                            let mut expanded_chunk = String::new();
-                            if let Some(pattern) = destructure_map.get(&param_index) {
-                                let pattern_txt = self.fmt_destructure_pattern(pattern, true);
-                                chunk.push_str(&format!("{} ", pattern_txt));
-                                expanded_chunk.push_str(&pattern_txt);
-                            } else {
-                                chunk.push_str(&format!("{} ", id.0));
-                                expanded_chunk.push_str(&id.0.to_string());
-                            }
-                            if let Some(x) = &id.1 {
-                                expanded_chunk.push_str(&format!(": {}", x));
-                            }
-                            if let Some(x) = &id.2 {
-                                expanded_chunk.push_str(&format!(
-                                    "{}= {}",
-                                    if id.1.is_none() { ":" } else { " " },
-                                    self.format(x)
-                                ));
-                            }
-                            param_txt_expanded.push(expanded_chunk);
-                            param_index += 1;
-                        }
-
-                        if let Some(last) = params.last() {
-                            if let Some(x) = &last.1 {
-                                chunk.push_str(&format!(": {}", x));
-                            }
-
-                            if let Some(x) = &last.2 {
-                                chunk.push_str(&format!(
-                                    "{}= {}",
-                                    if last.1.is_none() { ":" } else { " " },
-                                    self.format(x)
-                                ));
-                            }
-                        }
-                        param_txt.push(chunk.trim_end().to_string());
-                    }
-
-                    let single = format!("{}{})", txt, param_txt.join(", "));
-                    let multi = format!(
-                        "{}\n{}\n{})",
-                        txt,
-                        self.fmt_txt_with_tab(&param_txt.join(",\n"), 1, true),
-                        self.tab.get_tab_from_amt(0)
-                    );
-                    let multi_expanded = format!(
-                        "{}\n{}\n{})",
-                        txt,
-                        self.fmt_txt_with_tab(&param_txt_expanded.join(",\n"), 1, true),
-                        self.tab.get_tab_from_amt(0)
-                    );
-
-                    let force_third_layout = self.has_comment_between_spans(&node.span, &body.span);
-                    txt = if force_third_layout || header.parameters.len() > self.max_values + 2 {
-                        multi_expanded
-                    } else if !self.should_wrap_width_only(&single) {
-                        single
-                    } else if !self.should_wrap_width_only(&multi) {
-                        multi
-                    } else {
-                        multi_expanded
-                    };
-                }
-
-                if !header.return_type.is_null() {
-                    txt.push_str(&format!(" -> {}", header.return_type));
-                }
-
-                txt.push_str(&format!(" {}", self.format(body)));
-
-                txt
-            }
-            AstNodeType::ExternFunctionDeclaration {
-                abi,
-                identifier,
-                parameters,
-                return_type,
-                library,
-                symbol,
-            } => {
-                let mut txt = format!("extern \"{}\" const {} := fn(", abi, identifier);
-                let params: Vec<String> = parameters.iter().map(|p| self.fmt_ffi_type(p)).collect();
-                let single = format!("{}{})", txt, params.join(", "));
-                let multi = format!(
-                    "{}\n{}\n{})",
-                    txt,
-                    self.fmt_txt_with_tab(&params.join(",\n"), 1, true),
-                    self.tab.get_tab_from_amt(0)
-                );
-                txt = self.wrap_if_wide(single, &multi);
-                if !return_type.is_null() {
-                    txt.push_str(&format!(" -> {}", self.fmt_ffi_type(return_type)));
-                }
-                txt.push_str(&format!(" from \"{}\"", library));
-                if let Some(sym) = symbol {
-                    txt.push_str(&format!(" as \"{}\"", sym));
                 }
                 txt
             }
@@ -1261,7 +1063,11 @@ impl Formatter {
         }
     }
 
-    fn fmt_destructure_pattern(&self, pattern: &DestructurePattern, wrap_tuple: bool) -> String {
+    pub fn fmt_destructure_pattern(
+        &self,
+        pattern: &DestructurePattern,
+        wrap_tuple: bool,
+    ) -> String {
         match pattern {
             DestructurePattern::Tuple(bindings) => {
                 let mut txt = String::new();
@@ -1412,7 +1218,7 @@ impl Formatter {
         }
     }
 
-    fn fmt_generic_types(&mut self, types: &GenericTypes) -> String {
+    pub fn fmt_generic_types(&mut self, types: &GenericTypes) -> String {
         if types.0.is_empty() {
             return String::new();
         }
@@ -2118,22 +1924,16 @@ impl Formatter {
 
     pub fn fmt_infix_expr<T: std::fmt::Display>(
         &mut self,
-        left: &dyn AstFormatting,
+        left: &dyn AstFormatting<PreFormat = ()>,
         operator: T,
-        right: &dyn AstFormatting,
+        right: &dyn AstFormatting<PreFormat = ()>,
     ) -> String {
         let lhs = left.format(self);
         let rhs = right.format(self);
         format!("{} {} {}", lhs, operator, rhs)
     }
 
-    fn has_comment_between_spans(&self, outer: &Span, end: &Span) -> bool {
-        self.comments
-            .iter()
-            .any(|comment| comment.span.from >= outer.from && comment.span.to <= end.from)
-    }
-
-    fn fmt_ffi_type(&mut self, data_type: &ParserDataType) -> String {
+    pub fn fmt_ffi_type(&mut self, data_type: &ParserDataType) -> String {
         self.fmt_ffi_normal_type(data_type)
     }
 

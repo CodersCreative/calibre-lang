@@ -1,10 +1,11 @@
 use calibre_parser::ast::{
     ObjectType,
     nodes::{
-        AstNode, AstNodeType, CallArg, LoopType,
+        AstNode, AstNodeType, LoopType,
         binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
         conditionals::{AstIf, AstTernary, IfComparisonType},
         flow::{AstBreak, AstContinue, AstDefer, AstPipe, AstReturn, AstTry, PipeSegment},
+        functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
         literals::{AstDataType, AstEnum, AstRange, AstStruct, AstTuple},
         loops::{AstList, AstListRepeat},
         unary::{AstNeg, AstNot},
@@ -57,13 +58,13 @@ pub trait NodeVisitor {
                     value: Box::new(self.visit(*value)),
                 }
             }
-            AstNodeType::CallExpression {
+            AstNodeType::CallExpression(AstCall {
                 string_fn,
                 caller,
                 generic_types,
                 args,
                 reverse_args,
-            } => AstNodeType::CallExpression {
+            }) => AstNodeType::CallExpression(AstCall {
                 string_fn,
                 caller: Box::new(self.visit(*caller)),
                 generic_types,
@@ -75,7 +76,7 @@ pub trait NodeVisitor {
                     })
                     .collect(),
                 reverse_args: reverse_args.into_iter().map(|n| self.visit(n)).collect(),
-            },
+            }),
             AstNodeType::IfStatement(AstIf {
                 comparison,
                 then,
@@ -113,9 +114,11 @@ pub trait NodeVisitor {
             AstNodeType::NegExpression(AstNeg { value }) => AstNodeType::NegExpression(AstNeg {
                 value: Box::new(self.visit(*value)),
             }),
-            AstNodeType::CurryExpression { value } => AstNodeType::CurryExpression {
-                value: Box::new(self.visit(*value)),
-            },
+            AstNodeType::CurryExpression(AstCurry { value }) => {
+                AstNodeType::CurryExpression(AstCurry {
+                    value: Box::new(self.visit(*value)),
+                })
+            }
             AstNodeType::AsExpression(AstAs {
                 value,
                 data_type,
@@ -179,10 +182,12 @@ pub trait NodeVisitor {
                 object,
                 overloads,
             },
-            AstNodeType::FunctionDeclaration { header, body } => AstNodeType::FunctionDeclaration {
-                header,
-                body: Box::new(self.visit(*body)),
-            },
+            AstNodeType::FunctionDeclaration(AstFunction { header, body }) => {
+                AstNodeType::FunctionDeclaration(AstFunction {
+                    header,
+                    body: Box::new(self.visit(*body)),
+                })
+            }
             AstNodeType::LoopDeclaration {
                 loop_type,
                 body,
@@ -258,21 +263,21 @@ pub trait NodeVisitor {
                     value: Box::new(self.visit(*value)),
                 })
             }
-            AstNodeType::ExternFunctionDeclaration {
+            AstNodeType::ExternFunctionDeclaration(AstExtern {
                 abi,
                 identifier,
                 parameters,
                 return_type,
                 library,
                 symbol,
-            } => AstNodeType::ExternFunctionDeclaration {
+            }) => AstNodeType::ExternFunctionDeclaration(AstExtern {
                 abi,
                 identifier,
                 parameters,
                 return_type,
                 library,
                 symbol,
-            },
+            }),
             AstNodeType::Return(AstReturn { value }) => AstNodeType::Return(AstReturn {
                 value: value.map(|n| Box::new(self.visit(*n))),
             }),
@@ -493,12 +498,12 @@ pub trait NodeAnalyzer {
                 identifier: left,
                 value: right,
             }) => self.analyze(left) && self.analyze(right),
-            AstNodeType::CallExpression {
+            AstNodeType::CallExpression(AstCall {
                 caller,
                 args,
                 reverse_args,
                 ..
-            } => {
+            }) => {
                 self.analyze(caller)
                     && args.iter().all(|a| match a {
                         CallArg::Value(v) => self.analyze(v),
@@ -523,7 +528,7 @@ pub trait NodeAnalyzer {
             AstNodeType::ParenExpression { value }
             | AstNodeType::NotExpression(AstNot { value })
             | AstNodeType::NegExpression(AstNeg { value })
-            | AstNodeType::CurryExpression { value }
+            | AstNodeType::CurryExpression(AstCurry { value })
             | AstNodeType::AsExpression(AstAs { value, .. })
             | AstNodeType::IsExpression(AstIs { value, .. })
             | AstNodeType::FieldAccess { base: value, .. }
@@ -543,7 +548,7 @@ pub trait NodeAnalyzer {
                 values.iter().all(|n| self.analyze(n))
             }
             AstNodeType::VariableDeclaration { value, .. } => self.analyze(value),
-            AstNodeType::FunctionDeclaration { body, .. } => self.analyze(body),
+            AstNodeType::FunctionDeclaration(AstFunction { body, .. }) => self.analyze(body),
             AstNodeType::LoopDeclaration {
                 loop_type,
                 body,

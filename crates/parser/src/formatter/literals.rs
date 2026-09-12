@@ -14,6 +14,8 @@ use crate::{
 };
 
 impl AstFormatting for AstStruct {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         // TODO check if has comments
         let has_comments = false;
@@ -130,6 +132,8 @@ impl AstFormatting for AstStruct {
 }
 
 impl AstFormatting for AstEnum {
+    type PreFormat = ();
+
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
         match &self.data {
             Some(data) => {
@@ -155,6 +159,8 @@ impl AstFormatting for AstEnum {
 }
 
 impl AstFormatting for AstTuple {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         self.values
             .iter()
@@ -176,6 +182,8 @@ impl AstFormatting for AstTuple {
 }
 
 impl AstFormatting for AstString {
+    type PreFormat = ();
+
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
         format!("\"{}\"", Self::escape_string_literal(&self.value.text))
     }
@@ -202,6 +210,8 @@ impl AstString {
 }
 
 impl AstFormatting for AstRange {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         format!(
             "{}..{}{}",
@@ -213,6 +223,8 @@ impl AstFormatting for AstRange {
 }
 
 impl AstFormatting for AstChar {
+    type PreFormat = ();
+
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
         format!("'{}'", Self::escape_char_literal(&self.value))
     }
@@ -225,6 +237,8 @@ impl AstChar {
 }
 
 impl AstFormatting for AstFloat {
+    type PreFormat = ();
+
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
         let mut temp = self.value.to_string();
         if temp.contains(".") {
@@ -237,18 +251,24 @@ impl AstFormatting for AstFloat {
 }
 
 impl AstFormatting for AstInt {
+    type PreFormat = ();
+
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
         self.value.to_string()
     }
 }
 
 impl AstFormatting for AstBig {
+    type PreFormat = ();
+
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
         format!("{}g", self.value)
     }
 }
 
 impl AstFormatting for AstDataType {
+    type PreFormat = ();
+
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
         format!("type : {}", self.data_type)
     }

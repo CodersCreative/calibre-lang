@@ -9,10 +9,11 @@ use crate::ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType};
 use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstPipe, AstTry, PipeSegment, TryCatch,
 };
+use crate::ast::nodes::functions::{AstCall, CallArg};
 use crate::ast::nodes::literals::{AstEnum, AstRange, AstString};
 use crate::ast::nodes::loops::{AstList, AstListRepeat};
 use crate::ast::nodes::unary::{AstNeg, AstNot};
-use crate::ast::nodes::{AstNode, AstNodeType, CallArg, LoopType};
+use crate::ast::nodes::{AstNode, AstNodeType, LoopType};
 use crate::ast::types::{ParserDataType, ParserInnerType};
 use crate::parse::util::{
     ensure_scope_node, lex, parse_embedded_expr, parse_splits, span, span_from_nodes_or,
@@ -282,13 +283,13 @@ pub fn build_tail_expression_parser<'a>(
                                 field: value.value.into(),
                             },
                         );
-                    } else if let AstNodeType::CallExpression {
+                    } else if let AstNodeType::CallExpression(AstCall {
                         caller,
                         string_fn,
                         generic_types,
                         args,
                         reverse_args,
-                    } = &node.node_type
+                    }) = &node.node_type
                         && let AstNodeType::Identifier(ident) = &caller.node_type
                     {
                         current = AstNode::new(
@@ -300,13 +301,13 @@ pub fn build_tail_expression_parser<'a>(
                         );
                         current = AstNode::new(
                             Span::new_from_spans(current.span, node.span),
-                            AstNodeType::CallExpression {
+                            AstNodeType::CallExpression(AstCall {
                                 caller: Box::new(current),
                                 string_fn: string_fn.clone(),
                                 generic_types: generic_types.clone(),
                                 args: args.clone(),
                                 reverse_args: reverse_args.clone(),
-                            },
+                            }),
                         );
                     } else {
                         current = *node;

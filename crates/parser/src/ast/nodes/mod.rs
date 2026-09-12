@@ -11,6 +11,7 @@ use crate::{
             binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
             conditionals::{AstIf, AstTernary},
             flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
+            functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg, FunctionHeader},
             literals::{
                 AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstRange, AstString,
                 AstStruct, AstTuple,
@@ -272,7 +273,7 @@ impl AstNode {
     #[inline]
     pub fn is_raw_option_value(&self) -> bool {
         match &self.node_type {
-            AstNodeType::CallExpression { caller, .. } => matches!(
+            AstNodeType::CallExpression(AstCall { caller, .. }) => matches!(
                 &caller.node_type,
                 AstNodeType::Identifier(x) if x.to_string() == "some"
             ),
@@ -303,13 +304,13 @@ impl AstNode {
     pub fn call(span: Span, caller: AstNode, args: Vec<CallArg>) -> Self {
         Self::new(
             span,
-            AstNodeType::CallExpression {
+            AstNodeType::CallExpression(AstCall {
                 string_fn: None,
                 caller: Box::new(caller),
                 generic_types: Vec::new(),
                 args,
                 reverse_args: Vec::new(),
-            },
+            }),
         )
     }
 
@@ -321,13 +322,13 @@ impl AstNode {
     ) -> Self {
         Self::new(
             span,
-            AstNodeType::CallExpression {
+            AstNodeType::CallExpression(AstCall {
                 string_fn: None,
                 caller: Box::new(caller),
                 generic_types,
                 args,
                 reverse_args: Vec::new(),
-            },
+            }),
         )
     }
 
@@ -341,13 +342,13 @@ impl AstNode {
     ) -> Self {
         Self::new(
             span,
-            AstNodeType::CallExpression {
+            AstNodeType::CallExpression(AstCall {
                 string_fn,
                 caller: Box::new(caller),
                 generic_types,
                 args,
                 reverse_args,
-            },
+            }),
         )
     }
 
@@ -437,7 +438,7 @@ impl IdentifiersUsed for AstNode {
                 names.extend(base.identifiers_used());
                 names.extend(index.identifiers_used());
             }
-            AstNodeType::CallExpression { args, .. } => {
+            AstNodeType::CallExpression(AstCall { args, .. }) => {
                 for arg in args {
                     match arg {
                         CallArg::Value(node) => {
@@ -479,10 +480,10 @@ impl From<Overload> for AstNode {
     fn from(val: Overload) -> AstNode {
         AstNode::new(
             val.operator.span,
-            AstNodeType::FunctionDeclaration {
+            AstNodeType::FunctionDeclaration(AstFunction {
                 header: val.header,
                 body: val.body,
-            },
+            }),
         )
     }
 }
@@ -520,42 +521,6 @@ impl Overload {
                 self.header.parameters.len()
             )),
             _ => Ok(()),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct FunctionHeader {
-    pub generics: GenericTypes,
-    pub parameters: Vec<(
-        PotentialDollarIdentifier,
-        Option<ParserDataType>,
-        Option<Box<AstNode>>,
-    )>,
-    pub return_type: ParserDataType,
-    pub param_destructures: Vec<(usize, DestructurePattern)>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum CallArg {
-    Value(AstNode),
-    Named(PotentialDollarIdentifier, AstNode),
-}
-
-impl From<CallArg> for AstNode {
-    fn from(value: CallArg) -> Self {
-        match value {
-            CallArg::Value(x) => x,
-            CallArg::Named(_, x) => x,
-        }
-    }
-}
-
-impl<'a> From<&'a CallArg> for &'a AstNode {
-    fn from(value: &'a CallArg) -> Self {
-        match value {
-            CallArg::Value(x) => x,
-            CallArg::Named(_, x) => x,
         }
     }
 }
@@ -598,28 +563,10 @@ pub enum AstNodeType {
     Ternary(AstTernary),
 
     // Functions
-    FunctionDeclaration {
-        header: FunctionHeader,
-        body: Box<AstNode>,
-    },
-    ExternFunctionDeclaration {
-        abi: String,
-        identifier: PotentialDollarIdentifier,
-        parameters: Vec<ParserDataType>,
-        return_type: ParserDataType,
-        library: String,
-        symbol: Option<String>,
-    },
-    CallExpression {
-        string_fn: Option<ParserText>,
-        caller: Box<AstNode>,
-        generic_types: Vec<ParserDataType>,
-        args: Vec<CallArg>,
-        reverse_args: Vec<AstNode>,
-    },
-    CurryExpression {
-        value: Box<AstNode>,
-    },
+    FunctionDeclaration(AstFunction),
+    ExternFunctionDeclaration(AstExtern),
+    CallExpression(AstCall),
+    CurryExpression(AstCurry),
 
     // Matching
     FnMatchDeclaration {

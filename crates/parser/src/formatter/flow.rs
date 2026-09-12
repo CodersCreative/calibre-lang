@@ -10,6 +10,8 @@ use crate::{
 };
 
 impl AstFormatting for AstEmit {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         match self {
             AstEmit::Scope(x) => format!("emit {}", x.format(formatter)),
@@ -25,6 +27,8 @@ impl AstFormatting for AstEmit {
 }
 
 impl AstFormatting for AstBreak {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         let mut txt = String::from("break");
 
@@ -42,6 +46,8 @@ impl AstFormatting for AstBreak {
 }
 
 impl AstFormatting for AstContinue {
+    type PreFormat = ();
+
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
         let mut txt = String::from("continue");
 
@@ -54,6 +60,8 @@ impl AstFormatting for AstContinue {
 }
 
 impl AstFormatting for AstReturn {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         match &self.value {
             Some(value) => format!("return {}", value.format(formatter)),
@@ -63,6 +71,8 @@ impl AstFormatting for AstReturn {
 }
 
 impl AstFormatting for AstDefer {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         format!(
             "defer {}{}",
@@ -73,6 +83,8 @@ impl AstFormatting for AstDefer {
 }
 
 impl AstFormatting for TryCatch {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         let mut txt = String::new();
 
@@ -86,6 +98,8 @@ impl AstFormatting for TryCatch {
 }
 
 impl AstFormatting for AstTry {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         let mut txt = format!("try {}", self.value.format(formatter));
 
@@ -98,6 +112,8 @@ impl AstFormatting for AstTry {
 }
 
 impl AstFormatting for AstPipe {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         let mut single = self.values[0].get_node().format(formatter);
 

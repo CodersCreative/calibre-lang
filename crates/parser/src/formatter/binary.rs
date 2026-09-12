@@ -7,24 +7,32 @@ use crate::{
 };
 
 impl AstFormatting for AstBinary {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         formatter.fmt_infix_expr(&*self.left, self.operator, &*self.right)
     }
 }
 
 impl AstFormatting for AstBoolean {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         formatter.fmt_infix_expr(&*self.left, self.operator, &*self.right)
     }
 }
 
 impl AstFormatting for AstComparison {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         formatter.fmt_infix_expr(&*self.left, self.operator, &*self.right)
     }
 }
 
 impl AstFormatting for AstAs {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         format!(
             "{} as{} {}",
@@ -40,12 +48,16 @@ impl AstFormatting for AstAs {
 }
 
 impl AstFormatting for AstIn {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         formatter.fmt_infix_expr(&*self.identifier, "is", &*self.value)
     }
 }
 
 impl AstFormatting for AstIs {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         format!("{} is {}", self.value.format(formatter), self.data_type)
     }

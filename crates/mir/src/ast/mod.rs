@@ -6,10 +6,11 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialGenericTypeIdentifier},
         nodes::{
-            AstNode, AstNodeType, CallArg, FunctionHeader, LoopType, VarType,
+            AstNode, AstNodeType, LoopType, VarType,
             binary::{AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIs},
             conditionals::{AstIf, IfComparisonType},
             flow::{AstBreak, AstContinue, AstEmit, AstReturn},
+            functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
             literals::{
                 AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
             },
@@ -634,34 +635,38 @@ impl From<MiddleNodeType> for AstNodeType {
                 create_new_scope: Some(value.create_new_scope),
                 define: false,
             },
-            MiddleNodeType::FunctionDeclaration(value) => AstNodeType::FunctionDeclaration {
-                header: FunctionHeader {
-                    generics: GenericTypes::default(),
-                    parameters: {
-                        let mut lst = Vec::new();
+            MiddleNodeType::FunctionDeclaration(value) => {
+                AstNodeType::FunctionDeclaration(AstFunction {
+                    header: FunctionHeader {
+                        generics: GenericTypes::default(),
+                        parameters: {
+                            let mut lst = Vec::new();
 
-                        for param in value.parameters {
-                            lst.push((
-                                param.0.into(),
-                                Some(param.1),
-                                param.2.map(|x| Box::new((*x).into())),
-                            ));
-                        }
-                        lst
+                            for param in value.parameters {
+                                lst.push((
+                                    param.0.into(),
+                                    Some(param.1),
+                                    param.2.map(|x| Box::new((*x).into())),
+                                ));
+                            }
+                            lst
+                        },
+                        return_type: value.return_type,
+                        param_destructures: Vec::new(),
                     },
+                    body: Box::new((*value.body).into()),
+                })
+            }
+            MiddleNodeType::ExternFunction(value) => {
+                AstNodeType::ExternFunctionDeclaration(AstExtern {
+                    abi: value.abi.to_string(),
+                    identifier: ParserText::from(value.symbol).into(),
+                    parameters: value.parameters,
                     return_type: value.return_type,
-                    param_destructures: Vec::new(),
-                },
-                body: Box::new((*value.body).into()),
-            },
-            MiddleNodeType::ExternFunction(value) => AstNodeType::ExternFunctionDeclaration {
-                abi: value.abi.to_string(),
-                identifier: ParserText::from(value.symbol).into(),
-                parameters: value.parameters,
-                return_type: value.return_type,
-                library: value.library.to_string(),
-                symbol: None,
-            },
+                    library: value.library.to_string(),
+                    symbol: None,
+                })
+            }
             MiddleNodeType::AssignmentExpression(value) => AstNodeType::AssignmentExpression {
                 identifier: Box::new((*value.identifier).into()),
                 value: Box::new((*value.value).into()),
@@ -763,7 +768,7 @@ impl From<MiddleNodeType> for AstNodeType {
                 base: Box::new((*value.base).into()),
                 index: Box::new((*value.index).into()),
             },
-            MiddleNodeType::CallExpression(value) => AstNodeType::CallExpression {
+            MiddleNodeType::CallExpression(value) => AstNodeType::CallExpression(AstCall {
                 string_fn: None,
                 generic_types: Vec::new(),
                 caller: Box::new((*value.caller).into()),
@@ -776,7 +781,7 @@ impl From<MiddleNodeType> for AstNodeType {
                     lst
                 },
                 reverse_args: Vec::new(),
-            },
+            }),
             MiddleNodeType::BinaryExpression(value) => AstNodeType::BinaryExpression(AstBinary {
                 left: Box::new((*value.left).into()),
                 right: Box::new((*value.right).into()),
@@ -805,7 +810,7 @@ impl From<MiddleNodeType> for AstNodeType {
                 if is_tuple {
                     let caller_span = Span::default();
 
-                    AstNodeType::CallExpression {
+                    AstNodeType::CallExpression(AstCall {
                         string_fn: None,
                         generic_types: Vec::new(),
                         caller: Box::new(AstNode::identifier(
@@ -827,7 +832,7 @@ impl From<MiddleNodeType> for AstNodeType {
                             lst
                         },
                         reverse_args: Vec::new(),
-                    }
+                    })
                 } else {
                     AstNodeType::StructLiteral(AstStruct {
                         identifier: PotentialGenericTypeIdentifier::new(

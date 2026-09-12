@@ -11,7 +11,11 @@ use calibre_parser::{
     Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{AstNode, AstNodeType, Overload, TypeDefType, VarType, binary::AsFailureMode},
+        nodes::{
+            AstNode, AstNodeType, Overload, TypeDefType, VarType,
+            binary::AsFailureMode,
+            functions::{AstCall, AstFunction},
+        },
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -37,13 +41,13 @@ impl MiddleEnvironment {
 
         let new_name = Ustr::from(&ParserText::temp_name_with_suffix(identifier.trim(), span).text);
 
-        if let AstNodeType::CallExpression {
+        if let AstNodeType::CallExpression(AstCall {
             caller,
             generic_types,
             args,
             reverse_args,
             ..
-        } = value.clone().node_type
+        }) = value.clone().node_type
             && let AstNodeType::Identifier(callee_ident) = &caller.node_type
             && callee_ident.to_string() == identifier
             && let Some(first_arg) = args.first().cloned().map(|a| -> AstNode { a.into() })
@@ -64,19 +68,21 @@ impl MiddleEnvironment {
             {
                 value = AstNode::new(
                     value.span,
-                    AstNodeType::CallExpression {
+                    AstNodeType::CallExpression(AstCall {
                         string_fn: None,
                         caller: Box::new(AstNode::identifier(value.span, mapped_name)),
                         generic_types,
                         args,
                         reverse_args,
-                    },
+                    }),
                 );
             }
         }
 
         let function_decl = match &value.node_type {
-            AstNodeType::FunctionDeclaration { header, body, .. } => Some((header, body)),
+            AstNodeType::FunctionDeclaration(AstFunction { header, body, .. }) => {
+                Some((header, body))
+            }
             _ => None,
         };
 

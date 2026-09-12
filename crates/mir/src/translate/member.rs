@@ -11,7 +11,7 @@ use calibre_parser::{
     ast::{
         Operator,
         idents::PotentialDollarIdentifier,
-        nodes::{AstNode, AstNodeType, CallArg, literals::AstEnum},
+        nodes::{AstNode, AstNodeType, functions::CallArg, literals::AstEnum},
         types::ParserDataType,
     },
 };

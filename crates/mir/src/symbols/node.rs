@@ -1,6 +1,5 @@
 use crate::{
     environment::MiddleEnvironment,
-    errors::MiddleErr,
     scoping::ScopeId,
     symbols::resolve::{ResolutionOptions, StrOrAstNode},
     translate::MirLowering,
@@ -33,7 +32,11 @@ impl MiddleEnvironment {
         })
     }
 
-    fn resolve_curried_type(&mut self, scope: ScopeId, value: &AstNode) -> Option<ParserDataType> {
+    pub fn resolve_curried_type(
+        &mut self,
+        scope: ScopeId,
+        value: &AstNode,
+    ) -> Option<ParserDataType> {
         match self.resolve_type_from_node(scope, value)?.data_type {
             ParserInnerType::Function {
                 return_type,
@@ -108,6 +111,15 @@ impl MiddleEnvironment {
             AstNodeType::AsExpression(x) => x.type_of(self, scope, node.span),
             AstNodeType::IsExpression(x) => x.type_of(self, scope, node.span),
 
+            // Functions
+            AstNodeType::CurryExpression(x) => x.type_of(self, scope, node.span),
+            AstNodeType::FunctionDeclaration(x) => x.type_of(self, scope, node.span),
+            AstNodeType::ExternFunctionDeclaration(x) => x.type_of(self, scope, node.span),
+            AstNodeType::CallExpression(x) => x.type_of(self, scope, node.span),
+            AstNodeType::FnMatchDeclaration { header, .. } => {
+                header.type_of(self, scope, node.span)
+            }
+
             // TODO
             AstNodeType::Break { .. }
             | AstNodeType::Continue { .. }
@@ -116,7 +128,6 @@ impl MiddleEnvironment {
             | AstNodeType::ImplTraitDeclaration { .. }
             | AstNodeType::TraitDeclaration { .. }
             | AstNodeType::TypeDeclaration { .. }
-            | AstNodeType::ExternFunctionDeclaration { .. }
             | AstNodeType::Return { .. }
             | AstNodeType::ImportStatement { .. }
             | AstNodeType::AssignmentExpression { .. }
@@ -209,56 +220,6 @@ impl MiddleEnvironment {
                     None
                 }
             }
-            AstNodeType::FunctionDeclaration { header, .. }
-            | AstNodeType::FnMatchDeclaration { header, .. } => {
-                let generic_params: Vec<Ustr> = header
-                    .generics
-                    .0
-                    .iter()
-                    .map(|g| {
-                        self.resolve(
-                            scope,
-                            &g.identifier,
-                            ResolutionOptions::default().with_dollar(),
-                        )
-                    })
-                    .collect::<Result<Vec<Ustr>, MiddleErr>>()
-                    .ok()?;
-
-                if !generic_params.is_empty() {
-                    self.scoping.push_generic_params(generic_params.clone());
-                }
-
-                let return_type = self
-                    .resolve_data_type(scope, &header.return_type, ResolutionOptions::typing())
-                    .ok()?;
-
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Function {
-                        return_type: Box::new(return_type),
-                        parameters: {
-                            let mut params = Vec::with_capacity(header.parameters.len());
-
-                            for param in &header.parameters {
-                                let data_type = if let Some(x) = &param.1 {
-                                    self.resolve_data_type(scope, x, ResolutionOptions::typing())
-                                        .ok()?
-                                } else if let Some(node) = &param.2 {
-                                    self.resolve_type_from_node(scope, node)?
-                                } else {
-                                    return None;
-                                };
-                                params.push(data_type);
-                            }
-
-                            self.scoping.pop_generic_params();
-
-                            params
-                        },
-                    },
-                    span: node.span,
-                })
-            }
             AstNodeType::IterExpression {
                 data_type, spawned, ..
             } => {
@@ -280,88 +241,6 @@ impl MiddleEnvironment {
                 } else {
                     Some(list_type)
                 }
-            }
-            AstNodeType::CurryExpression { value } => self.resolve_curried_type(scope, value),
-
-            AstNodeType::CallExpression {
-                caller,
-                generic_types: _generic_types,
-                args,
-                reverse_args,
-                ..
-            } => {
-                if let AstNodeType::FieldAccess { base, field } = &caller.node_type {
-                    let member_name = self
-                        .resolve(scope, field, ResolutionOptions::default().with_dollar())
-                        .unwrap_or(Ustr::from(field.text()));
-
-                    if !member_name.is_empty() {
-                        if let Some(ty) = &self.resolve_type_from_node(scope, base).or_else(|| {
-                            if let AstNodeType::Identifier(id) = &base.node_type {
-                                self.resolve_to_data_type(scope, id).ok()
-                            } else {
-                                None
-                            }
-                        }) && let Some(method_ty) = self.resolve_member_fn_type(ty, &member_name)
-                        {
-                            return method_ty.apply_callable();
-                        }
-
-                        return Some(ParserDataType::new(base.span, ParserInnerType::Dynamic));
-                    }
-                }
-
-                let mut caller_type = None;
-                if let AstNodeType::Identifier(caller) = &caller.node_type {
-                    match caller.to_string().as_str() {
-                        "tuple" => {
-                            let mut lst = Vec::new();
-
-                            for arg in args {
-                                let ty = self.resolve_type_from_node(scope, &arg.clone().into())?;
-                                lst.push(ty);
-                            }
-                            return Some(ParserDataType {
-                                data_type: ParserInnerType::Tuple(lst),
-                                span: node.span,
-                            });
-                        }
-                        "curry" if args.len() == 1 && reverse_args.is_empty() => {
-                            return self.resolve_curried_type(scope, &args[0].clone().into());
-                        }
-                        _ => {}
-                    }
-
-                    if let Ok(caller_ty) = self.resolve_to_data_type(scope, caller) {
-                        match &caller_ty.data_type {
-                            ParserInnerType::Struct(name)
-                                if self.typing.objects.contains_key(&Ustr::from(name)) =>
-                            {
-                                return Some(ParserDataType {
-                                    data_type: ParserInnerType::Struct(name.clone()),
-                                    span: node.span,
-                                });
-                            }
-                            ParserInnerType::StructWithGenerics {
-                                identifier,
-                                generic_types,
-                            } if self.typing.objects.contains_key(&Ustr::from(identifier)) => {
-                                return Some(ParserDataType {
-                                    data_type: ParserInnerType::StructWithGenerics {
-                                        identifier: identifier.clone(),
-                                        generic_types: generic_types.clone(),
-                                    },
-                                    span: node.span,
-                                });
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-
-                caller_type = caller_type.or_else(|| self.resolve_type_from_node(scope, caller));
-
-                caller_type?.data_type.apply_callable()
             }
             AstNodeType::Identifier(x) => {
                 match self

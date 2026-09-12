@@ -12,10 +12,11 @@ use calibre_parser::{
         comparison::ComparisonOperator,
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
-            AstNode, AstNodeType, CallArg, LoopType, VarType,
+            AstNode, AstNodeType, LoopType, VarType,
             binary::{AstBinary, AstComparison},
             conditionals::{AstIf, IfComparisonType},
             flow::AstBreak,
+            functions::CallArg,
             literals::AstRange,
             unary::AstNot,
         },

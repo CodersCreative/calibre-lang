@@ -3,7 +3,7 @@ use calibre_parser::{
     Location,
     ast::{
         Operator,
-        nodes::{AstNode, FunctionHeader, VarType},
+        nodes::{AstNode, VarType, functions::FunctionHeader},
         types::ParserDataType,
     },
 };

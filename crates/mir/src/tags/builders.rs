@@ -10,8 +10,9 @@ use calibre_parser::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
-            AstNode, AstNodeType, CallArg, FunctionHeader, TypeDefType, VarType,
+            AstNode, AstNodeType, TypeDefType, VarType,
             flow::{AstTry, TryCatch},
+            functions::{AstFunction, CallArg, FunctionHeader},
             literals::{AstString, AstStruct},
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
@@ -100,7 +101,7 @@ impl MiddleEnvironment {
                     data_type: ParserDataType::auto(span),
                     value: Box::new(AstNode::new(
                         span,
-                        AstNodeType::FunctionDeclaration {
+                        AstNodeType::FunctionDeclaration(AstFunction {
                             header: FunctionHeader {
                                 generics: GenericTypes::default(),
                                 parameters: vec![
@@ -130,7 +131,7 @@ impl MiddleEnvironment {
                                     }),
                                 ),
                             )])),
-                        },
+                        }),
                     )),
                 },
             );
@@ -187,7 +188,7 @@ impl MiddleEnvironment {
                 data_type: ParserDataType::auto(span),
                 value: Box::new(AstNode::new(
                     span,
-                    AstNodeType::FunctionDeclaration {
+                    AstNodeType::FunctionDeclaration(AstFunction {
                         header: FunctionHeader {
                             generics: GenericTypes::default(),
                             parameters: vec![(
@@ -241,7 +242,7 @@ impl MiddleEnvironment {
                                 ))],
                             )),
                         ])),
-                    },
+                    }),
                 )),
             },
         ));

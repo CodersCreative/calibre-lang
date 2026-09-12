@@ -5,7 +5,10 @@ use crate::{
     tags::{Tagging, context::PackageMetadata},
     typing::Typing,
 };
-use calibre_parser::ast::{nodes::AstNode, types::ParserInnerType};
+use calibre_parser::ast::{
+    nodes::{AstNode, functions::FunctionHeader},
+    types::ParserInnerType,
+};
 use indextree::Arena;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -66,11 +69,7 @@ pub struct ManifestSymbols {
     pub variables: UstrMap<MiddleVariable>,
     pub native_mappings: UstrMap<Ustr>,
     pub overloads: Vec<MiddleOverload>,
-    pub generic_fn_templates: UstrMap<(
-        Vec<Ustr>,
-        calibre_parser::ast::nodes::FunctionHeader,
-        AstNode,
-    )>,
+    pub generic_fn_templates: UstrMap<(Vec<Ustr>, FunctionHeader, AstNode)>,
     pub fn_specializations: UstrMap<Ustr>,
 }
 

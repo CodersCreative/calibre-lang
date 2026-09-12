@@ -5,7 +5,8 @@ use crate::{
         ffi::ParserFfiInnerType,
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
-            AstNode, AstNodeType, CallArg,
+            AstNode, AstNodeType,
+            functions::CallArg,
             literals::{AstChar, AstFloat, AstRange, AstString, AstTuple},
             loops::AstList,
         },

@@ -20,9 +20,10 @@ use calibre_parser::{
         idents::ParserText,
         matching::MatchArmType,
         nodes::{
-            AstNode, AstNodeType, CallArg, VarType,
+            AstNode, AstNodeType, VarType,
             binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, IfComparisonType},
+            functions::CallArg,
         },
         types::{ParserDataType, ParserInnerType},
     },

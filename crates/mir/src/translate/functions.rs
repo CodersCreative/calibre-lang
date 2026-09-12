@@ -8,6 +8,7 @@ use crate::{
     scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
     tags::TagInfo,
+    translate::MirLowering,
     traversal::NodeVisitor,
 };
 use calibre_parser::{
@@ -17,10 +18,11 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
-            AstNode, AstNodeType, CallArg, FunctionHeader, LoopType, VarType,
+            AstNode, AstNodeType, LoopType, VarType,
             binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, AstTernary, IfComparisonType},
             flow::{AstContinue, AstReturn},
+            functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
             literals::{AstString, AstStruct},
             loops::AstList,
         },
@@ -340,7 +342,7 @@ impl MiddleEnvironment {
                 ),
                 value: Box::new(AstNode::new(
                     span,
-                    AstNodeType::FunctionDeclaration {
+                    AstNodeType::FunctionDeclaration(AstFunction {
                         header: FunctionHeader {
                             generics: GenericTypes::default(),
                             parameters: vec![],
@@ -351,7 +353,7 @@ impl MiddleEnvironment {
                             param_destructures: Vec::new(),
                         },
                         body: Box::new(next_body),
-                    },
+                    }),
                 )),
             },
         );
@@ -438,375 +440,6 @@ impl MiddleEnvironment {
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn evaluate_extern_function(
-        &mut self,
-        scope: ScopeId,
-        abi: String,
-        identifier: PotentialDollarIdentifier,
-        parameters: Vec<ParserDataType>,
-        return_type: ParserDataType,
-        library: String,
-        symbol: Option<String>,
-    ) -> Result<MiddleNode, MiddleErr> {
-        let span = self.context.current_span();
-        let ident = self.resolve(
-            scope,
-            &identifier,
-            ResolutionOptions::default().with_dollar(),
-        )?;
-
-        let new_name = Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
-
-        let mut params = Vec::new();
-        for ty in parameters {
-            let ty = ty.clone().resolve_ffi();
-            params.push(
-                self.resolve_data_type(scope, &ty, ResolutionOptions::typing())
-                    .unwrap_or(ty),
-            );
-        }
-
-        let return_type = self.resolve_data_type(
-            scope,
-            &return_type.resolve_ffi(),
-            ResolutionOptions::typing(),
-        )?;
-
-        let fn_type = ParserDataType::function(
-            self.context.current_span(),
-            params.clone(),
-            return_type.clone(),
-        );
-
-        let mut pure = false;
-        let mut memo = false;
-        let mut memo_params = Vec::new();
-
-        for tag in self.tagging.tag_info.iter() {
-            if let TagInfo::Pure(x) = tag {
-                pure = true;
-                memo = x.memo;
-                memo_params.append(&mut x.params.clone());
-            }
-        }
-
-        self.register_variable(scope, ident, new_name, fn_type.clone(), VarType::Constant)?;
-
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
-                var_type: VarType::Constant,
-                identifier: new_name,
-                value: Box::new(MiddleNode::new(
-                    MiddleNodeType::ExternFunction(MirExtern {
-                        abi: Ustr::from(&abi),
-                        library: Ustr::from(&library),
-                        symbol: symbol.map(|x| Ustr::from(&x)).unwrap_or_else(|| ident),
-                        parameters: params,
-                        return_type,
-                        pure,
-                        memo,
-                        memo_params,
-                    }),
-                    self.context.current_span(),
-                )),
-                data_type: fn_type,
-            }),
-            span,
-        })
-    }
-
-    pub(crate) fn evaluate_function_declaration(
-        &mut self,
-        scope: ScopeId,
-        span: Span,
-        header: FunctionHeader,
-        mut body: AstNode,
-    ) -> Result<MiddleNode, MiddleErr> {
-        let mut params = Vec::with_capacity(header.parameters.len());
-        let mut param_idents = Vec::with_capacity(header.parameters.len());
-        let mut old_func_defers = std::mem::take(&mut self.symbols.func_defers);
-        let new_scope = self.scoping.new_scope_from_parent_shallow(scope);
-
-        let generic_params: Vec<Ustr> = header
-            .generics
-            .0
-            .iter()
-            .map(|g| Ustr::from(&g.identifier.to_string()))
-            .collect();
-
-        if !generic_params.is_empty() {
-            self.scoping.push_generic_params(generic_params.clone());
-        }
-
-        let needs_caller_context = self.tagging.tag_info.contains(&TagInfo::CallerContext);
-
-        for param in header.parameters {
-            param_idents.push(param.0.clone());
-            let og_name = self.resolve(
-                new_scope,
-                &param.0,
-                ResolutionOptions::default().with_dollar(),
-            )?;
-            let new_name =
-                Ustr::from(&ParserText::temp_name_with_suffix(og_name.trim(), span).text);
-
-            let data_type = if let Some(x) = param.1 {
-                self.resolve_data_type(new_scope, &x, ResolutionOptions::typing())?
-            } else if let Some(node) = &param.2 {
-                self.resolve_type_from_node(new_scope, node)
-                    .ok_or_else(|| {
-                        self.context
-                            .err_at_current(MiddleErr::CannotInferParameterType(
-                                og_name.to_string(),
-                                "function".to_string(),
-                            ))
-                    })?
-            } else {
-                return Err(self
-                    .context
-                    .err_at_current(MiddleErr::CannotInferParameterType(
-                        og_name.to_string(),
-                        "function".to_string(),
-                    )));
-            };
-
-            self.register_variable(
-                new_scope,
-                og_name,
-                new_name,
-                data_type.clone(),
-                VarType::Mutable,
-            )?;
-
-            params.push((
-                new_name,
-                data_type,
-                param.2.map(|x| Box::new(self.evaluate(new_scope, *x))),
-            ));
-        }
-
-        if needs_caller_context {
-            let caller_context_name =
-                Ustr::from(&ParserText::temp_name_with_suffix("caller_context", span).text);
-            let caller_context_type =
-                ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
-
-            self.register_variable(
-                new_scope,
-                Ustr::from("caller_context"),
-                caller_context_name,
-                caller_context_type.clone(),
-                VarType::Mutable,
-            )?;
-
-            params.push((caller_context_name, caller_context_type, None));
-        }
-
-        let return_type =
-            self.resolve_data_type(new_scope, &header.return_type, ResolutionOptions::typing())?;
-
-        self.scoping.return_type_stack.push(return_type.key());
-
-        body = body.rewrite_main_emits_to_returns();
-
-        if !header.param_destructures.is_empty() {
-            let mut destructures = Vec::new();
-            for (param_index, pattern) in header.param_destructures {
-                if let Some(tmp_name) = param_idents.get(param_index) {
-                    destructures
-                        .extend(self.emit_destructure_statements(tmp_name, &pattern, span, true));
-                }
-            }
-            body = match body.node_type {
-                AstNodeType::ScopeDeclaration {
-                    body: Some(mut inner),
-                    named,
-                    is_temp,
-                    create_new_scope,
-                    define,
-                } => {
-                    let mut new_body = destructures;
-                    new_body.append(&mut inner);
-                    AstNode::new(
-                        body.span,
-                        AstNodeType::ScopeDeclaration {
-                            body: Some(new_body),
-                            named,
-                            is_temp,
-                            create_new_scope,
-                            define,
-                        },
-                    )
-                }
-                _ => {
-                    let mut new_body = destructures;
-                    new_body.push(body);
-                    AstNode::new_temp_scope_with_create(new_body, Some(false))
-                }
-            };
-        }
-
-        if let Some(elem_type) = return_type.clone().get_gen() {
-            body = Self::wrap_generator_body(body, elem_type, span);
-        }
-
-        let body = self.evaluate_inner(new_scope, body)?;
-        let mut func_defers = Vec::new();
-        func_defers.append(&mut self.symbols.func_defers);
-
-        let body = if let MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-            body: mut scope_body,
-            create_new_scope,
-            is_temp: _,
-            scope_id,
-        }) = body.node_type
-        {
-            let mut last = scope_body.pop();
-            for defer in func_defers {
-                scope_body.push(self.evaluate_inner(scope_id, defer)?);
-            }
-
-            if return_type.data_type != ParserInnerType::Null
-                && let Some(last_node) = last.take()
-            {
-                if matches!(last_node.node_type, MiddleNodeType::Return { .. }) {
-                    last = Some(last_node);
-                } else {
-                    let simple_return = matches!(
-                        last_node.node_type,
-                        MiddleNodeType::Identifier(_)
-                            | MiddleNodeType::IntLiteral { .. }
-                            | MiddleNodeType::FloatLiteral(_)
-                            | MiddleNodeType::StringLiteral(_)
-                            | MiddleNodeType::CharLiteral(_)
-                            | MiddleNodeType::Null
-                            | MiddleNodeType::FieldAccess { .. }
-                            | MiddleNodeType::IndexAccess { .. }
-                    );
-                    if simple_return {
-                        last = Some(MiddleNode::new(
-                            MiddleNodeType::Return(MirReturn {
-                                value: Some(Box::new(last_node)),
-                            }),
-                            self.context.current_span(),
-                        ));
-                    } else {
-                        let last_node = match last_node.node_type {
-                            MiddleNodeType::Conditional(MirConditional {
-                                comparison,
-                                then,
-                                otherwise,
-                            }) => {
-                                let wrap = |node: Box<MiddleNode>| {
-                                    if matches!(node.node_type, MiddleNodeType::Return { .. }) {
-                                        node
-                                    } else {
-                                        Box::new(MiddleNode::new(
-                                            MiddleNodeType::Return(MirReturn { value: Some(node) }),
-                                            self.context.current_span(),
-                                        ))
-                                    }
-                                };
-                                let then = wrap(then);
-                                let otherwise = match otherwise {
-                                    Some(other) => Some(wrap(other)),
-                                    None => Some(Box::new(MiddleNode::new(
-                                        MiddleNodeType::Return(MirReturn { value: None }),
-                                        self.context.current_span(),
-                                    ))),
-                                };
-                                MiddleNode {
-                                    span: last_node.span,
-                                    node_type: MiddleNodeType::Conditional(MirConditional {
-                                        comparison,
-                                        then,
-                                        otherwise,
-                                    }),
-                                }
-                            }
-                            _ => last_node,
-                        };
-                        last = Some(last_node);
-                    }
-                }
-            }
-
-            if let Some(last) = last {
-                scope_body.push(last);
-            }
-
-            MiddleNode {
-                span: body.span,
-                node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                    body: scope_body,
-                    create_new_scope,
-                    is_temp: false,
-                    scope_id,
-                }),
-            }
-        } else {
-            body
-        };
-        self.symbols.func_defers.append(&mut old_func_defers);
-
-        let mut memo = false;
-        let mut memo_params = Vec::new();
-        let mut pure = false;
-
-        for tag in self.tagging.tag_info.iter() {
-            #[allow(clippy::single_match)]
-            match tag {
-                TagInfo::Pure(x) => {
-                    pure = true;
-                    if x.memo {
-                        memo = true
-                    };
-                    memo_params.append(&mut x.params.clone());
-                }
-                _ => {}
-            }
-        }
-
-        if pure && return_type.is_null() {
-            self.context.push_error(
-                self.context
-                    .err_at_current(MiddleErr::PureFunctionNoReturnType),
-            );
-        }
-
-        let fn_node = MiddleNode {
-            node_type: MiddleNodeType::FunctionDeclaration(MirFunction {
-                parameters: params.clone(),
-                body: Box::new(body.clone()),
-                return_type: return_type.clone(),
-                scope_id: new_scope,
-                memo,
-                memo_params,
-                pure,
-            }),
-            span,
-        };
-
-        let _ = self.scoping.return_type_stack.pop();
-
-        if !header.generics.0.is_empty() {
-            self.scoping.pop_generic_params();
-        }
-
-        // TODO revisit this
-        for (name, _, _) in params.iter() {
-            if let Some(short) = ParserText::get_temp_name_suffix(name) {
-                self.scoping
-                    .scope_mut_or_err(new_scope)?
-                    .mappings
-                    .insert(Ustr::from(&short), *name);
-            }
-        }
-
-        Ok(fn_node)
-    }
-
     pub fn get_caller_context(&self, scope: ScopeId, span: Span) -> Option<AstNode> {
         let scope_ref = self.scoping.scope_or_err(scope).ok()?;
 
@@ -860,83 +493,549 @@ impl MiddleEnvironment {
             }),
         ))
     }
+}
 
-    // TODO Deal with generics
-    #[allow(clippy::only_used_in_recursion)]
-    pub(crate) fn evaluate_call_expression(
-        &mut self,
+impl MirLowering for FunctionHeader {
+    fn lower(
+        self,
+        _env: &mut MiddleEnvironment,
+        _scope: ScopeId,
+        _span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        unreachable!()
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-        caller: AstNode,
-        generic_types: Vec<ParserDataType>,
-        mut args: Vec<CallArg>,
-        mut reverse_args: Vec<AstNode>,
+    ) -> Option<ParserDataType> {
+        let generic_params: Vec<Ustr> = self
+            .generics
+            .0
+            .iter()
+            .map(|g| {
+                env.resolve(
+                    scope,
+                    &g.identifier,
+                    ResolutionOptions::default().with_dollar(),
+                )
+            })
+            .collect::<Result<Vec<Ustr>, MiddleErr>>()
+            .ok()?;
+
+        if !generic_params.is_empty() {
+            env.scoping.push_generic_params(generic_params.clone());
+        }
+
+        let return_type = env
+            .resolve_data_type(scope, &self.return_type, ResolutionOptions::typing())
+            .ok()?;
+
+        Some(ParserDataType {
+            data_type: ParserInnerType::Function {
+                return_type: Box::new(return_type),
+                parameters: {
+                    let mut params = Vec::with_capacity(self.parameters.len());
+
+                    for param in &self.parameters {
+                        let data_type = if let Some(x) = &param.1 {
+                            env.resolve_data_type(scope, x, ResolutionOptions::typing())
+                                .ok()?
+                        } else if let Some(node) = &param.2 {
+                            node.type_of(env, scope, span)?
+                        } else {
+                            return None;
+                        };
+                        params.push(data_type);
+                    }
+
+                    env.scoping.pop_generic_params();
+
+                    params
+                },
+            },
+            span,
+        })
+    }
+}
+
+impl MirLowering for AstExtern {
+    fn lower(
+        self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        match caller.node_type.clone() {
+        let ident = env.resolve(
+            scope,
+            &self.identifier,
+            ResolutionOptions::default().with_dollar(),
+        )?;
+
+        let new_name = Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
+
+        let mut params = Vec::new();
+        for ty in &self.parameters {
+            let ty = ty.clone().resolve_ffi();
+            params.push(
+                env.resolve_data_type(scope, &ty, ResolutionOptions::typing())
+                    .unwrap_or(ty),
+            );
+        }
+
+        let return_type = env.resolve_data_type(
+            scope,
+            &self.return_type.resolve_ffi(),
+            ResolutionOptions::typing(),
+        )?;
+
+        let fn_type = ParserDataType::function(span, params.clone(), return_type.clone());
+
+        let mut pure = false;
+        let mut memo = false;
+        let mut memo_params = Vec::new();
+
+        for tag in env.tagging.tag_info.iter() {
+            if let TagInfo::Pure(x) = tag {
+                pure = true;
+                memo = x.memo;
+                memo_params.append(&mut x.params.clone());
+            }
+        }
+
+        env.register_variable(scope, ident, new_name, fn_type.clone(), VarType::Constant)?;
+
+        Ok(MiddleNode {
+            node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
+                var_type: VarType::Constant,
+                identifier: new_name,
+                value: Box::new(MiddleNode::new(
+                    MiddleNodeType::ExternFunction(MirExtern {
+                        abi: Ustr::from(&self.abi),
+                        library: Ustr::from(&self.library),
+                        symbol: self.symbol.map(|x| Ustr::from(&x)).unwrap_or_else(|| ident),
+                        parameters: params,
+                        return_type,
+                        pure,
+                        memo,
+                        memo_params,
+                    }),
+                    span,
+                )),
+                data_type: fn_type,
+            }),
+            span,
+        })
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        Some(ParserDataType {
+            span,
+            data_type: ParserInnerType::NativeFunction {
+                return_type: Box::new(
+                    env.resolve_data_type(
+                        scope,
+                        &self.return_type.clone().resolve_ffi(),
+                        ResolutionOptions::typing(),
+                    )
+                    .ok()?,
+                ),
+                parameters: self
+                    .parameters
+                    .clone()
+                    .into_iter()
+                    .map(|x| {
+                        env.resolve_data_type(scope, &x.resolve_ffi(), ResolutionOptions::typing())
+                    })
+                    .collect::<Result<Vec<_>, MiddleErr>>()
+                    .ok()?,
+            },
+        })
+    }
+}
+
+impl MirLowering for AstFunction {
+    fn lower(
+        self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        let mut params = Vec::with_capacity(self.header.parameters.len());
+        let mut param_idents = Vec::with_capacity(self.header.parameters.len());
+        let mut old_func_defers = std::mem::take(&mut env.symbols.func_defers);
+        let new_scope = env.scoping.new_scope_from_parent_shallow(scope);
+
+        let generic_params: Vec<Ustr> = self
+            .header
+            .generics
+            .0
+            .iter()
+            .map(|g| Ustr::from(&g.identifier.to_string()))
+            .collect();
+
+        if !generic_params.is_empty() {
+            env.scoping.push_generic_params(generic_params.clone());
+        }
+
+        let needs_caller_context = env.tagging.tag_info.contains(&TagInfo::CallerContext);
+
+        for param in self.header.parameters {
+            param_idents.push(param.0.clone());
+            let og_name = env.resolve(
+                new_scope,
+                &param.0,
+                ResolutionOptions::default().with_dollar(),
+            )?;
+            let new_name =
+                Ustr::from(&ParserText::temp_name_with_suffix(og_name.trim(), span).text);
+
+            let data_type = if let Some(x) = param.1 {
+                env.resolve_data_type(new_scope, &x, ResolutionOptions::typing())?
+            } else if let Some(node) = &param.2 {
+                node.type_of(env, scope, span).ok_or_else(|| {
+                    env.context
+                        .err_at_current(MiddleErr::CannotInferParameterType(
+                            og_name.to_string(),
+                            "function".to_string(),
+                        ))
+                })?
+            } else {
+                return Err(env
+                    .context
+                    .err_at_current(MiddleErr::CannotInferParameterType(
+                        og_name.to_string(),
+                        "function".to_string(),
+                    )));
+            };
+
+            env.register_variable(
+                new_scope,
+                og_name,
+                new_name,
+                data_type.clone(),
+                VarType::Mutable,
+            )?;
+
+            params.push((
+                new_name,
+                data_type,
+                param
+                    .2
+                    .map(|x| Box::new(x.lower_or_empty(env, scope, span))),
+            ));
+        }
+
+        if needs_caller_context {
+            let caller_context_name =
+                Ustr::from(&ParserText::temp_name_with_suffix("caller_context", span).text);
+            let caller_context_type =
+                ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
+
+            env.register_variable(
+                new_scope,
+                Ustr::from("caller_context"),
+                caller_context_name,
+                caller_context_type.clone(),
+                VarType::Mutable,
+            )?;
+
+            params.push((caller_context_name, caller_context_type, None));
+        }
+
+        let return_type = env.resolve_data_type(
+            new_scope,
+            &self.header.return_type,
+            ResolutionOptions::typing(),
+        )?;
+
+        env.scoping.return_type_stack.push(return_type.key());
+
+        let mut body = self.body.rewrite_main_emits_to_returns();
+
+        if !self.header.param_destructures.is_empty() {
+            let mut destructures = Vec::new();
+            for (param_index, pattern) in self.header.param_destructures {
+                if let Some(tmp_name) = param_idents.get(param_index) {
+                    destructures
+                        .extend(env.emit_destructure_statements(tmp_name, &pattern, span, true));
+                }
+            }
+            body = match body.node_type {
+                AstNodeType::ScopeDeclaration {
+                    body: Some(mut inner),
+                    named,
+                    is_temp,
+                    create_new_scope,
+                    define,
+                } => {
+                    let mut new_body = destructures;
+                    new_body.append(&mut inner);
+                    AstNode::new(
+                        body.span,
+                        AstNodeType::ScopeDeclaration {
+                            body: Some(new_body),
+                            named,
+                            is_temp,
+                            create_new_scope,
+                            define,
+                        },
+                    )
+                }
+                _ => {
+                    let mut new_body = destructures;
+                    new_body.push(body);
+                    AstNode::new_temp_scope_with_create(new_body, Some(false))
+                }
+            };
+        }
+
+        if let Some(elem_type) = return_type.clone().get_gen() {
+            body = MiddleEnvironment::wrap_generator_body(body, elem_type, span);
+        }
+
+        let body = body.lower(env, scope, span)?;
+        let mut func_defers = Vec::new();
+        func_defers.append(&mut env.symbols.func_defers);
+
+        let body = if let MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+            body: mut scope_body,
+            create_new_scope,
+            is_temp: _,
+            scope_id,
+        }) = body.node_type
+        {
+            let mut last = scope_body.pop();
+            for defer in func_defers {
+                scope_body.push(defer.lower(env, scope_id, span)?);
+            }
+
+            if return_type.data_type != ParserInnerType::Null
+                && let Some(last_node) = last.take()
+            {
+                if matches!(last_node.node_type, MiddleNodeType::Return { .. }) {
+                    last = Some(last_node);
+                } else {
+                    let simple_return = matches!(
+                        last_node.node_type,
+                        MiddleNodeType::Identifier(_)
+                            | MiddleNodeType::IntLiteral { .. }
+                            | MiddleNodeType::FloatLiteral(_)
+                            | MiddleNodeType::StringLiteral(_)
+                            | MiddleNodeType::CharLiteral(_)
+                            | MiddleNodeType::Null
+                            | MiddleNodeType::FieldAccess { .. }
+                            | MiddleNodeType::IndexAccess { .. }
+                    );
+                    if simple_return {
+                        last = Some(MiddleNode::new(
+                            MiddleNodeType::Return(MirReturn {
+                                value: Some(Box::new(last_node)),
+                            }),
+                            span,
+                        ));
+                    } else {
+                        let last_node = match last_node.node_type {
+                            MiddleNodeType::Conditional(MirConditional {
+                                comparison,
+                                then,
+                                otherwise,
+                            }) => {
+                                let wrap = |node: Box<MiddleNode>| {
+                                    if matches!(node.node_type, MiddleNodeType::Return { .. }) {
+                                        node
+                                    } else {
+                                        Box::new(MiddleNode::new(
+                                            MiddleNodeType::Return(MirReturn { value: Some(node) }),
+                                            span,
+                                        ))
+                                    }
+                                };
+                                let then = wrap(then);
+                                let otherwise = match otherwise {
+                                    Some(other) => Some(wrap(other)),
+                                    None => Some(Box::new(MiddleNode::new(
+                                        MiddleNodeType::Return(MirReturn { value: None }),
+                                        span,
+                                    ))),
+                                };
+                                MiddleNode {
+                                    span: last_node.span,
+                                    node_type: MiddleNodeType::Conditional(MirConditional {
+                                        comparison,
+                                        then,
+                                        otherwise,
+                                    }),
+                                }
+                            }
+                            _ => last_node,
+                        };
+                        last = Some(last_node);
+                    }
+                }
+            }
+
+            if let Some(last) = last {
+                scope_body.push(last);
+            }
+
+            MiddleNode {
+                span: body.span,
+                node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                    body: scope_body,
+                    create_new_scope,
+                    is_temp: false,
+                    scope_id,
+                }),
+            }
+        } else {
+            body
+        };
+        env.symbols.func_defers.append(&mut old_func_defers);
+
+        let mut memo = false;
+        let mut memo_params = Vec::new();
+        let mut pure = false;
+
+        for tag in env.tagging.tag_info.iter() {
+            #[allow(clippy::single_match)]
+            match tag {
+                TagInfo::Pure(x) => {
+                    pure = true;
+                    if x.memo {
+                        memo = true
+                    };
+                    memo_params.append(&mut x.params.clone());
+                }
+                _ => {}
+            }
+        }
+
+        if pure && return_type.is_null() {
+            env.context.push_error(
+                env.context
+                    .err_at_current(MiddleErr::PureFunctionNoReturnType),
+            );
+        }
+
+        let fn_node = MiddleNode {
+            node_type: MiddleNodeType::FunctionDeclaration(MirFunction {
+                parameters: params.clone(),
+                body: Box::new(body.clone()),
+                return_type: return_type.clone(),
+                scope_id: new_scope,
+                memo,
+                memo_params,
+                pure,
+            }),
+            span,
+        };
+
+        let _ = env.scoping.return_type_stack.pop();
+
+        if !self.header.generics.0.is_empty() {
+            env.scoping.pop_generic_params();
+        }
+
+        // TODO revisit this
+        for (name, _, _) in params.iter() {
+            if let Some(short) = ParserText::get_temp_name_suffix(name) {
+                env.scoping
+                    .scope_mut_or_err(new_scope)?
+                    .mappings
+                    .insert(Ustr::from(&short), *name);
+            }
+        }
+
+        Ok(fn_node)
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        self.header.type_of(env, scope, span)
+    }
+}
+
+impl MirLowering for AstCall {
+    // TODO Deal with generics
+    fn lower(
+        mut self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        match self.caller.node_type.clone() {
             AstNodeType::FieldAccess { base, field } => {
-                let field_name = self
+                let field_name = env
                     .resolve(scope, &field, ResolutionOptions::default().with_dollar())
                     .unwrap_or(Ustr::from(field.text()));
 
-                if let Some(ty) = self.resolve_type_from_node(scope, base.as_ref())
-                    && let Some(x) = self
+                if let Some(ty) = base.type_of(env, scope, span)
+                    && let Some(x) = env
                         .typing
                         .find_impl_member(&ty, &field_name)
                         .map(|x| x.symbol_name)
                 {
-                    args.insert(0, CallArg::Value(*base));
-                    return self.evaluate_call_expression(
-                        scope,
-                        span,
-                        AstNode::identifier(caller.span, x),
-                        generic_types,
-                        args,
-                        reverse_args,
-                    );
+                    self.args.insert(0, CallArg::Value(*base));
+                    return AstCall {
+                        string_fn: None,
+                        caller: Box::new(AstNode::identifier(self.caller.span, x)),
+                        ..self
+                    }
+                    .lower(env, scope, span);
                 }
 
                 if let Ok(resolved) =
-                    self.evaluate_field_access(scope, caller.span, *base.clone(), field.clone())
+                    env.evaluate_field_access(scope, span, *base.clone(), field.clone())
                     && let MiddleNodeType::Identifier(symbol) = resolved.node_type
                 {
-                    return self.evaluate_call_expression(
-                        scope,
-                        span,
-                        AstNode::identifier(caller.span, symbol.identifier),
-                        generic_types,
-                        args,
-                        reverse_args,
-                    );
+                    return AstCall {
+                        string_fn: None,
+                        caller: Box::new(AstNode::identifier(self.caller.span, symbol.identifier)),
+                        ..self
+                    }
+                    .lower(env, scope, span);
                 }
             }
             AstNodeType::Identifier(caller_ident) => {
                 match caller_ident.to_string().as_str() {
                     "tuple" => {
-                        return Ok(self.aggregate_from_call_nodes(
+                        return Ok(env.aggregate_from_call_nodes(
                             scope,
                             span,
                             None,
-                            args,
-                            reverse_args,
+                            self.args,
+                            self.reverse_args,
                         ));
                     }
-                    "curry" if args.len() == 1 && reverse_args.is_empty() => {
+                    "curry" if self.args.len() == 1 && self.reverse_args.is_empty() => {
                         let rewritten =
-                            self.rewrite_curry_call(scope, span, args.pop().unwrap().into())?;
-                        return Ok(self.evaluate(scope, rewritten));
+                            env.rewrite_curry_call(scope, span, self.args.pop().unwrap().into())?;
+                        return rewritten.lower(env, scope, span);
                     }
                     _ => {}
                 }
 
-                if let Ok(caller) = self.resolve(scope, &caller_ident, ResolutionOptions::typing())
-                    && self.typing.objects.contains_key(&caller)
+                if let Ok(caller) = env.resolve(scope, &caller_ident, ResolutionOptions::typing())
+                    && env.typing.objects.contains_key(&caller)
                 {
-                    return Ok(self.aggregate_from_call_nodes(
+                    return Ok(env.aggregate_from_call_nodes(
                         scope,
                         span,
                         Some(caller),
-                        args,
-                        reverse_args,
+                        self.args,
+                        self.reverse_args,
                     ));
                 }
             }
@@ -944,25 +1043,27 @@ impl MiddleEnvironment {
         }
 
         let data_type = self
-            .resolve_type_from_node(scope, &caller)
+            .caller
+            .type_of(env, scope, span)
             .map(|x| x.unwrap_all_refs().data_type);
 
-        if !self.context.type_check
+        if !env.context.type_check
             && let Some(ParserInnerType::Function { parameters, .. }) = &data_type
         {
-            let all_args: Vec<&AstNode> = args
+            let all_args: Vec<&AstNode> = self
+                .args
                 .iter()
                 .map(|a| match a {
                     CallArg::Value(v) => v,
                     CallArg::Named(_, v) => v,
                 })
-                .chain(reverse_args.iter())
+                .chain(self.reverse_args.iter())
                 .collect();
 
             for (i, arg) in all_args.iter().enumerate() {
                 if let Some(param) = parameters.get(i) {
-                    let arg_ty = self.resolve_type_from_node(scope, arg);
-                    self.compare_types_ref(
+                    let arg_ty = arg.type_of(env, scope, span);
+                    env.compare_types_ref(
                         Some(param),
                         arg_ty.as_ref(),
                         Some(&TagInfo::IgnoreInvalidTypeCheck),
@@ -971,13 +1072,13 @@ impl MiddleEnvironment {
             }
         }
 
-        let caller_name = if let AstNodeType::Identifier(ident) = &caller.node_type {
-            self.resolve(scope, ident, ResolutionOptions::default().with_dollar())?
+        let caller_name = if let AstNodeType::Identifier(ident) = &self.caller.node_type {
+            env.resolve(scope, ident, ResolutionOptions::default().with_dollar())?
         } else {
             Ustr::default()
         };
 
-        let needs_caller_context = if let Some(var) = self.symbols.variables.get(&caller_name) {
+        let needs_caller_context = if let Some(var) = env.symbols.variables.get(&caller_name) {
             match var.data_type.clone().unwrap_all_refs().data_type {
                 ParserInnerType::Function {
                     return_type: _,
@@ -992,17 +1093,17 @@ impl MiddleEnvironment {
             false
         };
 
-        if needs_caller_context && let Some(x) = self.get_caller_context(scope, span) {
-            reverse_args.push(x);
+        if needs_caller_context && let Some(x) = env.get_caller_context(scope, span) {
+            self.reverse_args.push(x);
         }
 
-        let lowered_args = self.lower_defaulted_call_args(
+        let lowered_args = env.lower_defaulted_call_args(
             scope,
             span,
-            &caller,
+            &self.caller,
             &data_type,
-            args.clone(),
-            reverse_args.clone(),
+            self.args.clone(),
+            self.reverse_args.clone(),
         );
 
         Ok(MiddleNode {
@@ -1014,32 +1115,32 @@ impl MiddleEnvironment {
                         Some(ParserInnerType::Function {
                             return_type: _,
                             parameters,
-                        }) if Self::should_combine_excess_args_into_list_param(
+                        }) if MiddleEnvironment::should_combine_excess_args_into_list_param(
                             &parameters,
-                            args.len(),
-                            reverse_args.len(),
+                            self.args.len(),
+                            self.reverse_args.len(),
                         ) =>
                         {
                             let mut lst: Vec<MiddleNode> =
-                                (0..(parameters.len() - 1 - reverse_args.len()))
+                                (0..(parameters.len() - 1 - self.reverse_args.len()))
                                     .map(|_| {
-                                        let arg = args.remove(0);
-                                        self.evaluate(scope, arg.into())
+                                        let arg = self.args.remove(0);
+                                        AstNode::from(arg).lower_or_empty(env, scope, span)
                                     })
                                     .collect();
 
-                            let list_arg = if args.len() == 1 {
-                                let arg: AstNode = args.remove(0).into();
+                            let list_arg = if self.args.len() == 1 {
+                                let arg: AstNode = self.args.remove(0).into();
                                 let is_already_list =
                                     matches!(arg.node_type, AstNodeType::ListLiteral(_))
-                                        || self
-                                            .resolve_type_from_node(scope, &arg)
+                                        || arg
+                                            .type_of(env, scope, span)
                                             .is_some_and(|dt| dt.is_list());
                                 if is_already_list {
                                     arg
                                 } else {
                                     AstNode::new(
-                                        self.context.current_span(),
+                                        span,
                                         AstNodeType::ListLiteral(AstList {
                                             data_type: match parameters
                                                 .last()
@@ -1047,9 +1148,7 @@ impl MiddleEnvironment {
                                                 .map(|p| p.unwrap_all_refs().data_type)
                                             {
                                                 Some(ParserInnerType::List(x)) => *x,
-                                                _ => ParserDataType::auto(
-                                                    self.context.current_span(),
-                                                ),
+                                                _ => ParserDataType::auto(span),
                                             },
                                             values: vec![arg],
                                         }),
@@ -1057,7 +1156,7 @@ impl MiddleEnvironment {
                                 }
                             } else {
                                 AstNode::new(
-                                    self.context.current_span(),
+                                    span,
                                     AstNodeType::ListLiteral(AstList {
                                         data_type: match parameters
                                             .last()
@@ -1065,27 +1164,109 @@ impl MiddleEnvironment {
                                             .map(|p| p.unwrap_all_refs().data_type)
                                         {
                                             Some(ParserInnerType::List(x)) => *x,
-                                            _ => ParserDataType::auto(self.context.current_span()),
+                                            _ => ParserDataType::auto(env.context.current_span()),
                                         },
-                                        values: args.into_iter().map(|x| x.into()).collect(),
+                                        values: self.args.into_iter().map(|x| x.into()).collect(),
                                     }),
                                 )
                             };
 
-                            lst.push(self.evaluate(scope, list_arg));
+                            lst.push(list_arg.lower_or_empty(env, scope, span));
 
-                            for _ in 0..reverse_args.len() {
-                                lst.push(self.evaluate(scope, reverse_args.remove(0)));
+                            for _ in 0..self.reverse_args.len() {
+                                lst.push(
+                                    self.reverse_args.remove(0).lower_or_empty(env, scope, span),
+                                );
                             }
 
                             lst
                         }
-                        _ => self.lower_call_args(scope, args, reverse_args),
+                        _ => env.lower_call_args(scope, self.args, self.reverse_args),
                     }
                 },
-                caller: Box::new(self.evaluate_inner(scope, caller)?),
+                caller: Box::new(self.caller.lower(env, scope, span)?),
             }),
             span,
         })
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        if let AstNodeType::FieldAccess { base, field } = &self.caller.node_type {
+            let member_name = env
+                .resolve(scope, field, ResolutionOptions::default().with_dollar())
+                .unwrap_or(Ustr::from(field.text()));
+
+            if !member_name.is_empty() {
+                if let Some(ty) = &base.type_of(env, scope, span).or_else(|| {
+                    if let AstNodeType::Identifier(id) = &base.node_type {
+                        env.resolve_to_data_type(scope, id).ok()
+                    } else {
+                        None
+                    }
+                }) && let Some(method_ty) = env.resolve_member_fn_type(ty, &member_name)
+                {
+                    return method_ty.apply_callable();
+                }
+
+                return Some(ParserDataType::new(base.span, ParserInnerType::Dynamic));
+            }
+        }
+
+        let mut caller_type = None;
+        if let AstNodeType::Identifier(caller) = &self.caller.node_type {
+            match caller.to_string().as_str() {
+                "tuple" => {
+                    let mut lst = Vec::new();
+
+                    for arg in &self.args {
+                        let ty = arg.get_node().type_of(env, scope, span)?;
+                        lst.push(ty);
+                    }
+                    return Some(ParserDataType {
+                        data_type: ParserInnerType::Tuple(lst),
+                        span,
+                    });
+                }
+                "curry" if self.args.len() == 1 && self.reverse_args.is_empty() => {
+                    return env.resolve_curried_type(scope, self.args[0].get_node());
+                }
+                _ => {}
+            }
+
+            if let Ok(caller_ty) = env.resolve_to_data_type(scope, caller) {
+                match &caller_ty.data_type {
+                    ParserInnerType::Struct(name)
+                        if env.typing.objects.contains_key(&Ustr::from(name)) =>
+                    {
+                        return Some(ParserDataType {
+                            data_type: ParserInnerType::Struct(name.clone()),
+                            span,
+                        });
+                    }
+                    ParserInnerType::StructWithGenerics {
+                        identifier,
+                        generic_types,
+                    } if env.typing.objects.contains_key(&Ustr::from(identifier)) => {
+                        return Some(ParserDataType {
+                            data_type: ParserInnerType::StructWithGenerics {
+                                identifier: identifier.clone(),
+                                generic_types: generic_types.clone(),
+                            },
+                            span,
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        caller_type = caller_type.or_else(|| self.caller.type_of(env, scope, span));
+
+        caller_type?.data_type.apply_callable()
     }
 }

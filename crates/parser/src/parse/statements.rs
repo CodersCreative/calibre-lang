@@ -6,6 +6,7 @@ use crate::ast::generics::{TraitMember, TraitMemberKind};
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier};
 use crate::ast::matching::{SelectArm, SelectArmKind};
 use crate::ast::nodes::flow::AstReturn;
+use crate::ast::nodes::functions::{AstExtern, AstFunction};
 use crate::ast::nodes::literals::{AstDataType, AstEnum, AstTuple};
 use crate::ast::nodes::{
     AstNode, AstNodeType, DestructurePattern, NamedScope, Overload, TypeDefType, VarType,
@@ -320,11 +321,13 @@ pub fn build_statement_parser<'a>(
                         .then_ignore(lex(pad.clone(), just(":=")))
                         .then(expr.clone())
                         .try_map(|(operator, value), sp| match value.node_type {
-                            AstNodeType::FunctionDeclaration { header, body } => Ok(Overload {
-                                operator,
-                                body,
-                                header,
-                            }),
+                            AstNodeType::FunctionDeclaration(AstFunction { header, body }) => {
+                                Ok(Overload {
+                                    operator,
+                                    body,
+                                    header,
+                                })
+                            }
                             _ => Err(Rich::custom(sp, "expected function declaration")),
                         })
                         .separated_by(delim.clone())
@@ -1048,7 +1051,7 @@ pub fn build_statement_parser<'a>(
 
                 AstNode::new(
                     sp,
-                    AstNodeType::ExternFunctionDeclaration {
+                    AstNodeType::ExternFunctionDeclaration(AstExtern {
                         abi,
                         identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                             sp, name,
@@ -1058,7 +1061,7 @@ pub fn build_statement_parser<'a>(
                             .unwrap_or_else(|| ParserDataType::new(sp, ParserInnerType::Null)),
                         library,
                         symbol,
-                    },
+                    }),
                 )
             },
         )

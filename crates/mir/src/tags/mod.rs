@@ -6,7 +6,10 @@ use crate::{
 };
 use calibre_parser::ast::{
     idents::ParserText,
-    nodes::{AstNode, AstNodeType, CallArg},
+    nodes::{
+        AstNode, AstNodeType,
+        functions::{AstCall, CallArg},
+    },
 };
 use std::{fmt::Debug, sync::Arc};
 use ustr::{Ustr, UstrMap};
@@ -511,12 +514,12 @@ impl MiddleEnvironment {
                                 params.push(Ustr::from(&x.value.to_string()));
                             }
                         }
-                        AstNodeType::CallExpression {
+                        AstNodeType::CallExpression(AstCall {
                             string_fn: None,
                             caller,
                             args,
                             ..
-                        } => {
+                        }) => {
                             let AstNodeType::Identifier(x) = caller.node_type else {
                                 continue;
                             };

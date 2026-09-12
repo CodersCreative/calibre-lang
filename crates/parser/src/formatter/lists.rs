@@ -7,6 +7,8 @@ use crate::{
 };
 
 impl AstFormatting for AstList {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         let prefix = if !self.data_type.is_auto() {
             format!("list:<{}>[", self.data_type)
@@ -68,6 +70,8 @@ impl AstFormatting for AstList {
 }
 
 impl AstFormatting for AstListRepeat {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         let prefix = if !self.data_type.is_auto() {
             format!("list:<{}>[", self.data_type)

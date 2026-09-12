@@ -4,8 +4,9 @@ use crate::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
-            AstNode, AstNodeType, CallArg,
+            AstNode, AstNodeType,
             flow::AstEmit,
+            functions::{AstCurry, CallArg},
             literals::{AstStruct, AstTuple},
             loops::{AstList, AstListRepeat},
         },
@@ -247,9 +248,9 @@ pub fn parse_program_with_source(
                             let sp = span(ls.as_ref(), r);
                             AstNode::new(
                                 sp,
-                                AstNodeType::CurryExpression {
+                                AstNodeType::CurryExpression(AstCurry {
                                     value: Box::new(value),
-                                },
+                                }),
                             )
                         }
                     }),

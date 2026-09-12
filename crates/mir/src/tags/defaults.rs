@@ -5,8 +5,9 @@ use crate::{ast::MiddleNode, errors::MiddleErr, typing::MiddleTypeDefType};
 use calibre_parser::ast::idents::{
     ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
 };
+use calibre_parser::ast::nodes::functions::{AstFunction, FunctionHeader};
 use calibre_parser::ast::nodes::{
-    AstNode, AstNodeType, FunctionHeader, VarType,
+    AstNode, AstNodeType, VarType,
     literals::{AstEnum, AstStruct},
 };
 use calibre_parser::ast::types::{GenericTypes, ParserDataType};
@@ -41,7 +42,7 @@ impl MiddleEnvironment {
                                 data_type: ParserDataType::auto(span),
                                 value: Box::new(AstNode::new(
                                     span,
-                                    AstNodeType::FunctionDeclaration {
+                                    AstNodeType::FunctionDeclaration(AstFunction {
                                         header: FunctionHeader {
                                             generics: GenericTypes::default(),
                                             parameters: Vec::new(),
@@ -62,7 +63,7 @@ impl MiddleEnvironment {
                                                 }),
                                             )),
                                         ])),
-                                    },
+                                    }),
                                 )),
                             },
                         )
@@ -118,7 +119,7 @@ impl MiddleEnvironment {
                         data_type: ParserDataType::auto(span),
                         value: Box::new(AstNode::new(
                             span,
-                            AstNodeType::FunctionDeclaration {
+                            AstNodeType::FunctionDeclaration(AstFunction {
                                 header: FunctionHeader {
                                     generics: GenericTypes::default(),
                                     parameters: Vec::new(),
@@ -134,7 +135,7 @@ impl MiddleEnvironment {
                                         }),
                                     ),
                                 )])),
-                            },
+                            }),
                         )),
                     },
                 )

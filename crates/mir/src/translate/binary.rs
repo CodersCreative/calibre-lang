@@ -13,9 +13,10 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
-            AstNode, AstNodeType, CallArg,
+            AstNode, AstNodeType,
             binary::{AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
             flow::{AstTry, TryCatch},
+            functions::CallArg,
             literals::AstRange,
             loops::AstList,
         },

@@ -1,12 +1,39 @@
-use crate::{environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId};
+use crate::{
+    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+    translate::MirLowering,
+};
 use calibre_parser::{
     Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{AstNode, AstNodeType, CallArg, FunctionHeader},
+        nodes::{
+            AstNode, AstNodeType,
+            functions::{AstCurry, AstFunction, CallArg, FunctionHeader},
+        },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
+
+impl MirLowering for AstCurry {
+    fn lower(
+        self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        let value = env.rewrite_curry_call(scope, span, *self.value)?;
+        value.lower(env, scope, span)
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        _span: Span,
+    ) -> Option<ParserDataType> {
+        env.resolve_curried_type(scope, &self.value)
+    }
+}
 
 impl MiddleEnvironment {
     #[allow(clippy::type_complexity)]
@@ -70,7 +97,7 @@ impl MiddleEnvironment {
 
         AstNode::new(
             span,
-            AstNodeType::FunctionDeclaration {
+            AstNodeType::FunctionDeclaration(AstFunction {
                 header: FunctionHeader {
                     generics: GenericTypes::default(),
                     parameters: vec![(first_name, Some(first_type), first_default)],
@@ -84,7 +111,7 @@ impl MiddleEnvironment {
                 body: Box::new(AstNode::new_temp_scope(vec![AstNode::ret(
                     Self::build_curried_call(span, target, params, return_type, bound),
                 )])),
-            },
+            }),
         )
     }
 
@@ -96,7 +123,7 @@ impl MiddleEnvironment {
     ) -> Result<AstNode, MiddleErr> {
         Ok(AstNode::new(
             span,
-            AstNodeType::FunctionDeclaration {
+            AstNodeType::FunctionDeclaration(AstFunction {
                 header: FunctionHeader {
                     generics: GenericTypes::default(),
                     parameters: Vec::new(),
@@ -107,7 +134,7 @@ impl MiddleEnvironment {
                     param_destructures: Vec::new(),
                 },
                 body: Box::new(AstNode::new_temp_scope(vec![AstNode::ret(target)])),
-            },
+            }),
         ))
     }
 

@@ -16,10 +16,11 @@ use calibre_parser::{
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialDollarIdentifier},
         matching::MatchArmType,
         nodes::{
-            AstNode, AstNodeType, CallArg, VarType,
+            AstNode, AstNodeType, VarType,
             flow::{
                 AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment,
             },
+            functions::CallArg,
         },
         types::{ParserDataType, ParserInnerType},
     },

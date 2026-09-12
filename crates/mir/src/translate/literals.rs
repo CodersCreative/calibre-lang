@@ -17,7 +17,8 @@ use calibre_parser::{
         ObjectMap, ObjectType,
         idents::ParsedIntLiteral,
         nodes::{
-            AstNode, CallArg,
+            AstNode,
+            functions::CallArg,
             literals::{
                 AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
                 AstTuple,

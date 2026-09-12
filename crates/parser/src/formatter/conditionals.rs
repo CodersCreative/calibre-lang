@@ -11,6 +11,8 @@ use crate::{
 };
 
 impl AstFormatting for AstIf {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         let mut txt = String::from("if");
         match &*self.comparison {
@@ -59,6 +61,8 @@ impl AstFormatting for AstIf {
 }
 
 impl AstFormatting for AstTernary {
+    type PreFormat = ();
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         let cmp = self.comparison.format(formatter);
         let cmp = if cmp.starts_with('(') && cmp.ends_with(')') {

@@ -21,10 +21,11 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::SelectArmKind,
         nodes::{
-            AstNode, AstNodeType, CallArg, FunctionHeader, LoopType, TypeDefType, VarType,
+            AstNode, AstNodeType, LoopType, TypeDefType, VarType,
             binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, AstTernary, IfComparisonType},
             flow::{AstBreak, AstEmit},
+            functions::{AstFunction, CallArg, FunctionHeader},
             unary::AstNot,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
@@ -272,10 +273,12 @@ impl MiddleEnvironment {
             AstNodeType::IsExpression(x) => x.lower(self, scope, node.span),
             AstNodeType::InDeclaration(x) => x.lower(self, scope, node.span),
 
-            AstNodeType::CurryExpression { value } => {
-                let value = self.rewrite_curry_call(scope, node.span, *value)?;
-                Ok(self.evaluate(scope, value))
-            }
+            // Functions
+            AstNodeType::CurryExpression(x) => x.lower(self, scope, node.span),
+            AstNodeType::FunctionDeclaration(x) => x.lower(self, scope, node.span),
+            AstNodeType::ExternFunctionDeclaration(x) => x.lower(self, scope, node.span),
+            AstNodeType::CallExpression(x) => x.lower(self, scope, node.span),
+
             AstNodeType::Identifier(x) => Ok(MiddleNode::identifier(
                 node.span,
                 match self.resolve_potential_node(scope, &x, ResolutionOptions::idents())? {
@@ -342,7 +345,7 @@ impl MiddleEnvironment {
                 let inner = match value.node_type {
                     AstNodeType::ScopeDeclaration { .. } => AstNode::new(
                         node.span,
-                        AstNodeType::FunctionDeclaration {
+                        AstNodeType::FunctionDeclaration(AstFunction {
                             header: FunctionHeader {
                                 generics: GenericTypes::default(),
                                 parameters: Vec::new(),
@@ -350,11 +353,11 @@ impl MiddleEnvironment {
                                 param_destructures: Vec::new(),
                             },
                             body: Box::new(value),
-                        },
+                        }),
                     ),
                     AstNodeType::CallExpression { .. } => AstNode::new(
                         node.span,
-                        AstNodeType::FunctionDeclaration {
+                        AstNodeType::FunctionDeclaration(AstFunction {
                             header: FunctionHeader {
                                 generics: GenericTypes::default(),
                                 parameters: Vec::new(),
@@ -362,7 +365,7 @@ impl MiddleEnvironment {
                                 param_destructures: Vec::new(),
                             },
                             body: Box::new(AstNode::new_temp_scope(vec![value])),
-                        },
+                        }),
                     ),
                     AstNodeType::LoopDeclaration {
                         loop_type,
@@ -766,7 +769,7 @@ impl MiddleEnvironment {
                             data_type: ParserDataType::auto(node.span),
                             value: Box::new(AstNode::new(
                                 node.span,
-                                AstNodeType::FunctionDeclaration {
+                                AstNodeType::FunctionDeclaration(AstFunction {
                                     header: FunctionHeader {
                                         generics: GenericTypes::default(),
                                         parameters: Vec::new(),
@@ -774,7 +777,7 @@ impl MiddleEnvironment {
                                         param_destructures: Vec::new(),
                                     },
                                     body,
-                                },
+                                }),
                             )),
                         },
                     ),
@@ -1069,7 +1072,9 @@ impl MiddleEnvironment {
                             let resolved_iden = format!("{}.{}", resolved.impl_name(), identifier);
 
                             let dependant = match &value.node_type {
-                                AstNodeType::FunctionDeclaration { header, .. } => {
+                                AstNodeType::FunctionDeclaration(AstFunction {
+                                    header, ..
+                                }) => {
                                     let param_type = if let Some(Some(param)) =
                                         header.parameters.first().map(|x| &x.1)
                                     {
@@ -1366,7 +1371,9 @@ impl MiddleEnvironment {
                             let resolved_iden = format!("{}.{}", impl_key, identifier);
 
                             let dependant = match &value.node_type {
-                                AstNodeType::FunctionDeclaration { header, .. } => {
+                                AstNodeType::FunctionDeclaration(AstFunction {
+                                    header, ..
+                                }) => {
                                     let param_type = if let Some(Some(param)) =
                                         header.parameters.first().map(|x| &x.1)
                                     {
@@ -1639,7 +1646,7 @@ impl MiddleEnvironment {
                 scope,
                 AstNode::new(
                     self.context.current_span(),
-                    AstNodeType::FunctionDeclaration {
+                    AstNodeType::FunctionDeclaration(AstFunction {
                         body: Box::new(AstNode::new(
                             self.context.current_span(),
                             AstNodeType::ScopeDeclaration {
@@ -1655,7 +1662,7 @@ impl MiddleEnvironment {
                                 )]),
                                 named: None,
                                 is_temp: true,
-                                create_new_scope: Some(false),
+                                create_new_scope: Some(true),
                                 define: false,
                             },
                         )),
@@ -1663,12 +1670,9 @@ impl MiddleEnvironment {
                             param_destructures: Vec::new(),
                             ..header
                         },
-                    },
+                    }),
                 ),
             ),
-            AstNodeType::FunctionDeclaration { header, body } => {
-                self.evaluate_function_declaration(scope, node.span, header, *body)
-            }
             AstNodeType::Tag {
                 node,
                 tag,
@@ -1687,36 +1691,6 @@ impl MiddleEnvironment {
                     self.evaluate_inner(scope, *node)
                 }
             }
-            AstNodeType::ExternFunctionDeclaration {
-                abi,
-                identifier,
-                parameters,
-                return_type,
-                library,
-                symbol,
-            } => self.evaluate_extern_function(
-                scope,
-                abi,
-                identifier,
-                parameters,
-                return_type,
-                library,
-                symbol,
-            ),
-            AstNodeType::CallExpression {
-                string_fn: _,
-                caller,
-                generic_types,
-                args,
-                reverse_args,
-            } => self.evaluate_call_expression(
-                scope,
-                node.span,
-                *caller,
-                generic_types,
-                args,
-                reverse_args,
-            ),
             AstNodeType::ImportStatement {
                 module,
                 alias,

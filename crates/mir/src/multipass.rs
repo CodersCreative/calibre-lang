@@ -4,7 +4,7 @@ use crate::{
 };
 use calibre_parser::ast::{
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-    nodes::{AstNode, AstNodeType, VarType},
+    nodes::{AstNode, AstNodeType, VarType, functions::AstExtern},
     types::ParserDataType,
 };
 use ustr::Ustr;
@@ -65,12 +65,12 @@ impl MiddleEnvironment {
 
                 Ok(())
             }
-            AstNodeType::ExternFunctionDeclaration {
+            AstNodeType::ExternFunctionDeclaration(AstExtern {
                 identifier: PotentialDollarIdentifier::Identifier(ident),
                 parameters,
                 return_type,
                 ..
-            } => {
+            }) => {
                 let new_name = ParserText::temp_name_with_suffix(&ident, node.span);
 
                 if self

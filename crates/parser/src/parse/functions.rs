@@ -1,7 +1,8 @@
 use super::{LegacySpanMapExt, setup::StrParser};
 use crate::Span;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
-use crate::ast::nodes::{AstNode, AstNodeType, DestructurePattern, FunctionHeader, VarType};
+use crate::ast::nodes::functions::{AstFunction, FunctionHeader};
+use crate::ast::nodes::{AstNode, AstNodeType, DestructurePattern, VarType};
 use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{
     ensure_scope_node, labelled_scope_parser, lex, scope_node_parser, span,
@@ -282,7 +283,7 @@ pub fn build_function_parsers<'a>(
             };
             AstNode::new(
                 body.span,
-                AstNodeType::FunctionDeclaration {
+                AstNodeType::FunctionDeclaration(AstFunction {
                     header: FunctionHeader {
                         generics,
                         parameters,
@@ -290,7 +291,7 @@ pub fn build_function_parsers<'a>(
                         param_destructures,
                     },
                     body: Box::new(body),
-                },
+                }),
             )
         })
         .boxed();
