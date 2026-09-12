@@ -5,7 +5,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        matching::MatchArmType,
+        nodes::matching::MatchArmType,
         types::{ParserDataType, ParserInnerType},
     },
 };

@@ -10,10 +10,10 @@ use crate::{
 };
 use calibre_parser::ast::{
     idents::ParserText,
-    matching::MatchArmType,
     nodes::{
         AstNode, AstNodeType,
         binary::{AstIn, AstIs},
+        matching::MatchArmType,
     },
     types::{ParserDataType, ParserInnerType},
 };

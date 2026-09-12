@@ -17,7 +17,6 @@ pub mod ffi;
 pub mod formatter;
 pub mod generics;
 pub mod idents;
-pub mod matching;
 pub mod nodes;
 pub mod types;
 

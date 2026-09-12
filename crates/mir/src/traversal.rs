@@ -9,7 +9,9 @@ use calibre_parser::ast::{
         functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
         literals::{AstDataType, AstEnum, AstRange, AstStruct, AstTuple},
         loops::{AstList, AstListRepeat},
+        matching::{AstFnMatch, AstMatch, MatchBody},
         memory::{AstDeref, AstMove, AstRef},
+        spawn::{AstSelect, AstSpawn},
         unary::{AstNeg, AstNot},
     },
 };
@@ -205,19 +207,24 @@ pub trait NodeVisitor {
                 label,
                 else_body: else_body.map(|n| Box::new(self.visit(*n))),
             },
-            AstNodeType::MatchStatement { value, body } => AstNodeType::MatchStatement {
-                value: value.map(|n| Box::new(self.visit(*n))),
-                body: body
-                    .into_iter()
-                    .map(|(arm, guards, body)| {
-                        (
-                            arm,
-                            guards.into_iter().map(|n| self.visit(n)).collect(),
-                            Box::new(self.visit(*body)),
-                        )
-                    })
-                    .collect(),
-            },
+            AstNodeType::MatchStatement(AstMatch { value, body }) => {
+                AstNodeType::MatchStatement(AstMatch {
+                    value: value.map(|n| Box::new(self.visit(*n))),
+                    body: MatchBody {
+                        values: body
+                            .values
+                            .into_iter()
+                            .map(|(arm, guards, body)| {
+                                (
+                                    arm,
+                                    guards.into_iter().map(|n| self.visit(n)).collect(),
+                                    Box::new(self.visit(*body)),
+                                )
+                            })
+                            .collect(),
+                    },
+                })
+            }
             AstNodeType::Ternary(AstTernary {
                 comparison,
                 then,
@@ -260,10 +267,10 @@ pub trait NodeVisitor {
                     value: Box::new(self.visit(*value)),
                 }
             }
-            AstNodeType::Spawn { items, auto_wait } => AstNodeType::Spawn {
+            AstNodeType::Spawn(AstSpawn { items, auto_wait }) => AstNodeType::Spawn(AstSpawn {
                 items: items.into_iter().map(|n| self.visit(n)).collect(),
                 auto_wait,
-            },
+            }),
             AstNodeType::MoveExpression(AstMove { value }) => {
                 AstNodeType::MoveExpression(AstMove {
                     value: Box::new(self.visit(*value)),
@@ -308,7 +315,9 @@ pub trait NodeVisitor {
             | AstNodeType::BigLiteral(_)
             | AstNodeType::FloatLiteral(_)
             | AstNodeType::CharLiteral(_) => node_type,
-            AstNodeType::SelectStatement { arms } => AstNodeType::SelectStatement { arms },
+            AstNodeType::SelectStatement(AstSelect { arms }) => {
+                AstNodeType::SelectStatement(AstSelect { arms })
+            }
             AstNodeType::Emit(emit_type) => AstNodeType::Emit(emit_type),
             AstNodeType::RefStatement(AstRef { mutability, value }) => {
                 AstNodeType::RefStatement(AstRef {
@@ -371,19 +380,24 @@ pub trait NodeVisitor {
                 value,
                 create_new_scope,
             },
-            AstNodeType::FnMatchDeclaration { header, body } => AstNodeType::FnMatchDeclaration {
-                header,
-                body: body
-                    .into_iter()
-                    .map(|(arm, guards, body)| {
-                        (
-                            arm,
-                            guards.into_iter().map(|n| self.visit(n)).collect(),
-                            Box::new(self.visit(*body)),
-                        )
-                    })
-                    .collect(),
-            },
+            AstNodeType::FnMatchDeclaration(AstFnMatch { header, body }) => {
+                AstNodeType::FnMatchDeclaration(AstFnMatch {
+                    header,
+                    body: MatchBody {
+                        values: body
+                            .values
+                            .into_iter()
+                            .map(|(arm, guards, body)| {
+                                (
+                                    arm,
+                                    guards.into_iter().map(|n| self.visit(n)).collect(),
+                                    Box::new(self.visit(*body)),
+                                )
+                            })
+                            .collect(),
+                    },
+                })
+            }
             AstNodeType::RangeDeclaration(AstRange {
                 from,
                 to,
@@ -581,9 +595,9 @@ pub trait NodeAnalyzer {
                     && until.as_ref().is_none_or(|n| self.analyze(n))
                     && else_body.as_ref().is_none_or(|n| self.analyze(n))
             }
-            AstNodeType::MatchStatement { value, body } => {
+            AstNodeType::MatchStatement(AstMatch { value, body }) => {
                 let value_ok = value.as_ref().is_none_or(|n| self.analyze(n));
-                let body_ok = body.iter().all(|(_arm, guards, body)| {
+                let body_ok = body.values.iter().all(|(_arm, guards, body)| {
                     guards.iter().all(|n| self.analyze(n)) && self.analyze(body)
                 });
                 value_ok && body_ok
@@ -593,7 +607,7 @@ pub trait NodeAnalyzer {
                 then,
                 otherwise,
             }) => self.analyze(comparison) && self.analyze(then) && self.analyze(otherwise),
-            AstNodeType::Spawn { items, .. } => items.iter().all(|n| self.analyze(n)),
+            AstNodeType::Spawn(AstSpawn { items, .. }) => items.iter().all(|n| self.analyze(n)),
             AstNodeType::Return(AstReturn { value })
             | AstNodeType::Break(AstBreak { value, .. }) => {
                 value.as_ref().is_none_or(|n| self.analyze(n))

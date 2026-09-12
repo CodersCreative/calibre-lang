@@ -1,7 +1,6 @@
 use super::{LegacySpanMapExt, filter, setup::StrParser};
 use crate::ast::RefMutability;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
-use crate::ast::matching::MatchArmType;
 use crate::ast::nodes::access::{AstField, AstIndex};
 use crate::ast::nodes::binary::{
     AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
@@ -13,7 +12,9 @@ use crate::ast::nodes::flow::{
 use crate::ast::nodes::functions::{AstCall, CallArg};
 use crate::ast::nodes::literals::{AstEnum, AstRange, AstString};
 use crate::ast::nodes::loops::{AstList, AstListRepeat};
+use crate::ast::nodes::matching::MatchArmType;
 use crate::ast::nodes::memory::{AstDeref, AstMove, AstRef};
+use crate::ast::nodes::spawn::AstSpawn;
 use crate::ast::nodes::unary::{AstNeg, AstNot};
 use crate::ast::nodes::{AstNode, AstNodeType, LoopType};
 use crate::ast::types::{ParserDataType, ParserInnerType};
@@ -1063,10 +1064,10 @@ pub fn build_tail_expression_parser<'a>(
                 move |items, r| {
                     AstNode::new(
                         span(ls.as_ref(), r),
-                        AstNodeType::Spawn {
+                        AstNodeType::Spawn(AstSpawn {
                             items,
                             auto_wait: false,
-                        },
+                        }),
                     )
                 }
             }),
@@ -1101,20 +1102,20 @@ pub fn build_tail_expression_parser<'a>(
         expr.clone(),
     )))
     .map(|(auto_wait, mut item)| {
-        if let AstNodeType::Spawn {
+        if let AstNodeType::Spawn(AstSpawn {
             auto_wait: item_auto_wait,
             ..
-        } = &mut item.node_type
+        }) = &mut item.node_type
         {
             *item_auto_wait = auto_wait;
             item
         } else {
             AstNode::new(
                 item.span,
-                AstNodeType::Spawn {
+                AstNodeType::Spawn(AstSpawn {
                     items: vec![item],
                     auto_wait,
-                },
+                }),
             )
         }
     })

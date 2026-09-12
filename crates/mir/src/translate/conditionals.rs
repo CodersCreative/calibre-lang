@@ -9,10 +9,10 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        matching::MatchArmType,
         nodes::{
             AstNode, AstNodeType,
             conditionals::{AstIf, AstTernary, IfComparisonType},
+            matching::{AstMatch, MatchArmType, MatchBody},
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -52,7 +52,7 @@ impl MirLowering for AstIf {
                 span,
             }),
             IfComparisonType::IfLet { value, pattern } => AstNode {
-                node_type: AstNodeType::MatchStatement {
+                node_type: AstNodeType::MatchStatement(AstMatch {
                     value: Some(Box::new(value)),
                     body: {
                         let mut lst: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)> = pattern
@@ -71,9 +71,9 @@ impl MirLowering for AstIf {
                             })),
                         ));
 
-                        lst
+                        MatchBody { values: lst }
                     },
-                },
+                }),
                 span,
             }
             .lower(env, scope, span),

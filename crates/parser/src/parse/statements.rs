@@ -4,10 +4,10 @@ use crate::ast::ObjectType;
 use crate::ast::ffi::ParserFfiInnerType;
 use crate::ast::generics::{TraitMember, TraitMemberKind};
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier};
-use crate::ast::matching::{SelectArm, SelectArmKind};
 use crate::ast::nodes::flow::AstReturn;
 use crate::ast::nodes::functions::{AstExtern, AstFunction};
 use crate::ast::nodes::literals::{AstDataType, AstEnum, AstTuple};
+use crate::ast::nodes::spawn::{AstSelect, AstSpawn, SelectArm, SelectArmKind};
 use crate::ast::nodes::{
     AstNode, AstNodeType, DestructurePattern, NamedScope, Overload, TypeDefType, VarType,
 };
@@ -1109,7 +1109,12 @@ pub fn build_statement_parser<'a>(
         .then_ignore(lex(pad.clone(), just('}')))
         .map_with_span({
             let ls = line_starts.clone();
-            move |arms, r| AstNode::new(span(ls.as_ref(), r), AstNodeType::SelectStatement { arms })
+            move |arms, r| {
+                AstNode::new(
+                    span(ls.as_ref(), r),
+                    AstNodeType::SelectStatement(AstSelect { arms }),
+                )
+            }
         })
         .boxed();
 
@@ -1149,7 +1154,7 @@ pub fn build_statement_parser<'a>(
             } else {
                 parser_span
             };
-            AstNode::new(sp, AstNodeType::Spawn { items, auto_wait })
+            AstNode::new(sp, AstNodeType::Spawn(AstSpawn { items, auto_wait }))
         }
     })
     .boxed();

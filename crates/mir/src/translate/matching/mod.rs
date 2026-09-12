@@ -11,20 +11,20 @@ pub use translator::PatternTranslatorDispatcher;
 
 use crate::{
     MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
-    symbols::resolve::ResolutionOptions, typing::MiddleTypeDefType,
+    symbols::resolve::ResolutionOptions, translate::MirLowering, typing::MiddleTypeDefType,
 };
 use calibre_parser::{
     Span,
     ast::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::ParserText,
-        matching::MatchArmType,
         nodes::{
             AstNode, AstNodeType, VarType,
             access::AstIndex,
             binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, IfComparisonType},
-            functions::CallArg,
+            functions::{AstFunction, CallArg, FunctionHeader},
+            matching::{AstFnMatch, AstMatch, MatchArmType},
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -122,30 +122,28 @@ impl MiddleEnvironment {
     }
 }
 
-impl MiddleEnvironment {
-    pub fn evaluate_match_statement(
-        &mut self,
+impl MirLowering for AstMatch {
+    fn lower(
+        self,
+        env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-        value: Option<Box<AstNode>>,
-        body: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let (decl, value) = if let Some(value) = value {
+        let (decl, value) = if let Some(value) = self.value {
             let tmp_name = ParserText::temp_name_with_suffix("match_tmp", span);
-            let resolved = self.resolve_type_from_node(scope, &value);
+            let resolved = value.type_of(env, scope, span);
 
             (
                 Some(AstNode::new(
-                    self.context.current_span(),
+                    span,
                     AstNodeType::VariableDeclaration {
                         var_type: VarType::Mutable,
                         identifier: tmp_name.clone().into(),
-                        data_type: resolved
-                            .unwrap_or_else(|| ParserDataType::auto(self.context.current_span())),
+                        data_type: resolved.unwrap_or_else(|| ParserDataType::auto(span)),
                         value,
                     },
                 )),
-                Some(AstNode::identifier(self.context.current_span(), tmp_name)),
+                Some(AstNode::identifier(span, tmp_name)),
             )
         } else {
             (None, None)
@@ -153,13 +151,13 @@ impl MiddleEnvironment {
 
         let mut ifs: Vec<AstNode> = Vec::new();
 
-        for mut pattern in body {
+        for mut pattern in self.body.values {
             // This is just to turn idents that cant be resolved into new let match arms
             if let MatchArmType::Value(AstNode {
                 node_type: AstNodeType::Identifier(id),
                 ..
             }) = &pattern.0
-                && self
+                && env
                     .resolve(scope, &id.value, ResolutionOptions::idents())
                     .is_err()
             {
@@ -173,10 +171,10 @@ impl MiddleEnvironment {
 
             if let Some(value_node) = value.clone() {
                 let compilation =
-                    PatternTranslatorDispatcher::translate(self, scope, &pattern.0, &value_node)?;
+                    PatternTranslatorDispatcher::translate(env, scope, &pattern.0, &value_node)?;
 
                 let mut body_nodes =
-                    PatternTranslatorDispatcher::bindings_to_decls(&compilation.bindings, self);
+                    PatternTranslatorDispatcher::bindings_to_decls(&compilation.bindings, env);
 
                 let guard_bindings: Vec<(Ustr, AstNode)> = compilation
                     .bindings
@@ -188,14 +186,14 @@ impl MiddleEnvironment {
                     compilation.condition
                 } else {
                     let guard_cond =
-                        GuardProcessor::rewrite_guards(self, &guard_nodes, &guard_bindings);
-                    self.bool_and_nodes(compilation.condition, guard_cond)
+                        GuardProcessor::rewrite_guards(env, &guard_nodes, &guard_bindings);
+                    env.bool_and_nodes(compilation.condition, guard_cond)
                 };
 
                 body_nodes.push(*pattern.2);
 
                 ifs.push(AstNode::new(
-                    self.context.current_span(),
+                    span,
                     AstNodeType::IfStatement(AstIf {
                         comparison: Box::new(IfComparisonType::If(final_cond)),
                         then: Box::new(AstNode::new_temp_scope(body_nodes)),
@@ -217,16 +215,75 @@ impl MiddleEnvironment {
 
             current
         } else {
-            AstNode::new(self.context.current_span(), AstNodeType::EmptyLine)
+            AstNode::new(span, AstNodeType::EmptyLine)
         };
 
-        self.evaluate_inner(
-            scope,
-            if let Some(decl) = decl {
-                AstNode::new_temp_scope(vec![decl, ifs])
-            } else {
-                ifs
-            },
+        if let Some(decl) = decl {
+            AstNode::new_temp_scope(vec![decl, ifs])
+        } else {
+            ifs
+        }
+        .lower(env, scope, span)
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        if let Some((_arm_type, _guards, arm_body)) = self.body.values.first() {
+            arm_body.type_of(env, scope, span)
+        } else {
+            None
+        }
+    }
+}
+
+impl MirLowering for AstFnMatch {
+    fn lower(
+        self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        AstNode::new(
+            span,
+            AstNodeType::FunctionDeclaration(AstFunction {
+                body: Box::new(AstNode::new(
+                    span,
+                    AstNodeType::ScopeDeclaration {
+                        body: Some(vec![AstNode::new(
+                            span,
+                            AstNodeType::MatchStatement(AstMatch {
+                                value: Some(Box::new(AstNode::identifier(
+                                    span,
+                                    self.header.parameters[0].0.clone(),
+                                ))),
+                                body: self.body,
+                            }),
+                        )]),
+                        named: None,
+                        is_temp: true,
+                        create_new_scope: Some(true),
+                        define: false,
+                    },
+                )),
+                header: FunctionHeader {
+                    param_destructures: Vec::new(),
+                    ..self.header
+                },
+            }),
         )
+        .lower(env, scope, span)
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        self.header.type_of(env, scope, span)
     }
 }

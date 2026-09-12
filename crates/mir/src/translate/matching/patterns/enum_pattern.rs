@@ -4,8 +4,7 @@ use crate::{
     symbols::resolve::ResolutionOptions, translate::matching::PatternTranslatorDispatcher,
 };
 use calibre_parser::ast::{
-    matching::MatchArmType,
-    nodes::AstNode,
+    nodes::{AstNode, matching::MatchArmType},
     types::{ParserDataType, ParserInnerType},
 };
 use ustr::Ustr;

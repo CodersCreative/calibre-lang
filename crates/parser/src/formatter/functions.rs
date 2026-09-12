@@ -50,7 +50,7 @@ impl FunctionPreFormat {
             format!(" -> {}", func.header.return_type)
         };
 
-        let body_str = formatter.format(&func.body);
+        let body_str = func.body.format(formatter);
 
         Self {
             generics_str,
@@ -111,7 +111,7 @@ impl FunctionPreFormat {
         };
 
         let data_type = param.1.as_ref().map(|dt| dt.to_string());
-        let default_value = param.2.as_ref().map(|val| formatter.format(val));
+        let default_value = param.2.as_ref().map(|val| val.format(formatter));
 
         let expanded = {
             let mut txt = name.clone();

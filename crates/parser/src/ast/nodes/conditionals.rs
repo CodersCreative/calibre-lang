@@ -1,4 +1,4 @@
-use crate::ast::{matching::MatchArmType, nodes::AstNode};
+use crate::ast::nodes::{AstNode, matching::MatchArmType};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,7 +1,6 @@
 use crate::{environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId};
 use calibre_parser::ast::{
-    matching::MatchArmType,
-    nodes::{AstNode, VarType},
+    nodes::{AstNode, VarType, matching::MatchArmType},
     types::ParserDataType,
 };
 use ustr::Ustr;

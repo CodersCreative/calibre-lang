@@ -111,9 +111,6 @@ impl MiddleEnvironment {
             AstNodeType::FunctionDeclaration(x) => x.type_of(self, scope, node.span),
             AstNodeType::ExternFunctionDeclaration(x) => x.type_of(self, scope, node.span),
             AstNodeType::CallExpression(x) => x.type_of(self, scope, node.span),
-            AstNodeType::FnMatchDeclaration { header, .. } => {
-                header.type_of(self, scope, node.span)
-            }
 
             // Access
             AstNodeType::FieldAccess(x) => x.type_of(self, scope, node.span),
@@ -125,6 +122,14 @@ impl MiddleEnvironment {
             AstNodeType::MoveExpression(x) => x.type_of(self, scope, node.span),
             AstNodeType::RefStatement(x) => x.type_of(self, scope, node.span),
             AstNodeType::DerefStatement(x) => x.type_of(self, scope, node.span),
+
+            // Matching
+            AstNodeType::MatchStatement(x) => x.type_of(self, scope, node.span),
+            AstNodeType::FnMatchDeclaration(x) => x.type_of(self, scope, node.span),
+
+            // Spawn
+            AstNodeType::Spawn(x) => x.type_of(self, scope, node.span),
+            AstNodeType::SelectStatement(x) => x.type_of(self, scope, node.span),
 
             // TODO
             AstNodeType::Break { .. }
@@ -145,16 +150,7 @@ impl MiddleEnvironment {
             | AstNodeType::TestDeclaration { .. }
             | AstNodeType::ScopeDeclaration { define: true, .. }
             | AstNodeType::ScopeAlias { .. }
-            | AstNodeType::DataType { .. }
-            | AstNodeType::SelectStatement { .. } => None,
-            AstNodeType::Spawn { auto_wait, .. } => Some(ParserDataType::new(
-                node.span,
-                if *auto_wait {
-                    ParserInnerType::Null
-                } else {
-                    ParserInnerType::Struct(String::from("WaitGroup"))
-                },
-            )),
+            | AstNodeType::DataType { .. } => None,
             AstNodeType::InlineGenerator { map, data_type, .. } => {
                 let elem = match data_type {
                     Some(dt) => dt.clone(),
@@ -212,13 +208,6 @@ impl MiddleEnvironment {
                 else_body: Some(body),
                 ..
             } => self.resolve_type_from_node(scope, body),
-            AstNodeType::MatchStatement { value: _, body } => {
-                if let Some((_arm_type, _guards, arm_body)) = body.first() {
-                    self.resolve_type_from_node(scope, arm_body)
-                } else {
-                    None
-                }
-            }
             AstNodeType::IterExpression {
                 data_type, spawned, ..
             } => {

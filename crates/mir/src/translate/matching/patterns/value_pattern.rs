@@ -5,8 +5,7 @@ use crate::{
 };
 use calibre_parser::ast::{
     comparison::ComparisonOperator,
-    matching::MatchArmType,
-    nodes::{AstNode, AstNodeType, binary::AstComparison},
+    nodes::{AstNode, AstNodeType, binary::AstComparison, matching::MatchArmType},
 };
 
 pub struct ValuePatternTranslator;

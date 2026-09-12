@@ -17,6 +17,7 @@ use calibre_parser::{
             },
             loops::AstList,
             memory::{AstDeref, AstDrop, AstMove, AstRef},
+            spawn::AstSpawn,
             unary::AstNot,
         },
         types::{GenericTypes, ParserDataType},
@@ -584,10 +585,10 @@ impl From<MiddleNodeType> for AstNodeType {
             MiddleNodeType::Emit(value) => {
                 AstNodeType::Emit(AstEmit::Scope(Box::new((*value.value).into())))
             }
-            MiddleNodeType::Spawn(value) => AstNodeType::Spawn {
+            MiddleNodeType::Spawn(value) => AstNodeType::Spawn(AstSpawn {
                 items: vec![(*value.value).into()],
                 auto_wait: false,
-            },
+            }),
             MiddleNodeType::Drop(value) => AstNodeType::Drop(AstDrop {
                 value: value.identifier.into(),
             }),

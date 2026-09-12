@@ -6,7 +6,6 @@ use crate::{
         formatter::Formatter,
         generics::TraitMember,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        matching::{MatchArmType, SelectArm},
         nodes::{
             access::{AstField, AstIdentifier, AstIndex, AstScope},
             binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
@@ -18,7 +17,9 @@ use crate::{
                 AstStruct, AstTuple,
             },
             loops::{AstList, AstListRepeat},
+            matching::{AstFnMatch, AstMatch, MatchArmType},
             memory::{AstDeref, AstDrop, AstMove, AstRef},
+            spawn::{AstSelect, AstSpawn},
             unary::{AstNeg, AstNot},
         },
         types::{GenericTypes, ParserDataType},
@@ -573,14 +574,8 @@ pub enum AstNodeType {
     CurryExpression(AstCurry),
 
     // Matching
-    FnMatchDeclaration {
-        header: FunctionHeader,
-        body: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)>,
-    },
-    MatchStatement {
-        value: Option<Box<AstNode>>,
-        body: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)>,
-    },
+    FnMatchDeclaration(AstFnMatch),
+    MatchStatement(AstMatch),
 
     // Unary
     NotExpression(AstNot),
@@ -606,14 +601,9 @@ pub enum AstNodeType {
     ScopeAccess(AstScope),
     IndexAccess(AstIndex),
 
-    // Async
-    Spawn {
-        items: Vec<AstNode>,
-        auto_wait: bool,
-    },
-    SelectStatement {
-        arms: Vec<SelectArm>,
-    },
+    // Spawn
+    Spawn(AstSpawn),
+    SelectStatement(AstSelect),
 
     // Declaration
     VariableDeclaration {

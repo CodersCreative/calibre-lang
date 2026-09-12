@@ -1,12 +1,9 @@
 use super::{LegacySpanMapExt, setup::StrParser};
 use crate::Span;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
-use crate::ast::matching::{
-    MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem,
-};
 use crate::ast::nodes::functions::FunctionHeader;
 use crate::ast::nodes::literals::AstTuple;
-use crate::ast::nodes::{AstNode, AstNodeType, DestructurePattern, VarType};
+use crate::ast::nodes::{AstNode, AstNodeType, DestructurePattern, VarType, matching::*};
 use crate::ast::types::{GenericTypes, ParserDataType};
 use crate::parse::util::{lex, span, struct_destructure_fields_parser};
 use chumsky::prelude::*;
@@ -774,10 +771,12 @@ pub fn build_match_parsers<'a>(
 
                 AstNode::new(
                     sp,
-                    AstNodeType::FnMatchDeclaration {
+                    AstNodeType::FnMatchDeclaration(AstFnMatch {
                         header,
-                        body: body.into_iter().flatten().collect(),
-                    },
+                        body: MatchBody {
+                            values: body.into_iter().flatten().collect(),
+                        },
+                    }),
                 )
             }
         })
@@ -830,10 +829,12 @@ pub fn build_match_parsers<'a>(
             move |(value, arms), r| {
                 AstNode::new(
                     span(ls.as_ref(), r),
-                    AstNodeType::MatchStatement {
+                    AstNodeType::MatchStatement(AstMatch {
                         value: value.map(Box::new),
-                        body: arms.into_iter().flatten().collect(),
-                    },
+                        body: MatchBody {
+                            values: arms.into_iter().flatten().collect(),
+                        },
+                    }),
                 )
             }
         })

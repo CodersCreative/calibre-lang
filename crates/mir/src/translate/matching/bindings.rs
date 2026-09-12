@@ -4,8 +4,10 @@ use crate::{
     symbols::resolve::ResolutionOptions,
 };
 use calibre_parser::ast::{
-    matching::{MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem},
-    nodes::AstNode,
+    nodes::{
+        AstNode,
+        matching::{MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem},
+    },
     types::{ParserDataType, ParserInnerType},
 };
 use ustr::Ustr;

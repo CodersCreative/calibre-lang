@@ -8,7 +8,6 @@ use calibre_parser::{
         binary::BinaryOperator,
         comparison::BooleanOperator,
         idents::{ParserText, PotentialDollarIdentifier},
-        matching::MatchArmType,
         nodes::{
             AstNode, AstNodeType, LoopType, VarType,
             binary::{AstBinary, AstBoolean},
@@ -16,6 +15,8 @@ use calibre_parser::{
             flow::{AstBreak, AstContinue},
             functions::CallArg,
             loops::AstList,
+            matching::{AstMatch, MatchArmType, MatchBody},
+            spawn::AstSpawn,
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -92,10 +93,10 @@ pub fn transform_spawn_iter(
                 AstNode::member(span, AstNode::identifier(span, &wg_ident), "join"),
                 vec![CallArg::Value(AstNode::new(
                     span,
-                    AstNodeType::Spawn {
+                    AstNodeType::Spawn(AstSpawn {
                         items: vec![AstNode::new_temp_scope(spawned_loop_items)],
                         auto_wait: false,
-                    },
+                    }),
                 ))],
             )])),
         },
@@ -116,49 +117,53 @@ pub fn transform_spawn_iter(
             else_body: None,
             body: Box::new(AstNode::new_temp_scope(vec![AstNode::new(
                 span,
-                AstNodeType::MatchStatement {
+                AstNodeType::MatchStatement(AstMatch {
                     value: Some(Box::new(channel_get)),
-                    body: vec![
-                        (
-                            calibre_parser::ast::matching::MatchArmType::Enum {
-                                value: ParserText::from(String::from("Some")).into(),
-                                var_type: VarType::Immutable,
-                                name: Some(item_ident.clone()),
-                                destructure: None,
-                                pattern: None,
-                            },
-                            Vec::new(),
-                            Box::new(AstNode::new(
-                                span,
-                                AstNodeType::AssignmentExpression {
-                                    identifier: Box::new(list_ident_node.clone()),
-                                    value: Box::new(AstNode::new(
-                                        span,
-                                        AstNodeType::BinaryExpression(AstBinary {
-                                            left: Box::new(list_ident_node.clone()),
-                                            right: Box::new(AstNode::new(
-                                                span,
-                                                AstNodeType::Identifier(item_ident.clone().into()),
-                                            )),
-                                            operator: BinaryOperator::Shl,
-                                        }),
-                                    )),
+                    body: MatchBody {
+                        values: vec![
+                            (
+                                MatchArmType::Enum {
+                                    value: ParserText::from(String::from("Some")).into(),
+                                    var_type: VarType::Immutable,
+                                    name: Some(item_ident.clone()),
+                                    destructure: None,
+                                    pattern: None,
                                 },
-                            )),
-                        ),
-                        (
-                            MatchArmType::Wildcard(span),
-                            Vec::new(),
-                            Box::new(AstNode::new(
-                                span,
-                                AstNodeType::Break(AstBreak {
-                                    label: None,
-                                    value: None,
-                                }),
-                            )),
-                        ),
-                    ],
-                },
+                                Vec::new(),
+                                Box::new(AstNode::new(
+                                    span,
+                                    AstNodeType::AssignmentExpression {
+                                        identifier: Box::new(list_ident_node.clone()),
+                                        value: Box::new(AstNode::new(
+                                            span,
+                                            AstNodeType::BinaryExpression(AstBinary {
+                                                left: Box::new(list_ident_node.clone()),
+                                                right: Box::new(AstNode::new(
+                                                    span,
+                                                    AstNodeType::Identifier(
+                                                        item_ident.clone().into(),
+                                                    ),
+                                                )),
+                                                operator: BinaryOperator::Shl,
+                                            }),
+                                        )),
+                                    },
+                                )),
+                            ),
+                            (
+                                MatchArmType::Wildcard(span),
+                                Vec::new(),
+                                Box::new(AstNode::new(
+                                    span,
+                                    AstNodeType::Break(AstBreak {
+                                        label: None,
+                                        value: None,
+                                    }),
+                                )),
+                            ),
+                        ],
+                    },
+                }),
             )])),
         },
     );

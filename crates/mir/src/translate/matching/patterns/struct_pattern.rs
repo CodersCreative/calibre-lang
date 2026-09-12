@@ -5,10 +5,10 @@ use crate::{
 };
 use calibre_parser::ast::{
     comparison::{BooleanOperator, ComparisonOperator},
-    matching::{MatchArmType, MatchStructFieldPattern},
     nodes::{
         AstNode, AstNodeType,
         binary::{AstBoolean, AstComparison},
+        matching::{MatchArmType, MatchStructFieldPattern},
     },
 };
 

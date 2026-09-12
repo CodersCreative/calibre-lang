@@ -5,8 +5,11 @@ use crate::{
 };
 use calibre_parser::ast::{
     comparison::ComparisonOperator,
-    matching::{MatchArmType, MatchTupleItem},
-    nodes::{AstNode, AstNodeType, binary::AstComparison},
+    nodes::{
+        AstNode, AstNodeType,
+        binary::AstComparison,
+        matching::{MatchArmType, MatchTupleItem},
+    },
 };
 
 pub struct TuplePatternTranslator;

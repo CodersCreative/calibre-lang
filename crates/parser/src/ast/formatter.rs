@@ -4,13 +4,12 @@ use crate::{
         ObjectType,
         generics::TraitMemberKind,
         idents::PotentialDollarIdentifier,
-        matching::{
-            MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem,
-            SelectArmKind,
-        },
         nodes::{
             AstNode, AstNodeType, DestructurePattern, LoopType, Overload, TypeDefType, VarType,
             binary::{AstBinary, AstBoolean},
+            matching::{
+                MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem,
+            },
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -426,117 +425,14 @@ impl Formatter {
             AstNodeType::IndexAccess(x) => x.format(self),
             AstNodeType::Identifier(x) => x.format(self),
 
-            AstNodeType::Spawn { items, auto_wait } => {
-                let prefix = if *auto_wait { "spawn@" } else { "spawn" };
-                if items.len() == 1 {
-                    return format!("{prefix} {}", self.format(&items[0]));
-                }
+            // Spawn
+            AstNodeType::Spawn(x) => x.format(self),
+            AstNodeType::SelectStatement(x) => x.format(self),
 
-                let mut txt = format!("{prefix} {{");
-                if items.is_empty() {
-                    txt.push('}');
-                    return txt;
-                }
-                txt.push('\n');
+            // Matching
+            AstNodeType::MatchStatement(x) => x.format(self),
+            AstNodeType::FnMatchDeclaration(x) => x.format(self),
 
-                for item in items {
-                    let temp =
-                        handle_comment!(self.get_potential_comment(&item.span), self.format(item));
-                    txt.push_str(&format!("{},\n", self.fmt_txt_with_tab(&temp, 1, true)));
-                }
-
-                txt = txt.trim_end().trim_end_matches(",").trim_end().to_string();
-                txt.push_str("\n}");
-                txt
-            }
-            AstNodeType::SelectStatement { arms } => {
-                let mut txt = String::from("select {\n");
-                for arm in arms {
-                    let temp = handle_comment!(self.get_potential_comment(&arm.body.span), {
-                        let mut heads = Vec::new();
-                        if !arm.patterns.is_empty()
-                            && arm.patterns.iter().all(|(kind, left, _)| {
-                                *kind == SelectArmKind::Recv && *left == arm.patterns[0].1
-                            })
-                        {
-                            let left = arm.patterns[0]
-                                .1
-                                .as_ref()
-                                .map(|x| self.format(x))
-                                .unwrap_or_else(|| "_".to_string());
-                            let rights: Vec<String> = arm
-                                .patterns
-                                .iter()
-                                .map(|(_, _, right)| {
-                                    right
-                                        .as_ref()
-                                        .map(|x| self.format(x))
-                                        .unwrap_or_else(|| "_".to_string())
-                                })
-                                .collect();
-                            heads.push(format!("{} <- {}", left, rights.join(" | ")));
-                        } else if !arm.patterns.is_empty()
-                            && arm.patterns.iter().all(|(kind, _, right)| {
-                                *kind == SelectArmKind::Send && *right == arm.patterns[0].2
-                            })
-                        {
-                            let lefts: Vec<String> = arm
-                                .patterns
-                                .iter()
-                                .map(|(_, left, _)| {
-                                    left.as_ref()
-                                        .map(|x| self.format(x))
-                                        .unwrap_or_else(|| "_".to_string())
-                                })
-                                .collect();
-                            let right = arm.patterns[0]
-                                .2
-                                .as_ref()
-                                .map(|x| self.format(x))
-                                .unwrap_or_else(|| "_".to_string());
-                            heads.push(format!("{} -> {}", lefts.join(" | "), right));
-                        } else {
-                            for (kind, left, right) in &arm.patterns {
-                                let head = match kind {
-                                    SelectArmKind::Default => "_".to_string(),
-                                    SelectArmKind::Recv => format!(
-                                        "{} <- {}",
-                                        left.as_ref()
-                                            .map(|x| self.format(x))
-                                            .unwrap_or_else(|| "_".to_string()),
-                                        right
-                                            .as_ref()
-                                            .map(|x| self.format(x))
-                                            .unwrap_or_else(|| "_".to_string())
-                                    ),
-                                    SelectArmKind::Send => format!(
-                                        "{} -> {}",
-                                        left.as_ref()
-                                            .map(|x| self.format(x))
-                                            .unwrap_or_else(|| "_".to_string()),
-                                        right
-                                            .as_ref()
-                                            .map(|x| self.format(x))
-                                            .unwrap_or_else(|| "_".to_string())
-                                    ),
-                                };
-                                heads.push(head);
-                            }
-                        }
-                        let mut line = heads.join(" | ");
-                        if !arm.conditionals.is_empty() {
-                            line.push(' ');
-                            line.push_str(&self.fmt_conditionals(&arm.conditionals));
-                        }
-                        format!("{} {}", line, self.format(&arm.body))
-                    });
-
-                    txt.push_str(&format!("{},\n", self.fmt_txt_with_tab(&temp, 1, true)));
-                }
-                txt = txt.trim_end().trim_end_matches(",").trim_end().to_string();
-                txt.push_str("\n}");
-                txt
-            }
             AstNodeType::ImportStatement {
                 module,
                 alias,
@@ -887,40 +783,6 @@ impl Formatter {
                 txt
             }
 
-            AstNodeType::MatchStatement { value, body } => {
-                format!(
-                    "match {}{}",
-                    if let Some(value) = value {
-                        format!("{} ", self.format(value))
-                    } else {
-                        String::new()
-                    },
-                    self.fmt_match_body(body)
-                )
-            }
-            AstNodeType::FnMatchDeclaration { header, body } => {
-                let mut txt = String::from("fn match");
-
-                if !header.generics.0.is_empty() {
-                    txt.push_str(&format!(" {}", self.fmt_generic_types(&header.generics)));
-                }
-
-                if let Some(x) = &header.parameters[0].1 {
-                    txt.push_str(&format!(" {}", x));
-                }
-
-                if let Some(x) = &header.parameters[0].2 {
-                    txt.push_str(&format!(" = {}", self.format(x)));
-                }
-
-                if !header.return_type.is_null() {
-                    txt.push_str(&format!(" -> {}", header.return_type));
-                }
-
-                txt.push_str(&format!(" {}", self.fmt_match_body(body)));
-
-                txt
-            }
             AstNodeType::ScopeAlias {
                 identifier,
                 value,

@@ -14,13 +14,13 @@ use calibre_parser::{
     Span,
     ast::{
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialDollarIdentifier},
-        matching::MatchArmType,
         nodes::{
             AstNode, AstNodeType, VarType,
             flow::{
                 AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment,
             },
             functions::CallArg,
+            matching::{AstMatch, MatchArmType, MatchBody},
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -246,28 +246,35 @@ impl MirLowering for AstTry {
         };
 
         AstNode {
-            node_type: AstNodeType::MatchStatement {
+            node_type: AstNodeType::MatchStatement(AstMatch {
                 value: Some(self.value),
                 body: if is_option_try {
                     let ok_name = "anon_ok_value";
+
                     let ok_arm = enum_arm(
                         "Some",
                         Some(ParserText::from(ok_name.to_string()).into()),
                         AstNode::identifier(span, ok_name),
                     );
+
                     let err_arm = if let Some(catch) = self.catch {
                         enum_arm("None", catch.name, *catch.body)
                     } else {
                         enum_arm("None", None, return_call("none", Vec::new()))
                     };
-                    vec![ok_arm, err_arm]
+
+                    MatchBody {
+                        values: vec![ok_arm, err_arm],
+                    }
                 } else {
                     let ok_name = "anon_ok_value";
+
                     let ok_arm = enum_arm(
                         "Ok",
                         Some(ParserText::from(ok_name.to_string()).into()),
                         AstNode::identifier(span, ok_name),
                     );
+
                     let err_arm = if let Some(catch) = self.catch {
                         enum_arm("Err", catch.name, *catch.body)
                     } else {
@@ -281,9 +288,12 @@ impl MirLowering for AstTry {
                             ),
                         )
                     };
-                    vec![ok_arm, err_arm]
+
+                    MatchBody {
+                        values: vec![ok_arm, err_arm],
+                    }
                 },
-            },
+            }),
             span,
         }
         .lower(env, scope, span)

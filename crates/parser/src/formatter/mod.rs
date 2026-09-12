@@ -7,7 +7,9 @@ pub mod flow;
 pub mod functions;
 pub mod lists;
 pub mod literals;
+pub mod matching;
 pub mod memory;
+pub mod spawn;
 pub mod unary;
 
 pub trait AstFormatting {
