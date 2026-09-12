@@ -22,6 +22,7 @@ use calibre_parser::{
             access::AstField,
             binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, AstTernary, IfComparisonType},
+            declaration::AstDeclaration,
             flow::{AstContinue, AstReturn},
             functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
             literals::{AstString, AstStruct},
@@ -330,7 +331,7 @@ impl MiddleEnvironment {
 
         let next_decl = AstNode::new(
             span,
-            AstNodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Immutable,
                 identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                     span,
@@ -356,7 +357,7 @@ impl MiddleEnvironment {
                         body: Box::new(next_body),
                     }),
                 )),
-            },
+            }),
         );
 
         let gen_value = AstNode::new(

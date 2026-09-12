@@ -3,8 +3,10 @@ use calibre_parser::ast::{
     nodes::{
         AstNode, AstNodeType, LoopType,
         access::{AstField, AstIndex, AstScope},
+        assignment::{AstAssignDestructure, AstAssignment},
         binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
         conditionals::{AstIf, AstTernary, IfComparisonType},
+        declaration::{AstDeclaration, AstDeclareDestructure},
         flow::{AstBreak, AstContinue, AstDefer, AstPipe, AstReturn, AstTry, PipeSegment},
         functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
         literals::{AstDataType, AstEnum, AstRange, AstStruct, AstTuple},
@@ -56,11 +58,11 @@ pub trait NodeVisitor {
                 right: Box::new(self.visit(*right)),
                 operator,
             }),
-            AstNodeType::AssignmentExpression { identifier, value } => {
-                AstNodeType::AssignmentExpression {
+            AstNodeType::AssignmentExpression(AstAssignment { identifier, value }) => {
+                AstNodeType::AssignmentExpression(AstAssignment {
                     identifier: Box::new(self.visit(*identifier)),
                     value: Box::new(self.visit(*value)),
-                }
+                })
             }
             AstNodeType::CallExpression(AstCall {
                 string_fn,
@@ -168,17 +170,17 @@ pub trait NodeVisitor {
                     value: Box::new(self.visit(*value)),
                 })
             }
-            AstNodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type,
                 identifier,
                 data_type,
                 value,
-            } => AstNodeType::VariableDeclaration {
+            }) => AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type,
                 identifier,
                 data_type,
                 value: Box::new(self.visit(*value)),
-            },
+            }),
             AstNodeType::TypeDeclaration {
                 identifier,
                 object,
@@ -252,20 +254,20 @@ pub trait NodeVisitor {
                     index: Box::new(self.visit(*index)),
                 })
             }
-            AstNodeType::DestructureDeclaration {
+            AstNodeType::DestructureDeclaration(AstDeclareDestructure {
                 var_type,
                 pattern,
                 value,
-            } => AstNodeType::DestructureDeclaration {
+            }) => AstNodeType::DestructureDeclaration(AstDeclareDestructure {
                 var_type,
                 pattern,
                 value: Box::new(self.visit(*value)),
-            },
-            AstNodeType::DestructureAssignment { pattern, value } => {
-                AstNodeType::DestructureAssignment {
+            }),
+            AstNodeType::DestructureAssignment(AstAssignDestructure { pattern, value }) => {
+                AstNodeType::DestructureAssignment(AstAssignDestructure {
                     pattern,
                     value: Box::new(self.visit(*value)),
-                }
+                })
             }
             AstNodeType::Spawn(AstSpawn { items, auto_wait }) => AstNodeType::Spawn(AstSpawn {
                 items: items.into_iter().map(|n| self.visit(n)).collect(),
@@ -513,10 +515,10 @@ pub trait NodeAnalyzer {
         match node_type {
             AstNodeType::BinaryExpression(AstBinary { left, right, .. })
             | AstNodeType::BooleanExpression(AstBoolean { left, right, .. })
-            | AstNodeType::AssignmentExpression {
+            | AstNodeType::AssignmentExpression(AstAssignment {
                 identifier: left,
                 value: right,
-            }
+            })
             | AstNodeType::ComparisonExpression(AstComparison { left, right, .. })
             | AstNodeType::IndexAccess(AstIndex {
                 base: left,
@@ -562,8 +564,8 @@ pub trait NodeAnalyzer {
             | AstNodeType::FieldAccess(AstField { base: value, .. })
             | AstNodeType::ScopeAccess(AstScope { base: value, .. })
             | AstNodeType::DerefStatement(AstDeref { value })
-            | AstNodeType::DestructureDeclaration { value, .. }
-            | AstNodeType::DestructureAssignment { value, .. }
+            | AstNodeType::DestructureDeclaration(AstDeclareDestructure { value, .. })
+            | AstNodeType::DestructureAssignment(AstAssignDestructure { value, .. })
             | AstNodeType::MoveExpression(AstMove { value }) => self.analyze(value),
             AstNodeType::TupleLiteral(AstTuple { values }) => {
                 values.iter().all(|n| self.analyze(n))
@@ -575,7 +577,7 @@ pub trait NodeAnalyzer {
             AstNodeType::ListLiteral(AstList { values, .. }) => {
                 values.iter().all(|n| self.analyze(n))
             }
-            AstNodeType::VariableDeclaration { value, .. } => self.analyze(value),
+            AstNodeType::VariableDeclaration(AstDeclaration { value, .. }) => self.analyze(value),
             AstNodeType::FunctionDeclaration(AstFunction { body, .. }) => self.analyze(body),
             AstNodeType::LoopDeclaration {
                 loop_type,

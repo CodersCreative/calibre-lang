@@ -1,11 +1,8 @@
-use crate::{
-    MiddleNode, MiddleNodeType,
-    ast::{
-        MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirBreak, MirCall,
-        MirComparison, MirConditional, MirDeref, MirDrop, MirEmit, MirEnum, MirField, MirFunction,
-        MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
-        MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
-    },
+use crate::ast::{
+    MiddleNode, MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean,
+    MirBreak, MirCall, MirComparison, MirConditional, MirDeref, MirDrop, MirEmit, MirEnum,
+    MirField, MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg,
+    MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
 };
 use calibre_parser::UstrIdentifiersUsed;
 use ustr::Ustr;

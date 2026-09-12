@@ -4,6 +4,8 @@ use crate::ast::ObjectType;
 use crate::ast::ffi::ParserFfiInnerType;
 use crate::ast::generics::{TraitMember, TraitMemberKind};
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier};
+use crate::ast::nodes::assignment::AstAssignDestructure;
+use crate::ast::nodes::declaration::{AstDeclaration, AstDeclareDestructure};
 use crate::ast::nodes::flow::AstReturn;
 use crate::ast::nodes::functions::{AstExtern, AstFunction};
 use crate::ast::nodes::literals::{AstDataType, AstEnum, AstTuple};
@@ -511,11 +513,11 @@ pub fn build_statement_parser<'a>(
         .map(|(fields, value)| {
             AstNode::new(
                 value.span,
-                AstNodeType::DestructureDeclaration {
+                AstNodeType::DestructureDeclaration(AstDeclareDestructure {
                     var_type: VarType::Immutable,
                     pattern: DestructurePattern::Struct(fields),
                     value: Box::new(value),
-                },
+                }),
             )
         })
         .boxed();
@@ -570,11 +572,11 @@ pub fn build_statement_parser<'a>(
             };
             AstNode::new(
                 value.span,
-                AstNodeType::DestructureDeclaration {
+                AstNodeType::DestructureDeclaration(AstDeclareDestructure {
                     var_type: VarType::Immutable,
                     pattern: DestructurePattern::Tuple(items),
                     value: Box::new(value),
-                },
+                }),
             )
         })
         .boxed();
@@ -690,12 +692,12 @@ pub fn build_statement_parser<'a>(
             let value_span = value.span;
             Ok(AstNode::new(
                 Span::new_from_spans(*name.span(), value_span),
-                AstNodeType::VariableDeclaration {
+                AstNodeType::VariableDeclaration(AstDeclaration {
                     var_type,
                     identifier: name,
                     value: Box::new(value),
                     data_type: ty.unwrap_or_else(|| ParserDataType::auto(value_span)),
-                },
+                }),
             ))
         },
     );
@@ -1187,10 +1189,10 @@ pub fn build_statement_parser<'a>(
             );
             AstNode::new(
                 value.span,
-                AstNodeType::DestructureAssignment {
+                AstNodeType::DestructureAssignment(AstAssignDestructure {
                     pattern,
                     value: Box::new(value),
-                },
+                }),
             )
         })
         .boxed();

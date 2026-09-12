@@ -16,6 +16,7 @@ use calibre_parser::{
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialDollarIdentifier},
         nodes::{
             AstNode, AstNodeType, VarType,
+            declaration::AstDeclaration,
             flow::{
                 AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment,
             },
@@ -562,22 +563,22 @@ impl MirLowering for AstPipe {
 
                             AstNode::new(
                                 span,
-                                AstNodeType::VariableDeclaration {
+                                AstNodeType::VariableDeclaration(AstDeclaration {
                                     var_type: VarType::Mutable,
                                     identifier: PotentialDollarIdentifier::new(span, ident),
                                     value: Box::new(value),
                                     data_type: ParserDataType::auto(span),
-                                },
+                                }),
                             )
                         }
                         _ => AstNode::new(
                             span,
-                            AstNodeType::VariableDeclaration {
+                            AstNodeType::VariableDeclaration(AstDeclaration {
                                 var_type: VarType::Mutable,
                                 identifier: ParserText::from("$".to_string()).into(),
                                 value: Box::new(value),
                                 data_type: ParserDataType::auto(span),
-                            },
+                            }),
                         ),
                     };
 

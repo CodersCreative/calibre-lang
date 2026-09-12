@@ -8,8 +8,10 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType, LoopType, VarType,
             access::{AstField, AstIdentifier, AstIndex},
+            assignment::AstAssignment,
             binary::{AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIs},
             conditionals::{AstIf, IfComparisonType},
+            declaration::AstDeclaration,
             flow::{AstBreak, AstContinue, AstEmit, AstReturn},
             functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
             literals::{
@@ -616,12 +618,14 @@ impl From<MiddleNodeType> for AstNodeType {
             MiddleNodeType::DerefStatement(value) => AstNodeType::DerefStatement(AstDeref {
                 value: Box::new((*value.value).into()),
             }),
-            MiddleNodeType::VariableDeclaration(value) => AstNodeType::VariableDeclaration {
-                var_type: value.var_type,
-                identifier: value.identifier.into(),
-                value: Box::new((*value.value).into()),
-                data_type: value.data_type,
-            },
+            MiddleNodeType::VariableDeclaration(value) => {
+                AstNodeType::VariableDeclaration(AstDeclaration {
+                    var_type: value.var_type,
+                    identifier: value.identifier.into(),
+                    value: Box::new((*value.value).into()),
+                    data_type: value.data_type,
+                })
+            }
             MiddleNodeType::EnumExpression(value) => AstNodeType::EnumExpression(AstEnum {
                 identifier: value.identifier.into(),
                 value: value.value.into(),
@@ -674,10 +678,12 @@ impl From<MiddleNodeType> for AstNodeType {
                     symbol: None,
                 })
             }
-            MiddleNodeType::AssignmentExpression(value) => AstNodeType::AssignmentExpression {
-                identifier: Box::new((*value.identifier).into()),
-                value: Box::new((*value.value).into()),
-            },
+            MiddleNodeType::AssignmentExpression(value) => {
+                AstNodeType::AssignmentExpression(AstAssignment {
+                    identifier: Box::new((*value.identifier).into()),
+                    value: Box::new((*value.value).into()),
+                })
+            }
             MiddleNodeType::NegExpression(value) => AstNodeType::NotExpression(AstNot {
                 value: Box::new((*value.value).into()),
             }),

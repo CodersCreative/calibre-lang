@@ -1,22 +1,17 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirAs, MirScopeDecl, MirVarDecl},
+    ast::{MiddleNode, MiddleNodeType, MirScopeDecl},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::{FunctionParamDefault, resolve::ResolutionOptions},
+    symbols::resolve::ResolutionOptions,
     tags::TagInfo,
     typing::{MiddleObject, MiddleTypeDefType},
 };
 use calibre_parser::{
     Span,
     ast::{
-        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{
-            AstNode, AstNodeType, Overload, TypeDefType, VarType,
-            binary::AsFailureMode,
-            functions::{AstCall, AstFunction},
-            memory::AstRef,
-        },
+        idents::{ParserText, PotentialGenericTypeIdentifier},
+        nodes::{Overload, TypeDefType},
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -24,179 +19,6 @@ use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
 impl MiddleEnvironment {
-    #[instrument(skip_all, fields(scope, identifier))]
-    pub fn evaluate_var_declaration(
-        &mut self,
-        scope: ScopeId,
-        span: Span,
-        var_type: VarType,
-        identifier: PotentialDollarIdentifier,
-        mut value: AstNode,
-        data_type: ParserDataType,
-    ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = self.resolve(
-            scope,
-            &identifier,
-            ResolutionOptions::default().with_dollar(),
-        )?;
-
-        let new_name = Ustr::from(&ParserText::temp_name_with_suffix(identifier.trim(), span).text);
-
-        if let AstNodeType::CallExpression(AstCall {
-            caller,
-            generic_types,
-            args,
-            reverse_args,
-            ..
-        }) = value.clone().node_type
-            && let AstNodeType::Identifier(callee_ident) = &caller.node_type
-            && callee_ident.value.get_ident().text() == identifier
-            && let Some(first_arg) = args.first().cloned().map(|a| -> AstNode { a.into() })
-        {
-            let first_ty = self.resolve_type_from_node(scope, &first_arg).or_else(|| {
-                match &first_arg.node_type {
-                    AstNodeType::RefStatement(AstRef { value, .. }) => {
-                        self.resolve_type_from_node(scope, value.as_ref())
-                    }
-                    _ => None,
-                }
-            });
-
-            if let Some(first_ty) = first_ty
-                && let Some(mapped_name) = self.resolve_member_fn_name(
-                    &first_ty.unwrap_all_refs(),
-                    &callee_ident.value.get_ident().text(),
-                )
-                && mapped_name != callee_ident.value.get_ident().text()
-            {
-                value = AstNode::new(
-                    value.span,
-                    AstNodeType::CallExpression(AstCall {
-                        string_fn: None,
-                        caller: Box::new(AstNode::identifier(value.span, mapped_name)),
-                        generic_types,
-                        args,
-                        reverse_args,
-                    }),
-                );
-            }
-        }
-
-        let function_decl = match &value.node_type {
-            AstNodeType::FunctionDeclaration(AstFunction { header, body, .. }) => {
-                Some((header, body))
-            }
-            _ => None,
-        };
-
-        if let Some((header, body)) = function_decl
-            && !header.generics.0.is_empty()
-        {
-            let template_params: Vec<Ustr> = header
-                .generics
-                .0
-                .iter()
-                .map(|g| {
-                    self.resolve(
-                        scope,
-                        &g.identifier,
-                        ResolutionOptions::default().with_dollar(),
-                    )
-                })
-                .collect::<Result<Vec<_>, MiddleErr>>()
-                .unwrap_or_default();
-
-            self.symbols
-                .generic_fn_templates
-                .entry(new_name)
-                .or_insert((template_params, (*header).clone(), (**body).clone()));
-        }
-
-        if let Some((header, _)) = function_decl {
-            for tag in &self.tagging.tag_info {
-                match tag {
-                    TagInfo::Init(priority) => {
-                        self.tagging.init_functions.push((*priority, new_name))
-                    }
-                    TagInfo::Fin(priority) => {
-                        self.tagging.fin_functions.push((*priority, new_name))
-                    }
-                    _ => {}
-                }
-            }
-
-            let defaults: Vec<FunctionParamDefault> = header
-                .parameters
-                .iter()
-                .map(|(name, declared_ty, default)| FunctionParamDefault {
-                    name: Ustr::from(&name.to_string()),
-                    explicit_default: default
-                        .clone()
-                        .map(|node| Box::new(self.evaluate(scope, *node)))
-                        .map(|x| *x),
-                    implicit_none: default.is_none()
-                        && matches!(
-                            declared_ty,
-                            Some(ParserDataType {
-                                data_type: ParserInnerType::Option(_),
-                                ..
-                            })
-                        ),
-                })
-                .collect();
-
-            self.symbols
-                .function_param_defaults
-                .insert(new_name, defaults.clone());
-            self.symbols
-                .function_param_defaults
-                .insert(identifier, defaults);
-        }
-
-        let node_ty = self.resolve_type_from_node(scope, &value);
-
-        let data_type = if data_type.is_auto() {
-            None
-        } else {
-            Some(self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?)
-        };
-
-        let data_type = self.compare_types(data_type, node_ty, Some(&TagInfo::IgnoreInvalidLet))?;
-
-        let mut value = if function_decl.is_some() {
-            self.register_variable(scope, identifier, new_name, data_type.clone(), var_type)?;
-
-            self.evaluate(scope, value)
-        } else {
-            let value = self.evaluate(scope, value);
-
-            self.register_variable(scope, identifier, new_name, data_type.clone(), var_type)?;
-
-            value
-        };
-
-        if matches!(data_type.data_type, ParserInnerType::DynamicTraits(_)) {
-            value = MiddleNode::new(
-                MiddleNodeType::AsExpression(MirAs {
-                    value: Box::new(value),
-                    data_type: data_type.clone(),
-                    failure_mode: AsFailureMode::Panic,
-                }),
-                span,
-            );
-        };
-
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
-                var_type,
-                identifier: new_name,
-                value: Box::new(value),
-                data_type,
-            }),
-            span,
-        })
-    }
-
     #[instrument(skip_all, fields(scope, identifier))]
     pub fn evaluate_type_declaration(
         &mut self,

@@ -13,6 +13,7 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType, VarType,
             access::{AstField, AstIdentifier, AstIndex, AstScope},
+            declaration::AstDeclaration,
             memory::{AstDeref, AstDrop, AstMove, AstRef},
         },
         types::{ParserDataType, ParserInnerType},
@@ -98,7 +99,7 @@ impl MirLowering for AstMove {
 
                 let tmp_decl = AstNode::new(
                     span,
-                    AstNodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration(AstDeclaration {
                         var_type: VarType::Immutable,
                         identifier: tmp_ident.clone(),
                         data_type: ParserDataType::auto(span),
@@ -108,7 +109,7 @@ impl MirLowering for AstMove {
                                 value: Box::new(*base),
                             }),
                         )),
-                    },
+                    }),
                 );
 
                 let moved_base = AstNode::new(
@@ -134,7 +135,7 @@ impl MirLowering for AstMove {
 
                 let tmp_decl = AstNode::new(
                     span,
-                    AstNodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration(AstDeclaration {
                         var_type: VarType::Immutable,
                         identifier: tmp_ident.clone(),
                         data_type: ParserDataType::auto(span),
@@ -144,7 +145,7 @@ impl MirLowering for AstMove {
                                 value: Box::new(*base),
                             }),
                         )),
-                    },
+                    }),
                 );
 
                 let moved_base = AstNode::new(
@@ -169,7 +170,7 @@ impl MirLowering for AstMove {
 
                 let tmp_decl = AstNode::new(
                     span,
-                    AstNodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration(AstDeclaration {
                         var_type: VarType::Immutable,
                         identifier: tmp_ident.clone(),
                         data_type: ParserDataType::auto(span),
@@ -179,7 +180,7 @@ impl MirLowering for AstMove {
                                 value: Box::new(*base),
                             }),
                         )),
-                    },
+                    }),
                 );
 
                 let moved_base = AstNode::new(

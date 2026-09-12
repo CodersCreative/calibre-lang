@@ -10,8 +10,10 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
             AstNode, AstNodeType, LoopType, VarType,
+            assignment::AstAssignment,
             binary::{AstBinary, AstBoolean},
             conditionals::{AstIf, IfComparisonType},
+            declaration::AstDeclaration,
             flow::{AstBreak, AstContinue},
             functions::CallArg,
             loops::AstList,
@@ -64,12 +66,12 @@ pub fn transform_spawn_iter(
 
     spawned_loop_items.push(AstNode::new(
         span,
-        AstNodeType::VariableDeclaration {
+        AstNodeType::VariableDeclaration(AstDeclaration {
             var_type: VarType::Immutable,
             identifier: value_ident.clone(),
             data_type: ParserDataType::auto(span),
             value: Box::new(map),
-        },
+        }),
     ));
 
     spawned_loop_items.push(AstNode::call(
@@ -132,7 +134,7 @@ pub fn transform_spawn_iter(
                                 Vec::new(),
                                 Box::new(AstNode::new(
                                     span,
-                                    AstNodeType::AssignmentExpression {
+                                    AstNodeType::AssignmentExpression(AstAssignment {
                                         identifier: Box::new(list_ident_node.clone()),
                                         value: Box::new(AstNode::new(
                                             span,
@@ -147,7 +149,7 @@ pub fn transform_spawn_iter(
                                                 operator: BinaryOperator::Shl,
                                             }),
                                         )),
-                                    },
+                                    }),
                                 )),
                             ),
                             (
@@ -173,7 +175,7 @@ pub fn transform_spawn_iter(
     AstNode::new_temp_scope(vec![
         AstNode::new(
             span,
-            AstNodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Mutable,
                 identifier: chan_ident.clone(),
                 data_type: ParserDataType::auto(span),
@@ -183,11 +185,11 @@ pub fn transform_spawn_iter(
                     vec![data_type.clone()],
                     Vec::new(),
                 )),
-            },
+            }),
         ),
         AstNode::new(
             span,
-            AstNodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Mutable,
                 identifier: wg_ident.clone(),
                 data_type: ParserDataType::object(span, "WaitGroup"),
@@ -196,7 +198,7 @@ pub fn transform_spawn_iter(
                     AstNode::member(span, AstNode::identifier(span, "WaitGroup"), "new"),
                     Vec::new(),
                 )),
-            },
+            }),
         ),
         dispatch_loop,
         AstNode::call(
@@ -211,7 +213,7 @@ pub fn transform_spawn_iter(
         ),
         AstNode::new(
             span,
-            AstNodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Mutable,
                 identifier: list_ident.clone(),
                 value: Box::new(AstNode::new(
@@ -222,7 +224,7 @@ pub fn transform_spawn_iter(
                     }),
                 )),
                 data_type: list_type.clone(),
-            },
+            }),
         ),
         collect_loop,
         list_ident_node,
@@ -290,7 +292,7 @@ impl MiddleEnvironment {
 
         let block = AstNode::new_temp_scope(vec![AstNode::new(
             span,
-            AstNodeType::AssignmentExpression {
+            AstNodeType::AssignmentExpression(AstAssignment {
                 identifier: Box::new(list_ident_node.clone()),
                 value: Box::new(AstNode::new(
                     span,
@@ -300,7 +302,7 @@ impl MiddleEnvironment {
                         operator: BinaryOperator::Shl,
                     }),
                 )),
-            },
+            }),
         )]);
 
         let block = if let Some(cond) = guard {
@@ -332,7 +334,7 @@ impl MiddleEnvironment {
             AstNode::new_temp_scope(vec![
                 AstNode::new(
                     span,
-                    AstNodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration(AstDeclaration {
                         var_type: VarType::Mutable,
                         identifier: list_ident.clone(),
                         value: Box::new(AstNode::new(
@@ -343,7 +345,7 @@ impl MiddleEnvironment {
                             }),
                         )),
                         data_type: list_type,
-                    },
+                    }),
                 ),
                 loop_node,
                 AstNode::emit(AstNode::identifier(span, list_ident)),

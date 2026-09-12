@@ -13,6 +13,7 @@ use calibre_parser::ast::{
     nodes::{
         AstNode, AstNodeType,
         binary::{AstIn, AstIs},
+        declaration::AstDeclaration,
         matching::MatchArmType,
     },
     types::{ParserDataType, ParserInnerType},
@@ -158,7 +159,7 @@ impl PatternTranslatorDispatcher {
             .map(|binding| {
                 AstNode::new(
                     env.context.current_span(),
-                    AstNodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration(AstDeclaration {
                         var_type: binding.var_type,
                         identifier: ParserText::new(env.context.current_span(), binding.name)
                             .into(),
@@ -169,7 +170,7 @@ impl PatternTranslatorDispatcher {
                                 ParserInnerType::Auto(None),
                             )
                         }),
-                    },
+                    }),
                 )
             })
             .collect()

@@ -2,6 +2,7 @@ use super::{LegacySpanMapExt, filter, setup::StrParser};
 use crate::ast::RefMutability;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::access::{AstField, AstIndex};
+use crate::ast::nodes::assignment::AstAssignment;
 use crate::ast::nodes::binary::{
     AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
 };
@@ -1301,10 +1302,10 @@ pub fn build_tail_expression_parser<'a>(
             };
             AstNode::new(
                 Span::new_from_spans(identifier.span, rhs.span),
-                AstNodeType::AssignmentExpression {
+                AstNodeType::AssignmentExpression(AstAssignment {
                     identifier: Box::new(identifier),
                     value: Box::new(rhs),
-                },
+                }),
             )
         })
         .or(base_expr)

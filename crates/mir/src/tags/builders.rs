@@ -1,5 +1,3 @@
-use std::format;
-
 use crate::{
     ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
     tags::TagInfo, typing::MiddleTypeDefType,
@@ -11,6 +9,7 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, TypeDefType, VarType,
+            declaration::AstDeclaration,
             flow::{AstTry, TryCatch},
             functions::{AstFunction, CallArg, FunctionHeader},
             literals::{AstString, AstStruct},
@@ -95,7 +94,7 @@ impl MiddleEnvironment {
 
             let setter = AstNode::new(
                 span,
-                AstNodeType::VariableDeclaration {
+                AstNodeType::VariableDeclaration(AstDeclaration {
                     var_type: VarType::Constant,
                     identifier: PotentialDollarIdentifier::new(span, format!("set_{field}")),
                     data_type: ParserDataType::auto(span),
@@ -133,7 +132,7 @@ impl MiddleEnvironment {
                             )])),
                         }),
                     )),
-                },
+                }),
             );
             methods.push(setter);
         }
@@ -182,7 +181,7 @@ impl MiddleEnvironment {
 
         methods.push(AstNode::new(
             span,
-            AstNodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::new(span, "build"),
                 data_type: ParserDataType::auto(span),
@@ -209,7 +208,7 @@ impl MiddleEnvironment {
                             if has_default {
                                 AstNode::new(
                                     span,
-                                    AstNodeType::VariableDeclaration {
+                                    AstNodeType::VariableDeclaration(AstDeclaration {
                                         var_type: VarType::Constant,
                                         identifier: PotentialDollarIdentifier::new(
                                             span,
@@ -225,7 +224,7 @@ impl MiddleEnvironment {
                                             ),
                                             Vec::new(),
                                         )),
-                                    },
+                                    }),
                                 )
                             } else {
                                 AstNode::null(span)
@@ -244,7 +243,7 @@ impl MiddleEnvironment {
                         ])),
                     }),
                 )),
-            },
+            }),
         ));
 
         let tags = std::mem::take(&mut self.tagging.tag_info);

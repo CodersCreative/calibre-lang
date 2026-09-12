@@ -8,8 +8,10 @@ use crate::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             access::{AstField, AstIdentifier, AstIndex, AstScope},
+            assignment::{AstAssignDestructure, AstAssignment},
             binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
             conditionals::{AstIf, AstTernary},
+            declaration::{AstDeclaration, AstDeclareDestructure},
             flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
             functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg, FunctionHeader},
             literals::{
@@ -606,27 +608,12 @@ pub enum AstNodeType {
     SelectStatement(AstSelect),
 
     // Declaration
-    VariableDeclaration {
-        var_type: VarType,
-        identifier: PotentialDollarIdentifier,
-        value: Box<AstNode>,
-        data_type: ParserDataType,
-    },
-    DestructureDeclaration {
-        var_type: VarType,
-        pattern: DestructurePattern,
-        value: Box<AstNode>,
-    },
+    VariableDeclaration(AstDeclaration),
+    DestructureDeclaration(AstDeclareDestructure),
 
     // Assignment
-    AssignmentExpression {
-        identifier: Box<AstNode>,
-        value: Box<AstNode>,
-    },
-    DestructureAssignment {
-        pattern: DestructurePattern,
-        value: Box<AstNode>,
-    },
+    AssignmentExpression(AstAssignment),
+    DestructureAssignment(AstAssignDestructure),
 
     // Types
     ImplDeclaration {

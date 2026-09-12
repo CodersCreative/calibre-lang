@@ -5,8 +5,7 @@ use crate::{
         generics::TraitMemberKind,
         idents::PotentialDollarIdentifier,
         nodes::{
-            AstNode, AstNodeType, DestructurePattern, LoopType, Overload, TypeDefType, VarType,
-            binary::{AstBinary, AstBoolean},
+            AstNode, AstNodeType, LoopType, Overload, TypeDefType, VarType,
             matching::{
                 MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem,
             },
@@ -433,6 +432,14 @@ impl Formatter {
             AstNodeType::MatchStatement(x) => x.format(self),
             AstNodeType::FnMatchDeclaration(x) => x.format(self),
 
+            // Assignment
+            AstNodeType::AssignmentExpression(x) => x.format(self),
+            AstNodeType::DestructureAssignment(x) => x.format(self),
+
+            // Declarations
+            AstNodeType::VariableDeclaration(x) => x.format(self),
+            AstNodeType::DestructureDeclaration(x) => x.format(self),
+
             AstNodeType::ImportStatement {
                 module,
                 alias,
@@ -609,58 +616,6 @@ impl Formatter {
             AstNodeType::TestDeclaration { identifier, body } => {
                 format!("test {:?} {}", identifier.text, self.format(body))
             }
-            AstNodeType::AssignmentExpression { identifier, value } => match &value.node_type {
-                AstNodeType::BinaryExpression(AstBinary {
-                    left,
-                    right,
-                    operator,
-                }) if left.node_type == identifier.node_type => format!(
-                    "{} {}= {}",
-                    self.format(identifier),
-                    operator,
-                    self.format(right)
-                ),
-                AstNodeType::BooleanExpression(AstBoolean {
-                    left,
-                    right,
-                    operator,
-                }) if left.node_type == identifier.node_type => format!(
-                    "{} {}= {}",
-                    self.format(identifier),
-                    operator,
-                    self.format(right)
-                ),
-                _ => {
-                    let lhs = self.format(identifier);
-                    let rhs = value.format(self);
-                    let single = format!("{} := {}", lhs, rhs);
-                    let multi = format!("{} :=\n{}", lhs, self.fmt_txt_with_tab(&rhs, 1, true));
-                    self.wrap_if_wide(single, &multi)
-                }
-            },
-            AstNodeType::VariableDeclaration {
-                var_type,
-                identifier,
-                value,
-                data_type,
-            } => {
-                let mut txt = format!("{} {}", var_type, identifier);
-
-                if !data_type.is_auto() {
-                    txt.push_str(&format!(" : {}", data_type));
-                }
-
-                let rhs = value.format(self);
-                let assign = if data_type.is_auto() { ":=" } else { "=" };
-                let single = format!("{} {} {}", txt, assign, rhs);
-                let multi = format!(
-                    "{} {}\n{}",
-                    txt,
-                    assign,
-                    self.fmt_txt_with_tab(&rhs, 1, true)
-                );
-                self.wrap_if_wide(single, &multi)
-            }
             AstNodeType::Tag {
                 node,
                 tag,
@@ -743,24 +698,6 @@ impl Formatter {
                 if let Some(data_type) = data_type {
                     txt.push_str(&format!(" -> gen:<{}>", data_type));
                 }
-                txt
-            }
-            AstNodeType::DestructureDeclaration {
-                var_type,
-                pattern,
-                value,
-            } => {
-                let mut txt = format!("{}", var_type);
-                txt.push(' ');
-                txt.push_str(&self.fmt_destructure_pattern(pattern, false));
-                txt.push_str(" := ");
-                txt.push_str(&value.format(self));
-                txt
-            }
-            AstNodeType::DestructureAssignment { pattern, value } => {
-                let mut txt = self.fmt_destructure_pattern(pattern, false);
-                txt.push_str(" := ");
-                txt.push_str(&value.format(self));
                 txt
             }
             AstNodeType::LoopDeclaration {
@@ -919,131 +856,6 @@ impl Formatter {
                 )
             }
         }
-    }
-
-    pub fn fmt_destructure_pattern(
-        &self,
-        pattern: &DestructurePattern,
-        wrap_tuple: bool,
-    ) -> String {
-        match pattern {
-            DestructurePattern::Tuple(bindings) => {
-                let mut txt = String::new();
-                if wrap_tuple {
-                    txt.push('(');
-                }
-                let mut first = true;
-                for binding in bindings {
-                    if !first {
-                        txt.push_str(", ");
-                    }
-                    first = false;
-                    match binding {
-                        None => txt.push_str(".."),
-                        Some((var_type, name)) => {
-                            if *var_type == VarType::Mutable {
-                                txt.push_str("mut ");
-                            }
-                            txt.push_str(&name.to_string());
-                        }
-                    }
-                }
-                if wrap_tuple {
-                    txt.push(')');
-                }
-                txt
-            }
-            DestructurePattern::Struct(fields) => {
-                let mut txt = String::from("{");
-                let mut first = true;
-                for (field, var_type, name) in fields {
-                    if !first {
-                        txt.push_str(", ");
-                    }
-                    first = false;
-                    if *var_type == VarType::Immutable && &name.to_string() == field {
-                        txt.push_str(field);
-                        continue;
-                    }
-                    txt.push_str(field);
-                    txt.push_str(": ");
-                    if *var_type == VarType::Mutable {
-                        txt.push_str("mut ");
-                    }
-                    txt.push_str(&name.to_string());
-                }
-                txt.push('}');
-                txt
-            }
-        }
-    }
-
-    pub fn fmt_match_body(
-        &mut self,
-        body: &[(MatchArmType, Vec<AstNode>, Box<AstNode>)],
-    ) -> String {
-        let mut txt = String::from("{\n");
-
-        let mut adjusted_body = body.first().map(|x| vec![vec![x]]).unwrap_or_default();
-
-        for arm in body.iter().skip(1) {
-            let should_group = adjusted_body
-                .last()
-                .and_then(|v| v.first())
-                .map(|last| last.1 == arm.1 && last.2 == arm.2)
-                .unwrap_or(false);
-            if should_group {
-                if let Some(group) = adjusted_body.last_mut() {
-                    group.push(arm);
-                } else {
-                    adjusted_body.push(vec![arm]);
-                }
-            } else {
-                adjusted_body.push(vec![arm]);
-            }
-        }
-
-        for arm in adjusted_body {
-            let temp = handle_comment!(self.get_potential_comment(arm[0].0.span()), {
-                let mut txt = self.fmt_match_arm(&arm[0].0, false);
-                for node in arm.iter().skip(1) {
-                    txt.push_str(&format!(" | {}", self.fmt_match_arm(&node.0, false)));
-                }
-
-                match &arm[0].0 {
-                    MatchArmType::Enum {
-                        var_type: VarType::Immutable,
-                        name: Some(name),
-                        destructure: None,
-                        pattern: None,
-                        ..
-                    } => txt.push_str(&format!(" : {}", name)),
-                    MatchArmType::Enum {
-                        var_type,
-                        name: Some(name),
-                        destructure: None,
-                        pattern: None,
-                        ..
-                    } => txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name)),
-                    _ => {}
-                }
-
-                format!(
-                    "{}{} {}",
-                    txt,
-                    if arm[0].1.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" {}", self.fmt_conditionals(&arm[0].1))
-                    },
-                    self.format(&arm[0].2)
-                )
-            });
-            txt.push_str(&format!("{},\n", self.fmt_txt_with_tab(&temp, 1, true)));
-        }
-        txt = txt.trim_end().trim_end_matches(",").to_string();
-        txt.push_str("\n}");
-        txt
     }
 
     pub fn fmt_txt_with_tab(&mut self, txt: &str, tab_amt: usize, starting_tab: bool) -> String {
@@ -1608,11 +1420,7 @@ impl Formatter {
                     };
                     format!(".{} : {}", value, payload)
                 } else if let Some(pattern) = destructure {
-                    format!(
-                        ".{} : {}",
-                        value,
-                        self.fmt_destructure_pattern(pattern, false)
-                    )
+                    format!(".{} : {}", value, pattern.format(self, false))
                 } else if let Some(name) = name {
                     if *var_type == VarType::Immutable {
                         format!(".{} : {}", value, name)
@@ -1668,11 +1476,7 @@ impl Formatter {
                 value,
                 destructure: Some(pattern),
                 ..
-            } => format!(
-                ".{} : {}",
-                value,
-                self.fmt_destructure_pattern(pattern, false)
-            ),
+            } => format!(".{} : {}", value, pattern.format(self, false)),
             MatchArmType::Enum {
                 value,
                 var_type: VarType::Immutable,

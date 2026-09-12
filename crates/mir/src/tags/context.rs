@@ -9,6 +9,7 @@ use calibre_parser::ast::{
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::{
         AstNode, AstNodeType, VarType,
+        declaration::AstDeclaration,
         literals::{AstString, AstStruct},
     },
     types::ParserDataType,
@@ -94,7 +95,7 @@ impl MiddleEnvironment {
 
         let mut prefix = vec![AstNode::new(
             sp,
-            AstNodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::new(sp, "package"),
                 data_type: ParserDataType::object(sp, "Package"),
@@ -114,7 +115,7 @@ impl MiddleEnvironment {
                         ]),
                     }),
                 )),
-            },
+            }),
         )];
 
         let mut body = match node.node_type {
@@ -158,16 +159,18 @@ impl MiddleEnvironment {
         };
 
         let function_name = match &node.node_type {
-            AstNodeType::VariableDeclaration { identifier, .. } => Ustr::from(match identifier {
-                PotentialDollarIdentifier::Identifier(text) => &text.text,
-                PotentialDollarIdentifier::DollarIdentifier(text) => &text.text,
-            }),
+            AstNodeType::VariableDeclaration(AstDeclaration { identifier, .. }) => {
+                Ustr::from(match identifier {
+                    PotentialDollarIdentifier::Identifier(text) => &text.text,
+                    PotentialDollarIdentifier::DollarIdentifier(text) => &text.text,
+                })
+            }
             _ => scope_ref.namespace,
         };
 
         let mut nodes = vec![AstNode::new(
             sp,
-            AstNodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::new(sp, "current_context"),
                 data_type: ParserDataType::object(sp, "ExecContext"),
@@ -199,7 +202,7 @@ impl MiddleEnvironment {
                         ]),
                     }),
                 )),
-            },
+            }),
         )];
 
         let mut body = match node.node_type {

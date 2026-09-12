@@ -10,9 +10,10 @@ pub use guards::GuardProcessor;
 pub use translator::PatternTranslatorDispatcher;
 
 use crate::{
-    MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
     symbols::resolve::ResolutionOptions, translate::MirLowering, typing::MiddleTypeDefType,
 };
+
 use calibre_parser::{
     Span,
     ast::{
@@ -23,6 +24,7 @@ use calibre_parser::{
             access::AstIndex,
             binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, IfComparisonType},
+            declaration::AstDeclaration,
             functions::{AstFunction, CallArg, FunctionHeader},
             matching::{AstFnMatch, AstMatch, MatchArmType},
         },
@@ -136,12 +138,12 @@ impl MirLowering for AstMatch {
             (
                 Some(AstNode::new(
                     span,
-                    AstNodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration(AstDeclaration {
                         var_type: VarType::Mutable,
                         identifier: tmp_name.clone().into(),
                         data_type: resolved.unwrap_or_else(|| ParserDataType::auto(span)),
                         value,
-                    },
+                    }),
                 )),
                 Some(AstNode::identifier(span, tmp_name)),
             )

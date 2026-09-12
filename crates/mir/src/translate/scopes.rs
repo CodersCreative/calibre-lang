@@ -9,7 +9,9 @@ use calibre_parser::{
     Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{AstNode, AstNodeType, LoopType, NamedScope, flow::AstBreak},
+        nodes::{
+            AstNode, AstNodeType, LoopType, NamedScope, declaration::AstDeclaration, flow::AstBreak,
+        },
     },
 };
 use ustr::Ustr;
@@ -220,9 +222,9 @@ impl MiddleEnvironment {
 
         if let Some(mut body) = body {
             for stmt in body.iter() {
-                if let AstNodeType::VariableDeclaration {
+                if let AstNodeType::VariableDeclaration(AstDeclaration {
                     identifier, value, ..
-                } = &stmt.node_type
+                }) = &stmt.node_type
                     && matches!(value.node_type, AstNodeType::FunctionDeclaration { .. })
                 {
                     let ident = self.resolve(

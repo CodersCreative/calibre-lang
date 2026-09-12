@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirAssignment, MirScopeDecl, MirVarDecl},
+    ast::{MiddleNode, MiddleNodeType, MirScopeDecl, MirVarDecl},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -16,10 +16,8 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, TypeDefType, VarType,
-            access::{AstField, AstIndex, AstScope},
-            conditionals::{AstIf, AstTernary, IfComparisonType},
+            declaration::AstDeclaration,
             functions::{AstFunction, FunctionHeader},
-            memory::AstDeref,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -28,9 +26,11 @@ use tracing::{debug, instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
 
 pub mod access;
+pub mod assignment;
 pub mod binary;
 pub mod conditionals;
 pub mod curry;
+pub mod declarations;
 pub mod flow;
 pub mod functions;
 pub mod iter;
@@ -294,81 +294,19 @@ impl MiddleEnvironment {
             AstNodeType::SelectStatement(x) => x.lower(self, scope, node.span),
             AstNodeType::Spawn(x) => x.lower(self, scope, node.span),
 
+            // Assignment
+            AstNodeType::AssignmentExpression(x) => x.lower(self, scope, node.span),
+            AstNodeType::DestructureAssignment(x) => x.lower(self, scope, node.span),
+
+            // Declarations
+            AstNodeType::VariableDeclaration(x) => x.lower(self, scope, node.span),
+            AstNodeType::DestructureDeclaration(x) => x.lower(self, scope, node.span),
+
             AstNodeType::EmptyLine => Ok(MiddleNode {
                 node_type: MiddleNodeType::EmptyLine,
                 span: node.span,
             }),
             AstNodeType::ParenExpression { value } => self.evaluate_inner(scope, *value),
-            AstNodeType::DestructureDeclaration {
-                var_type: _,
-                pattern,
-                value,
-            } => {
-                let tmp_ident: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_suffix("destructure_tmp", node.span).into();
-
-                let tmp_decl = AstNode::new(
-                    node.span,
-                    AstNodeType::VariableDeclaration {
-                        var_type: VarType::Immutable,
-                        identifier: tmp_ident.clone(),
-                        data_type: ParserDataType::auto(node.span),
-                        value,
-                    },
-                );
-
-                let mut body = Vec::new();
-                body.push(tmp_decl);
-                body.extend(
-                    self.emit_destructure_statements(&tmp_ident, &pattern, node.span, true),
-                );
-
-                self.evaluate_inner(
-                    scope,
-                    AstNode::new(
-                        node.span,
-                        AstNodeType::ScopeDeclaration {
-                            body: Some(body),
-                            named: None,
-                            is_temp: true,
-                            create_new_scope: Some(false),
-                            define: false,
-                        },
-                    ),
-                )
-            }
-            AstNodeType::DestructureAssignment { pattern, value } => {
-                let tmp_ident: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_suffix("destructure_tmp", node.span).into();
-
-                let tmp_decl = AstNode::new(
-                    node.span,
-                    AstNodeType::VariableDeclaration {
-                        var_type: VarType::Immutable,
-                        identifier: tmp_ident.clone(),
-                        data_type: ParserDataType::auto(node.span),
-                        value,
-                    },
-                );
-
-                let mut body = vec![tmp_decl];
-                body.extend(
-                    self.emit_destructure_statements(&tmp_ident, &pattern, node.span, false),
-                );
-
-                self.evaluate_inner(
-                    scope,
-                    AstNode::new_temp_scope_with_create(body, Some(false)),
-                )
-            }
-            AstNodeType::VariableDeclaration {
-                var_type,
-                identifier,
-                value,
-                data_type,
-            } => self.evaluate_var_declaration(
-                scope, node.span, var_type, identifier, *value, data_type,
-            ),
             AstNodeType::TypeDeclaration {
                 identifier,
                 object,
@@ -403,7 +341,7 @@ impl MiddleEnvironment {
                     scope,
                     AstNode::new(
                         node.span,
-                        AstNodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration(AstDeclaration {
                             var_type: VarType::Constant,
                             identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                                 node.span,
@@ -422,7 +360,7 @@ impl MiddleEnvironment {
                                     body,
                                 }),
                             )),
-                        },
+                        }),
                     ),
                 )
             }
@@ -459,122 +397,6 @@ impl MiddleEnvironment {
                     data_type.unwrap_or(ParserDataType::auto(node.span)),
                 ),
             ),
-            AstNodeType::AssignmentExpression { identifier, value } => {
-                if !self.context.type_check {
-                    let identifier_type = self.resolve_type_from_node(scope, &identifier);
-                    let value_type = self.resolve_type_from_node(scope, &value);
-                    self.compare_types_ref(
-                        identifier_type.as_ref(),
-                        value_type.as_ref(),
-                        Some(&TagInfo::IgnoreInvalidTypeCheck),
-                    )?;
-                }
-
-                match identifier.node_type.clone() {
-                    AstNodeType::Ternary(AstTernary {
-                        comparison,
-                        then,
-                        otherwise,
-                    }) => self.evaluate_inner(
-                        scope,
-                        AstNode {
-                            node_type: AstNodeType::IfStatement(AstIf {
-                                comparison: Box::new(IfComparisonType::If(*comparison)),
-                                then: Box::new(AstNode::new(
-                                    self.context.current_span(),
-                                    AstNodeType::AssignmentExpression {
-                                        identifier: then,
-                                        value: value.clone(),
-                                    },
-                                )),
-                                otherwise: Some(Box::new(AstNode::new(
-                                    self.context.current_span(),
-                                    AstNodeType::AssignmentExpression {
-                                        identifier: otherwise,
-                                        value,
-                                    },
-                                ))),
-                            }),
-                            span: node.span,
-                        },
-                    ),
-                    AstNodeType::DerefStatement(AstDeref {
-                        value: deref_target,
-                    }) => Ok(MiddleNode {
-                        node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
-                            identifier: Box::new(self.evaluate(
-                                scope,
-                                AstNode::new(
-                                    node.span,
-                                    AstNodeType::DerefStatement(AstDeref {
-                                        value: deref_target,
-                                    }),
-                                ),
-                            )),
-                            value: Box::new(self.evaluate(scope, *value)),
-                        }),
-                        span: node.span,
-                    }),
-                    AstNodeType::FieldAccess(AstField { base, field }) => Ok(MiddleNode {
-                        node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
-                            identifier: Box::new(self.evaluate(
-                                scope,
-                                AstNode::new(
-                                    node.span,
-                                    AstNodeType::FieldAccess(AstField { base, field }),
-                                ),
-                            )),
-                            value: Box::new(self.evaluate(scope, *value)),
-                        }),
-                        span: node.span,
-                    }),
-                    AstNodeType::ScopeAccess(AstScope { base, field }) => Ok(MiddleNode {
-                        node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
-                            identifier: Box::new(self.evaluate(
-                                scope,
-                                AstNode::new(
-                                    node.span,
-                                    AstNodeType::ScopeAccess(AstScope { base, field }),
-                                ),
-                            )),
-                            value: Box::new(self.evaluate(scope, *value)),
-                        }),
-                        span: node.span,
-                    }),
-                    AstNodeType::IndexAccess(AstIndex { base, index }) => {
-                        if let Some(overloaded) = self.handle_index_assign_overload(
-                            scope,
-                            node.span,
-                            *base.clone(),
-                            *index.clone(),
-                            *value.clone(),
-                        )? {
-                            return Ok(overloaded);
-                        }
-
-                        Ok(MiddleNode {
-                            node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
-                                identifier: Box::new(self.evaluate(
-                                    scope,
-                                    AstNode::new(
-                                        node.span,
-                                        AstNodeType::IndexAccess(AstIndex { base, index }),
-                                    ),
-                                )),
-                                value: Box::new(self.evaluate(scope, *value)),
-                            }),
-                            span: node.span,
-                        })
-                    }
-                    _ => Ok(MiddleNode {
-                        node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
-                            identifier: Box::new(self.evaluate(scope, *identifier)),
-                            value: Box::new(self.evaluate(scope, *value)),
-                        }),
-                        span: node.span,
-                    }),
-                }
-            }
             AstNodeType::ImplDeclaration {
                 generics,
                 target,
@@ -620,8 +442,10 @@ impl MiddleEnvironment {
                     let placeholders = variables
                         .iter()
                         .filter_map(|var| {
-                            if let AstNodeType::VariableDeclaration { identifier, .. } =
-                                &var.node_type
+                            if let AstNodeType::VariableDeclaration(AstDeclaration {
+                                identifier,
+                                ..
+                            }) = &var.node_type
                             {
                                 let identifier = self
                                     .resolve(
@@ -630,9 +454,10 @@ impl MiddleEnvironment {
                                         ResolutionOptions::default().with_dollar(),
                                     )
                                     .ok()?;
+
                                 let resolved_iden =
                                     Ustr::from(&format!("{}.{}", impl_key, identifier));
-                                // TODO Unpack the dollar ident only without resolving
+
                                 Some((identifier, resolved_iden, generic_params.clone()))
                             } else {
                                 None
@@ -707,12 +532,12 @@ impl MiddleEnvironment {
                     var: AstNode,
                 ) -> Result<Option<(AstNode, Ustr, bool)>, MiddleErr> {
                     match var.node_type {
-                        AstNodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration(AstDeclaration {
                             var_type,
                             identifier,
                             value,
                             data_type,
-                        } => {
+                        }) => {
                             let identifier = env.resolve(
                                 scope,
                                 &identifier,
@@ -761,14 +586,14 @@ impl MiddleEnvironment {
                             Ok(Some((
                                 AstNode {
                                     span: var.span,
-                                    node_type: AstNodeType::VariableDeclaration {
+                                    node_type: AstNodeType::VariableDeclaration(AstDeclaration {
                                         var_type,
                                         identifier: PotentialDollarIdentifier::Identifier(
                                             ParserText::from(resolved_iden),
                                         ),
                                         value,
                                         data_type,
-                                    },
+                                    }),
                                 },
                                 identifier,
                                 dependant,
@@ -913,7 +738,7 @@ impl MiddleEnvironment {
                 let mut assoc_types = Vec::new();
                 for var in &variables {
                     match &var.node_type {
-                        AstNodeType::VariableDeclaration { identifier, .. } => {
+                        AstNodeType::VariableDeclaration(AstDeclaration { identifier, .. }) => {
                             provided.insert(Ustr::from(&identifier.to_string()));
                         }
                         AstNodeType::TypeDeclaration {
@@ -937,14 +762,14 @@ impl MiddleEnvironment {
                     let default = member.default.unwrap();
                     all_vars.push(AstNode::new(
                         default.span,
-                        AstNodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration(AstDeclaration {
                             var_type: VarType::Constant,
                             identifier: PotentialDollarIdentifier::Identifier(ParserText::from(
                                 name,
                             )),
                             data_type: member.data_type.clone(),
                             value: Box::new(default),
-                        },
+                        }),
                     ));
                 }
 
@@ -993,7 +818,9 @@ impl MiddleEnvironment {
                         )
                     })?;
                     for var in &all_vars {
-                        if let AstNodeType::VariableDeclaration { identifier, .. } = &var.node_type
+                        if let AstNodeType::VariableDeclaration(AstDeclaration {
+                            identifier, ..
+                        }) = &var.node_type
                         {
                             let resolved_iden = Ustr::from(&format!("{}.{}", impl_key, identifier));
                             impl_ref.insert_member_placeholder(
@@ -1009,12 +836,12 @@ impl MiddleEnvironment {
 
                 for var in all_vars {
                     let (dec, iden, dependant) = match var.node_type {
-                        AstNodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration(AstDeclaration {
                             var_type,
                             identifier,
                             value,
                             data_type,
-                        } => {
+                        }) => {
                             // TODO Deal with dollar ident
                             let iden = identifier.to_string();
                             let resolved_iden = format!("{}.{}", impl_key, identifier);
@@ -1061,14 +888,14 @@ impl MiddleEnvironment {
                             (
                                 AstNode {
                                     span: var.span,
-                                    node_type: AstNodeType::VariableDeclaration {
+                                    node_type: AstNodeType::VariableDeclaration(AstDeclaration {
                                         var_type,
                                         identifier: PotentialDollarIdentifier::Identifier(
                                             ParserText::from(resolved_iden),
                                         ),
                                         value,
                                         data_type,
-                                    },
+                                    }),
                                 },
                                 iden,
                                 dependant,

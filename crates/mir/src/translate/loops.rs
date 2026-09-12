@@ -14,8 +14,10 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType, LoopType, VarType,
             access::{AstField, AstIndex},
+            assignment::AstAssignment,
             binary::{AstBinary, AstComparison},
             conditionals::{AstIf, IfComparisonType},
+            declaration::AstDeclaration,
             flow::AstBreak,
             functions::CallArg,
             literals::AstRange,
@@ -92,25 +94,27 @@ impl MiddleEnvironment {
 
         let result_ident = ParserText::from(result_raw);
         let broke_ident = ParserText::from(broke_raw);
+
         let result_decl = AstNode::new(
             span,
-            AstNodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Mutable,
                 identifier: result_ident.clone().into(),
                 value: else_body.clone(),
                 data_type: ParserDataType::auto(span),
-            },
+            }),
         );
 
         let broke_decl = AstNode::new(
             span,
-            AstNodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Mutable,
                 identifier: broke_ident.clone().into(),
                 value: Box::new(AstNode::int(span, 0)),
                 data_type: ParserDataType::new(span, ParserInnerType::Int),
-            },
+            }),
         );
+
         let stmts = vec![
             self.evaluate(scope, result_decl),
             self.evaluate(scope, broke_decl),
@@ -378,7 +382,7 @@ impl MiddleEnvironment {
                     scope,
                     AstNode::new(
                         span,
-                        AstNodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration(AstDeclaration {
                             var_type: if is_indexable_loop {
                                 VarType::Immutable
                             } else {
@@ -387,7 +391,7 @@ impl MiddleEnvironment {
                             identifier: iter_id.clone(),
                             value: Box::new(iter_value),
                             data_type: ParserDataType::auto(span),
-                        },
+                        }),
                     ),
                 );
 
@@ -398,12 +402,12 @@ impl MiddleEnvironment {
                         scope,
                         AstNode::new(
                             span,
-                            AstNodeType::VariableDeclaration {
+                            AstNodeType::VariableDeclaration(AstDeclaration {
                                 var_type: VarType::Mutable,
                                 identifier: idx_id.clone(),
                                 value: Box::new(idx_initial),
                                 data_type: ParserDataType::new(span, ParserInnerType::Int),
-                            },
+                            }),
                         ),
                     ));
                 } else {
@@ -411,12 +415,12 @@ impl MiddleEnvironment {
                         scope,
                         AstNode::new(
                             span,
-                            AstNodeType::VariableDeclaration {
+                            AstNodeType::VariableDeclaration(AstDeclaration {
                                 var_type: VarType::Mutable,
                                 identifier: next_id.clone(),
                                 value: Box::new(AstNode::none(span)),
                                 data_type: ParserDataType::auto(span),
-                            },
+                            }),
                         ),
                     ));
                 }
@@ -474,14 +478,14 @@ impl MiddleEnvironment {
                 } else {
                     Some(AstNode::new(
                         span,
-                        AstNodeType::AssignmentExpression {
+                        AstNodeType::AssignmentExpression(AstAssignment {
                             identifier: Box::new(AstNode::identifier(span, &next_id)),
                             value: Box::new(AstNode::call(
                                 span,
                                 AstNode::member(span, iter_node.clone(), "next"),
                                 vec![],
                             )),
-                        },
+                        }),
                     ))
                 };
 
@@ -510,17 +514,17 @@ impl MiddleEnvironment {
 
                 let var_name_node = AstNode::new(
                     span,
-                    AstNodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration(AstDeclaration {
                         identifier: name,
                         var_type: VarType::Mutable,
                         data_type: ParserDataType::auto(span),
                         value: Box::new(loop_item_value),
-                    },
+                    }),
                 );
 
                 let increment_node = AstNode::new(
                     span,
-                    AstNodeType::AssignmentExpression {
+                    AstNodeType::AssignmentExpression(AstAssignment {
                         identifier: Box::new(AstNode::identifier(span, &idx_id)),
                         value: Box::new(AstNode::new(
                             span,
@@ -530,7 +534,7 @@ impl MiddleEnvironment {
                                 operator: BinaryOperator::Add,
                             }),
                         )),
-                    },
+                    }),
                 );
 
                 let mut instructions = body.nodes();
@@ -549,10 +553,10 @@ impl MiddleEnvironment {
                 if let Some(target) = iter_target {
                     instructions.push(AstNode::new(
                         span,
-                        AstNodeType::AssignmentExpression {
+                        AstNodeType::AssignmentExpression(AstAssignment {
                             identifier: Box::new(target),
                             value: Box::new(iter_node.clone()),
-                        },
+                        }),
                     ));
                 }
 

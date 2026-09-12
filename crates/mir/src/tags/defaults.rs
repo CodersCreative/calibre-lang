@@ -5,6 +5,7 @@ use crate::{ast::MiddleNode, errors::MiddleErr, typing::MiddleTypeDefType};
 use calibre_parser::ast::idents::{
     ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
 };
+use calibre_parser::ast::nodes::declaration::AstDeclaration;
 use calibre_parser::ast::nodes::functions::{AstFunction, FunctionHeader};
 use calibre_parser::ast::nodes::{
     AstNode, AstNodeType, VarType,
@@ -34,7 +35,7 @@ impl MiddleEnvironment {
                     if let Some((default_variant_name, _)) = variants.get(*i) {
                         AstNode::new(
                             span,
-                            AstNodeType::VariableDeclaration {
+                            AstNodeType::VariableDeclaration(AstDeclaration {
                                 var_type: VarType::Constant,
                                 identifier: PotentialDollarIdentifier::Identifier(
                                     ParserText::from("default".to_string()),
@@ -65,7 +66,7 @@ impl MiddleEnvironment {
                                         ])),
                                     }),
                                 )),
-                            },
+                            }),
                         )
                     } else {
                         return Err(MiddleErr::At(
@@ -111,7 +112,7 @@ impl MiddleEnvironment {
 
                 AstNode::new(
                     span,
-                    AstNodeType::VariableDeclaration {
+                    AstNodeType::VariableDeclaration(AstDeclaration {
                         var_type: VarType::Constant,
                         identifier: PotentialDollarIdentifier::Identifier(ParserText::from(
                             "default".to_string(),
@@ -137,7 +138,7 @@ impl MiddleEnvironment {
                                 )])),
                             }),
                         )),
-                    },
+                    }),
                 )
             }
             _ => {

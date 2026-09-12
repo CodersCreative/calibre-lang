@@ -14,8 +14,10 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType, LoopType, VarType,
             access::AstField,
+            assignment::AstAssignment,
             binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, IfComparisonType},
+            declaration::AstDeclaration,
             flow::{AstBreak, AstEmit},
             functions::{AstFunction, CallArg, FunctionHeader},
             memory::AstRef,
@@ -38,12 +40,12 @@ impl MirLowering for AstSelect {
 
         let done_decl = AstNode::new(
             span,
-            AstNodeType::VariableDeclaration {
+            AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Mutable,
                 identifier: done_ident.clone(),
                 data_type: ParserDataType::new(span, ParserInnerType::Bool),
                 value: Box::new(AstNode::bool(span, false)),
-            },
+            }),
         );
 
         let mut loop_body = Vec::new();
@@ -64,10 +66,10 @@ impl MirLowering for AstSelect {
         let set_done_node = || {
             AstNode::new(
                 span,
-                AstNodeType::AssignmentExpression {
+                AstNodeType::AssignmentExpression(AstAssignment {
                     identifier: Box::new(done_ident_node()),
                     value: Box::new(AstNode::bool(span, true)),
-                },
+                }),
             )
         };
 
@@ -101,12 +103,12 @@ impl MirLowering for AstSelect {
 
                         loop_body.push(AstNode::new(
                             span,
-                            AstNodeType::VariableDeclaration {
+                            AstNodeType::VariableDeclaration(AstDeclaration {
                                 var_type: VarType::Immutable,
                                 identifier: tmp_ident.clone(),
                                 data_type: ParserDataType::auto(span),
                                 value: Box::new(try_get_call),
-                            },
+                            }),
                         ));
 
                         let cond = AstNode::new(
@@ -135,19 +137,19 @@ impl MirLowering for AstSelect {
                         let bind_node = match left.node_type {
                             AstNodeType::Identifier(ident) => AstNode::new(
                                 span,
-                                AstNodeType::VariableDeclaration {
+                                AstNodeType::VariableDeclaration(AstDeclaration {
                                     var_type: VarType::Immutable,
                                     identifier: ident.value.into(),
                                     data_type: ParserDataType::auto(span),
                                     value: Box::new(extracted),
-                                },
+                                }),
                             ),
                             _ => AstNode::new(
                                 span,
-                                AstNodeType::AssignmentExpression {
+                                AstNodeType::AssignmentExpression(AstAssignment {
                                     identifier: Box::new(left),
                                     value: Box::new(extracted),
-                                },
+                                }),
                             ),
                         };
 
@@ -243,10 +245,10 @@ impl MirLowering for AstSelect {
                         has_default = true;
                         let mut body_items = vec![AstNode::new(
                             span,
-                            AstNodeType::AssignmentExpression {
+                            AstNodeType::AssignmentExpression(AstAssignment {
                                 identifier: Box::new(done_ident_node()),
                                 value: Box::new(AstNode::bool(span, true)),
-                            },
+                            }),
                         )];
                         body_items.push(arm.body.clone());
                         body_items.push(break_node());
@@ -362,7 +364,7 @@ impl MirLowering for AstSpawn {
                 vec![
                     AstNode::new(
                         span,
-                        AstNodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration(AstDeclaration {
                             var_type: VarType::Immutable,
                             identifier: ident.clone(),
                             data_type: ParserDataType::object(span, "WaitGroup"),
@@ -373,7 +375,7 @@ impl MirLowering for AstSpawn {
                                     auto_wait: false,
                                 }),
                             )),
-                        },
+                        }),
                     ),
                     AstNode::call(
                         span,
@@ -426,7 +428,7 @@ impl MirLowering for AstSpawn {
 
                     let decl = AstNode::new(
                         span,
-                        AstNodeType::VariableDeclaration {
+                        AstNodeType::VariableDeclaration(AstDeclaration {
                             var_type: VarType::Mutable,
                             identifier: ident.clone(),
                             data_type: ParserDataType::auto(span),
@@ -439,7 +441,7 @@ impl MirLowering for AstSpawn {
                                 ),
                                 Vec::new(),
                             )),
-                        },
+                        }),
                     );
 
                     let join_call = AstNode::call(
@@ -495,7 +497,7 @@ impl MirLowering for AstSpawn {
 
             let mut body = vec![AstNode::new(
                 span,
-                AstNodeType::VariableDeclaration {
+                AstNodeType::VariableDeclaration(AstDeclaration {
                     var_type: VarType::Mutable,
                     identifier: ident.clone(),
                     data_type: ParserDataType::object(span, "WaitGroup"),
@@ -504,7 +506,7 @@ impl MirLowering for AstSpawn {
                         AstNode::member(span, AstNode::identifier(span, "WaitGroup"), "new"),
                         Vec::new(),
                     )),
-                },
+                }),
             )];
 
             for item in self.items {
