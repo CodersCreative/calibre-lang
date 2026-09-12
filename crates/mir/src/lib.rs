@@ -4,7 +4,7 @@ use calibre_parser::{
     ast::{
         binary::BinaryOperator,
         idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{AstNode, AstNodeType, DestructurePattern, VarType},
+        nodes::{AstNode, AstNodeType, DestructurePattern, VarType, binary::AstBinary},
         types::ParserDataType,
     },
 };
@@ -117,7 +117,7 @@ impl MiddleEnvironment {
                     if let Some((var_type, name)) = entry {
                         let index_expr = AstNode::new(
                             span,
-                            AstNodeType::BinaryExpression {
+                            AstNodeType::BinaryExpression(AstBinary {
                                 left: Box::new(AstNode::len(
                                     span,
                                     AstNode::new(
@@ -131,7 +131,7 @@ impl MiddleEnvironment {
                                 )),
                                 right: Box::new(AstNode::int(span, total_tail - i as i64)),
                                 operator: BinaryOperator::Sub,
-                            },
+                            }),
                         );
 
                         push_binding(

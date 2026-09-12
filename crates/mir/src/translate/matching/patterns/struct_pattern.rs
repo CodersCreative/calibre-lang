@@ -6,7 +6,10 @@ use crate::{
 use calibre_parser::ast::{
     comparison::{BooleanOperator, ComparisonOperator},
     matching::{MatchArmType, MatchStructFieldPattern},
-    nodes::{AstNode, AstNodeType},
+    nodes::{
+        AstNode, AstNodeType,
+        binary::{AstBoolean, AstComparison},
+    },
 };
 
 pub struct StructPatternTranslator;
@@ -57,11 +60,11 @@ impl PatternTranslator for StructPatternTranslator {
                         condition,
                         AstNode::new(
                             env.context.current_span(),
-                            AstNodeType::ComparisonExpression {
+                            AstNodeType::ComparisonExpression(AstComparison {
                                 left: Box::new(current),
                                 right: Box::new(expected),
                                 operator: ComparisonOperator::Equal,
-                            },
+                            }),
                         ),
                     );
                 }
@@ -83,28 +86,28 @@ impl PatternTranslator for StructPatternTranslator {
                         let first = iter.next().unwrap();
                         let mut cond = AstNode::new(
                             env.context.current_span(),
-                            AstNodeType::ComparisonExpression {
+                            AstNodeType::ComparisonExpression(AstComparison {
                                 left: Box::new(current.clone()),
                                 right: Box::new(first),
                                 operator: ComparisonOperator::Equal,
-                            },
+                            }),
                         );
 
                         for value in iter {
                             cond = AstNode::new(
                                 env.context.current_span(),
-                                AstNodeType::BooleanExpression {
+                                AstNodeType::BooleanExpression(AstBoolean {
                                     left: Box::new(cond),
                                     right: Box::new(AstNode::new(
                                         env.context.current_span(),
-                                        AstNodeType::ComparisonExpression {
+                                        AstNodeType::ComparisonExpression(AstComparison {
                                             left: Box::new(current.clone()),
                                             right: Box::new(value),
                                             operator: ComparisonOperator::Equal,
-                                        },
+                                        }),
                                     )),
                                     operator: BooleanOperator::Or,
-                                },
+                                }),
                             );
                         }
 

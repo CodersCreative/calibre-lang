@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBinary, MirBoolean, MirComparison,
-        MirDeref, MirDrop, MirIs, MirMove, MirNeg, MirRef, MirScopeDecl, MirSpawn, MirVarDecl,
+        MiddleNode, MiddleNodeType, MirAssignment, MirDeref, MirDrop, MirMove, MirRef,
+        MirScopeDecl, MirSpawn, MirVarDecl,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -15,18 +15,17 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        Operator, RefMutability,
+        RefMutability,
         comparison::{BooleanOperator, ComparisonOperator},
         generics::TraitMemberKind,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::SelectArmKind,
         nodes::{
-            AsFailureMode, AstNode, AstNodeType, CallArg, FunctionHeader, LoopType, TypeDefType,
-            VarType,
+            AstNode, AstNodeType, CallArg, FunctionHeader, LoopType, TypeDefType, VarType,
+            binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, AstTernary, IfComparisonType},
-            flow::{AstBreak, AstEmit, AstTry, TryCatch},
-            literals::AstRange,
-            loops::AstList,
+            flow::{AstBreak, AstEmit},
+            unary::AstNot,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -34,6 +33,7 @@ use calibre_parser::{
 use tracing::{debug, instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
 
+pub mod binary;
 pub mod conditionals;
 pub mod curry;
 pub mod flow;
@@ -46,6 +46,7 @@ pub mod matching;
 pub mod member;
 pub mod scopes;
 pub mod statements;
+pub mod unary;
 
 pub trait MirLowering {
     fn lower(
@@ -258,6 +259,18 @@ impl MiddleEnvironment {
             // Conditionals
             AstNodeType::Ternary(x) => x.lower(self, scope, node.span),
             AstNodeType::IfStatement(x) => x.lower(self, scope, node.span),
+
+            // Unary
+            AstNodeType::NotExpression(x) => x.lower(self, scope, node.span),
+            AstNodeType::NegExpression(x) => x.lower(self, scope, node.span),
+
+            // Binary
+            AstNodeType::BooleanExpression(x) => x.lower(self, scope, node.span),
+            AstNodeType::ComparisonExpression(x) => x.lower(self, scope, node.span),
+            AstNodeType::BinaryExpression(x) => x.lower(self, scope, node.span),
+            AstNodeType::AsExpression(x) => x.lower(self, scope, node.span),
+            AstNodeType::IsExpression(x) => x.lower(self, scope, node.span),
+            AstNodeType::InDeclaration(x) => x.lower(self, scope, node.span),
 
             AstNodeType::CurryExpression { value } => {
                 let value = self.rewrite_curry_call(scope, node.span, *value)?;
@@ -715,285 +728,6 @@ impl MiddleEnvironment {
                 object,
                 overloads,
             } => self.evaluate_type_declaration(scope, node.span, identifier, object, overloads),
-            AstNodeType::BooleanExpression {
-                left,
-                right,
-                operator,
-            } => {
-                if let Some(x) = self.handle_operator_overloads(
-                    scope,
-                    node.span,
-                    *left.clone(),
-                    *right.clone(),
-                    Operator::Boolean(operator),
-                )? {
-                    return Ok(x);
-                }
-
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::BooleanExpression(MirBoolean {
-                        left: Box::new(self.evaluate(scope, *left)),
-                        right: Box::new(self.evaluate(scope, *right)),
-                        operator,
-                    }),
-                    span: node.span,
-                })
-            }
-            AstNodeType::ComparisonExpression {
-                left,
-                right,
-                operator,
-            } => {
-                if let Some(x) = self.handle_operator_overloads(
-                    scope,
-                    node.span,
-                    *left.clone(),
-                    *right.clone(),
-                    Operator::Comparison(operator),
-                )? {
-                    return Ok(x);
-                }
-
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::ComparisonExpression(MirComparison {
-                        left: Box::new(self.evaluate(scope, *left)),
-                        right: Box::new(self.evaluate(scope, *right)),
-                        operator,
-                    }),
-                    span: node.span,
-                })
-            }
-            AstNodeType::BinaryExpression {
-                left,
-                right,
-                operator,
-            } => {
-                if let Some(x) = self.handle_operator_overloads(
-                    scope,
-                    node.span,
-                    *left.clone(),
-                    *right.clone(),
-                    Operator::Binary(operator),
-                )? {
-                    return Ok(x);
-                }
-
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::BinaryExpression(MirBinary {
-                        left: Box::new(self.evaluate(scope, *left)),
-                        right: Box::new(self.evaluate(scope, *right)),
-                        operator,
-                    }),
-                    span: node.span,
-                })
-            }
-            AstNodeType::NotExpression { value } => self.evaluate_inner(
-                scope,
-                AstNode {
-                    node_type: AstNodeType::ComparisonExpression {
-                        left: value,
-                        right: Box::new(AstNode::bool(self.context.current_span(), false)),
-                        operator: ComparisonOperator::Equal,
-                    },
-                    span: node.span,
-                },
-            ),
-            AstNodeType::NegExpression { value } => Ok(MiddleNode {
-                node_type: MiddleNodeType::NegExpression(MirNeg {
-                    value: Box::new(self.evaluate_inner(scope, *value)?),
-                }),
-                span: node.span,
-            }),
-            AstNodeType::AsExpression {
-                value,
-                data_type,
-                failure_mode,
-            } => {
-                let target =
-                    self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?;
-                if self
-                    .handle_as_overload_exists(scope, *value.clone(), target.clone())
-                    .unwrap_or_default()
-                {
-                    match failure_mode {
-                        AsFailureMode::Result | AsFailureMode::Option => {}
-                        AsFailureMode::Panic => {
-                            let temp_ident = ParserText::temp_name_with_suffix("as_res", node.span);
-                            return self.evaluate_inner(
-                                scope,
-                                AstNode {
-                                    node_type: AstNodeType::Try(AstTry {
-                                        value: Box::new(AstNode {
-                                            node_type: AstNodeType::AsExpression {
-                                                value,
-                                                data_type,
-                                                failure_mode: AsFailureMode::Result,
-                                            },
-                                            span: node.span,
-                                        }),
-                                        catch: Some(TryCatch {
-                                            name: Some(PotentialDollarIdentifier::new(
-                                                node.span,
-                                                temp_ident.clone(),
-                                            )),
-                                            body: Box::new(AstNode::call(
-                                                node.span,
-                                                AstNode::identifier(node.span, "panic"),
-                                                vec![CallArg::Value(AstNode::identifier(
-                                                    node.span,
-                                                    &temp_ident,
-                                                ))],
-                                            )),
-                                        }),
-                                    }),
-                                    span: node.span,
-                                },
-                            );
-                        }
-                    }
-                }
-
-                if let Some(x) =
-                    self.handle_as_overload(scope, node.span, *value.clone(), target.clone())?
-                {
-                    return Ok(x);
-                }
-
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::AsExpression(MirAs {
-                        value: Box::new(self.evaluate_inner(scope, *value)?),
-                        data_type: target,
-                        failure_mode,
-                    }),
-                    span: node.span,
-                })
-            }
-            AstNodeType::IsExpression { value, data_type } => Ok(MiddleNode {
-                node_type: MiddleNodeType::IsExpression(MirIs {
-                    value: Box::new(self.evaluate_inner(scope, *value)?),
-                    data_type: self.resolve_data_type(
-                        scope,
-                        &data_type,
-                        ResolutionOptions::typing(),
-                    )?,
-                }),
-                span: node.span,
-            }),
-            AstNodeType::InDeclaration { identifier, value } => {
-                if let Some(x) = self.handle_operator_overloads(
-                    scope,
-                    node.span,
-                    *identifier.clone(),
-                    *value.clone(),
-                    Operator::In,
-                )? {
-                    return Ok(x);
-                }
-
-                if let AstNodeType::RangeDeclaration(AstRange {
-                    from,
-                    to,
-                    inclusive,
-                }) = value.node_type.clone()
-                {
-                    let lower = AstNode::new(
-                        self.context.current_span(),
-                        AstNodeType::ComparisonExpression {
-                            left: Box::new(*identifier.clone()),
-                            right: from,
-                            operator: ComparisonOperator::GreaterEqual,
-                        },
-                    );
-
-                    let upper = AstNode::new(
-                        self.context.current_span(),
-                        AstNodeType::ComparisonExpression {
-                            left: Box::new(*identifier.clone()),
-                            right: to,
-                            operator: if inclusive {
-                                ComparisonOperator::LesserEqual
-                            } else {
-                                ComparisonOperator::Lesser
-                            },
-                        },
-                    );
-
-                    return self.evaluate_inner(
-                        scope,
-                        AstNode::new(
-                            self.context.current_span(),
-                            AstNodeType::BooleanExpression {
-                                left: Box::new(lower),
-                                right: Box::new(upper),
-                                operator: BooleanOperator::And,
-                            },
-                        ),
-                    );
-                }
-
-                if let AstNodeType::ListLiteral(AstList { values, .. }) = value.node_type.clone() {
-                    let mut comparisons = values.into_iter().map(|item| {
-                        AstNode::new(
-                            self.context.current_span(),
-                            AstNodeType::ComparisonExpression {
-                                left: Box::new(*identifier.clone()),
-                                right: Box::new(item),
-                                operator: ComparisonOperator::Equal,
-                            },
-                        )
-                    });
-
-                    if let Some(first) = comparisons.next() {
-                        let cond = comparisons.fold(first, |acc, cmp| {
-                            AstNode::new(
-                                self.context.current_span(),
-                                AstNodeType::BooleanExpression {
-                                    left: Box::new(acc),
-                                    right: Box::new(cmp),
-                                    operator: BooleanOperator::Or,
-                                },
-                            )
-                        });
-                        return self.evaluate_inner(scope, cond);
-                    }
-                }
-
-                if let Some(data_type) = self.resolve_type_from_node(scope, &value)
-                    && matches!(
-                        data_type.data_type.unwrap_all_refs(),
-                        ParserInnerType::List(_) | ParserInnerType::Str
-                    )
-                {
-                    let member = AstNode::new(
-                        self.context.current_span(),
-                        AstNodeType::FieldAccess {
-                            base: Box::new(*value.clone()),
-                            field: PotentialDollarIdentifier::new(
-                                self.context.current_span(),
-                                "contains",
-                            ),
-                        },
-                    );
-
-                    return self.evaluate_inner(
-                        scope,
-                        AstNode::call(
-                            self.context.current_span(),
-                            member,
-                            vec![CallArg::Value(*identifier)],
-                        ),
-                    );
-                }
-
-                self.evaluate_inner(
-                    scope,
-                    AstNode::call(
-                        self.context.current_span(),
-                        AstNode::identifier(self.context.current_span(), "contains"),
-                        vec![CallArg::Value(*value), CallArg::Value(*identifier)],
-                    ),
-                )
-            }
             AstNodeType::LoopDeclaration {
                 loop_type,
                 body,
@@ -2122,11 +1856,11 @@ impl MiddleEnvironment {
                     for guard in guards {
                         cond = AstNode::new(
                             node.span,
-                            AstNodeType::BooleanExpression {
+                            AstNodeType::BooleanExpression(AstBoolean {
                                 left: Box::new(cond),
                                 right: Box::new(guard.clone()),
                                 operator: BooleanOperator::And,
-                            },
+                            }),
                         );
                     }
                     cond
@@ -2160,14 +1894,14 @@ impl MiddleEnvironment {
 
                                 let cond = AstNode::new(
                                     node.span,
-                                    AstNodeType::ComparisonExpression {
+                                    AstNodeType::ComparisonExpression(AstComparison {
                                         left: Box::new(AstNode::new(
                                             node.span,
                                             AstNodeType::Identifier(tmp_ident.clone().into()),
                                         )),
                                         right: Box::new(AstNode::none(node.span)),
                                         operator: ComparisonOperator::NotEqual,
-                                    },
+                                    }),
                                 );
 
                                 let extracted = AstNode::new(
@@ -2222,11 +1956,11 @@ impl MiddleEnvironment {
                                     for guard in arm.conditionals.iter().skip(1) {
                                         guard_cond = AstNode::new(
                                             node.span,
-                                            AstNodeType::BooleanExpression {
+                                            AstNodeType::BooleanExpression(AstBoolean {
                                                 left: Box::new(guard_cond),
                                                 right: Box::new(guard.clone()),
                                                 operator: BooleanOperator::And,
-                                            },
+                                            }),
                                         );
                                     }
                                     body_items.push(AstNode::new(
@@ -2320,9 +2054,9 @@ impl MiddleEnvironment {
                                 let cond = fold_guards(
                                     AstNode::new(
                                         node.span,
-                                        AstNodeType::NotExpression {
+                                        AstNodeType::NotExpression(AstNot {
                                             value: Box::new(done_ident_node()),
-                                        },
+                                        }),
                                     ),
                                     &arm.conditionals,
                                 );
@@ -2354,9 +2088,9 @@ impl MiddleEnvironment {
                         AstNodeType::IfStatement(AstIf {
                             comparison: Box::new(IfComparisonType::If(AstNode::new(
                                 node.span,
-                                AstNodeType::NotExpression {
+                                AstNodeType::NotExpression(AstNot {
                                     value: Box::new(done_ident_node()),
-                                },
+                                }),
                             ))),
                             then: Box::new(AstNode::call(
                                 node.span,

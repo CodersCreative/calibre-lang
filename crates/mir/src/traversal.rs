@@ -2,10 +2,12 @@ use calibre_parser::ast::{
     ObjectType,
     nodes::{
         AstNode, AstNodeType, CallArg, LoopType,
+        binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
         conditionals::{AstIf, AstTernary, IfComparisonType},
         flow::{AstBreak, AstContinue, AstDefer, AstPipe, AstReturn, AstTry, PipeSegment},
         literals::{AstDataType, AstEnum, AstRange, AstStruct, AstTuple},
         loops::{AstList, AstListRepeat},
+        unary::{AstNeg, AstNot},
     },
 };
 
@@ -22,33 +24,33 @@ pub trait NodeVisitor {
 
     fn visit_children(&mut self, node_type: AstNodeType) -> AstNodeType {
         match node_type {
-            AstNodeType::BinaryExpression {
+            AstNodeType::BinaryExpression(AstBinary {
                 left,
                 right,
                 operator,
-            } => AstNodeType::BinaryExpression {
+            }) => AstNodeType::BinaryExpression(AstBinary {
                 left: Box::new(self.visit(*left)),
                 right: Box::new(self.visit(*right)),
                 operator,
-            },
-            AstNodeType::BooleanExpression {
+            }),
+            AstNodeType::BooleanExpression(AstBoolean {
                 left,
                 right,
                 operator,
-            } => AstNodeType::BooleanExpression {
+            }) => AstNodeType::BooleanExpression(AstBoolean {
                 left: Box::new(self.visit(*left)),
                 right: Box::new(self.visit(*right)),
                 operator,
-            },
-            AstNodeType::ComparisonExpression {
+            }),
+            AstNodeType::ComparisonExpression(AstComparison {
                 left,
                 right,
                 operator,
-            } => AstNodeType::ComparisonExpression {
+            }) => AstNodeType::ComparisonExpression(AstComparison {
                 left: Box::new(self.visit(*left)),
                 right: Box::new(self.visit(*right)),
                 operator,
-            },
+            }),
             AstNodeType::AssignmentExpression { identifier, value } => {
                 AstNodeType::AssignmentExpression {
                     identifier: Box::new(self.visit(*identifier)),
@@ -105,28 +107,30 @@ pub trait NodeVisitor {
             AstNodeType::ParenExpression { value } => AstNodeType::ParenExpression {
                 value: Box::new(self.visit(*value)),
             },
-            AstNodeType::NotExpression { value } => AstNodeType::NotExpression {
+            AstNodeType::NotExpression(AstNot { value }) => AstNodeType::NotExpression(AstNot {
                 value: Box::new(self.visit(*value)),
-            },
-            AstNodeType::NegExpression { value } => AstNodeType::NegExpression {
+            }),
+            AstNodeType::NegExpression(AstNeg { value }) => AstNodeType::NegExpression(AstNeg {
                 value: Box::new(self.visit(*value)),
-            },
+            }),
             AstNodeType::CurryExpression { value } => AstNodeType::CurryExpression {
                 value: Box::new(self.visit(*value)),
             },
-            AstNodeType::AsExpression {
+            AstNodeType::AsExpression(AstAs {
                 value,
                 data_type,
                 failure_mode,
-            } => AstNodeType::AsExpression {
+            }) => AstNodeType::AsExpression(AstAs {
                 value: Box::new(self.visit(*value)),
                 data_type,
                 failure_mode,
-            },
-            AstNodeType::IsExpression { value, data_type } => AstNodeType::IsExpression {
-                value: Box::new(self.visit(*value)),
-                data_type,
-            },
+            }),
+            AstNodeType::IsExpression(AstIs { value, data_type }) => {
+                AstNodeType::IsExpression(AstIs {
+                    value: Box::new(self.visit(*value)),
+                    data_type,
+                })
+            }
             AstNodeType::TupleLiteral(AstTuple { values }) => AstNodeType::TupleLiteral(AstTuple {
                 values: values.into_iter().map(|n| self.visit(n)).collect(),
             }),
@@ -248,10 +252,12 @@ pub trait NodeVisitor {
             AstNodeType::MoveExpression { value } => AstNodeType::MoveExpression {
                 value: Box::new(self.visit(*value)),
             },
-            AstNodeType::InDeclaration { identifier, value } => AstNodeType::InDeclaration {
-                identifier: Box::new(self.visit(*identifier)),
-                value: Box::new(self.visit(*value)),
-            },
+            AstNodeType::InDeclaration(AstIn { identifier, value }) => {
+                AstNodeType::InDeclaration(AstIn {
+                    identifier: Box::new(self.visit(*identifier)),
+                    value: Box::new(self.visit(*value)),
+                })
+            }
             AstNodeType::ExternFunctionDeclaration {
                 abi,
                 identifier,
@@ -472,21 +478,21 @@ pub trait NodeAnalyzer {
 
     fn analyze_children(&mut self, node_type: &AstNodeType) -> bool {
         match node_type {
-            AstNodeType::BinaryExpression { left, right, .. }
-            | AstNodeType::BooleanExpression { left, right, .. }
+            AstNodeType::BinaryExpression(AstBinary { left, right, .. })
+            | AstNodeType::BooleanExpression(AstBoolean { left, right, .. })
             | AstNodeType::AssignmentExpression {
                 identifier: left,
                 value: right,
             }
-            | AstNodeType::ComparisonExpression { left, right, .. }
+            | AstNodeType::ComparisonExpression(AstComparison { left, right, .. })
             | AstNodeType::IndexAccess {
                 base: left,
                 index: right,
             }
-            | AstNodeType::InDeclaration {
+            | AstNodeType::InDeclaration(AstIn {
                 identifier: left,
                 value: right,
-            } => self.analyze(left) && self.analyze(right),
+            }) => self.analyze(left) && self.analyze(right),
             AstNodeType::CallExpression {
                 caller,
                 args,
@@ -515,11 +521,11 @@ pub trait NodeAnalyzer {
                 .as_ref()
                 .is_none_or(|items| items.iter().all(|n| self.analyze(n))),
             AstNodeType::ParenExpression { value }
-            | AstNodeType::NotExpression { value }
-            | AstNodeType::NegExpression { value }
+            | AstNodeType::NotExpression(AstNot { value })
+            | AstNodeType::NegExpression(AstNeg { value })
             | AstNodeType::CurryExpression { value }
-            | AstNodeType::AsExpression { value, .. }
-            | AstNodeType::IsExpression { value, .. }
+            | AstNodeType::AsExpression(AstAs { value, .. })
+            | AstNodeType::IsExpression(AstIs { value, .. })
             | AstNodeType::FieldAccess { base: value, .. }
             | AstNodeType::ScopeAccess { base: value, .. }
             | AstNodeType::DerefStatement { value }

@@ -9,12 +9,15 @@ use calibre_parser::{
     Span,
     ast::{
         binary::BinaryOperator,
+        comparison::ComparisonOperator,
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
             AstNode, AstNodeType, CallArg, LoopType, VarType,
+            binary::{AstBinary, AstComparison},
             conditionals::{AstIf, IfComparisonType},
             flow::AstBreak,
             literals::AstRange,
+            unary::AstNot,
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -216,9 +219,9 @@ impl MiddleEnvironment {
                     AstNodeType::IfStatement(AstIf {
                         comparison: Box::new(IfComparisonType::If(AstNode::new(
                             span,
-                            AstNodeType::NotExpression {
+                            AstNodeType::NotExpression(AstNot {
                                 value: Box::new(condition),
-                            },
+                            }),
                         ))),
                         then: Box::new(AstNode::new(
                             span,
@@ -335,11 +338,11 @@ impl MiddleEnvironment {
                     let end = if inclusive {
                         AstNode::new(
                             span,
-                            AstNodeType::BinaryExpression {
+                            AstNodeType::BinaryExpression(AstBinary {
                                 left: Box::new(to),
                                 right: Box::new(AstNode::int(span, 1)),
                                 operator: BinaryOperator::Add,
-                            },
+                            }),
                         )
                     } else {
                         to
@@ -429,26 +432,25 @@ impl MiddleEnvironment {
                         comparison: Box::new(IfComparisonType::If(AstNode::new(
                             span,
                             if is_indexable_loop {
-                                AstNodeType::ComparisonExpression {
-                                        left: Box::new(AstNode::identifier(span, &idx_id)),
-                                        right: Box::new(if is_count_loop {
-                                            iter_node.clone()
-                                        } else {
-                                            AstNode::call(
-                                                span,
-                                                AstNode::identifier(span, "len"),
-                                                vec![CallArg::Value(iter_node.clone())],
-                                            )
-                                        }),
-                                        operator: calibre_parser::ast::comparison::ComparisonOperator::GreaterEqual,
-                                    }
+                                AstNodeType::ComparisonExpression(AstComparison {
+                                    left: Box::new(AstNode::identifier(span, &idx_id)),
+                                    right: Box::new(if is_count_loop {
+                                        iter_node.clone()
+                                    } else {
+                                        AstNode::call(
+                                            span,
+                                            AstNode::identifier(span, "len"),
+                                            vec![CallArg::Value(iter_node.clone())],
+                                        )
+                                    }),
+                                    operator: ComparisonOperator::GreaterEqual,
+                                })
                             } else {
-                                AstNodeType::ComparisonExpression {
+                                AstNodeType::ComparisonExpression(AstComparison {
                                     left: Box::new(AstNode::identifier(span, &next_id)),
                                     right: Box::new(AstNode::none(span)),
-                                    operator:
-                                        calibre_parser::ast::comparison::ComparisonOperator::Equal,
-                                }
+                                    operator: ComparisonOperator::Equal,
+                                })
                             },
                         ))),
                         then: Box::new(AstNode::new(
@@ -517,11 +519,11 @@ impl MiddleEnvironment {
                         identifier: Box::new(AstNode::identifier(span, &idx_id)),
                         value: Box::new(AstNode::new(
                             span,
-                            AstNodeType::BinaryExpression {
+                            AstNodeType::BinaryExpression(AstBinary {
                                 left: Box::new(AstNode::identifier(span, &idx_id)),
                                 right: Box::new(AstNode::int(span, 1)),
                                 operator: BinaryOperator::Add,
-                            },
+                            }),
                         )),
                     },
                 );

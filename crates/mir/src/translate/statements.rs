@@ -11,7 +11,7 @@ use calibre_parser::{
     Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{AsFailureMode, AstNode, AstNodeType, Overload, TypeDefType, VarType},
+        nodes::{AstNode, AstNodeType, Overload, TypeDefType, VarType, binary::AsFailureMode},
         types::{ParserDataType, ParserInnerType},
     },
 };

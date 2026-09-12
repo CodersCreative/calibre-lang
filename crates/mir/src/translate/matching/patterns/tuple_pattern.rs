@@ -6,7 +6,7 @@ use crate::{
 use calibre_parser::ast::{
     comparison::ComparisonOperator,
     matching::{MatchArmType, MatchTupleItem},
-    nodes::{AstNode, AstNodeType},
+    nodes::{AstNode, AstNodeType, binary::AstComparison},
 };
 
 pub struct TuplePatternTranslator;
@@ -97,11 +97,11 @@ impl PatternTranslator for TuplePatternTranslator {
                         condition,
                         AstNode::new(
                             env.context.current_span(),
-                            AstNodeType::ComparisonExpression {
+                            AstNodeType::ComparisonExpression(AstComparison {
                                 left: Box::new(current),
                                 right: Box::new(expected),
                                 operator: ComparisonOperator::Equal,
-                            },
+                            }),
                         ),
                     );
 

@@ -6,7 +6,7 @@ use crate::{
 use calibre_parser::ast::{
     comparison::ComparisonOperator,
     matching::{MatchArmType, MatchTupleItem},
-    nodes::{AstNode, AstNodeType},
+    nodes::{AstNode, AstNodeType, binary::AstComparison},
 };
 
 pub struct ListPatternTranslator;
@@ -52,7 +52,7 @@ impl PatternTranslator for ListPatternTranslator {
             condition,
             AstNode::new(
                 env.context.current_span(),
-                AstNodeType::ComparisonExpression {
+                AstNodeType::ComparisonExpression(AstComparison {
                     left: Box::new(AstNode::len(env.context.current_span(), value.clone())),
                     right: Box::new(AstNode::int(env.context.current_span(), min_len)),
                     operator: if has_rest {
@@ -60,7 +60,7 @@ impl PatternTranslator for ListPatternTranslator {
                     } else {
                         ComparisonOperator::Equal
                     },
-                },
+                }),
             ),
         );
 
@@ -114,11 +114,11 @@ impl PatternTranslator for ListPatternTranslator {
                         condition,
                         AstNode::new(
                             env.context.current_span(),
-                            AstNodeType::ComparisonExpression {
+                            AstNodeType::ComparisonExpression(AstComparison {
                                 left: Box::new(current),
                                 right: Box::new(expected),
                                 operator: ComparisonOperator::Equal,
-                            },
+                            }),
                         ),
                     );
 

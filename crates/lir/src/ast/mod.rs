@@ -4,7 +4,7 @@ use calibre_parser::{
         ObjectMap,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
-        nodes::AsFailureMode,
+        nodes::binary::AsFailureMode,
         types::ParserDataType,
     },
 };

@@ -11,7 +11,10 @@ use crate::{
 use calibre_parser::ast::{
     idents::ParserText,
     matching::MatchArmType,
-    nodes::{AstNode, AstNodeType},
+    nodes::{
+        AstNode, AstNodeType,
+        binary::{AstIn, AstIs},
+    },
     types::{ParserDataType, ParserInnerType},
 };
 
@@ -48,10 +51,10 @@ impl PatternTranslatorDispatcher {
             MatchArmType::IsType(data_type) => {
                 let condition = AstNode::new(
                     env.context.current_span(),
-                    AstNodeType::IsExpression {
+                    AstNodeType::IsExpression(AstIs {
                         value: Box::new(value.clone()),
                         data_type: data_type.clone(),
-                    },
+                    }),
                 );
 
                 let bindings = aliases
@@ -78,10 +81,10 @@ impl PatternTranslatorDispatcher {
             MatchArmType::In(in_value) => {
                 let condition = AstNode::new(
                     env.context.current_span(),
-                    AstNodeType::InDeclaration {
+                    AstNodeType::InDeclaration(AstIn {
                         identifier: Box::new(value.clone()),
                         value: Box::new(in_value.clone()),
-                    },
+                    }),
                 );
 
                 let bindings = aliases

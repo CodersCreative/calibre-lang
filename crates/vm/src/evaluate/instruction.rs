@@ -3,7 +3,7 @@ use crate::{
     native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
     value::{GcMap, GcVec},
 };
-use calibre_parser::ast::{idents::ParserText, nodes::AsFailureMode};
+use calibre_parser::ast::{idents::ParserText, nodes::binary::AsFailureMode};
 use wasm_sync::Mutex;
 
 impl VM {

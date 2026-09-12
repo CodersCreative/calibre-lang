@@ -9,8 +9,9 @@ use crate::{
             SelectArmKind,
         },
         nodes::{
-            AsFailureMode, AstNode, AstNodeType, CallArg, DestructurePattern, LoopType, Overload,
-            TypeDefType, VarType,
+            AstNode, AstNodeType, CallArg, DestructurePattern, LoopType, Overload, TypeDefType,
+            VarType,
+            binary::{AstBinary, AstBoolean},
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -395,6 +396,18 @@ impl Formatter {
             AstNodeType::IfStatement(x) => x.format(self),
             AstNodeType::Ternary(x) => x.format(self),
 
+            // Binary
+            AstNodeType::AsExpression(x) => x.format(self),
+            AstNodeType::IsExpression(x) => x.format(self),
+            AstNodeType::InDeclaration(x) => x.format(self),
+            AstNodeType::BooleanExpression(x) => x.format(self),
+            AstNodeType::ComparisonExpression(x) => x.format(self),
+            AstNodeType::BinaryExpression(x) => x.format(self),
+
+            // Unary
+            AstNodeType::NegExpression(x) => x.format(self),
+            AstNodeType::NotExpression(x) => x.format(self),
+
             AstNodeType::Spawn { items, auto_wait } => {
                 let prefix = if *auto_wait { "spawn@" } else { "spawn" };
                 if items.len() == 1 {
@@ -571,22 +584,6 @@ impl Formatter {
                     get_module(module)
                 )
             }
-
-            AstNodeType::BooleanExpression {
-                left,
-                right,
-                operator,
-            } => self.fmt_infix_expr(left, operator, right),
-            AstNodeType::ComparisonExpression {
-                left,
-                right,
-                operator,
-            } => self.fmt_infix_expr(left, operator, right),
-            AstNodeType::BinaryExpression {
-                left,
-                right,
-                operator,
-            } => self.fmt_infix_expr(left, operator, right),
             AstNodeType::RefStatement { mutability, value } => {
                 format!("{}.{}", self.format(value), mutability)
             }
@@ -701,28 +698,26 @@ impl Formatter {
 
                 txt
             }
-            AstNodeType::NegExpression { value } => format!("-{}", self.format(value)),
-            AstNodeType::NotExpression { value } => format!("!{}", self.format(value)),
             AstNodeType::TestDeclaration { identifier, body } => {
                 format!("test {:?} {}", identifier.text, self.format(body))
             }
             AstNodeType::CurryExpression { value } => format!("curry {}", self.format(value)),
             AstNodeType::AssignmentExpression { identifier, value } => match &value.node_type {
-                AstNodeType::BinaryExpression {
+                AstNodeType::BinaryExpression(AstBinary {
                     left,
                     right,
                     operator,
-                } if left.node_type == identifier.node_type => format!(
+                }) if left.node_type == identifier.node_type => format!(
                     "{} {}= {}",
                     self.format(identifier),
                     operator,
                     self.format(right)
                 ),
-                AstNodeType::BooleanExpression {
+                AstNodeType::BooleanExpression(AstBoolean {
                     left,
                     right,
                     operator,
-                } if left.node_type == identifier.node_type => format!(
+                }) if left.node_type == identifier.node_type => format!(
                     "{} {}= {}",
                     self.format(identifier),
                     operator,
@@ -759,28 +754,7 @@ impl Formatter {
                 );
                 self.wrap_if_wide(single, &multi)
             }
-            AstNodeType::AsExpression {
-                value,
-                data_type,
-                failure_mode,
-            } => {
-                format!(
-                    "{} as{} {}",
-                    self.format(value),
-                    match failure_mode {
-                        AsFailureMode::Panic => "!",
-                        AsFailureMode::Option => "?",
-                        AsFailureMode::Result => "",
-                    },
-                    data_type
-                )
-            }
-            AstNodeType::IsExpression { value, data_type } => {
-                format!("{} is {}", self.format(value), data_type)
-            }
-            AstNodeType::InDeclaration { identifier, value } => {
-                format!("{} in {}", self.format(identifier), self.format(value))
-            }
+
             AstNodeType::CallExpression {
                 string_fn,
                 caller,
@@ -2142,16 +2116,15 @@ impl Formatter {
         txt.trim_end().to_string()
     }
 
-    fn fmt_infix_expr<T: std::fmt::Display>(
+    pub fn fmt_infix_expr<T: std::fmt::Display>(
         &mut self,
-        left: &AstNode,
+        left: &dyn AstFormatting,
         operator: T,
-        right: &AstNode,
+        right: &dyn AstFormatting,
     ) -> String {
-        let lhs = self.format(left);
-        let rhs = self.format(right);
-        let op = operator.to_string();
-        format!("{} {} {}", lhs, op, rhs)
+        let lhs = left.format(self);
+        let rhs = right.format(self);
+        format!("{} {} {}", lhs, operator, rhs)
     }
 
     fn has_comment_between_spans(&self, outer: &Span, end: &Span) -> bool {

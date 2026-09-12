@@ -3,13 +3,12 @@ use calibre_lir::{
     ast::{BlockId, LirLiteral},
     environment::{LirGlobal, LirRegistry},
 };
-use calibre_parser::Span;
 use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
-    nodes::AsFailureMode,
     types::ParserDataType,
 };
+use calibre_parser::{Span, ast::nodes::binary::AsFailureMode};
 use indextree::NodeId;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};

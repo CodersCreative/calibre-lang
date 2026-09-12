@@ -18,6 +18,7 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, CallArg, FunctionHeader, LoopType, VarType,
+            binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, AstTernary, IfComparisonType},
             flow::{AstContinue, AstReturn},
             literals::{AstString, AstStruct},
@@ -61,11 +62,11 @@ impl MiddleEnvironment {
             AstNodeType::Ternary(AstTernary {
                 comparison: Box::new(AstNode::new(
                     span,
-                    AstNodeType::ComparisonExpression {
+                    AstNodeType::ComparisonExpression(AstComparison {
                         left: Box::new(value.clone()),
                         right: Box::new(AstNode::none(span)),
                         operator: ComparisonOperator::Equal,
-                    },
+                    }),
                 )),
                 then: Box::new(default),
                 otherwise: Box::new(AstNode::new(
@@ -387,11 +388,11 @@ impl MiddleEnvironment {
         let guard = conditionals.into_iter().reduce(|left, right| {
             AstNode::new(
                 span,
-                AstNodeType::BooleanExpression {
+                AstNodeType::BooleanExpression(AstBoolean {
                     left: Box::new(left),
                     right: Box::new(right),
                     operator: BooleanOperator::And,
-                },
+                }),
             )
         });
 

@@ -21,6 +21,7 @@ use calibre_parser::{
         matching::MatchArmType,
         nodes::{
             AstNode, AstNodeType, CallArg, VarType,
+            binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, IfComparisonType},
         },
         types::{ParserDataType, ParserInnerType},
@@ -73,11 +74,11 @@ impl MiddleEnvironment {
     pub fn bool_and_nodes(&self, left: AstNode, right: AstNode) -> AstNode {
         AstNode::new(
             self.context.current_span(),
-            AstNodeType::BooleanExpression {
+            AstNodeType::BooleanExpression(AstBoolean {
                 left: Box::new(left),
                 right: Box::new(right),
                 operator: BooleanOperator::And,
-            },
+            }),
         )
     }
 
@@ -94,7 +95,7 @@ impl MiddleEnvironment {
     pub fn discriminant_eq(&self, value: AstNode, index: i64) -> AstNode {
         AstNode::new(
             self.context.current_span(),
-            AstNodeType::ComparisonExpression {
+            AstNodeType::ComparisonExpression(AstComparison {
                 left: Box::new(AstNode::call(
                     self.context.current_span(),
                     AstNode::identifier(self.context.current_span(), "discriminant"),
@@ -102,7 +103,7 @@ impl MiddleEnvironment {
                 )),
                 right: Box::new(AstNode::int(self.context.current_span(), index)),
                 operator: ComparisonOperator::Equal,
-            },
+            }),
         )
     }
 

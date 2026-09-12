@@ -6,13 +6,15 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialGenericTypeIdentifier},
         nodes::{
-            AsFailureMode, AstNode, AstNodeType, CallArg, FunctionHeader, LoopType, VarType,
+            AstNode, AstNodeType, CallArg, FunctionHeader, LoopType, VarType,
+            binary::{AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIs},
             conditionals::{AstIf, IfComparisonType},
             flow::{AstBreak, AstContinue, AstEmit, AstReturn},
             literals::{
                 AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
             },
             loops::AstList,
+            unary::AstNot,
         },
         types::{GenericTypes, ParserDataType},
     },
@@ -664,18 +666,18 @@ impl From<MiddleNodeType> for AstNodeType {
                 identifier: Box::new((*value.identifier).into()),
                 value: Box::new((*value.value).into()),
             },
-            MiddleNodeType::NegExpression(value) => AstNodeType::NotExpression {
+            MiddleNodeType::NegExpression(value) => AstNodeType::NotExpression(AstNot {
                 value: Box::new((*value.value).into()),
-            },
-            MiddleNodeType::AsExpression(value) => AstNodeType::AsExpression {
+            }),
+            MiddleNodeType::AsExpression(value) => AstNodeType::AsExpression(AstAs {
                 value: Box::new((*value.value).into()),
                 data_type: value.data_type,
                 failure_mode: value.failure_mode,
-            },
-            MiddleNodeType::IsExpression(value) => AstNodeType::IsExpression {
+            }),
+            MiddleNodeType::IsExpression(value) => AstNodeType::IsExpression(AstIs {
                 value: Box::new((*value.value).into()),
                 data_type: value.data_type,
-            },
+            }),
             MiddleNodeType::Conditional(value) => AstNodeType::IfStatement(AstIf {
                 comparison: Box::new(IfComparisonType::If((*value.comparison).into())),
                 then: Box::new((*value.then).into()),
@@ -775,21 +777,25 @@ impl From<MiddleNodeType> for AstNodeType {
                 },
                 reverse_args: Vec::new(),
             },
-            MiddleNodeType::BinaryExpression(value) => AstNodeType::BinaryExpression {
+            MiddleNodeType::BinaryExpression(value) => AstNodeType::BinaryExpression(AstBinary {
                 left: Box::new((*value.left).into()),
                 right: Box::new((*value.right).into()),
                 operator: value.operator,
-            },
-            MiddleNodeType::ComparisonExpression(value) => AstNodeType::ComparisonExpression {
-                left: Box::new((*value.left).into()),
-                right: Box::new((*value.right).into()),
-                operator: value.operator,
-            },
-            MiddleNodeType::BooleanExpression(value) => AstNodeType::BooleanExpression {
-                left: Box::new((*value.left).into()),
-                right: Box::new((*value.right).into()),
-                operator: value.operator,
-            },
+            }),
+            MiddleNodeType::ComparisonExpression(value) => {
+                AstNodeType::ComparisonExpression(AstComparison {
+                    left: Box::new((*value.left).into()),
+                    right: Box::new((*value.right).into()),
+                    operator: value.operator,
+                })
+            }
+            MiddleNodeType::BooleanExpression(value) => {
+                AstNodeType::BooleanExpression(AstBoolean {
+                    left: Box::new((*value.left).into()),
+                    right: Box::new((*value.right).into()),
+                    operator: value.operator,
+                })
+            }
             MiddleNodeType::AggregateExpression(value) => {
                 let is_tuple = if value.value.is_empty() {
                     true

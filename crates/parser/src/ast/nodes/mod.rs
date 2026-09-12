@@ -3,12 +3,12 @@ use crate::{
     ast::{
         ObjectType, Operator, RefMutability,
         binary::BinaryOperator,
-        comparison::{BooleanOperator, ComparisonOperator},
         formatter::Formatter,
         generics::TraitMember,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         matching::{MatchArmType, SelectArm},
         nodes::{
+            binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
             conditionals::{AstIf, AstTernary},
             flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
             literals::{
@@ -16,6 +16,7 @@ use crate::{
                 AstStruct, AstTuple,
             },
             loops::{AstList, AstListRepeat},
+            unary::{AstNeg, AstNot},
         },
         types::{GenericTypes, ParserDataType},
     },
@@ -43,14 +44,6 @@ pub mod scopes;
 pub mod spawn;
 pub mod types;
 pub mod unary;
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub enum AsFailureMode {
-    Result,
-    Panic,
-    Option,
-}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LoopType {
@@ -375,11 +368,11 @@ impl AstNode {
 
     pub fn unwrap_bit_ors(self) -> Vec<Self> {
         match self.node_type {
-            AstNodeType::BinaryExpression {
+            AstNodeType::BinaryExpression(AstBinary {
                 left,
                 right,
                 operator: BinaryOperator::BitOr,
-            } => {
+            }) => {
                 let mut left = left.unwrap_bit_ors();
                 left.append(&mut right.unwrap_bit_ors());
                 left
@@ -639,42 +632,16 @@ pub enum AstNodeType {
     },
 
     // Unary
-    NotExpression {
-        value: Box<AstNode>,
-    },
-    NegExpression {
-        value: Box<AstNode>,
-    },
+    NotExpression(AstNot),
+    NegExpression(AstNeg),
 
     // Binary
-    BinaryExpression {
-        left: Box<AstNode>,
-        right: Box<AstNode>,
-        operator: BinaryOperator,
-    },
-    ComparisonExpression {
-        left: Box<AstNode>,
-        right: Box<AstNode>,
-        operator: ComparisonOperator,
-    },
-    BooleanExpression {
-        left: Box<AstNode>,
-        right: Box<AstNode>,
-        operator: BooleanOperator,
-    },
-    AsExpression {
-        value: Box<AstNode>,
-        data_type: ParserDataType,
-        failure_mode: AsFailureMode,
-    },
-    IsExpression {
-        value: Box<AstNode>,
-        data_type: ParserDataType,
-    },
-    InDeclaration {
-        identifier: Box<AstNode>,
-        value: Box<AstNode>,
-    },
+    BinaryExpression(AstBinary),
+    ComparisonExpression(AstComparison),
+    BooleanExpression(AstBoolean),
+    AsExpression(AstAs),
+    IsExpression(AstIs),
+    InDeclaration(AstIn),
 
     // Async
     Spawn {

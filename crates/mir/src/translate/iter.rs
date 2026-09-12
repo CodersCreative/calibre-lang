@@ -11,6 +11,7 @@ use calibre_parser::{
         matching::MatchArmType,
         nodes::{
             AstNode, AstNodeType, CallArg, LoopType, VarType,
+            binary::{AstBinary, AstBoolean},
             conditionals::{AstIf, IfComparisonType},
             flow::{AstBreak, AstContinue},
             loops::AstList,
@@ -132,14 +133,14 @@ pub fn transform_spawn_iter(
                                     identifier: Box::new(list_ident_node.clone()),
                                     value: Box::new(AstNode::new(
                                         span,
-                                        AstNodeType::BinaryExpression {
+                                        AstNodeType::BinaryExpression(AstBinary {
                                             left: Box::new(list_ident_node.clone()),
                                             right: Box::new(AstNode::new(
                                                 span,
                                                 AstNodeType::Identifier(item_ident.clone().into()),
                                             )),
                                             operator: BinaryOperator::Shl,
-                                        },
+                                        }),
                                     )),
                                 },
                             )),
@@ -273,11 +274,11 @@ impl MiddleEnvironment {
         let guard = conditionals.into_iter().reduce(|left, right| {
             AstNode::new(
                 span,
-                AstNodeType::BooleanExpression {
+                AstNodeType::BooleanExpression(AstBoolean {
                     left: Box::new(left),
                     right: Box::new(right),
                     operator: BooleanOperator::And,
-                },
+                }),
             )
         });
 
@@ -287,11 +288,11 @@ impl MiddleEnvironment {
                 identifier: Box::new(list_ident_node.clone()),
                 value: Box::new(AstNode::new(
                     span,
-                    AstNodeType::BinaryExpression {
+                    AstNodeType::BinaryExpression(AstBinary {
                         left: Box::new(list_ident_node.clone()),
                         right: map,
                         operator: BinaryOperator::Shl,
-                    },
+                    }),
                 )),
             },
         )]);

@@ -2,13 +2,17 @@ use super::{LegacySpanMapExt, filter, setup::StrParser};
 use crate::ast::RefMutability;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::matching::MatchArmType;
+use crate::ast::nodes::binary::{
+    AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
+};
 use crate::ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType};
 use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstPipe, AstTry, PipeSegment, TryCatch,
 };
 use crate::ast::nodes::literals::{AstEnum, AstRange, AstString};
 use crate::ast::nodes::loops::{AstList, AstListRepeat};
-use crate::ast::nodes::{AsFailureMode, AstNode, AstNodeType, CallArg, LoopType};
+use crate::ast::nodes::unary::{AstNeg, AstNot};
+use crate::ast::nodes::{AstNode, AstNodeType, CallArg, LoopType};
 use crate::ast::types::{ParserDataType, ParserInnerType};
 use crate::parse::util::{
     ensure_scope_node, lex, parse_embedded_expr, parse_splits, span, span_from_nodes_or,
@@ -514,11 +518,11 @@ pub fn build_tail_expression_parser<'a>(
                 for left in iter {
                     right = AstNode::new(
                         Span::new_from_spans(left.span, right.span),
-                        AstNodeType::BinaryExpression {
+                        AstNodeType::BinaryExpression(AstBinary {
                             left: Box::new(left),
                             right: Box::new(right),
                             operator: BinaryOperator::Pow,
-                        },
+                        }),
                     );
                 }
                 right
@@ -527,9 +531,15 @@ pub fn build_tail_expression_parser<'a>(
     .map(|(ops, node)| {
         ops.into_iter().fold(node, |n, op| {
             if op == BinaryOperator::Sub {
-                AstNode::new(n.span, AstNodeType::NegExpression { value: Box::new(n) })
+                AstNode::new(
+                    n.span,
+                    AstNodeType::NegExpression(AstNeg { value: Box::new(n) }),
+                )
             } else {
-                AstNode::new(n.span, AstNodeType::NotExpression { value: Box::new(n) })
+                AstNode::new(
+                    n.span,
+                    AstNodeType::NotExpression(AstNot { value: Box::new(n) }),
+                )
             }
         })
     })
@@ -554,11 +564,11 @@ pub fn build_tail_expression_parser<'a>(
             t.into_iter().fold(h, |l, (op, r)| {
                 AstNode::new(
                     Span::new_from_spans(l.span, r.span),
-                    AstNodeType::BinaryExpression {
+                    AstNodeType::BinaryExpression(AstBinary {
                         left: Box::new(l),
                         right: Box::new(r),
                         operator: op,
-                    },
+                    }),
                 )
             })
         })
@@ -571,11 +581,11 @@ pub fn build_tail_expression_parser<'a>(
             t.into_iter().fold(h, |l, (op, r)| {
                 AstNode::new(
                     Span::new_from_spans(l.span, r.span),
-                    AstNodeType::BinaryExpression {
+                    AstNodeType::BinaryExpression(AstBinary {
                         left: Box::new(l),
                         right: Box::new(r),
                         operator: op,
-                    },
+                    }),
                 )
             })
         })
@@ -597,11 +607,11 @@ pub fn build_tail_expression_parser<'a>(
             t.into_iter().fold(h, |l, (op, r)| {
                 AstNode::new(
                     Span::new_from_spans(l.span, r.span),
-                    AstNodeType::BinaryExpression {
+                    AstNodeType::BinaryExpression(AstBinary {
                         left: Box::new(l),
                         right: Box::new(r),
                         operator: op,
-                    },
+                    }),
                 )
             })
         })
@@ -624,11 +634,11 @@ pub fn build_tail_expression_parser<'a>(
             t.into_iter().fold(h, |l, (op, r)| {
                 AstNode::new(
                     Span::new_from_spans(l.span, r.span),
-                    AstNodeType::ComparisonExpression {
+                    AstNodeType::ComparisonExpression(AstComparison {
                         left: Box::new(l),
                         right: Box::new(r),
                         operator: op,
-                    },
+                    }),
                 )
             })
         })
@@ -652,11 +662,11 @@ pub fn build_tail_expression_parser<'a>(
             t.into_iter().fold(h, |l, (op, r)| {
                 AstNode::new(
                     Span::new_from_spans(l.span, r.span),
-                    AstNodeType::BooleanExpression {
+                    AstNodeType::BooleanExpression(AstBoolean {
                         left: Box::new(l),
                         right: Box::new(r),
                         operator: op,
-                    },
+                    }),
                 )
             })
         })
@@ -702,7 +712,7 @@ pub fn build_tail_expression_parser<'a>(
                 .fold(head, |value, ((_, suffix), data_type)| {
                     AstNode::new(
                         value.span,
-                        AstNodeType::AsExpression {
+                        AstNodeType::AsExpression(AstAs {
                             value: Box::new(value),
                             data_type,
                             failure_mode: match suffix {
@@ -710,7 +720,7 @@ pub fn build_tail_expression_parser<'a>(
                                 Some('?') => AsFailureMode::Option,
                                 _ => AsFailureMode::Result,
                             },
-                        },
+                        }),
                     )
                 })
         })
@@ -728,10 +738,10 @@ pub fn build_tail_expression_parser<'a>(
             checks.into_iter().fold(head, |value, data_type| {
                 AstNode::new(
                     value.span,
-                    AstNodeType::IsExpression {
+                    AstNodeType::IsExpression(AstIs {
                         value: Box::new(value),
                         data_type,
-                    },
+                    }),
                 )
             })
         })
@@ -749,10 +759,10 @@ pub fn build_tail_expression_parser<'a>(
             t.into_iter().fold(h, |l, r| {
                 AstNode::new(
                     Span::new_from_spans(l.span, r.span),
-                    AstNodeType::InDeclaration {
+                    AstNodeType::InDeclaration(AstIn {
                         identifier: Box::new(l),
                         value: Box::new(r),
-                    },
+                    }),
                 )
             })
         })
@@ -1276,11 +1286,11 @@ pub fn build_tail_expression_parser<'a>(
             let rhs = if let Some(op) = op {
                 AstNode::new(
                     Span::new_from_spans(identifier.span, value.span),
-                    AstNodeType::BinaryExpression {
+                    AstNodeType::BinaryExpression(AstBinary {
                         left: Box::new(identifier.clone()),
                         right: Box::new(value),
                         operator: op,
-                    },
+                    }),
                 )
             } else {
                 value

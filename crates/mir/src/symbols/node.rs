@@ -7,9 +7,8 @@ use crate::{
     typing::MiddleTypeDefType,
 };
 use calibre_parser::ast::{
-    Operator,
     idents::ParsedIntLiteral,
-    nodes::{AsFailureMode, AstNode, AstNodeType, flow::AstEmit},
+    nodes::{AstNode, AstNodeType, flow::AstEmit},
     types::{ParserDataType, ParserInnerType},
 };
 use ustr::Ustr;
@@ -96,6 +95,18 @@ impl MiddleEnvironment {
             // Conditionals
             AstNodeType::Ternary(x) => x.type_of(self, scope, node.span),
             AstNodeType::IfStatement(x) => x.type_of(self, scope, node.span),
+
+            // Unary
+            AstNodeType::NegExpression(x) => x.type_of(self, scope, node.span),
+            AstNodeType::NotExpression(x) => x.type_of(self, scope, node.span),
+
+            // Binary
+            AstNodeType::InDeclaration(x) => x.type_of(self, scope, node.span),
+            AstNodeType::ComparisonExpression(x) => x.type_of(self, scope, node.span),
+            AstNodeType::BooleanExpression(x) => x.type_of(self, scope, node.span),
+            AstNodeType::BinaryExpression(x) => x.type_of(self, scope, node.span),
+            AstNodeType::AsExpression(x) => x.type_of(self, scope, node.span),
+            AstNodeType::IsExpression(x) => x.type_of(self, scope, node.span),
 
             // TODO
             AstNodeType::Break { .. }
@@ -248,50 +259,6 @@ impl MiddleEnvironment {
                     span: node.span,
                 })
             }
-
-            AstNodeType::NotExpression { .. } => Some(ParserDataType {
-                data_type: ParserInnerType::Bool,
-                span: node.span,
-            }),
-            AstNodeType::InDeclaration { identifier, value } => {
-                self.resolve_operator_or_bool(scope, identifier, value, Operator::In, node.span)
-            }
-            AstNodeType::ComparisonExpression {
-                left,
-                right,
-                operator,
-            } => self.resolve_operator_or_bool(
-                scope,
-                left,
-                right,
-                Operator::Comparison(*operator),
-                node.span,
-            ),
-            AstNodeType::BooleanExpression {
-                left,
-                right,
-                operator,
-            } => self.resolve_operator_or_bool(
-                scope,
-                left,
-                right,
-                Operator::Boolean(*operator),
-                node.span,
-            ),
-            AstNodeType::BinaryExpression {
-                left,
-                right,
-                operator,
-            } => {
-                if let Some(x) =
-                    self.get_operator_overload(scope, left, right, &Operator::Binary(*operator))
-                {
-                    Some(x.return_type.clone())
-                } else {
-                    self.resolve_type_from_node(scope, left)
-                        .or_else(|| self.resolve_type_from_node(scope, right))
-                }
-            }
             AstNodeType::IterExpression {
                 data_type, spawned, ..
             } => {
@@ -314,35 +281,8 @@ impl MiddleEnvironment {
                     Some(list_type)
                 }
             }
-            AstNodeType::NegExpression { value } => self.resolve_type_from_node(scope, value),
             AstNodeType::CurryExpression { value } => self.resolve_curried_type(scope, value),
-            AstNodeType::AsExpression {
-                value: _,
-                data_type,
-                failure_mode,
-            } => {
-                let ok = self
-                    .resolve_data_type(scope, data_type, ResolutionOptions::typing())
-                    .ok()?;
-                match failure_mode {
-                    AsFailureMode::Panic => Some(ok),
-                    AsFailureMode::Option => Some(ParserDataType {
-                        data_type: ParserInnerType::Option(Box::new(ok)),
-                        span: node.span,
-                    }),
-                    AsFailureMode::Result => Some(ParserDataType {
-                        data_type: ParserInnerType::Result {
-                            ok: Box::new(ok),
-                            err: Box::new(ParserDataType::new(node.span, ParserInnerType::Dynamic)),
-                        },
-                        span: node.span,
-                    }),
-                }
-            }
-            AstNodeType::IsExpression { .. } => Some(ParserDataType {
-                data_type: ParserInnerType::Bool,
-                span: node.span,
-            }),
+
             AstNodeType::CallExpression {
                 caller,
                 generic_types: _generic_types,

@@ -7,7 +7,7 @@ use calibre_parser::ast::{
     comparison::ComparisonOperator,
     idents::ParserText,
     matching::{MatchArmType, MatchStringPatternPart},
-    nodes::{AstNode, AstNodeType, CallArg, literals::AstString},
+    nodes::{AstNode, AstNodeType, CallArg, binary::AstComparison, literals::AstString},
     types::{ParserDataType, ParserInnerType},
 };
 
@@ -114,7 +114,7 @@ impl PatternTranslator for StringPatternTranslator {
                 condition,
                 AstNode::new(
                     env.context.current_span(),
-                    AstNodeType::ComparisonExpression {
+                    AstNodeType::ComparisonExpression(AstComparison {
                         left: Box::new(current),
                         right: Box::new(AstNode::new(
                             env.context.current_span(),
@@ -123,7 +123,7 @@ impl PatternTranslator for StringPatternTranslator {
                             }),
                         )),
                         operator: ComparisonOperator::Equal,
-                    },
+                    }),
                 ),
             );
         }

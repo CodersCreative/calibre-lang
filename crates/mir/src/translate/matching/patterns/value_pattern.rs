@@ -6,7 +6,7 @@ use crate::{
 use calibre_parser::ast::{
     comparison::ComparisonOperator,
     matching::MatchArmType,
-    nodes::{AstNode, AstNodeType},
+    nodes::{AstNode, AstNodeType, binary::AstComparison},
 };
 
 pub struct ValuePatternTranslator;
@@ -24,11 +24,11 @@ impl PatternTranslator for ValuePatternTranslator {
         let condition = match inner_pattern {
             MatchArmType::Value(expected) => AstNode::new(
                 env.context.current_span(),
-                AstNodeType::ComparisonExpression {
+                AstNodeType::ComparisonExpression(AstComparison {
                     left: Box::new(value.clone()),
                     right: Box::new(expected),
                     operator: ComparisonOperator::Equal,
-                },
+                }),
             ),
             MatchArmType::Wildcard(_) => AstNode::bool(env.context.current_span(), true),
             _ => {
