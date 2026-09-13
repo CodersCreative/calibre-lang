@@ -1,6 +1,6 @@
 use crate::{
     ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
-    symbols::resolve::ResolutionOptions,
+    symbols::resolve::ResolutionOptions, translate::MirLowering,
 };
 use calibre_parser::{
     Span,
@@ -9,14 +9,15 @@ use calibre_parser::{
         comparison::BooleanOperator,
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
-            AstNode, AstNodeType, LoopType, VarType,
+            AstNode, AstNodeType, VarType,
             assignment::AstAssignment,
             binary::{AstBinary, AstBoolean},
             conditionals::{AstIf, IfComparisonType},
             declaration::AstDeclaration,
             flow::{AstBreak, AstContinue},
             functions::CallArg,
-            loops::AstList,
+            lists::AstList,
+            loops::{AstIter, AstLoop, LoopType},
             matching::{AstMatch, MatchArmType, MatchBody},
             spawn::AstSpawn,
         },
@@ -85,7 +86,7 @@ pub fn transform_spawn_iter(
 
     let dispatch_loop = AstNode::new(
         span,
-        AstNodeType::LoopDeclaration {
+        AstNodeType::LoopDeclaration(AstLoop {
             loop_type,
             until,
             label: None,
@@ -101,7 +102,7 @@ pub fn transform_spawn_iter(
                     }),
                 ))],
             )])),
-        },
+        }),
     );
 
     let channel_get = AstNode::call(
@@ -112,7 +113,7 @@ pub fn transform_spawn_iter(
 
     let collect_loop = AstNode::new(
         span,
-        AstNodeType::LoopDeclaration {
+        AstNodeType::LoopDeclaration(AstLoop {
             loop_type: Box::new(LoopType::Loop),
             until: None,
             label: None,
@@ -167,7 +168,7 @@ pub fn transform_spawn_iter(
                     },
                 }),
             )])),
-        },
+        }),
     );
 
     let list_type = ParserDataType::new(span, ParserInnerType::List(Box::new(data_type.clone())));
@@ -231,41 +232,33 @@ pub fn transform_spawn_iter(
     ])
 }
 
-impl MiddleEnvironment {
-    #[allow(clippy::too_many_arguments)]
+impl MirLowering for AstIter {
     #[instrument(skip_all)]
-    pub fn evaluate_iter_expression(
-        &mut self,
+    fn lower(
+        self,
+        env: &mut MiddleEnvironment,
         scope: ScopeId,
-        data_type: ParserDataType,
-        map: Box<AstNode>,
-        spawned: bool,
-        loop_type: Box<LoopType>,
-        conditionals: Vec<AstNode>,
-        until: Option<Box<AstNode>>,
+        span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let span = self.context.current_span();
-        let resolved_data_type = if data_type.is_auto() {
-            self.resolve_type_from_node(scope, &map).ok_or_else(|| {
-                self.context
+        let resolved_data_type = if self.data_type.is_auto() {
+            self.map.type_of(env, scope, span).ok_or_else(|| {
+                env.context
                     .err_at_current(MiddleErr::CannotInferLoopIteratorType)
             })?
         } else {
-            self.resolve_data_type(scope, &data_type, ResolutionOptions::typing())?
+            env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?
         };
 
-        if spawned {
-            return self.evaluate_inner(
-                scope,
-                transform_spawn_iter(
-                    span,
-                    resolved_data_type.clone(),
-                    *map,
-                    loop_type,
-                    conditionals,
-                    until,
-                ),
-            );
+        if self.spawned {
+            return transform_spawn_iter(
+                span,
+                resolved_data_type.clone(),
+                *self.map,
+                self.loop_type,
+                self.conditionals,
+                self.until,
+            )
+            .lower(env, scope, span);
         }
 
         let list_ident = PotentialDollarIdentifier::from(ParserText::temp_name_with_suffix(
@@ -279,7 +272,7 @@ impl MiddleEnvironment {
             ParserInnerType::List(Box::new(resolved_data_type.clone())),
         );
 
-        let guard = conditionals.into_iter().reduce(|left, right| {
+        let guard = self.conditionals.into_iter().reduce(|left, right| {
             AstNode::new(
                 span,
                 AstNodeType::BooleanExpression(AstBoolean {
@@ -298,7 +291,7 @@ impl MiddleEnvironment {
                     span,
                     AstNodeType::BinaryExpression(AstBinary {
                         left: Box::new(list_ident_node.clone()),
-                        right: map,
+                        right: self.map,
                         operator: BinaryOperator::Shl,
                     }),
                 )),
@@ -320,36 +313,61 @@ impl MiddleEnvironment {
 
         let loop_node = AstNode::new(
             span,
-            AstNodeType::LoopDeclaration {
-                loop_type,
-                until,
+            AstNodeType::LoopDeclaration(AstLoop {
+                loop_type: self.loop_type,
+                until: self.until,
                 label: None,
                 else_body: None,
                 body: Box::new(block),
-            },
+            }),
         );
 
-        self.evaluate_inner(
-            scope,
-            AstNode::new_temp_scope(vec![
-                AstNode::new(
-                    span,
-                    AstNodeType::VariableDeclaration(AstDeclaration {
-                        var_type: VarType::Mutable,
-                        identifier: list_ident.clone(),
-                        value: Box::new(AstNode::new(
-                            span,
-                            AstNodeType::ListLiteral(AstList {
-                                data_type: data_type.clone(),
-                                values: Vec::new(),
-                            }),
-                        )),
-                        data_type: list_type,
-                    }),
-                ),
-                loop_node,
-                AstNode::emit(AstNode::identifier(span, list_ident)),
-            ]),
-        )
+        AstNode::new_temp_scope(vec![
+            AstNode::new(
+                span,
+                AstNodeType::VariableDeclaration(AstDeclaration {
+                    var_type: VarType::Mutable,
+                    identifier: list_ident.clone(),
+                    value: Box::new(AstNode::new(
+                        span,
+                        AstNodeType::ListLiteral(AstList {
+                            data_type: self.data_type,
+                            values: Vec::new(),
+                        }),
+                    )),
+                    data_type: list_type,
+                }),
+            ),
+            loop_node,
+            AstNode::emit(AstNode::identifier(span, list_ident)),
+        ])
+        .lower(env, scope, span)
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        let list_type = ParserDataType {
+            data_type: ParserInnerType::List(Box::new(
+                env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
+                    .ok()?,
+            )),
+            span,
+        };
+
+        if self.spawned {
+            Some(ParserDataType {
+                data_type: ParserInnerType::StructWithGenerics {
+                    identifier: String::from("Mutex"),
+                    generic_types: vec![list_type],
+                },
+                span,
+            })
+        } else {
+            Some(list_type)
+        }
     }
 }

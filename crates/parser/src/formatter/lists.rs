@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         formatter::{Formatter, handle_comment},
-        nodes::loops::{AstList, AstListRepeat},
+        nodes::lists::{AstList, AstListRepeat},
     },
     formatter::AstFormatting,
 };

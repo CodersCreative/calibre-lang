@@ -3,7 +3,7 @@ use crate::{
     ast::{
         idents::PotentialDollarIdentifier,
         nodes::{
-            AstNode, AstNodeType, LoopType, VarType,
+            AstNode, AstNodeType, VarType,
             matching::{
                 MatchArmType, MatchStringPatternPart, MatchStructFieldPattern, MatchTupleItem,
             },
@@ -444,6 +444,10 @@ impl Formatter {
             AstNodeType::TraitDeclaration(x) => x.format(self),
             AstNodeType::TypeDeclaration(x) => x.format(self),
 
+            // Loops
+            AstNodeType::LoopDeclaration(x) => x.format(self),
+            AstNodeType::IterExpression(x) => x.format(self),
+
             AstNodeType::ImportStatement {
                 module,
                 alias,
@@ -532,43 +536,6 @@ impl Formatter {
                 let multi_line = format!("@{}{}\n{}", tag, args_str, node_formatted);
                 self.wrap_if_wide(single_line, &multi_line)
             }
-            AstNodeType::IterExpression {
-                data_type,
-                map,
-                spawned,
-                loop_type,
-                conditionals,
-                until,
-            } => {
-                let mut txt = if !data_type.is_auto() {
-                    format!(
-                        "list:<{}>[{} {}for {}",
-                        data_type,
-                        self.format(map),
-                        if *spawned { "spawn " } else { "" },
-                        self.fmt_loop_type(loop_type)
-                    )
-                } else {
-                    format!(
-                        "[{} {}for {}",
-                        self.format(map),
-                        if *spawned { "spawn " } else { "" },
-                        self.fmt_loop_type(loop_type)
-                    )
-                };
-
-                if !conditionals.is_empty() {
-                    txt.push_str(&format!(" {}", self.fmt_conditionals(conditionals)));
-                }
-
-                if let Some(until) = until {
-                    txt.push_str(&format!(" until {}", self.format(until)));
-                }
-
-                txt.push(']');
-
-                txt
-            }
             AstNodeType::InlineGenerator {
                 map,
                 data_type,
@@ -576,11 +543,7 @@ impl Formatter {
                 conditionals,
                 until,
             } => {
-                let mut txt = format!(
-                    "fn({} for {}",
-                    self.format(map),
-                    self.fmt_loop_type(loop_type)
-                );
+                let mut txt = format!("fn({} for {}", self.format(map), loop_type.format(self));
                 if !conditionals.is_empty() {
                     txt.push(' ');
                     txt.push_str(&self.fmt_conditionals(conditionals));
@@ -592,25 +555,6 @@ impl Formatter {
                 if let Some(data_type) = data_type {
                     txt.push_str(&format!(" -> gen:<{}>", data_type));
                 }
-                txt
-            }
-            AstNodeType::LoopDeclaration {
-                loop_type,
-                body,
-                until,
-                label,
-                else_body,
-            } => {
-                let body_txt = self.fmt_loop_body_with_label(body, label);
-                let mut txt = format!("for {} {}", self.fmt_loop_type(loop_type), body_txt);
-
-                if let Some(until) = until {
-                    txt.push_str(&format!(" until {}", self.format(until)));
-                }
-                if let Some(else_body) = else_body {
-                    txt.push_str(&format!(" else {}", self.format(else_body)));
-                }
-
                 txt
             }
 
@@ -1024,44 +968,6 @@ impl Formatter {
         }
     }
 
-    pub fn fmt_loop_type(&mut self, loop_type: &LoopType) -> String {
-        match loop_type {
-            LoopType::While(x) => self.format(x),
-            LoopType::For(id, x) => format!("{} in {}", id, self.format(x)),
-            LoopType::Let { value, pattern } => {
-                let mut txt = String::from("let ");
-                txt.push_str(&self.fmt_match_arm(&pattern.0[0], false));
-                for node in pattern.0.iter().skip(1) {
-                    txt.push_str(&format!(" | {}", self.fmt_match_arm(node, false)));
-                }
-
-                match &pattern.0[0] {
-                    MatchArmType::Enum {
-                        value: _,
-                        var_type: VarType::Immutable,
-                        name: Some(name),
-                        ..
-                    } => txt.push_str(&format!(" : {}", name)),
-                    MatchArmType::Enum {
-                        value: _,
-                        var_type,
-                        name: Some(name),
-                        ..
-                    } => txt.push_str(&format!(" : {} {}", var_type.print_only_ends(), name)),
-                    _ => {}
-                }
-
-                if !pattern.1.is_empty() {
-                    txt.push_str(&format!(" {}", self.fmt_conditionals(&pattern.1)));
-                };
-
-                txt.push_str(&format!(" <- {}", self.format(value)));
-                txt
-            }
-            LoopType::Loop => String::new(),
-        }
-    }
-
     pub fn fmt_conditionals(&mut self, conditionals: &[AstNode]) -> String {
         let mut txt = String::new();
 
@@ -1092,19 +998,6 @@ impl Formatter {
             ParserInnerType::Ptr(inner) => format!("ptr:<{}>", self.fmt_ffi_normal_type(inner)),
             _ => data_type.to_string(),
         }
-    }
-
-    fn fmt_loop_body_with_label(
-        &mut self,
-        body: &AstNode,
-        label: &Option<PotentialDollarIdentifier>,
-    ) -> String {
-        let formatted = self.format(body);
-        let Some(label) = label else { return formatted };
-        if let Some(rest) = formatted.strip_prefix("=>") {
-            return format!("=> @{}{}", label, rest);
-        }
-        formatted
     }
 }
 

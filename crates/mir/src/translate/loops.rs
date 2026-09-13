@@ -4,6 +4,7 @@ use crate::{
     errors::MiddleErr,
     scoping::{LoopContext, ScopeId},
     symbols::resolve::ResolutionOptions,
+    translate::MirLowering,
 };
 use calibre_parser::{
     Span,
@@ -12,7 +13,7 @@ use calibre_parser::{
         comparison::ComparisonOperator,
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
-            AstNode, AstNodeType, LoopType, VarType,
+            AstNode, AstNodeType, VarType,
             access::{AstField, AstIndex},
             assignment::AstAssignment,
             binary::{AstBinary, AstComparison},
@@ -21,6 +22,7 @@ use calibre_parser::{
             flow::AstBreak,
             functions::CallArg,
             literals::AstRange,
+            loops::{AstLoop, LoopType},
             memory::AstRef,
             unary::AstNot,
         },
@@ -132,31 +134,29 @@ impl MiddleEnvironment {
             span,
         })
     }
+}
 
+impl MirLowering for AstLoop {
     #[instrument(skip_all)]
-    pub fn evaluate_loop_statement(
-        &mut self,
+    fn lower(
+        mut self,
+        env: &mut MiddleEnvironment,
         scope: ScopeId,
-        loop_type: LoopType,
-        mut body: AstNode,
-        until: Option<Box<AstNode>>,
-        mut label: Option<PotentialDollarIdentifier>,
-        else_body: Option<Box<AstNode>>,
+        span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let span = self.context.current_span();
-        if label.is_none()
+        if self.label.is_none()
             && let AstNodeType::ScopeDeclaration {
                 body: scope_body,
                 named: Some(named),
                 is_temp,
                 create_new_scope,
                 define: false,
-            } = &body.node_type
+            } = &self.body.node_type
             && named.args.is_empty()
         {
-            label = Some(named.name.clone());
-            body = AstNode::new(
-                body.span,
+            self.label = Some(named.name.clone());
+            *self.body = AstNode::new(
+                span,
                 AstNodeType::ScopeDeclaration {
                     body: scope_body.clone(),
                     named: None,
@@ -167,13 +167,13 @@ impl MiddleEnvironment {
             );
         }
 
-        let scope = self.scoping.new_scope_from_parent_shallow(scope);
-        let label_text = label.as_ref().map(|l| {
-            self.resolve(scope, l, ResolutionOptions::default().with_dollar())
+        let scope = env.scoping.new_scope_from_parent_shallow(scope);
+        let label_text = self.label.as_ref().map(|l| {
+            env.resolve(scope, l, ResolutionOptions::default().with_dollar())
                 .unwrap_or_else(|_| Ustr::from(&l.to_string()))
         });
 
-        if let Some(until) = until {
+        if let Some(until) = self.until {
             let until_node = AstNode::new(
                 span,
                 AstNodeType::IfStatement(AstIf {
@@ -188,14 +188,14 @@ impl MiddleEnvironment {
                     otherwise: None,
                 }),
             );
-            body = self.wrap_loop_body(body, until_node, false);
+            *self.body = env.wrap_loop_body(*self.body, until_node, false);
         }
 
-        let (result_raw, broke_raw) = if else_body.is_some() {
+        let (result_raw, broke_raw) = if self.else_body.is_some() {
             let result = Ustr::from(&ParserText::temp_name_with_suffix("loop_result", span).text);
             let broke = Ustr::from(&ParserText::temp_name_with_suffix("loop_broke", span).text);
 
-            if let Ok(scope_data) = self.scoping.scope_mut_or_err(scope) {
+            if let Ok(scope_data) = env.scoping.scope_mut_or_err(scope) {
                 scope_data.mappings.insert(result, result);
                 scope_data.mappings.insert(broke, broke);
             }
@@ -204,11 +204,12 @@ impl MiddleEnvironment {
             (None, None)
         };
 
-        match loop_type {
+        match *self.loop_type {
             LoopType::Loop => {
-                let body = self.eval_loop_body_with_ctx(
-                    scope, label_text, result_raw, broke_raw, None, body,
+                let body = env.eval_loop_body_with_ctx(
+                    scope, label_text, result_raw, broke_raw, None, *self.body,
                 )?;
+
                 let loop_node = MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration(MirLoop {
                         state: None,
@@ -218,7 +219,15 @@ impl MiddleEnvironment {
                     }),
                     span,
                 };
-                self.finish_loop_with_else(loop_node, scope, span, else_body, result_raw, broke_raw)
+
+                env.finish_loop_with_else(
+                    loop_node,
+                    scope,
+                    span,
+                    self.else_body,
+                    result_raw,
+                    broke_raw,
+                )
             }
             LoopType::While(condition) => {
                 let break_if_not = AstNode::new(
@@ -241,10 +250,12 @@ impl MiddleEnvironment {
                     }),
                 );
 
-                let wrapped = self.wrap_loop_body(body, break_if_not, true);
-                let body = self.eval_loop_body_with_ctx(
+                let wrapped = env.wrap_loop_body(*self.body, break_if_not, true);
+
+                let body = env.eval_loop_body_with_ctx(
                     scope, label_text, result_raw, broke_raw, None, wrapped,
                 )?;
+
                 let loop_node = MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration(MirLoop {
                         state: None,
@@ -254,11 +265,19 @@ impl MiddleEnvironment {
                     }),
                     span,
                 };
-                self.finish_loop_with_else(loop_node, scope, span, else_body, result_raw, broke_raw)
+
+                env.finish_loop_with_else(
+                    loop_node,
+                    scope,
+                    span,
+                    self.else_body,
+                    result_raw,
+                    broke_raw,
+                )
             }
 
             LoopType::Let { value, pattern } => {
-                let body = self.eval_loop_body_with_ctx(
+                let body = env.eval_loop_body_with_ctx(
                     scope,
                     label_text,
                     result_raw,
@@ -268,7 +287,7 @@ impl MiddleEnvironment {
                         span,
                         AstNodeType::IfStatement(AstIf {
                             comparison: Box::new(IfComparisonType::IfLet { value, pattern }),
-                            then: Box::new(body),
+                            then: self.body,
                             otherwise: Some(Box::new(AstNode::new(
                                 span,
                                 AstNodeType::Break(AstBreak {
@@ -290,9 +309,15 @@ impl MiddleEnvironment {
                     span,
                 };
 
-                self.finish_loop_with_else(loop_node, scope, span, else_body, result_raw, broke_raw)
+                env.finish_loop_with_else(
+                    loop_node,
+                    scope,
+                    span,
+                    self.else_body,
+                    result_raw,
+                    broke_raw,
+                )
             }
-
             LoopType::For(name, range) => {
                 let iter_target =
                     if let AstNodeType::RefStatement(AstRef { value, .. }) = &range.node_type {
@@ -304,7 +329,7 @@ impl MiddleEnvironment {
                         None
                     };
 
-                let range_dt = self.resolve_type_from_node(scope, &range);
+                let range_dt = range.type_of(env, scope, span);
 
                 let explicit_range = match &range.node_type {
                     AstNodeType::RangeDeclaration(AstRange {
@@ -378,28 +403,25 @@ impl MiddleEnvironment {
 
                 let mut state_nodes = Vec::new();
 
-                let iter_decl = self.evaluate(
-                    scope,
-                    AstNode::new(
-                        span,
-                        AstNodeType::VariableDeclaration(AstDeclaration {
-                            var_type: if is_indexable_loop {
-                                VarType::Immutable
-                            } else {
-                                VarType::Mutable
-                            },
-                            identifier: iter_id.clone(),
-                            value: Box::new(iter_value),
-                            data_type: ParserDataType::auto(span),
-                        }),
-                    ),
-                );
+                let iter_decl = AstNode::new(
+                    span,
+                    AstNodeType::VariableDeclaration(AstDeclaration {
+                        var_type: if is_indexable_loop {
+                            VarType::Immutable
+                        } else {
+                            VarType::Mutable
+                        },
+                        identifier: iter_id.clone(),
+                        value: Box::new(iter_value),
+                        data_type: ParserDataType::auto(span),
+                    }),
+                )
+                .lower_or_empty(env, scope, span);
 
                 state_nodes.push(iter_decl);
 
                 if is_indexable_loop {
-                    state_nodes.push(self.evaluate(
-                        scope,
+                    state_nodes.push(
                         AstNode::new(
                             span,
                             AstNodeType::VariableDeclaration(AstDeclaration {
@@ -408,11 +430,11 @@ impl MiddleEnvironment {
                                 value: Box::new(idx_initial),
                                 data_type: ParserDataType::new(span, ParserInnerType::Int),
                             }),
-                        ),
-                    ));
+                        )
+                        .lower_or_empty(env, scope, span),
+                    );
                 } else {
-                    state_nodes.push(self.evaluate(
-                        scope,
+                    state_nodes.push(
                         AstNode::new(
                             span,
                             AstNodeType::VariableDeclaration(AstDeclaration {
@@ -421,8 +443,9 @@ impl MiddleEnvironment {
                                 value: Box::new(AstNode::none(span)),
                                 data_type: ParserDataType::auto(span),
                             }),
-                        ),
-                    ));
+                        )
+                        .lower_or_empty(env, scope, span),
+                    );
                 }
 
                 let state = Some(Box::new(MiddleNode {
@@ -537,7 +560,7 @@ impl MiddleEnvironment {
                     }),
                 );
 
-                let mut instructions = body.nodes();
+                let mut instructions = self.body.nodes();
 
                 if let Some(next_assign) = next_assign_node {
                     instructions.insert(0, next_assign);
@@ -562,7 +585,7 @@ impl MiddleEnvironment {
 
                 let final_body = AstNode::new_temp_scope(instructions);
 
-                let body = self.eval_loop_body_with_ctx(
+                let body = env.eval_loop_body_with_ctx(
                     scope,
                     label_text,
                     result_raw,
@@ -585,8 +608,26 @@ impl MiddleEnvironment {
                     span,
                 };
 
-                self.finish_loop_with_else(loop_node, scope, span, else_body, result_raw, broke_raw)
+                env.finish_loop_with_else(
+                    loop_node,
+                    scope,
+                    span,
+                    self.else_body,
+                    result_raw,
+                    broke_raw,
+                )
             }
         }
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Option<ParserDataType> {
+        self.else_body
+            .as_ref()
+            .and_then(|x| x.type_of(env, scope, span))
     }
 }

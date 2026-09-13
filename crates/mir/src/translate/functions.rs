@@ -18,15 +18,16 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
-            AstNode, AstNodeType, LoopType, VarType,
+            AstNode, AstNodeType, VarType,
             access::AstField,
             binary::{AstBoolean, AstComparison},
             conditionals::{AstIf, AstTernary, IfComparisonType},
             declaration::AstDeclaration,
             flow::{AstContinue, AstReturn},
             functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
+            lists::AstList,
             literals::{AstString, AstStruct},
-            loops::AstList,
+            loops::{AstLoop, LoopType},
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -426,13 +427,13 @@ impl MiddleEnvironment {
 
         let loop_node = AstNode::new(
             span,
-            AstNodeType::LoopDeclaration {
+            AstNodeType::LoopDeclaration(AstLoop {
                 loop_type: Box::new(loop_type),
                 body: Box::new(AstNode::new_temp_scope(loop_body_items)),
                 until,
                 label: None,
                 else_body: None,
-            },
+            }),
         );
 
         Self::wrap_generator_body(

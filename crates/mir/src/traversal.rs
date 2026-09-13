@@ -1,7 +1,7 @@
 use calibre_parser::ast::{
     ObjectType,
     nodes::{
-        AstNode, AstNodeType, LoopType,
+        AstNode, AstNodeType,
         access::{AstField, AstIndex, AstScope},
         assignment::{AstAssignDestructure, AstAssignment},
         binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
@@ -9,8 +9,9 @@ use calibre_parser::ast::{
         declaration::{AstDeclaration, AstDeclareDestructure},
         flow::{AstBreak, AstContinue, AstDefer, AstPipe, AstReturn, AstTry, PipeSegment},
         functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
+        lists::{AstList, AstListRepeat},
         literals::{AstDataType, AstEnum, AstRange, AstStruct, AstTuple},
-        loops::{AstList, AstListRepeat},
+        loops::{AstIter, AstLoop, LoopType},
         matching::{AstFnMatch, AstMatch, MatchBody},
         memory::{AstDeref, AstMove, AstRef},
         spawn::{AstSelect, AstSpawn},
@@ -197,19 +198,19 @@ pub trait NodeVisitor {
                     body: Box::new(self.visit(*body)),
                 })
             }
-            AstNodeType::LoopDeclaration {
+            AstNodeType::LoopDeclaration(AstLoop {
                 loop_type,
                 body,
                 until,
                 label,
                 else_body,
-            } => AstNodeType::LoopDeclaration {
+            }) => AstNodeType::LoopDeclaration(AstLoop {
                 loop_type: Box::new(self.visit_loop_type(*loop_type)),
                 body: Box::new(self.visit(*body)),
                 until: until.map(|n| Box::new(self.visit(*n))),
                 label,
                 else_body: else_body.map(|n| Box::new(self.visit(*n))),
-            },
+            }),
             AstNodeType::MatchStatement(AstMatch { value, body }) => {
                 AstNodeType::MatchStatement(AstMatch {
                     value: value.map(|n| Box::new(self.visit(*n))),
@@ -410,21 +411,21 @@ pub trait NodeVisitor {
                 to: Box::new(self.visit(*to)),
                 inclusive,
             }),
-            AstNodeType::IterExpression {
+            AstNodeType::IterExpression(AstIter {
                 data_type,
                 map,
                 spawned,
                 loop_type,
                 conditionals,
                 until,
-            } => AstNodeType::IterExpression {
+            }) => AstNodeType::IterExpression(AstIter {
                 data_type,
                 map: Box::new(self.visit(*map)),
                 spawned,
                 loop_type: Box::new(self.visit_loop_type(*loop_type)),
                 conditionals: conditionals.into_iter().map(|n| self.visit(n)).collect(),
                 until: until.map(|n| Box::new(self.visit(*n))),
-            },
+            }),
             AstNodeType::InlineGenerator {
                 map,
                 data_type,
@@ -580,13 +581,13 @@ pub trait NodeAnalyzer {
             }
             AstNodeType::VariableDeclaration(AstDeclaration { value, .. }) => self.analyze(value),
             AstNodeType::FunctionDeclaration(AstFunction { body, .. }) => self.analyze(body),
-            AstNodeType::LoopDeclaration {
+            AstNodeType::LoopDeclaration(AstLoop {
                 loop_type,
                 body,
                 until,
                 else_body,
                 ..
-            } => {
+            }) => {
                 let loop_ok = match loop_type.as_ref() {
                     LoopType::For(_, value) => self.analyze(value),
                     LoopType::While(condition) => self.analyze(condition),

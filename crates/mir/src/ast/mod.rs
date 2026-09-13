@@ -6,7 +6,7 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialGenericTypeIdentifier},
         nodes::{
-            AstNode, AstNodeType, LoopType, VarType,
+            AstNode, AstNodeType, VarType,
             access::{AstField, AstIdentifier, AstIndex},
             assignment::AstAssignment,
             binary::{AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIs},
@@ -14,10 +14,11 @@ use calibre_parser::{
             declaration::AstDeclaration,
             flow::{AstBreak, AstContinue, AstEmit, AstReturn},
             functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
+            lists::AstList,
             literals::{
                 AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
             },
-            loops::AstList,
+            loops::{AstLoop, LoopType},
             memory::{AstDeref, AstDrop, AstMove, AstRef},
             spawn::AstSpawn,
             unary::AstNot,
@@ -718,13 +719,13 @@ impl From<MiddleNodeType> for AstNodeType {
 
                     lst.push(AstNode::new(
                         value.body.span,
-                        AstNodeType::LoopDeclaration {
+                        AstNodeType::LoopDeclaration(AstLoop {
                             loop_type: Box::new(LoopType::Loop),
                             body: Box::new((*value.body).into()),
                             until: None,
                             label: value.label.map(Into::into),
                             else_body: None,
-                        },
+                        }),
                     ));
 
                     Some(lst)

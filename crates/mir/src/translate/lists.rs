@@ -10,7 +10,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        nodes::loops::{AstList, AstListRepeat},
+        nodes::lists::{AstList, AstListRepeat},
         types::{ParserDataType, ParserInnerType},
     },
 };

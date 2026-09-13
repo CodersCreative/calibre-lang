@@ -12,12 +12,13 @@ use crate::{
             declaration::{AstDeclaration, AstDeclareDestructure},
             flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
             functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
+            lists::{AstList, AstListRepeat},
             literals::{
                 AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstRange, AstString,
                 AstStruct, AstTuple,
             },
-            loops::{AstList, AstListRepeat},
-            matching::{AstFnMatch, AstMatch, MatchArmType},
+            loops::{AstIter, AstLoop, LoopType},
+            matching::{AstFnMatch, AstMatch},
             memory::{AstDeref, AstDrop, AstMove, AstRef},
             spawn::{AstSelect, AstSpawn},
             types::{AstImpl, AstImplTrait, AstTrait, AstType},
@@ -25,6 +26,7 @@ use crate::{
         },
         types::ParserDataType,
     },
+    formatter::AstFormatting,
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, matches};
@@ -48,17 +50,6 @@ pub mod scopes;
 pub mod spawn;
 pub mod types;
 pub mod unary;
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum LoopType {
-    Let {
-        value: AstNode,
-        pattern: (Vec<MatchArmType>, Vec<AstNode>),
-    },
-    While(AstNode),
-    For(PotentialDollarIdentifier, AstNode),
-    Loop,
-}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum DestructurePattern {
@@ -488,21 +479,8 @@ pub enum AstNodeType {
     TypeDeclaration(AstType),
 
     // Loops
-    LoopDeclaration {
-        loop_type: Box<LoopType>,
-        body: Box<AstNode>,
-        until: Option<Box<AstNode>>,
-        label: Option<PotentialDollarIdentifier>,
-        else_body: Option<Box<AstNode>>,
-    },
-    IterExpression {
-        data_type: ParserDataType,
-        map: Box<AstNode>,
-        spawned: bool,
-        loop_type: Box<LoopType>,
-        conditionals: Vec<AstNode>,
-        until: Option<Box<AstNode>>,
-    },
+    LoopDeclaration(AstLoop),
+    IterExpression(AstIter),
 
     // Scopes
     ScopeAlias {
@@ -585,6 +563,6 @@ impl Display for AstNode {
 impl Display for LoopType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut formatter = Formatter::default();
-        write!(f, "{}", formatter.fmt_loop_type(self))
+        write!(f, "{}", self.format(&mut formatter))
     }
 }

@@ -12,7 +12,7 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
-            AstNode, AstNodeType, LoopType, VarType,
+            AstNode, AstNodeType, VarType,
             access::AstField,
             assignment::AstAssignment,
             binary::{AstBoolean, AstComparison},
@@ -20,6 +20,7 @@ use calibre_parser::{
             declaration::AstDeclaration,
             flow::{AstBreak, AstEmit},
             functions::{AstFunction, CallArg, FunctionHeader},
+            loops::{AstLoop, LoopType},
             memory::AstRef,
             spawn::{AstSelect, AstSpawn, SelectArmKind},
             unary::AstNot,
@@ -326,13 +327,13 @@ impl MirLowering for AstSelect {
 
         let select_loop = AstNode::new(
             span,
-            AstNodeType::LoopDeclaration {
+            AstNodeType::LoopDeclaration(AstLoop {
                 loop_type: Box::new(LoopType::Loop),
                 body: Box::new(loop_body),
                 until: None,
                 label: None,
                 else_body: None,
-            },
+            }),
         );
 
         AstNode::new(
@@ -414,13 +415,13 @@ impl MirLowering for AstSpawn {
                         body: Box::new(AstNode::new_temp_scope(vec![value])),
                     }),
                 ),
-                AstNodeType::LoopDeclaration {
+                AstNodeType::LoopDeclaration(AstLoop {
                     loop_type,
                     body,
                     until,
                     label,
                     else_body,
-                } => {
+                }) => {
                     let ident: PotentialDollarIdentifier =
                         ParserText::temp_name_with_suffix("spawn_wg", span)
                             .clone()
@@ -458,7 +459,7 @@ impl MirLowering for AstSpawn {
 
                     let loop_node = AstNode::new(
                         span,
-                        AstNodeType::LoopDeclaration {
+                        AstNodeType::LoopDeclaration(AstLoop {
                             loop_type,
                             body: Box::new(AstNode::new_temp_scope_with_create(
                                 vec![join_call],
@@ -467,8 +468,9 @@ impl MirLowering for AstSpawn {
                             until,
                             label,
                             else_body,
-                        },
+                        }),
                     );
+
                     return AstNode::new_temp_scope(vec![
                         decl,
                         loop_node,

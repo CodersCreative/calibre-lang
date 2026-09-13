@@ -4,13 +4,17 @@ use crate::{
     errors::MiddleErr,
     scoping::{ScopeId, ScopeMacro},
     symbols::resolve::ResolutionOptions,
+    translate::MirLowering,
 };
 use calibre_parser::{
     Span,
     ast::{
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
-            AstNode, AstNodeType, LoopType, NamedScope, declaration::AstDeclaration, flow::AstBreak,
+            AstNode, AstNodeType, NamedScope,
+            declaration::AstDeclaration,
+            flow::AstBreak,
+            loops::{AstLoop, LoopType},
         },
     },
 };
@@ -153,6 +157,7 @@ impl MiddleEnvironment {
                 let mut body_nodes = body.unwrap_or_default();
                 let last = body_nodes.pop();
                 let break_value = last.map(Box::new);
+
                 body_nodes.push(AstNode::new(
                     span,
                     AstNodeType::Break(AstBreak {
@@ -161,17 +166,17 @@ impl MiddleEnvironment {
                     }),
                 ));
 
-                let loop_body =
-                    AstNode::new_temp_scope_with_create(body_nodes, Some(create_new_scope));
-
-                return self.evaluate_loop_statement(
-                    scope,
-                    LoopType::Loop,
-                    loop_body,
-                    None,
-                    Some(named.name),
-                    Some(Box::new(AstNode::new(span, AstNodeType::Null))),
-                );
+                return AstLoop {
+                    loop_type: Box::new(LoopType::Loop),
+                    body: Box::new(AstNode::new_temp_scope_with_create(
+                        body_nodes,
+                        Some(create_new_scope),
+                    )),
+                    until: None,
+                    label: Some(named.name),
+                    else_body: Some(Box::new(AstNode::new(span, AstNodeType::Null))),
+                }
+                .lower(self, scope, span);
             }
             let mut added = Vec::new();
 

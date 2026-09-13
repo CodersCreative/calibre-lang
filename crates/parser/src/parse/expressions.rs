@@ -11,13 +11,14 @@ use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstPipe, AstTry, PipeSegment, TryCatch,
 };
 use crate::ast::nodes::functions::{AstCall, CallArg};
+use crate::ast::nodes::lists::{AstList, AstListRepeat};
 use crate::ast::nodes::literals::{AstEnum, AstRange, AstString};
-use crate::ast::nodes::loops::{AstList, AstListRepeat};
+use crate::ast::nodes::loops::{AstIter, AstLoop, LoopType};
 use crate::ast::nodes::matching::MatchArmType;
 use crate::ast::nodes::memory::{AstDeref, AstMove, AstRef};
 use crate::ast::nodes::spawn::AstSpawn;
 use crate::ast::nodes::unary::{AstNeg, AstNot};
-use crate::ast::nodes::{AstNode, AstNodeType, LoopType};
+use crate::ast::nodes::{AstNode, AstNodeType};
 use crate::ast::types::{ParserDataType, ParserInnerType};
 use crate::parse::util::{
     ensure_scope_node, lex, parse_embedded_expr, parse_splits, span, span_from_nodes_or,
@@ -478,14 +479,14 @@ pub fn build_tail_expression_parser<'a>(
             let until = parts.1;
             AstNode::new(
                 map.span,
-                AstNodeType::IterExpression {
+                AstNodeType::IterExpression(AstIter {
                     data_type: open_ty,
                     map: Box::new(map),
                     spawned,
                     loop_type: Box::new(loop_type),
                     conditionals,
                     until: until.map(Box::new),
-                },
+                }),
             )
         })
         .boxed();
@@ -1091,13 +1092,13 @@ pub fn build_tail_expression_parser<'a>(
                 let body = ensure_scope_node(body, true, false);
                 AstNode::new(
                     body.span,
-                    AstNodeType::LoopDeclaration {
+                    AstNodeType::LoopDeclaration(AstLoop {
                         loop_type: Box::new(lt),
                         body: Box::new(body),
                         until: None,
                         label: None,
                         else_body: None,
-                    },
+                    }),
                 )
             }),
         expr.clone(),
@@ -1177,13 +1178,13 @@ pub fn build_tail_expression_parser<'a>(
             let else_body = else_body.map(|body| Box::new(ensure_scope_node(body, true, false)));
             AstNode::new(
                 body.span,
-                AstNodeType::LoopDeclaration {
+                AstNodeType::LoopDeclaration(AstLoop {
                     loop_type: Box::new(loop_type),
                     body: Box::new(body),
                     until: until.map(Box::new),
                     label,
                     else_body,
-                },
+                }),
             )
         })
         .then_ignore(lex(pad.clone(), just(';')).or_not())

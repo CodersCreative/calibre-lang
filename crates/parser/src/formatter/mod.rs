@@ -12,6 +12,7 @@ pub mod flow;
 pub mod functions;
 pub mod lists;
 pub mod literals;
+pub mod loops;
 pub mod matching;
 pub mod memory;
 pub mod spawn;

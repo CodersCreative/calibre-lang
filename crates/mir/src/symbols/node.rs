@@ -131,6 +131,10 @@ impl MiddleEnvironment {
             AstNodeType::Spawn(x) => x.type_of(self, scope, node.span),
             AstNodeType::SelectStatement(x) => x.type_of(self, scope, node.span),
 
+            // Loops
+            AstNodeType::LoopDeclaration(x) => x.type_of(self, scope, node.span),
+            AstNodeType::IterExpression(x) => x.type_of(self, scope, node.span),
+
             // TODO
             AstNodeType::Break { .. }
             | AstNodeType::Continue { .. }
@@ -144,9 +148,6 @@ impl MiddleEnvironment {
             | AstNodeType::AssignmentExpression { .. }
             | AstNodeType::DestructureDeclaration { .. }
             | AstNodeType::DestructureAssignment { .. }
-            | AstNodeType::LoopDeclaration {
-                else_body: None, ..
-            }
             | AstNodeType::TestDeclaration { .. }
             | AstNodeType::ScopeDeclaration { define: true, .. }
             | AstNodeType::ScopeAlias { .. }
@@ -202,33 +203,6 @@ impl MiddleEnvironment {
                     .last()?
                     .clone();
                 self.resolve_type_from_node(scope, &resolved)
-            }
-
-            AstNodeType::LoopDeclaration {
-                else_body: Some(body),
-                ..
-            } => self.resolve_type_from_node(scope, body),
-            AstNodeType::IterExpression {
-                data_type, spawned, ..
-            } => {
-                let list_type = ParserDataType {
-                    data_type: ParserInnerType::List(Box::new(
-                        self.resolve_data_type(scope, data_type, ResolutionOptions::typing())
-                            .ok()?,
-                    )),
-                    span: node.span,
-                };
-                if *spawned {
-                    Some(ParserDataType {
-                        data_type: ParserInnerType::StructWithGenerics {
-                            identifier: String::from("Mutex"),
-                            generic_types: vec![list_type],
-                        },
-                        span: node.span,
-                    })
-                } else {
-                    Some(list_type)
-                }
             }
             AstNodeType::ScopeDeclaration { .. } => unreachable!(),
             AstNodeType::Tag { .. } => {

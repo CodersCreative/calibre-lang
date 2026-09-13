@@ -304,18 +304,15 @@ impl MiddleEnvironment {
             AstNodeType::ImplDeclaration(x) => x.lower(self, scope, node.span),
             AstNodeType::ImplTraitDeclaration(x) => x.lower(self, scope, node.span),
 
+            // Lists
+            AstNodeType::IterExpression(x) => x.lower(self, scope, node.span),
+            AstNodeType::LoopDeclaration(x) => x.lower(self, scope, node.span),
+
             AstNodeType::EmptyLine => Ok(MiddleNode {
                 node_type: MiddleNodeType::EmptyLine,
                 span: node.span,
             }),
             AstNodeType::ParenExpression { value } => self.evaluate_inner(scope, *value),
-            AstNodeType::LoopDeclaration {
-                loop_type,
-                body,
-                until,
-                label,
-                else_body,
-            } => self.evaluate_loop_statement(scope, *loop_type, *body, until, label, else_body),
             AstNodeType::TestDeclaration { identifier, body } => {
                 let func_identifier = format!(
                     "test::{}",
@@ -361,22 +358,6 @@ impl MiddleEnvironment {
                     ),
                 )
             }
-            AstNodeType::IterExpression {
-                data_type,
-                map,
-                spawned,
-                loop_type,
-                conditionals,
-                until,
-            } => self.evaluate_iter_expression(
-                scope,
-                data_type,
-                map,
-                spawned,
-                loop_type,
-                conditionals,
-                until,
-            ),
             AstNodeType::InlineGenerator {
                 map,
                 data_type,
