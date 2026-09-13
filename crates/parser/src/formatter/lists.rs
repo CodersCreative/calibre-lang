@@ -38,6 +38,11 @@ impl AstFormatting for AstList {
         format!("{}{}]", prefix, items.join(", "))
     }
 
+    #[inline(always)]
+    fn wide_override(&self, formatter: &Formatter) -> bool {
+        self.values.len() > formatter.max_values
+    }
+
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
         let prefix = if !self.data_type.is_auto() {
             format!("list:<{}>[", self.data_type)

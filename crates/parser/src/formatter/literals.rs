@@ -168,6 +168,11 @@ impl AstFormatting for AstTuple {
             .join(", ")
     }
 
+    #[inline(always)]
+    fn wide_override(&self, formatter: &Formatter) -> bool {
+        self.values.len() > formatter.max_values
+    }
+
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
         let txt = self
             .values

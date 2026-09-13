@@ -127,6 +127,11 @@ impl AstFormatting for AstPipe {
         single
     }
 
+    #[inline(always)]
+    fn wide_override(&self, formatter: &Formatter) -> bool {
+        self.values.len() > formatter.max_values
+    }
+
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
         let mut lines = vec![self.values[0].get_node().format(formatter)];
 

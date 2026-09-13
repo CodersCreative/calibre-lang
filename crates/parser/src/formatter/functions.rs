@@ -343,6 +343,11 @@ impl AstFormatting for AstCall {
         txt
     }
 
+    #[inline(always)]
+    fn wide_override(&self, formatter: &Formatter) -> bool {
+        self.args.len() > formatter.max_values
+    }
+
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
         let mut txt = self.caller.format(formatter);
 
