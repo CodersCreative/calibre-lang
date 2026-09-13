@@ -1,9 +1,6 @@
 use crate::{
-    ast::{
-        formatter::Formatter,
-        nodes::scopes::{AstScopeAlias, AstScopeDef},
-    },
-    formatter::AstFormatting,
+    ast::nodes::scopes::{AstScopeAlias, AstScopeDef},
+    formatter::{AstFormatting, Formatter},
 };
 
 impl AstFormatting for AstScopeDef {

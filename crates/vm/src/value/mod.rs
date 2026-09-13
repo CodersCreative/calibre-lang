@@ -9,11 +9,9 @@ use crate::{
 };
 use astro_float::{BigFloat, RoundingMode};
 use calibre_lir::ast::BlockId;
-use calibre_parser::ast::{
-    ObjectMap,
-    ffi::ParserFfiInnerType,
-    types::{ParserDataType, ParserInnerType},
-};
+#[cfg(feature = "native")]
+use calibre_parser::ast::types::ParserDataType;
+use calibre_parser::ast::{ObjectMap, types::ParserInnerType};
 use dumpster::sync::Gc;
 use dumpster::{TraceWith, Visitor};
 

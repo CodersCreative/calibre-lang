@@ -9,11 +9,13 @@ use calibre_parser::ast::{
         declaration::{AstDeclaration, AstDeclareDestructure},
         flow::{AstBreak, AstContinue, AstDefer, AstPipe, AstReturn, AstTry, PipeSegment},
         functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
+        generator::AstGenerator,
         lists::{AstList, AstListRepeat},
         literals::{AstDataType, AstEnum, AstRange, AstStruct, AstTuple},
         loops::{AstIter, AstLoop, LoopType},
         matching::{AstFnMatch, AstMatch, MatchBody},
         memory::{AstDeref, AstMove, AstRef},
+        misc::{AstImport, AstParen, AstTag, AstTest},
         scopes::{AstScopeAlias, AstScopeDef},
         spawn::{AstSelect, AstSpawn},
         types::{AstImpl, AstImplTrait, AstTrait, AstType},
@@ -114,9 +116,11 @@ pub trait NodeVisitor {
                 create_new_scope,
                 define,
             }),
-            AstNodeType::ParenExpression { value } => AstNodeType::ParenExpression {
-                value: Box::new(self.visit(*value)),
-            },
+            AstNodeType::ParenExpression(AstParen { value }) => {
+                AstNodeType::ParenExpression(AstParen {
+                    value: Box::new(self.visit(*value)),
+                })
+            }
             AstNodeType::NotExpression(AstNot { value }) => AstNodeType::NotExpression(AstNot {
                 value: Box::new(self.visit(*value)),
             }),
@@ -427,23 +431,25 @@ pub trait NodeVisitor {
                 conditionals: conditionals.into_iter().map(|n| self.visit(n)).collect(),
                 until: until.map(|n| Box::new(self.visit(*n))),
             }),
-            AstNodeType::InlineGenerator {
+            AstNodeType::InlineGenerator(AstGenerator {
                 map,
                 data_type,
                 loop_type,
                 conditionals,
                 until,
-            } => AstNodeType::InlineGenerator {
+            }) => AstNodeType::InlineGenerator(AstGenerator {
                 map: Box::new(self.visit(*map)),
                 data_type,
                 loop_type: Box::new(self.visit_loop_type(*loop_type)),
                 conditionals: conditionals.into_iter().map(|n| self.visit(n)).collect(),
                 until: until.map(|n| Box::new(self.visit(*n))),
-            },
-            AstNodeType::TestDeclaration { identifier, body } => AstNodeType::TestDeclaration {
-                identifier,
-                body: Box::new(self.visit(*body)),
-            },
+            }),
+            AstNodeType::TestDeclaration(AstTest { identifier, body }) => {
+                AstNodeType::TestDeclaration(AstTest {
+                    identifier,
+                    body: Box::new(self.visit(*body)),
+                })
+            }
             AstNodeType::Try(AstTry { value, catch }) => AstNodeType::Try(AstTry {
                 value: Box::new(self.visit(*value)),
                 catch,
@@ -471,24 +477,24 @@ pub trait NodeVisitor {
                         .collect(),
                 })
             }
-            AstNodeType::ImportStatement {
+            AstNodeType::ImportStatement(AstImport {
                 module,
                 alias,
                 values,
-            } => AstNodeType::ImportStatement {
+            }) => AstNodeType::ImportStatement(AstImport {
                 module,
                 alias,
                 values,
-            },
-            AstNodeType::Tag {
+            }),
+            AstNodeType::Tag(AstTag {
                 node,
                 tag,
                 arguments,
-            } => AstNodeType::Tag {
+            }) => AstNodeType::Tag(AstTag {
                 node: Box::new(self.visit(*node)),
                 tag,
                 arguments: arguments.into_iter().map(|n| self.visit(n)).collect(),
-            },
+            }),
         }
     }
 
@@ -558,7 +564,7 @@ pub trait NodeAnalyzer {
             AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) => body
                 .as_ref()
                 .is_none_or(|items| items.iter().all(|n| self.analyze(n))),
-            AstNodeType::ParenExpression { value }
+            AstNodeType::ParenExpression(AstParen { value })
             | AstNodeType::NotExpression(AstNot { value })
             | AstNodeType::NegExpression(AstNeg { value })
             | AstNodeType::CurryExpression(AstCurry { value })

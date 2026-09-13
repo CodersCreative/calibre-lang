@@ -1,12 +1,9 @@
 use crate::{
-    ast::{
-        formatter::Formatter,
-        nodes::{
-            AstNode,
-            matching::{AstFnMatch, AstMatch, MatchArmType, MatchBody},
-        },
+    ast::nodes::{
+        AstNode,
+        matching::{AstFnMatch, AstMatch, MatchArmType, MatchBody},
     },
-    formatter::AstFormatting,
+    formatter::{AstFormatting, Formatter},
 };
 
 impl AstFormatting for AstMatch {
@@ -211,7 +208,7 @@ impl FnMatchPreFormat {
                 txt.push_str(&format!(" {}", dt));
             }
             if let Some(default) = &param.2 {
-                txt.push_str(&format!(" = {}", formatter.format(default)));
+                txt.push_str(&format!(" = {}", default.format(formatter)));
             }
             txt
         } else {

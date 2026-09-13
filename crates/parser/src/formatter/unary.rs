@@ -1,9 +1,6 @@
 use crate::{
-    ast::{
-        formatter::Formatter,
-        nodes::unary::{AstNeg, AstNot},
-    },
-    formatter::AstFormatting,
+    ast::nodes::unary::{AstNeg, AstNot},
+    formatter::{AstFormatting, Formatter},
 };
 
 impl AstFormatting for AstNeg {

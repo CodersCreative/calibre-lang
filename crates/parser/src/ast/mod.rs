@@ -14,7 +14,6 @@ use std::{
 pub mod binary;
 pub mod comparison;
 pub mod ffi;
-pub mod formatter;
 pub mod idents;
 pub mod nodes;
 pub mod types;

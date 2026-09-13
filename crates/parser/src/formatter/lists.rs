@@ -1,9 +1,6 @@
 use crate::{
-    ast::{
-        formatter::{Formatter, handle_comment},
-        nodes::lists::{AstList, AstListRepeat},
-    },
-    formatter::AstFormatting,
+    ast::nodes::lists::{AstList, AstListRepeat},
+    formatter::{AstFormatting, Formatter, handle_comment},
 };
 
 impl AstFormatting for AstList {

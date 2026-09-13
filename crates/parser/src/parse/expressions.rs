@@ -11,6 +11,7 @@ use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstPipe, AstTry, PipeSegment, TryCatch,
 };
 use crate::ast::nodes::functions::{AstCall, CallArg};
+use crate::ast::nodes::generator::AstGenerator;
 use crate::ast::nodes::lists::{AstList, AstListRepeat};
 use crate::ast::nodes::literals::{AstEnum, AstRange, AstString};
 use crate::ast::nodes::loops::{AstIter, AstLoop, LoopType};
@@ -916,13 +917,13 @@ pub fn build_tail_expression_parser<'a>(
             move |(map_expr, loop_type, conditionals, until, data_type), r| {
                 AstNode::new(
                     span(ls.as_ref(), r),
-                    AstNodeType::InlineGenerator {
+                    AstNodeType::InlineGenerator(AstGenerator {
                         map: Box::new(map_expr),
                         data_type,
                         loop_type: Box::new(loop_type),
                         conditionals,
                         until: until.map(Box::new),
-                    },
+                    }),
                 )
             }
         })

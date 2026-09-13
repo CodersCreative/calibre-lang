@@ -1,13 +1,10 @@
 use crate::{
-    ast::{
-        formatter::Formatter,
-        nodes::{
-            AstNodeType,
-            assignment::{AstAssignDestructure, AstAssignment},
-            binary::{AstBinary, AstBoolean},
-        },
+    ast::nodes::{
+        AstNodeType,
+        assignment::{AstAssignDestructure, AstAssignment},
+        binary::{AstBinary, AstBoolean},
     },
-    formatter::AstFormatting,
+    formatter::{AstFormatting, Formatter},
 };
 
 impl AstFormatting for AstAssignment {

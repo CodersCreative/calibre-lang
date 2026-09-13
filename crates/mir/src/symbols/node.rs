@@ -138,6 +138,13 @@ impl MiddleEnvironment {
             // Scopes
             AstNodeType::ScopeDeclaration(x) => x.type_of(self, scope, node.span),
 
+            // Generator
+            AstNodeType::InlineGenerator(x) => x.type_of(self, scope, node.span),
+
+            // Misc
+            AstNodeType::ParenExpression(x) => x.type_of(self, scope, node.span),
+            AstNodeType::Tag(x) => x.type_of(self, scope, node.span),
+
             // TODO
             AstNodeType::Break { .. }
             | AstNodeType::Continue { .. }
@@ -154,29 +161,10 @@ impl MiddleEnvironment {
             | AstNodeType::TestDeclaration { .. }
             | AstNodeType::ScopeAlias { .. }
             | AstNodeType::DataType { .. } => None,
-            AstNodeType::InlineGenerator { map, data_type, .. } => {
-                let elem = match data_type {
-                    Some(dt) => dt.clone(),
-                    _ => self
-                        .resolve_type_from_node(scope, map)
-                        .unwrap_or(ParserDataType::new(node.span, ParserInnerType::Auto(None))),
-                };
-
-                Some(ParserDataType::new(
-                    node.span,
-                    ParserInnerType::Gen(Box::new(elem)),
-                ))
-            }
             AstNodeType::Null
             | AstNodeType::Defer { .. }
             | AstNodeType::Drop(_)
             | AstNodeType::EmptyLine => Some(ParserDataType::new(node.span, ParserInnerType::Null)),
-            AstNodeType::ParenExpression { value } => self
-                .resolve_type_from_node(scope, value)
-                .map(|x| x.unwrap_all_refs()),
-            AstNodeType::Tag { .. } => {
-                Some(ParserDataType::new(node.span, ParserInnerType::Auto(None)))
-            }
         };
 
         typ.and_then(|typ| {

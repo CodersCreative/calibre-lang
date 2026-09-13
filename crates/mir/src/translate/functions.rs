@@ -15,19 +15,18 @@ use calibre_parser::{
     Span,
     ast::{
         ObjectType,
-        comparison::{BooleanOperator, ComparisonOperator},
+        comparison::ComparisonOperator,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, VarType,
             access::AstField,
-            binary::{AstBoolean, AstComparison},
-            conditionals::{AstIf, AstTernary, IfComparisonType},
+            binary::AstComparison,
+            conditionals::AstTernary,
             declaration::AstDeclaration,
-            flow::{AstContinue, AstReturn},
+            flow::AstReturn,
             functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
             lists::AstList,
             literals::{AstString, AstStruct},
-            loops::{AstLoop, LoopType},
             scopes::AstScopeDef,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
@@ -381,67 +380,6 @@ impl MiddleEnvironment {
         );
 
         AstNode::new_temp_scope_with_create(vec![next_decl, gen_value], Some(false))
-    }
-
-    pub(crate) fn wrap_inline_generator(
-        span: Span,
-        map: AstNode,
-        loop_type: LoopType,
-        conditionals: Vec<AstNode>,
-        until: Option<Box<AstNode>>,
-        elem_type: ParserDataType,
-    ) -> AstNode {
-        let guard = conditionals.into_iter().reduce(|left, right| {
-            AstNode::new(
-                span,
-                AstNodeType::BooleanExpression(AstBoolean {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                    operator: BooleanOperator::And,
-                }),
-            )
-        });
-
-        let mut loop_body_items = Vec::new();
-        let yield_node = AstNode::new(
-            span,
-            AstNodeType::Return(AstReturn {
-                value: Some(Box::new(map)),
-            }),
-        );
-
-        if let Some(guard) = guard {
-            loop_body_items.push(AstNode::new(
-                span,
-                AstNodeType::IfStatement(AstIf {
-                    comparison: Box::new(IfComparisonType::If(guard)),
-                    then: Box::new(yield_node),
-                    otherwise: Some(Box::new(AstNode::new(
-                        span,
-                        AstNodeType::Continue(AstContinue { label: None }),
-                    ))),
-                }),
-            ));
-        } else {
-            loop_body_items.push(yield_node);
-        }
-
-        let loop_node = AstNode::new(
-            span,
-            AstNodeType::LoopDeclaration(AstLoop {
-                loop_type: Box::new(loop_type),
-                body: Box::new(AstNode::new_temp_scope(loop_body_items)),
-                until,
-                label: None,
-                else_body: None,
-            }),
-        );
-
-        Self::wrap_generator_body(
-            AstNode::new_temp_scope_with_create(vec![loop_node], Some(false)),
-            elem_type,
-            span,
-        )
     }
 
     pub fn get_caller_context(&self, scope: ScopeId, span: Span) -> Option<AstNode> {

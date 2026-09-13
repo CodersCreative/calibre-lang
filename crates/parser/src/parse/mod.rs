@@ -10,6 +10,7 @@ use crate::{
             functions::{AstCurry, CallArg},
             lists::{AstList, AstListRepeat},
             literals::{AstStruct, AstTuple},
+            misc::AstParen,
             scopes::AstScopeDef,
         },
         types::{ParserDataType, ParserInnerType},
@@ -514,11 +515,12 @@ pub fn parse_program_with_source(
                             } else {
                                 AstNode::new(sp, AstNodeType::TupleLiteral(AstTuple { values }))
                             };
+
                             AstNode::new(
                                 sp,
-                                AstNodeType::ParenExpression {
+                                AstNodeType::ParenExpression(AstParen {
                                     value: Box::new(inner),
-                                },
+                                }),
                             )
                         }
                     }),

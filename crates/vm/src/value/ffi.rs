@@ -1,3 +1,5 @@
+use calibre_parser::ast::ffi::ParserFfiInnerType;
+
 use super::*;
 
 impl ExternFunction {

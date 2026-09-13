@@ -1,13 +1,10 @@
 use crate::{
-    ast::{
-        formatter::Formatter,
-        nodes::{
-            VarType,
-            loops::{AstIter, AstLoop, LoopType},
-            matching::MatchArmType,
-        },
+    ast::nodes::{
+        VarType,
+        loops::{AstIter, AstLoop, LoopType},
+        matching::MatchArmType,
     },
-    formatter::AstFormatting,
+    formatter::{AstFormatting, Formatter},
 };
 
 impl AstFormatting for LoopType {

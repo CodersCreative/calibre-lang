@@ -1,9 +1,6 @@
 use crate::{
-    ast::{
-        formatter::Formatter,
-        nodes::memory::{AstDeref, AstDrop, AstMove, AstRef},
-    },
-    formatter::AstFormatting,
+    ast::nodes::memory::{AstDeref, AstDrop, AstMove, AstRef},
+    formatter::{AstFormatting, Formatter},
 };
 
 impl AstFormatting for AstRef {

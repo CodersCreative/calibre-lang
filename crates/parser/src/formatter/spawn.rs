@@ -1,12 +1,9 @@
 use crate::{
-    ast::{
-        formatter::Formatter,
-        nodes::{
-            AstNode,
-            spawn::{AstSelect, AstSpawn, SelectArm, SelectArmKind},
-        },
+    ast::nodes::{
+        AstNode,
+        spawn::{AstSelect, AstSpawn, SelectArm, SelectArmKind},
     },
-    formatter::AstFormatting,
+    formatter::{AstFormatting, Formatter},
 };
 
 impl AstFormatting for AstSpawn {

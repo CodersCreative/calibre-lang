@@ -1,9 +1,8 @@
 use crate::{
-    ast::{
-        formatter::Formatter,
-        nodes::binary::{AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
+    ast::nodes::binary::{
+        AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
     },
-    formatter::AstFormatting,
+    formatter::{AstFormatting, Formatter},
 };
 
 impl AstFormatting for AstBinary {

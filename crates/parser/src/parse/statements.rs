@@ -8,6 +8,7 @@ use crate::ast::nodes::declaration::{AstDeclaration, AstDeclareDestructure};
 use crate::ast::nodes::flow::AstReturn;
 use crate::ast::nodes::functions::{AstExtern, AstFunction};
 use crate::ast::nodes::literals::{AstDataType, AstEnum, AstTuple};
+use crate::ast::nodes::misc::{AstImport, AstTag, AstTest};
 use crate::ast::nodes::scopes::{AstScopeAlias, AstScopeDef};
 use crate::ast::nodes::spawn::{AstSelect, AstSpawn, SelectArm, SelectArmKind};
 use crate::ast::nodes::types::{AstImpl, AstImplTrait, AstTrait, AstType, Overload, TypeDefType};
@@ -145,11 +146,11 @@ pub fn build_statement_parser<'a>(
             move |(values, module, alias), r| {
                 AstNode::new(
                     span(ls.as_ref(), r),
-                    AstNodeType::ImportStatement {
+                    AstNodeType::ImportStatement(AstImport {
                         module,
                         alias,
                         values,
-                    },
+                    }),
                 )
             }
         });
@@ -713,11 +714,11 @@ pub fn build_statement_parser<'a>(
             move |((tag, args, _), node), r| {
                 AstNode::new(
                     span(ls.as_ref(), r),
-                    AstNodeType::Tag {
+                    AstNodeType::Tag(AstTag {
                         node: Box::new(node),
                         tag,
                         arguments: args,
-                    },
+                    }),
                 )
             }
         })
@@ -769,11 +770,11 @@ pub fn build_statement_parser<'a>(
                     .map(|stmt| {
                         AstNode::new(
                             Span::new_from_spans(tag_span, stmt.span),
-                            AstNodeType::Tag {
+                            AstNodeType::Tag(AstTag {
                                 node: Box::new(stmt),
                                 tag: tag.clone(),
                                 arguments: args.clone(),
-                            },
+                            }),
                         )
                     })
                     .collect::<Vec<_>>();
@@ -980,10 +981,10 @@ pub fn build_statement_parser<'a>(
                 let sp = span(ls.as_ref(), sp);
                 AstNode::new(
                     sp,
-                    AstNodeType::TestDeclaration {
+                    AstNodeType::TestDeclaration(AstTest {
                         identifier: ParserText::new(sp, name),
                         body: Box::new(body),
-                    },
+                    }),
                 )
             }
         })

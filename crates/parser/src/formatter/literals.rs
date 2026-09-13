@@ -1,7 +1,6 @@
 use crate::{
     ast::{
         ObjectType,
-        formatter::{Formatter, handle_comment},
         nodes::{
             AstNodeType,
             literals::{
@@ -10,7 +9,7 @@ use crate::{
             },
         },
     },
-    formatter::AstFormatting,
+    formatter::{AstFormatting, Formatter, handle_comment},
 };
 
 impl AstFormatting for AstStruct {

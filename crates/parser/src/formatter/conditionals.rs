@@ -1,13 +1,10 @@
 use crate::{
-    ast::{
-        formatter::Formatter,
-        nodes::{
-            VarType,
-            conditionals::{AstIf, AstTernary, IfComparisonType},
-            matching::MatchArmType,
-        },
+    ast::nodes::{
+        VarType,
+        conditionals::{AstIf, AstTernary, IfComparisonType},
+        matching::MatchArmType,
     },
-    formatter::AstFormatting,
+    formatter::{AstFormatting, Formatter},
 };
 
 impl AstFormatting for AstIf {

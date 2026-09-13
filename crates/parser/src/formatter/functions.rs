@@ -1,6 +1,5 @@
 use crate::{
     ast::{
-        formatter::Formatter,
         idents::PotentialDollarIdentifier,
         nodes::{
             AstNode, DestructurePattern,
@@ -8,7 +7,7 @@ use crate::{
         },
         types::ParserDataType,
     },
-    formatter::AstFormatting,
+    formatter::{AstFormatting, Formatter},
 };
 use rustc_hash::FxHashMap;
 

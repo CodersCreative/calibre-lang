@@ -1,9 +1,6 @@
 use crate::{
-    ast::{
-        formatter::Formatter,
-        nodes::declaration::{AstDeclaration, AstDeclareDestructure},
-    },
-    formatter::AstFormatting,
+    ast::nodes::declaration::{AstDeclaration, AstDeclareDestructure},
+    formatter::{AstFormatting, Formatter},
 };
 
 impl AstFormatting for AstDeclaration {

@@ -2,7 +2,6 @@ use crate::{
     IdentifiersUsed, Span,
     ast::{
         binary::BinaryOperator,
-        formatter::Formatter,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             access::{AstField, AstIdentifier, AstIndex, AstScope},
@@ -12,6 +11,7 @@ use crate::{
             declaration::{AstDeclaration, AstDeclareDestructure},
             flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
             functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
+            generator::AstGenerator,
             lists::{AstList, AstListRepeat},
             literals::{
                 AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstRange, AstString,
@@ -20,6 +20,7 @@ use crate::{
             loops::{AstIter, AstLoop, LoopType},
             matching::{AstFnMatch, AstMatch},
             memory::{AstDeref, AstDrop, AstMove, AstRef},
+            misc::{AstImport, AstParen, AstTag, AstTest},
             scopes::{AstScopeAlias, AstScopeDef},
             spawn::{AstSelect, AstSpawn},
             types::{AstImpl, AstImplTrait, AstTrait, AstType},
@@ -27,7 +28,7 @@ use crate::{
         },
         types::ParserDataType,
     },
-    formatter::AstFormatting,
+    formatter::{AstFormatting, Formatter},
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, matches};
@@ -472,32 +473,13 @@ pub enum AstNodeType {
     ScopeDeclaration(AstScopeDef),
 
     // Generator
-    InlineGenerator {
-        map: Box<AstNode>,
-        data_type: Option<ParserDataType>,
-        loop_type: Box<LoopType>,
-        conditionals: Vec<AstNode>,
-        until: Option<Box<AstNode>>,
-    },
+    InlineGenerator(AstGenerator),
 
     // Misc
-    ParenExpression {
-        value: Box<AstNode>,
-    },
-    TestDeclaration {
-        identifier: ParserText,
-        body: Box<AstNode>,
-    },
-    ImportStatement {
-        module: Vec<PotentialDollarIdentifier>,
-        alias: Option<PotentialDollarIdentifier>,
-        values: Vec<PotentialDollarIdentifier>,
-    },
-    Tag {
-        node: Box<AstNode>,
-        tag: ParserText,
-        arguments: Vec<AstNode>,
-    },
+    ParenExpression(AstParen),
+    TestDeclaration(AstTest),
+    ImportStatement(AstImport),
+    Tag(AstTag),
 }
 
 impl AstNodeType {
@@ -524,14 +506,14 @@ impl Display for AstNodeType {
             node_type: self.clone(),
             span: Span::default(),
         };
-        write!(f, "{}", formatter.format(&fake_node))
+        write!(f, "{}", fake_node.format(&mut formatter))
     }
 }
 
 impl Display for AstNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut formatter = Formatter::default();
-        write!(f, "{}", formatter.format(self))
+        write!(f, "{}", self.format(&mut formatter))
     }
 }
 

@@ -6,7 +6,7 @@ use calibre_parser::ast::{
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::{
         AstNode, AstNodeType, VarType, declaration::AstDeclaration, functions::AstExtern,
-        types::AstType,
+        misc::AstTag, types::AstType,
     },
     types::ParserDataType,
 };
@@ -21,7 +21,9 @@ impl MiddleEnvironment {
 
     fn predeclare_node(&mut self, scope: ScopeId, node: &mut AstNode) -> Result<(), MiddleErr> {
         match &mut node.node_type {
-            AstNodeType::Tag { node: inner, .. } => self.predeclare_node(scope, inner.as_mut()),
+            AstNodeType::Tag(AstTag { node: inner, .. }) => {
+                self.predeclare_node(scope, inner.as_mut())
+            }
             AstNodeType::TypeDeclaration(AstType {
                 identifier:
                     PotentialGenericTypeIdentifier::Identifier(PotentialDollarIdentifier::Identifier(_)),

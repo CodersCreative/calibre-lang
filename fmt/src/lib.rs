@@ -1,7 +1,8 @@
 use calibre_frontend::config::ProjectContext;
 use calibre_parser::{
     Parser, ParserError,
-    ast::{formatter::Formatter, nodes::AstNodeType},
+    ast::nodes::{AstNodeType, misc::AstImport},
+    formatter::Formatter,
 };
 use std::{
     error::Error,
@@ -153,11 +154,11 @@ pub fn format_all(formatter: &mut Formatter, path: impl AsRef<Path>) -> Result<(
     };
 
     for import in imports {
-        let AstNodeType::ImportStatement {
+        let AstNodeType::ImportStatement(AstImport {
             module,
             alias: _,
             values: _,
-        } = import.node_type
+        }) = import.node_type
         else {
             continue;
         };

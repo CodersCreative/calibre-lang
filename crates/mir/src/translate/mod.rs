@@ -3,19 +3,13 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::resolve::ResolutionOptions,
     tags::TagInfo,
 };
 use calibre_parser::{
     Span,
     ast::{
-        idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{
-            AstNode, AstNodeType, VarType,
-            declaration::AstDeclaration,
-            functions::{AstFunction, FunctionHeader},
-        },
-        types::{GenericTypes, ParserDataType},
+        nodes::{AstNode, AstNodeType},
+        types::ParserDataType,
     },
 };
 use tracing::{debug, instrument, trace};
@@ -29,12 +23,14 @@ pub mod curry;
 pub mod declarations;
 pub mod flow;
 pub mod functions;
+pub mod generator;
 pub mod iter;
 pub mod lists;
 pub mod literals;
 pub mod loops;
 pub mod matching;
 pub mod memory;
+pub mod misc;
 pub mod scopes;
 pub mod spawn;
 pub mod types;
@@ -316,182 +312,14 @@ impl MiddleEnvironment {
             AstNodeType::ScopeAlias(x) => x.lower(self, scope, node.span),
             AstNodeType::ScopeDeclaration(x) => x.lower(self, scope, node.span),
 
-            AstNodeType::ParenExpression { value } => self.evaluate_inner(scope, *value),
-            AstNodeType::TestDeclaration { identifier, body } => {
-                let func_identifier = format!(
-                    "test::{}",
-                    ParserText::temp_name_with_suffix(identifier.text.trim(), node.span).text
-                );
-                let file_path = self
-                    .scoping
-                    .scope_or_err(scope)
-                    .map(|s| s.path.clone())
-                    .ok();
+            // Generator
+            AstNodeType::InlineGenerator(x) => x.lower(self, scope, node.span),
 
-                self.register_test(
-                    Ustr::from(&identifier.text),
-                    Ustr::from(&func_identifier),
-                    scope,
-                    file_path,
-                );
-
-                self.evaluate_inner(
-                    scope,
-                    AstNode::new(
-                        node.span,
-                        AstNodeType::VariableDeclaration(AstDeclaration {
-                            var_type: VarType::Constant,
-                            identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
-                                node.span,
-                                func_identifier,
-                            )),
-                            data_type: ParserDataType::auto(node.span),
-                            value: Box::new(AstNode::new(
-                                node.span,
-                                AstNodeType::FunctionDeclaration(AstFunction {
-                                    header: FunctionHeader {
-                                        generics: GenericTypes::default(),
-                                        parameters: Vec::new(),
-                                        return_type: ParserDataType::null(node.span),
-                                        param_destructures: Vec::new(),
-                                    },
-                                    body,
-                                }),
-                            )),
-                        }),
-                    ),
-                )
-            }
-            AstNodeType::InlineGenerator {
-                map,
-                data_type,
-                loop_type,
-                conditionals,
-                until,
-            } => self.evaluate_inner(
-                scope,
-                Self::wrap_inline_generator(
-                    node.span,
-                    *map,
-                    *loop_type,
-                    conditionals,
-                    until,
-                    data_type.unwrap_or(ParserDataType::auto(node.span)),
-                ),
-            ),
-            AstNodeType::Tag {
-                node,
-                tag,
-                arguments,
-            } => {
-                if let Some(handler) = self
-                    .tagging
-                    .tag_handlers
-                    .get(&Ustr::from(&tag.text))
-                    .cloned()
-                {
-                    let handler_fn = handler.handler.lock().unwrap();
-                    handler_fn(self, scope, *node, tag, arguments)
-                } else {
-                    self.context.push_error(MiddleErr::InvalidTag(tag.text));
-                    self.evaluate_inner(scope, *node)
-                }
-            }
-            AstNodeType::ImportStatement {
-                module,
-                alias,
-                values,
-            } => {
-                let values: Vec<Ustr> = values
-                    .into_iter()
-                    .map(|val| Ustr::from(&val.to_string()))
-                    .collect();
-                let module_path: Vec<Ustr> =
-                    module.iter().map(|x| Ustr::from(&x.to_string())).collect();
-
-                let alias = if let Some(alias) = alias {
-                    self.resolve(scope, &alias, ResolutionOptions::default().with_dollar())
-                        .ok()
-                } else {
-                    None
-                };
-
-                let (new_scope, build_node) = if let Some(alias) = alias {
-                    if ["super", "root"].contains(&alias.as_str()) {
-                        // TODO return err
-                        return Ok(MiddleNode {
-                            node_type: MiddleNodeType::EmptyLine,
-                            span: node.span,
-                        });
-                    }
-
-                    let (new_scope_id, build_node) = self.import_scope_list(scope, &module_path)?;
-
-                    self.scoping
-                        .scope_mut_or_err(scope)?
-                        .children
-                        .insert(alias, new_scope_id);
-
-                    return Ok(build_node.unwrap_or(MiddleNode {
-                        node_type: MiddleNodeType::EmptyLine,
-                        span: node.span,
-                    }));
-                } else if !values.is_empty() {
-                    let (new_scope_id, build_node) = self.import_scope_list(scope, &module_path)?;
-                    (new_scope_id, build_node)
-                } else {
-                    let (_, n) = self.import_scope_list(scope, &module_path)?;
-                    return Ok(if let Some(x) = n {
-                        x
-                    } else {
-                        MiddleNode {
-                            node_type: MiddleNodeType::EmptyLine,
-                            span: node.span,
-                        }
-                    });
-                };
-
-                let (ident_map, type_map) = {
-                    let scope = self.scoping.scope_or_err(new_scope)?;
-
-                    (scope.mappings.clone(), scope.type_mappings.clone())
-                };
-
-                if &values[0] == "*" {
-                    let scope = self.scoping.scope_mut_or_err(scope)?;
-
-                    for (key, value) in ident_map {
-                        scope.mappings.entry(key).or_insert(value);
-                    }
-
-                    for (key, value) in type_map {
-                        scope.type_mappings.entry(key).or_insert(value);
-                    }
-                } else {
-                    let scope = self.scoping.scope_mut_or_err(scope)?;
-
-                    for key in values {
-                        if let Some(value) = ident_map.get(&key).cloned() {
-                            scope.mappings.insert(key, value);
-                            continue;
-                        }
-
-                        if let Some(value) = type_map.get(&key).cloned() {
-                            scope.type_mappings.insert(key, value);
-                        } else {
-                            return Err(MiddleErr::At(
-                                node.span,
-                                Box::new(MiddleErr::CantImport(format!("{} at {:?}", key, module))),
-                            ));
-                        }
-                    }
-                }
-
-                Ok(build_node.unwrap_or(MiddleNode {
-                    node_type: MiddleNodeType::EmptyLine,
-                    span: node.span,
-                }))
-            }
+            // Misc
+            AstNodeType::ParenExpression(x) => x.lower(self, scope, node.span),
+            AstNodeType::TestDeclaration(x) => x.lower(self, scope, node.span),
+            AstNodeType::Tag(x) => x.lower(self, scope, node.span),
+            AstNodeType::ImportStatement(x) => x.lower(self, scope, node.span),
         }
     }
 }

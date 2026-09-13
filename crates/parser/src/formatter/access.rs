@@ -1,9 +1,6 @@
 use crate::{
-    ast::{
-        formatter::Formatter,
-        nodes::access::{AstField, AstIdentifier, AstIndex, AstScope},
-    },
-    formatter::AstFormatting,
+    ast::nodes::access::{AstField, AstIdentifier, AstIndex, AstScope},
+    formatter::{AstFormatting, Formatter},
 };
 
 impl AstFormatting for AstIdentifier {

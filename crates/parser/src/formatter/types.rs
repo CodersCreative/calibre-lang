@@ -1,7 +1,6 @@
 use crate::{
     ast::{
         ObjectType,
-        formatter::{Formatter, handle_comment},
         idents::PotentialDollarIdentifier,
         nodes::{
             AstNode,
@@ -11,7 +10,7 @@ use crate::{
         },
         types::{GenericTypes, ParserDataType},
     },
-    formatter::AstFormatting,
+    formatter::{AstFormatting, Formatter, handle_comment},
 };
 
 impl AstFormatting for AstImpl {
@@ -399,7 +398,7 @@ impl TypeDefPreFormat {
                 if let Some(x) = default_value
                     && i == default_idx
                 {
-                    txt.push_str(&format!(" = {}", formatter.format(x)));
+                    txt.push_str(&format!(" = {}", x.format(formatter)));
                 }
                 txt
             })
@@ -424,7 +423,7 @@ impl TypeDefPreFormat {
                 if let Some(x) = default_value
                     && i == default_idx
                 {
-                    txt.push_str(&format!(" = {}", formatter.format(x)));
+                    txt.push_str(&format!(" = {}", x.format(formatter)));
                 }
                 format!("{},", txt)
             })

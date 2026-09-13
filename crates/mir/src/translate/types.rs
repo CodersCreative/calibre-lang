@@ -18,6 +18,7 @@ use calibre_parser::{
             AstNode, AstNodeType, VarType,
             declaration::AstDeclaration,
             functions::AstFunction,
+            misc::AstTag,
             types::{AstImpl, AstImplTrait, AstTrait, AstType, TraitMemberKind, TypeDefType},
         },
         types::{ParserDataType, ParserInnerType},
@@ -577,19 +578,19 @@ impl MirLowering for AstImpl {
                         dependant,
                     )))
                 }
-                AstNodeType::Tag {
+                AstNodeType::Tag(AstTag {
                     node,
                     tag,
                     arguments,
-                } => match process_var(env, scope, resolved, generic_params, *node) {
+                }) => match process_var(env, scope, resolved, generic_params, *node) {
                     Ok(Some(x)) => Ok(Some((
                         AstNode::new(
                             Span::default(),
-                            AstNodeType::Tag {
+                            AstNodeType::Tag(AstTag {
                                 node: Box::new(x.0),
                                 tag,
                                 arguments,
-                            },
+                            }),
                         ),
                         x.1,
                         x.2,

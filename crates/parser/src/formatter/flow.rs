@@ -1,12 +1,8 @@
 use crate::{
-    ast::{
-        formatter::Formatter,
-        nodes::flow::{
-            AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment,
-            TryCatch,
-        },
+    ast::nodes::flow::{
+        AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment, TryCatch,
     },
-    formatter::AstFormatting,
+    formatter::{AstFormatting, Formatter},
 };
 
 impl AstFormatting for AstEmit {
