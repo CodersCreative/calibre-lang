@@ -1,82 +1,61 @@
+use ariadne::{Color, Label, Report, ReportKind, Source};
 use calibre_mir::errors::MiddleErr;
 use calibre_parser::{CalibreError, Span};
-use codespan_reporting::{
-    diagnostic::{Diagnostic, Label},
-    files::SimpleFiles,
-    term,
-    term::termcolor::{ColorChoice, StandardStream},
-};
 use std::path::Path;
 use tracing::{debug, instrument, warn};
 
 #[instrument(skip_all, fields(path = ?path.as_ref(), error_count = errors.len()))]
 pub fn emit_calibre_errors<T: CalibreError>(path: impl AsRef<Path>, contents: &str, errors: &[T]) {
-    let mut files = SimpleFiles::new();
-    let file_id = files.add(
-        path.as_ref().to_string_lossy().to_string(),
-        contents.to_string(),
-    );
-    let writer = StandardStream::stderr(ColorChoice::Auto);
-    let config = term::Config::default();
+    let file_id = path.as_ref().to_string_lossy().to_string();
+    let source = Source::from(contents);
 
     for err in errors {
         debug!(error_code = err.code(), error = %err, "emitting parser error");
-        let mut diagnostic = Diagnostic::error()
-            .with_message(err.to_string())
-            .with_code(err.code().to_string());
+        let span = err.span();
 
-        diagnostic = diagnostic.with_labels(vec![
-            Label::primary(file_id, err.span().to_range()).with_message(err.to_string()),
-        ]);
+        let mut report = Report::build(ReportKind::Error, (&file_id, span.to_range()))
+            .with_code(err.code().to_string())
+            .with_message(err.to_string());
 
-        if let Some(hint) = err.hint() {
-            diagnostic = diagnostic.with_notes(vec![
-                format!("hint: {hint}"),
-                format!("step: {}", err.step()),
-            ]);
-        } else {
-            diagnostic = diagnostic.with_notes(vec![format!("step: {}", err.step())]);
+        if !span.is_none() {
+            report = report.with_label(
+                Label::new((&file_id, span.to_range()))
+                    .with_message(err.to_string())
+                    .with_color(Color::Red),
+            );
         }
 
-        let mut writer = writer.lock();
-        let _ = term::emit_to_io_write(&mut writer, &config, &files, &diagnostic);
+        if let Some(hint) = err.hint() {
+            report = report.with_note(format!("hint: {hint}"));
+        }
+
+        report = report.with_note(format!("step: {}", err.step()));
+
+        let report = report.finish();
+        let _ = report.print((&file_id, &source));
     }
     warn!("emitted {} parser errors", errors.len());
-}
-
-#[inline]
-fn get_diagnostic_and_files(
-    path: impl AsRef<Path>,
-    contents: &str,
-    message: String,
-    span: Option<Span>,
-) -> (SimpleFiles<String, String>, Diagnostic<usize>) {
-    let mut files = SimpleFiles::new();
-    let file_id = files.add(
-        path.as_ref().to_string_lossy().to_string(),
-        contents.to_string(),
-    );
-
-    let mut diagnostic = Diagnostic::error().with_message(message);
-    if let Some(span) = span {
-        diagnostic = diagnostic.with_labels(vec![
-            Label::primary(file_id, span.to_range()).with_message("here"),
-        ]);
-    }
-
-    (files, diagnostic)
 }
 
 #[instrument(skip_all, fields(path = ?path.as_ref(), message = %message))]
 pub fn emit_error(path: impl AsRef<Path>, contents: &str, message: String, span: Option<Span>) {
     debug!("emitting generic error");
-    let writer = StandardStream::stderr(ColorChoice::Auto);
-    let config = term::Config::default();
+    let file_id = path.as_ref().to_string_lossy().to_string();
+    let source = Source::from(contents);
 
-    let (files, diagnostic) = get_diagnostic_and_files(path, contents, message, span);
+    let mut report = Report::build(ReportKind::Error, (&file_id, 0..1)).with_message(message);
 
-    let mut writer = writer.lock();
-    let _ = term::emit_to_io_write(&mut writer, &config, &files, &diagnostic);
+    if let Some(span) = span {
+        let span_range = span.to_range();
+        report = report.with_label(
+            Label::new((&file_id, span_range))
+                .with_message("here")
+                .with_color(Color::Red),
+        );
+    }
+
+    let report = report.finish();
+    let _ = report.print((&file_id, &source));
 }
 
 #[instrument(skip_all, fields(path = ?path))]
@@ -125,38 +104,28 @@ pub fn emit_calibre_error<T: CalibreError>(
     span: Option<Span>,
 ) {
     debug!(error = %err, span = ?span, "emitting calibre error");
-    let mut files = SimpleFiles::new();
-    let file_id = files.add(
-        path.as_ref().to_string_lossy().to_string(),
-        contents.to_string(),
-    );
-    let writer = StandardStream::stderr(ColorChoice::Auto);
-    let config = term::Config::default();
-
-    let mut diagnostic = Diagnostic::error()
-        .with_message(err.to_string())
-        .with_code(err.code().to_string());
-
+    let file_id = path.as_ref().to_string_lossy().to_string();
+    let source = Source::from(contents);
     let span = span.unwrap_or_else(|| err.span());
-    if span != Span::default() {
-        diagnostic = diagnostic.with_labels(vec![
-            Label::primary(file_id, span.to_range()).with_message(err.to_string()),
-        ]);
-    } else {
-        diagnostic = diagnostic.with_labels(vec![
-            Label::primary(file_id, 0..contents.len().min(1)).with_message(err.to_string()),
-        ]);
+
+    let mut report = Report::build(ReportKind::Error, (&file_id, span.to_range()))
+        .with_code(err.code().to_string())
+        .with_message(err.to_string());
+
+    if !span.is_none() {
+        report = report.with_label(
+            Label::new((&file_id, span.to_range()))
+                .with_message(err.to_string())
+                .with_color(Color::Red),
+        );
     }
 
     if let Some(hint) = err.hint() {
-        diagnostic = diagnostic.with_notes(vec![
-            format!("hint: {hint}"),
-            format!("step: {}", err.step()),
-        ]);
-    } else {
-        diagnostic = diagnostic.with_notes(vec![format!("step: {}", err.step())]);
+        report = report.with_note(format!("hint: {hint}"));
     }
 
-    let mut writer = writer.lock();
-    let _ = term::emit_to_io_write(&mut writer, &config, &files, &diagnostic);
+    report = report.with_note(format!("step: {}", err.step()));
+
+    let report = report.finish();
+    let _ = report.print((&file_id, &source));
 }

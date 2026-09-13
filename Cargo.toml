@@ -34,7 +34,6 @@ calibre-fmt = { path = "./fmt" }
 fastrand = "2"
 clap = { version = "4.5.40", features = ["derive"] }
 rustc-hash = "2.1.1"
-codespan-reporting = "0.13.1"
 serde = {version = "1", features = ["derive"]}
 thiserror = "2"
 rustyline = "17"

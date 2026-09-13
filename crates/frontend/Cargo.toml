@@ -18,7 +18,7 @@ wasm = ["calibre-parser/wasm", "calibre-mir/wasm", "calibre-vm/wasm"]
 fs = ["glob"]
 
 [dependencies]
-codespan-reporting = { workspace = true }
+ariadne = { version = "0.6" }
 calibre-parser = { workspace = true }
 calibre-mir = { workspace = true }
 calibre-vm = { workspace = true }
