@@ -423,6 +423,10 @@ impl MiddleEnvironment {
 
                 let ty = ParserDataType::from(ParserInnerType::from_str(&ident).unwrap());
 
+                if ty.clone().is_native() {
+                    return Ok(StrOrAstNode::Str(ident));
+                }
+
                 let scope_ref = self.scoping.scope_or_err(current_scope)?;
 
                 if let Some(x) = scope_ref
@@ -488,6 +492,12 @@ impl MiddleEnvironment {
                         return Ok(StrOrAstNode::Str(*key));
                     }
                 }
+            }
+
+            match ParserInnerType::from_str(&ident) {
+                Ok(ParserInnerType::Struct(_) | ParserInnerType::StructWithGenerics { .. })
+                | Err(_) => {}
+                _ => return Ok(StrOrAstNode::Str(ident)),
             }
 
             return Err(self
@@ -663,6 +673,13 @@ impl MiddleEnvironment {
                     });
                 }
 
+                if id == "gen" && resolved_gens.len() == 1 {
+                    return Ok(ParserDataType {
+                        data_type: ParserInnerType::Gen(Box::new(resolved_gens.remove(0))),
+                        span: self.context.current_span(),
+                    });
+                }
+
                 ParserDataType {
                     data_type: ParserInnerType::StructWithGenerics {
                         identifier: id.to_string(),
@@ -730,6 +747,14 @@ impl MiddleEnvironment {
             },
             ParserInnerType::Option(x) => ParserDataType {
                 data_type: ParserInnerType::Option(Box::new(self.resolve_data_type(
+                    scope,
+                    x.as_ref(),
+                    options,
+                )?)),
+                span: self.context.current_span(),
+            },
+            ParserInnerType::Gen(x) => ParserDataType {
+                data_type: ParserInnerType::Gen(Box::new(self.resolve_data_type(
                     scope,
                     x.as_ref(),
                     options,

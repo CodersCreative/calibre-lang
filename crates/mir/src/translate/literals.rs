@@ -12,8 +12,7 @@ use crate::{
     typing::MiddleTypeDefType,
 };
 use calibre_parser::{
-    Span,
-    ast::{
+    Span, ast::{
         ObjectMap, ObjectType,
         idents::ParsedIntLiteral,
         nodes::{
@@ -25,7 +24,7 @@ use calibre_parser::{
             },
         },
         types::{ParserDataType, ParserInnerType},
-    },
+    }, formatter::AstFormatting,
 };
 use ustr::Ustr;
 
@@ -39,7 +38,8 @@ impl MirLowering for AstStruct {
         let identifier = env.resolve(scope, &self.identifier, ResolutionOptions::typing())?;
         let obj = env.typing.objects.get(&identifier).cloned();
 
-        if obj.is_none()
+        // TODO Handle generators a bit better, I'm just lazy rn
+        if obj.is_none() && !identifier.contains("gen")
             && !env
                 .tagging
                 .tag_info

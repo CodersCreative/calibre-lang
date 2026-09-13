@@ -370,6 +370,13 @@ impl ParserDataType {
         )
     }
 
+    pub fn is_native(self) -> bool {
+        !matches!(
+            self.unwrap_all_refs().resolve_ffi().data_type,
+            ParserInnerType::Struct(_) | ParserInnerType::StructWithGenerics { .. }
+        )
+    }
+
     pub fn default_node(&self) -> Option<AstNode> {
         match &self.data_type {
             ParserInnerType::Int => Some(AstNode::int(self.span, 0)),

@@ -55,6 +55,11 @@ pub trait AstFormatting {
         }
     }
 
+    fn format_no_formatter(&self) -> String {
+        let mut formatter = Formatter::default();
+        self.format(&mut formatter)
+    }
+
     fn narrow_format(&self, formatter: &mut Formatter) -> String;
 
     fn wide_override(&self, _formatter: &Formatter) -> bool {
