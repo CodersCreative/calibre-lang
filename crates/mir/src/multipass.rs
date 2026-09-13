@@ -4,7 +4,10 @@ use crate::{
 };
 use calibre_parser::ast::{
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-    nodes::{AstNode, AstNodeType, VarType, declaration::AstDeclaration, functions::AstExtern},
+    nodes::{
+        AstNode, AstNodeType, VarType, declaration::AstDeclaration, functions::AstExtern,
+        types::AstType,
+    },
     types::ParserDataType,
 };
 use ustr::Ustr;
@@ -19,11 +22,11 @@ impl MiddleEnvironment {
     fn predeclare_node(&mut self, scope: ScopeId, node: &mut AstNode) -> Result<(), MiddleErr> {
         match &mut node.node_type {
             AstNodeType::Tag { node: inner, .. } => self.predeclare_node(scope, inner.as_mut()),
-            AstNodeType::TypeDeclaration {
+            AstNodeType::TypeDeclaration(AstType {
                 identifier:
                     PotentialGenericTypeIdentifier::Identifier(PotentialDollarIdentifier::Identifier(_)),
                 ..
-            } => {
+            }) => {
                 // TODO Account for types
 
                 Ok(())

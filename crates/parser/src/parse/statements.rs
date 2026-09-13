@@ -2,7 +2,6 @@ use super::{LegacySpanMapExt, setup::StrParser};
 use crate::Span;
 use crate::ast::ObjectType;
 use crate::ast::ffi::ParserFfiInnerType;
-use crate::ast::generics::{TraitMember, TraitMemberKind};
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier};
 use crate::ast::nodes::assignment::AstAssignDestructure;
 use crate::ast::nodes::declaration::{AstDeclaration, AstDeclareDestructure};
@@ -10,8 +9,10 @@ use crate::ast::nodes::flow::AstReturn;
 use crate::ast::nodes::functions::{AstExtern, AstFunction};
 use crate::ast::nodes::literals::{AstDataType, AstEnum, AstTuple};
 use crate::ast::nodes::spawn::{AstSelect, AstSpawn, SelectArm, SelectArmKind};
+use crate::ast::nodes::types::{AstImpl, AstImplTrait, AstTrait, AstType, Overload, TypeDefType};
 use crate::ast::nodes::{
-    AstNode, AstNodeType, DestructurePattern, NamedScope, Overload, TypeDefType, VarType,
+    AstNode, AstNodeType, DestructurePattern, NamedScope, VarType,
+    types::{TraitMember, TraitMemberKind},
 };
 use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{
@@ -360,11 +361,11 @@ pub fn build_statement_parser<'a>(
 
             AstNode::new(
                 sp,
-                AstNodeType::TypeDeclaration {
+                AstNodeType::TypeDeclaration(AstType {
                     identifier,
                     object,
                     overloads,
-                },
+                }),
             )
         });
 
@@ -413,13 +414,13 @@ pub fn build_statement_parser<'a>(
         .map(|((name, sp), members)| {
             AstNode::new(
                 sp,
-                AstNodeType::TraitDeclaration {
+                AstNodeType::TraitDeclaration(AstTrait {
                     identifier: PotentialGenericTypeIdentifier::Identifier(
                         PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
                     ),
                     implied_traits: Vec::new(),
                     members,
-                },
+                }),
             )
         });
 
@@ -473,12 +474,12 @@ pub fn build_statement_parser<'a>(
                     };
                     Ok(AstNode::new(
                         *trait_ident.span(),
-                        AstNodeType::ImplTraitDeclaration {
+                        AstNodeType::ImplTraitDeclaration(AstImplTrait {
                             generics,
                             trait_ident,
                             target: dt,
                             variables: vars,
-                        },
+                        }),
                     ))
                 } else {
                     let target = trait_ident;
@@ -491,11 +492,11 @@ pub fn build_statement_parser<'a>(
 
                     Ok(AstNode::new(
                         sp,
-                        AstNodeType::ImplDeclaration {
+                        AstNodeType::ImplDeclaration(AstImpl {
                             generics,
                             target,
                             variables: vars,
-                        },
+                        }),
                     ))
                 }
             }

@@ -15,6 +15,7 @@ pub mod literals;
 pub mod matching;
 pub mod memory;
 pub mod spawn;
+pub mod types;
 pub mod unary;
 
 pub trait AstFormatting {

@@ -12,12 +12,13 @@ use crate::typing::{
     MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType, Typing,
 };
 use calibre_parser::ast::ObjectMap;
+use calibre_parser::ast::nodes::types::Overload;
 use calibre_parser::{AlphaRenamable, AlphaRenameState};
 use calibre_parser::{
     Span,
     ast::{
         Operator,
-        nodes::{AstNode, AstNodeType, Overload, VarType},
+        nodes::{AstNode, AstNodeType, VarType},
         types::{ParserDataType, ParserInnerType},
     },
 };

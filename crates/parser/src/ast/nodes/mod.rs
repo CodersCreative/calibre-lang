@@ -1,10 +1,8 @@
 use crate::{
     IdentifiersUsed, Span,
     ast::{
-        ObjectType, Operator,
         binary::BinaryOperator,
         formatter::Formatter,
-        generics::TraitMember,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             access::{AstField, AstIdentifier, AstIndex, AstScope},
@@ -13,7 +11,7 @@ use crate::{
             conditionals::{AstIf, AstTernary},
             declaration::{AstDeclaration, AstDeclareDestructure},
             flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
-            functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg, FunctionHeader},
+            functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
             literals::{
                 AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstRange, AstString,
                 AstStruct, AstTuple,
@@ -22,14 +20,14 @@ use crate::{
             matching::{AstFnMatch, AstMatch, MatchArmType},
             memory::{AstDeref, AstDrop, AstMove, AstRef},
             spawn::{AstSelect, AstSpawn},
+            types::{AstImpl, AstImplTrait, AstTrait, AstType},
             unary::{AstNeg, AstNot},
         },
-        types::{GenericTypes, ParserDataType},
+        types::ParserDataType,
     },
 };
-use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, matches, str::FromStr};
+use std::{fmt::Display, matches};
 use ustr::Ustr;
 
 pub mod access;
@@ -94,82 +92,6 @@ impl Display for VarType {
             Self::Immutable => write!(f, "let"),
             Self::Constant => write!(f, "const"),
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum TypeDefType {
-    Enum {
-        variants: Vec<(PotentialDollarIdentifier, Option<ParserDataType>)>,
-        default_variant: Option<usize>,
-        default_value: Option<Box<AstNode>>,
-    },
-    Struct {
-        fields: ObjectType<(ParserDataType, Option<AstNode>)>,
-    },
-    NewType(Box<ParserDataType>),
-}
-
-impl TypeDefType {
-    pub fn substitute(&self, subst: &FxHashMap<String, ParserDataType>) -> TypeDefType {
-        match self {
-            TypeDefType::Struct { fields } => TypeDefType::Struct {
-                fields: match fields {
-                    ObjectType::Map(xs) => ObjectType::Map(
-                        xs.iter()
-                            .map(|(k, (v, _default))| (k.clone(), (v.substitute(subst), None)))
-                            .collect(),
-                    ),
-                    ObjectType::Tuple(xs) => ObjectType::Tuple(
-                        xs.iter()
-                            .map(|(v, _default)| (v.substitute(subst), None))
-                            .collect(),
-                    ),
-                },
-            },
-            TypeDefType::Enum {
-                variants,
-                default_variant,
-                default_value,
-            } => TypeDefType::Enum {
-                variants: variants
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.as_ref().map(|p| p.substitute(subst))))
-                    .collect(),
-                default_variant: *default_variant,
-                default_value: default_value.clone(),
-            },
-            TypeDefType::NewType(inner) => TypeDefType::NewType(Box::new(inner.substitute(subst))),
-        }
-    }
-}
-
-impl IdentifiersUsed for TypeDefType {
-    fn identifiers_used(&self) -> Vec<&String> {
-        let mut names = Vec::new();
-        match self {
-            TypeDefType::Enum { variants, .. } => {
-                for (_, potential_type) in variants {
-                    if let Some(potential) = potential_type {
-                        names.extend(potential.identifiers_used());
-                    }
-                }
-            }
-            TypeDefType::Struct { fields } => {
-                if let ObjectType::Map(field_map) = fields {
-                    for (_, (potential_type, default_value)) in field_map {
-                        names.extend(potential_type.identifiers_used());
-                        if let Some(default) = default_value {
-                            names.extend(default.identifiers_used());
-                        }
-                    }
-                }
-            }
-            TypeDefType::NewType(inner) => {
-                names.extend(inner.identifiers_used());
-            }
-        }
-        names
     }
 }
 
@@ -476,62 +398,6 @@ pub struct NamedScope {
     pub args: Vec<(PotentialDollarIdentifier, AstNode)>,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct Overload {
-    pub operator: ParserText,
-    pub body: Box<AstNode>,
-    pub header: FunctionHeader,
-}
-
-impl From<Overload> for AstNode {
-    fn from(val: Overload) -> AstNode {
-        AstNode::new(
-            val.operator.span,
-            AstNodeType::FunctionDeclaration(AstFunction {
-                header: val.header,
-                body: val.body,
-            }),
-        )
-    }
-}
-
-impl Overload {
-    pub fn span(&self) -> &Span {
-        &self.operator.span
-    }
-
-    pub fn verify(&self) -> Result<(), String> {
-        let operator = Operator::from_str(&self.operator.text)?;
-        match operator {
-            Operator::As if !self.header.return_type.is_result() => Err(format!(
-                "Expect result return type (Err!Ok) found {}",
-                self.header.return_type
-            )),
-            Operator::In if !self.header.return_type.is_bool() => Err(format!(
-                "Expect bool return type found {}",
-                self.header.return_type
-            )),
-            Operator::Binary(_) | Operator::Comparison(_) | Operator::Binary(_)
-                if self.header.return_type.is_null() || self.header.return_type.is_auto() =>
-            {
-                Err(format!(
-                    "Expect known non-null return type found {}",
-                    self.header.return_type
-                ))
-            }
-            Operator::Index if self.header.parameters.len() != 2 => Err(format!(
-                "Expect 2 parameters found {}",
-                self.header.parameters.len()
-            )),
-            Operator::IndexAssign if self.header.parameters.len() != 3 => Err(format!(
-                "Expect 3 parameters found {}",
-                self.header.parameters.len()
-            )),
-            _ => Ok(()),
-        }
-    }
-}
-
 // Flow
 
 #[repr(u8)]
@@ -616,27 +482,10 @@ pub enum AstNodeType {
     DestructureAssignment(AstAssignDestructure),
 
     // Types
-    ImplDeclaration {
-        generics: GenericTypes,
-        target: ParserDataType,
-        variables: Vec<AstNode>,
-    },
-    ImplTraitDeclaration {
-        generics: GenericTypes,
-        trait_ident: PotentialGenericTypeIdentifier,
-        target: ParserDataType,
-        variables: Vec<AstNode>,
-    },
-    TraitDeclaration {
-        identifier: PotentialGenericTypeIdentifier,
-        implied_traits: Vec<PotentialDollarIdentifier>,
-        members: Vec<TraitMember>,
-    },
-    TypeDeclaration {
-        identifier: PotentialGenericTypeIdentifier,
-        object: TypeDefType,
-        overloads: Vec<Overload>,
-    },
+    ImplDeclaration(AstImpl),
+    ImplTraitDeclaration(AstImplTrait),
+    TraitDeclaration(AstTrait),
+    TypeDeclaration(AstType),
 
     // Loops
     LoopDeclaration {

@@ -1,6 +1,6 @@
 use crate::{
     ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
-    tags::TagInfo, typing::MiddleTypeDefType,
+    tags::TagInfo, translate::MirLowering, typing::MiddleTypeDefType,
 };
 use calibre_parser::{
     Span,
@@ -8,11 +8,12 @@ use calibre_parser::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
-            AstNode, AstNodeType, TypeDefType, VarType,
+            AstNode, AstNodeType, VarType,
             declaration::AstDeclaration,
             flow::{AstTry, TryCatch},
             functions::{AstFunction, CallArg, FunctionHeader},
             literals::{AstString, AstStruct},
+            types::{AstImpl, AstType, TypeDefType},
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -57,13 +58,13 @@ impl MiddleEnvironment {
 
         let builder = AstNode::new(
             span,
-            AstNodeType::TypeDeclaration {
+            AstNodeType::TypeDeclaration(AstType {
                 identifier: PotentialGenericTypeIdentifier::new(span, &builder_name),
                 object: TypeDefType::Struct {
                     fields: ObjectType::Map(optional_fields),
                 },
                 overloads: Vec::new(),
-            },
+            }),
         );
 
         let self_ty = ParserDataType::object(span, &builder_name);
@@ -253,17 +254,15 @@ impl MiddleEnvironment {
 
         Ok((
             builder,
-            self.evaluate(
-                scope,
-                AstNode::new(
-                    span,
-                    AstNodeType::ImplDeclaration {
-                        generics: GenericTypes::default(),
-                        target: ParserDataType::object(span, &builder_name),
-                        variables: methods,
-                    },
-                ),
-            ),
+            AstNode::new(
+                span,
+                AstNodeType::ImplDeclaration(AstImpl {
+                    generics: GenericTypes::default(),
+                    target: ParserDataType::object(span, &builder_name),
+                    variables: methods,
+                }),
+            )
+            .lower_or_empty(self, scope, span),
         ))
     }
 }

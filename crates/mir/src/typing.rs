@@ -6,7 +6,10 @@ use calibre_parser::{
     ast::{
         ObjectMap, ObjectType,
         idents::ParserText,
-        nodes::{AstNode, Overload, TypeDefType},
+        nodes::{
+            AstNode,
+            types::{Overload, TypeDefType},
+        },
         types::{ParserDataType, ParserInnerType},
     },
 };

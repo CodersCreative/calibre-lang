@@ -31,7 +31,7 @@ impl FunctionPreFormat {
         let generics_str = if func.header.generics.0.is_empty() {
             String::new()
         } else {
-            format!(" {}", formatter.fmt_generic_types(&func.header.generics))
+            format!(" {}", func.header.generics.format(formatter))
         };
 
         let destructure_map: FxHashMap<usize, _> = func

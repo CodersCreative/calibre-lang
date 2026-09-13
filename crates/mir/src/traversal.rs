@@ -14,6 +14,7 @@ use calibre_parser::ast::{
         matching::{AstFnMatch, AstMatch, MatchBody},
         memory::{AstDeref, AstMove, AstRef},
         spawn::{AstSelect, AstSpawn},
+        types::{AstImpl, AstImplTrait, AstTrait, AstType},
         unary::{AstNeg, AstNot},
     },
 };
@@ -181,15 +182,15 @@ pub trait NodeVisitor {
                 data_type,
                 value: Box::new(self.visit(*value)),
             }),
-            AstNodeType::TypeDeclaration {
+            AstNodeType::TypeDeclaration(AstType {
                 identifier,
                 object,
                 overloads,
-            } => AstNodeType::TypeDeclaration {
+            }) => AstNodeType::TypeDeclaration(AstType {
                 identifier,
                 object,
                 overloads,
-            },
+            }),
             AstNodeType::FunctionDeclaration(AstFunction { header, body }) => {
                 AstNodeType::FunctionDeclaration(AstFunction {
                     header,
@@ -335,35 +336,35 @@ pub trait NodeVisitor {
                 value: Box::new(self.visit(*value)),
                 function,
             }),
-            AstNodeType::ImplDeclaration {
+            AstNodeType::ImplDeclaration(AstImpl {
                 generics,
                 target,
                 variables,
-            } => AstNodeType::ImplDeclaration {
+            }) => AstNodeType::ImplDeclaration(AstImpl {
                 generics,
                 target,
                 variables: variables.into_iter().map(|n| self.visit(n)).collect(),
-            },
-            AstNodeType::ImplTraitDeclaration {
+            }),
+            AstNodeType::ImplTraitDeclaration(AstImplTrait {
                 generics,
                 trait_ident,
                 target,
                 variables,
-            } => AstNodeType::ImplTraitDeclaration {
+            }) => AstNodeType::ImplTraitDeclaration(AstImplTrait {
                 generics,
                 trait_ident,
                 target,
                 variables: variables.into_iter().map(|n| self.visit(n)).collect(),
-            },
-            AstNodeType::TraitDeclaration {
+            }),
+            AstNodeType::TraitDeclaration(AstTrait {
                 identifier,
                 implied_traits,
                 members,
-            } => AstNodeType::TraitDeclaration {
+            }) => AstNodeType::TraitDeclaration(AstTrait {
                 identifier,
                 implied_traits,
                 members,
-            },
+            }),
             AstNodeType::EnumExpression(AstEnum {
                 identifier,
                 value,

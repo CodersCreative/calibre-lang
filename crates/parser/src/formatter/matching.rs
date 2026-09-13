@@ -202,10 +202,7 @@ impl FnMatchPreFormat {
         let generics_str = if fn_match.header.generics.0.is_empty() {
             String::new()
         } else {
-            format!(
-                " {}",
-                formatter.fmt_generic_types(&fn_match.header.generics)
-            )
+            format!(" {}", fn_match.header.generics.format(formatter))
         };
 
         let param_str = if let Some(param) = fn_match.header.parameters.first() {
