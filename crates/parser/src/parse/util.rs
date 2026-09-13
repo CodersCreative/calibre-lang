@@ -2,7 +2,12 @@ use crate::{
     CalibreError, Position, Span,
     ast::{
         idents::{ParsedIntLiteral, ParserText, PotentialDollarIdentifier},
-        nodes::{AstNode, AstNodeType, NamedScope, VarType, access::AstField, literals::AstInt},
+        nodes::{
+            AstNode, AstNodeType, VarType,
+            access::AstField,
+            literals::AstInt,
+            scopes::{AstScopeDef, NamedScope},
+        },
     },
 };
 use chumsky::prelude::*;
@@ -57,13 +62,13 @@ where
 
         AstNode::new(
             sp,
-            AstNodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: Some(items),
                 named: None,
                 is_temp: true,
                 create_new_scope: Some(create_new_scope),
                 define: false,
-            },
+            }),
         )
     };
 
@@ -104,13 +109,13 @@ where
             with_named_scope(
                 body.unwrap_or(AstNode::new(
                     sp,
-                    AstNodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration(AstScopeDef {
                         body: None,
                         named: None,
                         is_temp: true,
                         create_new_scope: None,
                         define: false,
-                    },
+                    }),
                 )),
                 NamedScope {
                     name: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
@@ -287,10 +292,10 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<AstN
 
     match super::parse_program_with_source(trimmed, None) {
         Ok(node) => match node.node_type {
-            AstNodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: Some(mut body),
                 ..
-            } if !body.is_empty() => Ok(body.remove(0)),
+            }) if !body.is_empty() => Ok(body.remove(0)),
             _ => Err("expected interpolated expression".to_string()),
         },
         Err(errs) => Err(errs
@@ -309,13 +314,13 @@ pub(super) fn scope_node(items: Vec<AstNode>, is_temp: bool, define: bool) -> As
     };
     AstNode::new(
         sp,
-        AstNodeType::ScopeDeclaration {
+        AstNodeType::ScopeDeclaration(AstScopeDef {
             body: Some(items),
             named: None,
             is_temp,
             create_new_scope: Some(false),
             define,
-        },
+        }),
     )
 }
 
@@ -329,31 +334,31 @@ pub(super) fn ensure_scope_node(node: AstNode, is_temp: bool, define: bool) -> A
 
 pub(super) fn scope_body_or_single(node: AstNode) -> Option<Vec<AstNode>> {
     match node.node_type {
-        AstNodeType::ScopeDeclaration { body, .. } => body,
+        AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) => body,
         _ => Some(vec![node]),
     }
 }
 
 pub(super) fn with_named_scope(node: AstNode, named: NamedScope) -> AstNode {
     match node.node_type {
-        AstNodeType::ScopeDeclaration {
+        AstNodeType::ScopeDeclaration(AstScopeDef {
             body,
             is_temp,
             create_new_scope,
             define,
             ..
-        } => AstNode::new(
+        }) => AstNode::new(
             body.as_ref()
                 .and_then(|b| b.first().zip(b.last()))
                 .map(|(a, b)| Span::new_from_spans(a.span, b.span))
                 .unwrap_or(Span::default()),
-            AstNodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration(AstScopeDef {
                 body,
                 named: Some(named),
                 is_temp,
                 create_new_scope,
                 define,
-            },
+            }),
         ),
         _ => node,
     }

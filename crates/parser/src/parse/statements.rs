@@ -8,10 +8,12 @@ use crate::ast::nodes::declaration::{AstDeclaration, AstDeclareDestructure};
 use crate::ast::nodes::flow::AstReturn;
 use crate::ast::nodes::functions::{AstExtern, AstFunction};
 use crate::ast::nodes::literals::{AstDataType, AstEnum, AstTuple};
+use crate::ast::nodes::scopes::{AstScopeAlias, AstScopeDef};
 use crate::ast::nodes::spawn::{AstSelect, AstSpawn, SelectArm, SelectArmKind};
 use crate::ast::nodes::types::{AstImpl, AstImplTrait, AstTrait, AstType, Overload, TypeDefType};
 use crate::ast::nodes::{
-    AstNode, AstNodeType, DestructurePattern, NamedScope, VarType,
+    AstNode, AstNodeType, DestructurePattern, VarType,
+    scopes::NamedScope,
     types::{TraitMember, TraitMemberKind},
 };
 use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
@@ -778,13 +780,13 @@ pub fn build_statement_parser<'a>(
 
                 AstNode::new(
                     span(ls.as_ref(), r),
-                    AstNodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration(AstScopeDef {
                         body: Some(tagged_statements),
                         named: None,
                         is_temp: false,
                         create_new_scope: Some(false),
                         define: false,
-                    },
+                    }),
                 )
             }
         })
@@ -864,13 +866,13 @@ pub fn build_statement_parser<'a>(
             move |(named, (body, create_new_scope)), r| {
                 AstNode::new(
                     span(ls.as_ref(), r),
-                    AstNodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration(AstScopeDef {
                         body,
                         named,
                         is_temp: true,
                         create_new_scope,
                         define: true,
-                    },
+                    }),
                 )
             }
         })
@@ -899,11 +901,11 @@ pub fn build_statement_parser<'a>(
             move |(((identifier, name), args), create_new_scope), r| {
                 AstNode::new(
                     span(ls.as_ref(), r),
-                    AstNodeType::ScopeAlias {
+                    AstNodeType::ScopeAlias(AstScopeAlias {
                         identifier,
                         value: NamedScope { name, args },
                         create_new_scope,
-                    },
+                    }),
                 )
             }
         })
@@ -919,13 +921,13 @@ pub fn build_statement_parser<'a>(
             move |(named, (body, create_new_scope)), r| {
                 AstNode::new(
                     span(ls.as_ref(), r),
-                    AstNodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration(AstScopeDef {
                         body,
                         named,
                         is_temp: true,
                         create_new_scope,
                         define: false,
-                    },
+                    }),
                 )
             }
         })

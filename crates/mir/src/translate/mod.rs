@@ -223,6 +223,10 @@ impl MiddleEnvironment {
                 node_type: MiddleNodeType::Null,
                 span: node.span,
             }),
+            AstNodeType::EmptyLine => Ok(MiddleNode {
+                node_type: MiddleNodeType::EmptyLine,
+                span: node.span,
+            }),
 
             // Flow
             AstNodeType::Break(x) => x.lower(self, scope, node.span),
@@ -308,10 +312,10 @@ impl MiddleEnvironment {
             AstNodeType::IterExpression(x) => x.lower(self, scope, node.span),
             AstNodeType::LoopDeclaration(x) => x.lower(self, scope, node.span),
 
-            AstNodeType::EmptyLine => Ok(MiddleNode {
-                node_type: MiddleNodeType::EmptyLine,
-                span: node.span,
-            }),
+            // Scopes
+            AstNodeType::ScopeAlias(x) => x.lower(self, scope, node.span),
+            AstNodeType::ScopeDeclaration(x) => x.lower(self, scope, node.span),
+
             AstNodeType::ParenExpression { value } => self.evaluate_inner(scope, *value),
             AstNodeType::TestDeclaration { identifier, body } => {
                 let func_identifier = format!(
@@ -374,25 +378,6 @@ impl MiddleEnvironment {
                     until,
                     data_type.unwrap_or(ParserDataType::auto(node.span)),
                 ),
-            ),
-            AstNodeType::ScopeAlias {
-                identifier,
-                value,
-                create_new_scope,
-            } => self.evaluate_scope_alias(scope, node.span, identifier, value, create_new_scope),
-            AstNodeType::ScopeDeclaration {
-                body,
-                named,
-                is_temp,
-                create_new_scope,
-                define,
-            } => self.evaluate_scope_declaration(
-                scope,
-                body,
-                named,
-                create_new_scope,
-                define,
-                is_temp,
             ),
             AstNodeType::Tag {
                 node,

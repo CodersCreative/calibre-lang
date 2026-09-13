@@ -15,6 +15,7 @@ pub mod literals;
 pub mod loops;
 pub mod matching;
 pub mod memory;
+pub mod scopes;
 pub mod spawn;
 pub mod types;
 pub mod unary;

@@ -3,6 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{MiddleScope, ScopeId},
+    translate::MirLowering,
 };
 use calibre_parser::ast::{
     ObjectType,
@@ -11,6 +12,7 @@ use calibre_parser::ast::{
         AstNode, AstNodeType, VarType,
         declaration::AstDeclaration,
         literals::{AstString, AstStruct},
+        scopes::AstScopeDef,
     },
     types::ParserDataType,
 };
@@ -119,24 +121,19 @@ impl MiddleEnvironment {
         )];
 
         let mut body = match node.node_type {
-            AstNodeType::ScopeDeclaration { body, .. } => body.unwrap_or_default(),
+            AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) => body.unwrap_or_default(),
             _ => vec![node],
         };
         prefix.append(&mut body);
 
-        self.evaluate_inner(
-            scope,
-            AstNode::new(
-                sp,
-                AstNodeType::ScopeDeclaration {
-                    body: Some(prefix),
-                    named: None,
-                    is_temp: false,
-                    create_new_scope: Some(false),
-                    define: false,
-                },
-            ),
-        )
+        AstScopeDef {
+            body: Some(prefix),
+            named: None,
+            is_temp: false,
+            create_new_scope: Some(false),
+            define: false,
+        }
+        .lower(self, scope, sp)
     }
 
     pub fn evaluate_with_current_context_injection(
@@ -206,23 +203,18 @@ impl MiddleEnvironment {
         )];
 
         let mut body = match node.node_type {
-            AstNodeType::ScopeDeclaration { body, .. } => body.unwrap_or_default(),
+            AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) => body.unwrap_or_default(),
             _ => vec![node],
         };
         nodes.append(&mut body);
 
-        self.evaluate_inner(
-            scope,
-            AstNode::new(
-                sp,
-                AstNodeType::ScopeDeclaration {
-                    body: Some(nodes),
-                    named: None,
-                    is_temp: false,
-                    create_new_scope: Some(false),
-                    define: false,
-                },
-            ),
-        )
+        AstScopeDef {
+            body: Some(nodes),
+            named: None,
+            is_temp: false,
+            create_new_scope: Some(false),
+            define: false,
+        }
+        .lower(self, scope, sp)
     }
 }

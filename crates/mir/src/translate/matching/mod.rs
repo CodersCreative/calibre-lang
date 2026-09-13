@@ -27,6 +27,7 @@ use calibre_parser::{
             declaration::AstDeclaration,
             functions::{AstFunction, CallArg, FunctionHeader},
             matching::{AstFnMatch, AstMatch, MatchArmType},
+            scopes::AstScopeDef,
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -254,7 +255,7 @@ impl MirLowering for AstFnMatch {
             AstNodeType::FunctionDeclaration(AstFunction {
                 body: Box::new(AstNode::new(
                     span,
-                    AstNodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration(AstScopeDef {
                         body: Some(vec![AstNode::new(
                             span,
                             AstNodeType::MatchStatement(AstMatch {
@@ -269,7 +270,7 @@ impl MirLowering for AstFnMatch {
                         is_temp: true,
                         create_new_scope: Some(true),
                         define: false,
-                    },
+                    }),
                 )),
                 header: FunctionHeader {
                     param_destructures: Vec::new(),

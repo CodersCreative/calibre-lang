@@ -6,7 +6,7 @@ use crate::{
 };
 use calibre_parser::{
     Parser,
-    ast::nodes::{AstNode, AstNodeType},
+    ast::nodes::{AstNode, AstNodeType, scopes::AstScopeDef},
 };
 use calibre_std::get_stdlib_file;
 use std::fs;
@@ -133,22 +133,22 @@ impl MiddleEnvironment {
                 }
 
                 let mut program = match program.node_type {
-                    AstNodeType::ScopeDeclaration { body, .. } => AstNode {
-                        node_type: AstNodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) => AstNode {
+                        node_type: AstNodeType::ScopeDeclaration(AstScopeDef {
                             body,
                             named: None,
                             is_temp: false,
                             create_new_scope: Some(false),
                             define: false,
-                        },
+                        }),
                         ..program
                     },
                     _ => program,
                 };
 
-                if let AstNodeType::ScopeDeclaration {
+                if let AstNodeType::ScopeDeclaration(AstScopeDef {
                     body: Some(body), ..
-                } = &mut program.node_type
+                }) = &mut program.node_type
                 {
                     self.predeclare_nodes(scope, body);
                 }
@@ -194,9 +194,9 @@ impl MiddleEnvironment {
             });
         }
 
-        if let AstNodeType::ScopeDeclaration {
+        if let AstNodeType::ScopeDeclaration(AstScopeDef {
             body: Some(body), ..
-        } = &mut program.node_type
+        }) = &mut program.node_type
         {
             self.predeclare_nodes(scope, body);
         }

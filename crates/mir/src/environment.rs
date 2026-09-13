@@ -12,6 +12,7 @@ use crate::typing::{
     MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType, Typing,
 };
 use calibre_parser::ast::ObjectMap;
+use calibre_parser::ast::nodes::scopes::AstScopeDef;
 use calibre_parser::ast::nodes::types::Overload;
 use calibre_parser::{AlphaRenamable, AlphaRenameState};
 use calibre_parser::{
@@ -193,9 +194,9 @@ impl MiddleEnvironment {
             }
         }
 
-        if let AstNodeType::ScopeDeclaration {
+        if let AstNodeType::ScopeDeclaration(AstScopeDef {
             body: Some(body), ..
-        } = &mut node.node_type
+        }) = &mut node.node_type
         {
             debug!("predeclaring nodes");
             env.predeclare_nodes(scope, body);

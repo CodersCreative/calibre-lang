@@ -20,6 +20,7 @@ use calibre_parser::{
             declaration::{AstDeclaration, AstDeclareDestructure},
             functions::{AstCall, AstFunction},
             memory::AstRef,
+            scopes::AstScopeDef,
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -379,16 +380,13 @@ impl MirLowering for AstDeclareDestructure {
         body.push(tmp_decl);
         body.extend(env.emit_destructure_statements(&tmp_ident, &self.pattern, span, true));
 
-        AstNode::new(
-            span,
-            AstNodeType::ScopeDeclaration {
-                body: Some(body),
-                named: None,
-                is_temp: true,
-                create_new_scope: Some(false),
-                define: false,
-            },
-        )
+        AstScopeDef {
+            body: Some(body),
+            named: None,
+            is_temp: true,
+            create_new_scope: Some(false),
+            define: false,
+        }
         .lower(env, scope, span)
     }
 }

@@ -20,6 +20,7 @@ use calibre_parser::{
             },
             loops::{AstLoop, LoopType},
             memory::{AstDeref, AstDrop, AstMove, AstRef},
+            scopes::AstScopeDef,
             spawn::AstSpawn,
             unary::AstNot,
         },
@@ -632,7 +633,7 @@ impl From<MiddleNodeType> for AstNodeType {
                 value: value.value.into(),
                 data: value.data.map(|data| Box::new((*data).into())),
             }),
-            MiddleNodeType::ScopeDeclaration(value) => AstNodeType::ScopeDeclaration {
+            MiddleNodeType::ScopeDeclaration(value) => AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: {
                     let mut lst = Vec::new();
 
@@ -646,7 +647,7 @@ impl From<MiddleNodeType> for AstNodeType {
                 is_temp: value.is_temp,
                 create_new_scope: Some(value.create_new_scope),
                 define: false,
-            },
+            }),
             MiddleNodeType::FunctionDeclaration(value) => {
                 AstNodeType::FunctionDeclaration(AstFunction {
                     header: FunctionHeader {
@@ -709,7 +710,7 @@ impl From<MiddleNodeType> for AstNodeType {
                 to: Box::new((*value.to).into()),
                 inclusive: value.inclusive,
             }),
-            MiddleNodeType::LoopDeclaration(value) => AstNodeType::ScopeDeclaration {
+            MiddleNodeType::LoopDeclaration(value) => AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: {
                     let mut lst = Vec::new();
 
@@ -734,7 +735,7 @@ impl From<MiddleNodeType> for AstNodeType {
                 is_temp: true,
                 create_new_scope: Some(false),
                 define: false,
-            },
+            }),
             MiddleNodeType::Return(value) => AstNodeType::Return(AstReturn {
                 value: value.value.map(|x| Box::new((*x).into())),
             }),

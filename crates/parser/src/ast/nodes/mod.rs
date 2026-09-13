@@ -20,6 +20,7 @@ use crate::{
             loops::{AstIter, AstLoop, LoopType},
             matching::{AstFnMatch, AstMatch},
             memory::{AstDeref, AstDrop, AstMove, AstRef},
+            scopes::{AstScopeAlias, AstScopeDef},
             spawn::{AstSelect, AstSpawn},
             types::{AstImpl, AstImplTrait, AstTrait, AstType},
             unary::{AstNeg, AstNot},
@@ -112,9 +113,9 @@ impl AstNode {
 
     pub fn nodes(self) -> Vec<AstNode> {
         match self.node_type {
-            AstNodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: Some(items), ..
-            } => items,
+            }) => items,
             _ => vec![self],
         }
     }
@@ -141,29 +142,19 @@ impl AstNode {
     }
 
     pub fn new_temp_scope_with_create(body: Vec<AstNode>, create_new_scope: Option<bool>) -> Self {
-        if body.is_empty() {
-            return Self::new(
-                Span::default(),
-                AstNodeType::ScopeDeclaration {
-                    body: Some(Vec::new()),
-                    named: None,
-                    is_temp: true,
-                    create_new_scope,
-                    define: false,
-                },
-            );
-        }
-        let span = Span::new_from_spans(body.first().unwrap().span, body.last().unwrap().span);
-
         Self::new(
-            span,
-            AstNodeType::ScopeDeclaration {
+            if body.is_empty() {
+                Span::default()
+            } else {
+                Span::new_from_spans(body.first().unwrap().span, body.last().unwrap().span)
+            },
+            AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: Some(body),
                 named: None,
                 is_temp: true,
                 create_new_scope,
                 define: false,
-            },
+            }),
         )
     }
 
@@ -304,14 +295,14 @@ impl AstNode {
 
     pub fn rewrite_main_emits_to_returns(self) -> Self {
         match self.node_type {
-            AstNodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: Some(body),
                 create_new_scope,
                 is_temp,
                 named,
                 define,
-            } => AstNode {
-                node_type: AstNodeType::ScopeDeclaration {
+            }) => AstNode {
+                node_type: AstNodeType::ScopeDeclaration(AstScopeDef {
                     body: Some(
                         body.into_iter()
                             .map(|x| match x.node_type {
@@ -329,7 +320,7 @@ impl AstNode {
                     is_temp,
                     named,
                     define,
-                },
+                }),
                 span: self.span,
             },
             AstNodeType::Emit(AstEmit::Scope(value)) => AstNode {
@@ -370,9 +361,9 @@ impl IdentifiersUsed for AstNode {
                     }
                 }
             }
-            AstNodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: Some(body), ..
-            } => {
+            }) => {
                 for stmt in body {
                     names.extend(stmt.identifiers_used());
                 }
@@ -381,12 +372,6 @@ impl IdentifiersUsed for AstNode {
         }
         names
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct NamedScope {
-    pub name: PotentialDollarIdentifier,
-    pub args: Vec<(PotentialDollarIdentifier, AstNode)>,
 }
 
 // Flow
@@ -483,18 +468,8 @@ pub enum AstNodeType {
     IterExpression(AstIter),
 
     // Scopes
-    ScopeAlias {
-        identifier: PotentialDollarIdentifier,
-        value: NamedScope,
-        create_new_scope: Option<bool>,
-    },
-    ScopeDeclaration {
-        body: Option<Vec<AstNode>>,
-        named: Option<NamedScope>,
-        is_temp: bool,
-        create_new_scope: Option<bool>,
-        define: bool,
-    },
+    ScopeAlias(AstScopeAlias),
+    ScopeDeclaration(AstScopeDef),
 
     // Generator
     InlineGenerator {

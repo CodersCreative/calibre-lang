@@ -14,6 +14,7 @@ use calibre_parser::ast::{
         loops::{AstIter, AstLoop, LoopType},
         matching::{AstFnMatch, AstMatch, MatchBody},
         memory::{AstDeref, AstMove, AstRef},
+        scopes::{AstScopeAlias, AstScopeDef},
         spawn::{AstSelect, AstSpawn},
         types::{AstImpl, AstImplTrait, AstTrait, AstType},
         unary::{AstNeg, AstNot},
@@ -100,19 +101,19 @@ pub trait NodeVisitor {
                 then: Box::new(self.visit(*then)),
                 otherwise: otherwise.map(|n| Box::new(self.visit(*n))),
             }),
-            AstNodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration(AstScopeDef {
                 body,
                 named,
                 is_temp,
                 create_new_scope,
                 define,
-            } => AstNodeType::ScopeDeclaration {
+            }) => AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: body.map(|items| items.into_iter().map(|n| self.visit(n)).collect()),
                 named,
                 is_temp,
                 create_new_scope,
                 define,
-            },
+            }),
             AstNodeType::ParenExpression { value } => AstNodeType::ParenExpression {
                 value: Box::new(self.visit(*value)),
             },
@@ -375,15 +376,15 @@ pub trait NodeVisitor {
                 value,
                 data: data.map(|n| Box::new(self.visit(*n))),
             }),
-            AstNodeType::ScopeAlias {
+            AstNodeType::ScopeAlias(AstScopeAlias {
                 identifier,
                 value,
                 create_new_scope,
-            } => AstNodeType::ScopeAlias {
+            }) => AstNodeType::ScopeAlias(AstScopeAlias {
                 identifier,
                 value,
                 create_new_scope,
-            },
+            }),
             AstNodeType::FnMatchDeclaration(AstFnMatch { header, body }) => {
                 AstNodeType::FnMatchDeclaration(AstFnMatch {
                     header,
@@ -554,7 +555,7 @@ pub trait NodeAnalyzer {
                 };
                 comp_ok && self.analyze(then) && otherwise.as_ref().is_none_or(|n| self.analyze(n))
             }
-            AstNodeType::ScopeDeclaration { body, .. } => body
+            AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) => body
                 .as_ref()
                 .is_none_or(|items| items.iter().all(|n| self.analyze(n))),
             AstNodeType::ParenExpression { value }

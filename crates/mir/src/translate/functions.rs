@@ -28,6 +28,7 @@ use calibre_parser::{
             lists::AstList,
             literals::{AstString, AstStruct},
             loops::{AstLoop, LoopType},
+            scopes::AstScopeDef,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -317,10 +318,10 @@ impl MiddleEnvironment {
         let rewritten = Self::rewrite_generator_returns(body);
 
         let next_body = match rewritten.node_type {
-            AstNodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: Some(mut items),
                 ..
-            } => {
+            }) => {
                 items.push(AstNode::identifier(span, "none"));
                 AstNode::new_temp_scope(items)
             }
@@ -772,24 +773,24 @@ impl MirLowering for AstFunction {
                 }
             }
             body = match body.node_type {
-                AstNodeType::ScopeDeclaration {
+                AstNodeType::ScopeDeclaration(AstScopeDef {
                     body: Some(mut inner),
                     named,
                     is_temp,
                     create_new_scope,
                     define,
-                } => {
+                }) => {
                     let mut new_body = destructures;
                     new_body.append(&mut inner);
                     AstNode::new(
                         body.span,
-                        AstNodeType::ScopeDeclaration {
+                        AstNodeType::ScopeDeclaration(AstScopeDef {
                             body: Some(new_body),
                             named,
                             is_temp,
                             create_new_scope,
                             define,
-                        },
+                        }),
                     )
                 }
                 _ => {

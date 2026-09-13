@@ -7,7 +7,7 @@ use calibre_parser::{
     Parser,
     ast::{
         idents::ParserText,
-        nodes::{AstNodeType, VarType},
+        nodes::{AstNodeType, VarType, scopes::AstScopeDef},
         types::ParserDataType,
     },
 };
@@ -152,9 +152,9 @@ impl MiddleEnvironment {
                     });
                 }
 
-                if let AstNodeType::ScopeDeclaration {
+                if let AstNodeType::ScopeDeclaration(AstScopeDef {
                     body: Some(body), ..
-                } = &mut program.node_type
+                }) = &mut program.node_type
                 {
                     self.predeclare_nodes(scope, body);
                 }
@@ -258,9 +258,9 @@ impl MiddleEnvironment {
                     return;
                 }
 
-                if let AstNodeType::ScopeDeclaration {
+                if let AstNodeType::ScopeDeclaration(AstScopeDef {
                     body: Some(body), ..
-                } = &mut program.node_type
+                }) = &mut program.node_type
                 {
                     self.predeclare_nodes(scope, body);
                 }

@@ -1,5 +1,5 @@
 use crate::{
-    ast::nodes::{AstNode, AstNodeType},
+    ast::nodes::{AstNode, AstNodeType, scopes::AstScopeDef},
     parse::parse_program_with_source,
 };
 use serde::{Deserialize, Serialize};
@@ -170,13 +170,13 @@ pub struct Parser {
 fn empty_scope_node() -> AstNode {
     AstNode::new(
         Span::default(),
-        AstNodeType::ScopeDeclaration {
+        AstNodeType::ScopeDeclaration(AstScopeDef {
             body: Some(Vec::new()),
             is_temp: false,
             define: false,
             named: None,
             create_new_scope: Some(false),
-        },
+        }),
     )
 }
 

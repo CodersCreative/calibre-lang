@@ -2,6 +2,7 @@ use super::{LegacySpanMapExt, setup::StrParser};
 use crate::Span;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::functions::{AstFunction, FunctionHeader};
+use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::nodes::{AstNode, AstNodeType, DestructurePattern, VarType};
 use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{
@@ -261,23 +262,23 @@ pub fn build_function_parsers<'a>(
                 }
             }
             let body = match body.node_type {
-                AstNodeType::ScopeDeclaration {
+                AstNodeType::ScopeDeclaration(AstScopeDef {
                     body,
                     named,
                     create_new_scope,
                     ..
-                } => AstNode::new(
+                }) => AstNode::new(
                     body.as_ref()
                         .and_then(|b| b.first().zip(b.last()))
                         .map(|(a, b)| Span::new_from_spans(a.span, b.span))
                         .unwrap_or(Span::default()),
-                    AstNodeType::ScopeDeclaration {
+                    AstNodeType::ScopeDeclaration(AstScopeDef {
                         body,
                         named,
                         is_temp: true,
                         create_new_scope,
                         define: false,
-                    },
+                    }),
                 ),
                 _ => ensure_scope_node(body, true, false),
             };

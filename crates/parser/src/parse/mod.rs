@@ -10,6 +10,7 @@ use crate::{
             functions::{AstCurry, CallArg},
             lists::{AstList, AstListRepeat},
             literals::{AstStruct, AstTuple},
+            scopes::AstScopeDef,
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -598,13 +599,13 @@ pub fn parse_program_with_source(
         };
         return Ok(AstNode::new(
             sp,
-            AstNodeType::ScopeDeclaration {
+            AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: Some(items),
                 named: None,
                 is_temp: false,
                 create_new_scope: Some(false),
                 define: false,
-            },
+            }),
         ));
     }
 

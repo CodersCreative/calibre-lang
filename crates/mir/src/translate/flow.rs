@@ -22,6 +22,7 @@ use calibre_parser::{
             },
             functions::CallArg,
             matching::{AstMatch, MatchArmType, MatchBody},
+            scopes::AstScopeDef,
         },
         types::{ParserDataType, ParserInnerType},
     },
@@ -584,35 +585,35 @@ impl MirLowering for AstPipe {
 
                     let point: AstNode = point.into();
                     value = match point.node_type {
-                        AstNodeType::ScopeDeclaration {
+                        AstNodeType::ScopeDeclaration(AstScopeDef {
                             body: Some(mut body),
                             named: None,
                             is_temp,
                             create_new_scope: _,
                             define,
-                        } => {
+                        }) => {
                             body.insert(0, var_dec);
 
                             AstNode {
-                                node_type: AstNodeType::ScopeDeclaration {
+                                node_type: AstNodeType::ScopeDeclaration(AstScopeDef {
                                     body: Some(body),
                                     named: None,
                                     is_temp,
                                     create_new_scope: Some(!keep_scope),
                                     define,
-                                },
+                                }),
                                 ..point
                             }
                         }
                         _ => AstNode::new(
                             span,
-                            AstNodeType::ScopeDeclaration {
+                            AstNodeType::ScopeDeclaration(AstScopeDef {
                                 body: Some(vec![var_dec, point]),
                                 named: None,
                                 is_temp: true,
                                 create_new_scope: Some(!keep_scope),
                                 define: false,
-                            },
+                            }),
                         ),
                     }
                 }

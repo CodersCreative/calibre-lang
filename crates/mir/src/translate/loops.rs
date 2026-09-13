@@ -24,6 +24,7 @@ use calibre_parser::{
             literals::AstRange,
             loops::{AstLoop, LoopType},
             memory::AstRef,
+            scopes::AstScopeDef,
             unary::AstNot,
         },
         types::{ParserDataType, ParserInnerType},
@@ -145,25 +146,25 @@ impl MirLowering for AstLoop {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         if self.label.is_none()
-            && let AstNodeType::ScopeDeclaration {
+            && let AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: scope_body,
                 named: Some(named),
                 is_temp,
                 create_new_scope,
                 define: false,
-            } = &self.body.node_type
+            }) = &self.body.node_type
             && named.args.is_empty()
         {
             self.label = Some(named.name.clone());
             *self.body = AstNode::new(
                 span,
-                AstNodeType::ScopeDeclaration {
+                AstNodeType::ScopeDeclaration(AstScopeDef {
                     body: scope_body.clone(),
                     named: None,
                     is_temp: *is_temp,
                     create_new_scope: *create_new_scope,
                     define: false,
-                },
+                }),
             );
         }
 

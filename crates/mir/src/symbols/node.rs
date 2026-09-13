@@ -135,6 +135,9 @@ impl MiddleEnvironment {
             AstNodeType::LoopDeclaration(x) => x.type_of(self, scope, node.span),
             AstNodeType::IterExpression(x) => x.type_of(self, scope, node.span),
 
+            // Scopes
+            AstNodeType::ScopeDeclaration(x) => x.type_of(self, scope, node.span),
+
             // TODO
             AstNodeType::Break { .. }
             | AstNodeType::Continue { .. }
@@ -149,7 +152,6 @@ impl MiddleEnvironment {
             | AstNodeType::DestructureDeclaration { .. }
             | AstNodeType::DestructureAssignment { .. }
             | AstNodeType::TestDeclaration { .. }
-            | AstNodeType::ScopeDeclaration { define: true, .. }
             | AstNodeType::ScopeAlias { .. }
             | AstNodeType::DataType { .. } => None,
             AstNodeType::InlineGenerator { map, data_type, .. } => {
@@ -172,39 +174,6 @@ impl MiddleEnvironment {
             AstNodeType::ParenExpression { value } => self
                 .resolve_type_from_node(scope, value)
                 .map(|x| x.unwrap_all_refs()),
-            AstNodeType::ScopeDeclaration {
-                body: Some(body), ..
-            } => {
-                let mut typ = None;
-
-                for node in body {
-                    typ = self.resolve_emit_type_from_node(scope, node);
-                    if typ.is_some() {
-                        break;
-                    }
-                }
-
-                typ
-            }
-            AstNodeType::ScopeDeclaration {
-                named: Some(named), ..
-            } => {
-                let name = self
-                    .resolve(
-                        scope,
-                        &named.name,
-                        ResolutionOptions::default().with_dollar(),
-                    )
-                    .ok()?;
-                let resolved = self
-                    .scoping
-                    .resolve_macro(scope, &name)?
-                    .body
-                    .last()?
-                    .clone();
-                self.resolve_type_from_node(scope, &resolved)
-            }
-            AstNodeType::ScopeDeclaration { .. } => unreachable!(),
             AstNodeType::Tag { .. } => {
                 Some(ParserDataType::new(node.span, ParserInnerType::Auto(None)))
             }
