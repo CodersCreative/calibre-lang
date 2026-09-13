@@ -253,7 +253,7 @@ impl From<HashKey> for RuntimeValue {
                 let mut entries = Vec::with_capacity(values.len());
 
                 for (k, v) in values {
-                    entries.push((k.to_string(), RuntimeValue::from(v)));
+                    entries.push((k, RuntimeValue::from(v)));
                 }
 
                 RuntimeValue::Aggregate(name, Gc::new(GcMap(ObjectMap(entries))))

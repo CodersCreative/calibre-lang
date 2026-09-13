@@ -96,7 +96,10 @@ impl MirLowering for AstStruct {
                             }
                         }
                     }
-                    map.push((idx.to_string(), itm.lower_or_empty(env, scope, span)));
+                    map.push((
+                        Ustr::from(&idx.to_string()),
+                        itm.lower_or_empty(env, scope, span),
+                    ));
                 }
 
                 map

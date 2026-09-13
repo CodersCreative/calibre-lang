@@ -10,6 +10,7 @@ use std::{
     ops::{Deref, DerefMut},
     str::FromStr,
 };
+use ustr::Ustr;
 
 pub mod binary;
 pub mod comparison;
@@ -99,7 +100,7 @@ impl Display for RefMutability {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObjectType<T> {
-    Map(Vec<(String, T)>),
+    Map(Vec<(Ustr, T)>),
     Tuple(Vec<T>),
 }
 
@@ -110,7 +111,7 @@ impl<T> ObjectType<T> {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ObjectMap<T>(pub Vec<(String, T)>);
+pub struct ObjectMap<T>(pub Vec<(Ustr, T)>);
 
 impl<T> ObjectMap<T> {
     pub fn get(&self, key: &str) -> Option<&T> {
@@ -129,12 +130,24 @@ impl<T> ObjectMap<T> {
 
 impl<T> From<FxHashMap<String, T>> for ObjectMap<T> {
     fn from(value: FxHashMap<String, T>) -> Self {
-        Self(value.into_iter().collect())
+        Self(value.into_iter().map(|x| (Ustr::from(&x.0), x.1)).collect())
     }
 }
 
 impl<T> From<Vec<(String, T)>> for ObjectMap<T> {
     fn from(value: Vec<(String, T)>) -> Self {
+        Self(value.into_iter().map(|x| (Ustr::from(&x.0), x.1)).collect())
+    }
+}
+
+impl<T> From<FxHashMap<Ustr, T>> for ObjectMap<T> {
+    fn from(value: FxHashMap<Ustr, T>) -> Self {
+        Self(value.into_iter().collect())
+    }
+}
+
+impl<T> From<Vec<(Ustr, T)>> for ObjectMap<T> {
+    fn from(value: Vec<(Ustr, T)>) -> Self {
         Self(value)
     }
 }
@@ -145,7 +158,7 @@ impl<T> From<Vec<T>> for ObjectMap<T> {
             value
                 .into_iter()
                 .enumerate()
-                .map(|x| (x.0.to_string(), x.1))
+                .map(|x| (Ustr::from(&x.0.to_string()), x.1))
                 .collect(),
         )
     }
@@ -161,7 +174,7 @@ impl<T> From<ObjectType<T>> for ObjectMap<T> {
 }
 
 impl<T> Deref for ObjectMap<T> {
-    type Target = Vec<(String, T)>;
+    type Target = Vec<(Ustr, T)>;
 
     fn deref(&self) -> &Self::Target {
         &self.0

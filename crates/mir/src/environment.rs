@@ -449,7 +449,7 @@ impl MiddleEnvironment {
                         .iter()
                         .map(|(field_name, (data_type, default_val))| {
                             (
-                                field_name.clone(),
+                                *field_name,
                                 (
                                     data_type.clone().rename_owned(&mut rename_state),
                                     default_val.clone(),

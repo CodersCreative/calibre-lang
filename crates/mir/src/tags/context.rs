@@ -106,14 +106,14 @@ impl MiddleEnvironment {
                     AstNodeType::StructLiteral(AstStruct {
                         identifier: PotentialGenericTypeIdentifier::new(sp, "Package"),
                         value: ObjectType::Map(vec![
-                            ("name".to_string(), value(meta.name)),
-                            ("version".to_string(), value(meta.version)),
-                            ("description".to_string(), value(meta.description)),
-                            ("license".to_string(), value(meta.license)),
-                            ("repository".to_string(), value(meta.repository)),
-                            ("homepage".to_string(), value(meta.homepage)),
-                            ("src".to_string(), value(meta.src)),
-                            ("root".to_string(), value(meta.root)),
+                            (Ustr::from("name"), value(meta.name)),
+                            (Ustr::from("version"), value(meta.version)),
+                            (Ustr::from("description"), value(meta.description)),
+                            (Ustr::from("license"), value(meta.license)),
+                            (Ustr::from("repository"), value(meta.repository)),
+                            (Ustr::from("homepage"), value(meta.homepage)),
+                            (Ustr::from("src"), value(meta.src)),
+                            (Ustr::from("root"), value(meta.root)),
                         ]),
                     }),
                 )),
@@ -176,10 +176,10 @@ impl MiddleEnvironment {
                     AstNodeType::StructLiteral(AstStruct {
                         identifier: PotentialGenericTypeIdentifier::new(sp, "ExecContext"),
                         value: ObjectType::Map(vec![
-                            ("function_name".to_string(), value(function_name)),
-                            ("module_name".to_string(), value(scope_ref.namespace)),
+                            (Ustr::from("function_name"), value(function_name)),
+                            (Ustr::from("module_name"), value(scope_ref.namespace)),
                             (
-                                "path".to_string(),
+                                Ustr::from("path"),
                                 value(Ustr::from(
                                     &scope_ref
                                         .path
@@ -189,11 +189,11 @@ impl MiddleEnvironment {
                                 )),
                             ),
                             (
-                                "line".to_string(),
+                                Ustr::from("line"),
                                 AstNode::int(sp, format!("{}u", sp.from.line)),
                             ),
                             (
-                                "col".to_string(),
+                                Ustr::from("col"),
                                 AstNode::int(sp, format!("{}u", sp.from.col)),
                             ),
                         ]),

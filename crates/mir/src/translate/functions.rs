@@ -372,9 +372,9 @@ impl MiddleEnvironment {
                     generic_types: vec![elem_type],
                 },
                 value: ObjectType::Map(vec![
-                    (String::from("data"), AstNode::identifier(span, &next_name)),
-                    (String::from("index"), AstNode::int(span, 0)),
-                    (String::from("done"), AstNode::identifier(span, "false")),
+                    (Ustr::from("data"), AstNode::identifier(span, &next_name)),
+                    (Ustr::from("index"), AstNode::int(span, 0)),
+                    (Ustr::from("done"), AstNode::identifier(span, "false")),
                 ]),
             }),
         );
@@ -411,10 +411,10 @@ impl MiddleEnvironment {
             AstNodeType::StructLiteral(AstStruct {
                 identifier: PotentialGenericTypeIdentifier::new(span, "ExecContext"),
                 value: ObjectType::Map(vec![
-                    ("function_name".to_string(), value(current_function_name)),
-                    ("module_name".to_string(), value(module_name)),
+                    (Ustr::from("function_name"), value(current_function_name)),
+                    (Ustr::from("module_name"), value(module_name)),
                     (
-                        "path".to_string(),
+                        Ustr::from("path"),
                         value(Ustr::from(
                             &scope_ref
                                 .path
@@ -424,11 +424,11 @@ impl MiddleEnvironment {
                         )),
                     ),
                     (
-                        "line".to_string(),
+                        Ustr::from("line"),
                         AstNode::int(span, format!("{}u", span.from.line)),
                     ),
                     (
-                        "col".to_string(),
+                        Ustr::from("col"),
                         AstNode::int(span, format!("{}u", span.from.col)),
                     ),
                 ]),

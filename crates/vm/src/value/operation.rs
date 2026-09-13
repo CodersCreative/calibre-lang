@@ -493,7 +493,7 @@ impl RuntimeValue {
             Self::Aggregate(None, data) => {
                 let mut data = data.clone();
                 let entries = &mut Gc::make_mut(&mut data).0.0;
-                let key = entries.len().to_string();
+                let key = Ustr::from(&entries.len().to_string());
                 entries.push((key, self));
                 Ok(Self::Aggregate(None, data))
             }
@@ -515,7 +515,7 @@ impl RuntimeValue {
             Self::Aggregate(None, data) => {
                 let mut data = data.clone();
                 let entries = &mut Gc::make_mut(&mut data).0.0;
-                let key = entries.len().to_string();
+                let key = Ustr::from(&entries.len().to_string());
                 entries.push((key, rhs));
                 Ok(Self::Aggregate(None, data))
             }

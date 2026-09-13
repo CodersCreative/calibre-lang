@@ -35,7 +35,7 @@ impl TypeDefType {
                 fields: match fields {
                     ObjectType::Map(xs) => ObjectType::Map(
                         xs.iter()
-                            .map(|(k, (v, _default))| (k.clone(), (v.substitute(subst), None)))
+                            .map(|(k, (v, _default))| (*k, (v.substitute(subst), None)))
                             .collect(),
                     ),
                     ObjectType::Tuple(xs) => ObjectType::Tuple(

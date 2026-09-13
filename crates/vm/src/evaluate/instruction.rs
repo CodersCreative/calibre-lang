@@ -201,7 +201,7 @@ impl VM {
                             .0
                             .0
                             .iter_mut()
-                            .find(|(field, _)| field == member_name)
+                            .find(|(field, _)| field == &member_name)
                     {
                         entry.1 = updated_field;
 
@@ -814,11 +814,8 @@ impl VM {
                     *dst,
                     RuntimeValue::Aggregate(
                         layout.name,
-                        Gc::new(crate::value::GcMap(ObjectMap(
-                            entries
-                                .into_iter()
-                                .map(|x| (x.0.to_string(), x.1))
-                                .collect(),
+                        Gc::new(GcMap(ObjectMap(
+                            entries.into_iter().map(|x| (*x.0, x.1)).collect(),
                         ))),
                     ),
                 );
@@ -985,7 +982,9 @@ impl VM {
                         _ => break,
                     }
                 }
-                let mut member_source: Option<(u16, String)> = None;
+
+                let mut member_source: Option<(u16, Ustr)> = None;
+
                 let val = match resolved {
                     RuntimeValue::Generator { type_name, state } => match member_short {
                         "data" | "next" => {
@@ -1089,9 +1088,12 @@ impl VM {
                                     .member_sources
                                     .get(&source_reg)
                                     .map(|(parent, path)| {
-                                        (parent.to_owned(), format!("{path}.{}", map.0.0[idx].0))
+                                        (
+                                            parent.to_owned(),
+                                            Ustr::from(&format!("{path}.{}", map.0.0[idx].0)),
+                                        )
                                     })
-                                    .unwrap_or((source_reg, map.0.0[idx].0.clone())),
+                                    .unwrap_or((source_reg, Ustr::from(&map.0.0[idx].0))),
                             );
 
                             map.0.0[idx].1.clone()
@@ -1105,9 +1107,9 @@ impl VM {
                                         .member_sources
                                         .get(&source_reg)
                                         .map(|(parent, path)| {
-                                            (parent.to_owned(), format!("{path}.0"))
+                                            (parent.to_owned(), Ustr::from(&format!("{path}.0")))
                                         })
-                                        .unwrap_or((source_reg, "0".to_string())),
+                                        .unwrap_or((source_reg, Ustr::from("0"))),
                                 );
                                 wrapped
                             } else {
@@ -1714,10 +1716,7 @@ impl VM {
                             let (s, e) =
                                 Self::resolve_slice_range(tuple.as_ref().0.0.len(), *start, *end);
                             let slice = tuple.as_ref().0.0[s..e].to_vec();
-                            RuntimeValue::Aggregate(
-                                None,
-                                Gc::new(crate::value::GcMap(ObjectMap(slice))),
-                            )
+                            RuntimeValue::Aggregate(None, Gc::new(GcMap(ObjectMap(slice))))
                         }
                         _ => {
                             return Err(RuntimeError::ExpectedIntIndexFound {

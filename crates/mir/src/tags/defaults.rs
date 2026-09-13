@@ -88,16 +88,16 @@ impl MiddleEnvironment {
                     .iter()
                     .map(|(field_name, (field_type, default_value))| {
                         if let Some(default) = default_value {
-                            (field_name.clone(), *default.clone())
+                            (*field_name, *default.clone())
                         } else if let Some(default) = field_type.default_node() {
-                            (field_name.clone(), default)
+                            (*field_name, default)
                         } else {
                             let resolved = self
                                 .resolve_data_type(scope, field_type, ResolutionOptions::typing())
                                 .unwrap_or(field_type.clone());
                             let type_name = resolved.impl_name();
                             (
-                                field_name.clone(),
+                                *field_name,
                                 AstNode::member(
                                     span,
                                     AstNode::identifier(span, type_name),

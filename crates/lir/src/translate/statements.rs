@@ -150,9 +150,7 @@ impl LirLowering for MirAggregate {
                 self.value
                     .0
                     .into_iter()
-                    .map(|(field_name, field_node)| {
-                        (field_name.to_string(), env.lower_node(field_node))
-                    })
+                    .map(|(field_name, field_node)| (field_name, env.lower_node(field_node)))
                     .collect(),
             ),
         })

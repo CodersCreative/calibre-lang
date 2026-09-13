@@ -69,14 +69,14 @@ impl AstFormatting for AstStruct {
                             && x.value.get_ident().text() == key
                         {
                             (
-                                key.clone(),
+                                *key,
                                 None,
                                 formatter.get_potential_comment(&value.span),
                                 formatter.get_trailing_comment(&value.span),
                             )
                         } else {
                             (
-                                key.clone(),
+                                *key,
                                 Some(value.format(formatter)),
                                 formatter.get_potential_comment(&value.span),
                                 formatter.get_trailing_comment(&value.span),
@@ -91,7 +91,7 @@ impl AstFormatting for AstStruct {
                         let base = if let Some(value) = value {
                             format!("{} : {}", key, value)
                         } else {
-                            key.clone()
+                            key.to_string()
                         };
 
                         let mut temp = handle_comment!(leading, base);

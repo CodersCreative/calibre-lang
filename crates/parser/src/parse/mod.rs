@@ -26,6 +26,7 @@ use setup::build_parser_prelude;
 use statements::{StatementParsers, build_statement_parser};
 use std::sync::Arc;
 use tracing::instrument;
+use ustr::Ustr;
 use util::{lex, span, strip_block_comments_keep_layout};
 
 mod diagnostics;
@@ -176,7 +177,7 @@ pub fn parse_program_with_source(
                                 .map(|((k, sp), value)| {
                                     let value =
                                         value.unwrap_or_else(|| AstNode::identifier(sp, &k));
-                                    (k, value)
+                                    (Ustr::from(&k), value)
                                 })
                                 .separated_by(lex(pad_with_newline.clone(), just(',')))
                                 .allow_trailing()

@@ -840,12 +840,14 @@ impl From<MiddleNodeType> for AstNodeType {
                         )),
                         args: {
                             let mut lst = Vec::new();
-                            let mut value: Vec<(String, MiddleNode)> =
+                            let mut value: Vec<(Ustr, MiddleNode)> =
                                 value.value.0.into_iter().collect();
-                            value.sort_by(|a, b| a.0.cmp(&b.0));
+                            value.sort_by_key(|a| a.0);
+
                             for arg in value {
                                 lst.push(CallArg::Value(arg.1.into()));
                             }
+
                             lst
                         },
                         reverse_args: Vec::new(),

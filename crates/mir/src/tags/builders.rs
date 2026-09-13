@@ -41,7 +41,7 @@ impl MiddleEnvironment {
             .iter()
             .map(|(field, (ty, node))| {
                 (
-                    field.clone(),
+                    *field,
                     (
                         ParserDataType::new(span, ParserInnerType::Option(Box::new(ty.clone()))),
                         node.clone().map(|x| {
@@ -79,7 +79,7 @@ impl MiddleEnvironment {
                 .iter()
                 .map(|(other, _)| {
                     (
-                        other.clone(),
+                        *other,
                         if other == field {
                             AstNode::call(
                                 span,
@@ -142,7 +142,7 @@ impl MiddleEnvironment {
             .iter()
             .map(|(field, _)| {
                 (
-                    field.clone(),
+                    *field,
                     AstNode::new(
                         span,
                         AstNodeType::Try(AstTry {

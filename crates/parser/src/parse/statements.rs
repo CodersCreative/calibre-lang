@@ -27,6 +27,7 @@ use chumsky::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
+use ustr::Ustr;
 
 #[derive(Clone, Copy)]
 enum DeclAssignOp {
@@ -204,7 +205,7 @@ pub fn build_statement_parser<'a>(
                         let mut fields = Vec::new();
                         for ((names, ty), default_value) in groups {
                             for (n, _sp) in names {
-                                fields.push((n, (ty.clone(), default_value.clone())));
+                                fields.push((Ustr::from(&n), (ty.clone(), default_value.clone())));
                             }
                         }
                         TypeDefType::Struct {

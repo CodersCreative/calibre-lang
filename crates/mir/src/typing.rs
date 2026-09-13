@@ -425,7 +425,10 @@ impl MiddleTypeDefType {
                             let resolved_type = env
                                 .resolve_data_type(scope, &t, ResolutionOptions::typing())
                                 .unwrap_or(t);
-                            map.push((format!("{}", map.len()), (resolved_type, v.map(Box::new))));
+                            map.push((
+                                Ustr::from(&map.len().to_string()),
+                                (resolved_type, v.map(Box::new)),
+                            ));
                         }
                     }
                 }

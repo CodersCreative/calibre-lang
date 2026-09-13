@@ -1,3 +1,5 @@
+use ustr::Ustr;
+
 use crate::{
     ast::{
         ObjectType,
@@ -439,7 +441,7 @@ impl TypeDefPreFormat {
     }
 
     fn format_struct_map_vec(
-        map: &[(String, (ParserDataType, Option<AstNode>))],
+        map: &[(Ustr, (ParserDataType, Option<AstNode>))],
         formatter: &mut Formatter,
     ) -> (String, String, bool) {
         #[allow(clippy::type_complexity)]
@@ -462,7 +464,7 @@ impl TypeDefPreFormat {
                     format!("{} : {}", key, type_txt)
                 };
                 (
-                    key.clone(),
+                    key.to_string(),
                     type_txt,
                     field_txt,
                     leading,
