@@ -1,3 +1,4 @@
+use crate::ast::idents::ParsedIntLiteral;
 use logos::{Lexer, Logos};
 use logos_display::{Debug, Display};
 
@@ -17,8 +18,16 @@ enum Token<'a> {
     Dyn,
 
     // Values
-    #[regex("[a-zA-Z_][a-zA-Z0-9_]*")]
+    #[regex(r#"[a-zA-Z_][a-zA-Z0-9_]*"#)]
     Identifier(&'a str),
+    #[regex(r#"'([^'\\]|\\['"\\nter0]|\\x[0-9a-fA-F]{2}|\\u\{[0-9a-fA-F]{1,6}\})'"#)]
+    CharLiteral(&'a str),
+    #[regex(r#""[^"]*""#)]
+    StringLiteral(&'a str),
+    #[regex(r#"[0-9][0-9_]*(\.[0-9][0-9_]*|[fg])([eE][+-]?[0-9][0-9_]*)?"#)]
+    FloatLiteral(&'a str),
+    #[regex(r#"[0-9][0-9_]*([eE][+-]?[0-9][0-9_]*)?[uib]?"#, lex_int)]
+    IntLiteral(ParsedIntLiteral),
 
     // Ranges
     #[token("..")]
@@ -225,13 +234,13 @@ enum Token<'a> {
     NewLine,
     #[regex(r"//[^\n]*", allow_greedy = true, callback = |lex| lex.slice())]
     LineComment(&'a str),
-    #[regex(r"/\*", block_comment)]
+    #[regex(r"/\*", lex_block_comment)]
     BlockComment(&'a str),
     #[regex(r"[ \t\f;]+", logos::skip)]
     Whitespace,
 }
 
-fn block_comment<'a>(lex: &mut Lexer<'a, Token<'a>>) -> logos::Filter<&'a str> {
+fn lex_block_comment<'a>(lex: &mut Lexer<'a, Token<'a>>) -> logos::Filter<&'a str> {
     let mut nesting = 1;
     let bytes = lex.remainder().as_bytes();
     let mut i = 0;
@@ -260,4 +269,9 @@ fn block_comment<'a>(lex: &mut Lexer<'a, Token<'a>>) -> logos::Filter<&'a str> {
     }
 
     logos::Filter::Emit("")
+}
+
+fn lex_int<'a>(lex: &mut Lexer<'a, Token<'a>>) -> Option<ParsedIntLiteral> {
+    let slice = lex.slice();
+    ParsedIntLiteral::parse(slice)
 }
