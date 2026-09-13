@@ -61,17 +61,29 @@ impl CalibreLanguageServer {
         }
     }
 
-    pub(super) fn lsp_pos(pos: CalPosition) -> Position {
-        Position {
-            line: pos.line.saturating_sub(1),
-            character: pos.col.saturating_sub(1),
+    pub(super) fn byte_offset_to_position(text: &str, offset: usize) -> Position {
+        let mut line = 0u32;
+        let mut character = 0u32;
+
+        for (idx, ch) in text.char_indices() {
+            if idx >= offset {
+                break;
+            }
+            if ch == '\n' {
+                line += 1;
+                character = 0;
+            } else {
+                character += 1;
+            }
         }
+
+        Position { line, character }
     }
 
-    pub(super) fn lsp_range(span: CalSpan) -> Range {
+    pub(super) fn lsp_range(span: CalSpan, text: &str) -> Range {
         Range {
-            start: Self::lsp_pos(span.from),
-            end: Self::lsp_pos(span.to),
+            start: Self::byte_offset_to_position(text, span.from),
+            end: Self::byte_offset_to_position(text, span.to),
         }
     }
 

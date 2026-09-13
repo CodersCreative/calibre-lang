@@ -4,7 +4,7 @@ type Package := struct {
 
 type ExecContext := struct {
 	function_name module_name path : str,
-	line col : uint
+	span : range
 };
 
 type ListIter:<T> := struct { data : list:<T>, index : int };

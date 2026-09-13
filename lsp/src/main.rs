@@ -22,7 +22,7 @@ use calibre_mir::errors::MiddleErr;
 use calibre_mir::typing::MiddleTypeDefType;
 use calibre_parser::ast::types::{ParserDataType, ParserInnerType};
 use calibre_parser::formatter::{Formatter, Tab};
-use calibre_parser::{CalibreError, Parser, ParserError, Position as CalPosition, Span as CalSpan};
+use calibre_parser::{CalibreError, Parser, ParserError, Span as CalSpan};
 use clap::Parser as ClapParser;
 use futures::future::{BoxFuture, ready};
 use model::*;

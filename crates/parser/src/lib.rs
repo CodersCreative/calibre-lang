@@ -125,9 +125,9 @@ impl From<SimpleSpan> for Span {
     }
 }
 
-impl Into<Range<usize>> for Span {
-    fn into(self) -> Range<usize> {
-        self.from..self.to
+impl From<Span> for Range<usize> {
+    fn from(value: Span) -> Self {
+        value.from..value.to
     }
 }
 
@@ -144,7 +144,7 @@ impl Span {
     }
 
     pub fn is_none(&self) -> bool {
-        return self.from == 0 && self.to == 0;
+        self.from == 0 && self.to == 0
     }
 
     pub fn to_range(self) -> Range<usize> {
@@ -331,9 +331,13 @@ impl CalibreError for SyntaxErr {
                 "insert the missing closing {:?} bracket to finish the current construct",
                 bracket
             )),
-            Self::UnclosedParen => Some(format!("add a closing ')' to match the opening '('")),
-            Self::UnclosedBracket => Some(format!("add a closing ']' to match the opening '['")),
-            Self::UnclosedBrace => Some(format!("add a closing '}}' to match the opening '{{'")),
+            Self::UnclosedParen => Some(String::from("add a closing ')' to match the opening '('")),
+            Self::UnclosedBracket => {
+                Some(String::from("add a closing ']' to match the opening '['"))
+            }
+            Self::UnclosedBrace => {
+                Some(String::from("add a closing '}}' to match the opening '{{'"))
+            }
             Self::MissingSemicolon => {
                 Some("add ';' or a newline to terminate the previous statement".to_string())
             }

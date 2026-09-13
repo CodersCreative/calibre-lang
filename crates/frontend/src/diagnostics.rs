@@ -26,7 +26,7 @@ pub fn emit_calibre_errors<T: CalibreError>(path: impl AsRef<Path>, contents: &s
             .with_code(err.code().to_string());
 
         diagnostic = diagnostic.with_labels(vec![
-            Label::primary(file_id, err.span().to_range(contents)).with_message(err.to_string()),
+            Label::primary(file_id, err.span().to_range()).with_message(err.to_string()),
         ]);
 
         if let Some(hint) = err.hint() {
@@ -60,7 +60,7 @@ fn get_diagnostic_and_files(
     let mut diagnostic = Diagnostic::error().with_message(message);
     if let Some(span) = span {
         diagnostic = diagnostic.with_labels(vec![
-            Label::primary(file_id, span.to_range(contents)).with_message("here"),
+            Label::primary(file_id, span.to_range()).with_message("here"),
         ]);
     }
 
@@ -140,7 +140,7 @@ pub fn emit_calibre_error<T: CalibreError>(
     let span = span.unwrap_or_else(|| err.span());
     if span != Span::default() {
         diagnostic = diagnostic.with_labels(vec![
-            Label::primary(file_id, span.to_range(contents)).with_message(err.to_string()),
+            Label::primary(file_id, span.to_range()).with_message(err.to_string()),
         ]);
     } else {
         diagnostic = diagnostic.with_labels(vec![

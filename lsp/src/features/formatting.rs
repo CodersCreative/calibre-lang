@@ -1,16 +1,10 @@
 use super::*;
 
 impl CalibreLanguageServer {
-    pub(super) fn lsp_range_to_cal_span(range: Range) -> CalSpan {
+    pub(super) fn lsp_range_to_cal_span(range: Range, text: &str) -> CalSpan {
         CalSpan {
-            from: CalPosition {
-                line: range.start.line.saturating_add(1),
-                col: range.start.character.saturating_add(1),
-            },
-            to: CalPosition {
-                line: range.end.line.saturating_add(1),
-                col: range.end.character.saturating_add(1),
-            },
+            from: Self::position_to_byte_offset(text, range.start),
+            to: Self::position_to_byte_offset(text, range.end),
         }
     }
 

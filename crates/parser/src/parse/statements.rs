@@ -90,7 +90,7 @@ pub fn build_statement_parser<'a>(
                 .or_not()
                 .map(|x| x.unwrap_or_default()),
         )
-        .map_with_span({ move |((name, _sp), args), sp| (ParserText::new(sp, name), args, sp) })
+        .map_with_span(move |((name, _sp), args), sp| (ParserText::new(sp, name), args, sp))
         .boxed();
 
     let import_stmt = lex(pad.clone(), just("import"))

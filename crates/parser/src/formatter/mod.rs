@@ -370,31 +370,7 @@ pub(crate) use handle_comment;
 
 impl Formatter {
     fn slice_by_span(text: &str, span: Span) -> String {
-        fn offset_for(text: &str, line: u32, col: u32) -> usize {
-            let mut cur_line = 1u32;
-            let mut cur_col = 1u32;
-            let mut last = 0usize;
-            for (idx, ch) in text.char_indices() {
-                if cur_line == line && cur_col == col {
-                    return idx;
-                }
-                if ch == '\n' {
-                    cur_line += 1;
-                    cur_col = 1;
-                } else {
-                    cur_col += 1;
-                }
-                last = idx + ch.len_utf8();
-            }
-            if cur_line == line && cur_col == col {
-                return text.len();
-            }
-            last.min(text.len())
-        }
-
-        let start = offset_for(text, span.from.line.max(1), span.from.col.max(1));
-        let end = offset_for(text, span.to.line.max(1), span.to.col.max(1)).max(start);
-        text.get(start..end).unwrap_or("").to_string()
+        text.get(span.to_range()).unwrap_or("").to_string()
     }
 
     fn extract_comments(text: &str) -> Vec<Comment> {
@@ -408,8 +384,6 @@ impl Formatter {
         let chars: Vec<char> = text.chars().collect();
         let mut comments = Vec::new();
         let mut i = 0usize;
-        let mut line = 1u32;
-        let mut col = 1u32;
         let mut state = State::Normal;
         let mut escaped = false;
 
@@ -442,10 +416,8 @@ impl Formatter {
                     } else if c == '\'' {
                         state = State::Char;
                     } else if c == '/' && next == Some('/') {
-                        let start_line = line;
-                        let start_col = col;
+                        let start_offset = i;
                         i += 2;
-                        col += 2;
                         let mut val = String::new();
                         while i < chars.len() {
                             let ch = chars[i];
@@ -454,76 +426,39 @@ impl Formatter {
                             }
                             val.push(ch);
                             i += 1;
-                            col += 1;
                         }
-                        let end_col = if col > 1 { col - 1 } else { col };
+                        let end_offset = i;
                         comments.push(Comment {
                             value: val,
                             kind: CommentKind::Line,
-                            span: Span::new(
-                                crate::Position {
-                                    line: start_line,
-                                    col: start_col,
-                                },
-                                crate::Position {
-                                    line: start_line,
-                                    col: end_col,
-                                },
-                            ),
+                            span: Span::new(start_offset, end_offset),
                         });
                         continue;
                     } else if c == '/' && next == Some('*') {
-                        let start_line = line;
-                        let start_col = col;
+                        let start_offset = i;
                         i += 2;
-                        col += 2;
                         let mut val = String::new();
-                        let mut end_line = line;
-                        let mut end_col = col;
                         while i < chars.len() {
                             let ch = chars[i];
                             let ch_next = chars.get(i + 1).copied();
                             if ch == '*' && ch_next == Some('/') {
-                                end_line = line;
-                                end_col = col + 1;
                                 i += 2;
-                                col += 2;
                                 break;
                             }
                             val.push(ch);
-                            if ch == '\n' {
-                                line += 1;
-                                col = 1;
-                            } else {
-                                col += 1;
-                            }
                             i += 1;
                         }
+                        let end_offset = i;
                         comments.push(Comment {
                             value: val,
                             kind: CommentKind::Block,
-                            span: Span::new(
-                                crate::Position {
-                                    line: start_line,
-                                    col: start_col,
-                                },
-                                crate::Position {
-                                    line: end_line,
-                                    col: end_col,
-                                },
-                            ),
+                            span: Span::new(start_offset, end_offset),
                         });
                         continue;
                     }
                 }
             }
 
-            if c == '\n' {
-                line += 1;
-                col = 1;
-            } else {
-                col += 1;
-            }
             i += 1;
         }
 
@@ -547,7 +482,7 @@ impl Formatter {
     }
 
     pub(crate) fn get_scope_lines(&mut self, nodes: &[AstNode]) -> Vec<String> {
-        let mut last_line: Option<u32> = None;
+        let mut last_end: Option<usize> = None;
         let mut lines = Vec::new();
 
         for node in nodes {
@@ -561,8 +496,11 @@ impl Formatter {
                 format!("{};", formatted)
             };
 
-            if let Some(line) = last_line {
-                if (node.span.from.line as i32 - line as i32).abs() > 1 {
+            // TODO Find a more certain way of finding out if theres a new line
+            if let Some(end) = last_end {
+                let gap = node.span.from.saturating_sub(end);
+
+                if gap > 100 {
                     lines.push(format!("\n{}\n", formatted));
                 } else {
                     lines.push(format!("{}\n", formatted));
@@ -571,7 +509,7 @@ impl Formatter {
                 lines.push(format!("{}\n", formatted));
             }
 
-            last_line = Some(node.span.to.line);
+            last_end = Some(node.span.to);
         }
 
         lines
@@ -590,9 +528,7 @@ impl Formatter {
             while let Some(comment) = self.comments.first() {
                 let close_enough = comments
                     .last()
-                    .map(|last| {
-                        (comment.span.from.line as i32 - last.span.to.line as i32).abs() <= 1
-                    })
+                    .map(|last| comment.span.from.saturating_sub(last.span.to) <= 100)
                     .unwrap_or(false);
                 if close_enough {
                     comments.push(self.comments.remove(0));
@@ -635,10 +571,8 @@ impl Formatter {
     pub fn get_potential_comment(&mut self, span: &Span) -> Option<String> {
         let mut comments = Vec::new();
         while let Some(first) = self.comments.first() {
-            let is_before_line = first.span.to.line < span.from.line;
-            let is_same_line_before =
-                first.span.to.line == span.from.line && first.span.to.col < span.from.col;
-            if is_before_line || is_same_line_before {
+            let is_before = first.span.to < span.from;
+            if is_before {
                 comments.push(self.comments.remove(0));
             } else {
                 break;
@@ -654,9 +588,10 @@ impl Formatter {
 
     pub fn get_trailing_comment(&mut self, span: &Span) -> Option<String> {
         if let Some(first) = self.comments.first() {
-            let is_same_line_after =
-                first.span.from.line == span.to.line && first.span.from.col >= span.to.col;
-            if is_same_line_after {
+            // TODO Get if new line
+
+            let is_close = first.span.from.saturating_sub(span.to) <= 50;
+            if is_close {
                 let comment = self.comments.remove(0);
                 return Some(Formatter::fmt_comments(vec![comment]));
             }
@@ -667,9 +602,7 @@ impl Formatter {
     pub fn take_leading_scope_comments(&mut self, first_body_span: &Span) -> Option<String> {
         let mut comments = Vec::new();
         while let Some(first) = self.comments.first() {
-            let before_first = first.span.to.line < first_body_span.from.line
-                || (first.span.to.line == first_body_span.from.line
-                    && first.span.to.col < first_body_span.from.col);
+            let before_first = first.span.to < first_body_span.from;
             if before_first {
                 comments.push(self.comments.remove(0));
             } else {

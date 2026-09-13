@@ -1,11 +1,11 @@
 use super::*;
 
 impl CalibreLanguageServer {
-    pub(super) fn parser_diagnostics(errors: &[ParserError]) -> Vec<Diagnostic> {
+    pub(super) fn parser_diagnostics(errors: &[ParserError], text: &str) -> Vec<Diagnostic> {
         errors
             .iter()
             .map(|err| Diagnostic {
-                range: Self::lsp_range(err.span()),
+                range: Self::lsp_range(err.span(), text),
                 severity: Some(DiagnosticSeverity::ERROR),
                 code: Some(NumberOrString::String(err.code().to_string())),
                 source: Some(err.step().to_string()),
@@ -15,26 +15,27 @@ impl CalibreLanguageServer {
             .collect()
     }
 
-    pub(super) fn semantic_diagnostics(errors: &MiddleErr) -> Vec<Diagnostic> {
+    pub(super) fn semantic_diagnostics(errors: &MiddleErr, text: &str) -> Vec<Diagnostic> {
         match errors {
             MiddleErr::At(span, inner) => {
-                let mut diagnostics = Self::semantic_diagnostics(inner);
+                let mut diagnostics = Self::semantic_diagnostics(inner, text);
                 if diagnostics.is_empty() {
                     diagnostics.push(Diagnostic {
-                        range: Self::lsp_range(*span),
+                        range: Self::lsp_range(*span, text),
                         severity: Some(DiagnosticSeverity::ERROR),
                         message: inner.to_string(),
                         ..Diagnostic::default()
                     });
                 } else {
-                    diagnostics[0].range = Self::lsp_range(*span);
+                    diagnostics[0].range = Self::lsp_range(*span, text);
                 }
                 diagnostics
             }
-            MiddleErr::ParserErrors { errors, .. } => Self::parser_diagnostics(errors),
-            MiddleErr::Multiple(errors) => {
-                errors.iter().flat_map(Self::semantic_diagnostics).collect()
-            }
+            MiddleErr::ParserErrors { errors, .. } => Self::parser_diagnostics(errors, text),
+            MiddleErr::Multiple(errors) => errors
+                .iter()
+                .flat_map(|e| Self::semantic_diagnostics(e, text))
+                .collect(),
             other => vec![Diagnostic {
                 range: Range {
                     start: Position {
@@ -57,7 +58,7 @@ impl CalibreLanguageServer {
         let mut parser = Parser::default();
         parser.set_source_path(Self::path_from_url(uri));
         let ast = parser.produce_ast(text);
-        let mut diagnostics = Self::parser_diagnostics(&parser.errors);
+        let mut diagnostics = Self::parser_diagnostics(&parser.errors, text);
 
         if parser.errors.is_empty() {
             let path = Self::path_from_url(uri).unwrap_or_default();
@@ -65,9 +66,10 @@ impl CalibreLanguageServer {
                 MiddleEnvironment::new_and_evaluate(ast, path, Vec::new(), false, true);
             let semantic_errors = env.context.take_errors();
             if !semantic_errors.is_empty() {
-                diagnostics.extend(Self::semantic_diagnostics(&MiddleErr::Multiple(
-                    semantic_errors,
-                )));
+                diagnostics.extend(Self::semantic_diagnostics(
+                    &MiddleErr::Multiple(semantic_errors),
+                    text,
+                ));
             }
         }
 

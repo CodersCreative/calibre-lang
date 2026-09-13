@@ -423,14 +423,7 @@ impl MiddleEnvironment {
                                 .to_string_lossy(),
                         )),
                     ),
-                    (
-                        Ustr::from("line"),
-                        AstNode::int(span, format!("{}u", span.from.line)),
-                    ),
-                    (
-                        Ustr::from("col"),
-                        AstNode::int(span, format!("{}u", span.from.col)),
-                    ),
+                    (Ustr::from("span"), AstNode::range(span, span.to_range())),
                 ]),
             }),
         ))

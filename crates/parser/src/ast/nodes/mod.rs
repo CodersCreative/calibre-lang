@@ -31,7 +31,7 @@ use crate::{
     formatter::{AstFormatting, Formatter},
 };
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, matches};
+use std::{fmt::Display, matches, ops::Range};
 use ustr::Ustr;
 
 pub mod access;
@@ -108,6 +108,17 @@ impl AstNode {
             span,
             AstNodeType::IntLiteral(AstInt {
                 value: ParserText::new(span, value.to_string()),
+            }),
+        )
+    }
+
+    pub fn range(span: Span, value: Range<usize>) -> Self {
+        AstNode::new(
+            span,
+            AstNodeType::RangeDeclaration(AstRange {
+                from: Box::new(AstNode::int(span, value.start)),
+                to: Box::new(AstNode::int(span, value.end)),
+                inclusive: false,
             }),
         )
     }

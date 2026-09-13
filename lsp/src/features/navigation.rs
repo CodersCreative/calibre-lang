@@ -18,10 +18,11 @@ impl CalibreLanguageServer {
         fn traverse(
             node: &calibre_mir::ast::MiddleNode,
             pos: Position,
+            text: &str,
             current_scope: &mut ScopeId,
             smallest_span: &mut u32,
         ) {
-            let range = CalibreLanguageServer::lsp_range(node.span);
+            let range = CalibreLanguageServer::lsp_range(node.span, text);
             if !CalibreLanguageServer::is_position_within_range(pos, range) {
                 return;
             }
@@ -59,32 +60,32 @@ impl CalibreLanguageServer {
                     value: Some(value), ..
                 })
                 | MiddleNodeType::FieldAccess(MirField { base: value, .. }) => {
-                    traverse(value, pos, current_scope, smallest_span);
+                    traverse(value, pos, text, current_scope, smallest_span);
                 }
                 MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
                     for stmt in body {
-                        traverse(stmt, pos, current_scope, smallest_span);
+                        traverse(stmt, pos, text, current_scope, smallest_span);
                     }
                 }
                 MiddleNodeType::LoopDeclaration(MirLoop { state, body, .. }) => {
                     if let Some(state) = state {
-                        traverse(state, pos, current_scope, smallest_span);
+                        traverse(state, pos, text, current_scope, smallest_span);
                     }
-                    traverse(body, pos, current_scope, smallest_span);
+                    traverse(body, pos, text, current_scope, smallest_span);
                 }
                 MiddleNodeType::ListLiteral(MirList {
                     data_type: _,
                     values,
                 }) => {
                     for item in values {
-                        traverse(item, pos, current_scope, smallest_span);
+                        traverse(item, pos, text, current_scope, smallest_span);
                     }
                 }
 
                 MiddleNodeType::CallExpression(MirCall { caller, args }) => {
-                    traverse(caller, pos, current_scope, smallest_span);
+                    traverse(caller, pos, text, current_scope, smallest_span);
                     for arg in args {
-                        traverse(arg, pos, current_scope, smallest_span);
+                        traverse(arg, pos, text, current_scope, smallest_span);
                     }
                 }
                 MiddleNodeType::AssignmentExpression(MirAssignment {
@@ -103,12 +104,12 @@ impl CalibreLanguageServer {
                 | MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
                 | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
                 | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. }) => {
-                    traverse(left, pos, current_scope, smallest_span);
-                    traverse(right, pos, current_scope, smallest_span);
+                    traverse(left, pos, text, current_scope, smallest_span);
+                    traverse(right, pos, text, current_scope, smallest_span);
                 }
                 MiddleNodeType::AggregateExpression(MirAggregate { value, .. }) => {
                     for (_, node) in &value.0 {
-                        traverse(node, pos, current_scope, smallest_span);
+                        traverse(node, pos, text, current_scope, smallest_span);
                     }
                 }
                 MiddleNodeType::Conditional(MirConditional {
@@ -116,10 +117,10 @@ impl CalibreLanguageServer {
                     then,
                     otherwise,
                 }) => {
-                    traverse(comparison, pos, current_scope, smallest_span);
-                    traverse(then, pos, current_scope, smallest_span);
+                    traverse(comparison, pos, text, current_scope, smallest_span);
+                    traverse(then, pos, text, current_scope, smallest_span);
                     if let Some(otherwise) = otherwise {
-                        traverse(otherwise, pos, current_scope, smallest_span);
+                        traverse(otherwise, pos, text, current_scope, smallest_span);
                     }
                 }
                 _ => {}
@@ -128,7 +129,7 @@ impl CalibreLanguageServer {
 
         let mut current_scope = default_scope;
         let mut smallest_span = u32::MAX;
-        traverse(ast, pos, &mut current_scope, &mut smallest_span);
+        traverse(ast, pos, "", &mut current_scope, &mut smallest_span);
         current_scope
     }
 
@@ -188,20 +189,22 @@ impl CalibreLanguageServer {
                 if let Some(var) = env.symbols.variables.get(&resolved)
                     && let Some(loc) = &var.location
                     && let Ok(uri) = Url::from_file_path(&loc.path)
+                    && let Some(target_text) = all_documents.get(&uri)
                 {
                     return Some(GotoDefinitionResponse::Scalar(Location::new(
                         uri,
-                        Self::lsp_range(loc.span),
+                        Self::lsp_range(loc.span, target_text),
                     )));
                 }
 
                 if let Some(obj) = env.typing.objects.get(&resolved)
                     && let Some(loc) = &obj.location
                     && let Ok(uri) = Url::from_file_path(&loc.path)
+                    && let Some(target_text) = all_documents.get(&uri)
                 {
                     return Some(GotoDefinitionResponse::Scalar(Location::new(
                         uri,
-                        Self::lsp_range(loc.span),
+                        Self::lsp_range(loc.span, target_text),
                     )));
                 }
             }
@@ -283,26 +286,6 @@ impl CalibreLanguageServer {
 
     pub(super) fn is_ident_byte(b: u8) -> bool {
         (b as char).is_ascii_alphanumeric() || b == b'_'
-    }
-
-    pub(super) fn byte_offset_to_position(text: &str, target_offset: usize) -> Position {
-        let mut line = 0u32;
-        let mut character = 0u32;
-
-        for (idx, ch) in text.char_indices() {
-            if idx >= target_offset {
-                break;
-            }
-
-            if ch == '\n' {
-                line = line.saturating_add(1);
-                character = 0;
-            } else {
-                character = character.saturating_add(1);
-            }
-        }
-
-        Position { line, character }
     }
 
     pub(super) fn find_word_occurrences(text: &str, word: &str) -> Vec<Range> {

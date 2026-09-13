@@ -196,10 +196,7 @@ impl MatchArmType {
     }
 
     fn default_span() -> &'static Span {
-        static DEFAULT: Span = Span {
-            from: crate::Position { line: 0, col: 0 },
-            to: crate::Position { line: 0, col: 0 },
-        };
+        static DEFAULT: Span = Span { from: 0, to: 0 };
 
         &DEFAULT
     }

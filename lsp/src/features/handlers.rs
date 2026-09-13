@@ -425,7 +425,7 @@ impl LanguageServer for CalibreLanguageServer {
             let edits = smol::unblock(move || {
                 let mut formatter = CalibreLanguageServer::formatter_from_options(&options);
 
-                let cal_span = CalibreLanguageServer::lsp_range_to_cal_span(range);
+                let cal_span = CalibreLanguageServer::lsp_range_to_cal_span(range, &contents);
                 let Ok(formatted_slice) = formatter.start_format(&contents, Some(cal_span)) else {
                     return None;
                 };
