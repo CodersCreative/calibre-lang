@@ -1,5 +1,6 @@
 use crate::{
-    ParserError, Span, ast::{
+    ParserError, Span,
+    ast::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
@@ -13,29 +14,29 @@ use crate::{
             scopes::AstScopeDef,
         },
         types::{ParserDataType, ParserInnerType},
-    }, lexer::Token,
+    },
+    lexer::Token,
 };
-use chumsky::{error::Rich, extra::ParserExtra};
 use chumsky::prelude::*;
+use chumsky::span::Span as ChumskySpan;
+use chumsky::{error::Rich, extra::ParserExtra};
 use diagnostics::to_parser_errors;
 use expressions::{TailExpressionParsers, build_tail_expression_parser};
 use functions::{FunctionParsers, build_function_parsers};
 use matching::{MatchParsers, build_match_parsers};
 use setup::build_parser_prelude;
 use statements::{StatementParsers, build_statement_parser};
-use std::sync::Arc;
 use tracing::instrument;
 use ustr::Ustr;
-use util::{lex, span, strip_block_comments_keep_layout};
-use chumsky::span::Span as ChumskySpan;
+use util::{lex, strip_block_comments_keep_layout};
 
 mod diagnostics;
 mod expressions;
 mod functions;
+pub mod literals;
 mod matching;
 mod setup;
 mod statements;
-pub mod literals;
 pub mod util;
 
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
@@ -49,16 +50,16 @@ pub trait MapWithSpanExt<'a, I, O, E>: Parser<'a, I, O, E>
 where
     I: chumsky::input::Input<'a>,
     E: ParserExtra<'a, I>,
-    I::Span: ChumskySpan<Offset = usize>, 
+    I::Span: ChumskySpan<Offset = usize>,
 {
     fn map_with_span<U, F>(self, f: F) -> impl Parser<'a, I, U, E>
     where
-        F: Fn(O, std::ops::Range<usize>) -> U + Clone + 'a,
+        F: Fn(O, Span) -> U + Clone + 'a,
         Self: Sized + 'a,
     {
         self.map_with(move |out, extra| {
             let span = extra.span();
-            f(out, span.start()..span.end())
+            f(out, Span::from(span.start()..span.end()))
         })
     }
 }
@@ -69,7 +70,8 @@ where
     E: ParserExtra<'a, I>,
     I::Span: ChumskySpan<Offset = usize>,
     P: Parser<'a, I, O, E>,
-{}
+{
+}
 
 fn filter<'a, F>(f: F) -> impl Parser<'a, &'a str, char, extra::Err<Rich<'a, char>>> + Clone
 where
@@ -93,12 +95,7 @@ pub fn parse_program_with_source(
     source_path: Option<&std::path::Path>,
 ) -> Result<AstNode, Vec<ParserError>> {
     let source = strip_block_comments_keep_layout(source);
-    let source = source.as_str();
-    let line_starts: Arc<Vec<usize>> = Arc::new(
-        std::iter::once(0)
-            .chain(source.match_indices('\n').map(|(i, _)| i + 1))
-            .collect(),
-    );
+
     let setup::ParserPrelude {
         pad,
         pad_with_newline,
@@ -119,33 +116,36 @@ pub fn parse_program_with_source(
         float_lit,
         null_lit,
         type_name,
-    } = build_parser_prelude(line_starts.clone());
+    } = build_parser_prelude();
 
     let parser = recursive(|statement| {
         let expr = recursive(|expr| {
-            let functions = build_function_parsers(
-                FunctionParsers {
-                    pad: pad.clone(),
-                    pad_with_newline: pad_with_newline.clone(),
-                    delim: delim.clone(),
-                    comma: comma.clone(),
-                    arrow: arrow.clone(),
-                    fat_arrow: fat_arrow.clone(),
-                    raw_ident: raw_ident.clone(),
-                    ident: ident.clone(),
-                    generic_params: generic_params.clone(),
-                    type_name: type_name.clone(),
-                    expr: expr.clone().boxed(),
-                    statement: statement.clone().boxed(),
-                },
-                line_starts.clone(),
-            );
+            let functions = build_function_parsers(FunctionParsers {
+                pad: pad.clone(),
+                pad_with_newline: pad_with_newline.clone(),
+                delim: delim.clone(),
+                comma: comma.clone(),
+                arrow: arrow.clone(),
+                fat_arrow: fat_arrow.clone(),
+                raw_ident: raw_ident.clone(),
+                ident: ident.clone(),
+                generic_params: generic_params.clone(),
+                type_name: type_name.clone(),
+                expr: expr.clone().boxed(),
+                statement: statement.clone().boxed(),
+            });
 
             let scope_block = functions.scope_block.clone();
             let spawn_item_expr = functions.spawn_item_expr.clone();
             let fn_standard_expr = functions.fn_standard_expr.clone();
 
-            let generic_ident: Boxed<'_, '_, &str, PotentialGenericTypeIdentifier, extra::Full<Rich<'_, char>, (), ()>> = ident
+            let generic_ident: Boxed<
+                '_,
+                '_,
+                &str,
+                PotentialGenericTypeIdentifier,
+                extra::Full<Rich<'_, char>, (), ()>,
+            > = ident
                 .clone()
                 .then(
                     lex(pad.clone(), just(":<"))
@@ -176,10 +176,7 @@ pub fn parse_program_with_source(
                 pad_with_newline.clone(),
                 text::ident().map(|s: &str| s.to_string()),
             )
-            .map_with_span({
-                let ls = line_starts.clone();
-                move |s: String, r| (s, span(ls.as_ref(), r))
-            })
+            .map_with_span(move |s: String, sp| (s, sp))
             .boxed();
 
             let struct_lit = generic_ident
@@ -219,21 +216,18 @@ pub fn parse_program_with_source(
                 })
                 .boxed();
 
-            let matching = build_match_parsers(
-                MatchParsers {
-                    pad: pad_with_newline.clone(),
-                    delim: delim.clone(),
-                    comma: comma.clone(),
-                    arrow: arrow.clone(),
-                    ident: ident.clone(),
-                    generic_params: generic_params.clone(),
-                    string_lit: string_lit.clone(),
-                    type_name: type_name.clone(),
-                    expr: expr.clone().boxed(),
-                    scope_block: scope_block.clone(),
-                },
-                line_starts.clone(),
-            );
+            let matching = build_match_parsers(MatchParsers {
+                pad: pad_with_newline.clone(),
+                delim: delim.clone(),
+                comma: comma.clone(),
+                arrow: arrow.clone(),
+                ident: ident.clone(),
+                generic_params: generic_params.clone(),
+                string_lit: string_lit.clone(),
+                type_name: type_name.clone(),
+                expr: expr.clone().boxed(),
+                scope_block: scope_block.clone(),
+            });
 
             let let_pattern_list = matching.let_pattern_list.clone();
             let fn_match_expr = matching.fn_match_expr.clone();
@@ -247,36 +241,28 @@ pub fn parse_program_with_source(
                 lex(pad.clone(), just("emit"))
                     .ignore_then(expr.clone())
                     .then(expr.clone().or_not())
-                    .map_with_span({
-                        let ls = line_starts.clone();
-                        move |args: (AstNode, Option<AstNode>), r| {
-                            let sp = span(ls.as_ref(), r);
-                            AstNode::new(
-                                sp,
-                                AstNodeType::Emit(if let Some(value) = args.1 {
-                                    AstEmit::Channel {
-                                        channel: Box::new(args.0),
-                                        value: Box::new(value),
-                                    }
-                                } else {
-                                    AstEmit::Scope(Box::new(args.0))
-                                }),
-                            )
-                        }
+                    .map_with_span(move |args: (AstNode, Option<AstNode>), sp| {
+                        AstNode::new(
+                            sp,
+                            AstNodeType::Emit(if let Some(value) = args.1 {
+                                AstEmit::Channel {
+                                    channel: Box::new(args.0),
+                                    value: Box::new(value),
+                                }
+                            } else {
+                                AstEmit::Scope(Box::new(args.0))
+                            }),
+                        )
                     }),
                 lex(pad.clone(), just("curry"))
                     .ignore_then(expr.clone())
-                    .map_with_span({
-                        let ls = line_starts.clone();
-                        move |value: AstNode, r| {
-                            let sp = span(ls.as_ref(), r);
-                            AstNode::new(
-                                sp,
-                                AstNodeType::CurryExpression(AstCurry {
-                                    value: Box::new(value),
-                                }),
-                            )
-                        }
+                    .map_with_span(move |value: AstNode, sp| {
+                        AstNode::new(
+                            sp,
+                            AstNodeType::CurryExpression(AstCurry {
+                                value: Box::new(value),
+                            }),
+                        )
                     }),
                 lex(pad.clone(), just("list"))
                     .ignore_then(lex(pad.clone(), just(":<")))
@@ -345,51 +331,47 @@ pub fn parse_program_with_source(
                         .repeated()
                         .collect::<Vec<_>>(),
                     )
-                    .map_with_span({
-                        let ls = line_starts.clone();
-                        move |(((_open_ty, _open_br), values), tails), r| {
-                            let sp = span(ls.as_ref(), r);
-                            let list = if let Some((value, count)) = values.0 {
+                    .map_with_span(move |(((_open_ty, _open_br), values), tails), sp| {
+                        let list = if let Some((value, count)) = values.0 {
+                            AstNode::new(
+                                sp,
+                                AstNodeType::ListRepeatLiteral(AstListRepeat {
+                                    data_type: _open_ty,
+                                    value: Box::new(value),
+                                    count: Box::new(count),
+                                }),
+                            )
+                        } else {
+                            AstNode::new(
+                                sp,
+                                AstNodeType::ListLiteral(AstList {
+                                    data_type: _open_ty,
+                                    values: values.1,
+                                }),
+                            )
+                        };
+
+                        tails.into_iter().fold(list, |current, (node, is_index)| {
+                            if is_index {
                                 AstNode::new(
-                                    sp,
-                                    AstNodeType::ListRepeatLiteral(AstListRepeat {
-                                        data_type: _open_ty,
-                                        value: Box::new(value),
-                                        count: Box::new(count),
+                                    Span::new_from_spans(current.span, node.span),
+                                    AstNodeType::IndexAccess(AstIndex {
+                                        base: Box::new(current),
+                                        index: Box::new(node),
+                                    }),
+                                )
+                            } else if let AstNodeType::Identifier(ident) = node.node_type {
+                                AstNode::new(
+                                    Span::new_from_spans(current.span, node.span),
+                                    AstNodeType::FieldAccess(AstField {
+                                        base: Box::new(current),
+                                        field: ident.value.into(),
                                     }),
                                 )
                             } else {
-                                AstNode::new(
-                                    sp,
-                                    AstNodeType::ListLiteral(AstList {
-                                        data_type: _open_ty,
-                                        values: values.1,
-                                    }),
-                                )
-                            };
-
-                            tails.into_iter().fold(list, |current, (node, is_index)| {
-                                if is_index {
-                                    AstNode::new(
-                                        Span::new_from_spans(current.span, node.span),
-                                        AstNodeType::IndexAccess(AstIndex {
-                                            base: Box::new(current),
-                                            index: Box::new(node),
-                                        }),
-                                    )
-                                } else if let AstNodeType::Identifier(ident) = node.node_type {
-                                    AstNode::new(
-                                        Span::new_from_spans(current.span, node.span),
-                                        AstNodeType::FieldAccess(AstField {
-                                            base: Box::new(current),
-                                            field: ident.value.into(),
-                                        }),
-                                    )
-                                } else {
-                                    current
-                                }
-                            })
-                        }
+                                current
+                            }
+                        })
                     }),
                 float_lit.clone(),
                 int_lit.clone(),
@@ -415,19 +397,15 @@ pub fn parse_program_with_source(
                             .map(|x| x.unwrap_or_default()),
                     )
                     .then_ignore(lex(pad_with_newline.clone(), just(')')))
-                    .map_with_span({
-                        let ls = line_starts.clone();
-                        move |args, r| {
-                            let sp = span(ls.as_ref(), r);
-                            AstNode::call_full(
-                                sp,
-                                AstNode::identifier(sp, "$"),
-                                Vec::new(),
-                                args.into_iter().map(CallArg::Value).collect(),
-                                Vec::new(),
-                                None,
-                            )
-                        }
+                    .map_with_span(move |args, sp| {
+                        AstNode::call_full(
+                            sp,
+                            AstNode::identifier(sp, "$"),
+                            Vec::new(),
+                            args.into_iter().map(CallArg::Value).collect(),
+                            Vec::new(),
+                            None,
+                        )
                     }),
                 ident
                     .clone()
@@ -524,54 +502,47 @@ pub fn parse_program_with_source(
                             .map(|x| x.unwrap_or_default()),
                     )
                     .then_ignore(lex(pad_with_newline.clone(), just(')')))
-                    .map_with_span({
-                        let ls = line_starts.clone();
-                        move |values, r| {
-                            let sp = span(ls.as_ref(), r);
-                            let inner = if values.len() == 1 {
-                                values
-                                    .first()
-                                    .cloned()
-                                    .unwrap_or_else(|| AstNode::new(sp, AstNodeType::EmptyLine))
-                            } else {
-                                AstNode::new(sp, AstNodeType::TupleLiteral(AstTuple { values }))
-                            };
+                    .map_with_span(move |values, sp| {
+                        let inner = if values.len() == 1 {
+                            values
+                                .first()
+                                .cloned()
+                                .unwrap_or_else(|| AstNode::new(sp, AstNodeType::EmptyLine))
+                        } else {
+                            AstNode::new(sp, AstNodeType::TupleLiteral(AstTuple { values }))
+                        };
 
-                            AstNode::new(
-                                sp,
-                                AstNodeType::ParenExpression(AstParen {
-                                    value: Box::new(inner),
-                                }),
-                            )
-                        }
+                        AstNode::new(
+                            sp,
+                            AstNodeType::ParenExpression(AstParen {
+                                value: Box::new(inner),
+                            }),
+                        )
                     }),
             ))
             .boxed();
 
-            build_tail_expression_parser(
-                TailExpressionParsers {
-                    pad: pad.clone(),
-                    pad_with_newline: pad_with_newline.clone(),
-                    delim: delim.clone(),
-                    comma: comma.clone(),
-                    arrow: arrow.clone(),
-                    fat_arrow: fat_arrow.clone(),
-                    left_arrow: left_arrow.clone(),
-                    ident: ident.clone(),
-                    int_lit: int_lit.clone(),
-                    named_ident: named_ident.clone(),
-                    type_name: type_name.clone(),
-                    expr: expr.boxed(),
-                    statement: statement.clone().boxed(),
-                    atom: atom.clone(),
-                    fn_standard_expr: fn_standard_expr.clone(),
-                    fn_match_expr: fn_match_expr.clone(),
-                    scope_block: scope_block.clone(),
-                    spawn_item_expr: spawn_item_expr.clone(),
-                    let_pattern_list: let_pattern_list.clone(),
-                },
-                line_starts.clone(),
-            )
+            build_tail_expression_parser(TailExpressionParsers {
+                pad: pad.clone(),
+                pad_with_newline: pad_with_newline.clone(),
+                delim: delim.clone(),
+                comma: comma.clone(),
+                arrow: arrow.clone(),
+                fat_arrow: fat_arrow.clone(),
+                left_arrow: left_arrow.clone(),
+                ident: ident.clone(),
+                int_lit: int_lit.clone(),
+                named_ident: named_ident.clone(),
+                type_name: type_name.clone(),
+                expr: expr.boxed(),
+                statement: statement.clone().boxed(),
+                atom: atom.clone(),
+                fn_standard_expr: fn_standard_expr.clone(),
+                fn_match_expr: fn_match_expr.clone(),
+                scope_block: scope_block.clone(),
+                spawn_item_expr: spawn_item_expr.clone(),
+                let_pattern_list: let_pattern_list.clone(),
+            })
         });
 
         build_statement_parser(
@@ -592,7 +563,6 @@ pub fn parse_program_with_source(
                 statement: statement.boxed(),
                 expr: expr.boxed(),
             },
-            line_starts.clone(),
             source_path,
         )
     })
@@ -612,7 +582,7 @@ pub fn parse_program_with_source(
         .then_ignore(pad.clone())
         .then_ignore(delim.clone().repeated().collect::<Vec<_>>())
         .then_ignore(end())
-        .parse(source);
+        .parse(&source);
 
     if let Some(items) = parsed.output().cloned() {
         let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
@@ -632,5 +602,5 @@ pub fn parse_program_with_source(
         ));
     }
 
-    Err(to_parser_errors(line_starts.as_ref(), parsed.into_errors()))
+    Err(to_parser_errors(parsed.into_errors()))
 }

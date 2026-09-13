@@ -19,14 +19,13 @@ use crate::ast::nodes::{
 };
 use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{
-    ensure_scope_node, labelled_scope_parser, lex, scope_body_or_single, scope_node_parser, span,
+    ensure_scope_node, labelled_scope_parser, lex, scope_body_or_single, scope_node_parser,
     struct_destructure_fields_parser,
 };
 use chumsky::error::Rich;
 use chumsky::prelude::*;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::Arc;
 use ustr::Ustr;
 
 #[derive(Clone, Copy)]
@@ -55,7 +54,6 @@ pub struct StatementParsers<'a> {
 
 pub fn build_statement_parser<'a>(
     parts: StatementParsers<'a>,
-    line_starts: Arc<Vec<usize>>,
     source_path: Option<&'a Path>,
 ) -> StrParser<'a, AstNode> {
     let StatementParsers {
@@ -92,13 +90,7 @@ pub fn build_statement_parser<'a>(
                 .or_not()
                 .map(|x| x.unwrap_or_default()),
         )
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |((name, _sp), args), r| {
-                let tag_span = span(ls.as_ref(), r);
-                (ParserText::new(tag_span, name), args, tag_span)
-            }
-        })
+        .map_with_span({ move |((name, _sp), args), sp| (ParserText::new(sp, name), args, sp) })
         .boxed();
 
     let import_stmt = lex(pad.clone(), just("import"))
@@ -142,18 +134,15 @@ pub fn build_statement_parser<'a>(
                 )
                 .map(|(module, alias)| (Vec::new(), module, alias)),
         )))
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |(values, module, alias), r| {
-                AstNode::new(
-                    span(ls.as_ref(), r),
-                    AstNodeType::ImportStatement(AstImport {
-                        module,
-                        alias,
-                        values,
-                    }),
-                )
-            }
+        .map_with_span(move |(values, module, alias), sp| {
+            AstNode::new(
+                sp,
+                AstNodeType::ImportStatement(AstImport {
+                    module,
+                    alias,
+                    values,
+                }),
+            )
         });
 
     let type_stmt = lex(pad.clone(), just("type"))
@@ -321,10 +310,7 @@ pub fn build_statement_parser<'a>(
                 .ignore_then(
                     lex(pad.clone(), just("const"))
                         .ignore_then(string_text.clone())
-                        .map_with_span({
-                            let ls = line_starts.clone();
-                            move |op: String, r| ParserText::new(span(ls.as_ref(), r), op)
-                        })
+                        .map_with_span(move |op: String, sp| ParserText::new(sp, op))
                         .then_ignore(lex(pad.clone(), just(":=")))
                         .then(expr.clone())
                         .try_map(|(operator, value), sp| match value.node_type {
@@ -448,8 +434,7 @@ pub fn build_statement_parser<'a>(
                 .map(|x| x.unwrap_or_default()),
         )
         .then_ignore(lex(pad.clone(), just('}')))
-        .try_map({
-            let ls = line_starts.clone();
+        .try_map(
             move |(((generics, trait_ident), maybe_target), vars), parser_sp| {
                 if let Some(dt) = maybe_target {
                     let trait_ident = match trait_ident.data_type.clone() {
@@ -488,8 +473,8 @@ pub fn build_statement_parser<'a>(
                 } else {
                     let target = trait_ident;
 
-                    let sp = if target.span == Span::default() {
-                        span(ls.as_ref(), parser_sp.into_range())
+                    let sp = if target.span.is_none() {
+                        Span::from(parser_sp)
                     } else {
                         target.span
                     };
@@ -503,8 +488,8 @@ pub fn build_statement_parser<'a>(
                         }),
                     ))
                 }
-            }
-        });
+            },
+        );
 
     let let_struct_destruct_stmt = lex(pad.clone(), just("let"))
         .ignore_then(struct_destructure_fields_parser(
@@ -710,18 +695,15 @@ pub fn build_statement_parser<'a>(
     let tag_stmt = tag_parser
         .clone()
         .then(lex(pad_with_newline.clone(), statement.clone()))
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |((tag, args, _), node), r| {
-                AstNode::new(
-                    span(ls.as_ref(), r),
-                    AstNodeType::Tag(AstTag {
-                        node: Box::new(node),
-                        tag,
-                        arguments: args,
-                    }),
-                )
-            }
+        .map_with_span(move |((tag, args, _), node), sp| {
+            AstNode::new(
+                sp,
+                AstNodeType::Tag(AstTag {
+                    node: Box::new(node),
+                    tag,
+                    arguments: args,
+                }),
+            )
         })
         .boxed();
 
@@ -741,13 +723,7 @@ pub fn build_statement_parser<'a>(
                 .or_not()
                 .map(|x| x.unwrap_or_default()),
         )
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |((name, _sp), args), r| {
-                let tag_span = span(ls.as_ref(), r);
-                (ParserText::new(tag_span, name), args, tag_span)
-            }
-        })
+        .map_with_span(move |((name, _sp), args), sp| (ParserText::new(sp, name), args, sp))
         .then(
             lex(pad.clone(), just('{'))
                 .ignore_then(delim.clone().repeated().collect::<Vec<_>>())
@@ -763,34 +739,31 @@ pub fn build_statement_parser<'a>(
                 .then_ignore(delim.clone().or_not())
                 .then_ignore(lex(pad.clone(), just('}'))),
         )
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |((tag, args, tag_span), statements), r| {
-                let tagged_statements = statements
-                    .into_iter()
-                    .map(|stmt| {
-                        AstNode::new(
-                            Span::new_from_spans(tag_span, stmt.span),
-                            AstNodeType::Tag(AstTag {
-                                node: Box::new(stmt),
-                                tag: tag.clone(),
-                                arguments: args.clone(),
-                            }),
-                        )
-                    })
-                    .collect::<Vec<_>>();
+        .map_with_span(move |((tag, args, tag_span), statements), sp| {
+            let tagged_statements = statements
+                .into_iter()
+                .map(|stmt| {
+                    AstNode::new(
+                        Span::new_from_spans(tag_span, stmt.span),
+                        AstNodeType::Tag(AstTag {
+                            node: Box::new(stmt),
+                            tag: tag.clone(),
+                            arguments: args.clone(),
+                        }),
+                    )
+                })
+                .collect::<Vec<_>>();
 
-                AstNode::new(
-                    span(ls.as_ref(), r),
-                    AstNodeType::ScopeDeclaration(AstScopeDef {
-                        body: Some(tagged_statements),
-                        named: None,
-                        is_temp: false,
-                        create_new_scope: Some(false),
-                        define: false,
-                    }),
-                )
-            }
+            AstNode::new(
+                sp,
+                AstNodeType::ScopeDeclaration(AstScopeDef {
+                    body: Some(tagged_statements),
+                    named: None,
+                    is_temp: false,
+                    create_new_scope: Some(false),
+                    define: false,
+                }),
+            )
         })
         .boxed();
 
@@ -863,20 +836,17 @@ pub fn build_statement_parser<'a>(
         .ignore_then(fat_arrow.clone())
         .ignore_then(named_scope.clone().or_not())
         .then(scope_body_with_mode.clone())
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |(named, (body, create_new_scope)), r| {
-                AstNode::new(
-                    span(ls.as_ref(), r),
-                    AstNodeType::ScopeDeclaration(AstScopeDef {
-                        body,
-                        named,
-                        is_temp: true,
-                        create_new_scope,
-                        define: true,
-                    }),
-                )
-            }
+        .map_with_span(move |(named, (body, create_new_scope)), sp| {
+            AstNode::new(
+                sp,
+                AstNodeType::ScopeDeclaration(AstScopeDef {
+                    body,
+                    named,
+                    is_temp: true,
+                    create_new_scope,
+                    define: true,
+                }),
+            )
         })
         .boxed();
 
@@ -898,18 +868,15 @@ pub fn build_statement_parser<'a>(
         .then(scope_name.clone())
         .then(scope_args.clone().or_not().map(|x| x.unwrap_or_default()))
         .then(scope_call_mode.clone())
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |(((identifier, name), args), create_new_scope), r| {
-                AstNode::new(
-                    span(ls.as_ref(), r),
-                    AstNodeType::ScopeAlias(AstScopeAlias {
-                        identifier,
-                        value: NamedScope { name, args },
-                        create_new_scope,
-                    }),
-                )
-            }
+        .map_with_span(move |(((identifier, name), args), create_new_scope), sp| {
+            AstNode::new(
+                sp,
+                AstNodeType::ScopeAlias(AstScopeAlias {
+                    identifier,
+                    value: NamedScope { name, args },
+                    create_new_scope,
+                }),
+            )
         })
         .boxed();
 
@@ -918,35 +885,29 @@ pub fn build_statement_parser<'a>(
         .ignored()
         .ignore_then(named_scope.or_not())
         .then(scope_body_with_mode)
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |(named, (body, create_new_scope)), r| {
-                AstNode::new(
-                    span(ls.as_ref(), r),
-                    AstNodeType::ScopeDeclaration(AstScopeDef {
-                        body,
-                        named,
-                        is_temp: true,
-                        create_new_scope,
-                        define: false,
-                    }),
-                )
-            }
+        .map_with_span(move |(named, (body, create_new_scope)), sp| {
+            AstNode::new(
+                sp,
+                AstNodeType::ScopeDeclaration(AstScopeDef {
+                    body,
+                    named,
+                    is_temp: true,
+                    create_new_scope,
+                    define: false,
+                }),
+            )
         })
         .boxed();
 
     let return_stmt = lex(pad.clone(), just("return"))
         .ignore_then(expr.clone().or_not())
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |value, r| {
-                AstNode::new(
-                    span(ls.as_ref(), r),
-                    AstNodeType::Return(AstReturn {
-                        value: value.map(Box::new),
-                    }),
-                )
-            }
+        .map_with_span(move |value, sp| {
+            AstNode::new(
+                sp,
+                AstNodeType::Return(AstReturn {
+                    value: value.map(Box::new),
+                }),
+            )
         });
 
     let labelled_scope = labelled_scope_parser(
@@ -976,18 +937,14 @@ pub fn build_statement_parser<'a>(
     let test_stmt = lex(pad.clone(), just("test"))
         .ignore_then(string_text.clone())
         .then(arrow_body_expr.clone())
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |(name, body), sp| {
-                let sp = span(ls.as_ref(), sp);
-                AstNode::new(
-                    sp,
-                    AstNodeType::TestDeclaration(AstTest {
-                        identifier: ParserText::new(sp, name),
-                        body: Box::new(body),
-                    }),
-                )
-            }
+        .map_with_span(move |(name, body), sp| {
+            AstNode::new(
+                sp,
+                AstNodeType::TestDeclaration(AstTest {
+                    identifier: ParserText::new(sp, name),
+                    body: Box::new(body),
+                }),
+            )
         })
         .boxed();
 
@@ -1114,14 +1071,8 @@ pub fn build_statement_parser<'a>(
         )
         .then_ignore(delim.clone().or_not())
         .then_ignore(lex(pad.clone(), just('}')))
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |arms, r| {
-                AstNode::new(
-                    span(ls.as_ref(), r),
-                    AstNodeType::SelectStatement(AstSelect { arms }),
-                )
-            }
+        .map_with_span(move |arms, sp| {
+            AstNode::new(sp, AstNodeType::SelectStatement(AstSelect { arms }))
         })
         .boxed();
 
@@ -1152,17 +1103,13 @@ pub fn build_statement_parser<'a>(
             .map(|(_, at)| at.is_some()),
     )
     .then(choice((spawn_block, expr.clone().map(|x| vec![x]))))
-    .map_with_span({
-        let ls = line_starts.clone();
-        move |(auto_wait, items), r| {
-            let parser_span = span(ls.as_ref(), r);
-            let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
-                Span::new_from_spans(a.span, b.span)
-            } else {
-                parser_span
-            };
-            AstNode::new(sp, AstNodeType::Spawn(AstSpawn { items, auto_wait }))
-        }
+    .map_with_span(move |(auto_wait, items), sp| {
+        let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
+            Span::new_from_spans(a.span, b.span)
+        } else {
+            sp
+        };
+        AstNode::new(sp, AstNodeType::Spawn(AstSpawn { items, auto_wait }))
     })
     .boxed();
 

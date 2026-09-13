@@ -6,11 +6,10 @@ use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::literals::{AstBig, AstChar, AstFloat, AstInt, AstString};
 use crate::ast::nodes::{AstNode, AstNodeType};
 use crate::ast::types::{GenericType, GenericTypes, ParserDataType, ParserInnerType};
-use crate::parse::util::{is_keyword, lex, span, unescape_char_literal, unescape_string};
+use crate::parse::util::{is_keyword, lex, unescape_char_literal, unescape_string};
 use chumsky::error::Rich;
 use chumsky::prelude::*;
 use std::str::FromStr;
-use std::sync::Arc;
 
 pub type ParseExtra<'a> = extra::Err<Rich<'a, char>>;
 pub type StrParser<'a, O> = Boxed<'a, 'a, &'a str, O, ParseExtra<'a>>;
@@ -37,7 +36,7 @@ pub struct ParserPrelude<'a> {
     pub type_name: StrParser<'a, ParserDataType>,
 }
 
-pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'a> {
+pub fn build_parser_prelude<'a>() -> ParserPrelude<'a> {
     let ws = filter(|c: &char| *c == ' ' || *c == '\t' || *c == '\r')
         .repeated()
         .at_least(1)
@@ -86,10 +85,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
         .boxed();
 
     let raw_ident = lex(pad.clone(), text::ident().map(|s: &str| s.to_string()))
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |s: String, r| (s, span(ls.as_ref(), r))
-        })
+        .map_with_span(move |s: String, sp| (s, sp))
         .boxed();
 
     let ident = lex(pad.clone(), text::ident().map(|s: &str| s.to_string()))
@@ -100,10 +96,7 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                 Ok(s)
             }
         })
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |s: String, r| (s, span(ls.as_ref(), r))
-        })
+        .map_with_span(move |s: String, sp| (s, sp))
         .boxed();
 
     let dollar_ident = lex(pad.clone(), just('$'))
@@ -162,17 +155,13 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
 
     let string_lit = string_text
         .clone()
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |text: String, r| {
-                let sp = span(ls.as_ref(), r);
-                AstNode::new(
-                    sp,
-                    AstNodeType::StringLiteral(AstString {
-                        value: ParserText::new(sp, text),
-                    }),
-                )
-            }
+        .map_with_span(move |text: String, sp| {
+            AstNode::new(
+                sp,
+                AstNodeType::StringLiteral(AstString {
+                    value: ParserText::new(sp, text),
+                }),
+            )
         })
         .boxed();
 
@@ -190,22 +179,15 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
             )
             .then_ignore(just('\'')),
     )
-    .try_map({
-        let ls = line_starts.clone();
-        move |parts: Vec<String>, parser_sp| {
-            let sp = span(ls.as_ref(), parser_sp.into_range());
-            match unescape_char_literal(&parts.concat()) {
-                Some(value) => Ok(AstNode::new(
-                    sp,
-                    AstNodeType::CharLiteral(AstChar { value }),
-                )),
-                None => Err(Rich::custom(
-                    parser_sp,
-                    "invalid char literal escape sequence",
-                )),
-            }
-        }
-    })
+    .try_map(
+        move |parts: Vec<String>, sp| match unescape_char_literal(&parts.concat()) {
+            Some(value) => Ok(AstNode::new(
+                Span::from(sp),
+                AstNodeType::CharLiteral(AstChar { value }),
+            )),
+            None => Err(Rich::custom(sp, "invalid char literal escape sequence")),
+        },
+    )
     .boxed();
 
     let dec_digits = any()
@@ -253,17 +235,13 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                 out
             }),
     )
-    .map_with_span({
-        let ls = line_starts.clone();
-        move |number: String, r| {
-            let sp = span(ls.as_ref(), r);
-            AstNode::new(
-                sp,
-                AstNodeType::IntLiteral(AstInt {
-                    value: ParserText::new(sp, number),
-                }),
-            )
-        }
+    .map_with_span(move |number: String, sp| {
+        AstNode::new(
+            sp,
+            AstNodeType::IntLiteral(AstInt {
+                value: ParserText::new(sp, number),
+            }),
+        )
     })
     .boxed();
 
@@ -292,31 +270,24 @@ pub fn build_parser_prelude<'a>(line_starts: Arc<Vec<usize>>) -> ParserPrelude<'
                 .map(|((number, exp), typ)| (format!("{number}e{exp}"), typ)),
         )),
     )
-    .map_with_span({
-        let ls = line_starts.clone();
-        move |(number, typ), r| {
-            let sp = span(ls.as_ref(), r);
-            AstNode::new(
-                sp,
-                if typ == Some('g') {
-                    AstNodeType::BigLiteral(AstBig {
-                        value: ParserText::new(sp, number.replace('_', "")),
-                    })
-                } else {
-                    AstNodeType::FloatLiteral(AstFloat {
-                        value: number.replace('_', "").parse::<f64>().unwrap_or_default(),
-                    })
-                },
-            )
-        }
+    .map_with_span(move |(number, typ), sp| {
+        AstNode::new(
+            sp,
+            if typ == Some('g') {
+                AstNodeType::BigLiteral(AstBig {
+                    value: ParserText::new(sp, number.replace('_', "")),
+                })
+            } else {
+                AstNodeType::FloatLiteral(AstFloat {
+                    value: number.replace('_', "").parse::<f64>().unwrap_or_default(),
+                })
+            },
+        )
     })
     .boxed();
 
     let null_lit = lex(pad.clone(), just("null"))
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |_, r| AstNode::null(span(ls.as_ref(), r))
-        })
+        .map_with_span(move |_, sp| AstNode::null(sp))
         .boxed();
 
     let type_name: Boxed<'_, '_, &str, ParserDataType, extra::Full<Rich<'_, char>, (), ()>> =
@@ -451,18 +422,17 @@ Ok(ParserDataType::new(
                                 }),
                         )
                         .then_ignore(lex(pad.clone(), just('>')))
-                        .map_with_span({
-                            let ls = line_starts.clone();
-                            move |mut types, r| {
+                        .map_with_span(
+                            move |mut types, sp| {
                                 if types.len() == 1 {
                                     types.pop().unwrap()
                                 }else {
                                 ParserDataType::new(
-                                    span(ls.as_ref(), r),
+                                    sp,
                                     ParserInnerType::Tuple(types),
                                 )}
                             }
-                        }),
+                        ),
                     lex(pad.clone(), just('@'))
                         .ignore_then(raw_ident.clone())
                         .map(|(name, sp)| {
@@ -484,10 +454,8 @@ Ok(ParserDataType::new(
                         )
                         .then_ignore(lex(pad_with_newline.clone(), just(')')))
                         .then(arrow.clone().ignore_then(ty.clone()).or_not())
-                        .map_with_span({
-                            let ls = line_starts.clone();
-                            move |(parameters, ret), r| {
-                                let sp = span(ls.as_ref(), r);
+                        .map_with_span(
+                            move |(parameters, ret), sp| {
                                 ParserDataType::new(
                                     sp,
                                     ParserInnerType::Function {
@@ -498,7 +466,7 @@ Ok(ParserDataType::new(
                                     },
                                 )
                             }
-                        }),
+                        ),
                     struct_with_generics,
                     lex(pad.clone(), just('$'))
                         .ignore_then(raw_ident.clone())
@@ -510,40 +478,34 @@ Ok(ParserDataType::new(
                 choice((
                     lex(pad.clone(), just("mut"))
                         .ignore_then(ty.clone())
-                        .map_with_span({
-                            let ls = line_starts.clone();
-                            move |inner, r| {
-                                let sp = span(ls.as_ref(), r);
+                        .map_with_span(
+                            move |inner, sp| {
                                 ParserDataType::new(
                                     sp,
                                     ParserInnerType::Ref(Box::new(inner), RefMutability::MutValue),
                                 )
                             }
-                        }),
+                        ),
                     lex(pad.clone(), just("&mut"))
                         .ignore_then(ty.clone())
-                        .map_with_span({
-                            let ls = line_starts.clone();
-                            move |inner, r| {
-                                let sp = span(ls.as_ref(), r);
+                        .map_with_span(
+                            move |inner, sp| {
                                 ParserDataType::new(
                                     sp,
                                     ParserInnerType::Ref(Box::new(inner), RefMutability::MutRef),
                                 )
                             }
-                        }),
+                        ),
                     lex(pad.clone(), just('&'))
                         .ignore_then(ty.clone())
-                        .map_with_span({
-                            let ls = line_starts.clone();
-                            move |inner, r| {
-                                let sp = span(ls.as_ref(), r);
+                        .map_with_span(
+                            move |inner, sp| {
                                 ParserDataType::new(
                                     sp,
                                     ParserInnerType::Ref(Box::new(inner), RefMutability::Ref),
                                 )
                             }
-                        }),
+                        ),
                     base,
                 ))
                 .then(lex(pad.clone(), just('!')).ignore_then(ty.clone()).or_not())

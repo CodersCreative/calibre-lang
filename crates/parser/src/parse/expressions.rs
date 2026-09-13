@@ -22,8 +22,7 @@ use crate::ast::nodes::unary::{AstNeg, AstNot};
 use crate::ast::nodes::{AstNode, AstNodeType};
 use crate::ast::types::{ParserDataType, ParserInnerType};
 use crate::parse::util::{
-    ensure_scope_node, lex, parse_embedded_expr, parse_splits, span, span_from_nodes_or,
-    unescape_string,
+    ensure_scope_node, lex, parse_embedded_expr, parse_splits, span_from_nodes_or, unescape_string,
 };
 use crate::{
     Span,
@@ -34,7 +33,6 @@ use crate::{
 };
 use chumsky::error::Rich;
 use chumsky::prelude::*;
-use std::sync::Arc;
 
 pub struct TailExpressionParsers<'a> {
     pub pad: StrParser<'a, ()>,
@@ -60,7 +58,6 @@ pub struct TailExpressionParsers<'a> {
 
 pub fn build_tail_expression_parser<'a>(
     parts: TailExpressionParsers<'a>,
-    line_starts: Arc<Vec<usize>>,
 ) -> StrParser<'a, AstNode> {
     let TailExpressionParsers {
         pad,
@@ -97,41 +94,38 @@ pub fn build_tail_expression_parser<'a>(
             )
             .then_ignore(just('"')),
     )
-    .try_map({
-        let ls = line_starts.clone();
-        move |parts: Vec<String>, parser_sp| {
-            let sp = span(ls.as_ref(), parser_sp.into_range());
-            let raw = unescape_string(&parts.concat());
-            let (texts, args) = parse_splits(&raw);
+    .try_map(move |parts: Vec<String>, parser_sp| {
+        let sp = Span::from(parser_sp);
+        let raw = unescape_string(&parts.concat());
+        let (texts, args) = parse_splits(&raw);
 
-            let text_nodes = texts
-                .into_iter()
-                .map(|txt| {
-                    AstNode::new(
-                        sp,
-                        AstNodeType::StringLiteral(AstString {
-                            value: ParserText::new(sp, txt),
-                        }),
-                    )
-                })
-                .collect::<Vec<_>>();
+        let text_nodes = texts
+            .into_iter()
+            .map(|txt| {
+                AstNode::new(
+                    sp,
+                    AstNodeType::StringLiteral(AstString {
+                        value: ParserText::new(sp, txt),
+                    }),
+                )
+            })
+            .collect::<Vec<_>>();
 
-            let mut call_args = vec![CallArg::Value(AstNode::new(
-                sp,
-                AstNodeType::ListLiteral(AstList {
-                    data_type: ParserDataType::new(sp, ParserInnerType::Str),
-                    values: text_nodes,
-                }),
-            ))];
+        let mut call_args = vec![CallArg::Value(AstNode::new(
+            sp,
+            AstNodeType::ListLiteral(AstList {
+                data_type: ParserDataType::new(sp, ParserInnerType::Str),
+                values: text_nodes,
+            }),
+        ))];
 
-            for arg in args {
-                let embedded =
-                    parse_embedded_expr(&arg, sp).map_err(|msg| Rich::custom(parser_sp, msg))?;
-                call_args.push(CallArg::Value(embedded));
-            }
-
-            Ok((ParserText::new(sp, raw), call_args))
+        for arg in args {
+            let embedded =
+                parse_embedded_expr(&arg, sp).map_err(|msg| Rich::custom(parser_sp, msg))?;
+            call_args.push(CallArg::Value(embedded));
         }
+
+        Ok((ParserText::new(sp, raw), call_args))
     })
     .boxed();
 
@@ -408,31 +402,27 @@ pub fn build_tail_expression_parser<'a>(
         )))
         .then_ignore(lex(pad_with_newline.clone(), just(']')))
         .then(member.clone().repeated().collect::<Vec<_>>())
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |(((_open_ty, _open_br), values), tails), r| {
-                let data_type = _open_ty;
-                let sp = span(ls.as_ref(), r);
-                let list = if let Some((value, count)) = values.0 {
-                    AstNode::new(
-                        sp,
-                        AstNodeType::ListRepeatLiteral(AstListRepeat {
-                            data_type,
-                            value: Box::new(value),
-                            count: Box::new(count),
-                        }),
-                    )
-                } else {
-                    AstNode::new(
-                        sp,
-                        AstNodeType::ListLiteral(AstList {
-                            data_type,
-                            values: values.1,
-                        }),
-                    )
-                };
-                apply_postfix_suffixes(list, tails)
-            }
+        .map_with_span(move |(((_open_ty, _open_br), values), tails), sp| {
+            let data_type = _open_ty;
+            let list = if let Some((value, count)) = values.0 {
+                AstNode::new(
+                    sp,
+                    AstNodeType::ListRepeatLiteral(AstListRepeat {
+                        data_type,
+                        value: Box::new(value),
+                        count: Box::new(count),
+                    }),
+                )
+            } else {
+                AstNode::new(
+                    sp,
+                    AstNodeType::ListLiteral(AstList {
+                        data_type,
+                        values: values.1,
+                    }),
+                )
+            };
+            apply_postfix_suffixes(list, tails)
         })
         .boxed();
 
@@ -912,11 +902,10 @@ pub fn build_tail_expression_parser<'a>(
                 Ok((map_expr, loop_type, conditionals, until, data_type))
             },
         )
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |(map_expr, loop_type, conditionals, until, data_type), r| {
+        .map_with_span(
+            move |(map_expr, loop_type, conditionals, until, data_type), sp| {
                 AstNode::new(
-                    span(ls.as_ref(), r),
+                    sp,
                     AstNodeType::InlineGenerator(AstGenerator {
                         map: Box::new(map_expr),
                         data_type,
@@ -925,8 +914,8 @@ pub fn build_tail_expression_parser<'a>(
                         until: until.map(Box::new),
                     }),
                 )
-            }
-        })
+            },
+        )
         .boxed();
 
     let fn_inline_postfix = fn_inline_gen_expr
@@ -1004,17 +993,14 @@ pub fn build_tail_expression_parser<'a>(
                 .or_not(),
         )
         .then(expr.clone().or_not())
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |(label, value), r| {
-                AstNode::new(
-                    span(ls.as_ref(), r),
-                    AstNodeType::Break(AstBreak {
-                        label,
-                        value: value.map(Box::new),
-                    }),
-                )
-            }
+        .map_with_span(move |(label, value), sp| {
+            AstNode::new(
+                sp,
+                AstNodeType::Break(AstBreak {
+                    label,
+                    value: value.map(Box::new),
+                }),
+            )
         })
         .boxed();
 
@@ -1025,14 +1011,8 @@ pub fn build_tail_expression_parser<'a>(
                 .map(|(n, sp)| PotentialDollarIdentifier::Identifier(ParserText::new(sp, n)))
                 .or_not(),
         )
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |label, r| {
-                AstNode::new(
-                    span(ls.as_ref(), r),
-                    AstNodeType::Continue(AstContinue { label }),
-                )
-            }
+        .map_with_span(move |label, sp| {
+            AstNode::new(sp, AstNodeType::Continue(AstContinue { label }))
         })
         .boxed();
 
@@ -1062,17 +1042,14 @@ pub fn build_tail_expression_parser<'a>(
             )
             .then_ignore(delim.clone().or_not())
             .then_ignore(lex(pad.clone(), just('}')))
-            .map_with_span({
-                let ls = line_starts.clone();
-                move |items, r| {
-                    AstNode::new(
-                        span(ls.as_ref(), r),
-                        AstNodeType::Spawn(AstSpawn {
-                            items,
-                            auto_wait: false,
-                        }),
-                    )
-                }
+            .map_with_span(move |items, sp| {
+                AstNode::new(
+                    sp,
+                    AstNodeType::Spawn(AstSpawn {
+                        items,
+                        auto_wait: false,
+                    }),
+                )
             }),
         lex(pad.clone(), text::keyword("for"))
             .ignore_then(

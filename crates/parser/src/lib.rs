@@ -2,6 +2,7 @@ use crate::{
     ast::nodes::{AstNode, AstNodeType, scopes::AstScopeDef},
     parse::parse_program_with_source,
 };
+use chumsky::span::SimpleSpan;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display,
@@ -86,14 +87,6 @@ pub trait UstrIdentifiersUsed {
     }
 }
 
-#[derive(
-    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
-)]
-pub struct Position {
-    pub line: u32,
-    pub col: u32,
-}
-
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct Location {
     pub path: PathBuf,
@@ -104,22 +97,42 @@ pub struct Location {
     Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
 )]
 pub struct Span {
-    pub from: Position,
-    pub to: Position,
+    pub from: usize,
+    pub to: usize,
 }
 
 impl Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "({}:{}) -> ({}:{})",
-            self.from.line, self.from.col, self.to.line, self.to.col
-        )
+        write!(f, "({}) -> ({})", self.from, self.to)
+    }
+}
+
+impl From<Range<usize>> for Span {
+    fn from(value: Range<usize>) -> Self {
+        Self {
+            from: value.start,
+            to: value.end,
+        }
+    }
+}
+
+impl From<SimpleSpan> for Span {
+    fn from(value: SimpleSpan) -> Self {
+        Self {
+            from: value.start,
+            to: value.end,
+        }
+    }
+}
+
+impl Into<Range<usize>> for Span {
+    fn into(self) -> Range<usize> {
+        self.from..self.to
     }
 }
 
 impl Span {
-    pub fn new(from: Position, to: Position) -> Self {
+    pub fn new(from: usize, to: usize) -> Self {
         Self { from, to }
     }
 
@@ -130,26 +143,12 @@ impl Span {
         }
     }
 
-    pub fn to_range(&self, contents: &str) -> Range<usize> {
-        let mut line_starts: Vec<usize> = vec![0];
-        line_starts.append(&mut contents.match_indices('\n').map(|(i, _)| i + 1).collect());
+    pub fn is_none(&self) -> bool {
+        return self.from == 0 && self.to == 0;
+    }
 
-        let start = *line_starts
-            .get(self.from.line.saturating_sub(1) as usize)
-            .unwrap_or(&0);
-        let end = *line_starts
-            .get(self.to.line.saturating_sub(1) as usize)
-            .unwrap_or(&start);
-
-        let start = start
-            .saturating_add(self.from.col as usize)
-            .min(contents.len());
-        let end = end
-            .saturating_add(self.to.col as usize)
-            .min(contents.len())
-            .max(start + 1);
-
-        start..end
+    pub fn to_range(self) -> Range<usize> {
+        self.into()
     }
 }
 
@@ -255,12 +254,12 @@ pub enum SyntaxErr {
     ExpectedOpeningBracket(Bracket),
     #[error("expected closing bracket: {0:?}")]
     ExpectedClosingBracket(Bracket),
-    #[error("unclosed parenthesis: missing ')' to match opening '(' at line {0}")]
-    UnclosedParen(usize),
-    #[error("unclosed bracket: missing ']' to match opening '[' at line {0}")]
-    UnclosedBracket(usize),
-    #[error("unclosed brace: missing '}}' to match opening '{{' at line {0}")]
-    UnclosedBrace(usize),
+    #[error("unclosed parenthesis: missing ')' to match opening '('")]
+    UnclosedParen,
+    #[error("unclosed bracket: missing ']' to match opening '['")]
+    UnclosedBracket,
+    #[error("unclosed brace: missing '}}' to match opening '{{'")]
+    UnclosedBrace,
     #[error("missing semicolon after statement")]
     MissingSemicolon,
     #[error("missing comma between items")]
@@ -300,9 +299,9 @@ impl CalibreError for SyntaxErr {
         match self {
             Self::ExpectedOpeningBracket(_) => "P001",
             Self::ExpectedClosingBracket(_) => "P002",
-            Self::UnclosedParen(_) => "P017",
-            Self::UnclosedBracket(_) => "P018",
-            Self::UnclosedBrace(_) => "P019",
+            Self::UnclosedParen => "P017",
+            Self::UnclosedBracket => "P018",
+            Self::UnclosedBrace => "P019",
             Self::MissingSemicolon => "P020",
             Self::MissingComma => "P021",
             Self::ExpectedToken(_) => "P003",
@@ -332,15 +331,9 @@ impl CalibreError for SyntaxErr {
                 "insert the missing closing {:?} bracket to finish the current construct",
                 bracket
             )),
-            Self::UnclosedParen(line) => Some(format!(
-                "add a closing ')' to match the opening '(' at line {line}"
-            )),
-            Self::UnclosedBracket(line) => Some(format!(
-                "add a closing ']' to match the opening '[' at line {line}"
-            )),
-            Self::UnclosedBrace(line) => Some(format!(
-                "add a closing '}}' to match the opening '{{' at line {line}"
-            )),
+            Self::UnclosedParen => Some(format!("add a closing ')' to match the opening '('")),
+            Self::UnclosedBracket => Some(format!("add a closing ']' to match the opening '['")),
+            Self::UnclosedBrace => Some(format!("add a closing '}}' to match the opening '{{'")),
             Self::MissingSemicolon => {
                 Some("add ';' or a newline to terminate the previous statement".to_string())
             }

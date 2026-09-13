@@ -6,11 +6,10 @@ use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::nodes::{AstNode, AstNodeType, DestructurePattern, VarType};
 use crate::ast::types::{GenericTypes, ParserDataType, ParserInnerType};
 use crate::parse::util::{
-    ensure_scope_node, labelled_scope_parser, lex, scope_node_parser, span,
+    ensure_scope_node, labelled_scope_parser, lex, scope_node_parser,
     struct_destructure_fields_parser,
 };
 use chumsky::prelude::*;
-use std::sync::Arc;
 
 #[derive(Clone)]
 enum FnParamGroup {
@@ -50,10 +49,7 @@ pub struct FunctionBuilt<'a> {
     pub fn_standard_expr: StrParser<'a, AstNode>,
 }
 
-pub fn build_function_parsers<'a>(
-    parts: FunctionParsers<'a>,
-    line_starts: Arc<Vec<usize>>,
-) -> FunctionBuilt<'a> {
+pub fn build_function_parsers<'a>(parts: FunctionParsers<'a>) -> FunctionBuilt<'a> {
     let FunctionParsers {
         pad,
         pad_with_newline,
@@ -102,17 +98,13 @@ pub fn build_function_parsers<'a>(
                 .then(lex(pad.clone(), just('=').ignore_then(expr.clone())).or_not())
                 .or_not(),
         )
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |(items, maybe_ty_default), r| {
-                let sp = span(ls.as_ref(), r);
-                let (ty, default) = maybe_ty_default.unwrap_or((None, None));
-                FnParamGroup::Destructure {
-                    span: sp,
-                    pattern: DestructurePattern::Tuple(items),
-                    data_type: ty,
-                    default: default.map(Box::new),
-                }
+        .map_with_span(move |(items, maybe_ty_default), sp| {
+            let (ty, default) = maybe_ty_default.unwrap_or((None, None));
+            FnParamGroup::Destructure {
+                span: sp,
+                pattern: DestructurePattern::Tuple(items),
+                data_type: ty,
+                default: default.map(Box::new),
             }
         });
 
@@ -124,17 +116,13 @@ pub fn build_function_parsers<'a>(
                     .then(lex(pad.clone(), just('=').ignore_then(expr.clone())).or_not())
                     .or_not(),
             )
-            .map_with_span({
-                let ls = line_starts.clone();
-                move |(items, maybe_ty_default), r| {
-                    let sp = span(ls.as_ref(), r);
-                    let (ty, default) = maybe_ty_default.unwrap_or((None, None));
-                    FnParamGroup::Destructure {
-                        span: sp,
-                        pattern: DestructurePattern::Struct(items),
-                        data_type: ty,
-                        default: default.map(Box::new),
-                    }
+            .map_with_span(move |(items, maybe_ty_default), sp| {
+                let (ty, default) = maybe_ty_default.unwrap_or((None, None));
+                FnParamGroup::Destructure {
+                    span: sp,
+                    pattern: DestructurePattern::Struct(items),
+                    data_type: ty,
+                    default: default.map(Box::new),
                 }
             });
 

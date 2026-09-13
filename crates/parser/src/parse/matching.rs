@@ -5,9 +5,8 @@ use crate::ast::nodes::functions::FunctionHeader;
 use crate::ast::nodes::literals::AstTuple;
 use crate::ast::nodes::{AstNode, AstNodeType, DestructurePattern, VarType, matching::*};
 use crate::ast::types::{GenericTypes, ParserDataType};
-use crate::parse::util::{lex, span, struct_destructure_fields_parser};
+use crate::parse::util::{lex, struct_destructure_fields_parser};
 use chumsky::prelude::*;
-use std::sync::Arc;
 
 pub struct MatchParsers<'a> {
     pub pad: StrParser<'a, ()>,
@@ -28,10 +27,7 @@ pub struct MatchBuilt<'a> {
     pub match_expr: StrParser<'a, AstNode>,
 }
 
-pub fn build_match_parsers<'a>(
-    parts: MatchParsers<'a>,
-    line_starts: Arc<Vec<usize>>,
-) -> MatchBuilt<'a> {
+pub fn build_match_parsers<'a>(parts: MatchParsers<'a>) -> MatchBuilt<'a> {
     let MatchParsers {
         pad,
         delim,
@@ -86,10 +82,7 @@ pub fn build_match_parsers<'a>(
         .boxed();
 
     let match_string_wildcard_part = lex(pad.clone(), just('_'))
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |_, r| MatchStringPatternPart::Wildcard(span(ls.as_ref(), r))
-        })
+        .map_with_span(move |_, sp| MatchStringPatternPart::Wildcard(sp))
         .boxed();
 
     let match_string_part = choice((
@@ -153,16 +146,10 @@ pub fn build_match_parsers<'a>(
 
     let match_tuple_item_atom = choice((
         lex(pad.clone(), just(".."))
-            .map_with_span({
-                let ls = line_starts.clone();
-                move |_, r| MatchTupleItem::Rest(span(ls.as_ref(), r))
-            })
+            .map_with_span(move |_, sp| MatchTupleItem::Rest(sp))
             .boxed(),
         lex(pad.clone(), just('_'))
-            .map_with_span({
-                let ls = line_starts.clone();
-                move |_, r| MatchTupleItem::Wildcard(span(ls.as_ref(), r))
-            })
+            .map_with_span(move |_, sp| MatchTupleItem::Wildcard(sp))
             .boxed(),
         match_is_type.clone().map(MatchTupleItem::IsType).boxed(),
         match_in_pattern.clone().map(MatchTupleItem::In).boxed(),
@@ -489,14 +476,9 @@ pub fn build_match_parsers<'a>(
                 var_type: vt,
                 name: PotentialDollarIdentifier::Identifier(ParserText::new(sp, name)),
             }),
-        lex(pad.clone(), just("..")).map_with_span({
-            let ls = line_starts.clone();
-            move |_, r| MatchArmType::TuplePattern(vec![MatchTupleItem::Rest(span(ls.as_ref(), r))])
-        }),
-        lex(pad.clone(), just('_')).map_with_span({
-            let ls = line_starts.clone();
-            move |_, r| MatchArmType::Wildcard(span(ls.as_ref(), r))
-        }),
+        lex(pad.clone(), just(".."))
+            .map_with_span(move |_, sp| MatchArmType::TuplePattern(vec![MatchTupleItem::Rest(sp)])),
+        lex(pad.clone(), just('_')).map_with_span(move |_, sp| MatchArmType::Wildcard(sp)),
         match_is_type.clone().map(MatchArmType::IsType),
         match_in_pattern.clone().map(MatchArmType::In),
         match_string_pattern
@@ -751,10 +733,8 @@ pub fn build_match_parsers<'a>(
         )
         .then_ignore(delim.clone().or_not())
         .then_ignore(lex(pad.clone(), just('}')))
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |((((generics, param_ty), default), return_ty), body), r| {
-                let sp = span(ls.as_ref(), r);
+        .map_with_span(
+            move |((((generics, param_ty), default), return_ty), body), sp| {
                 let header = FunctionHeader {
                     generics,
                     parameters: vec![(
@@ -778,8 +758,8 @@ pub fn build_match_parsers<'a>(
                         },
                     }),
                 )
-            }
-        })
+            },
+        )
         .boxed();
 
     let match_value = expr
@@ -824,19 +804,16 @@ pub fn build_match_parsers<'a>(
         )
         .then_ignore(delim.clone().or_not())
         .then_ignore(lex(pad.clone(), just('}')))
-        .map_with_span({
-            let ls = line_starts.clone();
-            move |(value, arms), r| {
-                AstNode::new(
-                    span(ls.as_ref(), r),
-                    AstNodeType::MatchStatement(AstMatch {
-                        value: value.map(Box::new),
-                        body: MatchBody {
-                            values: arms.into_iter().flatten().collect(),
-                        },
-                    }),
-                )
-            }
+        .map_with_span(move |(value, arms), sp| {
+            AstNode::new(
+                sp,
+                AstNodeType::MatchStatement(AstMatch {
+                    value: value.map(Box::new),
+                    body: MatchBody {
+                        values: arms.into_iter().flatten().collect(),
+                    },
+                }),
+            )
         })
         .boxed();
 

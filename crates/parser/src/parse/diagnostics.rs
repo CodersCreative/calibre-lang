@@ -1,11 +1,7 @@
-use super::util::span;
-use crate::{ParserError, SyntaxErr};
+use crate::{ParserError, Span, SyntaxErr};
 use chumsky::error::{Rich, RichPattern};
 
-pub(super) fn to_parser_errors(
-    line_starts: &[usize],
-    errs: Vec<Rich<'_, char>>,
-) -> Vec<ParserError> {
+pub(super) fn to_parser_errors(errs: Vec<Rich<'_, char>>) -> Vec<ParserError> {
     errs.into_iter()
         .map(|e| {
             let err = if e.found().is_none() {
@@ -27,17 +23,11 @@ pub(super) fn to_parser_errors(
                     .collect();
 
                 if expected.iter().any(|t| t.contains("')'")) && found == "`;`" {
-                    SyntaxErr::UnclosedParen(
-                        span(line_starts, (*e.span()).into_range()).from.line as usize,
-                    )
+                    SyntaxErr::UnclosedParen
                 } else if expected.iter().any(|t| t.contains("']'")) && found == "`;`" {
-                    SyntaxErr::UnclosedBracket(
-                        span(line_starts, (*e.span()).into_range()).from.line as usize,
-                    )
+                    SyntaxErr::UnclosedBracket
                 } else if expected.iter().any(|t| t.contains("'}'")) && found == "`;`" {
-                    SyntaxErr::UnclosedBrace(
-                        span(line_starts, (*e.span()).into_range()).from.line as usize,
-                    )
+                    SyntaxErr::UnclosedBrace
                 } else if expected.iter().any(|t| t.contains("`;`")) && found != "`;`" {
                     SyntaxErr::MissingSemicolon
                 } else if expected.iter().any(|t| t.contains("`,`")) && found != "`,`" {
@@ -63,9 +53,10 @@ pub(super) fn to_parser_errors(
                     }
                 }
             };
+
             ParserError::Syntax {
                 err,
-                span: span(line_starts, (*e.span()).into_range()),
+                span: Span::from(*e.span()),
             }
         })
         .collect()

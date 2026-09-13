@@ -1,5 +1,6 @@
 use crate::{
-    CalibreError, Position, Span, ast::{
+    CalibreError, Span,
+    ast::{
         idents::{ParsedIntLiteral, ParserText, PotentialDollarIdentifier},
         nodes::{
             AstNode, AstNodeType, VarType,
@@ -20,21 +21,6 @@ where
     P: Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Clone + 'a,
 {
     p.padded_by(pad)
-}
-
-pub(super) fn pos(line_starts: &[usize], off: usize) -> Position {
-    let idx = match line_starts.binary_search(&off) {
-        Ok(i) => i,
-        Err(i) => i.saturating_sub(1),
-    };
-    Position {
-        line: (idx as u32) + 1,
-        col: (off.saturating_sub(line_starts[idx]) as u32) + 1,
-    }
-}
-
-pub(super) fn span(line_starts: &[usize], r: std::ops::Range<usize>) -> Span {
-    Span::new(pos(line_starts, r.start), pos(line_starts, r.end))
 }
 
 pub(super) fn scope_node_parser<'a, P>(
