@@ -1,4 +1,4 @@
-use super::{LegacySpanMapExt, filter};
+use super::{MapWithSpanExt, filter};
 use crate::Span;
 use crate::ast::RefMutability;
 use crate::ast::ffi::ParserFfiInnerType;

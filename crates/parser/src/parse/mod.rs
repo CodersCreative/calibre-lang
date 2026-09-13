@@ -1,6 +1,5 @@
 use crate::{
-    ParserError, Span,
-    ast::{
+    ParserError, Span, ast::{
         ObjectType,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
@@ -14,9 +13,9 @@ use crate::{
             scopes::AstScopeDef,
         },
         types::{ParserDataType, ParserInnerType},
-    },
+    }, lexer::Token,
 };
-use chumsky::error::Rich;
+use chumsky::{error::Rich, extra::ParserExtra};
 use chumsky::prelude::*;
 use diagnostics::to_parser_errors;
 use expressions::{TailExpressionParsers, build_tail_expression_parser};
@@ -28,6 +27,7 @@ use std::sync::Arc;
 use tracing::instrument;
 use ustr::Ustr;
 use util::{lex, span, strip_block_comments_keep_layout};
+use chumsky::span::Span as ChumskySpan;
 
 mod diagnostics;
 mod expressions;
@@ -35,21 +35,41 @@ mod functions;
 mod matching;
 mod setup;
 mod statements;
+pub mod literals;
 pub mod util;
 
-trait LegacySpanMapExt<'a, O>: Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Sized {
-    fn map_with_span<U, F>(self, f: F) -> impl Parser<'a, &'a str, U, extra::Err<Rich<'a, char>>>
+pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
+pub type TokenStream<'a> = &'a [(Token<'a>, Span)];
+
+pub trait AstParser<'a>: Sized {
+    fn parser() -> Box<dyn Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> + 'a>;
+}
+
+pub trait MapWithSpanExt<'a, I, O, E>: Parser<'a, I, O, E>
+where
+    I: chumsky::input::Input<'a>,
+    E: ParserExtra<'a, I>,
+    I::Span: ChumskySpan<Offset = usize>, 
+{
+    fn map_with_span<U, F>(self, f: F) -> impl Parser<'a, I, U, E>
     where
         F: Fn(O, std::ops::Range<usize>) -> U + Clone + 'a,
+        Self: Sized + 'a,
     {
-        self.map_with(move |out, e| f(out, e.span().into_range()))
+        self.map_with(move |out, extra| {
+            let span = extra.span();
+            f(out, span.start()..span.end())
+        })
     }
 }
 
-impl<'a, O, P> LegacySpanMapExt<'a, O> for P where
-    P: Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Sized
-{
-}
+impl<'a, I, O, E, P> MapWithSpanExt<'a, I, O, E> for P
+where
+    I: chumsky::input::Input<'a>,
+    E: ParserExtra<'a, I>,
+    I::Span: ChumskySpan<Offset = usize>,
+    P: Parser<'a, I, O, E>,
+{}
 
 fn filter<'a, F>(f: F) -> impl Parser<'a, &'a str, char, extra::Err<Rich<'a, char>>> + Clone
 where
@@ -125,7 +145,7 @@ pub fn parse_program_with_source(
             let spawn_item_expr = functions.spawn_item_expr.clone();
             let fn_standard_expr = functions.fn_standard_expr.clone();
 
-            let generic_ident = ident
+            let generic_ident: Boxed<'_, '_, &str, PotentialGenericTypeIdentifier, extra::Full<Rich<'_, char>, (), ()>> = ident
                 .clone()
                 .then(
                     lex(pad.clone(), just(":<"))

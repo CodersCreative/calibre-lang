@@ -1,4 +1,4 @@
-use super::{LegacySpanMapExt, setup::StrParser};
+use super::{MapWithSpanExt, setup::StrParser};
 use crate::Span;
 use crate::ast::ObjectType;
 use crate::ast::ffi::ParserFfiInnerType;

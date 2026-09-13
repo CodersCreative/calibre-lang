@@ -1,4 +1,4 @@
-use super::{LegacySpanMapExt, setup::StrParser};
+use super::{MapWithSpanExt, setup::StrParser};
 use crate::Span;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::functions::FunctionHeader;

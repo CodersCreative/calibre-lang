@@ -1,4 +1,4 @@
-use super::{LegacySpanMapExt, filter, setup::StrParser};
+use super::{MapWithSpanExt, filter, setup::StrParser};
 use crate::ast::RefMutability;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::access::{AstField, AstIndex};

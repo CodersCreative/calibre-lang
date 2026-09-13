@@ -8,7 +8,7 @@ use logos_display::{Debug, Display};
 // Comments need to be manually filtered out before parsing
 
 #[derive(Logos, Display, Debug, Clone, PartialEq)]
-enum Token<'a> {
+pub enum Token<'a> {
     Error,
 
     // Types
