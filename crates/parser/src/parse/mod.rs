@@ -38,6 +38,8 @@ mod matching;
 mod setup;
 mod statements;
 pub mod util;
+pub mod idents;
+pub mod types;
 
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
 pub type TokenStream<'a> = &'a [Token<'a>];
