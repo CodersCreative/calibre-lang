@@ -12,9 +12,10 @@ use crate::{
     typing::MiddleTypeDefType,
 };
 use calibre_parser::{
-    Span, ast::{
+    Span,
+    ast::{
         ObjectMap, ObjectType,
-        idents::ParsedIntLiteral,
+        idents::{IntLiteralType, ParsedIntLiteral},
         nodes::{
             AstNode,
             functions::CallArg,
@@ -24,7 +25,7 @@ use calibre_parser::{
             },
         },
         types::{ParserDataType, ParserInnerType},
-    }, formatter::AstFormatting,
+    },
 };
 use ustr::Ustr;
 
@@ -39,7 +40,8 @@ impl MirLowering for AstStruct {
         let obj = env.typing.objects.get(&identifier).cloned();
 
         // TODO Handle generators a bit better, I'm just lazy rn
-        if obj.is_none() && !identifier.contains("gen")
+        if obj.is_none()
+            && !identifier.contains("gen")
             && !env
                 .tagging
                 .tag_info
@@ -319,12 +321,10 @@ impl MirLowering for AstInt {
         span: Span,
     ) -> Option<ParserDataType> {
         Some(ParserDataType {
-            data_type: if self.value.ends_with('b') {
-                ParserInnerType::Byte
-            } else if self.value.ends_with('u') {
-                ParserInnerType::UInt
-            } else {
-                ParserInnerType::Int
+            data_type: match self.value.int_type {
+                IntLiteralType::Byte => ParserInnerType::Byte,
+                IntLiteralType::UInt => ParserInnerType::UInt,
+                IntLiteralType::Int => ParserInnerType::Int,
             },
             span,
         })

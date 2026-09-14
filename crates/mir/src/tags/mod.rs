@@ -89,7 +89,7 @@ impl MiddleEnvironment {
                 let priority = if let Some(AstNodeType::IntLiteral(val)) =
                     args.first().map(|x| &x.node_type)
                 {
-                    val.value.parse::<i32>().unwrap_or(100)
+                    val.value.value as i32
                 } else {
                     100
                 };
@@ -188,7 +188,7 @@ impl MiddleEnvironment {
                 let priority = if let Some(AstNodeType::IntLiteral(val)) =
                     args.first().map(|x| &x.node_type)
                 {
-                    val.value.parse::<i32>().unwrap_or(100)
+                    val.value.value as i32
                 } else {
                     100
                 };

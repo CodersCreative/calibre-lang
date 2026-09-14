@@ -266,12 +266,10 @@ pub(super) fn parse_embedded_expr(txt: &str, fallback_span: Span) -> Result<AstN
         return Ok(current);
     }
 
-    if ParsedIntLiteral::parse(trimmed).is_some() {
+    if let Some(x) = ParsedIntLiteral::parse(trimmed) {
         return Ok(AstNode::new(
             fallback_span,
-            AstNodeType::IntLiteral(AstInt {
-                value: ParserText::from(trimmed.to_string()),
-            }),
+            AstNodeType::IntLiteral(AstInt { value: x }),
         ));
     }
 

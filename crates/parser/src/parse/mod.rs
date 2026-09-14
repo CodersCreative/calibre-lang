@@ -40,10 +40,10 @@ mod statements;
 pub mod util;
 
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
-pub type TokenStream<'a> = &'a [(Token<'a>, Span)];
+pub type TokenStream<'a> = &'a [Token<'a>];
 
 pub trait AstParser<'a>: Sized {
-    fn parser() -> Box<dyn Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> + 'a>;
+    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>>;
 }
 
 pub trait MapWithSpanExt<'a, I, O, E>: Parser<'a, I, O, E>

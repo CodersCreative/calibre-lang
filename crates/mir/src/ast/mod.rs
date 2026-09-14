@@ -767,15 +767,7 @@ impl From<MiddleNodeType> for AstNodeType {
                 value: ParserText::from(value.value),
             }),
             MiddleNodeType::IntLiteral(value) => {
-                let mut out = value.value.value.to_string();
-                match value.value.int_type {
-                    IntLiteralType::Int => {}
-                    IntLiteralType::UInt => out.push('u'),
-                    IntLiteralType::Byte => out.push('b'),
-                }
-                AstNodeType::IntLiteral(AstInt {
-                    value: ParserText::from(out),
-                })
+                AstNodeType::IntLiteral(AstInt { value: value.value })
             }
             MiddleNodeType::FieldAccess(value) => AstNodeType::FieldAccess(AstField {
                 base: Box::new((*value.base).into()),

@@ -276,11 +276,12 @@ pub fn build_tail_expression_parser<'a>(
                             }),
                         );
                     } else if let AstNodeType::IntLiteral(value) = node.node_type {
+                        let sp = current.span;
                         current = AstNode::new(
-                            Span::new_from_spans(current.span, value.value.span),
+                            sp,
                             AstNodeType::FieldAccess(AstField {
                                 base: Box::new(current),
-                                field: value.value.into(),
+                                field: PotentialDollarIdentifier::new(sp, value.value.to_string()),
                             }),
                         );
                     } else if let AstNodeType::CallExpression(AstCall {

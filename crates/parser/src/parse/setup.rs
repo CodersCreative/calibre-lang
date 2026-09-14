@@ -2,7 +2,7 @@ use super::{MapWithSpanExt, filter};
 use crate::Span;
 use crate::ast::RefMutability;
 use crate::ast::ffi::ParserFfiInnerType;
-use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
+use crate::ast::idents::{ParsedIntLiteral, ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::literals::{AstBig, AstChar, AstFloat, AstInt, AstString};
 use crate::ast::nodes::{AstNode, AstNodeType};
 use crate::ast::types::{GenericType, GenericTypes, ParserDataType, ParserInnerType};
@@ -239,7 +239,7 @@ pub fn build_parser_prelude<'a>() -> ParserPrelude<'a> {
         AstNode::new(
             sp,
             AstNodeType::IntLiteral(AstInt {
-                value: ParserText::new(sp, number),
+                value: ParsedIntLiteral::parse(number).unwrap_or_default(),
             }),
         )
     })

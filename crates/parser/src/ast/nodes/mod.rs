@@ -2,7 +2,9 @@ use crate::{
     IdentifiersUsed, Span,
     ast::{
         binary::BinaryOperator,
-        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        idents::{
+            ParsedIntLiteral, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+        },
         nodes::{
             access::{AstField, AstIdentifier, AstIndex, AstScope},
             assignment::{AstAssignDestructure, AstAssignment},
@@ -107,7 +109,7 @@ impl AstNode {
         AstNode::new(
             span,
             AstNodeType::IntLiteral(AstInt {
-                value: ParserText::new(span, value.to_string()),
+                value: ParsedIntLiteral::parse(value).unwrap_or_default(),
             }),
         )
     }

@@ -1,6 +1,8 @@
 use crate::ast::{
     ObjectType,
-    idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+    idents::{
+        ParsedIntLiteral, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+    },
     nodes::AstNode,
     types::ParserDataType,
 };
@@ -48,7 +50,7 @@ pub struct AstFloat {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstInt {
-    pub value: ParserText,
+    pub value: ParsedIntLiteral,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
