@@ -39,10 +39,12 @@ mod functions;
 pub mod idents;
 pub mod literals;
 mod matching;
+pub mod misc;
 pub mod scopes;
 mod setup;
 mod statements;
 pub mod types;
+pub mod unary;
 pub mod util;
 
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
