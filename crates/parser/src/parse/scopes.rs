@@ -1,0 +1,145 @@
+use crate::ast::nodes::scopes::{AstScopeAlias, AstScopeDef, NamedScope};
+use crate::{
+    ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
+    lexer::Token,
+    parse::{AstParser, AstParserErr, TokenStream},
+};
+use chumsky::prelude::*;
+use chumsky::{Boxed, Parser, select};
+
+impl<'a> AstParser<'a> for AstScopeDef {
+    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        let body = choice((
+            select! { Token::LeftBracket => () }
+                .ignore_then(select! { Token::LeftBracket => () })
+                .ignore_then(
+                    AstNode::parser()
+                        .repeated()
+                        .collect::<Vec<_>>()
+                        .or_not()
+                        .map(|x| x.unwrap_or_default()),
+                )
+                .then_ignore(select! { Token::RightBracket => () })
+                .then_ignore(select! { Token::RightBracket => () })
+                .map(|items| (Some(items), Some(false))),
+            select! { Token::LeftBracket => () }
+                .ignore_then(
+                    AstNode::parser()
+                        .repeated()
+                        .collect::<Vec<_>>()
+                        .or_not()
+                        .map(|x| x.unwrap_or_default()),
+                )
+                .then_ignore(select! { Token::RightBracket => () })
+                .map(|items| (Some(items), Some(true))),
+            // Im going to make node by itself produce a scope so that no scope is now an explicit action
+            AstNode::parser().map(|body| (Some(vec![body]), Some(true))),
+        ))
+        .or_not()
+        .map(|x| x.unwrap_or((None, None)));
+
+        let named = PotentialDollarIdentifier::parser()
+            .then(
+                select! { Token::LeftSquare => () }
+                    .ignore_then(
+                        PotentialDollarIdentifier::parser()
+                            .then(
+                                select! { Token::Colon => () }
+                                    .ignore_then(AstNode::parser())
+                                    .or_not(),
+                            )
+                            .map(|(ident, value)| (ident, value))
+                            .separated_by(select! { Token::Comma => () })
+                            .allow_trailing()
+                            .collect::<Vec<_>>()
+                            .or_not()
+                            .map(|x| x.unwrap_or_default()),
+                    )
+                    .then_ignore(select! { Token::RightSquare => () })
+                    .or_not()
+                    .map(|x| x.unwrap_or_default()),
+            )
+            .map(|(name, args)| NamedScope {
+                name,
+                args: args
+                    .into_iter()
+                    .map(|(ident, value)| {
+                        let span = *ident.span();
+                        (ident, value.unwrap_or_else(|| AstNode::none(span)))
+                    })
+                    .collect(),
+            });
+
+        select! { Token::FatArrow => () }
+            .ignore_then(named.or_not())
+            .then(body)
+            .map(|(named, (body, create_new_scope))| AstScopeDef {
+                body,
+                named,
+                is_temp: true,
+                create_new_scope,
+                define: false,
+            })
+            .boxed()
+    }
+}
+
+impl<'a> AstParser<'a> for AstScopeAlias {
+    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        let args = select! { Token::LeftSquare => () }
+            .ignore_then(
+                PotentialDollarIdentifier::parser()
+                    .then(
+                        select! { Token::Colon => () }
+                            .ignore_then(AstNode::parser())
+                            .or_not(),
+                    )
+                    .map(|(ident, value)| (ident, value))
+                    .separated_by(select! { Token::Comma => () })
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .or_not()
+                    .map(|x| x.unwrap_or_default()),
+            )
+            .then_ignore(select! { Token::RightSquare => () })
+            .or_not()
+            .map(|x| x.unwrap_or_default());
+
+        let call_mode = choice((
+            select! { Token::LeftBracket => () }
+                .then_ignore(select! { Token::LeftBracket => () })
+                .then_ignore(select! { Token::RightBracket => () })
+                .then_ignore(select! { Token::RightBracket => () })
+                .map(|()| Some(false)),
+            select! { Token::LeftBracket => () }
+                .then_ignore(select! { Token::RightBracket => () })
+                .map(|()| Some(true)),
+        ))
+        .or_not()
+        .map(|x| x.flatten());
+
+        select! { Token::Let => () }
+            .ignore_then(PotentialDollarIdentifier::parser())
+            .then_ignore(select! { Token::FatArrow => () })
+            .then(PotentialDollarIdentifier::parser())
+            .then(args)
+            .then(call_mode)
+            .map(
+                |(((identifier, name), args), create_new_scope)| AstScopeAlias {
+                    identifier,
+                    value: NamedScope {
+                        name,
+                        args: args
+                            .into_iter()
+                            .map(|(ident, value)| {
+                                let span = *ident.span();
+                                (ident, value.unwrap_or_else(|| AstNode::none(span)))
+                            })
+                            .collect(),
+                    },
+                    create_new_scope,
+                },
+            )
+            .boxed()
+    }
+}

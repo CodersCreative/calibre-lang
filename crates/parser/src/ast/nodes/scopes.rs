@@ -1,4 +1,7 @@
-use crate::ast::{idents::PotentialDollarIdentifier, nodes::AstNode};
+use crate::ast::{
+    idents::PotentialDollarIdentifier,
+    nodes::{AstNode, AstNodeType},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -21,4 +24,10 @@ pub struct AstScopeDef {
     pub is_temp: bool,
     pub create_new_scope: Option<bool>,
     pub define: bool,
+}
+
+impl From<AstScopeDef> for AstNodeType {
+    fn from(value: AstScopeDef) -> Self {
+        Self::ScopeDeclaration(value)
+    }
 }

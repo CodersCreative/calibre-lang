@@ -30,29 +30,30 @@ impl AstFormatting for AstScopeDef {
             if let Some(body) = &self.body
                 && !body.is_empty()
             {
-                let create_new_scope = self.create_new_scope.as_ref().copied().unwrap_or(false);
-                if create_new_scope {
-                    txt.push_str(" {\n");
-                    if let Some(first_stmt) = body.first()
-                        && let Some(comment) =
-                            formatter.take_leading_scope_comments(&first_stmt.span)
-                    {
-                        txt.push_str(&format!("{};\n", comment));
-                    }
+                if self.create_new_scope.as_ref().copied().unwrap_or(true) {
+                    if body.len() == 1 {
+                        txt.push_str(&format!(" {}", body[0].format(formatter)));
+                    } else {
+                        txt.push_str(" {\n");
+                        if let Some(first_stmt) = body.first()
+                            && let Some(comment) =
+                                formatter.take_leading_scope_comments(&first_stmt.span)
+                        {
+                            txt.push_str(&format!("{};\n", comment));
+                        }
 
-                    let lines = formatter.get_scope_lines(body);
-                    for line in lines {
-                        txt.push_str(&line);
-                    }
+                        let lines = formatter.get_scope_lines(body);
+                        for line in lines {
+                            txt.push_str(&line);
+                        }
 
-                    txt = formatter
-                        .fmt_txt_with_tab(&txt, 1, false)
-                        .trim_end()
-                        .to_string();
-                    txt.push('\n');
-                    txt.push('}');
-                } else if body.len() == 1 {
-                    txt.push_str(&format!(" {}", body[0].format(formatter)));
+                        txt = formatter
+                            .fmt_txt_with_tab(&txt, 1, false)
+                            .trim_end()
+                            .to_string();
+                        txt.push('\n');
+                        txt.push('}');
+                    }
                 } else {
                     txt.push_str(" {{\n");
                     if let Some(first_stmt) = body.first()
