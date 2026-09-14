@@ -103,6 +103,19 @@ where
     any().and_is(end.not()).repeated().collect::<String>()
 }
 
+// TODO I will do these once the entire parser is complete
+impl<'a> AstParser<'a> for AstNode {
+    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        unimplemented!()
+    }
+}
+
+impl<'a> AstParser<'a> for AstNodeType {
+    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        unimplemented!()
+    }
+}
+
 #[instrument(skip_all, fields(path = ?source_path, bytes = source.len()))]
 pub fn parse_program_with_source(
     source: &str,
