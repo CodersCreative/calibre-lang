@@ -24,8 +24,10 @@ pub enum Token<'a> {
     CharLiteral(&'a str),
     #[regex(r#""[^"]*""#)]
     StringLiteral(&'a str),
-    #[regex(r#"[0-9][0-9_]*(\.[0-9][0-9_]*|[fg])([eE][+-]?[0-9][0-9_]*)?"#)]
+    #[regex(r#"[0-9][0-9_]*((\.[0-9][0-9_]*)([eE][+-]?[0-9][0-9_]*)?|([eE][+-]?[0-9][0-9_]*)?f)"#)]
     FloatLiteral(&'a str),
+    #[regex(r#"[0-9][0-9_]*(\.[0-9][0-9_]*)?([eE][+-]?[0-9][0-9_]*)?g"#)]
+    BigLiteral(&'a str),
     #[regex(r#"[0-9][0-9_]*([eE][+-]?[0-9][0-9_]*)?[uib]?"#, lex_int)]
     IntLiteral(ParsedIntLiteral),
 
