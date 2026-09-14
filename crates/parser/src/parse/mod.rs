@@ -31,8 +31,10 @@ use ustr::Ustr;
 use util::{lex, strip_block_comments_keep_layout};
 
 pub mod access;
+pub mod assignment;
 pub mod binary;
 pub mod conditionals;
+pub mod declarations;
 mod diagnostics;
 mod expressions;
 pub mod flow;
