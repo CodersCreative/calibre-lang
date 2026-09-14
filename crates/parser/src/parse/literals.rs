@@ -1,6 +1,3 @@
-use chumsky::prelude::*;
-use chumsky::{Boxed, Parser, select};
-
 use crate::{
     ast::{
         ObjectType,
@@ -16,6 +13,8 @@ use crate::{
     lexer::Token,
     parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream},
 };
+use chumsky::prelude::*;
+use chumsky::{Boxed, Parser, select};
 use ustr::Ustr;
 
 impl<'a> AstParser<'a> for AstFloat {

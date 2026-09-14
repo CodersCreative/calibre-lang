@@ -30,6 +30,7 @@ use tracing::instrument;
 use ustr::Ustr;
 use util::{lex, strip_block_comments_keep_layout};
 
+pub mod access;
 mod diagnostics;
 mod expressions;
 mod functions;
