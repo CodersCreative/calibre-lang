@@ -33,13 +33,13 @@ use util::{lex, strip_block_comments_keep_layout};
 mod diagnostics;
 mod expressions;
 mod functions;
+pub mod idents;
 pub mod literals;
 mod matching;
 mod setup;
 mod statements;
-pub mod util;
-pub mod idents;
 pub mod types;
+pub mod util;
 
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
 pub type TokenStream<'a> = &'a [Token<'a>];
@@ -62,6 +62,18 @@ where
         self.map_with(move |out, extra| {
             let span = extra.span();
             f(out, Span::from(span.start()..span.end()))
+        })
+    }
+
+    fn try_map_with_span<U, F, Err>(self, f: F) -> impl Parser<'a, I, U, E>
+    where
+        F: Fn(O, Span) -> Result<U, Err> + Clone + 'a,
+        Err: Into<E::Error>,
+        Self: Sized + 'a,
+    {
+        self.try_map_with(move |out, extra| {
+            let span = extra.span();
+            f(out, Span::from(span.start()..span.end())).map_err(Into::into)
         })
     }
 }

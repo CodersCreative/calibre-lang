@@ -125,6 +125,12 @@ impl From<SimpleSpan> for Span {
     }
 }
 
+impl From<Span> for SimpleSpan {
+    fn from(value: Span) -> Self {
+        Self { start: value.from, end: value.to, context: () }
+    }
+}
+
 impl From<Span> for Range<usize> {
     fn from(value: Span) -> Self {
         value.from..value.to
