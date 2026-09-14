@@ -56,7 +56,7 @@ impl<'a> AstParser<'a> for AstAssignment {
 
 impl<'a> AstParser<'a> for AstAssignDestructure {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        DestructurePattern::parser()
+        DestructurePattern::no_bracket_parser()
             .then_ignore(select! { Token::Walrus => () })
             .then(AstNode::parser())
             .map(|(pattern, value)| AstAssignDestructure {

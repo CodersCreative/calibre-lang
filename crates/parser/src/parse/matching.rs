@@ -34,10 +34,45 @@ impl<'a> AstParser<'a> for VarType {
     }
 }
 
+impl<'a> DestructurePattern {
+    pub fn no_bracket_parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        choice((
+            Self::parser(),
+            choice((
+                // rest
+                select! { Token::Range => () }.map(|_| None),
+                // binding
+                choice((
+                    select! { Token::Mut => () }.map(|_| VarType::Mutable),
+                    select! { Token::Const => () }.map(|_| VarType::Constant),
+                ))
+                .or_not()
+                .then(PotentialDollarIdentifier::parser())
+                .map_with_span(|(var_type, name), span| {
+                    Some((
+                        var_type.unwrap_or(VarType::Immutable),
+                        PotentialDollarIdentifier::Identifier(ParserText::new(
+                            span,
+                            name.text().clone(),
+                        )),
+                    ))
+                }),
+            ))
+            .separated_by(select! { Token::Comma => () })
+            .allow_trailing()
+            .collect::<Vec<_>>()
+            .or_not()
+            .map(|x| x.unwrap_or_default())
+            .map(DestructurePattern::Tuple),
+        ))
+        .boxed()
+    }
+}
+
 impl<'a> AstParser<'a> for DestructurePattern {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
-            // (tuple)
+            // tuple
             select! { Token::LeftParen => () }
                 .ignore_then(
                     choice((
@@ -68,33 +103,6 @@ impl<'a> AstParser<'a> for DestructurePattern {
                 )
                 .then_ignore(select! { Token::RightParen => () })
                 .map(DestructurePattern::Tuple),
-            // tuple
-            choice((
-                // rest
-                select! { Token::Range => () }.map(|_| None),
-                // binding
-                choice((
-                    select! { Token::Mut => () }.map(|_| VarType::Mutable),
-                    select! { Token::Const => () }.map(|_| VarType::Constant),
-                ))
-                .or_not()
-                .then(PotentialDollarIdentifier::parser())
-                .map_with_span(|(var_type, name), span| {
-                    Some((
-                        var_type.unwrap_or(VarType::Immutable),
-                        PotentialDollarIdentifier::Identifier(ParserText::new(
-                            span,
-                            name.text().clone(),
-                        )),
-                    ))
-                }),
-            ))
-            .separated_by(select! { Token::Comma => () })
-            .allow_trailing()
-            .collect::<Vec<_>>()
-            .or_not()
-            .map(|x| x.unwrap_or_default())
-            .map(DestructurePattern::Tuple),
             // struct
             select! { Token::LeftBracket => () }
                 .ignore_then(

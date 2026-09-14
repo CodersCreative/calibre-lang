@@ -78,7 +78,7 @@ impl<'a> AstParser<'a> for AstDeclaration {
 impl<'a> AstParser<'a> for AstDeclareDestructure {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Let => () }
-            .ignore_then(DestructurePattern::parser())
+            .ignore_then(DestructurePattern::no_bracket_parser())
             .then_ignore(select! { Token::Walrus => () })
             .then(AstNode::parser())
             .map(|(pattern, value)| AstDeclareDestructure {

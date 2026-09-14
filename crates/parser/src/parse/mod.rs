@@ -38,6 +38,7 @@ pub mod declarations;
 mod diagnostics;
 mod expressions;
 pub mod flow;
+pub mod functions;
 mod functions_old;
 pub mod generator;
 pub mod idents;
