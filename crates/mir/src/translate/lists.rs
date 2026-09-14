@@ -10,7 +10,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        nodes::lists::{AstList, AstListRepeat},
+        nodes::lists::AstList,
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -82,72 +82,6 @@ impl MirLowering for AstList {
             })
         } else {
             None
-        }
-    }
-}
-
-impl MirLowering for AstListRepeat {
-    fn lower(
-        self,
-        env: &mut MiddleEnvironment,
-        scope: ScopeId,
-        span: Span,
-    ) -> Result<MiddleNode, MiddleErr> {
-        let count = self.count.lower_or_empty(env, scope, span);
-        let count = match count.node_type {
-            MiddleNodeType::IntLiteral(value) => value.value.value as usize,
-            _ => {
-                return Err(MiddleErr::At(
-                    count.span,
-                    Box::new(MiddleErr::InvalidListRepeatCount),
-                ));
-            }
-        };
-
-        let mut lst = MirListBuilder::default();
-
-        let node_ty = self.value.type_of(env, scope, span);
-
-        let data_type = if self.data_type.is_auto() {
-            None
-        } else {
-            Some(env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?)
-        };
-
-        lst.data_type(env.compare_types(
-            data_type,
-            node_ty,
-            Some(&TagInfo::IgnoreInvalidTypeCheck),
-        )?);
-
-        let item = self.value.lower_or_empty(env, scope, span);
-        lst.values((0..count).map(|_| item.clone()).collect());
-
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::ListLiteral(lst.build().unwrap()),
-            span,
-        })
-    }
-
-    fn type_of(
-        &self,
-        env: &mut MiddleEnvironment,
-        scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        if !self.data_type.is_auto() {
-            Some(ParserDataType {
-                data_type: ParserInnerType::List(Box::new(
-                    env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
-                        .ok()?,
-                )),
-                span,
-            })
-        } else {
-            Some(ParserDataType {
-                data_type: ParserInnerType::List(Box::new(self.value.type_of(env, scope, span)?)),
-                span,
-            })
         }
     }
 }

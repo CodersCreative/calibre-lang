@@ -14,7 +14,7 @@ use crate::{
             flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
             functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
             generator::AstGenerator,
-            lists::{AstList, AstListRepeat},
+            lists::AstList,
             literals::{
                 AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstRange, AstString,
                 AstStruct, AstTuple,
@@ -419,7 +419,6 @@ pub enum AstNodeType {
 
     // Lists
     ListLiteral(AstList),
-    ListRepeatLiteral(AstListRepeat),
 
     // Conditionals
     IfStatement(AstIf),

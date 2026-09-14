@@ -8,7 +8,7 @@ use crate::{
             access::{AstField, AstIdentifier, AstIndex, AstScope},
             flow::AstEmit,
             functions::{AstCurry, CallArg},
-            lists::{AstList, AstListRepeat},
+            lists::AstList,
             literals::{AstStruct, AstTuple},
             misc::AstParen,
             scopes::AstScopeDef,
@@ -32,12 +32,16 @@ use util::{lex, strip_block_comments_keep_layout};
 
 pub mod access;
 pub mod binary;
+pub mod conditionals;
 mod diagnostics;
 mod expressions;
 pub mod flow;
 mod functions_old;
+pub mod generator;
 pub mod idents;
+pub mod lists;
 pub mod literals;
+pub mod loops;
 mod matching_old;
 pub mod misc;
 pub mod scopes;
@@ -365,15 +369,8 @@ pub fn parse_program_with_source(
                         .collect::<Vec<_>>(),
                     )
                     .map_with_span(move |(((_open_ty, _open_br), values), tails), sp| {
-                        let list = if let Some((value, count)) = values.0 {
-                            AstNode::new(
-                                sp,
-                                AstNodeType::ListRepeatLiteral(AstListRepeat {
-                                    data_type: _open_ty,
-                                    value: Box::new(value),
-                                    count: Box::new(count),
-                                }),
-                            )
+                        let list = if let Some((_value, _count)) = values.0 {
+                            unimplemented!()
                         } else {
                             AstNode::new(
                                 sp,

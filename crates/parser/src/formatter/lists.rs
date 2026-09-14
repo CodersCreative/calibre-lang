@@ -1,5 +1,5 @@
 use crate::{
-    ast::nodes::lists::{AstList, AstListRepeat},
+    ast::nodes::lists::AstList,
     formatter::{AstFormatting, Formatter, handle_comment},
 };
 
@@ -68,23 +68,5 @@ impl AstFormatting for AstList {
             prefix,
             formatter.fmt_txt_with_tab(&items.join(",\n"), 1, true)
         ))
-    }
-}
-
-impl AstFormatting for AstListRepeat {
-    type PreFormat = ();
-
-    fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let prefix = if !self.data_type.is_auto() {
-            format!("list:<{}>[", self.data_type)
-        } else {
-            "[".to_string()
-        };
-        format!(
-            "{}{}; {}]",
-            prefix,
-            self.value.format(formatter),
-            self.count.format(formatter)
-        )
     }
 }

@@ -246,7 +246,6 @@ impl MiddleEnvironment {
 
             // Lists
             AstNodeType::ListLiteral(x) => x.lower(self, scope, node.span),
-            AstNodeType::ListRepeatLiteral(x) => x.lower(self, scope, node.span),
 
             // Conditionals
             AstNodeType::Ternary(x) => x.lower(self, scope, node.span),

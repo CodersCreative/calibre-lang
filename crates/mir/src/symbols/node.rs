@@ -88,7 +88,6 @@ impl MiddleEnvironment {
 
             // Lists
             AstNodeType::ListLiteral(x) => x.type_of(self, scope, node.span),
-            AstNodeType::ListRepeatLiteral(x) => x.type_of(self, scope, node.span),
 
             // Conditionals
             AstNodeType::Ternary(x) => x.type_of(self, scope, node.span),

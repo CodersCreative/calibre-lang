@@ -10,7 +10,7 @@ use calibre_parser::ast::{
         flow::{AstBreak, AstContinue, AstDefer, AstPipe, AstReturn, AstTry, PipeSegment},
         functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
         generator::AstGenerator,
-        lists::{AstList, AstListRepeat},
+        lists::AstList,
         literals::{AstDataType, AstEnum, AstRange, AstStruct, AstTuple},
         loops::{AstIter, AstLoop, LoopType},
         matching::{AstFnMatch, AstMatch, MatchBody},
@@ -453,15 +453,6 @@ pub trait NodeVisitor {
             AstNodeType::Try(AstTry { value, catch }) => AstNodeType::Try(AstTry {
                 value: Box::new(self.visit(*value)),
                 catch,
-            }),
-            AstNodeType::ListRepeatLiteral(AstListRepeat {
-                data_type,
-                value,
-                count,
-            }) => AstNodeType::ListRepeatLiteral(AstListRepeat {
-                data_type,
-                value: Box::new(self.visit(*value)),
-                count: Box::new(self.visit(*count)),
             }),
             AstNodeType::PipeExpression(AstPipe { values }) => {
                 AstNodeType::PipeExpression(AstPipe {

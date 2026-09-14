@@ -234,7 +234,6 @@ impl AstFormatting for AstNode {
 
             // Lists
             AstNodeType::ListLiteral(x) => x.format(formatter),
-            AstNodeType::ListRepeatLiteral(x) => x.format(formatter),
 
             // Conditionals
             AstNodeType::IfStatement(x) => x.format(formatter),

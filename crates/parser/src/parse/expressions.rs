@@ -12,7 +12,7 @@ use crate::ast::nodes::flow::{
 };
 use crate::ast::nodes::functions::{AstCall, CallArg};
 use crate::ast::nodes::generator::AstGenerator;
-use crate::ast::nodes::lists::{AstList, AstListRepeat};
+use crate::ast::nodes::lists::AstList;
 use crate::ast::nodes::literals::{AstEnum, AstRange, AstString};
 use crate::ast::nodes::loops::{AstIter, AstLoop, LoopType};
 use crate::ast::nodes::matching::MatchArmType;
@@ -405,15 +405,8 @@ pub fn build_tail_expression_parser<'a>(
         .then(member.clone().repeated().collect::<Vec<_>>())
         .map_with_span(move |(((_open_ty, _open_br), values), tails), sp| {
             let data_type = _open_ty;
-            let list = if let Some((value, count)) = values.0 {
-                AstNode::new(
-                    sp,
-                    AstNodeType::ListRepeatLiteral(AstListRepeat {
-                        data_type,
-                        value: Box::new(value),
-                        count: Box::new(count),
-                    }),
-                )
+            let list = if let Some((_value, _count)) = values.0 {
+                unimplemented!()
             } else {
                 AstNode::new(
                     sp,
