@@ -12,15 +12,27 @@ use crate::{
 use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
+use super::matching::parse_pattern_list;
+
 impl<'a> AstParser<'a> for LoopType {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
+            // ... in ...
             PotentialDollarIdentifier::parser()
                 .then_ignore(select! { Token::In => () })
                 .then(AstNode::parser())
                 .map(|(ident, iter)| LoopType::For(ident, iter)),
+            // ...
             AstNode::parser().map(LoopType::While),
-            // TODO Let
+            // let ... <- ...
+            select! { Token::Let => () }
+                .ignore_then(parse_pattern_list())
+                .then_ignore(select! { Token::LeftArrow => () })
+                .then(AstNode::parser())
+                .map(|((patterns, _), value)| LoopType::Let {
+                    value,
+                    pattern: (patterns, Vec::new()),
+                }),
         ))
         .or_not()
         .map(|x| x.unwrap_or(LoopType::Loop))

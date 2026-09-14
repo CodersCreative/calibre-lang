@@ -10,10 +10,21 @@ use crate::{
 use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
+use super::matching::parse_pattern_list;
+
 impl<'a> AstParser<'a> for IfComparisonType {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
-            // TODO if let
+            // let ... <- ...
+            select! { Token::Let => () }
+                .ignore_then(parse_pattern_list())
+                .then_ignore(select! { Token::LeftArrow => () })
+                .then(AstNode::parser())
+                .map(|((patterns, _), value)| IfComparisonType::IfLet {
+                    value,
+                    pattern: (patterns, Vec::new()),
+                }),
+            // ...
             AstNode::parser().map(IfComparisonType::If),
         ))
         .boxed()

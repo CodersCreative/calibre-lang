@@ -42,6 +42,7 @@ pub mod idents;
 pub mod lists;
 pub mod literals;
 pub mod loops;
+pub mod matching;
 mod matching_old;
 pub mod memory;
 pub mod misc;
