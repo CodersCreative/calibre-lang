@@ -46,6 +46,7 @@ mod matching_old;
 pub mod misc;
 pub mod scopes;
 mod setup;
+pub mod spawn;
 mod statements;
 pub mod types;
 pub mod unary;

@@ -13,7 +13,8 @@ impl<'a> AstParser<'a> for AstList {
         let data_type = choice((
             select! { Token::Identifier(x) if x == "list" => () }
                 .ignore_then(select! { Token::Vampire => () })
-                .ignore_then(ParserDataType::parser()).then_ignore(select!{ Token::Greater => ()}),
+                .ignore_then(ParserDataType::parser())
+                .then_ignore(select! { Token::Greater => ()}),
             select! { Token::Identifier(x) if x == "list" => () }
                 .map_with_span(|_, span| ParserDataType::auto(span)),
         ))
