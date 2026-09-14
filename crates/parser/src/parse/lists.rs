@@ -21,8 +21,8 @@ impl<'a> AstParser<'a> for AstList {
         .or_not()
         .map_with_span(|x, span| x.unwrap_or_else(|| ParserDataType::auto(span)));
 
-        select! { Token::LeftSquare => () }
-            .ignore_then(data_type)
+        data_type
+            .then_ignore(select! { Token::LeftSquare => () })
             .then(
                 AstNode::parser()
                     .separated_by(select! { Token::Comma => () })
