@@ -3,7 +3,8 @@ use crate::{
     ast::{
         RefMutability,
         ffi::{ParserFfiDataType, ParserFfiInnerType},
-        types::{ParserDataType, ParserInnerType},
+        idents::PotentialDollarIdentifier,
+        types::{GenericType, GenericTypes, ParserDataType, ParserInnerType},
     },
     lexer::Token,
     parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream},
@@ -227,7 +228,14 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
+                let null_parser = select! {
+                    Token::Null => ()
+                }.map_with_span(|_, sp| {
+                    ParserDataType::new(sp, ParserInnerType::Null)
+                }).boxed();
+
                 let base = choice((
+                    null_parser,
                     tuple_parser,
                     ffi_parser,
                     function_parser,
@@ -307,6 +315,44 @@ impl<'a> AstParser<'a> for ParserInnerType {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         ParserDataType::parser()
             .map(|data_type| data_type.data_type)
+            .boxed()
+    }
+}
+
+impl<'a> AstParser<'a> for GenericTypes {
+    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        select! { Token::Lesser => () }
+            .ignore_then(
+                GenericType::parser()
+                    .separated_by(select! { Token::Comma => () })
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .or_not()
+                    .map(|x| x.unwrap_or_default()),
+            )
+            .then_ignore(select! { Token::Greater => () })
+            .or_not()
+            .map(|items| GenericTypes(items.unwrap_or_default()))
+            .boxed()
+    }
+}
+
+impl<'a> AstParser<'a> for GenericType {
+    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        PotentialDollarIdentifier::parser()
+            .then(
+                select! { Token::Colon => () }
+                    .ignore_then(
+                        PotentialDollarIdentifier::parser()
+                            .separated_by(select! { Token::Add => () })
+                            .collect::<Vec<_>>(),
+                    )
+                    .or_not(),
+            )
+            .map(|(identifier, trait_constraints)| GenericType {
+                identifier,
+                trait_constraints: trait_constraints.unwrap_or_default(),
+            })
             .boxed()
     }
 }

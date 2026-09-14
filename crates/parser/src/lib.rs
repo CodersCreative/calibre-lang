@@ -127,7 +127,11 @@ impl From<SimpleSpan> for Span {
 
 impl From<Span> for SimpleSpan {
     fn from(value: Span) -> Self {
-        Self { start: value.from, end: value.to, context: () }
+        Self {
+            start: value.from,
+            end: value.to,
+            context: (),
+        }
     }
 }
 
