@@ -3,7 +3,7 @@ use crate::ast::nodes::binary::{
 };
 use crate::ast::nodes::unary::{AstNeg, AstNot};
 use crate::ast::nodes::{AstNode, AstNodeType};
-use crate::parse::{RecursiveData, potential_new_line};
+use crate::parse::{PrattData, StatementData, potential_new_line};
 use crate::{
     ast::{
         binary::BinaryOperator,
@@ -21,7 +21,7 @@ pub struct PrattParser;
 
 impl<'a> PrattParser {
     pub fn parse(
-        data: RecursiveData<'a>,
+        data: PrattData<'a>,
     ) -> impl Parser<'a, TokenStream<'a>, AstNode, AstParserErr<'a>> {
         fn fold_binary(
             left: AstNode,
@@ -71,7 +71,7 @@ impl<'a> PrattParser {
             )
         }
 
-        data.node
+        data.stmt
             .pratt((
                 // Binary
                 infix(left(50), just(Token::Add), |l, _, r, sp| {

@@ -7,7 +7,7 @@ use crate::ast::nodes::types::{
 use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserDataType;
 use crate::ast::types::ParserInnerType;
-use crate::parse::RecursiveData;
+use crate::parse::StatementData;
 use crate::parse::potential_new_line;
 use crate::{
     ast::nodes::AstNodeType,
@@ -19,7 +19,7 @@ use chumsky::{Parser, select};
 use ustr::Ustr;
 
 impl<'a> AstParser<'a> for TypeDefType {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let struct_named_fields = select! { Token::LeftBracket => () }
@@ -160,7 +160,7 @@ impl<'a> AstParser<'a> for TypeDefType {
 }
 
 impl<'a> AstParser<'a> for Overload {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -181,7 +181,7 @@ impl<'a> AstParser<'a> for Overload {
 }
 
 impl<'a> AstParser<'a> for TraitMember {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -209,7 +209,7 @@ impl<'a> AstParser<'a> for TraitMember {
 }
 
 impl<'a> AstParser<'a> for AstImpl {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -237,7 +237,7 @@ impl<'a> AstParser<'a> for AstImpl {
 }
 
 impl<'a> AstParser<'a> for AstImplTrait {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -270,7 +270,7 @@ impl<'a> AstParser<'a> for AstImplTrait {
 }
 
 impl<'a> AstParser<'a> for AstTrait {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -296,7 +296,7 @@ impl<'a> AstParser<'a> for AstTrait {
 }
 
 impl<'a> AstParser<'a> for AstType {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Type => () }

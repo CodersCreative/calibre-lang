@@ -2,7 +2,7 @@ use crate::ast::idents::ParserText;
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::misc::{AstImport, AstParen, AstTag, AstTest};
 use crate::ast::nodes::scopes::AstScopeDef;
-use crate::parse::{MapWithSpanExt, RecursiveData, potential_new_line};
+use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -12,7 +12,7 @@ use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for AstParen {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -26,7 +26,7 @@ impl<'a> AstParser<'a> for AstParen {
 }
 
 impl<'a> AstParser<'a> for AstTest {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -41,7 +41,7 @@ impl<'a> AstParser<'a> for AstTest {
 }
 
 impl<'a> AstParser<'a> for AstImport {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
@@ -91,7 +91,7 @@ impl<'a> AstParser<'a> for AstImport {
 }
 
 impl<'a> AstParser<'a> for AstTag {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {

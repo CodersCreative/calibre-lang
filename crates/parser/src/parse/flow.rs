@@ -3,7 +3,7 @@ use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment, TryCatch,
 };
 use crate::ast::nodes::scopes::AstScopeDef;
-use crate::parse::{MapWithSpanExt, RecursiveData, potential_new_line};
+use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -13,7 +13,7 @@ use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for AstEmit {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -33,7 +33,7 @@ impl<'a> AstParser<'a> for AstEmit {
 }
 
 impl<'a> AstParser<'a> for AstBreak {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -52,7 +52,7 @@ impl<'a> AstParser<'a> for AstBreak {
 }
 
 impl<'a> AstParser<'a> for AstContinue {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -67,7 +67,7 @@ impl<'a> AstParser<'a> for AstContinue {
 }
 
 impl<'a> AstParser<'a> for AstReturn {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -80,7 +80,7 @@ impl<'a> AstParser<'a> for AstReturn {
 }
 
 impl<'a> AstParser<'a> for AstDefer {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -100,7 +100,7 @@ impl<'a> AstParser<'a> for AstDefer {
 }
 
 impl<'a> AstParser<'a> for TryCatch {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -121,7 +121,7 @@ impl<'a> AstParser<'a> for TryCatch {
 }
 
 impl<'a> AstParser<'a> for AstTry {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -136,7 +136,7 @@ impl<'a> AstParser<'a> for AstTry {
 }
 
 impl<'a> AstParser<'a> for AstPipe {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let pipe_seg = choice((

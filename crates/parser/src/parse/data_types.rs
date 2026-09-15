@@ -7,7 +7,7 @@ use crate::{
     },
     lexer::Token,
     parse::{
-        AstParser, AstParserErr, MapWithSpanExt, RecursiveData, TokenStream, potential_new_line,
+        AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream, potential_new_line,
     },
 };
 use chumsky::prelude::*;
@@ -318,7 +318,7 @@ impl<'a> AstParser<'a> for ParserDataType {
 }
 
 impl<'a> AstParser<'a> for GenericTypes {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -338,7 +338,7 @@ impl<'a> AstParser<'a> for GenericTypes {
 }
 
 impl<'a> AstParser<'a> for GenericType {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {

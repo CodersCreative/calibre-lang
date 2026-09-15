@@ -8,7 +8,7 @@ use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserDataType;
 use crate::parse::MapWithSpanExt;
-use crate::parse::RecursiveData;
+use crate::parse::StatementData;
 use crate::parse::potential_new_line;
 use crate::{
     Span,
@@ -21,7 +21,7 @@ use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for CallArg {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -54,7 +54,7 @@ enum FnParamGroup {
 }
 
 impl<'a> AstParser<'a> for FnParamGroup {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -90,7 +90,7 @@ impl<'a> AstParser<'a> for FnParamGroup {
 }
 
 impl<'a> AstParser<'a> for FunctionHeader {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let fn_param_groups = FnParamGroup::parser(data.clone())
@@ -155,7 +155,7 @@ impl<'a> AstParser<'a> for FunctionHeader {
 }
 
 impl<'a> AstParser<'a> for AstFunction {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -171,7 +171,7 @@ impl<'a> AstParser<'a> for AstFunction {
 }
 
 impl<'a> AstParser<'a> for AstExtern {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Extern => () }
@@ -221,7 +221,7 @@ impl<'a> AstParser<'a> for AstExtern {
 }
 
 impl<'a> AstParser<'a> for AstCurry {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -234,7 +234,7 @@ impl<'a> AstParser<'a> for AstCurry {
 }
 
 impl<'a> AstParser<'a> for AstCall {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let call_args = select! { Token::LeftParen => () }

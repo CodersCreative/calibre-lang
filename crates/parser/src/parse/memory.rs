@@ -1,6 +1,6 @@
 use crate::ast::RefMutability;
 use crate::ast::nodes::memory::{AstDeref, AstDrop, AstMove, AstRef};
-use crate::parse::RecursiveData;
+use crate::parse::StatementData;
 use crate::{
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
@@ -24,7 +24,7 @@ impl<'a> AstParser<'a> for RefMutability {
 }
 
 impl<'a> AstParser<'a> for AstRef {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -43,7 +43,7 @@ impl<'a> AstParser<'a> for AstRef {
 }
 
 impl<'a> AstParser<'a> for AstDeref {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -58,7 +58,7 @@ impl<'a> AstParser<'a> for AstDeref {
 }
 
 impl<'a> AstParser<'a> for AstDrop {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -69,7 +69,7 @@ impl<'a> AstParser<'a> for AstDrop {
 }
 
 impl<'a> AstParser<'a> for AstMove {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {

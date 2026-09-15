@@ -1,7 +1,7 @@
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType};
 use crate::ast::nodes::scopes::AstScopeDef;
-use crate::parse::{MapWithSpanExt, RecursiveData, potential_new_line};
+use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -13,7 +13,7 @@ use chumsky::{Parser, select};
 use super::matching::parse_pattern_list;
 
 impl<'a> AstParser<'a> for IfComparisonType {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -34,7 +34,7 @@ impl<'a> AstParser<'a> for IfComparisonType {
 }
 
 impl<'a> AstParser<'a> for AstIf {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|if_parser| {
@@ -66,7 +66,7 @@ impl<'a> AstParser<'a> for AstIf {
 }
 
 impl<'a> AstParser<'a> for AstTernary {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {

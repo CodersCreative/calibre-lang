@@ -2,7 +2,7 @@ use crate::ast::nodes::DestructurePattern;
 use crate::ast::nodes::VarType;
 use crate::ast::nodes::declaration::{AstDeclaration, AstDeclareDestructure};
 use crate::ast::types::ParserDataType;
-use crate::parse::RecursiveData;
+use crate::parse::StatementData;
 use crate::parse::potential_new_line;
 use crate::{
     lexer::Token,
@@ -13,7 +13,7 @@ use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for AstDeclaration {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
@@ -54,7 +54,7 @@ impl<'a> AstParser<'a> for AstDeclaration {
 }
 
 impl<'a> AstParser<'a> for AstDeclareDestructure {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {

@@ -1,6 +1,6 @@
 use crate::ast::nodes::generator::AstGenerator;
 use crate::ast::nodes::loops::LoopType;
-use crate::parse::RecursiveData;
+use crate::parse::StatementData;
 use crate::{
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
@@ -9,7 +9,7 @@ use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for AstGenerator {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }

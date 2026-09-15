@@ -5,7 +5,7 @@ use crate::{
         types::ParserDataType,
     },
     lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, RecursiveData, TokenStream},
+    parse::{AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream},
 };
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
@@ -70,7 +70,7 @@ impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
 }
 
 impl<'a> AstParser<'a> for AstIdentifier {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {

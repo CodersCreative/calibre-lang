@@ -12,7 +12,7 @@ use crate::{
     },
     lexer::Token,
     parse::{
-        AstParser, AstParserErr, MapWithSpanExt, RecursiveData, TokenStream, potential_new_line,
+        AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream, potential_new_line,
     },
 };
 use chumsky::prelude::*;
@@ -94,7 +94,7 @@ impl<'a> AstParser<'a> for AstString {
 }
 
 impl<'a> AstParser<'a> for AstRange {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -124,7 +124,7 @@ impl<'a> AstParser<'a> for AstRange {
 }
 
 impl<'a> AstParser<'a> for AstTuple {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -145,7 +145,7 @@ impl<'a> AstParser<'a> for AstTuple {
 }
 
 impl<'a> AstParser<'a> for AstStruct {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.generic_ident
@@ -183,7 +183,7 @@ impl<'a> AstParser<'a> for AstStruct {
 }
 
 impl<'a> AstParser<'a> for AstEnum {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -202,7 +202,7 @@ impl<'a> AstParser<'a> for AstEnum {
 }
 
 impl<'a> AstParser<'a> for AstDataType {
-    type Data = RecursiveData<'a>;
+    type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {

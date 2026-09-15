@@ -66,8 +66,20 @@ pub type TokenStream<'a> = &'a [Token<'a>];
 // So I'm gonna need to make this basically just become a cache of commonly used items aswell
 // Otherwise it uses way too much memory
 #[derive(Clone)]
-pub struct RecursiveData<'a> {
+pub struct StatementData<'a> {
     pub node: Recursive<
+        dyn Parser<'a, TokenStream<'a>, AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>> + 'a,
+    >,
+    pub expr: Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>,
+    pub data_type: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
+    pub dollar_ident: Boxed<'a, 'a, TokenStream<'a>, PotentialDollarIdentifier, AstParserErr<'a>>,
+    pub generic_ident:
+        Boxed<'a, 'a, TokenStream<'a>, PotentialGenericTypeIdentifier, AstParserErr<'a>>,
+}
+
+#[derive(Clone)]
+pub struct PrattData<'a> {
+    pub stmt: Recursive<
         dyn Parser<'a, TokenStream<'a>, AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>> + 'a,
     >,
     pub data_type: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
@@ -122,7 +134,7 @@ where
 }
 
 pub fn typed_or_untyped_assignment<'a>(
-    data: RecursiveData<'a>,
+    data: StatementData<'a>,
 ) -> impl Parser<'a, TokenStream<'a>, (Option<ParserDataType>, Option<AstNode>), AstParserErr<'a>> {
     choice((
         // : (= or :=)
@@ -166,7 +178,7 @@ pub fn potential_new_line<'a>() -> impl Parser<'a, TokenStream<'a>, (), AstParse
 }
 
 impl<'a> AstNode {
-    fn parser(data: &RecursiveData<'a>) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &StatementData<'a>) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         /*let parser1 = choice((
             // Flow
             AstBreak::parser(data.clone()).map(AstNodeType::Break),
@@ -250,14 +262,11 @@ impl<'a> AstNode {
         ))
         .boxed().map_with_span(|node_type, span| Self { node_type, span });*/
 
-        let pratt = PrattParser::parse(data.clone()).boxed();
-
         AstInt::parser(())
             .map_with_span(|node_type, span| Self {
                 node_type: AstNodeType::IntLiteral(node_type),
                 span,
             })
-            .or(pratt)
             /* .or(parser1)
             .or(parser2)
             .or(parser3)*/
@@ -271,17 +280,28 @@ pub fn parse_program_with_source<'a>(
     source_path: Option<&Path>,
 ) -> Result<AstNode, Vec<ParserError>> {
     tokens.iter().for_each(|x| println!("{x}"));
-    let parser = recursive(|node| {
+    let parser = recursive(|stmt| {
         let generic_ident = PotentialGenericTypeIdentifier::parser(()).boxed();
         let dollar_ident = PotentialDollarIdentifier::parser(()).boxed();
         let data_type = ParserDataType::parser(()).boxed();
-        let recurse = RecursiveData {
-            node,
+        let data = PrattData {
+            stmt,
             data_type,
             dollar_ident,
             generic_ident,
         };
-        AstNode::parser(&recurse)
+
+        let pratt = PrattParser::parse(data.clone()).memoized().boxed();
+
+        let data = StatementData {
+            node: data.stmt,
+            expr: pratt.clone(),
+            data_type: data.data_type,
+            dollar_ident: data.dollar_ident,
+            generic_ident: data.generic_ident,
+        };
+
+        choice((pratt, AstNode::parser(&data)))
     })
     .padded_by(potential_new_line())
     .repeated()
@@ -290,6 +310,7 @@ pub fn parse_program_with_source<'a>(
     let parsed = parser.parse(tokens);
 
     if let Some(items) = parsed.output() {
+        println!("{items:?}");
         let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
             Span::new_from_spans(a.span, b.span)
         } else {
