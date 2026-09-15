@@ -1,4 +1,3 @@
-use crate::ast::idents::PotentialDollarIdentifier;
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::loops::{AstIter, AstLoop, LoopType};
 use crate::ast::nodes::scopes::AstScopeDef;
@@ -20,7 +19,8 @@ impl<'a> AstParser<'a> for LoopType {
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // ... in ...
-            PotentialDollarIdentifier::parser(())
+            data.dollar_ident
+                .clone()
                 .then_ignore(select! { Token::In => () })
                 .then(data.node.clone())
                 .map(|(ident, iter)| LoopType::For(ident, iter)),
@@ -47,7 +47,7 @@ impl<'a> AstParser<'a> for AstLoop {
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let label = select! { Token::At => () }
-            .ignore_then(PotentialDollarIdentifier::parser(()))
+            .ignore_then(data.dollar_ident.clone())
             .or_not();
 
         LoopType::parser(data.clone())
@@ -84,7 +84,7 @@ impl<'a> AstParser<'a> for AstIter {
         let data_type = choice((
             select! { Token::Identifier(x) if x == "list" => () }
                 .ignore_then(select! { Token::Vampire => () })
-                .ignore_then(ParserDataType::parser(()))
+                .ignore_then(data.data_type.clone())
                 .then_ignore(select! { Token::Greater => ()}),
             select! { Token::Identifier(x) if x == "list" => () }
                 .map_with_span(|_, span| ParserDataType::auto(span)),

@@ -25,7 +25,7 @@ impl<'a> AstParser<'a> for CallArg {
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
-            PotentialDollarIdentifier::parser(())
+            data.dollar_ident
                 .then_ignore(select! { Token::Colon => () })
                 .then(data.node.clone())
                 .map(|(name, value)| CallArg::Named(name, value)),
@@ -58,7 +58,7 @@ impl<'a> AstParser<'a> for FnParamGroup {
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let normal = select! { Token::Mut => () }
             .or_not()
-            .ignore_then(PotentialDollarIdentifier::parser(()))
+            .ignore_then(data.dollar_ident.clone())
             .repeated()
             .at_least(1)
             .collect::<Vec<_>>()
@@ -72,7 +72,7 @@ impl<'a> AstParser<'a> for FnParamGroup {
                 )
             });
 
-        let destructure = DestructurePattern::parser(())
+        let destructure = DestructurePattern::parser(data.clone())
             .then(typed_or_untyped_assignment(data))
             .map_with_span(
                 move |(pattern, (ty, default)), sp| FnParamGroup::Destructure {
@@ -107,11 +107,11 @@ impl<'a> AstParser<'a> for FunctionHeader {
             .map(|x| x.unwrap_or_default())
             .boxed();
 
-        GenericTypes::parser(())
+        GenericTypes::parser(data.clone())
             .then(fn_params)
             .then(
                 select! { Token::RightArrow => () }
-                    .ignore_then(ParserDataType::parser(()))
+                    .ignore_then(data.data_type)
                     .or_not(),
             )
             .map_with_span(|((generics, params), ret), span| {
@@ -172,18 +172,19 @@ impl<'a> AstParser<'a> for AstFunction {
 }
 
 impl<'a> AstParser<'a> for AstExtern {
-    type Data = ();
+    type Data = RecursiveData<'a>;
 
-    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Extern => () }
             .ignore_then(select! { Token::StringLiteral(abi) => abi })
             .then_ignore(select! { Token::Const => () })
-            .then(PotentialDollarIdentifier::parser(()))
+            .then(data.dollar_ident.clone())
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then_ignore(select! { Token::Fn => () })
             .then_ignore(select! { Token::LeftParen => () })
             .then(
-                ParserDataType::parser(())
+                data.data_type
+                    .clone()
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
@@ -195,7 +196,7 @@ impl<'a> AstParser<'a> for AstExtern {
             .then(
                 select! { Token::RightArrow => () }
                     .padded_by(potential_new_line())
-                    .ignore_then(ParserDataType::parser(()))
+                    .ignore_then(data.data_type)
                     .or_not(),
             )
             .then_ignore(select! { Token::From => () }.padded_by(potential_new_line()))
@@ -270,7 +271,7 @@ impl<'a> AstParser<'a> for AstCall {
             .then(
                 select! { Token::Vampire => () }
                     .ignore_then(
-                        ParserDataType::parser(())
+                        data.data_type
                             .padded_by(potential_new_line())
                             .separated_by(select! { Token::Comma => () })
                             .collect::<Vec<_>>(),

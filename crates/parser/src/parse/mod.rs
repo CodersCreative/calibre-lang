@@ -3,6 +3,7 @@ use std::path::Path;
 use crate::{
     ParserError, Span,
     ast::{
+        idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType,
             access::{AstField, AstIdentifier, AstIndex, AstScope},
@@ -62,11 +63,17 @@ pub mod util;
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
 pub type TokenStream<'a> = &'a [Token<'a>];
 
+// So I'm gonna need to make this basically just become a cache of commonly used items aswell
+// Otherwise it uses way too much memory
 #[derive(Clone)]
 pub struct RecursiveData<'a> {
     pub node: Recursive<
         dyn Parser<'a, TokenStream<'a>, AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>> + 'a,
     >,
+    pub data_type: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
+    pub dollar_ident: Boxed<'a, 'a, TokenStream<'a>, PotentialDollarIdentifier, AstParserErr<'a>>,
+    pub generic_ident:
+        Boxed<'a, 'a, TokenStream<'a>, PotentialGenericTypeIdentifier, AstParserErr<'a>>,
 }
 
 pub trait AstParser<'a>: Sized {
@@ -119,7 +126,7 @@ pub fn typed_or_untyped_assignment<'a>(
     choice((
         // : (= or :=)
         select! { Token::Colon => () }
-            .ignore_then(ParserDataType::parser(()))
+            .ignore_then(data.data_type)
             .then(
                 choice((
                     select! { Token::Eq => () }.map(|_| true),
@@ -165,7 +172,7 @@ impl<'a> AstParser<'a> for AstNode {
         let flow = choice((
             AstBreak::parser(data.clone()).map(AstNodeType::Break),
             AstEmit::parser(data.clone()).map(AstNodeType::Emit),
-            AstContinue::parser(()).map(AstNodeType::Continue),
+            AstContinue::parser(data.clone()).map(AstNodeType::Continue),
             AstDefer::parser(data.clone()).map(AstNodeType::Defer),
             AstReturn::parser(data.clone()).map(AstNodeType::Return),
             AstTry::parser(data.clone()).map(AstNodeType::Try),
@@ -182,7 +189,7 @@ impl<'a> AstParser<'a> for AstNode {
             AstBig::parser(()).map(AstNodeType::BigLiteral),
             AstFloat::parser(()).map(AstNodeType::FloatLiteral),
             AstChar::parser(()).map(AstNodeType::CharLiteral),
-            AstDataType::parser(()).map(AstNodeType::DataType),
+            AstDataType::parser(data.clone()).map(AstNodeType::DataType),
         ));
 
         let lists = AstList::parser(data.clone()).map(AstNodeType::ListLiteral);
@@ -208,20 +215,20 @@ impl<'a> AstParser<'a> for AstNode {
 
         let functions = choice((
             AstFunction::parser(data.clone()).map(AstNodeType::FunctionDeclaration),
-            AstExtern::parser(()).map(AstNodeType::ExternFunctionDeclaration),
+            AstExtern::parser(data.clone()).map(AstNodeType::ExternFunctionDeclaration),
             AstCall::parser(data.clone()).map(AstNodeType::CallExpression),
             AstCurry::parser(data.clone()).map(AstNodeType::CurryExpression),
         ));
 
         let memory = choice((
-            AstDrop::parser(()).map(AstNodeType::Drop),
+            AstDrop::parser(data.clone()).map(AstNodeType::Drop),
             AstRef::parser(data.clone()).map(AstNodeType::RefStatement),
             AstDeref::parser(data.clone()).map(AstNodeType::DerefStatement),
             AstMove::parser(data.clone()).map(AstNodeType::MoveExpression),
         ));
 
         let access = choice((
-            AstIdentifier::parser(()).map(AstNodeType::Identifier),
+            AstIdentifier::parser(data.clone()).map(AstNodeType::Identifier),
             AstField::parser(data.clone()).map(AstNodeType::FieldAccess),
             AstScope::parser(data.clone()).map(AstNodeType::ScopeAccess),
             AstIndex::parser(data.clone()).map(AstNodeType::IndexAccess),
@@ -267,7 +274,7 @@ impl<'a> AstParser<'a> for AstNode {
         let generator = AstGenerator::parser(data.clone()).map(AstNodeType::InlineGenerator);
 
         let misc = choice((
-            AstImport::parser(()).map(AstNodeType::ImportStatement),
+            AstImport::parser(data.clone()).map(AstNodeType::ImportStatement),
             AstTest::parser(data.clone()).map(AstNodeType::TestDeclaration),
             AstTag::parser(data.clone()).map(AstNodeType::Tag),
             AstParen::parser(data.clone()).map(AstNodeType::ParenExpression),
@@ -305,7 +312,15 @@ pub fn parse_program_with_source<'a>(
     source_path: Option<&Path>,
 ) -> Result<AstNode, Vec<ParserError>> {
     let parser = recursive(|node| {
-        let recurse = RecursiveData { node };
+        let generic_ident = PotentialGenericTypeIdentifier::parser(());
+        let dollar_ident = PotentialDollarIdentifier::parser(());
+        let data_type = ParserDataType::parser(());
+        let recurse = RecursiveData {
+            node,
+            data_type,
+            dollar_ident,
+            generic_ident,
+        };
         AstNode::parser(recurse)
     })
     .padded_by(potential_new_line())

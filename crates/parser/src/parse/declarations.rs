@@ -1,4 +1,3 @@
-use crate::ast::idents::PotentialDollarIdentifier;
 use crate::ast::nodes::DestructurePattern;
 use crate::ast::nodes::VarType;
 use crate::ast::nodes::declaration::{AstDeclaration, AstDeclareDestructure};
@@ -22,7 +21,7 @@ impl<'a> AstParser<'a> for AstDeclaration {
             select! { Token::Const => () }.map(|_| VarType::Constant),
         ))
         .then(select! { Token::Mut => () }.or_not())
-        .then(PotentialDollarIdentifier::parser(()))
+        .then(data.dollar_ident.clone())
         .then(typed_or_untyped_assignment(data))
         .try_map(|(((var_type, mut_tok), identifier), (data_type, value)), sp| {
             let var_type = if mut_tok.is_some() {
@@ -60,7 +59,7 @@ impl<'a> AstParser<'a> for AstDeclareDestructure {
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Let => () }
-            .ignore_then(DestructurePattern::no_bracket_parser())
+            .ignore_then(DestructurePattern::no_bracket_parser(data.clone()))
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then(data.node)
             .map(|(pattern, value)| AstDeclareDestructure {

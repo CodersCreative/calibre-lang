@@ -1,7 +1,5 @@
 use crate::ast::ObjectType;
 use crate::ast::idents::ParserText;
-use crate::ast::idents::PotentialDollarIdentifier;
-use crate::ast::idents::PotentialGenericTypeIdentifier;
 use crate::ast::nodes::misc::AstTag;
 use crate::ast::nodes::types::{
     AstImpl, AstImplTrait, AstTrait, AstType, Overload, TraitMember, TraitMemberKind, TypeDefType,
@@ -26,12 +24,13 @@ impl<'a> AstParser<'a> for TypeDefType {
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let struct_named_fields = select! { Token::LeftBracket => () }
             .ignore_then(
-                PotentialDollarIdentifier::parser(())
+                data.dollar_ident
+                    .clone()
                     .repeated()
                     .at_least(1)
                     .collect::<Vec<_>>()
                     .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
-                    .then(ParserDataType::parser(()))
+                    .then(data.data_type.clone())
                     .then(
                         select! { Token::Eq => () }
                             .ignore_then(data.node.clone())
@@ -60,7 +59,8 @@ impl<'a> AstParser<'a> for TypeDefType {
 
         let struct_tuple_fields = select! { Token::LeftParen => () }
             .ignore_then(
-                ParserDataType::parser(())
+                data.data_type
+                    .clone()
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -81,7 +81,7 @@ impl<'a> AstParser<'a> for TypeDefType {
                     .or_not()
                     .map(|x| x.unwrap_or_default())
                     .then(
-                        PotentialDollarIdentifier::parser(())
+                        data.dollar_ident
                             .repeated()
                             .collect::<Vec<_>>()
                             .or_not()
@@ -90,7 +90,7 @@ impl<'a> AstParser<'a> for TypeDefType {
                     .then(
                         select! { Token::Colon => () }
                             .padded_by(potential_new_line())
-                            .ignore_then(ParserDataType::parser(()))
+                            .ignore_then(data.data_type.clone())
                             .or_not(),
                     )
                     .then(
@@ -136,7 +136,7 @@ impl<'a> AstParser<'a> for TypeDefType {
                 }
             });
 
-        let newtype_parser = ParserDataType::parser(()).try_map(|typ, sp| {
+        let newtype_parser = data.data_type.try_map(|typ, sp| {
             if typ.data_type == ParserInnerType::Dynamic
                 || typ.data_type == ParserInnerType::Auto(None)
             {
@@ -185,8 +185,8 @@ impl<'a> AstParser<'a> for TraitMember {
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let const_member = select! { Token::Const => () }
-            .ignore_then(PotentialDollarIdentifier::parser(()))
-            .then(typed_or_untyped_assignment(data))
+            .ignore_then(data.dollar_ident.clone())
+            .then(typed_or_untyped_assignment(data.clone()))
             .map_with_span(|(identifier, (data_type, value)), span| TraitMember {
                 kind: TraitMemberKind::Const,
                 identifier,
@@ -195,7 +195,7 @@ impl<'a> AstParser<'a> for TraitMember {
             });
 
         let type_member = select! { Token::Type => () }
-            .ignore_then(PotentialDollarIdentifier::parser(()))
+            .ignore_then(data.dollar_ident)
             .map_with_span(|identifier, span| TraitMember {
                 kind: TraitMemberKind::Type,
                 identifier,
@@ -212,8 +212,8 @@ impl<'a> AstParser<'a> for AstImpl {
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Impl => () }
-            .ignore_then(GenericTypes::parser(()))
-            .then(ParserDataType::parser(()))
+            .ignore_then(GenericTypes::parser(data.clone()))
+            .then(data.data_type)
             .then_ignore(select! { Token::LeftBracket => () })
             .then(
                 data.node
@@ -239,10 +239,10 @@ impl<'a> AstParser<'a> for AstImplTrait {
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Impl => () }
-            .ignore_then(GenericTypes::parser(()))
-            .then(PotentialGenericTypeIdentifier::parser(()))
+            .ignore_then(GenericTypes::parser(data.clone()))
+            .then(data.generic_ident)
             .then_ignore(select! { Token::For => () }.padded_by(potential_new_line()))
-            .then(ParserDataType::parser(()))
+            .then(data.data_type)
             .then_ignore(select! { Token::LeftBracket => () })
             .then(
                 data.node
@@ -271,10 +271,10 @@ impl<'a> AstParser<'a> for AstTrait {
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Trait => () }
-            .ignore_then(PotentialGenericTypeIdentifier::parser(()))
+            .ignore_then(data.generic_ident.clone())
             .then_ignore(select! { Token::LeftBracket => () })
             .then(
-                TraitMember::parser(data)
+                TraitMember::parser(data.clone())
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
@@ -297,7 +297,7 @@ impl<'a> AstParser<'a> for AstType {
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Type => () }
-            .ignore_then(PotentialGenericTypeIdentifier::parser(()))
+            .ignore_then(data.generic_ident.clone())
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then(TypeDefType::parser(data.clone()))
             .then(

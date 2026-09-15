@@ -4,7 +4,7 @@ use crate::ast::nodes::misc::{AstImport, AstParen, AstTag, AstTest};
 use crate::ast::nodes::scopes::AstScopeDef;
 use crate::parse::{MapWithSpanExt, RecursiveData, potential_new_line};
 use crate::{
-    ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
+    ast::nodes::AstNode,
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
@@ -41,40 +41,43 @@ impl<'a> AstParser<'a> for AstTest {
 }
 
 impl<'a> AstParser<'a> for AstImport {
-    type Data = ();
+    type Data = RecursiveData<'a>;
 
-    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // import ... from module::path
             choice((
                 select! { Token::LeftParen => () }
                     .ignore_then(
-                        PotentialDollarIdentifier::parser(())
+                        data.dollar_ident
+                            .clone()
                             .padded_by(potential_new_line())
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>(),
                     )
                     .then_ignore(select! { Token::RightParen => () }),
-                PotentialDollarIdentifier::parser(()).map(|x| vec![x]),
+                data.dollar_ident.clone().map(|x| vec![x]),
             ))
             .then_ignore(select! { Token::From => () }.padded_by(potential_new_line()))
             .then(
-                PotentialDollarIdentifier::parser(())
+                data.dollar_ident
+                    .clone()
                     .separated_by(select! { Token::Scope => () }.padded_by(potential_new_line()))
                     .at_least(1)
                     .collect::<Vec<_>>(),
             )
             .map(|(values, module)| (values, module, None)),
             // import module::path as alias
-            PotentialDollarIdentifier::parser(())
+            data.dollar_ident
+                .clone()
                 .separated_by(select! { Token::Scope => () }.padded_by(potential_new_line()))
                 .at_least(1)
                 .collect::<Vec<_>>()
                 .then(
                     select! { Token::As => () }
                         .padded_by(potential_new_line())
-                        .ignore_then(PotentialDollarIdentifier::parser(()))
+                        .ignore_then(data.dollar_ident)
                         .or_not(),
                 )
                 .map(|(module, alias)| (Vec::new(), module, alias)),

@@ -1,7 +1,6 @@
 use crate::ast::nodes::binary::{
     AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
 };
-use crate::ast::types::ParserDataType;
 use crate::parse::{RecursiveData, potential_new_line};
 use crate::{
     ast::{
@@ -98,7 +97,7 @@ impl<'a> AstParser<'a> for AstAs {
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
             .then_ignore(select! { Token::As => () }.padded_by(potential_new_line()))
-            .then(ParserDataType::parser(()))
+            .then(data.data_type)
             .then(
                 select! { Token::Question => () }
                     .map(|()| AsFailureMode::Option)
@@ -120,7 +119,7 @@ impl<'a> AstParser<'a> for AstIs {
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
             .then_ignore(select! { Token::Is => () }.padded_by(potential_new_line()))
-            .then(ParserDataType::parser(()))
+            .then(data.data_type)
             .map(|(value, data_type)| AstIs {
                 value: Box::new(value),
                 data_type,

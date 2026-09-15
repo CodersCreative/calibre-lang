@@ -2,7 +2,6 @@ use crate::ast::nodes::generator::AstGenerator;
 use crate::ast::nodes::loops::LoopType;
 use crate::parse::RecursiveData;
 use crate::{
-    ast::types::ParserDataType,
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
@@ -32,7 +31,7 @@ impl<'a> AstParser<'a> for AstGenerator {
             .then_ignore(select! { Token::RightParen => () })
             .then(
                 select! { Token::RightArrow => () }
-                    .ignore_then(ParserDataType::parser(()))
+                    .ignore_then(data.data_type)
                     .or_not(),
             )
             .map(

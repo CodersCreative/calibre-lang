@@ -5,7 +5,7 @@ use crate::{
         types::ParserDataType,
     },
     lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream},
+    parse::{AstParser, AstParserErr, MapWithSpanExt, RecursiveData, TokenStream},
 };
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
@@ -36,15 +36,16 @@ impl<'a> AstParser<'a> for PotentialDollarIdentifier {
     }
 }
 
+// This is one of the few places where I will allow ParserDataType::parser and PotentialDollarIdentifier::parser to be used directly
 impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
     type Data = ();
 
-    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        PotentialDollarIdentifier::parser(())
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        PotentialDollarIdentifier::parser(data)
             .then(
                 select! { Token::Vampire => () }
                     .ignore_then(
-                        ParserDataType::parser(())
+                        ParserDataType::parser(data)
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()
@@ -69,10 +70,10 @@ impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
 }
 
 impl<'a> AstParser<'a> for AstIdentifier {
-    type Data = ();
+    type Data = RecursiveData<'a>;
 
-    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        PotentialGenericTypeIdentifier::parser(())
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        data.generic_ident
             .map(|value| AstIdentifier { value })
             .boxed()
     }

@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         ObjectType,
-        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        idents::ParserText,
         nodes::{
             AstNode,
             literals::{
@@ -9,7 +9,6 @@ use crate::{
                 AstStruct, AstTuple,
             },
         },
-        types::ParserDataType,
     },
     lexer::Token,
     parse::{
@@ -148,7 +147,7 @@ impl<'a> AstParser<'a> for AstStruct {
     type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        PotentialGenericTypeIdentifier::parser(())
+        data.generic_ident
             .then(
                 select! { Token::LeftBracket => () }
                     .ignore_then(
@@ -186,9 +185,9 @@ impl<'a> AstParser<'a> for AstEnum {
     type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        PotentialGenericTypeIdentifier::parser(())
+        data.generic_ident
             .then_ignore(select! { Token::Dot => () })
-            .then(PotentialDollarIdentifier::parser(()))
+            .then(data.dollar_ident)
             .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
             .then(data.node.or_not())
             .map(|((identifier, value), data)| AstEnum {
@@ -201,12 +200,12 @@ impl<'a> AstParser<'a> for AstEnum {
 }
 
 impl<'a> AstParser<'a> for AstDataType {
-    type Data = ();
+    type Data = RecursiveData<'a>;
 
-    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {Token::Type => ()}
             .then(select! {Token::Colon => ()})
-            .ignore_then(ParserDataType::parser(()))
+            .ignore_then(data.data_type)
             .map(|data_type| AstDataType { data_type })
             .boxed()
     }

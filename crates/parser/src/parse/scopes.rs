@@ -1,7 +1,7 @@
 use crate::ast::nodes::scopes::{AstScopeAlias, AstScopeDef, NamedScope};
 use crate::parse::{RecursiveData, potential_new_line};
 use crate::{
-    ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
+    ast::nodes::AstNode,
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
@@ -45,11 +45,13 @@ impl<'a> AstParser<'a> for AstScopeDef {
         .or_not()
         .map(|x| x.unwrap_or((None, None)));
 
-        let named = PotentialDollarIdentifier::parser(())
+        let named = data
+            .dollar_ident
+            .clone()
             .then(
                 select! { Token::LeftSquare => () }
                     .ignore_then(
-                        PotentialDollarIdentifier::parser(())
+                        data.dollar_ident
                             .then(
                                 select! { Token::Colon => () }
                                     .ignore_then(data.node)
@@ -99,7 +101,8 @@ impl<'a> AstParser<'a> for AstScopeAlias {
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let args = select! { Token::LeftSquare => () }
             .ignore_then(
-                PotentialDollarIdentifier::parser(())
+                data.dollar_ident
+                    .clone()
                     .then(
                         select! { Token::Colon => () }
                             .ignore_then(data.node.clone())
@@ -131,9 +134,9 @@ impl<'a> AstParser<'a> for AstScopeAlias {
         .map(|x| x.flatten());
 
         select! { Token::Let => () }
-            .ignore_then(PotentialDollarIdentifier::parser(()))
+            .ignore_then(data.dollar_ident.clone())
             .then_ignore(select! { Token::FatArrow => () }.padded_by(potential_new_line()))
-            .then(PotentialDollarIdentifier::parser(()))
+            .then(data.dollar_ident)
             .then(args)
             .then(call_mode)
             .map(

@@ -3,11 +3,12 @@ use crate::{
     ast::{
         RefMutability,
         ffi::{ParserFfiDataType, ParserFfiInnerType},
-        idents::PotentialDollarIdentifier,
         types::{GenericType, GenericTypes, ParserDataType, ParserInnerType},
     },
     lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream, potential_new_line},
+    parse::{
+        AstParser, AstParserErr, MapWithSpanExt, RecursiveData, TokenStream, potential_new_line,
+    },
 };
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
@@ -318,12 +319,12 @@ impl<'a> AstParser<'a> for ParserDataType {
 }
 
 impl<'a> AstParser<'a> for GenericTypes {
-    type Data = ();
+    type Data = RecursiveData<'a>;
 
-    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Lesser => () }
             .ignore_then(
-                GenericType::parser(())
+                GenericType::parser(data)
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -338,14 +339,15 @@ impl<'a> AstParser<'a> for GenericTypes {
 }
 
 impl<'a> AstParser<'a> for GenericType {
-    type Data = ();
+    type Data = RecursiveData<'a>;
 
-    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        PotentialDollarIdentifier::parser(())
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        data.dollar_ident
+            .clone()
             .then(
                 select! { Token::Colon => () }
                     .ignore_then(
-                        PotentialDollarIdentifier::parser(())
+                        data.dollar_ident
                             .separated_by(select! { Token::Add => () })
                             .collect::<Vec<_>>(),
                     )

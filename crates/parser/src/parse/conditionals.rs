@@ -42,14 +42,14 @@ impl<'a> AstParser<'a> for AstIf {
                 if_parser.clone().map_with_span(|value, span| {
                     Box::new(AstNode::new(span, AstNodeType::IfStatement(value)))
                 }),
-                AstScopeDef::parser(data.clone().into()).map_with_span(|scope, span| {
+                AstScopeDef::parser(data.clone()).map_with_span(|scope, span| {
                     Box::new(AstNode::new(span, AstNodeType::from(scope)))
                 }),
             ));
 
             select! { Token::If => () }
                 .ignore_then(IfComparisonType::parser(data.clone()))
-                .then(AstScopeDef::parser(data.into()))
+                .then(AstScopeDef::parser(data))
                 .then(
                     select! { Token::Else => () }
                         .ignore_then(else_block)

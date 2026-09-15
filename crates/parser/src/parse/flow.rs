@@ -5,7 +5,7 @@ use crate::ast::nodes::flow::{
 use crate::ast::nodes::scopes::AstScopeDef;
 use crate::parse::{MapWithSpanExt, RecursiveData, potential_new_line};
 use crate::{
-    ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
+    ast::nodes::AstNode,
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
@@ -39,7 +39,7 @@ impl<'a> AstParser<'a> for AstBreak {
         select! { Token::Break => () }
             .ignore_then(
                 select! {Token::At => ()}
-                    .ignore_then(PotentialDollarIdentifier::parser(()))
+                    .ignore_then(data.dollar_ident)
                     .or_not()
                     .then(data.node.or_not()),
             )
@@ -52,13 +52,13 @@ impl<'a> AstParser<'a> for AstBreak {
 }
 
 impl<'a> AstParser<'a> for AstContinue {
-    type Data = ();
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Continue => () }
             .ignore_then(
                 select! {Token::At => ()}
-                    .ignore_then(PotentialDollarIdentifier::parser(()))
+                    .ignore_then(data.dollar_ident)
                     .or_not(),
             )
             .map(|label| AstContinue { label })
@@ -105,7 +105,7 @@ impl<'a> AstParser<'a> for TryCatch {
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Colon => () }
-                .ignore_then(PotentialDollarIdentifier::parser(()))
+                .ignore_then(data.dollar_ident.clone())
                 .then(AstScopeDef::parser(data.clone()))
                 .map_with_span(|(name, body), span| TryCatch {
                     name: Some(name),
@@ -146,7 +146,7 @@ impl<'a> AstParser<'a> for AstPipe {
                 .map(PipeSegment::Unnamed),
             select! { Token::Face => () }
                 .padded_by(potential_new_line())
-                .ignore_then(PotentialDollarIdentifier::parser(()))
+                .ignore_then(data.dollar_ident)
                 .then_ignore(select! { Token::Greater => () })
                 .then(data.node.clone())
                 .map(|(identifier, node)| PipeSegment::Named { identifier, node }),

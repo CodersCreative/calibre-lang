@@ -1,7 +1,6 @@
 use crate::ast::nodes::access::{AstField, AstIndex, AstScope};
 use crate::parse::{RecursiveData, potential_new_line};
 use crate::{
-    ast::idents::PotentialDollarIdentifier,
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
@@ -13,7 +12,7 @@ impl<'a> AstParser<'a> for AstField {
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
             .then_ignore(select! { Token::Dot => () }.padded_by(potential_new_line()))
-            .then(PotentialDollarIdentifier::parser(()))
+            .then(data.dollar_ident)
             .map(|(base, field)| AstField {
                 base: Box::new(base),
                 field,
@@ -28,7 +27,7 @@ impl<'a> AstParser<'a> for AstScope {
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
             .then_ignore(select! { Token::Scope => () }.padded_by(potential_new_line()))
-            .then(PotentialDollarIdentifier::parser(()))
+            .then(data.dollar_ident)
             .map(|(base, field)| AstScope {
                 base: Box::new(base),
                 field,
