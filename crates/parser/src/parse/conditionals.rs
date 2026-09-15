@@ -15,6 +15,7 @@ use super::matching::parse_pattern_list;
 impl<'a> AstParser<'a> for IfComparisonType {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // let ... <- ...
@@ -36,6 +37,7 @@ impl<'a> AstParser<'a> for IfComparisonType {
 impl<'a> AstParser<'a> for AstIf {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|if_parser| {
             let else_block = choice((
@@ -69,8 +71,10 @@ impl<'a> AstParser<'a> for AstIf {
 impl<'a> AstParser<'a> for AstTernary {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node.clone()
+        data.node
+            .clone()
             .clone()
             .then(
                 select! { Token::Question => () }

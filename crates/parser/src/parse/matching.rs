@@ -26,6 +26,7 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for VarType {
     type Data = ();
 
+    #[inline(always)]
     fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Mut => () }.map(|_| VarType::Mutable),
@@ -79,6 +80,7 @@ impl<'a> DestructurePattern {
 impl<'a> AstParser<'a> for DestructurePattern {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // tuple
@@ -150,6 +152,7 @@ impl<'a> AstParser<'a> for DestructurePattern {
 impl<'a> AstParser<'a> for MatchStringPatternPart {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // string
@@ -171,6 +174,7 @@ impl<'a> AstParser<'a> for MatchStringPatternPart {
 impl<'a> AstParser<'a> for MatchTupleItem {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|tuple_item| {
             choice((
@@ -312,6 +316,7 @@ impl<'a> AstParser<'a> for MatchTupleItem {
 impl<'a> AstParser<'a> for MatchStructFieldPattern {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Identifier(field) => field }
             .map_with_span(|field, span| (field, span))
@@ -337,7 +342,9 @@ impl<'a> AstParser<'a> for MatchStructFieldPattern {
                             .then(data.dollar_ident.clone())
                             .map(|(var_type, name)| (None, Some(var_type), Some(name))),
                         // value
-                        data.node.clone().map(|value| (Some(vec![value]), None, None)),
+                        data.node
+                            .clone()
+                            .map(|value| (Some(vec![value]), None, None)),
                     )))
                     .or_not()
                     .map(|x| x.unwrap_or((None, Some(VarType::Immutable), None))),
@@ -390,6 +397,7 @@ impl<'a> AstParser<'a> for MatchStructFieldPattern {
 impl<'a> AstParser<'a> for MatchArmType {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|arm_type| {
             choice((
@@ -429,11 +437,9 @@ impl<'a> AstParser<'a> for MatchArmType {
                         select! { Token::Colon => () }
                             .ignore_then(choice((
                                 // tuple
-                                DestructurePattern::parser(data)
-                                    .map(|d| (None, None, Some(d))),
+                                DestructurePattern::parser(data).map(|d| (None, None, Some(d))),
                                 // struct
-                                DestructurePattern::parser(data)
-                                    .map(|d| (None, None, Some(d))),
+                                DestructurePattern::parser(data).map(|d| (None, None, Some(d))),
                                 // binding
                                 VarType::parser(&())
                                     .then(data.dollar_ident.clone())
@@ -543,6 +549,7 @@ pub fn parse_pattern_list<'a>(
 impl<'a> AstParser<'a> for MatchBody {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let match_arm = MatchArmType::parser(data)
             .padded_by(potential_new_line())
@@ -695,6 +702,7 @@ impl<'a> AstParser<'a> for MatchBody {
 impl<'a> AstParser<'a> for AstMatch {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Match => () }
             .ignore_then(
@@ -732,6 +740,7 @@ impl<'a> AstParser<'a> for AstMatch {
 impl<'a> AstParser<'a> for AstFnMatch {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }
             .ignore_then(select! { Token::Match => () })

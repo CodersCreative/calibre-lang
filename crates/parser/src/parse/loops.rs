@@ -16,6 +16,7 @@ use super::matching::parse_pattern_list;
 impl<'a> AstParser<'a> for LoopType {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // ... in ...
@@ -45,6 +46,7 @@ impl<'a> AstParser<'a> for LoopType {
 impl<'a> AstParser<'a> for AstLoop {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let label = select! { Token::At => () }
             .ignore_then(data.dollar_ident.clone())
@@ -80,6 +82,7 @@ impl<'a> AstParser<'a> for AstLoop {
 impl<'a> AstParser<'a> for AstIter {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let data_type = choice((
             select! { Token::Identifier(x) if x == "list" => () }

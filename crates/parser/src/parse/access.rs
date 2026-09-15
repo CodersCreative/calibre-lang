@@ -9,8 +9,10 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstField {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node.clone()
+        data.node
+            .clone()
             .then_ignore(select! { Token::Dot => () }.padded_by(potential_new_line()))
             .then(data.dollar_ident.clone())
             .map(|(base, field)| AstField {
@@ -24,8 +26,10 @@ impl<'a> AstParser<'a> for AstField {
 impl<'a> AstParser<'a> for AstScope {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node.clone()
+        data.node
+            .clone()
             .then_ignore(select! { Token::Scope => () }.padded_by(potential_new_line()))
             .then(data.dollar_ident.clone())
             .map(|(base, field)| AstScope {
@@ -39,8 +43,10 @@ impl<'a> AstParser<'a> for AstScope {
 impl<'a> AstParser<'a> for AstIndex {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node.clone()
+        data.node
+            .clone()
             .clone()
             .then_ignore(select! { Token::LeftSquare => () }.padded_by(potential_new_line()))
             .then(data.node.clone())

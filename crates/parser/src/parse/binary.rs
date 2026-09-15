@@ -15,8 +15,10 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstBinary {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node.clone()
+        data.node
+            .clone()
             .clone()
             .then(select! {
                 Token::Add => BinaryOperator::Add,
@@ -44,8 +46,10 @@ impl<'a> AstParser<'a> for AstBinary {
 impl<'a> AstParser<'a> for AstComparison {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node.clone()
+        data.node
+            .clone()
             .clone()
             .then(
                 select! {
@@ -71,8 +75,10 @@ impl<'a> AstParser<'a> for AstComparison {
 impl<'a> AstParser<'a> for AstBoolean {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node.clone()
+        data.node
+            .clone()
             .clone()
             .then(
                 select! {
@@ -94,8 +100,10 @@ impl<'a> AstParser<'a> for AstBoolean {
 impl<'a> AstParser<'a> for AstAs {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node.clone()
+        data.node
+            .clone()
             .then_ignore(select! { Token::As => () }.padded_by(potential_new_line()))
             .then(data.data_type.clone())
             .then(
@@ -116,8 +124,10 @@ impl<'a> AstParser<'a> for AstAs {
 impl<'a> AstParser<'a> for AstIs {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node.clone()
+        data.node
+            .clone()
             .then_ignore(select! { Token::Is => () }.padded_by(potential_new_line()))
             .then(data.data_type.clone())
             .map(|(value, data_type)| AstIs {
@@ -131,8 +141,10 @@ impl<'a> AstParser<'a> for AstIs {
 impl<'a> AstParser<'a> for AstIn {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node.clone()
+        data.node
+            .clone()
             .clone()
             .then_ignore(select! { Token::In => () }.padded_by(potential_new_line()))
             .then(data.node.clone())

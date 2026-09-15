@@ -11,6 +11,7 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstList {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let data_type = choice((
             select! { Token::Identifier(x) if x == "list" => () }
@@ -26,7 +27,8 @@ impl<'a> AstParser<'a> for AstList {
         data_type
             .then_ignore(select! { Token::LeftSquare => () })
             .then(
-                data.node.clone()
+                data.node
+                    .clone()
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()

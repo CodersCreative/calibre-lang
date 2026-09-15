@@ -15,6 +15,7 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstDeclaration {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Let => () }.map(|_| VarType::Immutable),
@@ -57,6 +58,7 @@ impl<'a> AstParser<'a> for AstDeclaration {
 impl<'a> AstParser<'a> for AstDeclareDestructure {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Let => () }
             .ignore_then(DestructurePattern::no_bracket_parser(data))

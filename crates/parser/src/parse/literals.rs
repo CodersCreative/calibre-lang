@@ -22,6 +22,7 @@ use ustr::Ustr;
 impl<'a> AstParser<'a> for AstFloat {
     type Data = ();
 
+    #[inline(always)]
     fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::FloatLiteral(x) => x
@@ -41,6 +42,7 @@ impl<'a> AstParser<'a> for AstFloat {
 impl<'a> AstParser<'a> for AstBig {
     type Data = ();
 
+    #[inline(always)]
     fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::BigLiteral(x) => x
@@ -55,6 +57,7 @@ impl<'a> AstParser<'a> for AstBig {
 impl<'a> AstParser<'a> for AstInt {
     type Data = ();
 
+    #[inline(always)]
     fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::IntLiteral(x) => x
@@ -68,6 +71,7 @@ impl<'a> AstParser<'a> for AstInt {
 impl<'a> AstParser<'a> for AstChar {
     type Data = ();
 
+    #[inline(always)]
     fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::CharLiteral(x) => AstChar{value : x.to_string().chars().next().unwrap_or_default()}
@@ -79,6 +83,7 @@ impl<'a> AstParser<'a> for AstChar {
 impl<'a> AstParser<'a> for AstString {
     type Data = ();
 
+    #[inline(always)]
     fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::StringLiteral(x) => x
@@ -96,6 +101,7 @@ impl<'a> AstParser<'a> for AstString {
 impl<'a> AstParser<'a> for AstRange {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             data.node
@@ -126,10 +132,12 @@ impl<'a> AstParser<'a> for AstRange {
 impl<'a> AstParser<'a> for AstTuple {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::LeftParen => () }
             .ignore_then(
-                data.node.clone()
+                data.node
+                    .clone()
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
@@ -146,8 +154,10 @@ impl<'a> AstParser<'a> for AstTuple {
 impl<'a> AstParser<'a> for AstStruct {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.generic_ident.clone()
+        data.generic_ident
+            .clone()
             .then(
                 select! { Token::LeftBracket => () }
                     .ignore_then(
@@ -184,8 +194,10 @@ impl<'a> AstParser<'a> for AstStruct {
 impl<'a> AstParser<'a> for AstEnum {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.generic_ident.clone()
+        data.generic_ident
+            .clone()
             .then_ignore(select! { Token::Dot => () })
             .then(data.dollar_ident.clone())
             .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
@@ -202,6 +214,7 @@ impl<'a> AstParser<'a> for AstEnum {
 impl<'a> AstParser<'a> for AstDataType {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {Token::Type => ()}
             .then(select! {Token::Colon => ()})

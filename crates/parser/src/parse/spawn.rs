@@ -13,6 +13,7 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for SelectArm {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Identifier(x) if x == "_" => () }
@@ -50,6 +51,7 @@ impl<'a> AstParser<'a> for SelectArm {
 impl<'a> AstParser<'a> for AstSelect {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Select => () }
             .ignore_then(select! { Token::LeftBracket => () })
@@ -69,6 +71,7 @@ impl<'a> AstParser<'a> for AstSelect {
 impl<'a> AstParser<'a> for AstSpawn {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let auto_wait = select! { Token::At => () }.or_not().map(|x| x.is_some());
 

@@ -79,6 +79,7 @@ pub struct RecursiveData<'a> {
 pub trait AstParser<'a>: Sized {
     type Data;
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>>;
+    //fn parser(data: &Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>>;
 }
 
 pub trait MapWithSpanExt<'a, I, O, E>: Parser<'a, I, O, E>
@@ -169,7 +170,8 @@ impl<'a> AstParser<'a> for AstNode {
     type Data = RecursiveData<'a>;
 
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let flow = choice((
+        let parser1 = choice((
+            // Flow
             AstBreak::parser(data).map(AstNodeType::Break),
             AstEmit::parser(data).map(AstNodeType::Emit),
             AstContinue::parser(data).map(AstNodeType::Continue),
@@ -177,9 +179,7 @@ impl<'a> AstParser<'a> for AstNode {
             AstReturn::parser(data).map(AstNodeType::Return),
             AstTry::parser(data).map(AstNodeType::Try),
             AstPipe::parser(data).map(AstNodeType::PipeExpression),
-        ));
-
-        let literals = choice((
+            // Literals
             AstStruct::parser(data).map(AstNodeType::StructLiteral),
             AstEnum::parser(data).map(AstNodeType::EnumExpression),
             AstTuple::parser(data).map(AstNodeType::TupleLiteral),
@@ -190,119 +190,81 @@ impl<'a> AstParser<'a> for AstNode {
             AstFloat::parser(&()).map(AstNodeType::FloatLiteral),
             AstChar::parser(&()).map(AstNodeType::CharLiteral),
             AstDataType::parser(data).map(AstNodeType::DataType),
-        ));
-
-        let lists = AstList::parser(data).map(AstNodeType::ListLiteral);
-
-        let conditionals = choice((
+            // List
+            AstList::parser(data).map(AstNodeType::ListLiteral),
+            // Conditionals
             AstIf::parser(data).map(AstNodeType::IfStatement),
             AstTernary::parser(data).map(AstNodeType::Ternary),
         ));
 
-        let binary = choice((
+        let parser2 = choice((
+            // Binary
             AstAs::parser(data).map(AstNodeType::AsExpression),
             AstIs::parser(data).map(AstNodeType::IsExpression),
             AstIn::parser(data).map(AstNodeType::InDeclaration),
             AstBoolean::parser(data).map(AstNodeType::BooleanExpression),
             AstComparison::parser(data).map(AstNodeType::ComparisonExpression),
             AstBinary::parser(data).map(AstNodeType::BinaryExpression),
-        ));
-
-        let unary = choice((
+            // Unary
             AstNeg::parser(data).map(AstNodeType::NegExpression),
             AstNot::parser(data).map(AstNodeType::NotExpression),
-        ));
-
-        let functions = choice((
+            // Functions
             AstFunction::parser(data).map(AstNodeType::FunctionDeclaration),
             AstExtern::parser(data).map(AstNodeType::ExternFunctionDeclaration),
             AstCall::parser(data).map(AstNodeType::CallExpression),
             AstCurry::parser(data).map(AstNodeType::CurryExpression),
-        ));
-
-        let memory = choice((
+            // Null
+            select! {Token::Null => ()}.map(|_| AstNodeType::Null),
+            // Memory
             AstDrop::parser(data).map(AstNodeType::Drop),
             AstRef::parser(data).map(AstNodeType::RefStatement),
             AstDeref::parser(data).map(AstNodeType::DerefStatement),
             AstMove::parser(data).map(AstNodeType::MoveExpression),
-        ));
-
-        let access = choice((
+            // Access
             AstIdentifier::parser(data).map(AstNodeType::Identifier),
             AstField::parser(data).map(AstNodeType::FieldAccess),
             AstScope::parser(data).map(AstNodeType::ScopeAccess),
             AstIndex::parser(data).map(AstNodeType::IndexAccess),
-        ));
-
-        let spawn = choice((
+            // Spawn
             AstSpawn::parser(data).map(AstNodeType::Spawn),
             AstSelect::parser(data).map(AstNodeType::SelectStatement),
         ));
 
-        let matching = choice((
+        let parser3 = choice((
+            // Matching
             AstMatch::parser(data).map(AstNodeType::MatchStatement),
             AstFnMatch::parser(data).map(AstNodeType::FnMatchDeclaration),
-        ));
-
-        let assignment = choice((
+            // Assignment
             AstAssignment::parser(data).map(AstNodeType::AssignmentExpression),
             AstAssignDestructure::parser(data).map(AstNodeType::DestructureAssignment),
-        ));
-
-        let declarations = choice((
+            // Declarations
             AstDeclaration::parser(data).map(AstNodeType::VariableDeclaration),
             AstDeclareDestructure::parser(data).map(AstNodeType::DestructureDeclaration),
-        ));
-
-        let types = choice((
+            // Types
             AstType::parser(data).map(AstNodeType::TypeDeclaration),
             AstImpl::parser(data).map(AstNodeType::ImplDeclaration),
             AstImplTrait::parser(data).map(AstNodeType::ImplTraitDeclaration),
             AstTrait::parser(data).map(AstNodeType::TraitDeclaration),
-        ));
-
-        let loops = choice((
+            // Loops
             AstLoop::parser(data).map(AstNodeType::LoopDeclaration),
             AstIter::parser(data).map(AstNodeType::IterExpression),
-        ));
-
-        let scopes = choice((
+            // Scopes
             AstScopeAlias::parser(data).map(AstNodeType::ScopeAlias),
             AstScopeDef::parser(data).map(AstNodeType::ScopeDeclaration),
-        ));
-
-        let generator = AstGenerator::parser(data).map(AstNodeType::InlineGenerator);
-
-        let misc = choice((
+            // Generator
+            AstGenerator::parser(data).map(AstNodeType::InlineGenerator),
+            // Misc
             AstImport::parser(data).map(AstNodeType::ImportStatement),
             AstTest::parser(data).map(AstNodeType::TestDeclaration),
             AstTag::parser(data).map(AstNodeType::Tag),
             AstParen::parser(data).map(AstNodeType::ParenExpression),
         ));
 
-        choice((
-            select! {Token::Null => ()}.map(|_| AstNodeType::Null),
-            flow,
-            literals,
-            lists,
-            conditionals,
-            binary,
-            unary,
-            functions,
-            memory,
-            access,
-            spawn,
-            matching,
-            assignment,
-            declarations,
-            types,
-            loops,
-            scopes,
-            generator,
-            misc,
-        ))
-        .map_with_span(|node_type, span| Self { node_type, span })
-        .boxed()
+        parser1
+            .or(parser2)
+            .or(parser3)
+            .map_with_span(|node_type, span| Self { node_type, span })
+            .boxed()
     }
 }
 

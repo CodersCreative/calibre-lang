@@ -13,6 +13,7 @@ use chumsky::{Parser, select};
 impl<'a> AstParser<'a> for ParserText {
     type Data = ();
 
+    #[inline(always)]
     fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::Identifier(x) => x
@@ -25,6 +26,7 @@ impl<'a> AstParser<'a> for ParserText {
 impl<'a> AstParser<'a> for PotentialDollarIdentifier {
     type Data = ();
 
+    #[inline(always)]
     fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::Dollar => (),
@@ -40,6 +42,7 @@ impl<'a> AstParser<'a> for PotentialDollarIdentifier {
 impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
     type Data = ();
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         PotentialDollarIdentifier::parser(data)
             .then(
@@ -72,8 +75,10 @@ impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
 impl<'a> AstParser<'a> for AstIdentifier {
     type Data = RecursiveData<'a>;
 
+    #[inline(always)]
     fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.generic_ident.clone()
+        data.generic_ident
+            .clone()
             .map(|value| AstIdentifier { value })
             .boxed()
     }
