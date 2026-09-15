@@ -14,7 +14,7 @@ impl<'a> AstParser<'a> for ParserText {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::Identifier(x) => x
         }
@@ -27,13 +27,13 @@ impl<'a> AstParser<'a> for PotentialDollarIdentifier {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::Dollar => (),
         }
-        .ignore_then(ParserText::parser(&()))
+        .ignore_then(ParserText::parser(()))
         .map(PotentialDollarIdentifier::DollarIdentifier)
-        .or(ParserText::parser(&()).map(PotentialDollarIdentifier::Identifier))
+        .or(ParserText::parser(()).map(PotentialDollarIdentifier::Identifier))
         .boxed()
     }
 }
@@ -43,7 +43,7 @@ impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
     type Data = ();
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         PotentialDollarIdentifier::parser(data)
             .then(
                 select! { Token::Vampire => () }
@@ -76,7 +76,7 @@ impl<'a> AstParser<'a> for AstIdentifier {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.generic_ident
             .clone()
             .map(|value| AstIdentifier { value })

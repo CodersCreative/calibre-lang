@@ -10,13 +10,13 @@ use crate::{
     parse::{AstParser, AstParserErr, TokenStream},
 };
 use chumsky::prelude::*;
-use chumsky::{Boxed, Parser, select};
+use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for AstAssignment {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
             .clone()
             .clone()
@@ -64,8 +64,8 @@ impl<'a> AstParser<'a> for AstAssignDestructure {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        DestructurePattern::no_bracket_parser(data)
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        DestructurePattern::no_bracket_parser(data.clone())
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then(data.node.clone())
             .map(|(pattern, value)| AstAssignDestructure {

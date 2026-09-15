@@ -6,13 +6,13 @@ use crate::{
     parse::{AstParser, AstParserErr, TokenStream},
 };
 use chumsky::prelude::*;
-use chumsky::{Boxed, Parser, select};
+use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for AstScopeDef {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let body = choice((
             select! { Token::LeftBracket => () }
                 .ignore_then(select! { Token::LeftBracket => () })
@@ -93,7 +93,6 @@ impl<'a> AstParser<'a> for AstScopeDef {
                 create_new_scope,
                 define: false,
             })
-            .boxed()
     }
 }
 
@@ -101,7 +100,7 @@ impl<'a> AstParser<'a> for AstScopeAlias {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let args = select! { Token::LeftSquare => () }
             .ignore_then(
                 data.dollar_ident

@@ -16,14 +16,14 @@ use crate::{
     },
 };
 use chumsky::prelude::*;
-use chumsky::{Boxed, Parser, select};
+use chumsky::{Parser, select};
 use ustr::Ustr;
 
 impl<'a> AstParser<'a> for AstFloat {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::FloatLiteral(x) => x
         }
@@ -43,7 +43,7 @@ impl<'a> AstParser<'a> for AstBig {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::BigLiteral(x) => x
         }
@@ -58,7 +58,7 @@ impl<'a> AstParser<'a> for AstInt {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::IntLiteral(x) => x
         }
@@ -72,7 +72,7 @@ impl<'a> AstParser<'a> for AstChar {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::CharLiteral(x) => AstChar{value : x.to_string().chars().next().unwrap_or_default()}
         }
@@ -84,7 +84,7 @@ impl<'a> AstParser<'a> for AstString {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::StringLiteral(x) => x
         }
@@ -102,7 +102,7 @@ impl<'a> AstParser<'a> for AstRange {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             data.node
                 .clone()
@@ -133,7 +133,7 @@ impl<'a> AstParser<'a> for AstTuple {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::LeftParen => () }
             .ignore_then(
                 data.node
@@ -155,7 +155,7 @@ impl<'a> AstParser<'a> for AstStruct {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.generic_ident
             .clone()
             .then(
@@ -195,7 +195,7 @@ impl<'a> AstParser<'a> for AstEnum {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.generic_ident
             .clone()
             .then_ignore(select! { Token::Dot => () })
@@ -215,7 +215,7 @@ impl<'a> AstParser<'a> for AstDataType {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {Token::Type => ()}
             .then(select! {Token::Colon => ()})
             .ignore_then(data.data_type.clone())

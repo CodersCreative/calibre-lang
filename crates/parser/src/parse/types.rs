@@ -15,14 +15,14 @@ use crate::{
     parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream, typed_or_untyped_assignment},
 };
 use chumsky::prelude::*;
-use chumsky::{Boxed, Parser, select};
+use chumsky::{Parser, select};
 use ustr::Ustr;
 
 impl<'a> AstParser<'a> for TypeDefType {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let struct_named_fields = select! { Token::LeftBracket => () }
             .ignore_then(
                 data.dollar_ident
@@ -76,7 +76,7 @@ impl<'a> AstParser<'a> for TypeDefType {
         let enum_parser = select! { Token::Enum => () }
             .ignore_then(select! { Token::LeftBracket => () })
             .ignore_then(
-                AstTag::parser(data)
+                AstTag::parser(data.clone())
                     .repeated()
                     .collect::<Vec<_>>()
                     .or_not()
@@ -165,7 +165,7 @@ impl<'a> AstParser<'a> for Overload {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Const => () }
             .ignore_then(select! { Token::StringLiteral(op) => op })
             .map_with_span(|op, sp| ParserText::new(sp, op))
@@ -187,10 +187,10 @@ impl<'a> AstParser<'a> for TraitMember {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let const_member = select! { Token::Const => () }
             .ignore_then(data.dollar_ident.clone())
-            .then(typed_or_untyped_assignment(data))
+            .then(typed_or_untyped_assignment(data.clone()))
             .map_with_span(|(identifier, (data_type, value)), span| TraitMember {
                 kind: TraitMemberKind::Const,
                 identifier,
@@ -215,9 +215,9 @@ impl<'a> AstParser<'a> for AstImpl {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Impl => () }
-            .ignore_then(GenericTypes::parser(data))
+            .ignore_then(GenericTypes::parser(data.clone()))
             .then(data.data_type.clone())
             .then_ignore(select! { Token::LeftBracket => () })
             .then(
@@ -244,9 +244,9 @@ impl<'a> AstParser<'a> for AstImplTrait {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Impl => () }
-            .ignore_then(GenericTypes::parser(data))
+            .ignore_then(GenericTypes::parser(data.clone()))
             .then(data.generic_ident.clone())
             .then_ignore(select! { Token::For => () }.padded_by(potential_new_line()))
             .then(data.data_type.clone())
@@ -278,12 +278,12 @@ impl<'a> AstParser<'a> for AstTrait {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Trait => () }
             .ignore_then(data.generic_ident.clone())
             .then_ignore(select! { Token::LeftBracket => () })
             .then(
-                TraitMember::parser(data)
+                TraitMember::parser(data.clone())
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
@@ -305,11 +305,11 @@ impl<'a> AstParser<'a> for AstType {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Type => () }
             .ignore_then(data.generic_ident.clone())
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
-            .then(TypeDefType::parser(data))
+            .then(TypeDefType::parser(data.clone()))
             .then(
                 select! { Token::At => () }
                     .ignore_then(select! { Token::Identifier(ident) => ident })

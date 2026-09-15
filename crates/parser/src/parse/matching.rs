@@ -21,13 +21,13 @@ use crate::{
     parse::{AstParser, AstParserErr, TokenStream},
 };
 use chumsky::prelude::*;
-use chumsky::{Boxed, Parser, select};
+use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for VarType {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Mut => () }.map(|_| VarType::Mutable),
             select! { Token::Const => () }.map(|_| VarType::Constant),
@@ -41,10 +41,10 @@ impl<'a> AstParser<'a> for VarType {
 
 impl<'a> DestructurePattern {
     pub fn no_bracket_parser(
-        data: &RecursiveData<'a>,
-    ) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        data: RecursiveData<'a>,
+    ) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
-            Self::parser(data),
+            Self::parser(data.clone()),
             choice((
                 // rest
                 select! { Token::Range => () }.map(|_| None),
@@ -81,7 +81,7 @@ impl<'a> AstParser<'a> for DestructurePattern {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // tuple
             select! { Token::LeftParen => () }
@@ -121,7 +121,7 @@ impl<'a> AstParser<'a> for DestructurePattern {
                     select! { Token::Identifier(field) => field }
                         .then(
                             select! { Token::Colon => () }
-                                .ignore_then(VarType::parser(&()).then(data.dollar_ident.clone()))
+                                .ignore_then(VarType::parser(()).then(data.dollar_ident.clone()))
                                 .or_not(),
                         )
                         .map_with_span(|(field, alias), span| {
@@ -153,14 +153,14 @@ impl<'a> AstParser<'a> for MatchStringPatternPart {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // string
             select! { Token::StringLiteral(s) => s }.map_with_span(|s, span| {
                 MatchStringPatternPart::Literal(ParserText::new(span, s.to_string()))
             }),
             // binding
-            VarType::parser(&())
+            VarType::parser(())
                 .then(data.dollar_ident.clone())
                 .map(|(var_type, name)| MatchStringPatternPart::Binding { var_type, name }),
             // wildcard
@@ -175,7 +175,7 @@ impl<'a> AstParser<'a> for MatchTupleItem {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|tuple_item| {
             choice((
                 // rest
@@ -201,7 +201,7 @@ impl<'a> AstParser<'a> for MatchTupleItem {
                     })
                     .then(
                         select! { Token::BitAnd => () }
-                            .ignore_then(MatchStringPatternPart::parser(data))
+                            .ignore_then(MatchStringPatternPart::parser(data.clone()))
                             .repeated()
                             .collect::<Vec<_>>(),
                     )
@@ -211,7 +211,7 @@ impl<'a> AstParser<'a> for MatchTupleItem {
                         MatchTupleItem::StringPattern(parts)
                     }),
                 // @
-                VarType::parser(&())
+                VarType::parser(())
                     .then(data.dollar_ident.clone())
                     .then_ignore(select! { Token::At => () })
                     .then(tuple_item.clone())
@@ -269,7 +269,7 @@ impl<'a> AstParser<'a> for MatchTupleItem {
                                     .map(DestructurePattern::Struct)
                                     .map(|d| (None, None, Some(d))),
                                 // binding
-                                VarType::parser(&())
+                                VarType::parser(())
                                     .then(data.dollar_ident.clone())
                                     .map(|(var_type, name)| (Some(var_type), Some(name), None)),
                             )))
@@ -293,7 +293,7 @@ impl<'a> AstParser<'a> for MatchTupleItem {
                 // struct
                 select! { Token::LeftBracket => () }
                     .ignore_then(
-                        MatchStructFieldPattern::parser(data)
+                        MatchStructFieldPattern::parser(data.clone())
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()
@@ -303,7 +303,7 @@ impl<'a> AstParser<'a> for MatchTupleItem {
                     .then_ignore(select! { Token::RightBracket => () })
                     .map(MatchTupleItem::StructPattern),
                 // binding
-                VarType::parser(&())
+                VarType::parser(())
                     .then(data.dollar_ident.clone())
                     .map(|(var_type, name)| MatchTupleItem::Binding { var_type, name }),
             ))
@@ -317,7 +317,7 @@ impl<'a> AstParser<'a> for MatchStructFieldPattern {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Identifier(field) => field }
             .map_with_span(|field, span| (field, span))
             .then(
@@ -338,7 +338,7 @@ impl<'a> AstParser<'a> for MatchStructFieldPattern {
                                 (Some(values), None, None)
                             }),
                         // binding
-                        VarType::parser(&())
+                        VarType::parser(())
                             .then(data.dollar_ident.clone())
                             .map(|(var_type, name)| (None, Some(var_type), Some(name))),
                         // value
@@ -398,7 +398,7 @@ impl<'a> AstParser<'a> for MatchArmType {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|arm_type| {
             choice((
                 // wildcard
@@ -421,7 +421,7 @@ impl<'a> AstParser<'a> for MatchArmType {
                     })
                     .then(
                         select! { Token::BitAnd => () }
-                            .ignore_then(MatchStringPatternPart::parser(data))
+                            .ignore_then(MatchStringPatternPart::parser(data.clone()))
                             .repeated()
                             .collect::<Vec<_>>(),
                     )
@@ -437,11 +437,13 @@ impl<'a> AstParser<'a> for MatchArmType {
                         select! { Token::Colon => () }
                             .ignore_then(choice((
                                 // tuple
-                                DestructurePattern::parser(data).map(|d| (None, None, Some(d))),
+                                DestructurePattern::parser(data.clone())
+                                    .map(|d| (None, None, Some(d))),
                                 // struct
-                                DestructurePattern::parser(data).map(|d| (None, None, Some(d))),
+                                DestructurePattern::parser(data.clone())
+                                    .map(|d| (None, None, Some(d))),
                                 // binding
-                                VarType::parser(&())
+                                VarType::parser(())
                                     .then(data.dollar_ident.clone())
                                     .map(|(var_type, name)| (Some(var_type), Some(name), None)),
                             )))
@@ -474,7 +476,7 @@ impl<'a> AstParser<'a> for MatchArmType {
                 // (...)
                 select! { Token::LeftParen => () }
                     .ignore_then(
-                        MatchTupleItem::parser(data)
+                        MatchTupleItem::parser(data.clone())
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()
@@ -486,7 +488,7 @@ impl<'a> AstParser<'a> for MatchArmType {
                 // [...]
                 select! { Token::LeftSquare => () }
                     .ignore_then(
-                        MatchTupleItem::parser(data)
+                        MatchTupleItem::parser(data.clone())
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()
@@ -498,7 +500,7 @@ impl<'a> AstParser<'a> for MatchArmType {
                 // struct
                 select! { Token::LeftBracket => () }
                     .ignore_then(
-                        MatchStructFieldPattern::parser(data)
+                        MatchStructFieldPattern::parser(data.clone())
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()
@@ -508,11 +510,11 @@ impl<'a> AstParser<'a> for MatchArmType {
                     .then_ignore(select! { Token::RightBracket => () })
                     .map(MatchArmType::StructPattern),
                 // binding
-                VarType::parser(&())
+                VarType::parser(())
                     .then(data.dollar_ident.clone())
                     .map(|(var_type, name)| MatchArmType::Let { var_type, name }),
                 // @
-                VarType::parser(&())
+                VarType::parser(())
                     .then(data.dollar_ident.clone())
                     .then_ignore(select! { Token::At => () })
                     .then(arm_type.clone())
@@ -529,9 +531,9 @@ impl<'a> AstParser<'a> for MatchArmType {
 }
 
 pub fn parse_pattern_list<'a>(
-    data: &RecursiveData<'a>,
-) -> Boxed<'a, 'a, TokenStream<'a>, (Vec<MatchArmType>, Vec<AstNode>), AstParserErr<'a>> {
-    MatchArmType::parser(data)
+    data: RecursiveData<'a>,
+) -> impl Parser<'a, TokenStream<'a>, (Vec<MatchArmType>, Vec<AstNode>), AstParserErr<'a>> {
+    MatchArmType::parser(data.clone())
         .then(
             select! { Token::BitOr => () }
                 .ignore_then(MatchArmType::parser(data))
@@ -550,15 +552,15 @@ impl<'a> AstParser<'a> for MatchBody {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let match_arm = MatchArmType::parser(data)
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        let match_arm = MatchArmType::parser(data.clone())
             .padded_by(potential_new_line())
             .then(
                 choice((
                     select! { Token::BitOr => () }.map(|_| '|'),
                     select! { Token::Comma => () }.map(|_| ','),
                 ))
-                .then(MatchArmType::parser(data))
+                .then(MatchArmType::parser(data.clone()))
                 .repeated()
                 .collect::<Vec<(char, MatchArmType)>>(),
             )
@@ -573,7 +575,7 @@ impl<'a> AstParser<'a> for MatchBody {
                 select! { Token::FatArrow => () }
                     .padded_by(potential_new_line())
                     .ignore_then(choice((
-                        AstScopeDef::parser(data).map_with_span(|scope, span| {
+                        AstScopeDef::parser(data.clone()).map_with_span(|scope, span| {
                             AstNode::new(span, AstNodeType::from(scope))
                         }),
                         data.node.clone(),
@@ -703,7 +705,7 @@ impl<'a> AstParser<'a> for AstMatch {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Match => () }
             .ignore_then(
                 data.node
@@ -741,10 +743,10 @@ impl<'a> AstParser<'a> for AstFnMatch {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }
             .ignore_then(select! { Token::Match => () })
-            .ignore_then(GenericTypes::parser(data).or_not())
+            .ignore_then(GenericTypes::parser(data.clone()).or_not())
             .then(data.data_type.clone().or_not())
             .then(
                 select! { Token::Eq => () }

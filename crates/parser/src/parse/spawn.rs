@@ -8,16 +8,16 @@ use crate::{
     parse::{AstParser, AstParserErr, TokenStream},
 };
 use chumsky::prelude::*;
-use chumsky::{Boxed, Parser, select};
+use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for SelectArm {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Identifier(x) if x == "_" => () }
-                .ignore_then(AstScopeDef::parser(data))
+                .ignore_then(AstScopeDef::parser(data.clone()))
                 .map_with_span(|body, span| SelectArm {
                     patterns: vec![(SelectArmKind::Default, None, None)],
                     conditionals: Vec::new(),
@@ -27,7 +27,7 @@ impl<'a> AstParser<'a> for SelectArm {
                 .clone()
                 .then_ignore(select! { Token::LeftArrow => () })
                 .then(data.node.clone())
-                .then(AstScopeDef::parser(data))
+                .then(AstScopeDef::parser(data.clone()))
                 .map_with_span(|((lhs, rhs), body), span| SelectArm {
                     patterns: vec![(SelectArmKind::Recv, Some(lhs), Some(rhs))],
                     conditionals: Vec::new(),
@@ -52,7 +52,7 @@ impl<'a> AstParser<'a> for AstSelect {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Select => () }
             .ignore_then(select! { Token::LeftBracket => () })
             .ignore_then(
@@ -72,7 +72,7 @@ impl<'a> AstParser<'a> for AstSpawn {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let auto_wait = select! { Token::At => () }.or_not().map(|x| x.is_some());
 
         auto_wait

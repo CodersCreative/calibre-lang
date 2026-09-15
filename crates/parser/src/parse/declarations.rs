@@ -10,13 +10,13 @@ use crate::{
 };
 use chumsky::error::Rich;
 use chumsky::prelude::*;
-use chumsky::{Boxed, Parser, select};
+use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for AstDeclaration {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Let => () }.map(|_| VarType::Immutable),
             select! { Token::Const => () }.map(|_| VarType::Constant),
@@ -59,9 +59,9 @@ impl<'a> AstParser<'a> for AstDeclareDestructure {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Let => () }
-            .ignore_then(DestructurePattern::no_bracket_parser(data))
+            .ignore_then(DestructurePattern::no_bracket_parser(data.clone()))
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then(data.node.clone())
             .map(|(pattern, value)| AstDeclareDestructure {

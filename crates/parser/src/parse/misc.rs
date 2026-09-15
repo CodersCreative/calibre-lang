@@ -9,13 +9,13 @@ use crate::{
     parse::{AstParser, AstParserErr, TokenStream},
 };
 use chumsky::prelude::*;
-use chumsky::{Boxed, Parser, select};
+use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for AstParen {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::LeftParen => () }
             .ignore_then(data.node.clone().padded_by(potential_new_line()))
             .then_ignore(select! { Token::RightParen => () })
@@ -30,7 +30,7 @@ impl<'a> AstParser<'a> for AstTest {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Test => () }
             .ignore_then(select! { Token::StringLiteral(x) => x })
             .then(AstScopeDef::parser(data))
@@ -46,7 +46,7 @@ impl<'a> AstParser<'a> for AstImport {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // import ... from module::path
             choice((
@@ -98,9 +98,9 @@ impl<'a> AstParser<'a> for AstTag {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::At => () }
-            .ignore_then(ParserText::parser(&()))
+            .ignore_then(ParserText::parser(()))
             .then(
                 select! { Token::LeftParen => () }
                     .ignore_then(

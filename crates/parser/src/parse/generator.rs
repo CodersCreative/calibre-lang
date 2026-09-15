@@ -6,18 +6,18 @@ use crate::{
     parse::{AstParser, AstParserErr, TokenStream},
 };
 use chumsky::prelude::*;
-use chumsky::{Boxed, Parser, select};
+use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for AstGenerator {
     type Data = RecursiveData<'a>;
 
     #[inline(always)]
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }
             .ignore_then(select! { Token::LeftParen => () })
             .then(data.node.clone())
             .then_ignore(select! { Token::For => () })
-            .then(LoopType::parser(data))
+            .then(LoopType::parser(data.clone()))
             .then(
                 select! { Token::If => () }
                     .ignore_then(data.node.clone())

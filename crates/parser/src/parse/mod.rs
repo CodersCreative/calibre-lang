@@ -78,8 +78,8 @@ pub struct RecursiveData<'a> {
 
 pub trait AstParser<'a>: Sized {
     type Data;
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>>;
-    //fn parser(data: &Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>>;
+    // fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>>;
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>>;
 }
 
 pub trait MapWithSpanExt<'a, I, O, E>: Parser<'a, I, O, E>
@@ -122,8 +122,8 @@ where
 }
 
 pub fn typed_or_untyped_assignment<'a>(
-    data: &RecursiveData<'a>,
-) -> Boxed<'a, 'a, TokenStream<'a>, (Option<ParserDataType>, Option<AstNode>), AstParserErr<'a>> {
+    data: RecursiveData<'a>,
+) -> impl Parser<'a, TokenStream<'a>, (Option<ParserDataType>, Option<AstNode>), AstParserErr<'a>> {
     choice((
         // : (= or :=)
         select! { Token::Colon => () }
@@ -162,102 +162,100 @@ pub fn typed_or_untyped_assignment<'a>(
     .boxed()
 }
 
-pub fn potential_new_line<'a>() -> Boxed<'a, 'a, TokenStream<'a>, (), AstParserErr<'a>> {
+pub fn potential_new_line<'a>() -> impl Parser<'a, TokenStream<'a>, (), AstParserErr<'a>> {
     just(Token::NewLine).repeated().boxed()
 }
 
-impl<'a> AstParser<'a> for AstNode {
-    type Data = RecursiveData<'a>;
-
-    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+impl<'a> AstNode {
+    fn parser(data: &RecursiveData<'a>) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let parser1 = choice((
             // Flow
-            AstBreak::parser(data).map(AstNodeType::Break),
-            AstEmit::parser(data).map(AstNodeType::Emit),
-            AstContinue::parser(data).map(AstNodeType::Continue),
-            AstDefer::parser(data).map(AstNodeType::Defer),
-            AstReturn::parser(data).map(AstNodeType::Return),
-            AstTry::parser(data).map(AstNodeType::Try),
-            AstPipe::parser(data).map(AstNodeType::PipeExpression),
+            AstBreak::parser(data.clone()).map(AstNodeType::Break),
+            AstEmit::parser(data.clone()).map(AstNodeType::Emit),
+            AstContinue::parser(data.clone()).map(AstNodeType::Continue),
+            AstDefer::parser(data.clone()).map(AstNodeType::Defer),
+            AstReturn::parser(data.clone()).map(AstNodeType::Return),
+            AstTry::parser(data.clone()).map(AstNodeType::Try),
+            AstPipe::parser(data.clone()).map(AstNodeType::PipeExpression),
             // Literals
-            AstStruct::parser(data).map(AstNodeType::StructLiteral),
-            AstEnum::parser(data).map(AstNodeType::EnumExpression),
-            AstTuple::parser(data).map(AstNodeType::TupleLiteral),
-            AstString::parser(&()).map(AstNodeType::StringLiteral),
-            AstRange::parser(data).map(AstNodeType::RangeDeclaration),
-            AstInt::parser(&()).map(AstNodeType::IntLiteral),
-            AstBig::parser(&()).map(AstNodeType::BigLiteral),
-            AstFloat::parser(&()).map(AstNodeType::FloatLiteral),
-            AstChar::parser(&()).map(AstNodeType::CharLiteral),
-            AstDataType::parser(data).map(AstNodeType::DataType),
+            AstStruct::parser(data.clone()).map(AstNodeType::StructLiteral),
+            AstEnum::parser(data.clone()).map(AstNodeType::EnumExpression),
+            AstTuple::parser(data.clone()).map(AstNodeType::TupleLiteral),
+            AstString::parser(()).map(AstNodeType::StringLiteral),
+            AstRange::parser(data.clone()).map(AstNodeType::RangeDeclaration),
+            AstInt::parser(()).map(AstNodeType::IntLiteral),
+            AstBig::parser(()).map(AstNodeType::BigLiteral),
+            AstFloat::parser(()).map(AstNodeType::FloatLiteral),
+            AstChar::parser(()).map(AstNodeType::CharLiteral),
+            AstDataType::parser(data.clone()).map(AstNodeType::DataType),
             // List
-            AstList::parser(data).map(AstNodeType::ListLiteral),
+            AstList::parser(data.clone()).map(AstNodeType::ListLiteral),
             // Conditionals
-            AstIf::parser(data).map(AstNodeType::IfStatement),
-            AstTernary::parser(data).map(AstNodeType::Ternary),
+            AstIf::parser(data.clone()).map(AstNodeType::IfStatement),
+            AstTernary::parser(data.clone()).map(AstNodeType::Ternary),
         ));
 
         let parser2 = choice((
             // Binary
-            AstAs::parser(data).map(AstNodeType::AsExpression),
-            AstIs::parser(data).map(AstNodeType::IsExpression),
-            AstIn::parser(data).map(AstNodeType::InDeclaration),
-            AstBoolean::parser(data).map(AstNodeType::BooleanExpression),
-            AstComparison::parser(data).map(AstNodeType::ComparisonExpression),
-            AstBinary::parser(data).map(AstNodeType::BinaryExpression),
+            AstAs::parser(data.clone()).map(AstNodeType::AsExpression),
+            AstIs::parser(data.clone()).map(AstNodeType::IsExpression),
+            AstIn::parser(data.clone()).map(AstNodeType::InDeclaration),
+            AstBoolean::parser(data.clone()).map(AstNodeType::BooleanExpression),
+            AstComparison::parser(data.clone()).map(AstNodeType::ComparisonExpression),
+            AstBinary::parser(data.clone()).map(AstNodeType::BinaryExpression),
             // Unary
-            AstNeg::parser(data).map(AstNodeType::NegExpression),
-            AstNot::parser(data).map(AstNodeType::NotExpression),
+            AstNeg::parser(data.clone()).map(AstNodeType::NegExpression),
+            AstNot::parser(data.clone()).map(AstNodeType::NotExpression),
             // Functions
-            AstFunction::parser(data).map(AstNodeType::FunctionDeclaration),
-            AstExtern::parser(data).map(AstNodeType::ExternFunctionDeclaration),
-            AstCall::parser(data).map(AstNodeType::CallExpression),
-            AstCurry::parser(data).map(AstNodeType::CurryExpression),
+            AstFunction::parser(data.clone()).map(AstNodeType::FunctionDeclaration),
+            AstExtern::parser(data.clone()).map(AstNodeType::ExternFunctionDeclaration),
+            AstCall::parser(data.clone()).map(AstNodeType::CallExpression),
+            AstCurry::parser(data.clone()).map(AstNodeType::CurryExpression),
             // Null
             select! {Token::Null => ()}.map(|_| AstNodeType::Null),
             // Memory
-            AstDrop::parser(data).map(AstNodeType::Drop),
-            AstRef::parser(data).map(AstNodeType::RefStatement),
-            AstDeref::parser(data).map(AstNodeType::DerefStatement),
-            AstMove::parser(data).map(AstNodeType::MoveExpression),
+            AstDrop::parser(data.clone()).map(AstNodeType::Drop),
+            AstRef::parser(data.clone()).map(AstNodeType::RefStatement),
+            AstDeref::parser(data.clone()).map(AstNodeType::DerefStatement),
+            AstMove::parser(data.clone()).map(AstNodeType::MoveExpression),
             // Access
-            AstIdentifier::parser(data).map(AstNodeType::Identifier),
-            AstField::parser(data).map(AstNodeType::FieldAccess),
-            AstScope::parser(data).map(AstNodeType::ScopeAccess),
-            AstIndex::parser(data).map(AstNodeType::IndexAccess),
+            AstIdentifier::parser(data.clone()).map(AstNodeType::Identifier),
+            AstField::parser(data.clone()).map(AstNodeType::FieldAccess),
+            AstScope::parser(data.clone()).map(AstNodeType::ScopeAccess),
+            AstIndex::parser(data.clone()).map(AstNodeType::IndexAccess),
             // Spawn
-            AstSpawn::parser(data).map(AstNodeType::Spawn),
-            AstSelect::parser(data).map(AstNodeType::SelectStatement),
+            AstSpawn::parser(data.clone()).map(AstNodeType::Spawn),
+            AstSelect::parser(data.clone()).map(AstNodeType::SelectStatement),
         ));
 
         let parser3 = choice((
             // Matching
-            AstMatch::parser(data).map(AstNodeType::MatchStatement),
-            AstFnMatch::parser(data).map(AstNodeType::FnMatchDeclaration),
+            AstMatch::parser(data.clone()).map(AstNodeType::MatchStatement),
+            AstFnMatch::parser(data.clone()).map(AstNodeType::FnMatchDeclaration),
             // Assignment
-            AstAssignment::parser(data).map(AstNodeType::AssignmentExpression),
-            AstAssignDestructure::parser(data).map(AstNodeType::DestructureAssignment),
+            AstAssignment::parser(data.clone()).map(AstNodeType::AssignmentExpression),
+            AstAssignDestructure::parser(data.clone()).map(AstNodeType::DestructureAssignment),
             // Declarations
-            AstDeclaration::parser(data).map(AstNodeType::VariableDeclaration),
-            AstDeclareDestructure::parser(data).map(AstNodeType::DestructureDeclaration),
+            AstDeclaration::parser(data.clone()).map(AstNodeType::VariableDeclaration),
+            AstDeclareDestructure::parser(data.clone()).map(AstNodeType::DestructureDeclaration),
             // Types
-            AstType::parser(data).map(AstNodeType::TypeDeclaration),
-            AstImpl::parser(data).map(AstNodeType::ImplDeclaration),
-            AstImplTrait::parser(data).map(AstNodeType::ImplTraitDeclaration),
-            AstTrait::parser(data).map(AstNodeType::TraitDeclaration),
+            AstType::parser(data.clone()).map(AstNodeType::TypeDeclaration),
+            AstImpl::parser(data.clone()).map(AstNodeType::ImplDeclaration),
+            AstImplTrait::parser(data.clone()).map(AstNodeType::ImplTraitDeclaration),
+            AstTrait::parser(data.clone()).map(AstNodeType::TraitDeclaration),
             // Loops
-            AstLoop::parser(data).map(AstNodeType::LoopDeclaration),
-            AstIter::parser(data).map(AstNodeType::IterExpression),
+            AstLoop::parser(data.clone()).map(AstNodeType::LoopDeclaration),
+            AstIter::parser(data.clone()).map(AstNodeType::IterExpression),
             // Scopes
-            AstScopeAlias::parser(data).map(AstNodeType::ScopeAlias),
-            AstScopeDef::parser(data).map(AstNodeType::ScopeDeclaration),
+            AstScopeAlias::parser(data.clone()).map(AstNodeType::ScopeAlias),
+            AstScopeDef::parser(data.clone()).map(AstNodeType::ScopeDeclaration),
             // Generator
-            AstGenerator::parser(data).map(AstNodeType::InlineGenerator),
+            AstGenerator::parser(data.clone()).map(AstNodeType::InlineGenerator),
             // Misc
-            AstImport::parser(data).map(AstNodeType::ImportStatement),
-            AstTest::parser(data).map(AstNodeType::TestDeclaration),
-            AstTag::parser(data).map(AstNodeType::Tag),
-            AstParen::parser(data).map(AstNodeType::ParenExpression),
+            AstImport::parser(data.clone()).map(AstNodeType::ImportStatement),
+            AstTest::parser(data.clone()).map(AstNodeType::TestDeclaration),
+            AstTag::parser(data.clone()).map(AstNodeType::Tag),
+            AstParen::parser(data.clone()).map(AstNodeType::ParenExpression),
         ));
 
         parser1
@@ -275,9 +273,9 @@ pub fn parse_program_with_source<'a>(
 ) -> Result<AstNode, Vec<ParserError>> {
     tokens.iter().for_each(|x| println!("{x}"));
     let parser = recursive(|node| {
-        let generic_ident = PotentialGenericTypeIdentifier::parser(&());
-        let dollar_ident = PotentialDollarIdentifier::parser(&());
-        let data_type = ParserDataType::parser(&());
+        let generic_ident = PotentialGenericTypeIdentifier::parser(()).boxed();
+        let dollar_ident = PotentialDollarIdentifier::parser(()).boxed();
+        let data_type = ParserDataType::parser(()).boxed();
         let recurse = RecursiveData {
             node,
             data_type,
