@@ -6,7 +6,7 @@ use crate::ast::types::ParserDataType;
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr, TokenStream, typed_or_untyped_assignment},
 };
 use chumsky::error::Rich;
 use chumsky::prelude::*;
@@ -20,35 +20,8 @@ impl<'a> AstParser<'a> for AstDeclaration {
         ))
         .then(select! { Token::Mut => () }.or_not())
         .then(PotentialDollarIdentifier::parser())
-        .then(
-            select! { Token::Colon => () }
-                .ignore_then(ParserDataType::parser())
-                .or_not(),
-        )
-        .then(
-            choice((
-                select! { Token::Walrus => () }.map(|_| false),
-                select! { Token::Eq => () }.map(|_| true),
-            ))
-            .then(AstNode::parser()),
-        )
-        .try_map(|((((var_type, mut_tok), identifier), data_type), (is_typed, value)), sp| {
-            match (data_type.is_some(), is_typed) {
-                (true, false) => {
-                    return Err(Rich::custom(
-                        sp,
-                        "expected `=` when a variable type is specified",
-                    ));
-                }
-                (false, true) => {
-                    return Err(Rich::custom(
-                        sp,
-                        "expected `:=` when a variable type is not specified",
-                    ));
-                }
-                _ => {}
-            }
-
+        .then(typed_or_untyped_assignment())
+        .try_map(|(((var_type, mut_tok), identifier), (data_type, value)), sp| {
             let var_type = if mut_tok.is_some() {
                 match var_type {
                     VarType::Constant => {
@@ -63,7 +36,11 @@ impl<'a> AstParser<'a> for AstDeclaration {
                 var_type
             };
 
+            let value = value.ok_or_else(|| {
+                Rich::custom(sp, "expected a value assignment")
+            })?;
             let value_span = value.span;
+
             Ok(AstDeclaration {
                 var_type,
                 identifier,

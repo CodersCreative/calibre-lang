@@ -1,20 +1,20 @@
+use crate::ast::ObjectType;
 use crate::ast::idents::ParserText;
 use crate::ast::idents::PotentialDollarIdentifier;
 use crate::ast::idents::PotentialGenericTypeIdentifier;
+use crate::ast::nodes::misc::AstTag;
 use crate::ast::nodes::types::{
     AstImpl, AstImplTrait, AstTrait, AstType, Overload, TraitMember, TraitMemberKind, TypeDefType,
 };
-use crate::ast::nodes::misc::AstTag;
 use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserDataType;
 use crate::ast::types::ParserInnerType;
-use crate::ast::ObjectType;
 use crate::{
+    Span,
     ast::nodes::AstNode,
     ast::nodes::AstNodeType,
     lexer::Token,
     parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream, typed_or_untyped_assignment},
-    Span,
 };
 use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};

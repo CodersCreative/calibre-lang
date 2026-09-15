@@ -104,9 +104,8 @@ where
 {
 }
 
-pub fn typed_or_untyped_assignment<'a>(
-) -> Boxed<'a, 'a, TokenStream<'a>, (Option<ParserDataType>, Option<AstNode>), AstParserErr<'a>>
-{
+pub fn typed_or_untyped_assignment<'a>()
+-> Boxed<'a, 'a, TokenStream<'a>, (Option<ParserDataType>, Option<AstNode>), AstParserErr<'a>> {
     choice((
         // : (= or :=)
         select! { Token::Colon => () }
@@ -118,25 +117,28 @@ pub fn typed_or_untyped_assignment<'a>(
                 ))
                 .then(AstNode::parser()),
             )
-            .try_map(|(data_type, (is_typed, value)), sp| {
-                match (true, is_typed) {
-                    (true, false) => Err(Rich::custom(
-                        sp,
-                        "expected `=` when a type is specified",
-                    )),
+            .try_map(
+                |(data_type, (is_typed, value)), sp| match (true, is_typed) {
+                    (true, false) => Err(Rich::custom(sp, "expected `=` when a type is specified")),
                     _ => Ok((Some(data_type), Some(value))),
-                }
-            }),
+                },
+            ),
         // =
         select! { Token::Eq => () }
             .ignore_then(AstNode::parser())
-            .try_map(|_, sp| Err(Rich::custom(sp, "expected `:=` when a type is not specified"))),
+            .try_map(|_, sp| {
+                Err(Rich::custom(
+                    sp,
+                    "expected `:=` when a type is not specified",
+                ))
+            }),
         // :=
         select! { Token::Walrus => () }
             .ignore_then(AstNode::parser())
             .map(|value| (None, Some(value))),
         empty().map(|_| (None, None)),
-    )).boxed()
+    ))
+    .boxed()
 }
 
 fn filter<'a, F>(f: F) -> impl Parser<'a, &'a str, char, extra::Err<Rich<'a, char>>> + Clone

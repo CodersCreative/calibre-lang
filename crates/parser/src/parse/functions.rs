@@ -7,14 +7,13 @@ use crate::ast::nodes::functions::{
 use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserDataType;
-use crate::ast::types::ParserInnerType;
 use crate::parse::MapWithSpanExt;
 use crate::{
     Span,
     ast::nodes::AstNode,
     ast::nodes::AstNodeType,
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr, TokenStream, typed_or_untyped_assignment},
 };
 use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
@@ -51,47 +50,13 @@ enum FnParamGroup {
 
 impl<'a> AstParser<'a> for FnParamGroup {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        // TODO I should probably just end up combining this into ParserInnerType
-        let impl_trait_param_type = select! { Token::Impl => () }
-            .ignore_then(select! { Token::Identifier(name) => name })
-            .map_with_span(|name, sp| (name, sp))
-            .then(
-                select! { Token::Vampire => () }
-                    .ignore_then(
-                        select! { Token::Identifier(s) => s }
-                            .repeated()
-                            .at_least(1)
-                            .collect::<Vec<_>>(),
-                    )
-                    .then_ignore(select! { Token::Greater => () })
-                    .or_not(),
-            )
-            .map(|((name, sp), generic_text)| {
-                let trait_text = if let Some(generic_text) = generic_text {
-                    let inner = generic_text.join(" ").trim().to_string();
-                    format!("{name}:<{inner}>")
-                } else {
-                    name.to_string()
-                };
-                ParserDataType::new(sp, ParserInnerType::DynamicTraits(vec![trait_text]))
-            })
-            .boxed();
-
         let normal = select! { Token::Mut => () }
             .or_not()
             .ignore_then(PotentialDollarIdentifier::parser())
             .repeated()
             .at_least(1)
             .collect::<Vec<_>>()
-            .then(
-                select! { Token::Colon => () }
-                    .ignore_then(choice((impl_trait_param_type, ParserDataType::parser())).or_not())
-                    .then(
-                        select! { Token::Eq => () }
-                            .ignore_then(AstNode::parser())
-                            .or_not(),
-                    ),
-            )
+            .then(typed_or_untyped_assignment())
             .map(|(names, (ty, default))| {
                 FnParamGroup::Plain(
                     names
@@ -102,25 +67,15 @@ impl<'a> AstParser<'a> for FnParamGroup {
             });
 
         let destructure = DestructurePattern::parser()
-            .then(
-                select! { Token::Colon => () }
-                    .ignore_then(ParserDataType::parser().or_not())
-                    .then(
-                        select! { Token::Eq => () }
-                            .ignore_then(AstNode::parser())
-                            .or_not(),
-                    )
-                    .or_not(),
-            )
-            .map_with_span(move |(pattern, maybe_ty_default), sp| {
-                let (ty, default) = maybe_ty_default.unwrap_or((None, None));
-                FnParamGroup::Destructure {
+            .then(typed_or_untyped_assignment())
+            .map_with_span(
+                move |(pattern, (ty, default)), sp| FnParamGroup::Destructure {
                     span: sp,
                     pattern,
                     data_type: ty,
                     default: default.map(Box::new),
-                }
-            });
+                },
+            );
 
         choice((destructure, normal)).boxed()
     }
