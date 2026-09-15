@@ -35,7 +35,6 @@ impl<'a> AstParser<'a> for VarType {
         ))
         .or_not()
         .map(|x| x.unwrap_or(VarType::Immutable))
-        .boxed()
     }
 }
 
@@ -73,7 +72,6 @@ impl<'a> DestructurePattern {
             .map(|x| x.unwrap_or_default())
             .map(DestructurePattern::Tuple),
         ))
-        .boxed()
     }
 }
 
@@ -145,7 +143,6 @@ impl<'a> AstParser<'a> for DestructurePattern {
                 .then_ignore(select! { Token::RightBracket => () })
                 .map(DestructurePattern::Struct),
         ))
-        .boxed()
     }
 }
 
@@ -167,7 +164,6 @@ impl<'a> AstParser<'a> for MatchStringPatternPart {
             select! { Token::Identifier(x) if x == "_" => () }
                 .map_with_span(|_, span| MatchStringPatternPart::Wildcard(span)),
         ))
-        .boxed()
     }
 }
 
@@ -309,7 +305,6 @@ impl<'a> AstParser<'a> for MatchTupleItem {
             ))
             .boxed()
         })
-        .boxed()
     }
 }
 
@@ -390,7 +385,6 @@ impl<'a> AstParser<'a> for MatchStructFieldPattern {
                     unreachable!()
                 }
             })
-            .boxed()
     }
 }
 
@@ -526,7 +520,6 @@ impl<'a> AstParser<'a> for MatchArmType {
             ))
             .boxed()
         })
-        .boxed()
     }
 }
 
@@ -545,7 +538,6 @@ pub fn parse_pattern_list<'a>(
             all.extend(rest);
             (all, Vec::new())
         })
-        .boxed()
 }
 
 impl<'a> AstParser<'a> for MatchBody {
@@ -697,7 +689,6 @@ impl<'a> AstParser<'a> for MatchBody {
             .map(|arms| MatchBody {
                 values: arms.into_iter().flatten().collect(),
             })
-            .boxed()
     }
 }
 
@@ -735,7 +726,6 @@ impl<'a> AstParser<'a> for AstMatch {
             .then(MatchBody::parser(data))
             .then_ignore(select! { Token::RightBracket => () })
             .map(|(value, body)| AstMatch { value, body })
-            .boxed()
     }
 }
 
@@ -780,6 +770,5 @@ impl<'a> AstParser<'a> for AstFnMatch {
                     AstFnMatch { header, body }
                 },
             )
-            .boxed()
     }
 }

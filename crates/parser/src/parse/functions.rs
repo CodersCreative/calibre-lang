@@ -33,7 +33,6 @@ impl<'a> AstParser<'a> for CallArg {
                 .map(|(name, value)| CallArg::Named(name, value)),
             data.node.clone().map(CallArg::Value),
         ))
-        .boxed()
     }
 }
 
@@ -86,7 +85,7 @@ impl<'a> AstParser<'a> for FnParamGroup {
                 },
             );
 
-        choice((destructure, normal)).boxed()
+        choice((destructure, normal))
     }
 }
 
@@ -101,15 +100,13 @@ impl<'a> AstParser<'a> for FunctionHeader {
             .allow_trailing()
             .collect::<Vec<_>>()
             .or_not()
-            .map(|x| x.unwrap_or_default())
-            .boxed();
+            .map(|x| x.unwrap_or_default());
 
         let fn_params = select! { Token::LeftParen => () }
-            .ignore_then(fn_param_groups.clone())
+            .ignore_then(fn_param_groups)
             .then_ignore(select! { Token::RightParen => () })
             .or_not()
-            .map(|x| x.unwrap_or_default())
-            .boxed();
+            .map(|x| x.unwrap_or_default());
 
         GenericTypes::parser(data.clone())
             .then(fn_params)
@@ -155,7 +152,6 @@ impl<'a> AstParser<'a> for FunctionHeader {
                     param_destructures,
                 }
             })
-            .boxed()
     }
 }
 
@@ -172,7 +168,6 @@ impl<'a> AstParser<'a> for AstFunction {
                 header,
                 body: Box::new(AstNode::new(span, AstNodeType::from(body))),
             })
-            .boxed()
     }
 }
 
@@ -224,7 +219,6 @@ impl<'a> AstParser<'a> for AstExtern {
                     symbol: symbol.map(|s| s.to_string()),
                 },
             )
-            .boxed()
     }
 }
 
@@ -238,7 +232,6 @@ impl<'a> AstParser<'a> for AstCurry {
             .map(|value| AstCurry {
                 value: Box::new(value),
             })
-            .boxed()
     }
 }
 
@@ -257,8 +250,7 @@ impl<'a> AstParser<'a> for AstCall {
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
-            .then_ignore(select! { Token::RightParen => () })
-            .boxed();
+            .then_ignore(select! { Token::RightParen => () });
 
         let reverse_args = select! { Token::Lesser => () }
             .ignore_then(select! { Token::LeftParen => () })
@@ -272,8 +264,7 @@ impl<'a> AstParser<'a> for AstCall {
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
-            .then_ignore(select! { Token::RightParen => () })
-            .boxed();
+            .then_ignore(select! { Token::RightParen => () });
 
         data.node
             .clone()
@@ -298,6 +289,5 @@ impl<'a> AstParser<'a> for AstCall {
                 args,
                 reverse_args,
             })
-            .boxed()
     }
 }

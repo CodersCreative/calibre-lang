@@ -19,7 +19,6 @@ impl<'a> AstParser<'a> for ParserText {
             Token::Identifier(x) => x
         }
         .map_with_span(|text, span| ParserText::new(span, text))
-        .boxed()
     }
 }
 
@@ -34,7 +33,6 @@ impl<'a> AstParser<'a> for PotentialDollarIdentifier {
         .ignore_then(ParserText::parser(()))
         .map(PotentialDollarIdentifier::DollarIdentifier)
         .or(ParserText::parser(()).map(PotentialDollarIdentifier::Identifier))
-        .boxed()
     }
 }
 
@@ -68,7 +66,6 @@ impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
                     PotentialGenericTypeIdentifier::Identifier(identifier)
                 }
             })
-            .boxed()
     }
 }
 
@@ -80,6 +77,5 @@ impl<'a> AstParser<'a> for AstIdentifier {
         data.generic_ident
             .clone()
             .map(|value| AstIdentifier { value })
-            .boxed()
     }
 }

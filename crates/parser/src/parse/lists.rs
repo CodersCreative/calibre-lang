@@ -38,6 +38,5 @@ impl<'a> AstParser<'a> for AstList {
             )
             .then_ignore(select! { Token::RightSquare => () })
             .map(|(data_type, values)| AstList { data_type, values })
-            .boxed()
     }
 }

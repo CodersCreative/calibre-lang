@@ -17,20 +17,18 @@ impl<'a> AstParser<'a> for AstEmit {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Emit => () }
-            .ignore_then(choice((
-                data.node
-                    .clone()
-                    .then(data.node.clone())
-                    .map(|(channel, value)| AstEmit::Channel {
-                        channel: Box::new(channel),
-                        value: Box::new(value),
-                    }),
-                data.node
-                    .clone()
-                    .map(|value| AstEmit::Scope(Box::new(value))),
-            )))
-            .boxed()
+        select! { Token::Emit => () }.ignore_then(choice((
+            data.node
+                .clone()
+                .then(data.node.clone())
+                .map(|(channel, value)| AstEmit::Channel {
+                    channel: Box::new(channel),
+                    value: Box::new(value),
+                }),
+            data.node
+                .clone()
+                .map(|value| AstEmit::Scope(Box::new(value))),
+        )))
     }
 }
 
@@ -50,7 +48,6 @@ impl<'a> AstParser<'a> for AstBreak {
                 label,
                 value: value.map(Box::new),
             })
-            .boxed()
     }
 }
 
@@ -66,7 +63,6 @@ impl<'a> AstParser<'a> for AstContinue {
                     .or_not(),
             )
             .map(|label| AstContinue { label })
-            .boxed()
     }
 }
 
@@ -80,7 +76,6 @@ impl<'a> AstParser<'a> for AstReturn {
             .map(|value| AstReturn {
                 value: value.map(Box::new),
             })
-            .boxed()
     }
 }
 
@@ -101,7 +96,6 @@ impl<'a> AstParser<'a> for AstDefer {
                 value: Box::new(value),
                 function,
             })
-            .boxed()
     }
 }
 
@@ -123,7 +117,6 @@ impl<'a> AstParser<'a> for TryCatch {
                 body: Box::new(AstNode::new(span, AstNodeType::from(body))),
             }),
         ))
-        .boxed()
     }
 }
 
@@ -139,7 +132,6 @@ impl<'a> AstParser<'a> for AstTry {
                 value: Box::new(value),
                 catch,
             })
-            .boxed()
     }
 }
 
@@ -159,8 +151,7 @@ impl<'a> AstParser<'a> for AstPipe {
                 .then_ignore(select! { Token::Greater => () })
                 .then(data.node.clone())
                 .map(|(identifier, node)| PipeSegment::Named { identifier, node }),
-        ))
-        .boxed();
+        ));
 
         data.node
             .clone()
@@ -203,6 +194,5 @@ impl<'a> AstParser<'a> for AstPipe {
                 }
                 AstPipe { values }
             })
-            .boxed()
     }
 }

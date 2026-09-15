@@ -19,7 +19,6 @@ impl<'a> AstParser<'a> for AstField {
                 base: Box::new(base),
                 field,
             })
-            .boxed()
     }
 }
 
@@ -36,7 +35,6 @@ impl<'a> AstParser<'a> for AstScope {
                 base: Box::new(base),
                 field,
             })
-            .boxed()
     }
 }
 
@@ -55,6 +53,5 @@ impl<'a> AstParser<'a> for AstIndex {
                 base: Box::new(base),
                 index: Box::new(index),
             })
-            .boxed()
     }
 }

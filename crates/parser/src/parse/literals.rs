@@ -35,7 +35,6 @@ impl<'a> AstParser<'a> for AstFloat {
                 .parse::<f64>()
                 .unwrap_or_default(),
         })
-        .boxed()
     }
 }
 
@@ -50,7 +49,6 @@ impl<'a> AstParser<'a> for AstBig {
         .map_with_span(|value, sp| AstBig {
             value: ParserText::new(sp, value.replace('_', "").replace("g", "").trim()),
         })
-        .boxed()
     }
 }
 
@@ -63,7 +61,6 @@ impl<'a> AstParser<'a> for AstInt {
             Token::IntLiteral(x) => x
         }
         .map(|value| AstInt { value })
-        .boxed()
     }
 }
 
@@ -76,7 +73,6 @@ impl<'a> AstParser<'a> for AstChar {
         select! {
             Token::CharLiteral(x) => AstChar{value : x.to_string().chars().next().unwrap_or_default()}
         }
-        .boxed()
     }
 }
 
@@ -94,7 +90,6 @@ impl<'a> AstParser<'a> for AstString {
                 span,
             },
         })
-        .boxed()
     }
 }
 
@@ -125,7 +120,6 @@ impl<'a> AstParser<'a> for AstRange {
                     inclusive: false,
                 }),
         ))
-        .boxed()
     }
 }
 
@@ -147,7 +141,6 @@ impl<'a> AstParser<'a> for AstTuple {
             )
             .then_ignore(select! { Token::RightParen => () })
             .map(|values| AstTuple { values })
-            .boxed()
     }
 }
 
@@ -187,7 +180,6 @@ impl<'a> AstParser<'a> for AstStruct {
                 identifier,
                 value: ObjectType::Map(fields.unwrap_or_default()),
             })
-            .boxed()
     }
 }
 
@@ -207,7 +199,6 @@ impl<'a> AstParser<'a> for AstEnum {
                 value,
                 data: data.map(Box::new),
             })
-            .boxed()
     }
 }
 
@@ -220,6 +211,5 @@ impl<'a> AstParser<'a> for AstDataType {
             .then(select! {Token::Colon => ()})
             .ignore_then(data.data_type.clone())
             .map(|data_type| AstDataType { data_type })
-            .boxed()
     }
 }

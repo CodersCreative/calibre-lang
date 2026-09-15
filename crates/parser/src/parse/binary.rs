@@ -39,7 +39,6 @@ impl<'a> AstParser<'a> for AstBinary {
                 right: Box::new(right),
                 operator,
             })
-            .boxed()
     }
 }
 
@@ -68,7 +67,6 @@ impl<'a> AstParser<'a> for AstComparison {
                 right: Box::new(right),
                 operator,
             })
-            .boxed()
     }
 }
 
@@ -93,7 +91,6 @@ impl<'a> AstParser<'a> for AstBoolean {
                 right: Box::new(right),
                 operator,
             })
-            .boxed()
     }
 }
 
@@ -117,7 +114,6 @@ impl<'a> AstParser<'a> for AstAs {
                 data_type,
                 failure_mode,
             })
-            .boxed()
     }
 }
 
@@ -134,7 +130,6 @@ impl<'a> AstParser<'a> for AstIs {
                 value: Box::new(value),
                 data_type,
             })
-            .boxed()
     }
 }
 
@@ -152,6 +147,5 @@ impl<'a> AstParser<'a> for AstIn {
                 identifier: Box::new(identifier),
                 value: Box::new(value),
             })
-            .boxed()
     }
 }

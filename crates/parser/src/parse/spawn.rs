@@ -44,7 +44,6 @@ impl<'a> AstParser<'a> for SelectArm {
                     body: AstNode::new(span, AstNodeType::from(body)),
                 }),
         ))
-        .boxed()
     }
 }
 
@@ -64,7 +63,6 @@ impl<'a> AstParser<'a> for AstSelect {
             )
             .then_ignore(select! { Token::RightBracket => () })
             .map(|arms| AstSelect { arms })
-            .boxed()
     }
 }
 
@@ -111,6 +109,5 @@ impl<'a> AstParser<'a> for AstSpawn {
                     }
                 }
             })
-            .boxed()
     }
 }

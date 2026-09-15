@@ -19,12 +19,10 @@ impl<'a> AstParser<'a> for ParserFfiInnerType {
 
     #[inline(always)]
     fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Identifier(x) => x }
-            .try_map(|name, span| {
-                ParserFfiInnerType::from_str(name)
-                    .map_err(|()| chumsky::error::Rich::custom(span, "invalid FFI type"))
-            })
-            .boxed()
+        select! { Token::Identifier(x) => x }.try_map(|name, span| {
+            ParserFfiInnerType::from_str(name)
+                .map_err(|()| chumsky::error::Rich::custom(span, "invalid FFI type"))
+        })
     }
 }
 
@@ -36,7 +34,6 @@ impl<'a> AstParser<'a> for ParserFfiDataType {
         select! { Token::At => () }
             .ignore_then(ParserFfiInnerType::parser(()))
             .map_with_span(|data_type, span| ParserFfiDataType::new(span, data_type))
-            .boxed()
     }
 }
 
@@ -338,7 +335,6 @@ impl<'a> AstParser<'a> for GenericTypes {
             .then_ignore(select! { Token::Greater => () })
             .or_not()
             .map(|items| GenericTypes(items.unwrap_or_default()))
-            .boxed()
     }
 }
 
@@ -363,6 +359,5 @@ impl<'a> AstParser<'a> for GenericType {
                 identifier,
                 trait_constraints: trait_constraints.unwrap_or_default(),
             })
-            .boxed()
     }
 }

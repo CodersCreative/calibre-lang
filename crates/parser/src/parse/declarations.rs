@@ -51,7 +51,6 @@ impl<'a> AstParser<'a> for AstDeclaration {
                 data_type: data_type.unwrap_or_else(|| ParserDataType::auto(value_span)),
             })
         })
-        .boxed()
     }
 }
 
@@ -69,6 +68,5 @@ impl<'a> AstParser<'a> for AstDeclareDestructure {
                 pattern,
                 value: Box::new(value),
             })
-            .boxed()
     }
 }

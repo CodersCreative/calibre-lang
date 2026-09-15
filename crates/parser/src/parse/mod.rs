@@ -159,11 +159,10 @@ pub fn typed_or_untyped_assignment<'a>(
             .map(|value| (None, Some(value))),
         empty().map(|_| (None, None)),
     ))
-    .boxed()
 }
 
 pub fn potential_new_line<'a>() -> impl Parser<'a, TokenStream<'a>, (), AstParserErr<'a>> {
-    just(Token::NewLine).repeated().boxed()
+    just(Token::NewLine).repeated()
 }
 
 impl<'a> AstNode {

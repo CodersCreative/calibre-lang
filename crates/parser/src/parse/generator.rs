@@ -44,6 +44,5 @@ impl<'a> AstParser<'a> for AstGenerator {
                     until: until.map(Box::new),
                 },
             )
-            .boxed()
     }
 }

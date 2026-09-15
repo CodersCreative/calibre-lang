@@ -157,6 +157,5 @@ impl<'a> AstParser<'a> for AstScopeAlias {
                     create_new_scope,
                 },
             )
-            .boxed()
     }
 }

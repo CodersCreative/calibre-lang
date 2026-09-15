@@ -22,7 +22,6 @@ impl<'a> AstParser<'a> for AstParen {
             .map(|value| AstParen {
                 value: Box::new(value),
             })
-            .boxed()
     }
 }
 
@@ -38,7 +37,6 @@ impl<'a> AstParser<'a> for AstTest {
                 identifier: ParserText::from(name.to_string()),
                 body: Box::new(AstNode::new(span, AstNodeType::from(body))),
             })
-            .boxed()
     }
 }
 
@@ -90,7 +88,6 @@ impl<'a> AstParser<'a> for AstImport {
             alias,
             values,
         })
-        .boxed()
     }
 }
 
@@ -122,6 +119,5 @@ impl<'a> AstParser<'a> for AstTag {
                 tag,
                 arguments: args,
             })
-            .boxed()
     }
 }

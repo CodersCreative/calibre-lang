@@ -16,7 +16,6 @@ impl<'a> AstParser<'a> for AstNot {
             .map(|value| AstNot {
                 value: Box::new(value),
             })
-            .boxed()
     }
 }
 
@@ -30,6 +29,5 @@ impl<'a> AstParser<'a> for AstNeg {
             .map(|value| AstNeg {
                 value: Box::new(value),
             })
-            .boxed()
     }
 }

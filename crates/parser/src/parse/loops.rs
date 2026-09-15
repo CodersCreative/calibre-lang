@@ -39,7 +39,6 @@ impl<'a> AstParser<'a> for LoopType {
         ))
         .or_not()
         .map(|x| x.unwrap_or(LoopType::Loop))
-        .boxed()
     }
 }
 
@@ -75,7 +74,6 @@ impl<'a> AstParser<'a> for AstLoop {
                         .map(|b| Box::new(AstNode::new(span, AstNodeType::from(b)))),
                 },
             )
-            .boxed()
     }
 }
 
@@ -123,6 +121,5 @@ impl<'a> AstParser<'a> for AstIter {
                     until: until.map(Box::new),
                 },
             )
-            .boxed()
     }
 }

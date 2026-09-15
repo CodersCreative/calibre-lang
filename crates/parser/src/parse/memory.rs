@@ -20,7 +20,6 @@ impl<'a> AstParser<'a> for RefMutability {
         ))
         .or_not()
         .map(|x| x.unwrap_or(RefMutability::Value))
-        .boxed()
     }
 }
 
@@ -40,7 +39,6 @@ impl<'a> AstParser<'a> for AstRef {
                 mutability,
                 value: Box::new(value),
             })
-            .boxed()
     }
 }
 
@@ -56,7 +54,6 @@ impl<'a> AstParser<'a> for AstDeref {
             .map(|value| AstDeref {
                 value: Box::new(value),
             })
-            .boxed()
     }
 }
 
@@ -68,7 +65,6 @@ impl<'a> AstParser<'a> for AstDrop {
         select! { Token::Identifier(x) if x == "drop" => () }
             .ignore_then(data.dollar_ident.clone())
             .map(|value| AstDrop { value })
-            .boxed()
     }
 }
 
@@ -82,6 +78,5 @@ impl<'a> AstParser<'a> for AstMove {
             .map(|value| AstMove {
                 value: Box::new(value),
             })
-            .boxed()
     }
 }

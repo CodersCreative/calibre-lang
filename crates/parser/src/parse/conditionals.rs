@@ -30,7 +30,6 @@ impl<'a> AstParser<'a> for IfComparisonType {
             // ...
             data.node.clone().map(IfComparisonType::If),
         ))
-        .boxed()
     }
 }
 
@@ -64,7 +63,6 @@ impl<'a> AstParser<'a> for AstIf {
                 })
                 .boxed()
         })
-        .boxed()
     }
 }
 
@@ -88,6 +86,5 @@ impl<'a> AstParser<'a> for AstTernary {
                 then: Box::new(then),
                 otherwise: Box::new(otherwise),
             })
-            .boxed()
     }
 }

@@ -56,7 +56,6 @@ impl<'a> AstParser<'a> for AstAssignment {
                     value: Box::new(rhs),
                 }
             })
-            .boxed()
     }
 }
 
@@ -72,6 +71,5 @@ impl<'a> AstParser<'a> for AstAssignDestructure {
                 pattern,
                 value: Box::new(value),
             })
-            .boxed()
     }
 }

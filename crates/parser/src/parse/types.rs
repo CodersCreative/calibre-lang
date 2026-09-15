@@ -157,7 +157,6 @@ impl<'a> AstParser<'a> for TypeDefType {
             enum_parser,
             newtype_parser,
         ))
-        .boxed()
     }
 }
 
@@ -179,7 +178,6 @@ impl<'a> AstParser<'a> for Overload {
                 }),
                 _ => Err(Rich::custom(sp, "expected function declaration")),
             })
-            .boxed()
     }
 }
 
@@ -207,7 +205,7 @@ impl<'a> AstParser<'a> for TraitMember {
                 value: None,
             });
 
-        choice((const_member, type_member)).boxed()
+        choice((const_member, type_member))
     }
 }
 
@@ -236,7 +234,6 @@ impl<'a> AstParser<'a> for AstImpl {
                 target,
                 variables,
             })
-            .boxed()
     }
 }
 
@@ -270,7 +267,6 @@ impl<'a> AstParser<'a> for AstImplTrait {
                     variables,
                 },
             )
-            .boxed()
     }
 }
 
@@ -297,7 +293,6 @@ impl<'a> AstParser<'a> for AstTrait {
                 implied_traits: Vec::new(),
                 members,
             })
-            .boxed()
     }
 }
 
@@ -339,6 +334,5 @@ impl<'a> AstParser<'a> for AstType {
                 object,
                 overloads,
             })
-            .boxed()
     }
 }
