@@ -5,10 +5,11 @@ use crate::{
         nodes::{
             AstNode,
             literals::{
-                AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
-                AstTuple,
+                AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstRange, AstString,
+                AstStruct, AstTuple,
             },
         },
+        types::ParserDataType,
     },
     lexer::Token,
     parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream, potential_new_line},
@@ -173,6 +174,16 @@ impl<'a> AstParser<'a> for AstEnum {
                 value,
                 data: data.map(Box::new),
             })
+            .boxed()
+    }
+}
+
+impl<'a> AstParser<'a> for AstDataType {
+    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        select! {Token::Type => ()}
+            .then(select! {Token::Colon => ()})
+            .ignore_then(ParserDataType::parser())
+            .map(|data_type| AstDataType { data_type })
             .boxed()
     }
 }
