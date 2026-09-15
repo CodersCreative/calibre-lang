@@ -31,6 +31,7 @@ use crate::{
         types::ParserDataType,
     },
     lexer::Token,
+    parse::pratt::PrattParser,
 };
 use chumsky::prelude::*;
 use chumsky::span::Span as ChumskySpan;
@@ -39,7 +40,6 @@ use tracing::instrument;
 
 pub mod access;
 pub mod assignment;
-pub mod binary;
 pub mod conditionals;
 pub mod data_types;
 pub mod declarations;
@@ -54,10 +54,10 @@ pub mod loops;
 pub mod matching;
 pub mod memory;
 pub mod misc;
+pub mod pratt;
 pub mod scopes;
 pub mod spawn;
 pub mod types;
-pub mod unary;
 pub mod util;
 
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
@@ -167,7 +167,7 @@ pub fn potential_new_line<'a>() -> impl Parser<'a, TokenStream<'a>, (), AstParse
 
 impl<'a> AstNode {
     fn parser(data: &RecursiveData<'a>) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let parser1 = choice((
+        /*let parser1 = choice((
             // Flow
             AstBreak::parser(data.clone()).map(AstNodeType::Break),
             AstEmit::parser(data.clone()).map(AstNodeType::Emit),
@@ -175,7 +175,7 @@ impl<'a> AstNode {
             AstDefer::parser(data.clone()).map(AstNodeType::Defer),
             AstReturn::parser(data.clone()).map(AstNodeType::Return),
             AstTry::parser(data.clone()).map(AstNodeType::Try),
-            AstPipe::parser(data.clone()).map(AstNodeType::PipeExpression),
+            // AstPipe::parser(data.clone()).map(AstNodeType::PipeExpression),
             // Literals
             AstStruct::parser(data.clone()).map(AstNodeType::StructLiteral),
             AstEnum::parser(data.clone()).map(AstNodeType::EnumExpression),
@@ -193,19 +193,9 @@ impl<'a> AstNode {
             AstIf::parser(data.clone()).map(AstNodeType::IfStatement),
             AstTernary::parser(data.clone()).map(AstNodeType::Ternary),
         ))
-        .boxed();
+        .boxed().map_with_span(|node_type, span| Self { node_type, span });
 
         let parser2 = choice((
-            // Binary
-            AstAs::parser(data.clone()).map(AstNodeType::AsExpression),
-            AstIs::parser(data.clone()).map(AstNodeType::IsExpression),
-            AstIn::parser(data.clone()).map(AstNodeType::InDeclaration),
-            AstBoolean::parser(data.clone()).map(AstNodeType::BooleanExpression),
-            AstComparison::parser(data.clone()).map(AstNodeType::ComparisonExpression),
-            AstBinary::parser(data.clone()).map(AstNodeType::BinaryExpression),
-            // Unary
-            AstNeg::parser(data.clone()).map(AstNodeType::NegExpression),
-            AstNot::parser(data.clone()).map(AstNodeType::NotExpression),
             // Functions
             AstFunction::parser(data.clone()).map(AstNodeType::FunctionDeclaration),
             AstExtern::parser(data.clone()).map(AstNodeType::ExternFunctionDeclaration),
@@ -227,14 +217,14 @@ impl<'a> AstNode {
             AstSpawn::parser(data.clone()).map(AstNodeType::Spawn),
             AstSelect::parser(data.clone()).map(AstNodeType::SelectStatement),
         ))
-        .boxed();
+        .boxed().map_with_span(|node_type, span| Self { node_type, span });
 
         let parser3 = choice((
             // Matching
             AstMatch::parser(data.clone()).map(AstNodeType::MatchStatement),
             AstFnMatch::parser(data.clone()).map(AstNodeType::FnMatchDeclaration),
             // Assignment
-            AstAssignment::parser(data.clone()).map(AstNodeType::AssignmentExpression),
+            //AstAssignment::parser(data.clone()).map(AstNodeType::AssignmentExpression),
             AstAssignDestructure::parser(data.clone()).map(AstNodeType::DestructureAssignment),
             // Declarations
             AstDeclaration::parser(data.clone()).map(AstNodeType::VariableDeclaration),
@@ -258,12 +248,19 @@ impl<'a> AstNode {
             AstTag::parser(data.clone()).map(AstNodeType::Tag),
             AstParen::parser(data.clone()).map(AstNodeType::ParenExpression),
         ))
-        .boxed();
+        .boxed().map_with_span(|node_type, span| Self { node_type, span });*/
 
-        parser1
+        let pratt = PrattParser::parse(data.clone()).boxed();
+
+        AstInt::parser(())
+            .map_with_span(|node_type, span| Self {
+                node_type: AstNodeType::IntLiteral(node_type),
+                span,
+            })
+            .or(pratt)
+            /* .or(parser1)
             .or(parser2)
-            .or(parser3)
-            .map_with_span(|node_type, span| Self { node_type, span })
+            .or(parser3)*/
             .boxed()
     }
 }

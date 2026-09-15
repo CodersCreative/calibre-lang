@@ -18,7 +18,6 @@ impl<'a> AstParser<'a> for AstAssignment {
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
             .clone()
-            .clone()
             .then(
                 choice((
                     select! { Token::Walrus => () }.map(|_| None),

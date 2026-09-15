@@ -72,7 +72,6 @@ impl<'a> AstParser<'a> for AstTernary {
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
             .clone()
-            .clone()
             .then(
                 select! { Token::Question => () }
                     .padded_by(potential_new_line())

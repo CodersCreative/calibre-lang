@@ -45,7 +45,6 @@ impl<'a> AstParser<'a> for AstIndex {
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
             .clone()
-            .clone()
             .then_ignore(select! { Token::LeftSquare => () }.padded_by(potential_new_line()))
             .then(data.node.clone())
             .then_ignore(select! { Token::RightSquare => () }.padded_by(potential_new_line()))
