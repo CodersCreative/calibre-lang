@@ -104,6 +104,41 @@ where
 {
 }
 
+pub fn typed_or_untyped_assignment<'a>(
+) -> Boxed<'a, 'a, TokenStream<'a>, (Option<ParserDataType>, Option<AstNode>), AstParserErr<'a>>
+{
+    choice((
+        // : (= or :=)
+        select! { Token::Colon => () }
+            .ignore_then(ParserDataType::parser())
+            .then(
+                choice((
+                    select! { Token::Eq => () }.map(|_| true),
+                    select! { Token::Walrus => () }.map(|_| false),
+                ))
+                .then(AstNode::parser()),
+            )
+            .try_map(|(data_type, (is_typed, value)), sp| {
+                match (true, is_typed) {
+                    (true, false) => Err(Rich::custom(
+                        sp,
+                        "expected `=` when a type is specified",
+                    )),
+                    _ => Ok((Some(data_type), Some(value))),
+                }
+            }),
+        // =
+        select! { Token::Eq => () }
+            .ignore_then(AstNode::parser())
+            .try_map(|_, sp| Err(Rich::custom(sp, "expected `:=` when a type is not specified"))),
+        // :=
+        select! { Token::Walrus => () }
+            .ignore_then(AstNode::parser())
+            .map(|value| (None, Some(value))),
+        empty().map(|_| (None, None)),
+    )).boxed()
+}
+
 fn filter<'a, F>(f: F) -> impl Parser<'a, &'a str, char, extra::Err<Rich<'a, char>>> + Clone
 where
     F: Fn(&char) -> bool + Clone + 'a,

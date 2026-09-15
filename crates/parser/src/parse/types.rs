@@ -1,18 +1,20 @@
-use crate::ast::ObjectType;
 use crate::ast::idents::ParserText;
 use crate::ast::idents::PotentialDollarIdentifier;
 use crate::ast::idents::PotentialGenericTypeIdentifier;
 use crate::ast::nodes::types::{
     AstImpl, AstImplTrait, AstTrait, AstType, Overload, TraitMember, TraitMemberKind, TypeDefType,
 };
+use crate::ast::nodes::misc::AstTag;
 use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserDataType;
 use crate::ast::types::ParserInnerType;
+use crate::ast::ObjectType;
 use crate::{
     ast::nodes::AstNode,
     ast::nodes::AstNodeType,
     lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream},
+    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream, typed_or_untyped_assignment},
+    Span,
 };
 use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
@@ -70,11 +72,18 @@ impl<'a> AstParser<'a> for TypeDefType {
         let enum_parser = select! { Token::Enum => () }
             .ignore_then(select! { Token::LeftBracket => () })
             .ignore_then(
-                PotentialDollarIdentifier::parser()
+                AstTag::parser()
                     .repeated()
                     .collect::<Vec<_>>()
                     .or_not()
                     .map(|x| x.unwrap_or_default())
+                    .then(
+                        PotentialDollarIdentifier::parser()
+                            .repeated()
+                            .collect::<Vec<_>>()
+                            .or_not()
+                            .map(|x| x.unwrap_or_default()),
+                    )
                     .then(
                         select! { Token::Colon => () }
                             .ignore_then(ParserDataType::parser())
@@ -85,10 +94,10 @@ impl<'a> AstParser<'a> for TypeDefType {
                             .ignore_then(AstNode::parser())
                             .or_not(),
                     )
-                    .map(|((names, t), default_value)| {
+                    .map(|(((tags, names), t), default_value)| {
                         names
                             .into_iter()
-                            .map(|name| (name, t.clone(), default_value.clone()))
+                            .map(|name| (name, t.clone(), default_value.clone(), tags.clone()))
                             .collect::<Vec<_>>()
                     })
                     .separated_by(select! { Token::Comma => () })
@@ -102,11 +111,14 @@ impl<'a> AstParser<'a> for TypeDefType {
                 let mut default_value = None;
 
                 for (idx, group) in groups.iter().enumerate() {
-                    for (name, data_type, default_val) in group {
+                    for (name, data_type, default_val, tags) in group {
                         variants.push((name.clone(), data_type.clone()));
-                        if default_val.is_some() {
-                            default_variant = Some(idx);
-                            default_value = default_val.clone().map(Box::new);
+
+                        for tag in tags {
+                            if *tag.tag == "default" {
+                                default_variant = Some(idx);
+                                default_value = default_val.clone().map(Box::new);
+                            }
                         }
                     }
                 }
@@ -164,17 +176,8 @@ impl<'a> AstParser<'a> for TraitMember {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let const_member = select! { Token::Const => () }
             .ignore_then(PotentialDollarIdentifier::parser())
-            .then(
-                select! { Token::Colon => () }
-                    .ignore_then(ParserDataType::parser())
-                    .or_not(),
-            )
-            .then(
-                select! { Token::Walrus => () }
-                    .ignore_then(AstNode::parser())
-                    .or_not(),
-            )
-            .map_with_span(|((identifier, data_type), value), span| TraitMember {
+            .then(typed_or_untyped_assignment())
+            .map_with_span(|(identifier, (data_type, value)), span| TraitMember {
                 kind: TraitMemberKind::Const,
                 identifier,
                 data_type: data_type.unwrap_or_else(|| ParserDataType::auto(span)),
