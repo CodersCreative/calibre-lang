@@ -64,9 +64,7 @@ pub type TokenStream<'a> = &'a [Token<'a>];
 
 #[derive(Clone)]
 pub struct RecurseAstNode<'a> {
-    pub node: Recursive<
-        dyn Parser<'a, &'a [Token<'a>], AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>>,
-    >,
+    pub node: Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>,
 }
 
 pub trait AstParser<'a>: Sized {
@@ -305,7 +303,7 @@ pub fn parse_program_with_source<'a>(
     source_path: Option<&Path>,
 ) -> Result<AstNode, Vec<ParserError>> {
     let parser = recursive(|node| {
-        let recurse = RecurseAstNode { node };
+        let recurse = RecurseAstNode { node: node.boxed() };
         AstNode::parser(recurse)
     })
     .padded_by(potential_new_line())
