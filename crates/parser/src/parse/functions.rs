@@ -8,6 +8,7 @@ use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserDataType;
 use crate::parse::MapWithSpanExt;
+use crate::parse::RecurseAstNode;
 use crate::parse::potential_new_line;
 use crate::{
     Span,
@@ -20,13 +21,15 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for CallArg {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
-            PotentialDollarIdentifier::parser()
+            PotentialDollarIdentifier::parser(())
                 .then_ignore(select! { Token::Colon => () })
-                .then(AstNode::parser())
+                .then(data.node.clone())
                 .map(|(name, value)| CallArg::Named(name, value)),
-            AstNode::parser().map(CallArg::Value),
+            data.node.map(CallArg::Value),
         ))
         .boxed()
     }
@@ -50,14 +53,16 @@ enum FnParamGroup {
 }
 
 impl<'a> AstParser<'a> for FnParamGroup {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let normal = select! { Token::Mut => () }
             .or_not()
-            .ignore_then(PotentialDollarIdentifier::parser())
+            .ignore_then(PotentialDollarIdentifier::parser(()))
             .repeated()
             .at_least(1)
             .collect::<Vec<_>>()
-            .then(typed_or_untyped_assignment())
+            .then(typed_or_untyped_assignment(data.clone()))
             .map(|(names, (ty, default))| {
                 FnParamGroup::Plain(
                     names
@@ -67,8 +72,8 @@ impl<'a> AstParser<'a> for FnParamGroup {
                 )
             });
 
-        let destructure = DestructurePattern::parser()
-            .then(typed_or_untyped_assignment())
+        let destructure = DestructurePattern::parser(())
+            .then(typed_or_untyped_assignment(data))
             .map_with_span(
                 move |(pattern, (ty, default)), sp| FnParamGroup::Destructure {
                     span: sp,
@@ -83,8 +88,10 @@ impl<'a> AstParser<'a> for FnParamGroup {
 }
 
 impl<'a> AstParser<'a> for FunctionHeader {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let fn_param_groups = FnParamGroup::parser()
+        let fn_param_groups = FnParamGroup::parser(data.clone())
             .padded_by(potential_new_line())
             .separated_by(select! { Token::Comma => () })
             .allow_trailing()
@@ -100,11 +107,11 @@ impl<'a> AstParser<'a> for FunctionHeader {
             .map(|x| x.unwrap_or_default())
             .boxed();
 
-        GenericTypes::parser()
+        GenericTypes::parser(())
             .then(fn_params)
             .then(
                 select! { Token::RightArrow => () }
-                    .ignore_then(ParserDataType::parser())
+                    .ignore_then(ParserDataType::parser(()))
                     .or_not(),
             )
             .map_with_span(|((generics, params), ret), span| {
@@ -149,11 +156,13 @@ impl<'a> AstParser<'a> for FunctionHeader {
 }
 
 impl<'a> AstParser<'a> for AstFunction {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }
             .then_ignore(select! { Token::Match => () }.not())
-            .ignore_then(FunctionHeader::parser())
-            .then(AstScopeDef::parser())
+            .ignore_then(FunctionHeader::parser(data.clone()))
+            .then(AstScopeDef::parser(data))
             .map_with_span(|(header, body), span| AstFunction {
                 header,
                 body: Box::new(AstNode::new(span, AstNodeType::from(body))),
@@ -163,16 +172,18 @@ impl<'a> AstParser<'a> for AstFunction {
 }
 
 impl<'a> AstParser<'a> for AstExtern {
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    type Data = ();
+
+    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Extern => () }
             .ignore_then(select! { Token::StringLiteral(abi) => abi })
             .then_ignore(select! { Token::Const => () })
-            .then(PotentialDollarIdentifier::parser())
+            .then(PotentialDollarIdentifier::parser(()))
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then_ignore(select! { Token::Fn => () })
             .then_ignore(select! { Token::LeftParen => () })
             .then(
-                ParserDataType::parser()
+                ParserDataType::parser(())
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
@@ -184,7 +195,7 @@ impl<'a> AstParser<'a> for AstExtern {
             .then(
                 select! { Token::RightArrow => () }
                     .padded_by(potential_new_line())
-                    .ignore_then(ParserDataType::parser())
+                    .ignore_then(ParserDataType::parser(()))
                     .or_not(),
             )
             .then_ignore(select! { Token::From => () }.padded_by(potential_new_line()))
@@ -211,9 +222,11 @@ impl<'a> AstParser<'a> for AstExtern {
 }
 
 impl<'a> AstParser<'a> for AstCurry {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Curry => () }
-            .ignore_then(AstNode::parser())
+            .ignore_then(data.node)
             .map(|value| AstCurry {
                 value: Box::new(value),
             })
@@ -222,10 +235,12 @@ impl<'a> AstParser<'a> for AstCurry {
 }
 
 impl<'a> AstParser<'a> for AstCall {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let call_args = select! { Token::LeftParen => () }
             .ignore_then(
-                CallArg::parser()
+                CallArg::parser(data.clone())
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
@@ -239,7 +254,7 @@ impl<'a> AstParser<'a> for AstCall {
         let reverse_args = select! { Token::Lesser => () }
             .ignore_then(select! { Token::LeftParen => () })
             .ignore_then(
-                AstNode::parser()
+                data.node.clone()
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
@@ -250,11 +265,11 @@ impl<'a> AstParser<'a> for AstCall {
             .then_ignore(select! { Token::RightParen => () })
             .boxed();
 
-        AstNode::parser()
+        data.node
             .then(
                 select! { Token::Vampire => () }
                     .ignore_then(
-                        ParserDataType::parser()
+                        ParserDataType::parser(())
                             .padded_by(potential_new_line())
                             .separated_by(select! { Token::Comma => () })
                             .collect::<Vec<_>>(),

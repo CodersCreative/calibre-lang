@@ -1,7 +1,7 @@
 use crate::ast::binary::BinaryOperator;
 use crate::ast::nodes::DestructurePattern;
 use crate::ast::nodes::assignment::{AstAssignDestructure, AstAssignment};
-use crate::parse::potential_new_line;
+use crate::parse::{RecurseAstNode, potential_new_line};
 use crate::{
     Span,
     ast::nodes::AstNode,
@@ -13,8 +13,10 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstAssignment {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        AstNode::parser()
+        data.node.clone()
             .then(
                 choice((
                     select! { Token::Walrus => () }.map(|_| None),
@@ -32,7 +34,7 @@ impl<'a> AstParser<'a> for AstAssignment {
                 ))
                 .padded_by(potential_new_line()),
             )
-            .then(AstNode::parser())
+            .then(data.node.clone())
             .map(|((identifier, op), value)| {
                 let rhs = if let Some(binary_op) = op {
                     AstNode::new(
@@ -56,10 +58,12 @@ impl<'a> AstParser<'a> for AstAssignment {
 }
 
 impl<'a> AstParser<'a> for AstAssignDestructure {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         DestructurePattern::no_bracket_parser()
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
-            .then(AstNode::parser())
+            .then(data.node)
             .map(|(pattern, value)| AstAssignDestructure {
                 pattern,
                 value: Box::new(value),

@@ -1,13 +1,12 @@
 use crate::ast::nodes::binary::{
     AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
 };
-use crate::parse::potential_new_line;
+use crate::ast::types::ParserDataType;
+use crate::parse::{RecurseAstNode, potential_new_line};
 use crate::{
     ast::{
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
-        nodes::AstNode,
-        types::ParserDataType,
     },
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
@@ -15,8 +14,10 @@ use crate::{
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstBinary {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        AstNode::parser()
+        data.node.clone()
             .then(select! {
                 Token::Add => BinaryOperator::Add,
                 Token::Sub => BinaryOperator::Sub,
@@ -30,7 +31,7 @@ impl<'a> AstParser<'a> for AstBinary {
                 Token::Shl => BinaryOperator::Shl,
                 Token::Shr => BinaryOperator::Shr,
             })
-            .then(AstNode::parser())
+            .then(data.node)
             .map(|((left, operator), right)| AstBinary {
                 left: Box::new(left),
                 right: Box::new(right),
@@ -41,8 +42,10 @@ impl<'a> AstParser<'a> for AstBinary {
 }
 
 impl<'a> AstParser<'a> for AstComparison {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        AstNode::parser()
+        data.node.clone()
             .then(
                 select! {
                     Token::Greater => ComparisonOperator::Greater,
@@ -54,7 +57,7 @@ impl<'a> AstParser<'a> for AstComparison {
                 }
                 .padded_by(potential_new_line()),
             )
-            .then(AstNode::parser())
+            .then(data.node)
             .map(|((left, operator), right)| AstComparison {
                 left: Box::new(left),
                 right: Box::new(right),
@@ -65,8 +68,10 @@ impl<'a> AstParser<'a> for AstComparison {
 }
 
 impl<'a> AstParser<'a> for AstBoolean {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        AstNode::parser()
+        data.node.clone()
             .then(
                 select! {
                     Token::And => BooleanOperator::And,
@@ -74,7 +79,7 @@ impl<'a> AstParser<'a> for AstBoolean {
                 }
                 .padded_by(potential_new_line()),
             )
-            .then(AstNode::parser())
+            .then(data.node)
             .map(|((left, operator), right)| AstBoolean {
                 left: Box::new(left),
                 right: Box::new(right),
@@ -85,10 +90,12 @@ impl<'a> AstParser<'a> for AstBoolean {
 }
 
 impl<'a> AstParser<'a> for AstAs {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        AstNode::parser()
+        data.node
             .then_ignore(select! { Token::As => () }.padded_by(potential_new_line()))
-            .then(ParserDataType::parser())
+            .then(ParserDataType::parser(()))
             .then(
                 select! { Token::Question => () }
                     .map(|()| AsFailureMode::Option)
@@ -105,10 +112,12 @@ impl<'a> AstParser<'a> for AstAs {
 }
 
 impl<'a> AstParser<'a> for AstIs {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        AstNode::parser()
+        data.node
             .then_ignore(select! { Token::Is => () }.padded_by(potential_new_line()))
-            .then(ParserDataType::parser())
+            .then(ParserDataType::parser(()))
             .map(|(value, data_type)| AstIs {
                 value: Box::new(value),
                 data_type,
@@ -118,10 +127,12 @@ impl<'a> AstParser<'a> for AstIs {
 }
 
 impl<'a> AstParser<'a> for AstIn {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        AstNode::parser()
+        data.node.clone()
             .then_ignore(select! { Token::In => () }.padded_by(potential_new_line()))
-            .then(AstNode::parser())
+            .then(data.node)
             .map(|(identifier, value)| AstIn {
                 identifier: Box::new(identifier),
                 value: Box::new(value),

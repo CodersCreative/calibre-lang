@@ -3,7 +3,7 @@ use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment, TryCatch,
 };
 use crate::ast::nodes::scopes::AstScopeDef;
-use crate::parse::{MapWithSpanExt, potential_new_line};
+use crate::parse::{MapWithSpanExt, RecurseAstNode, potential_new_line};
 use crate::{
     ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
     lexer::Token,
@@ -13,17 +13,19 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstEmit {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Emit => () }
-                .ignore_then(AstNode::parser())
-                .then(AstNode::parser())
+                .ignore_then(data.node.clone())
+                .then(data.node.clone())
                 .map(|(channel, value)| AstEmit::Channel {
                     channel: Box::new(channel),
                     value: Box::new(value),
                 }),
             select! { Token::Emit => () }
-                .ignore_then(AstNode::parser())
+                .ignore_then(data.node)
                 .map(|value| AstEmit::Scope(Box::new(value))),
         ))
         .boxed()
@@ -31,13 +33,15 @@ impl<'a> AstParser<'a> for AstEmit {
 }
 
 impl<'a> AstParser<'a> for AstBreak {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Break => () }
             .ignore_then(
                 select! {Token::At => ()}
-                    .ignore_then(PotentialDollarIdentifier::parser())
+                    .ignore_then(PotentialDollarIdentifier::parser(()))
                     .or_not()
-                    .then(AstNode::parser().or_not()),
+                    .then(data.node.or_not()),
             )
             .map(|(label, value)| AstBreak {
                 label,
@@ -48,11 +52,13 @@ impl<'a> AstParser<'a> for AstBreak {
 }
 
 impl<'a> AstParser<'a> for AstContinue {
+    type Data = ();
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Continue => () }
             .ignore_then(
                 select! {Token::At => ()}
-                    .ignore_then(PotentialDollarIdentifier::parser())
+                    .ignore_then(PotentialDollarIdentifier::parser(()))
                     .or_not(),
             )
             .map(|label| AstContinue { label })
@@ -61,9 +67,11 @@ impl<'a> AstParser<'a> for AstContinue {
 }
 
 impl<'a> AstParser<'a> for AstReturn {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Return => () }
-            .ignore_then(AstNode::parser().or_not())
+            .ignore_then(data.node.or_not())
             .map(|value| AstReturn {
                 value: value.map(Box::new),
             })
@@ -72,6 +80,8 @@ impl<'a> AstParser<'a> for AstReturn {
 }
 
 impl<'a> AstParser<'a> for AstDefer {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Defer => () }
             .ignore_then(
@@ -80,7 +90,7 @@ impl<'a> AstParser<'a> for AstDefer {
                     .or_not()
                     .map(|x| x.unwrap_or(false)),
             )
-            .then(AstNode::parser())
+            .then(data.node)
             .map(|(function, value)| AstDefer {
                 value: Box::new(value),
                 function,
@@ -90,16 +100,18 @@ impl<'a> AstParser<'a> for AstDefer {
 }
 
 impl<'a> AstParser<'a> for TryCatch {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Colon => () }
-                .ignore_then(PotentialDollarIdentifier::parser())
-                .then(AstScopeDef::parser())
+                .ignore_then(PotentialDollarIdentifier::parser(()))
+                .then(AstScopeDef::parser(data.clone()))
                 .map_with_span(|(name, body), span| TryCatch {
                     name: Some(name),
                     body: Box::new(AstNode::new(span, AstNodeType::from(body))),
                 }),
-            AstScopeDef::parser().map_with_span(|body, span| TryCatch {
+            AstScopeDef::parser(data).map_with_span(|body, span| TryCatch {
                 name: None,
                 body: Box::new(AstNode::new(span, AstNodeType::from(body))),
             }),
@@ -109,10 +121,12 @@ impl<'a> AstParser<'a> for TryCatch {
 }
 
 impl<'a> AstParser<'a> for AstTry {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Try => () }
-            .ignore_then(AstNode::parser())
-            .then(TryCatch::parser().or_not())
+            .ignore_then(data.node.clone())
+            .then(TryCatch::parser(data).or_not())
             .map(|(value, catch)| AstTry {
                 value: Box::new(value),
                 catch,
@@ -122,22 +136,24 @@ impl<'a> AstParser<'a> for AstTry {
 }
 
 impl<'a> AstParser<'a> for AstPipe {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let pipe_seg = choice((
             select! { Token::Pipe => () }
                 .padded_by(potential_new_line())
-                .ignore_then(AstNode::parser())
+                .ignore_then(data.node.clone())
                 .map(PipeSegment::Unnamed),
             select! { Token::Face => () }
                 .padded_by(potential_new_line())
-                .ignore_then(PotentialDollarIdentifier::parser())
+                .ignore_then(PotentialDollarIdentifier::parser(()))
                 .then_ignore(select! { Token::Greater => () })
-                .then(AstNode::parser())
+                .then(data.node.clone())
                 .map(|(identifier, node)| PipeSegment::Named { identifier, node }),
         ))
         .boxed();
 
-        AstNode::parser()
+        data.node
             .then(pipe_seg.repeated().collect::<Vec<_>>())
             .map(|(head, rest)| {
                 if rest.is_empty() {

@@ -3,7 +3,7 @@ use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::loops::{AstIter, AstLoop, LoopType};
 use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::types::ParserDataType;
-use crate::parse::MapWithSpanExt;
+use crate::parse::{MapWithSpanExt, RecurseAstNode};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -15,20 +15,22 @@ use chumsky::{Boxed, Parser, select};
 use super::matching::parse_pattern_list;
 
 impl<'a> AstParser<'a> for LoopType {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // ... in ...
-            PotentialDollarIdentifier::parser()
+            PotentialDollarIdentifier::parser(())
                 .then_ignore(select! { Token::In => () })
-                .then(AstNode::parser())
+                .then(data.node.clone())
                 .map(|(ident, iter)| LoopType::For(ident, iter)),
             // ...
-            AstNode::parser().map(LoopType::While),
+            data.node.clone().map(LoopType::While),
             // let ... <- ...
             select! { Token::Let => () }
-                .ignore_then(parse_pattern_list())
+                .ignore_then(parse_pattern_list(data.clone()))
                 .then_ignore(select! { Token::LeftArrow => () })
-                .then(AstNode::parser())
+                .then(data.node)
                 .map(|((patterns, _), value)| LoopType::Let {
                     value,
                     pattern: (patterns, Vec::new()),
@@ -41,22 +43,24 @@ impl<'a> AstParser<'a> for LoopType {
 }
 
 impl<'a> AstParser<'a> for AstLoop {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let label = select! { Token::At => () }
-            .ignore_then(PotentialDollarIdentifier::parser())
+            .ignore_then(PotentialDollarIdentifier::parser(()))
             .or_not();
 
-        LoopType::parser()
+        LoopType::parser(data.clone())
             .then(label)
-            .then(AstScopeDef::parser())
+            .then(AstScopeDef::parser(data.clone()))
             .then(
                 select! { Token::Else => () }
-                    .ignore_then(AstScopeDef::parser())
+                    .ignore_then(AstScopeDef::parser(data.clone()))
                     .or_not(),
             )
             .then(
                 select! { Token::Until => () }
-                    .ignore_then(AstNode::parser())
+                    .ignore_then(data.node)
                     .or_not(),
             )
             .map_with_span(
@@ -74,11 +78,13 @@ impl<'a> AstParser<'a> for AstLoop {
 }
 
 impl<'a> AstParser<'a> for AstIter {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let data_type = choice((
             select! { Token::Identifier(x) if x == "list" => () }
                 .ignore_then(select! { Token::Vampire => () })
-                .ignore_then(ParserDataType::parser())
+                .ignore_then(ParserDataType::parser(()))
                 .then_ignore(select! { Token::Greater => ()}),
             select! { Token::Identifier(x) if x == "list" => () }
                 .map_with_span(|_, span| ParserDataType::auto(span)),
@@ -88,19 +94,19 @@ impl<'a> AstParser<'a> for AstIter {
 
         data_type
             .then_ignore(select! { Token::LeftSquare => () })
-            .then(AstNode::parser())
+            .then(data.node.clone())
             .then(select! { Token::Spawn => () }.or_not().map(|x| x.is_some()))
             .then_ignore(select! { Token::For => () })
-            .then(LoopType::parser())
+            .then(LoopType::parser(data.clone()))
             .then(
                 select! { Token::If => () }
-                    .ignore_then(AstNode::parser())
+                    .ignore_then(data.node.clone())
                     .repeated()
                     .collect::<Vec<_>>(),
             )
             .then(
                 select! { Token::Until => () }
-                    .ignore_then(AstNode::parser())
+                    .ignore_then(data.node)
                     .or_not(),
             )
             .then_ignore(select! { Token::RightSquare => () })

@@ -62,6 +62,7 @@ pub mod util;
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
 pub type TokenStream<'a> = &'a [Token<'a>];
 
+#[derive(Clone)]
 pub struct RecurseAstNode<'a> {
     pub node : Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>,
 }
@@ -70,33 +71,6 @@ impl<'a> From<Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>> for Rec
     fn from(value: Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>) -> Self {
         Self {node : value}
     }
-}
-
-impl<'a> From<RecurseTypeAndNode<'a>> for RecurseAstNode<'a> {
-    fn from(value: RecurseTypeAndNode<'a>) -> Self {
-        Self { node: value.node }
-    }
-}
-
-pub struct RecurseDataType<'a> {
-    pub data_type : Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
-}
-
-impl<'a> From<Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>> for RecurseDataType<'a> {
-    fn from(value: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>) -> Self {
-        Self{data_type : value}
-    }
-}
-
-impl<'a> From<RecurseTypeAndNode<'a>> for RecurseDataType<'a> {
-    fn from(value: RecurseTypeAndNode<'a>) -> Self {
-        Self { data_type: value.data_type }
-    }
-}
-
-pub struct RecurseTypeAndNode<'a> {
-    pub node : Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>,
-    pub data_type : Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
 }
 
 
@@ -144,12 +118,12 @@ where
 {
 }
 
-pub fn typed_or_untyped_assignment<'a>(data : RecurseTypeAndNode<'a>)
+pub fn typed_or_untyped_assignment<'a>(data : RecurseAstNode<'a>)
 -> Boxed<'a, 'a, TokenStream<'a>, (Option<ParserDataType>, Option<AstNode>), AstParserErr<'a>> {
     choice((
         // : (= or :=)
         select! { Token::Colon => () }
-            .ignore_then(data.data_type.clone())
+            .ignore_then(ParserDataType::parser(()))
             .then(
                 choice((
                     select! { Token::Eq => () }.map(|_| true),
@@ -167,7 +141,7 @@ pub fn typed_or_untyped_assignment<'a>(data : RecurseTypeAndNode<'a>)
         // =
         select! { Token::Eq => () }
             .padded_by(potential_new_line())
-            .ignore_then(data.node)
+            .ignore_then(data.node.clone())
             .try_map(|_, sp| {
                 Err(Rich::custom(
                     sp,

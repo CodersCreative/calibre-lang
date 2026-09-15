@@ -1,7 +1,8 @@
 use crate::ast::nodes::generator::AstGenerator;
 use crate::ast::nodes::loops::LoopType;
+use crate::parse::RecurseAstNode;
 use crate::{
-    ast::{nodes::AstNode, types::ParserDataType},
+    ast::{types::ParserDataType},
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
@@ -9,27 +10,29 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstGenerator {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }
             .ignore_then(select! { Token::LeftParen => () })
-            .then(AstNode::parser())
+            .then(data.node.clone())
             .then_ignore(select! { Token::For => () })
-            .then(LoopType::parser())
+            .then(LoopType::parser(data.clone()))
             .then(
                 select! { Token::If => () }
-                    .ignore_then(AstNode::parser())
+                    .ignore_then(data.node.clone())
                     .repeated()
                     .collect::<Vec<_>>(),
             )
             .then(
                 select! { Token::Until => () }
-                    .ignore_then(AstNode::parser())
+                    .ignore_then(data.node)
                     .or_not(),
             )
             .then_ignore(select! { Token::RightParen => () })
             .then(
                 select! { Token::RightArrow => () }
-                    .ignore_then(ParserDataType::parser())
+                    .ignore_then(ParserDataType::parser(()))
                     .or_not(),
             )
             .map(

@@ -1,8 +1,8 @@
 use crate::ast::RefMutability;
 use crate::ast::idents::PotentialDollarIdentifier;
 use crate::ast::nodes::memory::{AstDeref, AstDrop, AstMove, AstRef};
+use crate::parse::RecurseAstNode;
 use crate::{
-    ast::nodes::AstNode,
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
@@ -10,7 +10,9 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for RefMutability {
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    type Data = ();
+
+    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::MutRef => () }.map(|_| RefMutability::MutRef),
             select! { Token::Mut => () }.map(|_| RefMutability::MutValue),
@@ -23,8 +25,10 @@ impl<'a> AstParser<'a> for RefMutability {
 }
 
 impl<'a> AstParser<'a> for AstRef {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        AstNode::parser()
+        data.node
             .then_ignore(select! {Token::Dot => ()})
             .then(choice((
                 select! { Token::MutRef => () }.map(|_| RefMutability::MutRef),
@@ -39,8 +43,10 @@ impl<'a> AstParser<'a> for AstRef {
 }
 
 impl<'a> AstParser<'a> for AstDeref {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        AstNode::parser()
+        data.node
             .then_ignore(select! {Token::Dot => ()})
             .then_ignore(select! {Token::Mul => ()})
             .map(|value| AstDeref {
@@ -51,18 +57,22 @@ impl<'a> AstParser<'a> for AstDeref {
 }
 
 impl<'a> AstParser<'a> for AstDrop {
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    type Data = ();
+
+    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Identifier(x) if x == "drop" => () }
-            .ignore_then(PotentialDollarIdentifier::parser())
+            .ignore_then(PotentialDollarIdentifier::parser(()))
             .map(|value| AstDrop { value })
             .boxed()
     }
 }
 
 impl<'a> AstParser<'a> for AstMove {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Move => () }
-            .ignore_then(AstNode::parser())
+            .ignore_then(data.node)
             .map(|value| AstMove {
                 value: Box::new(value),
             })

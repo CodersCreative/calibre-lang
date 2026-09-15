@@ -10,16 +10,16 @@ use crate::{
             },
         },
         types::ParserDataType,
-    },
-    lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream, potential_new_line},
+    }, lexer::Token, parse::{AstParser, AstParserErr, MapWithSpanExt, RecurseAstNode, TokenStream, potential_new_line},
 };
 use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 use ustr::Ustr;
 
 impl<'a> AstParser<'a> for AstFloat {
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    type Data = ();
+
+    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::FloatLiteral(x) => x
         }
@@ -36,7 +36,9 @@ impl<'a> AstParser<'a> for AstFloat {
 }
 
 impl<'a> AstParser<'a> for AstBig {
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    type Data = ();
+
+    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::BigLiteral(x) => x
         }
@@ -48,7 +50,9 @@ impl<'a> AstParser<'a> for AstBig {
 }
 
 impl<'a> AstParser<'a> for AstInt {
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    type Data = ();
+
+    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::IntLiteral(x) => x
         }
@@ -59,7 +63,9 @@ impl<'a> AstParser<'a> for AstInt {
 
 // TODO Rewrite char handling
 impl<'a> AstParser<'a> for AstChar {
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    type Data = ();
+
+    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::CharLiteral(x) => AstChar{value : x.to_string().chars().next().unwrap_or_default()}
         }
@@ -68,7 +74,9 @@ impl<'a> AstParser<'a> for AstChar {
 }
 
 impl<'a> AstParser<'a> for AstString {
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    type Data = ();
+
+    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::StringLiteral(x) => x
         }
@@ -83,21 +91,23 @@ impl<'a> AstParser<'a> for AstString {
 }
 
 impl<'a> AstParser<'a> for AstRange {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
-            AstNode::parser()
+            data.node.clone()
                 .then_ignore(
                     select! { Token::InclusiveRange => () }.padded_by(potential_new_line()),
                 )
-                .then(AstNode::parser())
+                .then(data.node.clone())
                 .map(|(from, to)| AstRange {
                     from: Box::new(from),
                     to: Box::new(to),
                     inclusive: true,
                 }),
-            AstNode::parser()
+            data.node.clone()
                 .then_ignore(select! { Token::Range => () }.padded_by(potential_new_line()))
-                .then(AstNode::parser())
+                .then(data.node)
                 .map(|(from, to)| AstRange {
                     from: Box::new(from),
                     to: Box::new(to),
@@ -109,10 +119,12 @@ impl<'a> AstParser<'a> for AstRange {
 }
 
 impl<'a> AstParser<'a> for AstTuple {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::LeftParen => () }
             .ignore_then(
-                AstNode::parser()
+                data.node
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
@@ -127,15 +139,17 @@ impl<'a> AstParser<'a> for AstTuple {
 }
 
 impl<'a> AstParser<'a> for AstStruct {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        PotentialGenericTypeIdentifier::parser()
+        PotentialGenericTypeIdentifier::parser(())
             .then(
                 select! { Token::LeftBracket => () }
                     .ignore_then(
                         select! { Token::Identifier(x) => x }
                             .then(
                                 select! { Token::Colon => () }
-                                    .ignore_then(AstNode::parser())
+                                    .ignore_then(data.node)
                                     .or_not(),
                             )
                             .map_with_span(|(field, value), span| {
@@ -163,12 +177,14 @@ impl<'a> AstParser<'a> for AstStruct {
 }
 
 impl<'a> AstParser<'a> for AstEnum {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        PotentialGenericTypeIdentifier::parser()
+        PotentialGenericTypeIdentifier::parser(())
             .then_ignore(select! { Token::Dot => () })
-            .then(PotentialDollarIdentifier::parser())
+            .then(PotentialDollarIdentifier::parser(()))
             .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
-            .then(AstNode::parser().or_not())
+            .then(data.node.or_not())
             .map(|((identifier, value), data)| AstEnum {
                 identifier,
                 value,
@@ -179,10 +195,12 @@ impl<'a> AstParser<'a> for AstEnum {
 }
 
 impl<'a> AstParser<'a> for AstDataType {
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    type Data = ();
+
+    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {Token::Type => ()}
             .then(select! {Token::Colon => ()})
-            .ignore_then(ParserDataType::parser())
+            .ignore_then(ParserDataType::parser(()))
             .map(|data_type| AstDataType { data_type })
             .boxed()
     }

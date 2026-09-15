@@ -1,5 +1,5 @@
 use crate::ast::nodes::scopes::{AstScopeAlias, AstScopeDef, NamedScope};
-use crate::parse::potential_new_line;
+use crate::parse::{RecurseAstNode, potential_new_line};
 use crate::{
     ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
     lexer::Token,
@@ -9,12 +9,14 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstScopeDef {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let body = choice((
             select! { Token::LeftBracket => () }
                 .ignore_then(select! { Token::LeftBracket => () })
                 .ignore_then(
-                    AstNode::parser()
+                    data.node.clone()
                         .padded_by(potential_new_line())
                         .repeated()
                         .collect::<Vec<_>>()
@@ -26,7 +28,7 @@ impl<'a> AstParser<'a> for AstScopeDef {
                 .map(|items| (Some(items), Some(false))),
             select! { Token::LeftBracket => () }
                 .ignore_then(
-                    AstNode::parser()
+                    data.node.clone()
                         .padded_by(potential_new_line())
                         .repeated()
                         .collect::<Vec<_>>()
@@ -36,19 +38,19 @@ impl<'a> AstParser<'a> for AstScopeDef {
                 .then_ignore(select! { Token::RightBracket => () })
                 .map(|items| (Some(items), Some(true))),
             // Im going to make node by itself produce a scope so that no scope is now an explicit action
-            AstNode::parser().map(|body| (Some(vec![body]), Some(true))),
+            data.node.clone().map(|body| (Some(vec![body]), Some(true))),
         ))
         .or_not()
         .map(|x| x.unwrap_or((None, None)));
 
-        let named = PotentialDollarIdentifier::parser()
+        let named = PotentialDollarIdentifier::parser(())
             .then(
                 select! { Token::LeftSquare => () }
                     .ignore_then(
-                        PotentialDollarIdentifier::parser()
+                        PotentialDollarIdentifier::parser(())
                             .then(
                                 select! { Token::Colon => () }
-                                    .ignore_then(AstNode::parser())
+                                    .ignore_then(data.node)
                                     .or_not(),
                             )
                             .padded_by(potential_new_line())
@@ -90,13 +92,15 @@ impl<'a> AstParser<'a> for AstScopeDef {
 }
 
 impl<'a> AstParser<'a> for AstScopeAlias {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let args = select! { Token::LeftSquare => () }
             .ignore_then(
-                PotentialDollarIdentifier::parser()
+                PotentialDollarIdentifier::parser(())
                     .then(
                         select! { Token::Colon => () }
-                            .ignore_then(AstNode::parser())
+                            .ignore_then(data.node.clone())
                             .or_not(),
                     )
                     .padded_by(potential_new_line())
@@ -125,9 +129,9 @@ impl<'a> AstParser<'a> for AstScopeAlias {
         .map(|x| x.flatten());
 
         select! { Token::Let => () }
-            .ignore_then(PotentialDollarIdentifier::parser())
+            .ignore_then(PotentialDollarIdentifier::parser(()))
             .then_ignore(select! { Token::FatArrow => () }.padded_by(potential_new_line()))
-            .then(PotentialDollarIdentifier::parser())
+            .then(PotentialDollarIdentifier::parser(()))
             .then(args)
             .then(call_mode)
             .map(

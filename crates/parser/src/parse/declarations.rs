@@ -3,9 +3,9 @@ use crate::ast::nodes::DestructurePattern;
 use crate::ast::nodes::VarType;
 use crate::ast::nodes::declaration::{AstDeclaration, AstDeclareDestructure};
 use crate::ast::types::ParserDataType;
+use crate::parse::RecurseAstNode;
 use crate::parse::potential_new_line;
 use crate::{
-    ast::nodes::AstNode,
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream, typed_or_untyped_assignment},
 };
@@ -14,14 +14,16 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstDeclaration {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Let => () }.map(|_| VarType::Immutable),
             select! { Token::Const => () }.map(|_| VarType::Constant),
         ))
         .then(select! { Token::Mut => () }.or_not())
-        .then(PotentialDollarIdentifier::parser())
-        .then(typed_or_untyped_assignment())
+        .then(PotentialDollarIdentifier::parser(()))
+        .then(typed_or_untyped_assignment(data))
         .try_map(|(((var_type, mut_tok), identifier), (data_type, value)), sp| {
             let var_type = if mut_tok.is_some() {
                 match var_type {
@@ -54,11 +56,13 @@ impl<'a> AstParser<'a> for AstDeclaration {
 }
 
 impl<'a> AstParser<'a> for AstDeclareDestructure {
+    type Data = RecurseAstNode<'a>;
+
     fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Let => () }
             .ignore_then(DestructurePattern::no_bracket_parser())
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
-            .then(AstNode::parser())
+            .then(data.node)
             .map(|(pattern, value)| AstDeclareDestructure {
                 var_type: VarType::Immutable,
                 pattern,
