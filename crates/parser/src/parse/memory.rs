@@ -1,7 +1,7 @@
 use crate::ast::RefMutability;
 use crate::ast::idents::PotentialDollarIdentifier;
 use crate::ast::nodes::memory::{AstDeref, AstDrop, AstMove, AstRef};
-use crate::parse::RecurseAstNode;
+use crate::parse::RecursiveData;
 use crate::{
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
@@ -25,7 +25,7 @@ impl<'a> AstParser<'a> for RefMutability {
 }
 
 impl<'a> AstParser<'a> for AstRef {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
@@ -43,7 +43,7 @@ impl<'a> AstParser<'a> for AstRef {
 }
 
 impl<'a> AstParser<'a> for AstDeref {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
@@ -68,7 +68,7 @@ impl<'a> AstParser<'a> for AstDrop {
 }
 
 impl<'a> AstParser<'a> for AstMove {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Move => () }

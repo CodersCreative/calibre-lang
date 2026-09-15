@@ -11,7 +11,7 @@ use crate::ast::nodes::matching::{
 use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::types::{GenericTypes, ParserDataType};
 use crate::parse::MapWithSpanExt;
-use crate::parse::RecurseAstNode;
+use crate::parse::RecursiveData;
 use crate::parse::potential_new_line;
 use crate::{
     Span,
@@ -169,7 +169,7 @@ impl<'a> AstParser<'a> for MatchStringPatternPart {
 }
 
 impl<'a> AstParser<'a> for MatchTupleItem {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|tuple_item| {
@@ -308,7 +308,7 @@ impl<'a> AstParser<'a> for MatchTupleItem {
 }
 
 impl<'a> AstParser<'a> for MatchStructFieldPattern {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Identifier(field) => field }
@@ -386,7 +386,7 @@ impl<'a> AstParser<'a> for MatchStructFieldPattern {
 }
 
 impl<'a> AstParser<'a> for MatchArmType {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|arm_type| {
@@ -519,7 +519,7 @@ impl<'a> AstParser<'a> for MatchArmType {
 }
 
 pub fn parse_pattern_list<'a>(
-    data: RecurseAstNode<'a>,
+    data: RecursiveData<'a>,
 ) -> Boxed<'a, 'a, TokenStream<'a>, (Vec<MatchArmType>, Vec<AstNode>), AstParserErr<'a>> {
     MatchArmType::parser(data.clone())
         .then(
@@ -537,7 +537,7 @@ pub fn parse_pattern_list<'a>(
 }
 
 impl<'a> AstParser<'a> for MatchBody {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let match_arm = MatchArmType::parser(data.clone())
@@ -689,7 +689,7 @@ impl<'a> AstParser<'a> for MatchBody {
 }
 
 impl<'a> AstParser<'a> for AstMatch {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Match => () }
@@ -726,7 +726,7 @@ impl<'a> AstParser<'a> for AstMatch {
 }
 
 impl<'a> AstParser<'a> for AstFnMatch {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }

@@ -1,7 +1,7 @@
 use crate::ast::binary::BinaryOperator;
 use crate::ast::nodes::DestructurePattern;
 use crate::ast::nodes::assignment::{AstAssignDestructure, AstAssignment};
-use crate::parse::{RecurseAstNode, potential_new_line};
+use crate::parse::{RecursiveData, potential_new_line};
 use crate::{
     Span,
     ast::nodes::AstNode,
@@ -13,7 +13,7 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstAssignment {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
@@ -59,7 +59,7 @@ impl<'a> AstParser<'a> for AstAssignment {
 }
 
 impl<'a> AstParser<'a> for AstAssignDestructure {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         DestructurePattern::no_bracket_parser()

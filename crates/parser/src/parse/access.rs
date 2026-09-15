@@ -1,5 +1,5 @@
 use crate::ast::nodes::access::{AstField, AstIndex, AstScope};
-use crate::parse::{RecurseAstNode, potential_new_line};
+use crate::parse::{RecursiveData, potential_new_line};
 use crate::{
     ast::idents::PotentialDollarIdentifier,
     lexer::Token,
@@ -8,7 +8,7 @@ use crate::{
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstField {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
@@ -23,7 +23,7 @@ impl<'a> AstParser<'a> for AstField {
 }
 
 impl<'a> AstParser<'a> for AstScope {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
@@ -38,7 +38,7 @@ impl<'a> AstParser<'a> for AstScope {
 }
 
 impl<'a> AstParser<'a> for AstIndex {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node

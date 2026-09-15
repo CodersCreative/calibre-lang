@@ -3,7 +3,7 @@ use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::loops::{AstIter, AstLoop, LoopType};
 use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::types::ParserDataType;
-use crate::parse::{MapWithSpanExt, RecurseAstNode};
+use crate::parse::{MapWithSpanExt, RecursiveData};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -15,7 +15,7 @@ use chumsky::{Boxed, Parser, select};
 use super::matching::parse_pattern_list;
 
 impl<'a> AstParser<'a> for LoopType {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
@@ -43,7 +43,7 @@ impl<'a> AstParser<'a> for LoopType {
 }
 
 impl<'a> AstParser<'a> for AstLoop {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let label = select! { Token::At => () }
@@ -78,7 +78,7 @@ impl<'a> AstParser<'a> for AstLoop {
 }
 
 impl<'a> AstParser<'a> for AstIter {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let data_type = choice((

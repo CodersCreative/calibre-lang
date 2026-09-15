@@ -3,7 +3,7 @@ use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment, TryCatch,
 };
 use crate::ast::nodes::scopes::AstScopeDef;
-use crate::parse::{MapWithSpanExt, RecurseAstNode, potential_new_line};
+use crate::parse::{MapWithSpanExt, RecursiveData, potential_new_line};
 use crate::{
     ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
     lexer::Token,
@@ -13,7 +13,7 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstEmit {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
@@ -33,7 +33,7 @@ impl<'a> AstParser<'a> for AstEmit {
 }
 
 impl<'a> AstParser<'a> for AstBreak {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Break => () }
@@ -67,7 +67,7 @@ impl<'a> AstParser<'a> for AstContinue {
 }
 
 impl<'a> AstParser<'a> for AstReturn {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Return => () }
@@ -80,7 +80,7 @@ impl<'a> AstParser<'a> for AstReturn {
 }
 
 impl<'a> AstParser<'a> for AstDefer {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Defer => () }
@@ -100,7 +100,7 @@ impl<'a> AstParser<'a> for AstDefer {
 }
 
 impl<'a> AstParser<'a> for TryCatch {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
@@ -121,7 +121,7 @@ impl<'a> AstParser<'a> for TryCatch {
 }
 
 impl<'a> AstParser<'a> for AstTry {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Try => () }
@@ -136,7 +136,7 @@ impl<'a> AstParser<'a> for AstTry {
 }
 
 impl<'a> AstParser<'a> for AstPipe {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let pipe_seg = choice((

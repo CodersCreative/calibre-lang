@@ -63,8 +63,10 @@ pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
 pub type TokenStream<'a> = &'a [Token<'a>];
 
 #[derive(Clone)]
-pub struct RecurseAstNode<'a> {
-    pub node: Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>,
+pub struct RecursiveData<'a> {
+    pub node: Recursive<
+        dyn Parser<'a, TokenStream<'a>, AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>> + 'a,
+    >,
 }
 
 pub trait AstParser<'a>: Sized {
@@ -112,7 +114,7 @@ where
 }
 
 pub fn typed_or_untyped_assignment<'a>(
-    data: RecurseAstNode<'a>,
+    data: RecursiveData<'a>,
 ) -> Boxed<'a, 'a, TokenStream<'a>, (Option<ParserDataType>, Option<AstNode>), AstParserErr<'a>> {
     choice((
         // : (= or :=)
@@ -157,7 +159,7 @@ pub fn potential_new_line<'a>() -> Boxed<'a, 'a, TokenStream<'a>, (), AstParserE
 }
 
 impl<'a> AstParser<'a> for AstNode {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let flow = choice((
@@ -299,11 +301,11 @@ impl<'a> AstParser<'a> for AstNode {
 
 #[instrument(skip_all, fields(path = ?source_path))]
 pub fn parse_program_with_source<'a>(
-    tokens: &[Token<'a>],
+    tokens: TokenStream<'a>,
     source_path: Option<&Path>,
 ) -> Result<AstNode, Vec<ParserError>> {
     let parser = recursive(|node| {
-        let recurse = RecurseAstNode { node: node.boxed() };
+        let recurse = RecursiveData { node };
         AstNode::parser(recurse)
     })
     .padded_by(potential_new_line())

@@ -2,7 +2,7 @@ use crate::ast::nodes::binary::{
     AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
 };
 use crate::ast::types::ParserDataType;
-use crate::parse::{RecurseAstNode, potential_new_line};
+use crate::parse::{RecursiveData, potential_new_line};
 use crate::{
     ast::{
         binary::BinaryOperator,
@@ -14,7 +14,7 @@ use crate::{
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstBinary {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
@@ -43,7 +43,7 @@ impl<'a> AstParser<'a> for AstBinary {
 }
 
 impl<'a> AstParser<'a> for AstComparison {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
@@ -70,7 +70,7 @@ impl<'a> AstParser<'a> for AstComparison {
 }
 
 impl<'a> AstParser<'a> for AstBoolean {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
@@ -93,7 +93,7 @@ impl<'a> AstParser<'a> for AstBoolean {
 }
 
 impl<'a> AstParser<'a> for AstAs {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
@@ -115,7 +115,7 @@ impl<'a> AstParser<'a> for AstAs {
 }
 
 impl<'a> AstParser<'a> for AstIs {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
@@ -130,7 +130,7 @@ impl<'a> AstParser<'a> for AstIs {
 }
 
 impl<'a> AstParser<'a> for AstIn {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node

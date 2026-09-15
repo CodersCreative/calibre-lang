@@ -1,5 +1,5 @@
 use crate::ast::nodes::scopes::{AstScopeAlias, AstScopeDef, NamedScope};
-use crate::parse::{RecurseAstNode, potential_new_line};
+use crate::parse::{RecursiveData, potential_new_line};
 use crate::{
     ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
     lexer::Token,
@@ -9,7 +9,7 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstScopeDef {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let body = choice((
@@ -94,7 +94,7 @@ impl<'a> AstParser<'a> for AstScopeDef {
 }
 
 impl<'a> AstParser<'a> for AstScopeAlias {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let args = select! { Token::LeftSquare => () }

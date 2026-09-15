@@ -1,7 +1,7 @@
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::nodes::spawn::{AstSelect, AstSpawn, SelectArm, SelectArmKind};
-use crate::parse::{MapWithSpanExt, RecurseAstNode, potential_new_line};
+use crate::parse::{MapWithSpanExt, RecursiveData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -11,7 +11,7 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for SelectArm {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
@@ -48,7 +48,7 @@ impl<'a> AstParser<'a> for SelectArm {
 }
 
 impl<'a> AstParser<'a> for AstSelect {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Select => () }
@@ -67,7 +67,7 @@ impl<'a> AstParser<'a> for AstSelect {
 }
 
 impl<'a> AstParser<'a> for AstSpawn {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let auto_wait = select! { Token::At => () }.or_not().map(|x| x.is_some());

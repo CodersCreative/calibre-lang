@@ -8,7 +8,7 @@ use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserDataType;
 use crate::parse::MapWithSpanExt;
-use crate::parse::RecurseAstNode;
+use crate::parse::RecursiveData;
 use crate::parse::potential_new_line;
 use crate::{
     Span,
@@ -21,7 +21,7 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for CallArg {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
@@ -53,7 +53,7 @@ enum FnParamGroup {
 }
 
 impl<'a> AstParser<'a> for FnParamGroup {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let normal = select! { Token::Mut => () }
@@ -88,7 +88,7 @@ impl<'a> AstParser<'a> for FnParamGroup {
 }
 
 impl<'a> AstParser<'a> for FunctionHeader {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let fn_param_groups = FnParamGroup::parser(data.clone())
@@ -156,7 +156,7 @@ impl<'a> AstParser<'a> for FunctionHeader {
 }
 
 impl<'a> AstParser<'a> for AstFunction {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }
@@ -222,7 +222,7 @@ impl<'a> AstParser<'a> for AstExtern {
 }
 
 impl<'a> AstParser<'a> for AstCurry {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Curry => () }
@@ -235,7 +235,7 @@ impl<'a> AstParser<'a> for AstCurry {
 }
 
 impl<'a> AstParser<'a> for AstCall {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let call_args = select! { Token::LeftParen => () }

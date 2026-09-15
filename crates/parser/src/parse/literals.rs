@@ -13,7 +13,7 @@ use crate::{
     },
     lexer::Token,
     parse::{
-        AstParser, AstParserErr, MapWithSpanExt, RecurseAstNode, TokenStream, potential_new_line,
+        AstParser, AstParserErr, MapWithSpanExt, RecursiveData, TokenStream, potential_new_line,
     },
 };
 use chumsky::prelude::*;
@@ -95,7 +95,7 @@ impl<'a> AstParser<'a> for AstString {
 }
 
 impl<'a> AstParser<'a> for AstRange {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
@@ -125,7 +125,7 @@ impl<'a> AstParser<'a> for AstRange {
 }
 
 impl<'a> AstParser<'a> for AstTuple {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::LeftParen => () }
@@ -145,7 +145,7 @@ impl<'a> AstParser<'a> for AstTuple {
 }
 
 impl<'a> AstParser<'a> for AstStruct {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         PotentialGenericTypeIdentifier::parser(())
@@ -183,7 +183,7 @@ impl<'a> AstParser<'a> for AstStruct {
 }
 
 impl<'a> AstParser<'a> for AstEnum {
-    type Data = RecurseAstNode<'a>;
+    type Data = RecursiveData<'a>;
 
     fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         PotentialGenericTypeIdentifier::parser(())
