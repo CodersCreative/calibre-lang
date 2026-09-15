@@ -1,8 +1,9 @@
 use crate::{
     ast::nodes::{AstNode, AstNodeType, scopes::AstScopeDef},
-    parse::parse_program_with_source,
+    lexer::Token,
 };
 use chumsky::span::SimpleSpan;
+use logos::Logos;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display,
