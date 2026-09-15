@@ -62,8 +62,47 @@ pub mod util;
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
 pub type TokenStream<'a> = &'a [Token<'a>];
 
+pub struct RecurseAstNode<'a> {
+    pub node : Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>,
+}
+
+impl<'a> From<Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>> for RecurseAstNode<'a> {
+    fn from(value: Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>) -> Self {
+        Self {node : value}
+    }
+}
+
+impl<'a> From<RecurseTypeAndNode<'a>> for RecurseAstNode<'a> {
+    fn from(value: RecurseTypeAndNode<'a>) -> Self {
+        Self { node: value.node }
+    }
+}
+
+pub struct RecurseDataType<'a> {
+    pub data_type : Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
+}
+
+impl<'a> From<Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>> for RecurseDataType<'a> {
+    fn from(value: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>) -> Self {
+        Self{data_type : value}
+    }
+}
+
+impl<'a> From<RecurseTypeAndNode<'a>> for RecurseDataType<'a> {
+    fn from(value: RecurseTypeAndNode<'a>) -> Self {
+        Self { data_type: value.data_type }
+    }
+}
+
+pub struct RecurseTypeAndNode<'a> {
+    pub node : Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>,
+    pub data_type : Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
+}
+
+
 pub trait AstParser<'a>: Sized {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>>;
+    type Data;
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>>;
 }
 
 pub trait MapWithSpanExt<'a, I, O, E>: Parser<'a, I, O, E>
@@ -105,19 +144,19 @@ where
 {
 }
 
-pub fn typed_or_untyped_assignment<'a>()
+pub fn typed_or_untyped_assignment<'a>(data : RecurseTypeAndNode<'a>)
 -> Boxed<'a, 'a, TokenStream<'a>, (Option<ParserDataType>, Option<AstNode>), AstParserErr<'a>> {
     choice((
         // : (= or :=)
         select! { Token::Colon => () }
-            .ignore_then(ParserDataType::parser())
+            .ignore_then(data.data_type.clone())
             .then(
                 choice((
                     select! { Token::Eq => () }.map(|_| true),
                     select! { Token::Walrus => () }.map(|_| false),
                 ))
                 .padded_by(potential_new_line())
-                .then(AstNode::parser()),
+                .then(data.node.clone()),
             )
             .try_map(
                 |(data_type, (is_typed, value)), sp| match (true, is_typed) {
@@ -128,7 +167,7 @@ pub fn typed_or_untyped_assignment<'a>()
         // =
         select! { Token::Eq => () }
             .padded_by(potential_new_line())
-            .ignore_then(AstNode::parser())
+            .ignore_then(data.node)
             .try_map(|_, sp| {
                 Err(Rich::custom(
                     sp,
@@ -138,7 +177,7 @@ pub fn typed_or_untyped_assignment<'a>()
         // :=
         select! { Token::Walrus => () }
             .padded_by(potential_new_line())
-            .ignore_then(AstNode::parser())
+            .ignore_then(data.node)
             .map(|value| (None, Some(value))),
         empty().map(|_| (None, None)),
     ))
@@ -150,7 +189,7 @@ pub fn potential_new_line<'a>() -> Boxed<'a, 'a, TokenStream<'a>, (), AstParserE
 }
 
 impl<'a> AstParser<'a> for AstNode {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         AstNodeType::parser()
             .map_with_span(|node_type, span| Self { node_type, span })
             .boxed()
@@ -158,7 +197,7 @@ impl<'a> AstParser<'a> for AstNode {
 }
 
 impl<'a> AstParser<'a> for AstNodeType {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let flow = choice((
             AstBreak::parser().map(AstNodeType::Break),
             AstEmit::parser().map(AstNodeType::Emit),

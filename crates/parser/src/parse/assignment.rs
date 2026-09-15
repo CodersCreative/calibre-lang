@@ -13,7 +13,7 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstAssignment {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         AstNode::parser()
             .then(
                 choice((
@@ -56,7 +56,7 @@ impl<'a> AstParser<'a> for AstAssignment {
 }
 
 impl<'a> AstParser<'a> for AstAssignDestructure {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         DestructurePattern::no_bracket_parser()
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then(AstNode::parser())

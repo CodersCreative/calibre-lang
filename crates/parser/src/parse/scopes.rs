@@ -9,7 +9,7 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstScopeDef {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let body = choice((
             select! { Token::LeftBracket => () }
                 .ignore_then(select! { Token::LeftBracket => () })
@@ -90,7 +90,7 @@ impl<'a> AstParser<'a> for AstScopeDef {
 }
 
 impl<'a> AstParser<'a> for AstScopeAlias {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let args = select! { Token::LeftSquare => () }
             .ignore_then(
                 PotentialDollarIdentifier::parser()

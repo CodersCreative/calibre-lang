@@ -12,7 +12,7 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstParen {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::LeftParen => () }
             .ignore_then(AstNode::parser().padded_by(potential_new_line()))
             .then_ignore(select! { Token::RightParen => () })
@@ -24,7 +24,7 @@ impl<'a> AstParser<'a> for AstParen {
 }
 
 impl<'a> AstParser<'a> for AstTest {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Test => () }
             .ignore_then(select! { Token::StringLiteral(x) => x })
             .then(AstScopeDef::parser())
@@ -37,7 +37,7 @@ impl<'a> AstParser<'a> for AstTest {
 }
 
 impl<'a> AstParser<'a> for AstImport {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // import ... from module::path
             choice((
@@ -83,7 +83,7 @@ impl<'a> AstParser<'a> for AstImport {
 }
 
 impl<'a> AstParser<'a> for AstTag {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::At => () }
             .ignore_then(ParserText::parser())
             .then(

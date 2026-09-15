@@ -7,7 +7,7 @@ use crate::{
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstNot {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Not => () }
             .ignore_then(AstNode::parser())
             .map(|value| AstNot {
@@ -18,7 +18,7 @@ impl<'a> AstParser<'a> for AstNot {
 }
 
 impl<'a> AstParser<'a> for AstNeg {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Sub => () }
             .ignore_then(AstNode::parser())
             .map(|value| AstNeg {

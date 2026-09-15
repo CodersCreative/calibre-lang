@@ -19,7 +19,7 @@ use chumsky::{Boxed, Parser, select};
 use ustr::Ustr;
 
 impl<'a> AstParser<'a> for AstFloat {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::FloatLiteral(x) => x
         }
@@ -36,7 +36,7 @@ impl<'a> AstParser<'a> for AstFloat {
 }
 
 impl<'a> AstParser<'a> for AstBig {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::BigLiteral(x) => x
         }
@@ -48,7 +48,7 @@ impl<'a> AstParser<'a> for AstBig {
 }
 
 impl<'a> AstParser<'a> for AstInt {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::IntLiteral(x) => x
         }
@@ -59,7 +59,7 @@ impl<'a> AstParser<'a> for AstInt {
 
 // TODO Rewrite char handling
 impl<'a> AstParser<'a> for AstChar {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::CharLiteral(x) => AstChar{value : x.to_string().chars().next().unwrap_or_default()}
         }
@@ -68,7 +68,7 @@ impl<'a> AstParser<'a> for AstChar {
 }
 
 impl<'a> AstParser<'a> for AstString {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::StringLiteral(x) => x
         }
@@ -83,7 +83,7 @@ impl<'a> AstParser<'a> for AstString {
 }
 
 impl<'a> AstParser<'a> for AstRange {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             AstNode::parser()
                 .then_ignore(
@@ -109,7 +109,7 @@ impl<'a> AstParser<'a> for AstRange {
 }
 
 impl<'a> AstParser<'a> for AstTuple {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::LeftParen => () }
             .ignore_then(
                 AstNode::parser()
@@ -127,7 +127,7 @@ impl<'a> AstParser<'a> for AstTuple {
 }
 
 impl<'a> AstParser<'a> for AstStruct {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         PotentialGenericTypeIdentifier::parser()
             .then(
                 select! { Token::LeftBracket => () }
@@ -163,7 +163,7 @@ impl<'a> AstParser<'a> for AstStruct {
 }
 
 impl<'a> AstParser<'a> for AstEnum {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         PotentialGenericTypeIdentifier::parser()
             .then_ignore(select! { Token::Dot => () })
             .then(PotentialDollarIdentifier::parser())
@@ -179,7 +179,7 @@ impl<'a> AstParser<'a> for AstEnum {
 }
 
 impl<'a> AstParser<'a> for AstDataType {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {Token::Type => ()}
             .then(select! {Token::Colon => ()})
             .ignore_then(ParserDataType::parser())

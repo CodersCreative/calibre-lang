@@ -2,16 +2,15 @@ use crate::{
     ast::{
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::access::AstIdentifier,
-        types::ParserDataType,
-    },
-    lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream},
+    }, lexer::Token, parse::{AstParser, AstParserErr, MapWithSpanExt, RecurseDataType, TokenStream},
 };
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for ParserText {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    type Data = ();
+
+    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::Identifier(x) => x
         }
@@ -21,24 +20,28 @@ impl<'a> AstParser<'a> for ParserText {
 }
 
 impl<'a> AstParser<'a> for PotentialDollarIdentifier {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    type Data = ();
+
+    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::Dollar => (),
         }
-        .ignore_then(ParserText::parser())
+        .ignore_then(ParserText::parser(()))
         .map(PotentialDollarIdentifier::DollarIdentifier)
-        .or(ParserText::parser().map(PotentialDollarIdentifier::Identifier))
+        .or(ParserText::parser(()).map(PotentialDollarIdentifier::Identifier))
         .boxed()
     }
 }
 
 impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        PotentialDollarIdentifier::parser()
+    type Data = RecurseDataType<'a>;
+
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        PotentialDollarIdentifier::parser(())
             .then(
                 select! { Token::Vampire => () }
                     .ignore_then(
-                        ParserDataType::parser()
+                        data.data_type
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()
@@ -63,8 +66,10 @@ impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
 }
 
 impl<'a> AstParser<'a> for AstIdentifier {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        PotentialGenericTypeIdentifier::parser()
+    type Data = RecurseDataType<'a>;
+
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        PotentialGenericTypeIdentifier::parser(data)
             .map(|value| AstIdentifier { value })
             .boxed()
     }

@@ -13,7 +13,7 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for AstEmit {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Emit => () }
                 .ignore_then(AstNode::parser())
@@ -31,7 +31,7 @@ impl<'a> AstParser<'a> for AstEmit {
 }
 
 impl<'a> AstParser<'a> for AstBreak {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Break => () }
             .ignore_then(
                 select! {Token::At => ()}
@@ -48,7 +48,7 @@ impl<'a> AstParser<'a> for AstBreak {
 }
 
 impl<'a> AstParser<'a> for AstContinue {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Continue => () }
             .ignore_then(
                 select! {Token::At => ()}
@@ -61,7 +61,7 @@ impl<'a> AstParser<'a> for AstContinue {
 }
 
 impl<'a> AstParser<'a> for AstReturn {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Return => () }
             .ignore_then(AstNode::parser().or_not())
             .map(|value| AstReturn {
@@ -72,7 +72,7 @@ impl<'a> AstParser<'a> for AstReturn {
 }
 
 impl<'a> AstParser<'a> for AstDefer {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Defer => () }
             .ignore_then(
                 select! { Token::Return => () }
@@ -90,7 +90,7 @@ impl<'a> AstParser<'a> for AstDefer {
 }
 
 impl<'a> AstParser<'a> for TryCatch {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Colon => () }
                 .ignore_then(PotentialDollarIdentifier::parser())
@@ -109,7 +109,7 @@ impl<'a> AstParser<'a> for TryCatch {
 }
 
 impl<'a> AstParser<'a> for AstTry {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Try => () }
             .ignore_then(AstNode::parser())
             .then(TryCatch::parser().or_not())
@@ -122,7 +122,7 @@ impl<'a> AstParser<'a> for AstTry {
 }
 
 impl<'a> AstParser<'a> for AstPipe {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let pipe_seg = choice((
             select! { Token::Pipe => () }
                 .padded_by(potential_new_line())

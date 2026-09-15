@@ -10,7 +10,7 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for RefMutability {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::MutRef => () }.map(|_| RefMutability::MutRef),
             select! { Token::Mut => () }.map(|_| RefMutability::MutValue),
@@ -23,7 +23,7 @@ impl<'a> AstParser<'a> for RefMutability {
 }
 
 impl<'a> AstParser<'a> for AstRef {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         AstNode::parser()
             .then_ignore(select! {Token::Dot => ()})
             .then(choice((
@@ -39,7 +39,7 @@ impl<'a> AstParser<'a> for AstRef {
 }
 
 impl<'a> AstParser<'a> for AstDeref {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         AstNode::parser()
             .then_ignore(select! {Token::Dot => ()})
             .then_ignore(select! {Token::Mul => ()})
@@ -51,7 +51,7 @@ impl<'a> AstParser<'a> for AstDeref {
 }
 
 impl<'a> AstParser<'a> for AstDrop {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Identifier(x) if x == "drop" => () }
             .ignore_then(PotentialDollarIdentifier::parser())
             .map(|value| AstDrop { value })
@@ -60,7 +60,7 @@ impl<'a> AstParser<'a> for AstDrop {
 }
 
 impl<'a> AstParser<'a> for AstMove {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Move => () }
             .ignore_then(AstNode::parser())
             .map(|value| AstMove {

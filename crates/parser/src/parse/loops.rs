@@ -15,7 +15,7 @@ use chumsky::{Boxed, Parser, select};
 use super::matching::parse_pattern_list;
 
 impl<'a> AstParser<'a> for LoopType {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // ... in ...
             PotentialDollarIdentifier::parser()
@@ -41,7 +41,7 @@ impl<'a> AstParser<'a> for LoopType {
 }
 
 impl<'a> AstParser<'a> for AstLoop {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let label = select! { Token::At => () }
             .ignore_then(PotentialDollarIdentifier::parser())
             .or_not();
@@ -74,7 +74,7 @@ impl<'a> AstParser<'a> for AstLoop {
 }
 
 impl<'a> AstParser<'a> for AstIter {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let data_type = choice((
             select! { Token::Identifier(x) if x == "list" => () }
                 .ignore_then(select! { Token::Vampire => () })

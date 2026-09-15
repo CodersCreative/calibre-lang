@@ -14,7 +14,7 @@ use chumsky::{Parser, select};
 use std::str::FromStr;
 
 impl<'a> AstParser<'a> for ParserFfiInnerType {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Identifier(x) => x }
             .try_map(|name, span| {
                 ParserFfiInnerType::from_str(name)
@@ -25,7 +25,7 @@ impl<'a> AstParser<'a> for ParserFfiInnerType {
 }
 
 impl<'a> AstParser<'a> for ParserFfiDataType {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::At => () }
             .ignore_then(ParserFfiInnerType::parser())
             .map_with_span(|data_type, span| ParserFfiDataType::new(span, data_type))
@@ -34,7 +34,7 @@ impl<'a> AstParser<'a> for ParserFfiDataType {
 }
 
 impl<'a> AstParser<'a> for ParserDataType {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(
             |ty: chumsky::recursive::Recursive<
                 dyn chumsky::Parser<'_, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
@@ -312,7 +312,7 @@ impl<'a> AstParser<'a> for ParserDataType {
 }
 
 impl<'a> AstParser<'a> for ParserInnerType {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         ParserDataType::parser()
             .map(|data_type| data_type.data_type)
             .boxed()
@@ -320,7 +320,7 @@ impl<'a> AstParser<'a> for ParserInnerType {
 }
 
 impl<'a> AstParser<'a> for GenericTypes {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Lesser => () }
             .ignore_then(
                 GenericType::parser()
@@ -338,7 +338,7 @@ impl<'a> AstParser<'a> for GenericTypes {
 }
 
 impl<'a> AstParser<'a> for GenericType {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         PotentialDollarIdentifier::parser()
             .then(
                 select! { Token::Colon => () }

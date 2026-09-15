@@ -11,7 +11,7 @@ use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
 
 impl<'a> AstParser<'a> for SelectArm {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Identifier(x) if x == "_" => () }
                 .ignore_then(AstScopeDef::parser())
@@ -44,7 +44,7 @@ impl<'a> AstParser<'a> for SelectArm {
 }
 
 impl<'a> AstParser<'a> for AstSelect {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Select => () }
             .ignore_then(select! { Token::LeftBracket => () })
             .ignore_then(
@@ -61,7 +61,7 @@ impl<'a> AstParser<'a> for AstSelect {
 }
 
 impl<'a> AstParser<'a> for AstSpawn {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let auto_wait = select! { Token::At => () }.or_not().map(|x| x.is_some());
 
         auto_wait

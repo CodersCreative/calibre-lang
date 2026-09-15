@@ -13,7 +13,7 @@ use chumsky::{Boxed, Parser, select};
 use super::matching::parse_pattern_list;
 
 impl<'a> AstParser<'a> for IfComparisonType {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // let ... <- ...
             select! { Token::Let => () }
@@ -32,7 +32,7 @@ impl<'a> AstParser<'a> for IfComparisonType {
 }
 
 impl<'a> AstParser<'a> for AstIf {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|if_parser| {
             let else_block = choice((
                 if_parser.clone().map_with_span(|value, span| {
@@ -63,7 +63,7 @@ impl<'a> AstParser<'a> for AstIf {
 }
 
 impl<'a> AstParser<'a> for AstTernary {
-    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         AstNode::parser()
             .then(
                 select! { Token::Question => () }
