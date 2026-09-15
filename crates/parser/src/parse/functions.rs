@@ -1,38 +1,313 @@
-use crate::ast::nodes::functions::{AstCall, AstCurry, AstExtern, AstFunction, FunctionHeader};
-use crate::ast::nodes::unary::{AstNeg, AstNot};
+use crate::ast::idents::ParserText;
+use crate::ast::idents::PotentialDollarIdentifier;
+use crate::ast::nodes::DestructurePattern;
+use crate::ast::nodes::functions::{
+    AstCall, AstCurry, AstExtern, AstFunction, CallArg, FunctionHeader,
+};
+use crate::ast::nodes::scopes::AstScopeDef;
+use crate::ast::types::GenericTypes;
+use crate::ast::types::ParserDataType;
+use crate::ast::types::ParserInnerType;
+use crate::parse::MapWithSpanExt;
 use crate::{
+    Span,
     ast::nodes::AstNode,
+    ast::nodes::AstNodeType,
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
+use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
+
+impl<'a> AstParser<'a> for CallArg {
+    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        choice((
+            PotentialDollarIdentifier::parser()
+                .then_ignore(select! { Token::Colon => () })
+                .then(AstNode::parser())
+                .map(|(name, value)| CallArg::Named(name, value)),
+            AstNode::parser().map(CallArg::Value),
+        ))
+        .boxed()
+    }
+}
+
+#[derive(Clone)]
+enum FnParamGroup {
+    Plain(
+        Vec<(
+            PotentialDollarIdentifier,
+            Option<ParserDataType>,
+            Option<Box<AstNode>>,
+        )>,
+    ),
+    Destructure {
+        pattern: DestructurePattern,
+        data_type: Option<ParserDataType>,
+        default: Option<Box<AstNode>>,
+        span: Span,
+    },
+}
+
+impl<'a> AstParser<'a> for FnParamGroup {
+    fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        // TODO I should probably just end up combining this into ParserInnerType
+        let impl_trait_param_type = select! { Token::Impl => () }
+            .ignore_then(select! { Token::Identifier(name) => name })
+            .map_with_span(|name, sp| (name, sp))
+            .then(
+                select! { Token::Vampire => () }
+                    .ignore_then(
+                        select! { Token::Identifier(s) => s }
+                            .repeated()
+                            .at_least(1)
+                            .collect::<Vec<_>>(),
+                    )
+                    .then_ignore(select! { Token::Greater => () })
+                    .or_not(),
+            )
+            .map(|((name, sp), generic_text)| {
+                let trait_text = if let Some(generic_text) = generic_text {
+                    let inner = generic_text.join(" ").trim().to_string();
+                    format!("{name}:<{inner}>")
+                } else {
+                    name.to_string()
+                };
+                ParserDataType::new(sp, ParserInnerType::DynamicTraits(vec![trait_text]))
+            })
+            .boxed();
+
+        let normal = select! { Token::Mut => () }
+            .or_not()
+            .ignore_then(PotentialDollarIdentifier::parser())
+            .repeated()
+            .at_least(1)
+            .collect::<Vec<_>>()
+            .then(
+                select! { Token::Colon => () }
+                    .ignore_then(choice((impl_trait_param_type, ParserDataType::parser())).or_not())
+                    .then(
+                        select! { Token::Eq => () }
+                            .ignore_then(AstNode::parser())
+                            .or_not(),
+                    ),
+            )
+            .map(|(names, (ty, default))| {
+                FnParamGroup::Plain(
+                    names
+                        .into_iter()
+                        .map(|n| (n, ty.clone(), default.clone().map(Box::new)))
+                        .collect::<Vec<_>>(),
+                )
+            });
+
+        let destructure = DestructurePattern::parser()
+            .then(
+                select! { Token::Colon => () }
+                    .ignore_then(ParserDataType::parser().or_not())
+                    .then(
+                        select! { Token::Eq => () }
+                            .ignore_then(AstNode::parser())
+                            .or_not(),
+                    )
+                    .or_not(),
+            )
+            .map_with_span(move |(pattern, maybe_ty_default), sp| {
+                let (ty, default) = maybe_ty_default.unwrap_or((None, None));
+                FnParamGroup::Destructure {
+                    span: sp,
+                    pattern,
+                    data_type: ty,
+                    default: default.map(Box::new),
+                }
+            });
+
+        choice((destructure, normal)).boxed()
+    }
+}
 
 impl<'a> AstParser<'a> for FunctionHeader {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        unimplemented!()
+        let fn_param_groups = FnParamGroup::parser()
+            .separated_by(select! { Token::Comma => () })
+            .allow_trailing()
+            .collect::<Vec<_>>()
+            .or_not()
+            .map(|x| x.unwrap_or_default())
+            .boxed();
+
+        let fn_params = select! { Token::LeftParen => () }
+            .ignore_then(fn_param_groups.clone())
+            .then_ignore(select! { Token::RightParen => () })
+            .or_not()
+            .map(|x| x.unwrap_or_default())
+            .boxed();
+
+        GenericTypes::parser()
+            .then(fn_params)
+            .then(
+                select! { Token::RightArrow => () }
+                    .ignore_then(ParserDataType::parser())
+                    .or_not(),
+            )
+            .map(|((generics, params), ret)| {
+                let mut parameters = Vec::new();
+                let mut param_destructures = Vec::new();
+                let mut index: i16 = 0;
+
+                for group in params {
+                    match group {
+                        FnParamGroup::Plain(items) => parameters.extend(items),
+                        FnParamGroup::Destructure {
+                            pattern,
+                            data_type,
+                            default,
+                            span,
+                        } => {
+                            let param_index = parameters.len();
+                            index += 1;
+
+                            parameters.push((
+                                PotentialDollarIdentifier::Identifier(ParserText::new(
+                                    span,
+                                    format!("destructure_param_{}", index),
+                                )),
+                                data_type,
+                                default,
+                            ));
+                            param_destructures.push((param_index, pattern));
+                        }
+                    }
+                }
+
+                FunctionHeader {
+                    generics,
+                    parameters,
+                    return_type: ret.unwrap_or_else(|| ParserDataType::null(Span::default())),
+                    param_destructures,
+                }
+            })
+            .boxed()
     }
 }
 
 impl<'a> AstParser<'a> for AstFunction {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        unimplemented!()
+        select! { Token::Fn => () }
+            .then_ignore(select! { Token::Match => () }.not())
+            .ignore_then(FunctionHeader::parser())
+            .then(AstScopeDef::parser())
+            .map_with_span(|(header, body), span| AstFunction {
+                header,
+                body: Box::new(AstNode::new(span, AstNodeType::from(body))),
+            })
+            .boxed()
     }
 }
 
 impl<'a> AstParser<'a> for AstExtern {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        unimplemented!()
+        select! { Token::Extern => () }
+            .ignore_then(select! { Token::StringLiteral(abi) => abi })
+            .then_ignore(select! { Token::Const => () })
+            .then(PotentialDollarIdentifier::parser())
+            .then_ignore(select! { Token::Walrus => () })
+            .then_ignore(select! { Token::Fn => () })
+            .then_ignore(select! { Token::LeftParen => () })
+            .then(
+                ParserDataType::parser()
+                    .separated_by(select! { Token::Comma => () })
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .or_not()
+                    .map(|x| x.unwrap_or_default()),
+            )
+            .then_ignore(select! { Token::RightParen => () })
+            .then(
+                select! { Token::RightArrow => () }
+                    .ignore_then(ParserDataType::parser())
+                    .or_not(),
+            )
+            .then_ignore(select! { Token::From => () })
+            .then(select! { Token::StringLiteral(library) => library })
+            .then(
+                select! { Token::As => () }
+                    .ignore_then(select! { Token::StringLiteral(symbol) => symbol })
+                    .or_not(),
+            )
+            .map(
+                |(((((abi, identifier), parameters), return_type), library), symbol)| AstExtern {
+                    abi: abi.to_string(),
+                    identifier,
+                    parameters,
+                    return_type: return_type
+                        .unwrap_or_else(|| ParserDataType::null(Span::default())),
+                    library: library.to_string(),
+                    symbol: symbol.map(|s| s.to_string()),
+                },
+            )
+            .boxed()
     }
 }
 
 impl<'a> AstParser<'a> for AstCurry {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        unimplemented!()
+        select! { Token::Curry => () }
+            .ignore_then(AstNode::parser())
+            .map(|value| AstCurry {
+                value: Box::new(value),
+            })
+            .boxed()
     }
 }
 
 impl<'a> AstParser<'a> for AstCall {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        unimplemented!()
+        let call_args = select! { Token::LeftParen => () }
+            .ignore_then(
+                CallArg::parser()
+                    .separated_by(select! { Token::Comma => () })
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .or_not()
+                    .map(|x| x.unwrap_or_default()),
+            )
+            .then_ignore(select! { Token::RightParen => () })
+            .boxed();
+
+        let reverse_args = select! { Token::Lesser => () }
+            .ignore_then(select! { Token::LeftParen => () })
+            .ignore_then(
+                AstNode::parser()
+                    .separated_by(select! { Token::Comma => () })
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .or_not()
+                    .map(|x| x.unwrap_or_default()),
+            )
+            .then_ignore(select! { Token::RightParen => () })
+            .boxed();
+
+        AstNode::parser()
+            .then(
+                select! { Token::Vampire => () }
+                    .ignore_then(
+                        ParserDataType::parser()
+                            .separated_by(select! { Token::Comma => () })
+                            .collect::<Vec<_>>(),
+                    )
+                    .then_ignore(select! { Token::Greater => () })
+                    .or_not(),
+            )
+            .then(call_args)
+            .then(reverse_args)
+            .map(|(((caller, generic_types), args), reverse_args)| AstCall {
+                string_fn: None,
+                caller: Box::new(caller),
+                generic_types: generic_types.unwrap_or_default(),
+                args,
+                reverse_args,
+            })
+            .boxed()
     }
 }

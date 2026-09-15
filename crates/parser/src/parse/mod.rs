@@ -34,6 +34,7 @@ pub mod access;
 pub mod assignment;
 pub mod binary;
 pub mod conditionals;
+pub mod data_types;
 pub mod declarations;
 mod diagnostics;
 mod expressions;
