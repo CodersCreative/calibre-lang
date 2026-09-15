@@ -1,5 +1,7 @@
+use std::path::Path;
+
 use crate::{
-    Span,
+    ParserError, Span,
     ast::{
         nodes::{
             AstNode, AstNodeType,
@@ -32,6 +34,7 @@ use crate::{
 use chumsky::prelude::*;
 use chumsky::span::Span as ChumskySpan;
 use chumsky::{error::Rich, extra::ParserExtra};
+use tracing::instrument;
 
 pub mod access;
 pub mod assignment;
@@ -39,7 +42,7 @@ pub mod binary;
 pub mod conditionals;
 pub mod data_types;
 pub mod declarations;
-mod diagnostics;
+pub mod diagnostics;
 pub mod flow;
 pub mod functions;
 pub mod generator;
@@ -54,6 +57,7 @@ pub mod scopes;
 pub mod spawn;
 pub mod types;
 pub mod unary;
+pub mod util;
 
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
 pub type TokenStream<'a> = &'a [Token<'a>];
@@ -142,26 +146,9 @@ pub fn typed_or_untyped_assignment<'a>()
 }
 
 pub fn potential_new_line<'a>() -> Boxed<'a, 'a, TokenStream<'a>, (), AstParserErr<'a>> {
-    select! {Token::NewLine => ()}.repeated().boxed()
+    just(Token::NewLine).repeated().boxed()
 }
 
-fn filter<'a, F>(f: F) -> impl Parser<'a, &'a str, char, extra::Err<Rich<'a, char>>> + Clone
-where
-    F: Fn(&char) -> bool + Clone + 'a,
-{
-    any().filter(f)
-}
-
-fn take_until<'a, P, O>(
-    end: P,
-) -> impl Parser<'a, &'a str, String, extra::Err<Rich<'a, char>>> + Clone
-where
-    P: Parser<'a, &'a str, O, extra::Err<Rich<'a, char>>> + Clone + 'a,
-{
-    any().and_is(end.not()).repeated().collect::<String>()
-}
-
-// TODO I will do these once the entire parser is complete
 impl<'a> AstParser<'a> for AstNode {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         AstNodeType::parser()
@@ -306,4 +293,37 @@ impl<'a> AstParser<'a> for AstNodeType {
         ))
         .boxed()
     }
+}
+
+#[instrument(skip_all, fields(path = ?source_path))]
+pub fn parse_program_with_source<'a>(
+    tokens: &[Token<'a>],
+    source_path: Option<&Path>,
+) -> Result<AstNode, Vec<ParserError>> {
+    let parser = AstNode::parser()
+        .padded_by(potential_new_line())
+        .repeated()
+        .collect::<Vec<_>>();
+
+    let parsed = parser.parse(tokens);
+
+    if let Some(items) = parsed.output() {
+        let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
+            Span::new_from_spans(a.span, b.span)
+        } else {
+            Span::default()
+        };
+        return Ok(AstNode::new(
+            sp,
+            AstNodeType::ScopeDeclaration(AstScopeDef {
+                body: Some(items.clone()),
+                named: None,
+                is_temp: false,
+                create_new_scope: Some(false),
+                define: false,
+            }),
+        ));
+    }
+
+    Err(diagnostics::to_parser_errors(parsed.into_errors()))
 }

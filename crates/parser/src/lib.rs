@@ -1,6 +1,7 @@
 use crate::{
     ast::nodes::{AstNode, AstNodeType, scopes::AstScopeDef},
     lexer::Token,
+    parse::parse_program_with_source,
 };
 use chumsky::span::SimpleSpan;
 use logos::Logos;
@@ -191,6 +192,30 @@ fn empty_scope_node() -> AstNode {
 }
 
 impl Parser {
+    pub fn lex<'a>(&self, source: &'a str) -> Result<Vec<Token<'a>>, Vec<ParserError>> {
+        let mut tokens = Vec::new();
+        let mut lex_errors = Vec::new();
+
+        for result in Token::lexer(source).spanned() {
+            match result {
+                (Ok(token), _) => {
+                    if !matches!(token, Token::LineComment(_) | Token::BlockComment(_)) {
+                        tokens.push(token);
+                    }
+                }
+                (Err(_), span) => {
+                    lex_errors.push(ParserError::Lexer{err :  "invalid token".to_string(), span : Span::from(span)});
+                }
+            }
+        }
+
+        if lex_errors.is_empty() {
+            Ok(tokens)
+        } else {
+            Err(lex_errors)
+        }
+    }
+
     pub fn set_source_path(&mut self, path: Option<PathBuf>) {
         self.source_path = path;
     }
@@ -198,7 +223,7 @@ impl Parser {
     #[instrument(skip_all, fields(bytes = source.len(), path = ?self.source_path))]
     pub fn produce_ast(&mut self, source: &str) -> AstNode {
         debug!(lines = source.lines().count(), "starting parse");
-        match parse_program_with_source(source, self.source_path.as_deref()) {
+        match self.lex(source).and_then(|x| parse_program_with_source(&x, self.source_path.as_deref())) {
             Ok(ast) => {
                 self.errors.clear();
                 info!("parse completed");
@@ -233,28 +258,36 @@ pub trait CalibreError: Display {
 pub enum ParserError {
     #[error("{err} at {span}")]
     Syntax { err: SyntaxErr, span: Span },
+    #[error("lexing error: {err}")]
+    Lexer {err : String, span : Span},
 }
 
 impl CalibreError for ParserError {
     fn code(&self) -> &'static str {
         match self {
             Self::Syntax { err, .. } => err.code(),
+            Self::Lexer{..} => "Lex",
         }
     }
 
     fn hint(&self) -> Option<String> {
         match self {
             Self::Syntax { err, .. } => err.hint(),
+            Self::Lexer{..} => None,
         }
     }
 
     fn step(&self) -> &'static str {
-        "parser"
+        match self {
+            Self::Syntax { .. } => "parser",
+            Self::Lexer{..} => "lexer",
+        }
     }
 
     fn span(&self) -> Span {
         match self {
             Self::Syntax { span, .. } => *span,
+            Self::Lexer{span, ..} => *span,
         }
     }
 }
