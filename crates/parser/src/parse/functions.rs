@@ -150,7 +150,7 @@ impl<'a> AstParser<'a> for FunctionHeader {
                     .ignore_then(ParserDataType::parser())
                     .or_not(),
             )
-            .map(|((generics, params), ret)| {
+            .map_with_span(|((generics, params), ret), span| {
                 let mut parameters = Vec::new();
                 let mut param_destructures = Vec::new();
                 let mut index: i16 = 0;
@@ -183,7 +183,7 @@ impl<'a> AstParser<'a> for FunctionHeader {
                 FunctionHeader {
                     generics,
                     parameters,
-                    return_type: ret.unwrap_or_else(|| ParserDataType::null(Span::default())),
+                    return_type: ret.unwrap_or_else(|| ParserDataType::null(span)),
                     param_destructures,
                 }
             })
