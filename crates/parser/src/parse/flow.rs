@@ -15,7 +15,7 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstEmit {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Emit => () }
                 .ignore_then(data.node.clone())
@@ -35,7 +35,7 @@ impl<'a> AstParser<'a> for AstEmit {
 impl<'a> AstParser<'a> for AstBreak {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Break => () }
             .ignore_then(
                 select! {Token::At => ()}
@@ -54,7 +54,7 @@ impl<'a> AstParser<'a> for AstBreak {
 impl<'a> AstParser<'a> for AstContinue {
     type Data = ();
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Continue => () }
             .ignore_then(
                 select! {Token::At => ()}
@@ -69,7 +69,7 @@ impl<'a> AstParser<'a> for AstContinue {
 impl<'a> AstParser<'a> for AstReturn {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Return => () }
             .ignore_then(data.node.or_not())
             .map(|value| AstReturn {
@@ -82,7 +82,7 @@ impl<'a> AstParser<'a> for AstReturn {
 impl<'a> AstParser<'a> for AstDefer {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Defer => () }
             .ignore_then(
                 select! { Token::Return => () }
@@ -102,7 +102,7 @@ impl<'a> AstParser<'a> for AstDefer {
 impl<'a> AstParser<'a> for TryCatch {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Colon => () }
                 .ignore_then(PotentialDollarIdentifier::parser(()))
@@ -123,7 +123,7 @@ impl<'a> AstParser<'a> for TryCatch {
 impl<'a> AstParser<'a> for AstTry {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Try => () }
             .ignore_then(data.node.clone())
             .then(TryCatch::parser(data).or_not())
@@ -138,7 +138,7 @@ impl<'a> AstParser<'a> for AstTry {
 impl<'a> AstParser<'a> for AstPipe {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let pipe_seg = choice((
             select! { Token::Pipe => () }
                 .padded_by(potential_new_line())

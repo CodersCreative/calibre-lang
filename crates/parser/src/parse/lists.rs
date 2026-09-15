@@ -1,7 +1,7 @@
 use crate::ast::nodes::lists::AstList;
 use crate::parse::{MapWithSpanExt, RecurseAstNode, potential_new_line};
 use crate::{
-    ast::{types::ParserDataType},
+    ast::types::ParserDataType,
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
@@ -11,7 +11,7 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstList {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let data_type = choice((
             select! { Token::Identifier(x) if x == "list" => () }
                 .ignore_then(select! { Token::Vampire => () })

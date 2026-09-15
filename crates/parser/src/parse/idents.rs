@@ -1,7 +1,11 @@
 use crate::{
     ast::{
-        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier}, nodes::access::AstIdentifier, types::ParserDataType,
-    }, lexer::Token, parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream},
+        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        nodes::access::AstIdentifier,
+        types::ParserDataType,
+    },
+    lexer::Token,
+    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream},
 };
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
@@ -9,7 +13,7 @@ use chumsky::{Parser, select};
 impl<'a> AstParser<'a> for ParserText {
     type Data = ();
 
-    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::Identifier(x) => x
         }
@@ -21,7 +25,7 @@ impl<'a> AstParser<'a> for ParserText {
 impl<'a> AstParser<'a> for PotentialDollarIdentifier {
     type Data = ();
 
-    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
             Token::Dollar => (),
         }
@@ -35,7 +39,7 @@ impl<'a> AstParser<'a> for PotentialDollarIdentifier {
 impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
     type Data = ();
 
-    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         PotentialDollarIdentifier::parser(())
             .then(
                 select! { Token::Vampire => () }
@@ -67,7 +71,7 @@ impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
 impl<'a> AstParser<'a> for AstIdentifier {
     type Data = ();
 
-    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         PotentialGenericTypeIdentifier::parser(())
             .map(|value| AstIdentifier { value })
             .boxed()

@@ -12,7 +12,7 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for RefMutability {
     type Data = ();
 
-    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::MutRef => () }.map(|_| RefMutability::MutRef),
             select! { Token::Mut => () }.map(|_| RefMutability::MutValue),
@@ -27,7 +27,7 @@ impl<'a> AstParser<'a> for RefMutability {
 impl<'a> AstParser<'a> for AstRef {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
             .then_ignore(select! {Token::Dot => ()})
             .then(choice((
@@ -45,7 +45,7 @@ impl<'a> AstParser<'a> for AstRef {
 impl<'a> AstParser<'a> for AstDeref {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
             .then_ignore(select! {Token::Dot => ()})
             .then_ignore(select! {Token::Mul => ()})
@@ -59,7 +59,7 @@ impl<'a> AstParser<'a> for AstDeref {
 impl<'a> AstParser<'a> for AstDrop {
     type Data = ();
 
-    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Identifier(x) if x == "drop" => () }
             .ignore_then(PotentialDollarIdentifier::parser(()))
             .map(|value| AstDrop { value })
@@ -70,7 +70,7 @@ impl<'a> AstParser<'a> for AstDrop {
 impl<'a> AstParser<'a> for AstMove {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Move => () }
             .ignore_then(data.node)
             .map(|value| AstMove {

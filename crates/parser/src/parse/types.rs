@@ -23,7 +23,7 @@ use ustr::Ustr;
 impl<'a> AstParser<'a> for TypeDefType {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let struct_named_fields = select! { Token::LeftBracket => () }
             .ignore_then(
                 PotentialDollarIdentifier::parser(())
@@ -162,7 +162,7 @@ impl<'a> AstParser<'a> for TypeDefType {
 impl<'a> AstParser<'a> for Overload {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Const => () }
             .ignore_then(select! { Token::StringLiteral(op) => op })
             .map_with_span(|op, sp| ParserText::new(sp, op))
@@ -183,7 +183,7 @@ impl<'a> AstParser<'a> for Overload {
 impl<'a> AstParser<'a> for TraitMember {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let const_member = select! { Token::Const => () }
             .ignore_then(PotentialDollarIdentifier::parser(()))
             .then(typed_or_untyped_assignment(data))
@@ -210,7 +210,7 @@ impl<'a> AstParser<'a> for TraitMember {
 impl<'a> AstParser<'a> for AstImpl {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Impl => () }
             .ignore_then(GenericTypes::parser(()))
             .then(ParserDataType::parser(()))
@@ -237,7 +237,7 @@ impl<'a> AstParser<'a> for AstImpl {
 impl<'a> AstParser<'a> for AstImplTrait {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Impl => () }
             .ignore_then(GenericTypes::parser(()))
             .then(PotentialGenericTypeIdentifier::parser(()))
@@ -269,7 +269,7 @@ impl<'a> AstParser<'a> for AstImplTrait {
 impl<'a> AstParser<'a> for AstTrait {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Trait => () }
             .ignore_then(PotentialGenericTypeIdentifier::parser(()))
             .then_ignore(select! { Token::LeftBracket => () })
@@ -295,7 +295,7 @@ impl<'a> AstParser<'a> for AstTrait {
 impl<'a> AstParser<'a> for AstType {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Type => () }
             .ignore_then(PotentialGenericTypeIdentifier::parser(()))
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))

@@ -204,7 +204,10 @@ impl Parser {
                     }
                 }
                 (Err(_), span) => {
-                    lex_errors.push(ParserError::Lexer{err :  "invalid token".to_string(), span : Span::from(span)});
+                    lex_errors.push(ParserError::Lexer {
+                        err: "invalid token".to_string(),
+                        span: Span::from(span),
+                    });
                 }
             }
         }
@@ -223,7 +226,10 @@ impl Parser {
     #[instrument(skip_all, fields(bytes = source.len(), path = ?self.source_path))]
     pub fn produce_ast(&mut self, source: &str) -> AstNode {
         debug!(lines = source.lines().count(), "starting parse");
-        match self.lex(source).and_then(|x| parse_program_with_source(&x, self.source_path.as_deref())) {
+        match self
+            .lex(source)
+            .and_then(|x| parse_program_with_source(&x, self.source_path.as_deref()))
+        {
             Ok(ast) => {
                 self.errors.clear();
                 info!("parse completed");
@@ -259,35 +265,35 @@ pub enum ParserError {
     #[error("{err} at {span}")]
     Syntax { err: SyntaxErr, span: Span },
     #[error("lexing error: {err}")]
-    Lexer {err : String, span : Span},
+    Lexer { err: String, span: Span },
 }
 
 impl CalibreError for ParserError {
     fn code(&self) -> &'static str {
         match self {
             Self::Syntax { err, .. } => err.code(),
-            Self::Lexer{..} => "Lex",
+            Self::Lexer { .. } => "Lex",
         }
     }
 
     fn hint(&self) -> Option<String> {
         match self {
             Self::Syntax { err, .. } => err.hint(),
-            Self::Lexer{..} => None,
+            Self::Lexer { .. } => None,
         }
     }
 
     fn step(&self) -> &'static str {
         match self {
             Self::Syntax { .. } => "parser",
-            Self::Lexer{..} => "lexer",
+            Self::Lexer { .. } => "lexer",
         }
     }
 
     fn span(&self) -> Span {
         match self {
             Self::Syntax { span, .. } => *span,
-            Self::Lexer{span, ..} => *span,
+            Self::Lexer { span, .. } => *span,
         }
     }
 }

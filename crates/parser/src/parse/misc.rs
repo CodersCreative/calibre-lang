@@ -14,7 +14,7 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstParen {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::LeftParen => () }
             .ignore_then(data.node.padded_by(potential_new_line()))
             .then_ignore(select! { Token::RightParen => () })
@@ -28,7 +28,7 @@ impl<'a> AstParser<'a> for AstParen {
 impl<'a> AstParser<'a> for AstTest {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Test => () }
             .ignore_then(select! { Token::StringLiteral(x) => x })
             .then(AstScopeDef::parser(data))
@@ -43,7 +43,7 @@ impl<'a> AstParser<'a> for AstTest {
 impl<'a> AstParser<'a> for AstImport {
     type Data = ();
 
-    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // import ... from module::path
             choice((
@@ -91,13 +91,14 @@ impl<'a> AstParser<'a> for AstImport {
 impl<'a> AstParser<'a> for AstTag {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::At => () }
             .ignore_then(ParserText::parser(()))
             .then(
                 select! { Token::LeftParen => () }
                     .ignore_then(
-                        data.node.clone()
+                        data.node
+                            .clone()
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()

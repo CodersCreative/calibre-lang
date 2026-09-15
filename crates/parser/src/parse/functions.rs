@@ -23,7 +23,7 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for CallArg {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             PotentialDollarIdentifier::parser(())
                 .then_ignore(select! { Token::Colon => () })
@@ -55,7 +55,7 @@ enum FnParamGroup {
 impl<'a> AstParser<'a> for FnParamGroup {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let normal = select! { Token::Mut => () }
             .or_not()
             .ignore_then(PotentialDollarIdentifier::parser(()))
@@ -90,7 +90,7 @@ impl<'a> AstParser<'a> for FnParamGroup {
 impl<'a> AstParser<'a> for FunctionHeader {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let fn_param_groups = FnParamGroup::parser(data.clone())
             .padded_by(potential_new_line())
             .separated_by(select! { Token::Comma => () })
@@ -158,7 +158,7 @@ impl<'a> AstParser<'a> for FunctionHeader {
 impl<'a> AstParser<'a> for AstFunction {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }
             .then_ignore(select! { Token::Match => () }.not())
             .ignore_then(FunctionHeader::parser(data.clone()))
@@ -174,7 +174,7 @@ impl<'a> AstParser<'a> for AstFunction {
 impl<'a> AstParser<'a> for AstExtern {
     type Data = ();
 
-    fn parser(_data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Extern => () }
             .ignore_then(select! { Token::StringLiteral(abi) => abi })
             .then_ignore(select! { Token::Const => () })
@@ -224,7 +224,7 @@ impl<'a> AstParser<'a> for AstExtern {
 impl<'a> AstParser<'a> for AstCurry {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Curry => () }
             .ignore_then(data.node)
             .map(|value| AstCurry {
@@ -237,7 +237,7 @@ impl<'a> AstParser<'a> for AstCurry {
 impl<'a> AstParser<'a> for AstCall {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let call_args = select! { Token::LeftParen => () }
             .ignore_then(
                 CallArg::parser(data.clone())
@@ -254,7 +254,8 @@ impl<'a> AstParser<'a> for AstCall {
         let reverse_args = select! { Token::Lesser => () }
             .ignore_then(select! { Token::LeftParen => () })
             .ignore_then(
-                data.node.clone()
+                data.node
+                    .clone()
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()

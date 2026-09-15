@@ -15,7 +15,7 @@ use super::matching::parse_pattern_list;
 impl<'a> AstParser<'a> for IfComparisonType {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // let ... <- ...
             select! { Token::Let => () }
@@ -36,7 +36,7 @@ impl<'a> AstParser<'a> for IfComparisonType {
 impl<'a> AstParser<'a> for AstIf {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|if_parser| {
             let else_block = choice((
                 if_parser.clone().map_with_span(|value, span| {
@@ -69,8 +69,9 @@ impl<'a> AstParser<'a> for AstIf {
 impl<'a> AstParser<'a> for AstTernary {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node.clone()
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        data.node
+            .clone()
             .then(
                 select! { Token::Question => () }
                     .padded_by(potential_new_line())

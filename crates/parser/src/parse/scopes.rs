@@ -11,12 +11,13 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstScopeDef {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let body = choice((
             select! { Token::LeftBracket => () }
                 .ignore_then(select! { Token::LeftBracket => () })
                 .ignore_then(
-                    data.node.clone()
+                    data.node
+                        .clone()
                         .padded_by(potential_new_line())
                         .repeated()
                         .collect::<Vec<_>>()
@@ -28,7 +29,8 @@ impl<'a> AstParser<'a> for AstScopeDef {
                 .map(|items| (Some(items), Some(false))),
             select! { Token::LeftBracket => () }
                 .ignore_then(
-                    data.node.clone()
+                    data.node
+                        .clone()
                         .padded_by(potential_new_line())
                         .repeated()
                         .collect::<Vec<_>>()
@@ -94,7 +96,7 @@ impl<'a> AstParser<'a> for AstScopeDef {
 impl<'a> AstParser<'a> for AstScopeAlias {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let args = select! { Token::LeftSquare => () }
             .ignore_then(
                 PotentialDollarIdentifier::parser(())

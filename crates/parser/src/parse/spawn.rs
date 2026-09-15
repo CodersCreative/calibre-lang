@@ -13,7 +13,7 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for SelectArm {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Identifier(x) if x == "_" => () }
                 .ignore_then(AstScopeDef::parser(data.clone()))
@@ -22,7 +22,8 @@ impl<'a> AstParser<'a> for SelectArm {
                     conditionals: Vec::new(),
                     body: AstNode::new(span, AstNodeType::from(body)),
                 }),
-            data.node.clone()
+            data.node
+                .clone()
                 .then_ignore(select! { Token::LeftArrow => () })
                 .then(data.node.clone())
                 .then(AstScopeDef::parser(data.clone()))
@@ -31,7 +32,8 @@ impl<'a> AstParser<'a> for SelectArm {
                     conditionals: Vec::new(),
                     body: AstNode::new(span, AstNodeType::from(body)),
                 }),
-            data.node.clone()
+            data.node
+                .clone()
                 .then_ignore(select! { Token::RightArrow => () })
                 .then(data.node.clone())
                 .then(AstScopeDef::parser(data))
@@ -48,7 +50,7 @@ impl<'a> AstParser<'a> for SelectArm {
 impl<'a> AstParser<'a> for AstSelect {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Select => () }
             .ignore_then(select! { Token::LeftBracket => () })
             .ignore_then(
@@ -67,14 +69,15 @@ impl<'a> AstParser<'a> for AstSelect {
 impl<'a> AstParser<'a> for AstSpawn {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let auto_wait = select! { Token::At => () }.or_not().map(|x| x.is_some());
 
         auto_wait
             .then(choice((
                 select! { Token::LeftBracket => () }
                     .ignore_then(
-                        data.node.clone()
+                        data.node
+                            .clone()
                             .padded_by(potential_new_line())
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
@@ -92,7 +95,7 @@ impl<'a> AstParser<'a> for AstSpawn {
                             }),
                         )
                     }),
-                data.node
+                data.node,
             )))
             .map(|(auto_wait, item)| {
                 if let AstNodeType::Spawn(mut spawn) = item.node_type {

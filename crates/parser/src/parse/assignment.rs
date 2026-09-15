@@ -15,8 +15,9 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstAssignment {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node.clone()
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        data.node
+            .clone()
             .then(
                 choice((
                     select! { Token::Walrus => () }.map(|_| None),
@@ -60,7 +61,7 @@ impl<'a> AstParser<'a> for AstAssignment {
 impl<'a> AstParser<'a> for AstAssignDestructure {
     type Data = RecurseAstNode<'a>;
 
-    fn parser(data : Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         DestructurePattern::no_bracket_parser()
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then(data.node)
