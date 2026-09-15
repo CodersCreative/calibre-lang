@@ -15,8 +15,8 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstBinary {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        data.node.clone()
             .clone()
             .then(select! {
                 Token::Add => BinaryOperator::Add,
@@ -31,7 +31,7 @@ impl<'a> AstParser<'a> for AstBinary {
                 Token::Shl => BinaryOperator::Shl,
                 Token::Shr => BinaryOperator::Shr,
             })
-            .then(data.node)
+            .then(data.node.clone())
             .map(|((left, operator), right)| AstBinary {
                 left: Box::new(left),
                 right: Box::new(right),
@@ -44,8 +44,8 @@ impl<'a> AstParser<'a> for AstBinary {
 impl<'a> AstParser<'a> for AstComparison {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        data.node.clone()
             .clone()
             .then(
                 select! {
@@ -58,7 +58,7 @@ impl<'a> AstParser<'a> for AstComparison {
                 }
                 .padded_by(potential_new_line()),
             )
-            .then(data.node)
+            .then(data.node.clone())
             .map(|((left, operator), right)| AstComparison {
                 left: Box::new(left),
                 right: Box::new(right),
@@ -71,8 +71,8 @@ impl<'a> AstParser<'a> for AstComparison {
 impl<'a> AstParser<'a> for AstBoolean {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        data.node.clone()
             .clone()
             .then(
                 select! {
@@ -81,7 +81,7 @@ impl<'a> AstParser<'a> for AstBoolean {
                 }
                 .padded_by(potential_new_line()),
             )
-            .then(data.node)
+            .then(data.node.clone())
             .map(|((left, operator), right)| AstBoolean {
                 left: Box::new(left),
                 right: Box::new(right),
@@ -94,10 +94,10 @@ impl<'a> AstParser<'a> for AstBoolean {
 impl<'a> AstParser<'a> for AstAs {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        data.node.clone()
             .then_ignore(select! { Token::As => () }.padded_by(potential_new_line()))
-            .then(data.data_type)
+            .then(data.data_type.clone())
             .then(
                 select! { Token::Question => () }
                     .map(|()| AsFailureMode::Option)
@@ -116,10 +116,10 @@ impl<'a> AstParser<'a> for AstAs {
 impl<'a> AstParser<'a> for AstIs {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        data.node.clone()
             .then_ignore(select! { Token::Is => () }.padded_by(potential_new_line()))
-            .then(data.data_type)
+            .then(data.data_type.clone())
             .map(|(value, data_type)| AstIs {
                 value: Box::new(value),
                 data_type,
@@ -131,11 +131,11 @@ impl<'a> AstParser<'a> for AstIs {
 impl<'a> AstParser<'a> for AstIn {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        data.node.clone()
             .clone()
             .then_ignore(select! { Token::In => () }.padded_by(potential_new_line()))
-            .then(data.node)
+            .then(data.node.clone())
             .map(|(identifier, value)| AstIn {
                 identifier: Box::new(identifier),
                 value: Box::new(value),

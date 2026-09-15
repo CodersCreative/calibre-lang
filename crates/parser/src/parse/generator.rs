@@ -11,12 +11,12 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstGenerator {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }
             .ignore_then(select! { Token::LeftParen => () })
             .then(data.node.clone())
             .then_ignore(select! { Token::For => () })
-            .then(LoopType::parser(data.clone()))
+            .then(LoopType::parser(data))
             .then(
                 select! { Token::If => () }
                     .ignore_then(data.node.clone())
@@ -25,13 +25,13 @@ impl<'a> AstParser<'a> for AstGenerator {
             )
             .then(
                 select! { Token::Until => () }
-                    .ignore_then(data.node)
+                    .ignore_then(data.node.clone())
                     .or_not(),
             )
             .then_ignore(select! { Token::RightParen => () })
             .then(
                 select! { Token::RightArrow => () }
-                    .ignore_then(data.data_type)
+                    .ignore_then(data.data_type.clone())
                     .or_not(),
             )
             .map(

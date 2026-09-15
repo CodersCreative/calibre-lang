@@ -11,7 +11,7 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstScopeDef {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let body = choice((
             select! { Token::LeftBracket => () }
                 .ignore_then(select! { Token::LeftBracket => () })
@@ -51,10 +51,10 @@ impl<'a> AstParser<'a> for AstScopeDef {
             .then(
                 select! { Token::LeftSquare => () }
                     .ignore_then(
-                        data.dollar_ident
+                        data.dollar_ident.clone()
                             .then(
                                 select! { Token::Colon => () }
-                                    .ignore_then(data.node)
+                                    .ignore_then(data.node.clone())
                                     .or_not(),
                             )
                             .padded_by(potential_new_line())
@@ -98,7 +98,7 @@ impl<'a> AstParser<'a> for AstScopeDef {
 impl<'a> AstParser<'a> for AstScopeAlias {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let args = select! { Token::LeftSquare => () }
             .ignore_then(
                 data.dollar_ident
@@ -136,7 +136,7 @@ impl<'a> AstParser<'a> for AstScopeAlias {
         select! { Token::Let => () }
             .ignore_then(data.dollar_ident.clone())
             .then_ignore(select! { Token::FatArrow => () }.padded_by(potential_new_line()))
-            .then(data.dollar_ident)
+            .then(data.dollar_ident.clone())
             .then(args)
             .then(call_mode)
             .map(

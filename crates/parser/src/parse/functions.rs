@@ -23,13 +23,13 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for CallArg {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
-            data.dollar_ident
+            data.dollar_ident.clone()
                 .then_ignore(select! { Token::Colon => () })
                 .then(data.node.clone())
                 .map(|(name, value)| CallArg::Named(name, value)),
-            data.node.map(CallArg::Value),
+            data.node.clone().map(CallArg::Value),
         ))
         .boxed()
     }
@@ -55,14 +55,14 @@ enum FnParamGroup {
 impl<'a> AstParser<'a> for FnParamGroup {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let normal = select! { Token::Mut => () }
             .or_not()
             .ignore_then(data.dollar_ident.clone())
             .repeated()
             .at_least(1)
             .collect::<Vec<_>>()
-            .then(typed_or_untyped_assignment(data.clone()))
+            .then(typed_or_untyped_assignment(data))
             .map(|(names, (ty, default))| {
                 FnParamGroup::Plain(
                     names
@@ -72,7 +72,7 @@ impl<'a> AstParser<'a> for FnParamGroup {
                 )
             });
 
-        let destructure = DestructurePattern::parser(data.clone())
+        let destructure = DestructurePattern::parser(data)
             .then(typed_or_untyped_assignment(data))
             .map_with_span(
                 move |(pattern, (ty, default)), sp| FnParamGroup::Destructure {
@@ -90,8 +90,8 @@ impl<'a> AstParser<'a> for FnParamGroup {
 impl<'a> AstParser<'a> for FunctionHeader {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let fn_param_groups = FnParamGroup::parser(data.clone())
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        let fn_param_groups = FnParamGroup::parser(data)
             .padded_by(potential_new_line())
             .separated_by(select! { Token::Comma => () })
             .allow_trailing()
@@ -107,11 +107,11 @@ impl<'a> AstParser<'a> for FunctionHeader {
             .map(|x| x.unwrap_or_default())
             .boxed();
 
-        GenericTypes::parser(data.clone())
+        GenericTypes::parser(data)
             .then(fn_params)
             .then(
                 select! { Token::RightArrow => () }
-                    .ignore_then(data.data_type)
+                    .ignore_then(data.data_type.clone())
                     .or_not(),
             )
             .map_with_span(|((generics, params), ret), span| {
@@ -158,10 +158,10 @@ impl<'a> AstParser<'a> for FunctionHeader {
 impl<'a> AstParser<'a> for AstFunction {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }
             .then_ignore(select! { Token::Match => () }.not())
-            .ignore_then(FunctionHeader::parser(data.clone()))
+            .ignore_then(FunctionHeader::parser(data))
             .then(AstScopeDef::parser(data))
             .map_with_span(|(header, body), span| AstFunction {
                 header,
@@ -174,7 +174,7 @@ impl<'a> AstParser<'a> for AstFunction {
 impl<'a> AstParser<'a> for AstExtern {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Extern => () }
             .ignore_then(select! { Token::StringLiteral(abi) => abi })
             .then_ignore(select! { Token::Const => () })
@@ -196,7 +196,7 @@ impl<'a> AstParser<'a> for AstExtern {
             .then(
                 select! { Token::RightArrow => () }
                     .padded_by(potential_new_line())
-                    .ignore_then(data.data_type)
+                    .ignore_then(data.data_type.clone())
                     .or_not(),
             )
             .then_ignore(select! { Token::From => () }.padded_by(potential_new_line()))
@@ -225,9 +225,9 @@ impl<'a> AstParser<'a> for AstExtern {
 impl<'a> AstParser<'a> for AstCurry {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Curry => () }
-            .ignore_then(data.node)
+            .ignore_then(data.node.clone())
             .map(|value| AstCurry {
                 value: Box::new(value),
             })
@@ -238,10 +238,10 @@ impl<'a> AstParser<'a> for AstCurry {
 impl<'a> AstParser<'a> for AstCall {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let call_args = select! { Token::LeftParen => () }
             .ignore_then(
-                CallArg::parser(data.clone())
+                CallArg::parser(data)
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
@@ -267,11 +267,11 @@ impl<'a> AstParser<'a> for AstCall {
             .then_ignore(select! { Token::RightParen => () })
             .boxed();
 
-        data.node
+        data.node.clone()
             .then(
                 select! { Token::Vampire => () }
                     .ignore_then(
-                        data.data_type
+                        data.data_type.clone()
                             .padded_by(potential_new_line())
                             .separated_by(select! { Token::Comma => () })
                             .collect::<Vec<_>>(),

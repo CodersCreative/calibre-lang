@@ -15,11 +15,11 @@ use super::matching::parse_pattern_list;
 impl<'a> AstParser<'a> for IfComparisonType {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // let ... <- ...
             select! { Token::Let => () }
-                .ignore_then(parse_pattern_list(data.clone()))
+                .ignore_then(parse_pattern_list(data))
                 .then_ignore(select! { Token::LeftArrow => () })
                 .then(data.node.clone())
                 .map(|((patterns, _), value)| IfComparisonType::IfLet {
@@ -27,7 +27,7 @@ impl<'a> AstParser<'a> for IfComparisonType {
                     pattern: (patterns, Vec::new()),
                 }),
             // ...
-            data.node.map(IfComparisonType::If),
+            data.node.clone().map(IfComparisonType::If),
         ))
         .boxed()
     }
@@ -36,19 +36,19 @@ impl<'a> AstParser<'a> for IfComparisonType {
 impl<'a> AstParser<'a> for AstIf {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|if_parser| {
             let else_block = choice((
                 if_parser.clone().map_with_span(|value, span| {
                     Box::new(AstNode::new(span, AstNodeType::IfStatement(value)))
                 }),
-                AstScopeDef::parser(data.clone()).map_with_span(|scope, span| {
+                AstScopeDef::parser(data).map_with_span(|scope, span| {
                     Box::new(AstNode::new(span, AstNodeType::from(scope)))
                 }),
             ));
 
             select! { Token::If => () }
-                .ignore_then(IfComparisonType::parser(data.clone()))
+                .ignore_then(IfComparisonType::parser(data))
                 .then(AstScopeDef::parser(data))
                 .then(
                     select! { Token::Else => () }
@@ -69,15 +69,15 @@ impl<'a> AstParser<'a> for AstIf {
 impl<'a> AstParser<'a> for AstTernary {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        data.node.clone()
             .clone()
             .then(
                 select! { Token::Question => () }
                     .padded_by(potential_new_line())
                     .ignore_then(data.node.clone())
                     .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
-                    .then(data.node),
+                    .then(data.node.clone()),
             )
             .map(|(comparison, (then, otherwise))| AstTernary {
                 comparison: Box::new(comparison),

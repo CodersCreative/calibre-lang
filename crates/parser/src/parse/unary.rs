@@ -9,9 +9,9 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstNot {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Not => () }
-            .ignore_then(data.node)
+            .ignore_then(data.node.clone())
             .map(|value| AstNot {
                 value: Box::new(value),
             })
@@ -22,9 +22,9 @@ impl<'a> AstParser<'a> for AstNot {
 impl<'a> AstParser<'a> for AstNeg {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Sub => () }
-            .ignore_then(data.node)
+            .ignore_then(data.node.clone())
             .map(|value| AstNeg {
                 value: Box::new(value),
             })

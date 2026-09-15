@@ -16,7 +16,7 @@ use super::matching::parse_pattern_list;
 impl<'a> AstParser<'a> for LoopType {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // ... in ...
             data.dollar_ident
@@ -28,9 +28,9 @@ impl<'a> AstParser<'a> for LoopType {
             data.node.clone().map(LoopType::While),
             // let ... <- ...
             select! { Token::Let => () }
-                .ignore_then(parse_pattern_list(data.clone()))
+                .ignore_then(parse_pattern_list(data))
                 .then_ignore(select! { Token::LeftArrow => () })
-                .then(data.node)
+                .then(data.node.clone())
                 .map(|((patterns, _), value)| LoopType::Let {
                     value,
                     pattern: (patterns, Vec::new()),
@@ -45,22 +45,22 @@ impl<'a> AstParser<'a> for LoopType {
 impl<'a> AstParser<'a> for AstLoop {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let label = select! { Token::At => () }
             .ignore_then(data.dollar_ident.clone())
             .or_not();
 
-        LoopType::parser(data.clone())
+        LoopType::parser(data)
             .then(label)
-            .then(AstScopeDef::parser(data.clone()))
+            .then(AstScopeDef::parser(data))
             .then(
                 select! { Token::Else => () }
-                    .ignore_then(AstScopeDef::parser(data.clone()))
+                    .ignore_then(AstScopeDef::parser(data))
                     .or_not(),
             )
             .then(
                 select! { Token::Until => () }
-                    .ignore_then(data.node)
+                    .ignore_then(data.node.clone())
                     .or_not(),
             )
             .map_with_span(
@@ -80,7 +80,7 @@ impl<'a> AstParser<'a> for AstLoop {
 impl<'a> AstParser<'a> for AstIter {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let data_type = choice((
             select! { Token::Identifier(x) if x == "list" => () }
                 .ignore_then(select! { Token::Vampire => () })
@@ -97,7 +97,7 @@ impl<'a> AstParser<'a> for AstIter {
             .then(data.node.clone())
             .then(select! { Token::Spawn => () }.or_not().map(|x| x.is_some()))
             .then_ignore(select! { Token::For => () })
-            .then(LoopType::parser(data.clone()))
+            .then(LoopType::parser(data))
             .then(
                 select! { Token::If => () }
                     .ignore_then(data.node.clone())
@@ -106,7 +106,7 @@ impl<'a> AstParser<'a> for AstIter {
             )
             .then(
                 select! { Token::Until => () }
-                    .ignore_then(data.node)
+                    .ignore_then(data.node.clone())
                     .or_not(),
             )
             .then_ignore(select! { Token::RightSquare => () })

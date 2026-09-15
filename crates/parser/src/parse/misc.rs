@@ -14,9 +14,9 @@ use chumsky::{Boxed, Parser, select};
 impl<'a> AstParser<'a> for AstParen {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::LeftParen => () }
-            .ignore_then(data.node.padded_by(potential_new_line()))
+            .ignore_then(data.node.clone().padded_by(potential_new_line()))
             .then_ignore(select! { Token::RightParen => () })
             .map(|value| AstParen {
                 value: Box::new(value),
@@ -28,7 +28,7 @@ impl<'a> AstParser<'a> for AstParen {
 impl<'a> AstParser<'a> for AstTest {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Test => () }
             .ignore_then(select! { Token::StringLiteral(x) => x })
             .then(AstScopeDef::parser(data))
@@ -43,7 +43,7 @@ impl<'a> AstParser<'a> for AstTest {
 impl<'a> AstParser<'a> for AstImport {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // import ... from module::path
             choice((
@@ -77,7 +77,7 @@ impl<'a> AstParser<'a> for AstImport {
                 .then(
                     select! { Token::As => () }
                         .padded_by(potential_new_line())
-                        .ignore_then(data.dollar_ident)
+                        .ignore_then(data.dollar_ident.clone())
                         .or_not(),
                 )
                 .map(|(module, alias)| (Vec::new(), module, alias)),
@@ -94,9 +94,9 @@ impl<'a> AstParser<'a> for AstImport {
 impl<'a> AstParser<'a> for AstTag {
     type Data = RecursiveData<'a>;
 
-    fn parser(data: Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: &Self::Data) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::At => () }
-            .ignore_then(ParserText::parser(()))
+            .ignore_then(ParserText::parser(&()))
             .then(
                 select! { Token::LeftParen => () }
                     .ignore_then(
@@ -112,7 +112,7 @@ impl<'a> AstParser<'a> for AstTag {
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
-            .then(data.node.padded_by(potential_new_line()))
+            .then(data.node.clone().padded_by(potential_new_line()))
             .map(|((tag, args), node)| AstTag {
                 node: Box::new(node),
                 tag,
