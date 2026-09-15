@@ -138,7 +138,6 @@ impl<'a> AstParser<'a> for AstTry {
 impl<'a> AstParser<'a> for AstPipe {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let pipe_seg = choice((
             select! { Token::Pipe => () }

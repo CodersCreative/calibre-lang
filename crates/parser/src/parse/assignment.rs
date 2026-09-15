@@ -15,7 +15,6 @@ use chumsky::{Parser, select};
 impl<'a> AstParser<'a> for AstAssignment {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.node
             .clone()

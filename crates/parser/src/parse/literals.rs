@@ -147,7 +147,6 @@ impl<'a> AstParser<'a> for AstTuple {
 impl<'a> AstParser<'a> for AstStruct {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         data.generic_ident
             .clone()

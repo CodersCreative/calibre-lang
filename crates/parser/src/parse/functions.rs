@@ -92,7 +92,6 @@ impl<'a> AstParser<'a> for FnParamGroup {
 impl<'a> AstParser<'a> for FunctionHeader {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let fn_param_groups = FnParamGroup::parser(data.clone())
             .padded_by(potential_new_line())
@@ -174,7 +173,6 @@ impl<'a> AstParser<'a> for AstFunction {
 impl<'a> AstParser<'a> for AstExtern {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Extern => () }
             .ignore_then(select! { Token::StringLiteral(abi) => abi })
@@ -238,7 +236,6 @@ impl<'a> AstParser<'a> for AstCurry {
 impl<'a> AstParser<'a> for AstCall {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let call_args = select! { Token::LeftParen => () }
             .ignore_then(

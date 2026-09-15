@@ -43,7 +43,6 @@ impl<'a> AstParser<'a> for AstTest {
 impl<'a> AstParser<'a> for AstImport {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // import ... from module::path

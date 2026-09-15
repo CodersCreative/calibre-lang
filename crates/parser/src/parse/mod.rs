@@ -192,7 +192,8 @@ impl<'a> AstNode {
             // Conditionals
             AstIf::parser(data.clone()).map(AstNodeType::IfStatement),
             AstTernary::parser(data.clone()).map(AstNodeType::Ternary),
-        ));
+        ))
+        .boxed();
 
         let parser2 = choice((
             // Binary
@@ -225,7 +226,8 @@ impl<'a> AstNode {
             // Spawn
             AstSpawn::parser(data.clone()).map(AstNodeType::Spawn),
             AstSelect::parser(data.clone()).map(AstNodeType::SelectStatement),
-        ));
+        ))
+        .boxed();
 
         let parser3 = choice((
             // Matching
@@ -255,7 +257,8 @@ impl<'a> AstNode {
             AstTest::parser(data.clone()).map(AstNodeType::TestDeclaration),
             AstTag::parser(data.clone()).map(AstNodeType::Tag),
             AstParen::parser(data.clone()).map(AstNodeType::ParenExpression),
-        ));
+        ))
+        .boxed();
 
         parser1
             .or(parser2)

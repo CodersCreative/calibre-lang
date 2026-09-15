@@ -40,7 +40,6 @@ impl<'a> AstParser<'a> for ParserFfiDataType {
 impl<'a> AstParser<'a> for ParserDataType {
     type Data = ();
 
-    #[inline(always)]
     fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(
             |ty: chumsky::recursive::Recursive<

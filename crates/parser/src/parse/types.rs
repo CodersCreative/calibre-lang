@@ -21,7 +21,6 @@ use ustr::Ustr;
 impl<'a> AstParser<'a> for TypeDefType {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let struct_named_fields = select! { Token::LeftBracket => () }
             .ignore_then(
@@ -299,7 +298,6 @@ impl<'a> AstParser<'a> for AstTrait {
 impl<'a> AstParser<'a> for AstType {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Type => () }
             .ignore_then(data.generic_ident.clone())

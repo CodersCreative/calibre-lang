@@ -36,7 +36,6 @@ impl<'a> AstParser<'a> for IfComparisonType {
 impl<'a> AstParser<'a> for AstIf {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|if_parser| {
             let else_block = choice((

@@ -78,7 +78,6 @@ impl<'a> DestructurePattern {
 impl<'a> AstParser<'a> for DestructurePattern {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // tuple
@@ -170,7 +169,6 @@ impl<'a> AstParser<'a> for MatchStringPatternPart {
 impl<'a> AstParser<'a> for MatchTupleItem {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|tuple_item| {
             choice((
@@ -311,7 +309,6 @@ impl<'a> AstParser<'a> for MatchTupleItem {
 impl<'a> AstParser<'a> for MatchStructFieldPattern {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Identifier(field) => field }
             .map_with_span(|field, span| (field, span))
@@ -391,7 +388,6 @@ impl<'a> AstParser<'a> for MatchStructFieldPattern {
 impl<'a> AstParser<'a> for MatchArmType {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         recursive(|arm_type| {
             choice((
@@ -543,7 +539,6 @@ pub fn parse_pattern_list<'a>(
 impl<'a> AstParser<'a> for MatchBody {
     type Data = RecursiveData<'a>;
 
-    #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let match_arm = MatchArmType::parser(data.clone())
             .padded_by(potential_new_line())
