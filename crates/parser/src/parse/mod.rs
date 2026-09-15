@@ -115,6 +115,7 @@ pub fn typed_or_untyped_assignment<'a>()
                     select! { Token::Eq => () }.map(|_| true),
                     select! { Token::Walrus => () }.map(|_| false),
                 ))
+                .padded_by(potential_new_line())
                 .then(AstNode::parser()),
             )
             .try_map(
@@ -125,6 +126,7 @@ pub fn typed_or_untyped_assignment<'a>()
             ),
         // =
         select! { Token::Eq => () }
+            .padded_by(potential_new_line())
             .ignore_then(AstNode::parser())
             .try_map(|_, sp| {
                 Err(Rich::custom(
@@ -134,11 +136,16 @@ pub fn typed_or_untyped_assignment<'a>()
             }),
         // :=
         select! { Token::Walrus => () }
+            .padded_by(potential_new_line())
             .ignore_then(AstNode::parser())
             .map(|value| (None, Some(value))),
         empty().map(|_| (None, None)),
     ))
     .boxed()
+}
+
+pub fn potential_new_line<'a>() -> Boxed<'a, 'a, TokenStream<'a>, (), AstParserErr<'a>> {
+    select! {Token::NewLine => ()}.repeated().boxed()
 }
 
 fn filter<'a, F>(f: F) -> impl Parser<'a, &'a str, char, extra::Err<Rich<'a, char>>> + Clone
@@ -160,7 +167,9 @@ where
 // TODO I will do these once the entire parser is complete
 impl<'a> AstParser<'a> for AstNode {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        unimplemented!()
+        AstNodeType::parser()
+            .map_with_span(|node_type, span| Self { node_type, span })
+            .boxed()
     }
 }
 

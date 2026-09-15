@@ -7,7 +7,7 @@ use crate::{
         types::{GenericType, GenericTypes, ParserDataType, ParserInnerType},
     },
     lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream},
+    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream, potential_new_line},
 };
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
@@ -64,17 +64,17 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
-                let function_parser = select! { Token::Fn => () }
-                    .ignore_then(select! { Token::LeftParen => () })
+                let function_parser = select! { Token::Fn => () }.ignore_then(
+                    select! { Token::LeftParen => () }
                     .ignore_then(
-                        ty.clone()
+                        ty.clone().padded_by(potential_new_line())
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| x.unwrap_or_default()),
                     )
-                    .then_ignore(select! { Token::RightParen => () })
+                    .then_ignore(select! { Token::RightParen => () })).or_not()
                     .then(
                         select! { Token::RightArrow => () }
                             .ignore_then(ty.clone())
@@ -87,7 +87,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                                 return_type: Box::new(ret.unwrap_or_else(|| {
                                     ParserDataType::new(span, ParserInnerType::Null)
                                 })),
-                                parameters,
+                                parameters : parameters.unwrap_or_default(),
                             },
                         )
                     })

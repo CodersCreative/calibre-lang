@@ -3,6 +3,7 @@ use crate::ast::nodes::DestructurePattern;
 use crate::ast::nodes::VarType;
 use crate::ast::nodes::declaration::{AstDeclaration, AstDeclareDestructure};
 use crate::ast::types::ParserDataType;
+use crate::parse::potential_new_line;
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -56,7 +57,7 @@ impl<'a> AstParser<'a> for AstDeclareDestructure {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Let => () }
             .ignore_then(DestructurePattern::no_bracket_parser())
-            .then_ignore(select! { Token::Walrus => () })
+            .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then(AstNode::parser())
             .map(|(pattern, value)| AstDeclareDestructure {
                 var_type: VarType::Immutable,

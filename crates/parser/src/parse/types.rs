@@ -9,8 +9,8 @@ use crate::ast::nodes::types::{
 use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserDataType;
 use crate::ast::types::ParserInnerType;
+use crate::parse::potential_new_line;
 use crate::{
-    Span,
     ast::nodes::AstNode,
     ast::nodes::AstNodeType,
     lexer::Token,
@@ -28,13 +28,14 @@ impl<'a> AstParser<'a> for TypeDefType {
                     .repeated()
                     .at_least(1)
                     .collect::<Vec<_>>()
-                    .then_ignore(select! { Token::Colon => () })
+                    .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
                     .then(ParserDataType::parser())
                     .then(
                         select! { Token::Eq => () }
                             .ignore_then(AstNode::parser())
                             .or_not(),
                     )
+                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>(),
@@ -86,11 +87,13 @@ impl<'a> AstParser<'a> for TypeDefType {
                     )
                     .then(
                         select! { Token::Colon => () }
+                            .padded_by(potential_new_line())
                             .ignore_then(ParserDataType::parser())
                             .or_not(),
                     )
                     .then(
                         select! { Token::Eq => () }
+                            .padded_by(potential_new_line())
                             .ignore_then(AstNode::parser())
                             .or_not(),
                     )
@@ -100,6 +103,7 @@ impl<'a> AstParser<'a> for TypeDefType {
                             .map(|name| (name, t.clone(), default_value.clone(), tags.clone()))
                             .collect::<Vec<_>>()
                     })
+                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>(),
@@ -158,7 +162,7 @@ impl<'a> AstParser<'a> for Overload {
         select! { Token::Const => () }
             .ignore_then(select! { Token::StringLiteral(op) => op })
             .map_with_span(|op, sp| ParserText::new(sp, op))
-            .then_ignore(select! { Token::Walrus => () })
+            .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then(AstNode::parser())
             .try_map(|(operator, value), sp| match value.node_type {
                 AstNodeType::FunctionDeclaration(ref func) => Ok(Overload {
@@ -205,6 +209,7 @@ impl<'a> AstParser<'a> for AstImpl {
             .then_ignore(select! { Token::LeftBracket => () })
             .then(
                 AstNode::parser()
+                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -226,11 +231,12 @@ impl<'a> AstParser<'a> for AstImplTrait {
         select! { Token::Impl => () }
             .ignore_then(GenericTypes::parser())
             .then(PotentialGenericTypeIdentifier::parser())
-            .then_ignore(select! { Token::For => () })
+            .then_ignore(select! { Token::For => () }.padded_by(potential_new_line()))
             .then(ParserDataType::parser())
             .then_ignore(select! { Token::LeftBracket => () })
             .then(
                 AstNode::parser()
+                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -257,6 +263,7 @@ impl<'a> AstParser<'a> for AstTrait {
             .then_ignore(select! { Token::LeftBracket => () })
             .then(
                 TraitMember::parser()
+                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -277,7 +284,7 @@ impl<'a> AstParser<'a> for AstType {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Type => () }
             .ignore_then(PotentialGenericTypeIdentifier::parser())
-            .then_ignore(select! { Token::Walrus => () })
+            .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then(TypeDefType::parser())
             .then(
                 select! { Token::At => () }
@@ -292,6 +299,7 @@ impl<'a> AstParser<'a> for AstType {
                     .ignore_then(select! { Token::LeftBracket => () })
                     .ignore_then(
                         Overload::parser()
+                            .padded_by(potential_new_line())
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()

@@ -1,6 +1,7 @@
 use crate::ast::binary::BinaryOperator;
 use crate::ast::nodes::DestructurePattern;
 use crate::ast::nodes::assignment::{AstAssignDestructure, AstAssignment};
+use crate::parse::potential_new_line;
 use crate::{
     Span,
     ast::nodes::AstNode,
@@ -29,11 +30,11 @@ impl<'a> AstParser<'a> for AstAssignment {
                     select! { Token::ShlEq => () }.map(|_| Some(BinaryOperator::Shl)),
                     select! { Token::ShrEq => () }.map(|_| Some(BinaryOperator::Shr)),
                 ))
-                .or_not(),
+                .padded_by(potential_new_line()),
             )
             .then(AstNode::parser())
             .map(|((identifier, op), value)| {
-                let rhs = if let Some(Some(binary_op)) = op {
+                let rhs = if let Some(binary_op) = op {
                     AstNode::new(
                         Span::new_from_spans(identifier.span, value.span),
                         AstNodeType::BinaryExpression(crate::ast::nodes::binary::AstBinary {
@@ -57,7 +58,7 @@ impl<'a> AstParser<'a> for AstAssignment {
 impl<'a> AstParser<'a> for AstAssignDestructure {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         DestructurePattern::no_bracket_parser()
-            .then_ignore(select! { Token::Walrus => () })
+            .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then(AstNode::parser())
             .map(|(pattern, value)| AstAssignDestructure {
                 pattern,

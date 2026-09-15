@@ -1,7 +1,7 @@
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType};
 use crate::ast::nodes::scopes::AstScopeDef;
-use crate::parse::MapWithSpanExt;
+use crate::parse::{MapWithSpanExt, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -67,8 +67,9 @@ impl<'a> AstParser<'a> for AstTernary {
         AstNode::parser()
             .then(
                 select! { Token::Question => () }
+                    .padded_by(potential_new_line())
                     .ignore_then(AstNode::parser())
-                    .then_ignore(select! { Token::Colon => () })
+                    .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
                     .then(AstNode::parser()),
             )
             .map(|(comparison, (then, otherwise))| AstTernary {

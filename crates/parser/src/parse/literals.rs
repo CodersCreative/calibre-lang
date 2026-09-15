@@ -11,7 +11,7 @@ use crate::{
         },
     },
     lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream},
+    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream, potential_new_line},
 };
 use chumsky::prelude::*;
 use chumsky::{Boxed, Parser, select};
@@ -85,7 +85,9 @@ impl<'a> AstParser<'a> for AstRange {
     fn parser() -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             AstNode::parser()
-                .then_ignore(select! { Token::InclusiveRange => () })
+                .then_ignore(
+                    select! { Token::InclusiveRange => () }.padded_by(potential_new_line()),
+                )
                 .then(AstNode::parser())
                 .map(|(from, to)| AstRange {
                     from: Box::new(from),
@@ -93,7 +95,7 @@ impl<'a> AstParser<'a> for AstRange {
                     inclusive: true,
                 }),
             AstNode::parser()
-                .then_ignore(select! { Token::Range => () })
+                .then_ignore(select! { Token::Range => () }.padded_by(potential_new_line()))
                 .then(AstNode::parser())
                 .map(|(from, to)| AstRange {
                     from: Box::new(from),
@@ -110,6 +112,7 @@ impl<'a> AstParser<'a> for AstTuple {
         select! { Token::LeftParen => () }
             .ignore_then(
                 AstNode::parser()
+                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -140,6 +143,7 @@ impl<'a> AstParser<'a> for AstStruct {
                                     value.unwrap_or_else(|| AstNode::identifier(span, field)),
                                 )
                             })
+                            .padded_by(potential_new_line())
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()
@@ -162,7 +166,7 @@ impl<'a> AstParser<'a> for AstEnum {
         PotentialGenericTypeIdentifier::parser()
             .then_ignore(select! { Token::Dot => () })
             .then(PotentialDollarIdentifier::parser())
-            .then_ignore(select! { Token::Colon => () })
+            .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
             .then(AstNode::parser().or_not())
             .map(|((identifier, value), data)| AstEnum {
                 identifier,
