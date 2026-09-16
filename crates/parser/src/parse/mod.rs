@@ -16,11 +16,12 @@ use crate::{
                 AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstString, AstStruct,
                 AstTuple,
             },
-            loops::AstIter,
+            loops::{AstIter, AstLoop},
             matching::{AstFnMatch, AstMatch},
             memory::{AstDrop, AstMove},
             misc::{AstImport, AstParen, AstTag, AstTest},
             scopes::{AstScopeAlias, AstScopeDef},
+            spawn::{AstSelect, AstSpawn},
             types::{AstImpl, AstImplTrait, AstTrait, AstType},
         },
         types::ParserDataType,
@@ -206,7 +207,6 @@ impl<'a> AstNode {
             AstDefer::parser(data.clone()).map(AstNodeType::Defer),
             AstReturn::parser(data.clone()).map(AstNodeType::Return),
             AstTry::parser(data.clone()).map(AstNodeType::Try),
-            // AstPipe::parser(data.clone()).map(AstNodeType::PipeExpression),
             // Literals
             AstStruct::parser(data.clone()).map(AstNodeType::StructLiteral),
             AstEnum::parser(data.clone()).map(AstNodeType::EnumExpression),
@@ -221,7 +221,6 @@ impl<'a> AstNode {
             AstList::parser(data.clone()).map(AstNodeType::ListLiteral),
             // Conditionals
             AstIf::parser(data.clone()).map(AstNodeType::IfStatement),
-            // AstTernary::parser(data.clone()).map(AstNodeType::Ternary),
         ))
         .boxed()
         .map_with_span(|node_type, span| Self { node_type, span });
@@ -239,8 +238,8 @@ impl<'a> AstNode {
             // Access
             AstIdentifier::parser(data.clone()).map(AstNodeType::Identifier),
             // Spawn
-            // AstSpawn::parser(data.clone()).map(AstNodeType::Spawn),
-            // AstSelect::parser(data.clone()).map(AstNodeType::SelectStatement),
+            AstSpawn::parser(data.clone()).map(AstNodeType::Spawn),
+            AstSelect::parser(data.clone()).map(AstNodeType::SelectStatement),
         ))
         .boxed()
         .map_with_span(|node_type, span| Self { node_type, span });
@@ -260,7 +259,7 @@ impl<'a> AstNode {
             AstImplTrait::parser(data.clone()).map(AstNodeType::ImplTraitDeclaration),
             AstTrait::parser(data.clone()).map(AstNodeType::TraitDeclaration),
             // Loops
-            // AstLoop::parser(data.clone()).map(AstNodeType::LoopDeclaration),
+            AstLoop::parser(data.clone()).map(AstNodeType::LoopDeclaration),
             AstIter::parser(data.clone()).map(AstNodeType::IterExpression),
             // Scopes
             AstScopeAlias::parser(data.clone()).map(AstNodeType::ScopeAlias),

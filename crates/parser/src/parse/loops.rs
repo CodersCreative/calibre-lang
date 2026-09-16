@@ -51,7 +51,8 @@ impl<'a> AstParser<'a> for AstLoop {
             .ignore_then(data.dollar_ident.clone())
             .or_not();
 
-        LoopType::parser(data.clone())
+        select! {Token::For => ()}
+            .ignore_then(LoopType::parser(data.clone()))
             .then(label)
             .then(AstScopeDef::parser(data.clone()))
             .then(

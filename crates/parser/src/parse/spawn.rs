@@ -71,7 +71,10 @@ impl<'a> AstParser<'a> for AstSpawn {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let auto_wait = select! { Token::At => () }.or_not().map(|x| x.is_some());
+        let auto_wait = select! { Token::At => () }
+            .or_not()
+            .map(|x| x.is_some())
+            .then_ignore(select! { Token::Spawn => ()});
 
         auto_wait
             .then(choice((

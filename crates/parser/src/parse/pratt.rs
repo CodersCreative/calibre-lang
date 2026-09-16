@@ -115,7 +115,8 @@ impl<'a> PrattParser {
             Token::AndEq => (BooleanOperator::And, true),
             Token::Or => (BooleanOperator::Or, false),
             Token::OrEq => (BooleanOperator::Or, true),
-        };
+        }
+        .padded_by(potential_new_line());
 
         let comparison = select! {
             Token::Greater => ComparisonOperator::Greater,
@@ -124,7 +125,8 @@ impl<'a> PrattParser {
             Token::LesserEq => ComparisonOperator::LesserEqual,
             Token::Eq => ComparisonOperator::Equal,
             Token::NotEq => ComparisonOperator::NotEqual,
-        };
+        }
+        .padded_by(potential_new_line());
 
         let bitwise = select! {
             Token::BitAnd => (BinaryOperator::BitAnd, false),
@@ -133,7 +135,8 @@ impl<'a> PrattParser {
             Token::BitXorEq => (BinaryOperator::BitXor, true),
             Token::BitOr => (BinaryOperator::BitOr, false),
             Token::BitOrEq => (BinaryOperator::BitOr, true),
-        };
+        }
+        .padded_by(potential_new_line());
 
         let shift = select! {
             Token::Shl => (BinaryOperator::Shl, false),
@@ -147,7 +150,8 @@ impl<'a> PrattParser {
             Token::SubEq => (BinaryOperator::Sub, true),
             Token::Add => (BinaryOperator::Add, false),
             Token::AddEq => (BinaryOperator::Add, true),
-        };
+        }
+        .padded_by(potential_new_line());
 
         let mul = select! {
             Token::Mul => (BinaryOperator::Mul, false),
@@ -156,17 +160,20 @@ impl<'a> PrattParser {
             Token::DivEq => (BinaryOperator::Div, true),
             Token::Mod => (BinaryOperator::Mod, false),
             Token::ModEq => (BinaryOperator::Mod, true),
-        };
+        }
+        .padded_by(potential_new_line());
 
         let pow = select! {
             Token::Pow => (BinaryOperator::Pow, false),
             Token::PowEq => (BinaryOperator::Pow, true),
-        };
+        }
+        .padded_by(potential_new_line());
 
         let range = select! {
             Token::Range => false,
             Token::InclusiveRange => true,
-        };
+        }
+        .padded_by(potential_new_line());
 
         let conversion = select! { Token::As => () }
             .padded_by(potential_new_line())
