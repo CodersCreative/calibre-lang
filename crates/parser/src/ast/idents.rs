@@ -197,7 +197,7 @@ pub enum IntLiteralType {
     Byte,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParsedIntLiteral {
     pub value: i64,
     pub int_type: IntLiteralType,

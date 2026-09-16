@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::ast::idents::ParsedIntLiteral;
 use logos::{Lexer, Logos};
 use logos_display::{Debug, Display};
@@ -276,4 +278,281 @@ fn lex_block_comment<'a>(lex: &mut Lexer<'a, Token<'a>>) -> logos::Filter<&'a st
 fn lex_int<'a>(lex: &mut Lexer<'a, Token<'a>>) -> Option<ParsedIntLiteral> {
     let slice = lex.slice();
     ParsedIntLiteral::parse(slice)
+}
+
+impl FromStr for Token<'static> {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Token<'static>, Self::Err> {
+        let trimmed = s.trim();
+        match trimmed {
+            // Types
+            "Null" => Ok(Token::Null),
+            "Dyn" => Ok(Token::Dyn),
+
+            // Values
+            "Identifier" => Ok(Token::Identifier("")),
+            "CharLiteral" => Ok(Token::CharLiteral("")),
+            "StringLiteral" => Ok(Token::StringLiteral("")),
+            "FloatLiteral" => Ok(Token::FloatLiteral("")),
+            "BigLiteral" => Ok(Token::BigLiteral("")),
+            "IntLiteral" => Ok(Token::IntLiteral(ParsedIntLiteral::default())),
+
+            // Ranges
+            "Range" => Ok(Token::Range),
+            "InclusiveRange" => Ok(Token::InclusiveRange),
+
+            // Misc
+            "Walrus" => Ok(Token::Walrus),
+            "Face" => Ok(Token::Face),
+            "Vampire" => Ok(Token::Vampire),
+            "MutRef" => Ok(Token::MutRef),
+            "Scope" => Ok(Token::Scope),
+            "At" => Ok(Token::At),
+            "Dollar" => Ok(Token::Dollar),
+            "DollarParen" => Ok(Token::DollarParen),
+
+            // Punctuation
+            "Not" => Ok(Token::Not),
+            "Dot" => Ok(Token::Dot),
+            "Comma" => Ok(Token::Comma),
+            "Question" => Ok(Token::Question),
+            "Colon" => Ok(Token::Colon),
+
+            // Binary
+            "Add" => Ok(Token::Add),
+            "Sub" => Ok(Token::Sub),
+            "Div" => Ok(Token::Div),
+            "Mul" => Ok(Token::Mul),
+            "Pow" => Ok(Token::Pow),
+            "Mod" => Ok(Token::Mod),
+            "BitXor" => Ok(Token::BitXor),
+            "BitOr" => Ok(Token::BitOr),
+            "BitAnd" => Ok(Token::BitAnd),
+            "Shl" => Ok(Token::Shl),
+            "Shr" => Ok(Token::Shr),
+
+            // BinaryEq
+            "AddEq" => Ok(Token::AddEq),
+            "SubEq" => Ok(Token::SubEq),
+            "DivEq" => Ok(Token::DivEq),
+            "MulEq" => Ok(Token::MulEq),
+            "PowEq" => Ok(Token::PowEq),
+            "ModEq" => Ok(Token::ModEq),
+            "BitXorEq" => Ok(Token::BitXorEq),
+            "BitOrEq" => Ok(Token::BitOrEq),
+            "BitAndEq" => Ok(Token::BitAndEq),
+            "ShlEq" => Ok(Token::ShlEq),
+            "ShrEq" => Ok(Token::ShrEq),
+
+            // Boolean
+            "And" => Ok(Token::And),
+            "Or" => Ok(Token::Or),
+
+            // BooleanEq
+            "AndEq" => Ok(Token::AndEq),
+            "OrEq" => Ok(Token::OrEq),
+
+            // Comparison
+            "Eq" => Ok(Token::Eq),
+            "NotEq" => Ok(Token::NotEq),
+            "GreaterEq" => Ok(Token::GreaterEq),
+            "Greater" => Ok(Token::Greater),
+            "LesserEq" => Ok(Token::LesserEq),
+            "Lesser" => Ok(Token::Lesser),
+
+            // Arrows
+            "LeftArrow" => Ok(Token::LeftArrow),
+            "RightArrow" => Ok(Token::RightArrow),
+            "FatArrow" => Ok(Token::FatArrow),
+            "Pipe" => Ok(Token::Pipe),
+
+            // Brackets
+            "LeftParen" => Ok(Token::LeftParen),
+            "RightParen" => Ok(Token::RightParen),
+            "LeftBracket" => Ok(Token::LeftBracket),
+            "RightBracket" => Ok(Token::RightBracket),
+            "LeftSquare" => Ok(Token::LeftSquare),
+            "RightSquare" => Ok(Token::RightSquare),
+
+            // Keywords
+            "Fn" => Ok(Token::Fn),
+            "Curry" => Ok(Token::Curry),
+            "Let" => Ok(Token::Let),
+            "Mut" => Ok(Token::Mut),
+            "Const" => Ok(Token::Const),
+            "Struct" => Ok(Token::Struct),
+            "Enum" => Ok(Token::Enum),
+            "Trait" => Ok(Token::Trait),
+            "Impl" => Ok(Token::Impl),
+            "If" => Ok(Token::If),
+            "Else" => Ok(Token::Else),
+            "Match" => Ok(Token::Match),
+            "For" => Ok(Token::For),
+            "In" => Ok(Token::In),
+            "Emit" => Ok(Token::Emit),
+            "Return" => Ok(Token::Return),
+            "Break" => Ok(Token::Break),
+            "Continue" => Ok(Token::Continue),
+            "Try" => Ok(Token::Try),
+            "As" => Ok(Token::As),
+            "Extern" => Ok(Token::Extern),
+            "Type" => Ok(Token::Type),
+            "Test" => Ok(Token::Test),
+            "Move" => Ok(Token::Move),
+            "Spawn" => Ok(Token::Spawn),
+            "AutoSpawn" => Ok(Token::AutoSpawn),
+            "Defer" => Ok(Token::Defer),
+            "Import" => Ok(Token::Import),
+            "Is" => Ok(Token::Is),
+            "From" => Ok(Token::From),
+            "Select" => Ok(Token::Select),
+            "Until" => Ok(Token::Until),
+
+            // Ignore
+            "NewLine" => Ok(Token::NewLine),
+            "LineComment" => Ok(Token::LineComment("")),
+            "BlockComment" => Ok(Token::BlockComment("")),
+            "Whitespace" => Ok(Token::Whitespace),
+
+            _ => Err(()),
+        }
+    }
+}
+
+impl<'a> Token<'a> {
+    pub fn variant_name(&self) -> &'static str {
+        match self {
+            // Types
+            Token::Null => "Null",
+            Token::Dyn => "Dyn",
+
+            // Values
+            Token::Identifier(_) => "Identifier",
+            Token::CharLiteral(_) => "CharLiteral",
+            Token::StringLiteral(_) => "StringLiteral",
+            Token::FloatLiteral(_) => "FloatLiteral",
+            Token::BigLiteral(_) => "BigLiteral",
+            Token::IntLiteral(_) => "IntLiteral",
+
+            // Ranges
+            Token::Range => "Range",
+            Token::InclusiveRange => "InclusiveRange",
+
+            // Misc
+            Token::Walrus => "Walrus",
+            Token::Face => "Face",
+            Token::Vampire => "Vampire",
+            Token::MutRef => "MutRef",
+            Token::Scope => "Scope",
+            Token::At => "At",
+            Token::Dollar => "Dollar",
+            Token::DollarParen => "DollarParen",
+
+            // Punctuation
+            Token::Not => "Not",
+            Token::Dot => "Dot",
+            Token::Comma => "Comma",
+            Token::Question => "Question",
+            Token::Colon => "Colon",
+
+            // Binary
+            Token::Add => "Add",
+            Token::Sub => "Sub",
+            Token::Div => "Div",
+            Token::Mul => "Mul",
+            Token::Pow => "Pow",
+            Token::Mod => "Mod",
+            Token::BitXor => "BitXor",
+            Token::BitOr => "BitOr",
+            Token::BitAnd => "BitAnd",
+            Token::Shl => "Shl",
+            Token::Shr => "Shr",
+
+            // BinaryEq
+            Token::AddEq => "AddEq",
+            Token::SubEq => "SubEq",
+            Token::DivEq => "DivEq",
+            Token::MulEq => "MulEq",
+            Token::PowEq => "PowEq",
+            Token::ModEq => "ModEq",
+            Token::BitXorEq => "BitXorEq",
+            Token::BitOrEq => "BitOrEq",
+            Token::BitAndEq => "BitAndEq",
+            Token::ShlEq => "ShlEq",
+            Token::ShrEq => "ShrEq",
+
+            // Boolean
+            Token::And => "And",
+            Token::Or => "Or",
+
+            // BooleanEq
+            Token::AndEq => "AndEq",
+            Token::OrEq => "OrEq",
+
+            // Comparison
+            Token::Eq => "Eq",
+            Token::NotEq => "NotEq",
+            Token::GreaterEq => "GreaterEq",
+            Token::Greater => "Greater",
+            Token::LesserEq => "LesserEq",
+            Token::Lesser => "Lesser",
+
+            // Arrows
+            Token::LeftArrow => "LeftArrow",
+            Token::RightArrow => "RightArrow",
+            Token::FatArrow => "FatArrow",
+            Token::Pipe => "Pipe",
+
+            // Brackets
+            Token::LeftParen => "LeftParen",
+            Token::RightParen => "RightParen",
+            Token::LeftBracket => "LeftBracket",
+            Token::RightBracket => "RightBracket",
+            Token::LeftSquare => "LeftSquare",
+            Token::RightSquare => "RightSquare",
+
+            // Keywords
+            Token::Fn => "Fn",
+            Token::Curry => "Curry",
+            Token::Let => "Let",
+            Token::Mut => "Mut",
+            Token::Const => "Const",
+            Token::Struct => "Struct",
+            Token::Enum => "Enum",
+            Token::Trait => "Trait",
+            Token::Impl => "Impl",
+            Token::If => "If",
+            Token::Else => "Else",
+            Token::Match => "Match",
+            Token::For => "For",
+            Token::In => "In",
+            Token::Emit => "Emit",
+            Token::Return => "Return",
+            Token::Break => "Break",
+            Token::Continue => "Continue",
+            Token::Try => "Try",
+            Token::As => "As",
+            Token::Extern => "Extern",
+            Token::Type => "Type",
+            Token::Test => "Test",
+            Token::Move => "Move",
+            Token::Spawn => "Spawn",
+            Token::AutoSpawn => "AutoSpawn",
+            Token::Defer => "Defer",
+            Token::Import => "Import",
+            Token::Is => "Is",
+            Token::From => "From",
+            Token::Select => "Select",
+            Token::Until => "Until",
+
+            // Ignore
+            Token::NewLine => "NewLine",
+            Token::LineComment(_) => "LineComment",
+            Token::BlockComment(_) => "BlockComment",
+            Token::Whitespace => "Whitespace",
+
+            Token::Error => "Error",
+        }
+    }
 }

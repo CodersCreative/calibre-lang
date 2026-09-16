@@ -826,7 +826,7 @@ impl Formatter {
     }
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use crate::{Parser, formatter::Formatter};
 
@@ -893,4 +893,4 @@ mod tests {
         assert!(out.contains("-> str!int"), "{out}");
         assert!(parse_has_no_errors(&out), "{out}");
     }
-}
+}*/

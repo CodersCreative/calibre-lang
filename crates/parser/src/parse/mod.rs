@@ -284,7 +284,6 @@ pub fn parse_program_with_source<'a>(
     tokens: TokenStream<'a>,
     source_path: Option<&Path>,
 ) -> Result<AstNode, Vec<ParserError>> {
-    tokens.iter().for_each(|x| println!("{x}"));
     let parser = recursive(|stmt| {
         let generic_ident = PotentialGenericTypeIdentifier::parser(()).boxed();
         let dollar_ident = PotentialDollarIdentifier::parser(()).boxed();
@@ -315,7 +314,6 @@ pub fn parse_program_with_source<'a>(
     let parsed = parser.parse(tokens);
 
     if let Some(items) = parsed.output() {
-        println!("{items:?}");
         let sp = if let (Some(a), Some(b)) = (items.first(), items.last()) {
             Span::new_from_spans(a.span, b.span)
         } else {
