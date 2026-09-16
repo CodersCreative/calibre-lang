@@ -1,6 +1,15 @@
 import Duration from std::thread;
 
+const custom_wait_and_time := fn(time : int) -> int => {
+	Duration.from_s(time).sleep();
+	return time;
+}
+
+const pow := fn(num : int) -> int => return num ** 2;
+
 const main := fn => {
+	let arr : list:<&fn(int) -> int> = [custom_wait_and_time.&, pow.&];
+	print((arr[0])(1));
 	Duration.from_s(5).sleep();
 	print("Okay!!");
 };

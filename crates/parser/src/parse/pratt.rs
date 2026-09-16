@@ -1,3 +1,6 @@
+use crate::Span;
+use crate::ast::nodes::access::{AstField, AstIndex, AstScope};
+use crate::ast::nodes::assignment::AstAssignment;
 use crate::ast::nodes::binary::{
     AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
 };
@@ -27,16 +30,30 @@ impl<'a> PrattParser {
             left: AstNode,
             operator: BinaryOperator,
             right: AstNode,
+            assign: bool,
             span: SimpleSpan,
         ) -> AstNode {
-            AstNode::new(
+            let span: Span = span.into();
+            let value = AstNode::new(
                 span.into(),
                 AstNodeType::BinaryExpression(AstBinary {
-                    left: Box::new(left),
+                    left: Box::new(left.clone()),
                     right: Box::new(right),
                     operator,
                 }),
-            )
+            );
+
+            if assign {
+                AstNode::new(
+                    span,
+                    AstNodeType::AssignmentExpression(AstAssignment {
+                        identifier: Box::new(left),
+                        value: Box::new(value),
+                    }),
+                )
+            } else {
+                value
+            }
         }
 
         fn fold_comparison(
@@ -59,54 +76,90 @@ impl<'a> PrattParser {
             left: AstNode,
             operator: BooleanOperator,
             right: AstNode,
+            assign: bool,
             span: SimpleSpan,
         ) -> AstNode {
-            AstNode::new(
-                span.into(),
+            let span: Span = span.into();
+            let value = AstNode::new(
+                span,
                 AstNodeType::BooleanExpression(AstBoolean {
-                    left: Box::new(left),
+                    left: Box::new(left.clone()),
                     right: Box::new(right),
                     operator,
                 }),
-            )
+            );
+
+            if assign {
+                AstNode::new(
+                    span,
+                    AstNodeType::AssignmentExpression(AstAssignment {
+                        identifier: Box::new(left),
+                        value: Box::new(value),
+                    }),
+                )
+            } else {
+                value
+            }
         }
 
         data.stmt
             .pratt((
                 // Binary
-                infix(left(50), just(Token::Add), |l, _, r, sp| {
-                    fold_binary(l, BinaryOperator::Add, r, sp.span())
-                }),
-                infix(left(50), just(Token::Sub), |l, _, r, sp| {
-                    fold_binary(l, BinaryOperator::Mul, r, sp.span())
-                }),
-                infix(left(60), just(Token::Mul), |l, _, r, sp| {
-                    fold_binary(l, BinaryOperator::Add, r, sp.span())
-                }),
-                infix(left(60), just(Token::Div), |l, _, r, sp| {
-                    fold_binary(l, BinaryOperator::Mul, r, sp.span())
-                }),
-                infix(left(80), just(Token::Pow), |l, _, r, sp| {
-                    fold_binary(l, BinaryOperator::Add, r, sp.span())
-                }),
-                infix(left(60), just(Token::Mod), |l, _, r, sp| {
-                    fold_binary(l, BinaryOperator::Mul, r, sp.span())
-                }),
-                infix(left(30), just(Token::BitXor), |l, _, r, sp| {
-                    fold_binary(l, BinaryOperator::Add, r, sp.span())
-                }),
-                infix(left(30), just(Token::BitOr), |l, _, r, sp| {
-                    fold_binary(l, BinaryOperator::Mul, r, sp.span())
-                }),
-                infix(left(30), just(Token::BitAnd), |l, _, r, sp| {
-                    fold_binary(l, BinaryOperator::Add, r, sp.span())
-                }),
-                infix(left(40), just(Token::Shl), |l, _, r, sp| {
-                    fold_binary(l, BinaryOperator::Mul, r, sp.span())
-                }),
-                infix(left(40), just(Token::Shr), |l, _, r, sp| {
-                    fold_binary(l, BinaryOperator::Add, r, sp.span())
-                }),
+                infix(
+                    left(50),
+                    select! {Token::Sub => false, Token::SubEq => true},
+                    |l, a, r, sp| fold_binary(l, BinaryOperator::Sub, r, a, sp.span()),
+                ),
+                infix(
+                    left(50),
+                    select! {Token::Add => false, Token::AddEq => true},
+                    |l, a, r, sp| fold_binary(l, BinaryOperator::Add, r, a, sp.span()),
+                ),
+                infix(
+                    left(60),
+                    select! {Token::Mul => false, Token::MulEq => true},
+                    |l, a, r, sp| fold_binary(l, BinaryOperator::Mul, r, a, sp.span()),
+                ),
+                infix(
+                    left(60),
+                    select! {Token::Div => false, Token::DivEq => true},
+                    |l, a, r, sp| fold_binary(l, BinaryOperator::Div, r, a, sp.span()),
+                ),
+                infix(
+                    left(80),
+                    select! {Token::Pow => false, Token::PowEq => true},
+                    |l, a, r, sp| fold_binary(l, BinaryOperator::Pow, r, a, sp.span()),
+                ),
+                infix(
+                    left(60),
+                    select! {Token::Mod => false, Token::ModEq => true},
+                    |l, a, r, sp| fold_binary(l, BinaryOperator::Mod, r, a, sp.span()),
+                ),
+                infix(
+                    left(30),
+                    select! {Token::BitAnd => false, Token::BitAndEq => true},
+                    |l, a, r, sp| fold_binary(l, BinaryOperator::BitAnd, r, a, sp.span()),
+                ),
+                infix(
+                    left(30),
+                    select! {Token::BitXor => false, Token::BitXorEq => true},
+                    |l, a, r, sp| fold_binary(l, BinaryOperator::BitXor, r, a, sp.span()),
+                ),
+                infix(
+                    left(30),
+                    select! {Token::BitOr => false, Token::BitOrEq => true},
+                    |l, a, r, sp| fold_binary(l, BinaryOperator::BitOr, r, a, sp.span()),
+                ),
+                infix(
+                    left(40),
+                    select! {Token::Shl => false, Token::ShlEq => true},
+                    |l, a, r, sp| fold_binary(l, BinaryOperator::Shl, r, a, sp.span()),
+                ),
+                infix(
+                    left(40),
+                    select! {Token::Shr => false, Token::ShrEq => true},
+                    |l, a, r, sp| fold_binary(l, BinaryOperator::Shr, r, a, sp.span()),
+                ),
                 // Comparison
                 infix(left(20), just(Token::Greater), |l, _, r, sp| {
                     fold_comparison(l, ComparisonOperator::Greater, r, sp.span())
@@ -127,18 +180,33 @@ impl<'a> PrattParser {
                     fold_comparison(l, ComparisonOperator::NotEqual, r, sp.span())
                 }),
                 // Boolean
-                infix(left(10), just(Token::Add), |l, _, r, sp| {
-                    fold_boolean(l, BooleanOperator::And, r, sp.span())
-                }),
-                infix(left(10), just(Token::Or), |l, _, r, sp| {
-                    fold_boolean(l, BooleanOperator::Or, r, sp.span())
-                }),
+                infix(
+                    left(10),
+                    select! {Token::And => false, Token::AndEq => true},
+                    |l, a, r, sp| fold_boolean(l, BooleanOperator::And, r, a, sp.span()),
+                ),
+                infix(
+                    left(10),
+                    select! {Token::Or => false, Token::OrEq => true},
+                    |l, a, r, sp| fold_boolean(l, BooleanOperator::Or, r, a, sp.span()),
+                ),
                 // Boolean
                 infix(left(20), just(Token::In), |left, _, right, sp| {
                     let span: SimpleSpan = sp.span();
                     AstNode::new(
                         span.into(),
                         AstNodeType::InDeclaration(AstIn {
+                            identifier: Box::new(left),
+                            value: Box::new(right),
+                        }),
+                    )
+                }),
+                // Assignment
+                infix(left(0), just(Token::Walrus), |left, _, right, sp| {
+                    let span: SimpleSpan = sp.span();
+                    AstNode::new(
+                        span.into(),
+                        AstNodeType::AssignmentExpression(AstAssignment {
                             identifier: Box::new(left),
                             value: Box::new(right),
                         }),
@@ -185,24 +253,74 @@ impl<'a> PrattParser {
                     },
                 ),
                 // Unary
-                prefix(90, select! { Token::Not => () }, |_, right, sp| {
-                    let span: SimpleSpan = sp.span();
-                    AstNode::new(
-                        span.into(),
-                        AstNodeType::NotExpression(AstNot {
-                            value: Box::new(right),
-                        }),
-                    )
-                }),
-                prefix(90, select! { Token::Sub => () }, |_, right, sp| {
-                    let span: SimpleSpan = sp.span();
-                    AstNode::new(
-                        span.into(),
-                        AstNodeType::NegExpression(AstNeg {
-                            value: Box::new(right),
-                        }),
-                    )
-                }),
+                prefix(
+                    90,
+                    select! { Token::Not => false, Token::Sub => true },
+                    |sub, right, sp| {
+                        let span: SimpleSpan = sp.span();
+
+                        if sub {
+                            AstNode::new(
+                                span.into(),
+                                AstNodeType::NegExpression(AstNeg {
+                                    value: Box::new(right),
+                                }),
+                            )
+                        } else {
+                            AstNode::new(
+                                span.into(),
+                                AstNodeType::NotExpression(AstNot {
+                                    value: Box::new(right),
+                                }),
+                            )
+                        }
+                    },
+                ),
+                // Access
+                postfix(
+                    90,
+                    select! {Token::Dot => true, Token::Scope => false}
+                        .padded_by(potential_new_line())
+                        .then(data.dollar_ident.clone()),
+                    |base, (dot, field), sp| {
+                        let span: SimpleSpan = sp.span();
+
+                        if dot {
+                            AstNode::new(
+                                span.into(),
+                                AstNodeType::FieldAccess(AstField {
+                                    base: Box::new(base),
+                                    field,
+                                }),
+                            )
+                        } else {
+                            AstNode::new(
+                                span.into(),
+                                AstNodeType::ScopeAccess(AstScope {
+                                    base: Box::new(base),
+                                    field,
+                                }),
+                            )
+                        }
+                    },
+                ),
+                postfix(
+                    90,
+                    select! { Token::LeftSquare => () }
+                        .ignore_then(data.stmt.clone().padded_by(potential_new_line()))
+                        .then_ignore(select! { Token::RightSquare => () }),
+                    |base, index, sp| {
+                        let span: SimpleSpan = sp.span();
+
+                        AstNode::new(
+                            span.into(),
+                            AstNodeType::IndexAccess(AstIndex {
+                                base: Box::new(base),
+                                index: Box::new(index),
+                            }),
+                        )
+                    },
+                ),
             ))
             .boxed()
     }

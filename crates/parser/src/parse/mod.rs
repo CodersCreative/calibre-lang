@@ -90,7 +90,6 @@ pub struct PrattData<'a> {
 
 pub trait AstParser<'a>: Sized {
     type Data;
-    // fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>>;
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>>;
 }
 
@@ -179,7 +178,7 @@ pub fn potential_new_line<'a>() -> impl Parser<'a, TokenStream<'a>, (), AstParse
 
 impl<'a> AstNode {
     fn parser(data: &StatementData<'a>) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        /*let parser1 = choice((
+        let parser1 = choice((
             // Flow
             AstBreak::parser(data.clone()).map(AstNodeType::Break),
             AstEmit::parser(data.clone()).map(AstNodeType::Emit),
@@ -205,7 +204,8 @@ impl<'a> AstNode {
             AstIf::parser(data.clone()).map(AstNodeType::IfStatement),
             AstTernary::parser(data.clone()).map(AstNodeType::Ternary),
         ))
-        .boxed().map_with_span(|node_type, span| Self { node_type, span });
+        .boxed()
+        .map_with_span(|node_type, span| Self { node_type, span });
 
         let parser2 = choice((
             // Functions
@@ -217,26 +217,26 @@ impl<'a> AstNode {
             select! {Token::Null => ()}.map(|_| AstNodeType::Null),
             // Memory
             AstDrop::parser(data.clone()).map(AstNodeType::Drop),
-            AstRef::parser(data.clone()).map(AstNodeType::RefStatement),
-            AstDeref::parser(data.clone()).map(AstNodeType::DerefStatement),
+            //AstRef::parser(data.clone()).map(AstNodeType::RefStatement),
+            //AstDeref::parser(data.clone()).map(AstNodeType::DerefStatement),
             AstMove::parser(data.clone()).map(AstNodeType::MoveExpression),
             // Access
             AstIdentifier::parser(data.clone()).map(AstNodeType::Identifier),
-            AstField::parser(data.clone()).map(AstNodeType::FieldAccess),
-            AstScope::parser(data.clone()).map(AstNodeType::ScopeAccess),
-            AstIndex::parser(data.clone()).map(AstNodeType::IndexAccess),
+            //AstField::parser(data.clone()).map(AstNodeType::FieldAccess),
+            //AstScope::parser(data.clone()).map(AstNodeType::ScopeAccess),
+            //AstIndex::parser(data.clone()).map(AstNodeType::IndexAccess),
             // Spawn
             AstSpawn::parser(data.clone()).map(AstNodeType::Spawn),
             AstSelect::parser(data.clone()).map(AstNodeType::SelectStatement),
         ))
-        .boxed().map_with_span(|node_type, span| Self { node_type, span });
+        .boxed()
+        .map_with_span(|node_type, span| Self { node_type, span });
 
         let parser3 = choice((
             // Matching
             AstMatch::parser(data.clone()).map(AstNodeType::MatchStatement),
             AstFnMatch::parser(data.clone()).map(AstNodeType::FnMatchDeclaration),
             // Assignment
-            //AstAssignment::parser(data.clone()).map(AstNodeType::AssignmentExpression),
             AstAssignDestructure::parser(data.clone()).map(AstNodeType::DestructureAssignment),
             // Declarations
             AstDeclaration::parser(data.clone()).map(AstNodeType::VariableDeclaration),
@@ -260,17 +260,10 @@ impl<'a> AstNode {
             AstTag::parser(data.clone()).map(AstNodeType::Tag),
             AstParen::parser(data.clone()).map(AstNodeType::ParenExpression),
         ))
-        .boxed().map_with_span(|node_type, span| Self { node_type, span });*/
+        .boxed()
+        .map_with_span(|node_type, span| Self { node_type, span });
 
-        AstInt::parser(())
-            .map_with_span(|node_type, span| Self {
-                node_type: AstNodeType::IntLiteral(node_type),
-                span,
-            })
-            /* .or(parser1)
-            .or(parser2)
-            .or(parser3)*/
-            .boxed()
+        parser1.or(parser2).or(parser3).boxed()
     }
 }
 

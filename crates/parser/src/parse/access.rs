@@ -6,38 +6,6 @@ use crate::{
 };
 use chumsky::{Parser, select};
 
-impl<'a> AstParser<'a> for AstField {
-    type Data = StatementData<'a>;
-
-    #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
-            .clone()
-            .then_ignore(select! { Token::Dot => () }.padded_by(potential_new_line()))
-            .then(data.dollar_ident.clone())
-            .map(|(base, field)| AstField {
-                base: Box::new(base),
-                field,
-            })
-    }
-}
-
-impl<'a> AstParser<'a> for AstScope {
-    type Data = StatementData<'a>;
-
-    #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
-            .clone()
-            .then_ignore(select! { Token::Scope => () }.padded_by(potential_new_line()))
-            .then(data.dollar_ident.clone())
-            .map(|(base, field)| AstScope {
-                base: Box::new(base),
-                field,
-            })
-    }
-}
-
 impl<'a> AstParser<'a> for AstIndex {
     type Data = StatementData<'a>;
 

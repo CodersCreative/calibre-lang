@@ -12,51 +12,6 @@ use crate::{
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
-impl<'a> AstParser<'a> for AstAssignment {
-    type Data = StatementData<'a>;
-
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
-            .clone()
-            .then(
-                choice((
-                    select! { Token::Walrus => () }.map(|_| None),
-                    select! { Token::AddEq => () }.map(|_| Some(BinaryOperator::Add)),
-                    select! { Token::SubEq => () }.map(|_| Some(BinaryOperator::Sub)),
-                    select! { Token::MulEq => () }.map(|_| Some(BinaryOperator::Mul)),
-                    select! { Token::PowEq => () }.map(|_| Some(BinaryOperator::Pow)),
-                    select! { Token::DivEq => () }.map(|_| Some(BinaryOperator::Div)),
-                    select! { Token::ModEq => () }.map(|_| Some(BinaryOperator::Mod)),
-                    select! { Token::BitAndEq => () }.map(|_| Some(BinaryOperator::BitAnd)),
-                    select! { Token::BitOrEq => () }.map(|_| Some(BinaryOperator::BitOr)),
-                    select! { Token::BitXorEq => () }.map(|_| Some(BinaryOperator::BitXor)),
-                    select! { Token::ShlEq => () }.map(|_| Some(BinaryOperator::Shl)),
-                    select! { Token::ShrEq => () }.map(|_| Some(BinaryOperator::Shr)),
-                ))
-                .padded_by(potential_new_line()),
-            )
-            .then(data.node.clone())
-            .map(|((identifier, op), value)| {
-                let rhs = if let Some(binary_op) = op {
-                    AstNode::new(
-                        Span::new_from_spans(identifier.span, value.span),
-                        AstNodeType::BinaryExpression(crate::ast::nodes::binary::AstBinary {
-                            left: Box::new(identifier.clone()),
-                            right: Box::new(value),
-                            operator: binary_op,
-                        }),
-                    )
-                } else {
-                    value
-                };
-                AstAssignment {
-                    identifier: Box::new(identifier),
-                    value: Box::new(rhs),
-                }
-            })
-    }
-}
-
 impl<'a> AstParser<'a> for AstAssignDestructure {
     type Data = StatementData<'a>;
 
