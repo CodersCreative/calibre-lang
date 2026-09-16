@@ -102,7 +102,7 @@ impl<'a> PrattParser {
             }
         }
 
-        data.stmt
+        data.stmt.clone()
             .pratt((
                 // Binary
                 infix(
@@ -321,6 +321,7 @@ impl<'a> PrattParser {
                         )
                     },
                 ),
+                // Memory
             ))
             .boxed()
     }

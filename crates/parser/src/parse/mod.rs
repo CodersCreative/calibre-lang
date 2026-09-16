@@ -192,7 +192,7 @@ impl<'a> AstNode {
             AstEnum::parser(data.clone()).map(AstNodeType::EnumExpression),
             AstTuple::parser(data.clone()).map(AstNodeType::TupleLiteral),
             AstString::parser(()).map(AstNodeType::StringLiteral),
-            AstRange::parser(data.clone()).map(AstNodeType::RangeDeclaration),
+            // AstRange::parser(data.clone()).map(AstNodeType::RangeDeclaration),
             AstInt::parser(()).map(AstNodeType::IntLiteral),
             AstBig::parser(()).map(AstNodeType::BigLiteral),
             AstFloat::parser(()).map(AstNodeType::FloatLiteral),
@@ -202,7 +202,7 @@ impl<'a> AstNode {
             AstList::parser(data.clone()).map(AstNodeType::ListLiteral),
             // Conditionals
             AstIf::parser(data.clone()).map(AstNodeType::IfStatement),
-            AstTernary::parser(data.clone()).map(AstNodeType::Ternary),
+            // AstTernary::parser(data.clone()).map(AstNodeType::Ternary),
         ))
         .boxed()
         .map_with_span(|node_type, span| Self { node_type, span });
@@ -211,7 +211,7 @@ impl<'a> AstNode {
             // Functions
             AstFunction::parser(data.clone()).map(AstNodeType::FunctionDeclaration),
             AstExtern::parser(data.clone()).map(AstNodeType::ExternFunctionDeclaration),
-            AstCall::parser(data.clone()).map(AstNodeType::CallExpression),
+            // AstCall::parser(data.clone()).map(AstNodeType::CallExpression),
             AstCurry::parser(data.clone()).map(AstNodeType::CurryExpression),
             // Null
             select! {Token::Null => ()}.map(|_| AstNodeType::Null),
@@ -222,12 +222,9 @@ impl<'a> AstNode {
             AstMove::parser(data.clone()).map(AstNodeType::MoveExpression),
             // Access
             AstIdentifier::parser(data.clone()).map(AstNodeType::Identifier),
-            //AstField::parser(data.clone()).map(AstNodeType::FieldAccess),
-            //AstScope::parser(data.clone()).map(AstNodeType::ScopeAccess),
-            //AstIndex::parser(data.clone()).map(AstNodeType::IndexAccess),
             // Spawn
-            AstSpawn::parser(data.clone()).map(AstNodeType::Spawn),
-            AstSelect::parser(data.clone()).map(AstNodeType::SelectStatement),
+            // AstSpawn::parser(data.clone()).map(AstNodeType::Spawn),
+            // AstSelect::parser(data.clone()).map(AstNodeType::SelectStatement),
         ))
         .boxed()
         .map_with_span(|node_type, span| Self { node_type, span });
@@ -247,7 +244,7 @@ impl<'a> AstNode {
             AstImplTrait::parser(data.clone()).map(AstNodeType::ImplTraitDeclaration),
             AstTrait::parser(data.clone()).map(AstNodeType::TraitDeclaration),
             // Loops
-            AstLoop::parser(data.clone()).map(AstNodeType::LoopDeclaration),
+            // AstLoop::parser(data.clone()).map(AstNodeType::LoopDeclaration),
             AstIter::parser(data.clone()).map(AstNodeType::IterExpression),
             // Scopes
             AstScopeAlias::parser(data.clone()).map(AstNodeType::ScopeAlias),
@@ -263,7 +260,11 @@ impl<'a> AstNode {
         .boxed()
         .map_with_span(|node_type, span| Self { node_type, span });
 
-        parser1.or(parser2).or(parser3).boxed()
+        choice((
+            parser1,
+            parser2,
+            parser3
+        )).boxed()
     }
 }
 
