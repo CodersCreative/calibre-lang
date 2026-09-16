@@ -6,27 +6,24 @@ use crate::{
         idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType,
-            access::{AstField, AstIdentifier, AstIndex, AstScope},
-            assignment::{AstAssignDestructure, AstAssignment},
-            binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
-            conditionals::{AstIf, AstTernary},
+            access::AstIdentifier,
+            assignment::AstAssignDestructure,
+            conditionals::AstIf,
             declaration::{AstDeclaration, AstDeclareDestructure},
-            flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
-            functions::{AstCall, AstCurry, AstExtern, AstFunction},
+            flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstReturn, AstTry},
+            functions::{AstCurry, AstExtern, AstFunction},
             generator::AstGenerator,
             lists::AstList,
             literals::{
-                AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstRange, AstString,
-                AstStruct, AstTuple,
+                AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstString, AstStruct,
+                AstTuple,
             },
-            loops::{AstIter, AstLoop},
+            loops::AstIter,
             matching::{AstFnMatch, AstMatch},
-            memory::{AstDeref, AstDrop, AstMove, AstRef},
+            memory::{AstDrop, AstMove},
             misc::{AstImport, AstParen, AstTag, AstTest},
             scopes::{AstScopeAlias, AstScopeDef},
-            spawn::{AstSelect, AstSpawn},
             types::{AstImpl, AstImplTrait, AstTrait, AstType},
-            unary::{AstNeg, AstNot},
         },
         types::ParserDataType,
     },
@@ -38,8 +35,6 @@ use chumsky::span::Span as ChumskySpan;
 use chumsky::{error::Rich, extra::ParserExtra};
 use tracing::instrument;
 
-pub mod access;
-pub mod assignment;
 pub mod conditionals;
 pub mod data_types;
 pub mod declarations;
@@ -260,11 +255,7 @@ impl<'a> AstNode {
         .boxed()
         .map_with_span(|node_type, span| Self { node_type, span });
 
-        choice((
-            parser1,
-            parser2,
-            parser3
-        )).boxed()
+        choice((parser1, parser2, parser3)).boxed()
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::ast::RefMutability;
-use crate::ast::nodes::memory::{AstDeref, AstDrop, AstMove, AstRef};
+use crate::ast::nodes::memory::{AstDrop, AstMove};
 use crate::parse::StatementData;
 use crate::{
     lexer::Token,
@@ -20,40 +20,6 @@ impl<'a> AstParser<'a> for RefMutability {
         ))
         .or_not()
         .map(|x| x.unwrap_or(RefMutability::Value))
-    }
-}
-
-impl<'a> AstParser<'a> for AstRef {
-    type Data = StatementData<'a>;
-
-    #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
-            .clone()
-            .then_ignore(select! {Token::Dot => ()})
-            .then(choice((
-                select! { Token::MutRef => () }.map(|_| RefMutability::MutRef),
-                select! { Token::BitAnd => () }.map(|_| RefMutability::Ref),
-            )))
-            .map(|(value, mutability)| AstRef {
-                mutability,
-                value: Box::new(value),
-            })
-    }
-}
-
-impl<'a> AstParser<'a> for AstDeref {
-    type Data = StatementData<'a>;
-
-    #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
-            .clone()
-            .then_ignore(select! {Token::Dot => ()})
-            .then_ignore(select! {Token::Mul => ()})
-            .map(|value| AstDeref {
-                value: Box::new(value),
-            })
     }
 }
 
