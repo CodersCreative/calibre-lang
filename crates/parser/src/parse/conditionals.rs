@@ -1,7 +1,7 @@
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType};
 use crate::ast::nodes::scopes::AstScopeDef;
-use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
+use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -65,24 +65,28 @@ impl<'a> AstParser<'a> for AstIf {
     }
 }
 
-impl<'a> AstParser<'a> for AstTernary {
-    type Data = StatementData<'a>;
+impl<'a> AstPrattParser<'a> for AstTernary {
+    type Data = PrattData<'a>;
+    type Value = (AstNode, AstNode);
 
-    #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.node
-            .clone()
-            .then(
-                select! { Token::Question => () }
-                    .padded_by(potential_new_line())
-                    .ignore_then(data.node.clone())
-                    .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
-                    .then(data.node.clone()),
-            )
-            .map(|(comparison, (then, otherwise))| AstTernary {
-                comparison: Box::new(comparison),
-                then: Box::new(then),
-                otherwise: Box::new(otherwise),
-            })
+    fn operator(
+        data: Self::Data,
+    ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>> {
+        select! { Token::Question => () }
+            .padded_by(potential_new_line())
+            .ignore_then(data.stmt.clone())
+            .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
+            .then(data.stmt.clone())
+    }
+
+    fn fold_postfix(base: AstNode, value: Self::Value, sp: SimpleSpan) -> AstNode {
+        AstNode::new(
+            sp.into(),
+            AstNodeType::Ternary(AstTernary {
+                comparison: Box::new(base),
+                then: Box::new(value.0),
+                otherwise: Box::new(value.1),
+            }),
+        )
     }
 }

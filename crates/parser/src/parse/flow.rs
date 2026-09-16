@@ -3,7 +3,7 @@ use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment, TryCatch,
 };
 use crate::ast::nodes::scopes::AstScopeDef;
-use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
+use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -135,63 +135,70 @@ impl<'a> AstParser<'a> for AstTry {
     }
 }
 
-impl<'a> AstParser<'a> for AstPipe {
-    type Data = StatementData<'a>;
+impl<'a> AstPrattParser<'a> for AstPipe {
+    type Data = PrattData<'a>;
+    type Value = Vec<PipeSegment>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let pipe_seg = choice((
+    fn operator(
+        data: Self::Data,
+    ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>> {
+        choice((
             select! { Token::Pipe => () }
                 .padded_by(potential_new_line())
-                .ignore_then(data.node.clone())
+                .ignore_then(data.stmt.clone())
                 .map(PipeSegment::Unnamed),
             select! { Token::Face => () }
                 .padded_by(potential_new_line())
                 .ignore_then(data.dollar_ident.clone())
                 .then_ignore(select! { Token::Greater => () })
-                .then(data.node.clone())
+                .then(data.stmt.clone())
                 .map(|(identifier, node)| PipeSegment::Named { identifier, node }),
-        ));
+        ))
+        .repeated()
+        .at_least(1)
+        .collect::<Vec<_>>()
+    }
 
-        data.node
-            .clone()
-            .then(pipe_seg.repeated().at_least(1).collect::<Vec<_>>())
-            .map(|(head, rest)| {
-                if rest.is_empty() {
-                    return AstPipe {
-                        values: vec![PipeSegment::Unnamed(head)],
-                    };
-                }
+    fn fold_postfix(base: AstNode, value: Self::Value, sp: SimpleSpan) -> AstNode {
+        let span = sp.into();
+        if value.is_empty() {
+            return AstNode::new(
+                span,
+                AstNodeType::PipeExpression(AstPipe {
+                    values: vec![PipeSegment::Unnamed(base)],
+                }),
+            );
+        }
 
-                let mut values = vec![PipeSegment::Unnamed(head)];
-                for seg in rest {
-                    match seg {
-                        PipeSegment::Unnamed(node) => {
-                            if let AstNodeType::PipeExpression(AstPipe { values: mut nested }) =
-                                node.node_type
-                            {
-                                values.append(&mut nested);
-                            } else {
-                                values.push(PipeSegment::Unnamed(node));
-                            }
-                        }
-                        PipeSegment::Named { identifier, node } => {
-                            if let AstNodeType::PipeExpression(AstPipe { values: mut nested }) =
-                                node.node_type
-                            {
-                                if let Some(first) = nested.first_mut() {
-                                    *first = PipeSegment::Named {
-                                        identifier,
-                                        node: first.get_node().clone(),
-                                    };
-                                }
-                                values.append(&mut nested);
-                            } else {
-                                values.push(PipeSegment::Named { identifier, node });
-                            }
-                        }
+        let mut values = vec![PipeSegment::Unnamed(base)];
+        for seg in value {
+            match seg {
+                PipeSegment::Unnamed(node) => {
+                    if let AstNodeType::PipeExpression(AstPipe { values: mut nested }) =
+                        node.node_type
+                    {
+                        values.append(&mut nested);
+                    } else {
+                        values.push(PipeSegment::Unnamed(node));
                     }
                 }
-                AstPipe { values }
-            })
+                PipeSegment::Named { identifier, node } => {
+                    if let AstNodeType::PipeExpression(AstPipe { values: mut nested }) =
+                        node.node_type
+                    {
+                        if let Some(first) = nested.first_mut() {
+                            *first = PipeSegment::Named {
+                                identifier,
+                                node: first.get_node().clone(),
+                            };
+                        }
+                        values.append(&mut nested);
+                    } else {
+                        values.push(PipeSegment::Named { identifier, node });
+                    }
+                }
+            }
+        }
+        AstNode::new(span, AstNodeType::PipeExpression(AstPipe { values }))
     }
 }

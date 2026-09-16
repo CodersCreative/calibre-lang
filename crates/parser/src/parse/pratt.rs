@@ -5,12 +5,13 @@ use crate::ast::nodes::assignment::AstAssignment;
 use crate::ast::nodes::binary::{
     AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
 };
-use crate::ast::nodes::functions::{AstCall, CallArg};
+use crate::ast::nodes::conditionals::AstTernary;
+use crate::ast::nodes::flow::AstPipe;
+use crate::ast::nodes::functions::AstCall;
 use crate::ast::nodes::literals::AstRange;
 use crate::ast::nodes::memory::{AstDeref, AstRef};
 use crate::ast::nodes::unary::{AstNeg, AstNot};
 use crate::ast::nodes::{AstNode, AstNodeType};
-use crate::ast::types::ParserDataType;
 use crate::parse::{AstPrattParser, PrattData, potential_new_line};
 use crate::{
     ast::{
@@ -211,10 +212,20 @@ impl<'a> PrattParser {
                         }),
                     )
                 }),
+                // 5
+                postfix(5, AstPipe::operator(data.clone()), |base, value, extra| {
+                    AstPipe::fold_postfix(base, value, extra.span())
+                }),
                 // 10
                 infix(left(10), boolean, |l, (op, assignment), r, sp| {
                     fold_boolean(l, op, r, assignment, sp.span())
                 }),
+                // 15
+                postfix(
+                    15,
+                    AstTernary::operator(data.clone()),
+                    |base, value, extra| AstTernary::fold_postfix(base, value, extra.span()),
+                ),
                 // 20
                 infix(left(20), comparison, |l, op, r, sp| {
                     fold_comparison(l, op, r, sp.span())
