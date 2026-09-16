@@ -277,8 +277,8 @@ impl TestHarness {
 }
 
 #[test]
-fn run_harness() {
+fn run_harness() -> Result<(), ()> {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests");
     let mut harness = TestHarness::default();
-    let _ = harness.run(dir);
+    harness.run(dir).map_err(|_| ())
 }

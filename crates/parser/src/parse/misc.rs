@@ -1,4 +1,4 @@
-use crate::ast::idents::ParserText;
+use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::misc::{AstImport, AstParen, AstTag, AstTest};
 use crate::ast::nodes::scopes::AstScopeDef;
@@ -44,49 +44,54 @@ impl<'a> AstParser<'a> for AstImport {
     type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        choice((
-            // import ... from module::path
-            choice((
-                select! { Token::LeftParen => () }
-                    .ignore_then(
-                        data.dollar_ident
-                            .clone()
-                            .padded_by(potential_new_line())
-                            .separated_by(select! { Token::Comma => () })
-                            .allow_trailing()
-                            .collect::<Vec<_>>(),
-                    )
-                    .then_ignore(select! { Token::RightParen => () }),
-                data.dollar_ident.clone().map(|x| vec![x]),
-            ))
-            .then_ignore(select! { Token::From => () }.padded_by(potential_new_line()))
-            .then(
+        select! { Token::Import => () }
+            .ignore_then(choice((
+                // import ... from module::path
+                choice((
+                    select! { Token::LeftParen => () }
+                        .ignore_then(
+                            data.dollar_ident
+                                .clone()
+                                .padded_by(potential_new_line())
+                                .separated_by(select! { Token::Comma => () })
+                                .allow_trailing()
+                                .collect::<Vec<_>>(),
+                        )
+                        .then_ignore(select! { Token::RightParen => () }),
+                    select! { Token::Mul => () }
+                        .map_with_span(|_, span| vec![PotentialDollarIdentifier::new(span, "*")]),
+                    data.dollar_ident.clone().map(|x| vec![x]),
+                ))
+                .then_ignore(select! { Token::From => () }.padded_by(potential_new_line()))
+                .then(
+                    data.dollar_ident
+                        .clone()
+                        .separated_by(
+                            select! { Token::Scope => () }.padded_by(potential_new_line()),
+                        )
+                        .at_least(1)
+                        .collect::<Vec<_>>(),
+                )
+                .map(|(values, module)| (values, module, None)),
+                // import module::path as alias
                 data.dollar_ident
                     .clone()
                     .separated_by(select! { Token::Scope => () }.padded_by(potential_new_line()))
                     .at_least(1)
-                    .collect::<Vec<_>>(),
-            )
-            .map(|(values, module)| (values, module, None)),
-            // import module::path as alias
-            data.dollar_ident
-                .clone()
-                .separated_by(select! { Token::Scope => () }.padded_by(potential_new_line()))
-                .at_least(1)
-                .collect::<Vec<_>>()
-                .then(
-                    select! { Token::As => () }
-                        .padded_by(potential_new_line())
-                        .ignore_then(data.dollar_ident.clone())
-                        .or_not(),
-                )
-                .map(|(module, alias)| (Vec::new(), module, alias)),
-        ))
-        .map(|(values, module, alias)| AstImport {
-            module,
-            alias,
-            values,
-        })
+                    .collect::<Vec<_>>()
+                    .then(
+                        select! { Token::As => () }
+                            .padded_by(potential_new_line())
+                            .ignore_then(data.dollar_ident.clone())
+                            .or_not(),
+                    )
+                    .map(|(module, alias)| (Vec::new(), module, alias)),
+            )))
+            .map(|(values, module, alias)| AstImport {
+                module,
+                alias,
+                values,
+            })
     }
 }
 
