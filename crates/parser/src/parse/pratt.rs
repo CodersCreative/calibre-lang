@@ -326,29 +326,9 @@ impl<'a> PrattParser {
                         )
                     }
                 }),
-                postfix(
-                    90,
-                    AstCall::operator(data.clone()),
-                    #[allow(clippy::type_complexity)]
-                    |caller,
-                     ((generic_types, args), reverse_args): (
-                        (Option<Vec<ParserDataType>>, Vec<CallArg>),
-                        Vec<AstNode>,
-                    ),
-                     sp| {
-                        let span: SimpleSpan = sp.span();
-                        AstNode::new(
-                            span.into(),
-                            AstNodeType::CallExpression(AstCall {
-                                string_fn: None,
-                                caller: Box::new(caller),
-                                generic_types: generic_types.unwrap_or_default(),
-                                args,
-                                reverse_args,
-                            }),
-                        )
-                    },
-                ),
+                postfix(90, AstCall::operator(data.clone()), |base, value, extra| {
+                    AstCall::fold_postfix(base, value, extra.span())
+                }),
                 postfix(90, index, |base, index, sp| {
                     let span: SimpleSpan = sp.span();
                     AstNode::new(

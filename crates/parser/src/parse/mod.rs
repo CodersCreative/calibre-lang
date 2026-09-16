@@ -90,9 +90,27 @@ pub trait AstParser<'a>: Sized {
 pub trait AstPrattParser<'a>: Sized {
     type Data;
     type Value;
+
     fn operator(
         data: Self::Data,
     ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>>;
+
+    fn fold_postfix(_base: AstNode, _value: Self::Value, _sp: SimpleSpan) -> AstNode {
+        unimplemented!()
+    }
+
+    fn fold_prefix(_value: Self::Value, _base: AstNode, _sp: SimpleSpan) -> AstNode {
+        unimplemented!()
+    }
+
+    fn fold_infix(
+        _left: AstNode,
+        _value: Self::Value,
+        _right: AstNode,
+        _sp: SimpleSpan,
+    ) -> AstNode {
+        unimplemented!()
+    }
 }
 
 pub trait MapWithSpanExt<'a, I, O, E>: Parser<'a, I, O, E>

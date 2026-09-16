@@ -281,4 +281,17 @@ impl<'a> AstPrattParser<'a> for AstCall {
             .then(call_args)
             .then(reverse_args)
     }
+
+    fn fold_postfix(base: AstNode, value: Self::Value, span: SimpleSpan) -> AstNode {
+        AstNode::new(
+            span.into(),
+            AstNodeType::CallExpression(AstCall {
+                string_fn: None,
+                caller: Box::new(base),
+                generic_types: value.0.0.unwrap_or_default(),
+                args: value.0.1,
+                reverse_args: value.1,
+            }),
+        )
+    }
 }
