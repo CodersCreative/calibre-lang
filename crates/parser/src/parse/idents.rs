@@ -57,7 +57,9 @@ impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
                     .or_not(),
             )
             .map(|(identifier, generic_types)| {
-                if let Some(generic_types) = generic_types {
+                if let Some(generic_types) = generic_types
+                    && !generic_types.is_empty()
+                {
                     PotentialGenericTypeIdentifier::Generic {
                         identifier,
                         generic_types,

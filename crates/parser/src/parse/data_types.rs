@@ -10,6 +10,8 @@ use crate::{
         AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream, potential_new_line,
     },
 };
+use chumsky::error::Rich;
+use chumsky::pratt::{infix, left, postfix, prefix};
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
 use std::str::FromStr;
@@ -19,10 +21,12 @@ impl<'a> AstParser<'a> for ParserFfiInnerType {
 
     #[inline(always)]
     fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Identifier(x) => x }.try_map(|name, span| {
-            ParserFfiInnerType::from_str(name)
-                .map_err(|()| chumsky::error::Rich::custom(span, "invalid FFI type"))
-        })
+        select! { Token::At => () }
+            .ignore_then(select! { Token::Identifier(x) => x })
+            .try_map(|name, span| {
+                ParserFfiInnerType::from_str(name)
+                    .map_err(|()| chumsky::error::Rich::custom(span, "invalid FFI type"))
+            })
     }
 }
 
@@ -31,8 +35,7 @@ impl<'a> AstParser<'a> for ParserFfiDataType {
 
     #[inline(always)]
     fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::At => () }
-            .ignore_then(ParserFfiInnerType::parser(()))
+        ParserFfiInnerType::parser(())
             .map_with_span(|data_type, span| ParserFfiDataType::new(span, data_type))
     }
 }
@@ -64,7 +67,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
-                let ffi_parser = ParserFfiInnerType::parser(())
+                let ffi_parser: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>> = ParserFfiInnerType::parser(())
                     .map_with_span(|ffi, span| {
                         ParserDataType::new(span, ParserInnerType::FfiType(ffi))
                     })
@@ -99,7 +102,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
-                let struct_parser = select! { Token::Identifier(x) => x }
+                let struct_parser: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>> = select! { Token::Identifier(x) => x }
                     .then(
                         select! { Token::Vampire => () }
                             .ignore_then(
@@ -240,7 +243,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                     ParserDataType::new(sp, ParserInnerType::Null)
                 }).boxed();
 
-                let base = choice((
+                let atom = choice((
                     null_parser,
                     tuple_parser,
                     ffi_parser,
@@ -249,68 +252,36 @@ impl<'a> AstParser<'a> for ParserDataType {
                     dollar_parser,
                 ));
 
-                let mut_val_parser = select! { Token::Mut => () }
-                    .ignore_then(ty.clone())
-                    .map_with_span(|inner, span| {
+                choice((
+                atom.clone().pratt((
+                    prefix(20, select! {
+                        Token::BitAnd => RefMutability::Ref,
+                        Token::Mut => RefMutability::MutValue,
+                        Token::MutRef => RefMutability::MutRef,
+                    }, |mutability: RefMutability, inner: ParserDataType, _| {
                         ParserDataType::new(
-                            span,
-                            ParserInnerType::Ref(Box::new(inner), RefMutability::MutValue),
+                            inner.span,
+                            ParserInnerType::Ref(Box::new(inner), mutability),
                         )
-                    })
-                    .boxed();
-
-                let mut_ref_parser = select! { Token::MutRef => () }
-                    .ignore_then(ty.clone())
-                    .map_with_span(|inner, span| {
+                    }),
+                    infix(left(30), select! { Token::Not => () }, |err: ParserDataType, _, ok: ParserDataType, _| {
                         ParserDataType::new(
-                            span,
-                            ParserInnerType::Ref(Box::new(inner), RefMutability::MutRef),
+                            Span::new_from_spans(err.span, ok.span),
+                            ParserInnerType::Result {
+                                ok: Box::new(ok),
+                                err: Box::new(err),
+                            },
                         )
-                    })
-                    .boxed();
-
-                let ref_parser = select! { Token::BitAnd => () }
-                    .ignore_then(ty.clone())
-                    .map_with_span(|inner, span| {
+                    }),
+                    postfix(40, select! { Token::Question => () }, |inner: ParserDataType, _, _| {
                         ParserDataType::new(
-                            span,
-                            ParserInnerType::Ref(Box::new(inner), RefMutability::Ref),
+                            inner.span,
+                            ParserInnerType::Option(Box::new(inner)),
                         )
-                    })
-                    .boxed();
-
-                let result_type = choice((mut_val_parser, mut_ref_parser, ref_parser, base))
-                    .then(
-                        select! { Token::Not => () }
-                            .ignore_then(ty.clone())
-                            .or_not(),
-                    )
-                    .map(|(left, right)| {
-                        if let Some(right) = right {
-                            ParserDataType::new(
-                                Span::new_from_spans(left.span, right.span),
-                                ParserInnerType::Result {
-                                    ok: Box::new(right),
-                                    err: Box::new(left),
-                                },
-                            )
-                        } else {
-                            left
-                        }
-                    });
-
-                result_type
-                    .then(select! { Token::Question => () }.or_not())
-                    .map(|(inner, option)| {
-                        if option.is_some() {
-                            ParserDataType::new(
-                                inner.span,
-                                ParserInnerType::Option(Box::new(inner)),
-                            )
-                        } else {
-                            inner
-                        }
-                    })
+                    }),
+                ))
+                .memoized(), atom,
+                )).boxed()
             },
         )
         .boxed()

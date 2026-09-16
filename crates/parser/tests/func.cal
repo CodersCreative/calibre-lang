@@ -1,0 +1,3 @@
+fn (self : Self) -> str => {
+    return "Hello " & self.get_name();
+};

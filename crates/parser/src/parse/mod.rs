@@ -189,12 +189,11 @@ pub fn typed_or_untyped_assignment<'a>(
             .padded_by(potential_new_line())
             .ignore_then(data.node.clone())
             .map(|value| (None, Some(value))),
-        empty().map(|_| (None, None)),
     ))
 }
 
 pub fn potential_new_line<'a>() -> impl Parser<'a, TokenStream<'a>, (), AstParserErr<'a>> {
-    just(Token::NewLine).repeated()
+    just(Token::NewLine).repeated().ignored()
 }
 
 impl<'a> AstNode {

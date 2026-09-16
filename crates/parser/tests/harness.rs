@@ -179,7 +179,7 @@ impl TestHarness {
 
     fn validate_formatter(&mut self, file: &Path, source: &str) {
         let mut parser = Parser::default();
-        let _ = parser.produce_ast(source);
+        let ast = parser.produce_ast(source);
 
         if !parser.errors.is_empty() {
             let message = self.format_errors(file, source, &parser.errors);
@@ -215,8 +215,8 @@ impl TestHarness {
                 file: file.to_path_buf(),
                 validation_type: ValidationType::Formatter,
                 message: format!(
-                    "Formatter produced invalid code. Re-parse errors:\n{}\nFormatted output:\n{}",
-                    message, formatted
+                    "Formatter produced invalid code. Re-parse errors:\n{}\nOriginal output:\n{}\nFormatted output:\n{}",
+                    message, ast, formatted
                 ),
             });
         }
