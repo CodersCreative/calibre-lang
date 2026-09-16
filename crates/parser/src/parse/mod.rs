@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use crate::{
     ParserError, Span,
     ast::{
@@ -33,6 +31,7 @@ use crate::{
 use chumsky::prelude::*;
 use chumsky::span::Span as ChumskySpan;
 use chumsky::{error::Rich, extra::ParserExtra};
+use std::path::Path;
 use tracing::instrument;
 
 pub mod conditionals;
@@ -86,6 +85,14 @@ pub struct PrattData<'a> {
 pub trait AstParser<'a>: Sized {
     type Data;
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>>;
+}
+
+pub trait AstPrattParser<'a>: Sized {
+    type Data;
+    type Value;
+    fn operator(
+        data: Self::Data,
+    ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>>;
 }
 
 pub trait MapWithSpanExt<'a, I, O, E>: Parser<'a, I, O, E>
@@ -187,7 +194,6 @@ impl<'a> AstNode {
             AstEnum::parser(data.clone()).map(AstNodeType::EnumExpression),
             AstTuple::parser(data.clone()).map(AstNodeType::TupleLiteral),
             AstString::parser(()).map(AstNodeType::StringLiteral),
-            // AstRange::parser(data.clone()).map(AstNodeType::RangeDeclaration),
             AstInt::parser(()).map(AstNodeType::IntLiteral),
             AstBig::parser(()).map(AstNodeType::BigLiteral),
             AstFloat::parser(()).map(AstNodeType::FloatLiteral),
@@ -206,14 +212,11 @@ impl<'a> AstNode {
             // Functions
             AstFunction::parser(data.clone()).map(AstNodeType::FunctionDeclaration),
             AstExtern::parser(data.clone()).map(AstNodeType::ExternFunctionDeclaration),
-            // AstCall::parser(data.clone()).map(AstNodeType::CallExpression),
             AstCurry::parser(data.clone()).map(AstNodeType::CurryExpression),
             // Null
             select! {Token::Null => ()}.map(|_| AstNodeType::Null),
             // Memory
             AstDrop::parser(data.clone()).map(AstNodeType::Drop),
-            //AstRef::parser(data.clone()).map(AstNodeType::RefStatement),
-            //AstDeref::parser(data.clone()).map(AstNodeType::DerefStatement),
             AstMove::parser(data.clone()).map(AstNodeType::MoveExpression),
             // Access
             AstIdentifier::parser(data.clone()).map(AstNodeType::Identifier),

@@ -5,10 +5,13 @@ use crate::ast::nodes::assignment::AstAssignment;
 use crate::ast::nodes::binary::{
     AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs,
 };
+use crate::ast::nodes::functions::{AstCall, CallArg};
+use crate::ast::nodes::literals::AstRange;
 use crate::ast::nodes::memory::{AstDeref, AstRef};
 use crate::ast::nodes::unary::{AstNeg, AstNot};
 use crate::ast::nodes::{AstNode, AstNodeType};
-use crate::parse::{PrattData, potential_new_line};
+use crate::ast::types::ParserDataType;
+use crate::parse::{AstPrattParser, PrattData, potential_new_line};
 use crate::{
     ast::{
         binary::BinaryOperator,
@@ -159,6 +162,11 @@ impl<'a> PrattParser {
             Token::PowEq => (BinaryOperator::Pow, true),
         };
 
+        let range = select! {
+            Token::Range => false,
+            Token::InclusiveRange => true,
+        };
+
         let conversion = select! { Token::As => () }
             .padded_by(potential_new_line())
             .ignore_then(data.data_type.clone())
@@ -204,8 +212,8 @@ impl<'a> PrattParser {
                     )
                 }),
                 // 10
-                infix(left(10), boolean, |l, (op, is_eq), r, sp| {
-                    fold_boolean(l, op, r, is_eq, sp.span())
+                infix(left(10), boolean, |l, (op, assignment), r, sp| {
+                    fold_boolean(l, op, r, assignment, sp.span())
                 }),
                 // 20
                 infix(left(20), comparison, |l, op, r, sp| {
@@ -221,21 +229,33 @@ impl<'a> PrattParser {
                         }),
                     )
                 }),
+                // 25
+                infix(left(20), range, |l, inclusive, r, sp| {
+                    let span: SimpleSpan = sp.span();
+                    AstNode::new(
+                        span.into(),
+                        AstNodeType::RangeDeclaration(AstRange {
+                            from: Box::new(l),
+                            to: Box::new(r),
+                            inclusive,
+                        }),
+                    )
+                }),
                 // 30
-                infix(left(30), bitwise, |l, (op, is_eq), r, sp| {
-                    fold_binary(l, op, r, is_eq, sp.span())
+                infix(left(30), bitwise, |l, (op, assignment), r, sp| {
+                    fold_binary(l, op, r, assignment, sp.span())
                 }),
                 // 40
-                infix(left(40), shift, |l, (op, is_eq), r, sp| {
-                    fold_binary(l, op, r, is_eq, sp.span())
+                infix(left(40), shift, |l, (op, assignment), r, sp| {
+                    fold_binary(l, op, r, assignment, sp.span())
                 }),
                 // 50
-                infix(left(50), add, |l, (op, is_eq), r, sp| {
-                    fold_binary(l, op, r, is_eq, sp.span())
+                infix(left(50), add, |l, (op, assignment), r, sp| {
+                    fold_binary(l, op, r, assignment, sp.span())
                 }),
                 // 60
-                infix(left(60), mul, |l, (op, is_eq), r, sp| {
-                    fold_binary(l, op, r, is_eq, sp.span())
+                infix(left(60), mul, |l, (op, assignment), r, sp| {
+                    fold_binary(l, op, r, assignment, sp.span())
                 }),
                 // 70
                 postfix(70, conversion, |value, (data_type, failure_mode), sp| {
@@ -260,8 +280,8 @@ impl<'a> PrattParser {
                     )
                 }),
                 // 80
-                infix(left(80), pow, |l, (op, is_eq), r, sp| {
-                    fold_binary(l, op, r, is_eq, sp.span())
+                infix(left(80), pow, |l, (op, assignment), r, sp| {
+                    fold_binary(l, op, r, assignment, sp.span())
                 }),
                 // 90
                 prefix(
@@ -306,6 +326,29 @@ impl<'a> PrattParser {
                         )
                     }
                 }),
+                postfix(
+                    90,
+                    AstCall::operator(data.clone()),
+                    #[allow(clippy::type_complexity)]
+                    |caller,
+                     ((generic_types, args), reverse_args): (
+                        (Option<Vec<ParserDataType>>, Vec<CallArg>),
+                        Vec<AstNode>,
+                    ),
+                     sp| {
+                        let span: SimpleSpan = sp.span();
+                        AstNode::new(
+                            span.into(),
+                            AstNodeType::CallExpression(AstCall {
+                                string_fn: None,
+                                caller: Box::new(caller),
+                                generic_types: generic_types.unwrap_or_default(),
+                                args,
+                                reverse_args,
+                            }),
+                        )
+                    },
+                ),
                 postfix(90, index, |base, index, sp| {
                     let span: SimpleSpan = sp.span();
                     AstNode::new(

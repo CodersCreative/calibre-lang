@@ -5,8 +5,8 @@ use crate::{
         nodes::{
             AstNode,
             literals::{
-                AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstRange, AstString,
-                AstStruct, AstTuple,
+                AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstString, AstStruct,
+                AstTuple,
             },
         },
     },
@@ -90,36 +90,6 @@ impl<'a> AstParser<'a> for AstString {
                 span,
             },
         })
-    }
-}
-
-impl<'a> AstParser<'a> for AstRange {
-    type Data = StatementData<'a>;
-
-    #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        choice((
-            data.node
-                .clone()
-                .then_ignore(
-                    select! { Token::InclusiveRange => () }.padded_by(potential_new_line()),
-                )
-                .then(data.node.clone())
-                .map(|(from, to)| AstRange {
-                    from: Box::new(from),
-                    to: Box::new(to),
-                    inclusive: true,
-                }),
-            data.node
-                .clone()
-                .then_ignore(select! { Token::Range => () }.padded_by(potential_new_line()))
-                .then(data.node.clone())
-                .map(|(from, to)| AstRange {
-                    from: Box::new(from),
-                    to: Box::new(to),
-                    inclusive: false,
-                }),
-        ))
     }
 }
 

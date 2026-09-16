@@ -7,7 +7,9 @@ use crate::ast::nodes::functions::{
 use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserDataType;
+use crate::parse::AstPrattParser;
 use crate::parse::MapWithSpanExt;
+use crate::parse::PrattData;
 use crate::parse::StatementData;
 use crate::parse::potential_new_line;
 use crate::{
@@ -21,7 +23,7 @@ use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for CallArg {
-    type Data = StatementData<'a>;
+    type Data = PrattData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
@@ -29,9 +31,9 @@ impl<'a> AstParser<'a> for CallArg {
             data.dollar_ident
                 .clone()
                 .then_ignore(select! { Token::Colon => () })
-                .then(data.node.clone())
+                .then(data.stmt.clone())
                 .map(|(name, value)| CallArg::Named(name, value)),
-            data.node.clone().map(CallArg::Value),
+            data.stmt.clone().map(CallArg::Value),
         ))
     }
 }
@@ -233,10 +235,13 @@ impl<'a> AstParser<'a> for AstCurry {
     }
 }
 
-impl<'a> AstParser<'a> for AstCall {
-    type Data = StatementData<'a>;
+impl<'a> AstPrattParser<'a> for AstCall {
+    type Data = PrattData<'a>;
+    type Value = ((Option<Vec<ParserDataType>>, Vec<CallArg>), Vec<AstNode>);
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn operator(
+        data: Self::Data,
+    ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>> {
         let call_args = select! { Token::LeftParen => () }
             .ignore_then(
                 CallArg::parser(data.clone())
@@ -252,7 +257,7 @@ impl<'a> AstParser<'a> for AstCall {
         let reverse_args = select! { Token::Lesser => () }
             .ignore_then(select! { Token::LeftParen => () })
             .ignore_then(
-                data.node
+                data.stmt
                     .clone()
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
@@ -263,28 +268,17 @@ impl<'a> AstParser<'a> for AstCall {
             )
             .then_ignore(select! { Token::RightParen => () });
 
-        data.node
-            .clone()
-            .then(
-                select! { Token::Vampire => () }
-                    .ignore_then(
-                        data.data_type
-                            .clone()
-                            .padded_by(potential_new_line())
-                            .separated_by(select! { Token::Comma => () })
-                            .collect::<Vec<_>>(),
-                    )
-                    .then_ignore(select! { Token::Greater => () })
-                    .or_not(),
+        select! { Token::Vampire => () }
+            .ignore_then(
+                data.data_type
+                    .clone()
+                    .padded_by(potential_new_line())
+                    .separated_by(select! { Token::Comma => () })
+                    .collect::<Vec<_>>(),
             )
+            .then_ignore(select! { Token::Greater => () })
+            .or_not()
             .then(call_args)
             .then(reverse_args)
-            .map(|(((caller, generic_types), args), reverse_args)| AstCall {
-                string_fn: None,
-                caller: Box::new(caller),
-                generic_types: generic_types.unwrap_or_default(),
-                args,
-                reverse_args,
-            })
     }
 }
