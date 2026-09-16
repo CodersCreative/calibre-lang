@@ -1,4 +1,4 @@
-use ariadne::{ColorGenerator, Label, Report, ReportKind, Source};
+use ariadne::{Color, Label, Report, ReportKind, Source};
 use calibre_parser::{CalibreError, Parser, formatter::Formatter, lexer::Token};
 use rayon::iter::IntoParallelRefIterator;
 use rayon::prelude::*;
@@ -128,7 +128,7 @@ impl TestHarness {
         let actual_tokens = match parser.lex(source) {
             Ok(tokens) => tokens,
             Err(errs) => {
-                let message = self.format_ariadne_errors(cal_file, source, &errs);
+                let message = self.format_errors(cal_file, source, &errs);
                 self.failures.push(TestFailure {
                     file: cal_file.to_path_buf(),
                     validation_type: ValidationType::Lexer,
@@ -182,7 +182,7 @@ impl TestHarness {
         let _ = parser.produce_ast(source);
 
         if !parser.errors.is_empty() {
-            let message = self.format_ariadne_errors(file, source, &parser.errors);
+            let message = self.format_errors(file, source, &parser.errors);
             self.failures.push(TestFailure {
                 file: file.to_path_buf(),
                 validation_type: ValidationType::Parser,
@@ -210,7 +210,7 @@ impl TestHarness {
         let _ = parser.produce_ast(&formatted);
 
         if !parser.errors.is_empty() {
-            let message = self.format_ariadne_errors(file, &formatted, &parser.errors);
+            let message = self.format_errors(file, &formatted, &parser.errors);
             self.failures.push(TestFailure {
                 file: file.to_path_buf(),
                 validation_type: ValidationType::Formatter,
@@ -222,33 +222,30 @@ impl TestHarness {
         }
     }
 
-    fn format_ariadne_errors(
-        &self,
-        file: &Path,
-        source: &str,
-        errors: &[impl CalibreError],
-    ) -> String {
+    fn format_errors(&self, file: &Path, source: &str, errors: &[impl CalibreError]) -> String {
         let mut output = Vec::new();
-        let mut colors = ColorGenerator::new();
-        let file_id = file.display().to_string();
+        let file_id = file.to_string_lossy().to_string();
 
-        for error in errors {
-            let span = error.span();
-            let color = colors.next();
+        for err in errors {
+            let span = err.span();
 
-            let mut report = Report::build(ReportKind::Error, &file_id, span.from)
-                .with_code(error.code())
-                .with_message(error.to_string());
+            let mut report = Report::build(ReportKind::Error, (&file_id, span.to_range()))
+                .with_code(err.code().to_string())
+                .with_message(err.to_string());
 
-            report = report.with_label(
-                Label::new((&file_id, span.from..span.to))
-                    .with_message(error.step())
-                    .with_color(color),
-            );
-
-            if let Some(hint) = error.hint() {
-                report = report.with_help(hint);
+            if !span.is_none() {
+                report = report.with_label(
+                    Label::new((&file_id, span.to_range()))
+                        .with_message(err.to_string())
+                        .with_color(Color::Red),
+                );
             }
+
+            if let Some(hint) = err.hint() {
+                report = report.with_note(format!("hint: {hint}"));
+            }
+
+            report = report.with_note(format!("step: {}", err.step()));
 
             report
                 .finish()

@@ -96,21 +96,11 @@ dependencies = [
 
 [[package]]
 name = "ariadne"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44055e597c674aef7cb903b2b9f6e4cba1277ed0d2d61dae7cd52d7ffa81f8e2"
-dependencies = [
- "unicode-width 0.1.14",
- "yansi",
-]
-
-[[package]]
-name = "ariadne"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8454c8a44ce2cb9cc7e7fae67fc6128465b343b92c6631e94beca3c8d1524ea5"
 dependencies = [
- "unicode-width 0.2.2",
+ "unicode-width",
  "yansi",
 ]
 
@@ -450,7 +440,7 @@ dependencies = [
 name = "calibre-frontend"
 version = "0.0.1"
 dependencies = [
- "ariadne 0.6.0",
+ "ariadne",
  "calibre-mir",
  "calibre-parser",
  "calibre-vm",
@@ -517,7 +507,7 @@ dependencies = [
 name = "calibre-parser"
 version = "0.0.1"
 dependencies = [
- "ariadne 0.4.1",
+ "ariadne",
  "chumsky",
  "logos",
  "logos-display",
@@ -2102,7 +2092,7 @@ dependencies = [
  "nix",
  "radix_trie",
  "unicode-segmentation",
- "unicode-width 0.2.2",
+ "unicode-width",
  "utf8parse",
  "windows-sys 0.60.2",
 ]
@@ -2713,12 +2703,6 @@ name = "unicode-segmentation"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9629274872b2bfaf8d66f5f15725007f635594914870f65218920345aa11aa8c"
-
-[[package]]
-name = "unicode-width"
-version = "0.1.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
 
 [[package]]
 name = "unicode-width"

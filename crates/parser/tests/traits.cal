@@ -1,0 +1,67 @@
+import File from std::fs;
+
+trait Person {
+	const get_name : fn (&Self) -> str;
+
+	const greeting := fn (self : &Self) -> str => {
+		return "Hello " & self.get_name();
+	};
+};
+
+type User := struct { name : str };
+
+impl Person for User {
+	const get_name := fn (self : &User) -> str => return self.name;
+};
+
+trait Human {
+	const name : str;
+
+	const age := 10;
+
+	const country := "Zimbabwe";
+};
+
+type Ty := struct { };
+type Tadiwa := struct { };
+
+impl Human for Ty {
+	const name := "Ty";
+};
+
+impl Human for Tadiwa {
+	const name := "Tadiwa";
+
+	const age := 21;
+
+	const country := "US";
+};
+
+const show := fn (label : str, p : dyn:<Human>) => {
+	print(label & " -> name=" & p.name & ", age=" & p.age & ", country=" & p.country);
+};
+
+@current_context const main := fn => {
+	let user := User { name : "Ty" };
+	print(user.greeting());
+	
+	let parts := "a,b,c".split(",");
+	print(parts[1]);
+	print("calibre".starts_with("cal"));
+	let file := try File.open_read(Path.new(current_context.path.replace("traits.cal", "destructure.cal"))) => panic();
+	print(file.read_all());
+	
+	let ty := Ty { };
+	let tadiwa := Tadiwa { };
+	
+	print(ty.name);
+	print(ty.age);
+	print(ty.country);
+	
+	print(tadiwa.name);
+	print(tadiwa.age);
+	print(tadiwa.country);
+	
+	show("ty", ty);
+	show("tadiwa", tadiwa);
+};
