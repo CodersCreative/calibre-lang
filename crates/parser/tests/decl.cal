@@ -1,0 +1,2 @@
+const hello := 10u;
+let bye := some(90);

@@ -1,2 +1,2 @@
 type : int
-type : Person
+type : Person!uint

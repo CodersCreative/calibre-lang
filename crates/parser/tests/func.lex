@@ -1,0 +1,15 @@
+Fn
+LeftParen
+Identifier
+Colon
+Identifier
+RightParen
+RightArrow
+Identifier
+FatArrow
+LeftBracket
+NewLine
+Return
+Identifier
+NewLine
+RightBracket

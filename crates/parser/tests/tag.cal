@@ -1,0 +1,1 @@
+@suite("main") @panics test "something" => {};

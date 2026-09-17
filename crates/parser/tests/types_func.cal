@@ -1,0 +1,2 @@
+type : fn(int) -> int;
+type : fn -> int;

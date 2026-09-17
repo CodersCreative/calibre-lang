@@ -1,0 +1,2 @@
+defer 10 + 10;
+defer return 20;

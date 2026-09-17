@@ -1,0 +1,1 @@
+extern "c" const hello := fn (@int) -> @int from "libc" as "hello";
