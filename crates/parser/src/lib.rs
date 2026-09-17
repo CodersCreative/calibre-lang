@@ -226,10 +226,37 @@ impl Parser {
     #[instrument(skip_all, fields(bytes = source.len(), path = ?self.source_path))]
     pub fn produce_ast(&mut self, source: &str) -> AstNode {
         debug!(lines = source.lines().count(), "starting parse");
-        match self
-            .lex(source)
-            .and_then(|x| parse_program_with_source(&x, self.source_path.as_deref()))
-        {
+        match self.lex(source).and_then(|x| {
+            parse_program_with_source(&x, self.source_path.as_deref()).map_err(|errors| {
+                let spans = Token::lexer(source)
+                    .spanned()
+                    .filter_map(|(token, span)| {
+                        let token = token.ok()?;
+                        (!matches!(token, Token::LineComment(_) | Token::BlockComment(_)))
+                            .then_some(Span::from(span))
+                    })
+                    .collect::<Vec<_>>();
+
+                errors
+                    .into_iter()
+                    .map(|mut error| {
+                        if let ParserError::Syntax { span, .. } = &mut error {
+                            let from = spans
+                                .get(span.from)
+                                .map(|token| token.from)
+                                .unwrap_or(source.len());
+                            let to = spans
+                                .get(span.to.saturating_sub(1))
+                                .map(|token| token.to)
+                                .unwrap_or(from);
+                            *span =
+                                Span::new(from.min(source.len()), to.max(from).min(source.len()));
+                        }
+                        error
+                    })
+                    .collect()
+            })
+        }) {
             Ok(ast) => {
                 self.errors.clear();
                 info!("parse completed");

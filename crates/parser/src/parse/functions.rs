@@ -162,7 +162,6 @@ impl<'a> AstParser<'a> for AstFunction {
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }
-            .then_ignore(select! { Token::Match => () }.not())
             .ignore_then(FunctionHeader::parser(data.clone()))
             .then(AstScopeDef::parser(data.clone()))
             .map_with_span(|(header, body), span| AstFunction {
