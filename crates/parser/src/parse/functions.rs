@@ -4,7 +4,6 @@ use crate::ast::nodes::DestructurePattern;
 use crate::ast::nodes::functions::{
     AstCall, AstCurry, AstExtern, AstFunction, CallArg, FunctionHeader,
 };
-use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserDataType;
 use crate::parse::AstPrattParser;
@@ -163,10 +162,10 @@ impl<'a> AstParser<'a> for AstFunction {
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Fn => () }
             .ignore_then(FunctionHeader::parser(data.clone()))
-            .then(AstScopeDef::parser(data.clone()))
-            .map_with_span(|(header, body), span| AstFunction {
+            .then(data.scope)
+            .map(|(header, body)| AstFunction {
                 header,
-                body: Box::new(AstNode::new(span, AstNodeType::from(body))),
+                body: Box::new(body),
             })
     }
 }

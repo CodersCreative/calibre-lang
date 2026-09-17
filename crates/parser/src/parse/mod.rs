@@ -69,41 +69,7 @@ pub struct StatementData<'a> {
     pub dollar_ident: Boxed<'a, 'a, TokenStream<'a>, PotentialDollarIdentifier, AstParserErr<'a>>,
     pub generic_ident:
         Boxed<'a, 'a, TokenStream<'a>, PotentialGenericTypeIdentifier, AstParserErr<'a>>,
-}
-
-impl<'a> StatementData<'a> {
-    pub fn with_prefix<T>(self, prefix: T) -> StatementDataWithPrefix<'a, T> {
-        StatementDataWithPrefix {
-            node: self.node,
-            data_type: self.data_type,
-            generic_ident: self.generic_ident,
-            dollar_ident: self.dollar_ident,
-            prefix,
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct StatementDataWithPrefix<'a, T> {
-    pub node: Recursive<
-        dyn Parser<'a, TokenStream<'a>, AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>> + 'a,
-    >,
-    pub data_type: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
-    pub dollar_ident: Boxed<'a, 'a, TokenStream<'a>, PotentialDollarIdentifier, AstParserErr<'a>>,
-    pub generic_ident:
-        Boxed<'a, 'a, TokenStream<'a>, PotentialGenericTypeIdentifier, AstParserErr<'a>>,
-    pub prefix: T,
-}
-
-impl<'a, T> From<StatementDataWithPrefix<'a, T>> for StatementData<'a> {
-    fn from(value: StatementDataWithPrefix<'a, T>) -> Self {
-        Self {
-            node: value.node,
-            data_type: value.data_type,
-            dollar_ident: value.dollar_ident,
-            generic_ident: value.generic_ident,
-        }
-    }
+    pub scope: Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>,
 }
 
 #[derive(Clone)]
@@ -343,8 +309,7 @@ impl<'a> AstNode {
             // Loops
             AstLoop::parser(data.clone()).map(AstNodeType::LoopDeclaration),
             // Scopes
-            AstScopeDef::parser(data.clone()).map(AstNodeType::ScopeDeclaration),
-            // Misc
+            data.scope.clone().map(|x| x.node_type), // Misc
         ))
         .map_with_span(|node_type, span| Self { node_type, span })
         .boxed()
@@ -368,15 +333,19 @@ pub fn parse_program_with_source<'a>(
         };
 
         let pratt = PrattParser::parse(data.clone()).memoized().boxed();
+        let scope = AstScopeDef::parser(data.clone())
+            .map_with_span(|body, span| AstNode::new(span, AstNodeType::from(body)))
+            .boxed();
 
         let data = StatementData {
             node: data.stmt,
             data_type: data.data_type,
             dollar_ident: data.dollar_ident,
             generic_ident: data.generic_ident,
+            scope: scope.clone(),
         };
 
-        choice((pratt, AstNode::parser(&data)))
+        choice((pratt, AstNode::parser(&data), scope))
     })
     .padded_by(potential_new_line())
     .repeated()

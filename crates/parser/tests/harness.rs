@@ -215,7 +215,7 @@ impl TestHarness {
                 file: file.to_path_buf(),
                 validation_type: ValidationType::Formatter,
                 message: format!(
-                    "Formatter produced invalid code. Re-parse errors:\n{}\nOriginal output:\n{}\nFormatted output:\n{}",
+                    "Formatter produced invalid code. Re-parse errors:\n{}\nOriginal output:\n{:?}\nFormatted output:\n{}",
                     message, ast, formatted
                 ),
             });
@@ -270,7 +270,10 @@ impl TestHarness {
                     ValidationType::Formatter => "Formatter",
                 };
 
-                println!("({}): {}", stage, failure.message);
+                println!(
+                    "\n-----------------------------\n({}): {}",
+                    stage, failure.message
+                );
             }
         }
     }

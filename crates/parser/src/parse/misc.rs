@@ -1,10 +1,7 @@
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
-use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::misc::{AstImport, AstParen, AstTag, AstTest};
-use crate::ast::nodes::scopes::AstScopeDef;
 use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
 use crate::{
-    ast::nodes::AstNode,
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
@@ -32,10 +29,10 @@ impl<'a> AstParser<'a> for AstTest {
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Test => () }
             .ignore_then(select! { Token::StringLiteral(x) => x })
-            .then(AstScopeDef::parser(data))
-            .map_with_span(|(name, body), span| AstTest {
+            .then(data.scope.clone())
+            .map(|(name, body)| AstTest {
                 identifier: ParserText::from(name.to_string()),
-                body: Box::new(AstNode::new(span, AstNodeType::from(body))),
+                body: Box::new(body),
             })
     }
 }

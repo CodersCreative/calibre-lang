@@ -8,7 +8,6 @@ use crate::ast::nodes::matching::{
     AstFnMatch, AstMatch, MatchArmType, MatchBody, MatchStringPatternPart, MatchStructFieldPattern,
     MatchTupleItem,
 };
-use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::types::{GenericTypes, ParserDataType};
 use crate::parse::MapWithSpanExt;
 use crate::parse::StatementData;
@@ -558,16 +557,7 @@ impl<'a> AstParser<'a> for MatchBody {
                     .repeated()
                     .collect::<Vec<_>>(),
             )
-            .then(
-                select! { Token::FatArrow => () }
-                    .padded_by(potential_new_line())
-                    .ignore_then(choice((
-                        AstScopeDef::parser(data.clone()).map_with_span(|scope, span| {
-                            AstNode::new(span, AstNodeType::from(scope))
-                        }),
-                        data.node.clone(),
-                    ))),
-            )
+            .then(data.scope)
             .map(|(((first, rest), conditions), body)| {
                 let mut values = vec![first.clone()];
                 values.extend(rest.iter().map(|(_, v)| v.clone()));

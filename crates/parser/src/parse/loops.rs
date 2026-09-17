@@ -1,10 +1,7 @@
-use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::loops::{AstIter, AstLoop, LoopType};
-use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::types::ParserDataType;
 use crate::parse::{MapWithSpanExt, StatementData};
 use crate::{
-    ast::nodes::AstNode,
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
@@ -54,10 +51,10 @@ impl<'a> AstParser<'a> for AstLoop {
         select! {Token::For => ()}
             .ignore_then(LoopType::parser(data.clone()))
             .then(label)
-            .then(AstScopeDef::parser(data.clone()))
+            .then(data.scope.clone())
             .then(
                 select! { Token::Else => () }
-                    .ignore_then(AstScopeDef::parser(data.clone()))
+                    .ignore_then(data.scope.clone())
                     .or_not(),
             )
             .then(
@@ -65,16 +62,13 @@ impl<'a> AstParser<'a> for AstLoop {
                     .ignore_then(data.node.clone())
                     .or_not(),
             )
-            .map_with_span(
-                |((((loop_type, label), body), else_body), until), span| AstLoop {
-                    loop_type: Box::new(loop_type),
-                    body: Box::new(AstNode::new(span, AstNodeType::from(body))),
-                    until: until.map(Box::new),
-                    label,
-                    else_body: else_body
-                        .map(|b| Box::new(AstNode::new(span, AstNodeType::from(b)))),
-                },
-            )
+            .map(|((((loop_type, label), body), else_body), until)| AstLoop {
+                loop_type: Box::new(loop_type),
+                body: Box::new(body),
+                until: until.map(Box::new),
+                label,
+                else_body: else_body.map(Box::new),
+            })
     }
 }
 

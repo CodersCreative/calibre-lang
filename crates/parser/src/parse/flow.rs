@@ -2,8 +2,7 @@ use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment, TryCatch,
 };
-use crate::ast::nodes::scopes::AstScopeDef;
-use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, StatementData, potential_new_line};
+use crate::parse::{AstPrattParser, PrattData, StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -107,14 +106,14 @@ impl<'a> AstParser<'a> for TryCatch {
         choice((
             select! { Token::Colon => () }
                 .ignore_then(data.dollar_ident.clone())
-                .then(AstScopeDef::parser(data.clone()))
-                .map_with_span(|(name, body), span| TryCatch {
+                .then(data.scope.clone())
+                .map(|(name, body)| TryCatch {
                     name: Some(name),
-                    body: Box::new(AstNode::new(span, AstNodeType::from(body))),
+                    body: Box::new(body),
                 }),
-            AstScopeDef::parser(data.clone()).map_with_span(|body, span| TryCatch {
+            data.scope.map(|body| TryCatch {
                 name: None,
-                body: Box::new(AstNode::new(span, AstNodeType::from(body))),
+                body: Box::new(body),
             }),
         ))
     }

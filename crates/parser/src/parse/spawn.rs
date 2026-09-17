@@ -1,5 +1,4 @@
 use crate::ast::nodes::AstNodeType;
-use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::nodes::spawn::{AstSelect, AstSpawn, SelectArm, SelectArmKind};
 use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
 use crate::{
@@ -17,31 +16,31 @@ impl<'a> AstParser<'a> for SelectArm {
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Identifier(x) if x == "_" => () }
-                .ignore_then(AstScopeDef::parser(data.clone()))
-                .map_with_span(|body, span| SelectArm {
+                .ignore_then(data.scope.clone())
+                .map(|body| SelectArm {
                     patterns: vec![(SelectArmKind::Default, None, None)],
                     conditionals: Vec::new(),
-                    body: AstNode::new(span, AstNodeType::from(body)),
+                    body,
                 }),
             data.node
                 .clone()
                 .then_ignore(select! { Token::LeftArrow => () })
                 .then(data.node.clone())
-                .then(AstScopeDef::parser(data.clone()))
-                .map_with_span(|((lhs, rhs), body), span| SelectArm {
+                .then(data.scope.clone())
+                .map(|((lhs, rhs), body)| SelectArm {
                     patterns: vec![(SelectArmKind::Recv, Some(lhs), Some(rhs))],
                     conditionals: Vec::new(),
-                    body: AstNode::new(span, AstNodeType::from(body)),
+                    body,
                 }),
             data.node
                 .clone()
                 .then_ignore(select! { Token::RightArrow => () })
                 .then(data.node.clone())
-                .then(AstScopeDef::parser(data))
-                .map_with_span(|((lhs, rhs), body), span| SelectArm {
+                .then(data.scope.clone())
+                .map(|((lhs, rhs), body)| SelectArm {
                     patterns: vec![(SelectArmKind::Send, Some(lhs), Some(rhs))],
                     conditionals: Vec::new(),
-                    body: AstNode::new(span, AstNodeType::from(body)),
+                    body,
                 }),
         ))
     }

@@ -161,11 +161,14 @@ impl AstFormatting for AstTuple {
     type PreFormat = ();
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        self.values
-            .iter()
-            .map(|x| x.format(formatter))
-            .collect::<Vec<_>>()
-            .join(", ")
+        format!(
+            "({})",
+            self.values
+                .iter()
+                .map(|x| x.format(formatter))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 
     #[inline(always)]
@@ -181,7 +184,10 @@ impl AstFormatting for AstTuple {
             .collect::<Vec<_>>()
             .join(",\n");
 
-        Some(format!("\n{}", formatter.fmt_txt_with_tab(&txt, 1, true)))
+        Some(format!(
+            "(\n{}\n)",
+            formatter.fmt_txt_with_tab(&txt, 1, true)
+        ))
     }
 }
 
@@ -189,11 +195,45 @@ impl AstFormatting for AstString {
     type PreFormat = ();
 
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
-        format!("\"{}\"", Self::escape_string_literal(&self.value.text))
+        let raw = self
+            .value
+            .text
+            .strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(&self.value.text);
+        format!(
+            "\"{}\"",
+            Self::escape_string_literal(&Self::unescape_string_literal(raw))
+        )
     }
 }
 
 impl AstString {
+    fn unescape_string_literal(input: &str) -> String {
+        let mut out = String::with_capacity(input.len());
+        let mut chars = input.chars();
+        while let Some(c) = chars.next() {
+            if c != '\\' {
+                out.push(c);
+                continue;
+            }
+            match chars.next() {
+                Some('n') => out.push('\n'),
+                Some('r') => out.push('\r'),
+                Some('t') => out.push('\t'),
+                Some('0') => out.push('\0'),
+                Some('\\') => out.push('\\'),
+                Some('"') => out.push('"'),
+                Some(c) => {
+                    out.push('\\');
+                    out.push(c);
+                }
+                None => out.push('\\'),
+            }
+        }
+        out
+    }
+
     pub fn escape_string_literal(input: &str) -> String {
         let mut out = String::with_capacity(input.len());
         for ch in input.chars() {

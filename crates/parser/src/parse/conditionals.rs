@@ -1,6 +1,6 @@
+use super::matching::parse_pattern_list;
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType};
-use crate::ast::nodes::scopes::AstScopeDef;
 use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
@@ -9,8 +9,6 @@ use crate::{
 };
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
-
-use super::matching::parse_pattern_list;
 
 impl<'a> AstParser<'a> for IfComparisonType {
     type Data = StatementData<'a>;
@@ -42,22 +40,20 @@ impl<'a> AstParser<'a> for AstIf {
                 if_parser.clone().map_with_span(|value, span| {
                     Box::new(AstNode::new(span, AstNodeType::IfStatement(value)))
                 }),
-                AstScopeDef::parser(data.clone()).map_with_span(|scope, span| {
-                    Box::new(AstNode::new(span, AstNodeType::from(scope)))
-                }),
+                data.scope.clone().map(Box::new),
             ));
 
             select! { Token::If => () }
                 .ignore_then(IfComparisonType::parser(data.clone()))
-                .then(AstScopeDef::parser(data.clone()))
+                .then(data.scope.clone())
                 .then(
                     select! { Token::Else => () }
                         .ignore_then(else_block)
                         .or_not(),
                 )
-                .map_with_span(|((cond, then), otherwise), span| AstIf {
+                .map(|((cond, then), otherwise)| AstIf {
                     comparison: Box::new(cond),
-                    then: Box::new(AstNode::new(span, AstNodeType::from(then))),
+                    then: Box::new(then),
                     otherwise,
                 })
                 .boxed()

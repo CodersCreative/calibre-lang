@@ -117,7 +117,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                             .or_not(),
                     )
                     .try_map_with_span(|(name, generic_types), span| {
-                        Ok(if let Some(generic_types) = generic_types {
+                        Ok(if let Some(generic_types) = generic_types && !generic_types.is_empty() {
                             match name {
                                 "dyn" => {
                                     let traits = generic_types
@@ -221,7 +221,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                             ParserDataType::new(
                                 span,
                                 ParserInnerType::from_str(name)
-                                    .unwrap_or(ParserInnerType::Struct(name.to_string())),
+                                    .expect("ParserInnerType::from_str cannot error"),
                             )
                         })
                     })
