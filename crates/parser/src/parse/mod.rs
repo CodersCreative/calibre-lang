@@ -165,7 +165,6 @@ pub fn typed_or_untyped_assignment<'a>(
                     select! { Token::Eq => () }.map(|_| true),
                     select! { Token::Walrus => () }.map(|_| false),
                 ))
-                .padded_by(potential_new_line())
                 .then(data.node.clone()),
             )
             .try_map(
@@ -176,7 +175,6 @@ pub fn typed_or_untyped_assignment<'a>(
             ),
         // =
         select! { Token::Eq => () }
-            .padded_by(potential_new_line())
             .ignore_then(data.node.clone())
             .try_map(|_, sp| {
                 Err(Rich::custom(
@@ -186,14 +184,9 @@ pub fn typed_or_untyped_assignment<'a>(
             }),
         // :=
         select! { Token::Walrus => () }
-            .padded_by(potential_new_line())
             .ignore_then(data.node.clone())
             .map(|value| (None, Some(value))),
     ))
-}
-
-pub fn potential_new_line<'a>() -> impl Parser<'a, TokenStream<'a>, (), AstParserErr<'a>> {
-    just(Token::NewLine).repeated().ignored()
 }
 
 impl<'a> AstNode {
@@ -306,7 +299,6 @@ pub fn parse_program_with_source<'a>(
 
         choice((pratt, AstNode::parser(&data)))
     })
-    .padded_by(potential_new_line())
     .repeated()
     .collect::<Vec<_>>();
 

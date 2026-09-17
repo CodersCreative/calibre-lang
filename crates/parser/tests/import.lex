@@ -4,7 +4,6 @@ From
 Identifier
 Scope
 Identifier
-NewLine
 Import
 Identifier
 From

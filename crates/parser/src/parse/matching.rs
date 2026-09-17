@@ -12,7 +12,6 @@ use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::types::{GenericTypes, ParserDataType};
 use crate::parse::MapWithSpanExt;
 use crate::parse::StatementData;
-use crate::parse::potential_new_line;
 use crate::{
     Span,
     ast::nodes::AstNode,
@@ -64,7 +63,6 @@ impl<'a> DestructurePattern {
                     ))
                 }),
             ))
-            .padded_by(potential_new_line())
             .separated_by(select! { Token::Comma => () })
             .allow_trailing()
             .collect::<Vec<_>>()
@@ -103,7 +101,6 @@ impl<'a> AstParser<'a> for DestructurePattern {
                             ))
                         }),
                     ))
-                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -540,144 +537,140 @@ impl<'a> AstParser<'a> for MatchBody {
     type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let match_arm = MatchArmType::parser(data.clone())
-            .padded_by(potential_new_line())
-            .then(
-                choice((
-                    select! { Token::BitOr => () }.map(|_| '|'),
-                    select! { Token::Comma => () }.map(|_| ','),
-                ))
-                .then(MatchArmType::parser(data.clone()))
-                .repeated()
-                .collect::<Vec<(char, MatchArmType)>>(),
-            )
-            .then(
-                select! { Token::If => () }
-                    .padded_by(potential_new_line())
-                    .ignore_then(data.node.clone())
+        let match_arm =
+            MatchArmType::parser(data.clone())
+                .then(
+                    choice((
+                        select! { Token::BitOr => () }.map(|_| '|'),
+                        select! { Token::Comma => () }.map(|_| ','),
+                    ))
+                    .then(MatchArmType::parser(data.clone()))
                     .repeated()
-                    .collect::<Vec<_>>(),
-            )
-            .then(
-                select! { Token::FatArrow => () }
-                    .padded_by(potential_new_line())
-                    .ignore_then(choice((
+                    .collect::<Vec<(char, MatchArmType)>>(),
+                )
+                .then(
+                    select! { Token::If => () }
+                        .ignore_then(data.node.clone())
+                        .repeated()
+                        .collect::<Vec<_>>(),
+                )
+                .then(select! { Token::FatArrow => () }.ignore_then(choice(
+                    (
                         AstScopeDef::parser(data.clone()).map_with_span(|scope, span| {
                             AstNode::new(span, AstNodeType::from(scope))
                         }),
                         data.node.clone(),
-                    ))),
-            )
-            .map(|(((first, rest), conditions), body)| {
-                let mut values = vec![first.clone()];
-                values.extend(rest.iter().map(|(_, v)| v.clone()));
-                let has_comma = rest.iter().any(|(sep, _)| *sep == ',');
+                    ),
+                )))
+                .map(|(((first, rest), conditions), body)| {
+                    let mut values = vec![first.clone()];
+                    values.extend(rest.iter().map(|(_, v)| v.clone()));
+                    let has_comma = rest.iter().any(|(sep, _)| *sep == ',');
 
-                if has_comma {
-                    let mut slots: Vec<Vec<MatchArmType>> = vec![vec![first.clone()]];
-                    for (sep, arm) in rest {
-                        if sep == ',' {
-                            slots.push(vec![arm]);
-                        } else if let Some(last) = slots.last_mut() {
-                            last.push(arm);
-                        }
-                    }
-
-                    let mut tuple_item_variants: Vec<Vec<Vec<MatchTupleItem>>> = Vec::new();
-                    for slot in slots {
-                        let mut variants = Vec::new();
-                        for arm in slot {
-                            let mut items = Vec::new();
-                            if let Some(mapped) = arm.into_tuple_items() {
-                                items.extend(mapped);
-                            } else {
-                                continue;
-                            }
-                            variants.push(items);
-                        }
-                        tuple_item_variants.push(variants);
-                    }
-
-                    let mut combos: Vec<Vec<MatchTupleItem>> = vec![Vec::new()];
-                    for slot_variants in tuple_item_variants {
-                        let mut next = Vec::new();
-                        for prefix in &combos {
-                            for variant in &slot_variants {
-                                let mut merged = prefix.clone();
-                                merged.extend(variant.clone());
-                                next.push(merged);
+                    if has_comma {
+                        let mut slots: Vec<Vec<MatchArmType>> = vec![vec![first.clone()]];
+                        for (sep, arm) in rest {
+                            if sep == ',' {
+                                slots.push(vec![arm]);
+                            } else if let Some(last) = slots.last_mut() {
+                                last.push(arm);
                             }
                         }
-                        combos = next;
-                    }
 
-                    combos
-                        .into_iter()
-                        .map(|items| {
-                            (
-                                MatchArmType::TuplePattern(items),
-                                conditions.clone(),
-                                Box::new(body.clone()),
-                            )
-                        })
-                        .collect()
-                } else {
-                    let shared_enum_payload = values.iter().rev().find_map(|v| match &v {
-                        MatchArmType::Enum {
-                            var_type,
-                            name,
-                            destructure,
-                            pattern,
-                            ..
-                        } if var_type != &VarType::Immutable
-                            || name.is_some()
-                            || destructure.is_some()
-                            || pattern.is_some() =>
-                        {
-                            Some((
-                                *var_type,
-                                name.clone(),
-                                destructure.clone(),
-                                pattern.clone(),
-                            ))
+                        let mut tuple_item_variants: Vec<Vec<Vec<MatchTupleItem>>> = Vec::new();
+                        for slot in slots {
+                            let mut variants = Vec::new();
+                            for arm in slot {
+                                let mut items = Vec::new();
+                                if let Some(mapped) = arm.into_tuple_items() {
+                                    items.extend(mapped);
+                                } else {
+                                    continue;
+                                }
+                                variants.push(items);
+                            }
+                            tuple_item_variants.push(variants);
                         }
-                        _ => None,
-                    });
 
-                    if let Some((shared_vt, shared_name, shared_destructure, shared_pattern)) =
-                        shared_enum_payload
-                    {
-                        for value in values.iter_mut() {
-                            if let MatchArmType::Enum {
+                        let mut combos: Vec<Vec<MatchTupleItem>> = vec![Vec::new()];
+                        for slot_variants in tuple_item_variants {
+                            let mut next = Vec::new();
+                            for prefix in &combos {
+                                for variant in &slot_variants {
+                                    let mut merged = prefix.clone();
+                                    merged.extend(variant.clone());
+                                    next.push(merged);
+                                }
+                            }
+                            combos = next;
+                        }
+
+                        combos
+                            .into_iter()
+                            .map(|items| {
+                                (
+                                    MatchArmType::TuplePattern(items),
+                                    conditions.clone(),
+                                    Box::new(body.clone()),
+                                )
+                            })
+                            .collect()
+                    } else {
+                        let shared_enum_payload = values.iter().rev().find_map(|v| match &v {
+                            MatchArmType::Enum {
                                 var_type,
                                 name,
                                 destructure,
                                 pattern,
                                 ..
-                            } = value
-                                && var_type == &VarType::Immutable
-                                && name.is_none()
-                                && destructure.is_none()
-                                && pattern.is_none()
+                            } if var_type != &VarType::Immutable
+                                || name.is_some()
+                                || destructure.is_some()
+                                || pattern.is_some() =>
                             {
-                                *var_type = shared_vt;
-                                *name = shared_name.clone();
-                                *destructure = shared_destructure.clone();
-                                *pattern = shared_pattern.clone();
+                                Some((
+                                    *var_type,
+                                    name.clone(),
+                                    destructure.clone(),
+                                    pattern.clone(),
+                                ))
+                            }
+                            _ => None,
+                        });
+
+                        if let Some((shared_vt, shared_name, shared_destructure, shared_pattern)) =
+                            shared_enum_payload
+                        {
+                            for value in values.iter_mut() {
+                                if let MatchArmType::Enum {
+                                    var_type,
+                                    name,
+                                    destructure,
+                                    pattern,
+                                    ..
+                                } = value
+                                    && var_type == &VarType::Immutable
+                                    && name.is_none()
+                                    && destructure.is_none()
+                                    && pattern.is_none()
+                                {
+                                    *var_type = shared_vt;
+                                    *name = shared_name.clone();
+                                    *destructure = shared_destructure.clone();
+                                    *pattern = shared_pattern.clone();
+                                }
                             }
                         }
-                    }
 
-                    let mut out = Vec::with_capacity(values.len());
-                    for value in values {
-                        out.push((value, conditions.clone(), Box::new(body.clone())));
+                        let mut out = Vec::with_capacity(values.len());
+                        for value in values {
+                            out.push((value, conditions.clone(), Box::new(body.clone())));
+                        }
+                        out
                     }
-                    out
-                }
-            });
+                });
 
         match_arm
-            .padded_by(potential_new_line())
             .separated_by(select! { Token::Comma => () })
             .allow_trailing()
             .collect::<Vec<_>>()

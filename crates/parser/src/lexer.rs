@@ -234,13 +234,11 @@ pub enum Token<'a> {
     Until,
 
     // Ignore
-    #[token("\n")]
-    NewLine,
     #[regex(r"//[^\n]*", allow_greedy = true, callback = |lex| lex.slice())]
     LineComment(&'a str),
     #[regex(r"/\*", lex_block_comment)]
     BlockComment(&'a str),
-    #[regex(r"[ \t\f;]+", logos::skip)]
+    #[regex(r"[ \t\f;\n]+", logos::skip)]
     Whitespace,
 }
 
@@ -410,7 +408,6 @@ impl FromStr for Token<'static> {
             "Until" => Ok(Token::Until),
 
             // Ignore
-            "NewLine" => Ok(Token::NewLine),
             "LineComment" => Ok(Token::LineComment("")),
             "BlockComment" => Ok(Token::BlockComment("")),
             "Whitespace" => Ok(Token::Whitespace),
@@ -547,7 +544,6 @@ impl<'a> Token<'a> {
             Token::Until => "Until",
 
             // Ignore
-            Token::NewLine => "NewLine",
             Token::LineComment(_) => "LineComment",
             Token::BlockComment(_) => "BlockComment",
             Token::Whitespace => "Whitespace",

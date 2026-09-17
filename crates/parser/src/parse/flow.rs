@@ -3,7 +3,7 @@ use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment, TryCatch,
 };
 use crate::ast::nodes::scopes::AstScopeDef;
-use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, StatementData, potential_new_line};
+use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, StatementData};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -144,11 +144,9 @@ impl<'a> AstPrattParser<'a> for AstPipe {
     ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>> {
         choice((
             select! { Token::Pipe => () }
-                .padded_by(potential_new_line())
                 .ignore_then(data.stmt.clone())
                 .map(PipeSegment::Unnamed),
             select! { Token::Face => () }
-                .padded_by(potential_new_line())
                 .ignore_then(data.dollar_ident.clone())
                 .then_ignore(select! { Token::Greater => () })
                 .then(data.stmt.clone())

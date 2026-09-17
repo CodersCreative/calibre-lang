@@ -4,4 +4,3 @@ For
 Identifier
 LeftBracket
 RightBracket
-NewLine

@@ -2,7 +2,7 @@ use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::misc::{AstImport, AstParen, AstTag, AstTest};
 use crate::ast::nodes::scopes::AstScopeDef;
-use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
+use crate::parse::{MapWithSpanExt, StatementData};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -17,7 +17,7 @@ impl<'a> AstParser<'a> for AstParen {
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::LeftParen => () }
-            .ignore_then(data.node.clone().padded_by(potential_new_line()))
+            .ignore_then(data.node.clone())
             .then_ignore(select! { Token::RightParen => () })
             .map(|value| AstParen {
                 value: Box::new(value),
@@ -52,7 +52,6 @@ impl<'a> AstParser<'a> for AstImport {
                         .ignore_then(
                             data.dollar_ident
                                 .clone()
-                                .padded_by(potential_new_line())
                                 .separated_by(select! { Token::Comma => () })
                                 .allow_trailing()
                                 .collect::<Vec<_>>(),
@@ -62,13 +61,11 @@ impl<'a> AstParser<'a> for AstImport {
                         .map_with_span(|_, span| vec![PotentialDollarIdentifier::new(span, "*")]),
                     data.dollar_ident.clone().map(|x| vec![x]),
                 ))
-                .then_ignore(select! { Token::From => () }.padded_by(potential_new_line()))
+                .then_ignore(select! { Token::From => () })
                 .then(
                     data.dollar_ident
                         .clone()
-                        .separated_by(
-                            select! { Token::Scope => () }.padded_by(potential_new_line()),
-                        )
+                        .separated_by(select! { Token::Scope => () })
                         .at_least(1)
                         .collect::<Vec<_>>(),
                 )
@@ -76,12 +73,11 @@ impl<'a> AstParser<'a> for AstImport {
                 // import module::path as alias
                 data.dollar_ident
                     .clone()
-                    .separated_by(select! { Token::Scope => () }.padded_by(potential_new_line()))
+                    .separated_by(select! { Token::Scope => () })
                     .at_least(1)
                     .collect::<Vec<_>>()
                     .then(
                         select! { Token::As => () }
-                            .padded_by(potential_new_line())
                             .ignore_then(data.dollar_ident.clone())
                             .or_not(),
                     )
@@ -117,7 +113,7 @@ impl<'a> AstParser<'a> for AstTag {
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
-            .then(data.node.clone().padded_by(potential_new_line()))
+            .then(data.node.clone())
             .map(|((tag, args), node)| AstTag {
                 node: Box::new(node),
                 tag,

@@ -1,7 +1,7 @@
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::scopes::AstScopeDef;
 use crate::ast::nodes::spawn::{AstSelect, AstSpawn, SelectArm, SelectArmKind};
-use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
+use crate::parse::{MapWithSpanExt, StatementData};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -56,7 +56,6 @@ impl<'a> AstParser<'a> for AstSelect {
             .ignore_then(select! { Token::LeftBracket => () })
             .ignore_then(
                 SelectArm::parser(data)
-                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>(),
@@ -82,7 +81,6 @@ impl<'a> AstParser<'a> for AstSpawn {
                     .ignore_then(
                         data.node
                             .clone()
-                            .padded_by(potential_new_line())
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()

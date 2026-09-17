@@ -4,7 +4,6 @@ use crate::ast::nodes::assignment::AstAssignDestructure;
 use crate::ast::nodes::declaration::{AstDeclaration, AstDeclareDestructure};
 use crate::ast::types::ParserDataType;
 use crate::parse::StatementData;
-use crate::parse::potential_new_line;
 use crate::{
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream, typed_or_untyped_assignment},
@@ -19,7 +18,7 @@ impl<'a> AstParser<'a> for AstAssignDestructure {
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         DestructurePattern::no_bracket_parser(data.clone())
-            .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
+            .then_ignore(select! { Token::Walrus => () })
             .then(data.node.clone())
             .map(|(pattern, value)| AstAssignDestructure {
                 pattern,
@@ -76,7 +75,7 @@ impl<'a> AstParser<'a> for AstDeclareDestructure {
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Let => () }
             .ignore_then(DestructurePattern::no_bracket_parser(data.clone()))
-            .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
+            .then_ignore(select! { Token::Walrus => () })
             .then(data.node.clone())
             .map(|(pattern, value)| AstDeclareDestructure {
                 var_type: VarType::Immutable,
