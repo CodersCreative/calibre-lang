@@ -11,6 +11,7 @@ use crate::parse::AstPrattParser;
 use crate::parse::MapWithSpanExt;
 use crate::parse::PrattData;
 use crate::parse::StatementData;
+use crate::parse::potential_new_line;
 use crate::{
     Span,
     ast::nodes::AstNode,
@@ -95,6 +96,7 @@ impl<'a> AstParser<'a> for FunctionHeader {
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let fn_param_groups = FnParamGroup::parser(data.clone())
+            .padded_by(potential_new_line())
             .separated_by(select! { Token::Comma => () })
             .allow_trailing()
             .collect::<Vec<_>>()
@@ -178,12 +180,13 @@ impl<'a> AstParser<'a> for AstExtern {
             .ignore_then(select! { Token::StringLiteral(abi) => abi })
             .then_ignore(select! { Token::Const => () })
             .then(data.dollar_ident.clone())
-            .then_ignore(select! { Token::Walrus => () })
+            .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then_ignore(select! { Token::Fn => () })
             .then_ignore(select! { Token::LeftParen => () })
             .then(
                 data.data_type
                     .clone()
+                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -193,13 +196,15 @@ impl<'a> AstParser<'a> for AstExtern {
             .then_ignore(select! { Token::RightParen => () })
             .then(
                 select! { Token::RightArrow => () }
+                    .padded_by(potential_new_line())
                     .ignore_then(data.data_type.clone())
                     .or_not(),
             )
-            .then_ignore(select! { Token::From => () })
+            .then_ignore(select! { Token::From => () }.padded_by(potential_new_line()))
             .then(select! { Token::StringLiteral(library) => library })
             .then(
                 select! { Token::As => () }
+                    .padded_by(potential_new_line())
                     .ignore_then(select! { Token::StringLiteral(symbol) => symbol })
                     .or_not(),
             )
@@ -240,6 +245,7 @@ impl<'a> AstPrattParser<'a> for AstCall {
         let call_args = select! { Token::LeftParen => () }
             .ignore_then(
                 CallArg::parser(data.clone())
+                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -253,6 +259,7 @@ impl<'a> AstPrattParser<'a> for AstCall {
             .ignore_then(
                 data.stmt
                     .clone()
+                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -265,6 +272,7 @@ impl<'a> AstPrattParser<'a> for AstCall {
             .ignore_then(
                 data.data_type
                     .clone()
+                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .collect::<Vec<_>>(),
             )

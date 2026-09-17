@@ -1,7 +1,7 @@
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType};
 use crate::ast::nodes::scopes::AstScopeDef;
-use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, StatementData};
+use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -73,8 +73,9 @@ impl<'a> AstPrattParser<'a> for AstTernary {
         data: Self::Data,
     ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>> {
         select! { Token::Question => () }
+            .padded_by(potential_new_line())
             .ignore_then(data.stmt.clone())
-            .then_ignore(select! { Token::Colon => () })
+            .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
             .then(data.stmt.clone())
     }
 

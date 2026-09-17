@@ -6,7 +6,9 @@ use crate::{
         types::{GenericType, GenericTypes, ParserDataType, ParserInnerType},
     },
     lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream},
+    parse::{
+        AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream, potential_new_line,
+    },
 };
 use chumsky::error::Rich;
 use chumsky::pratt::{infix, left, postfix, prefix};
@@ -74,7 +76,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                 let function_parser = select! { Token::Fn => () }.ignore_then(
                     select! { Token::LeftParen => () }
                     .ignore_then(
-                        ty.clone()
+                        ty.clone().padded_by(potential_new_line())
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()

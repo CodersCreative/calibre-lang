@@ -1,5 +1,5 @@
 use crate::ast::nodes::lists::AstList;
-use crate::parse::{MapWithSpanExt, StatementData};
+use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
 use crate::{
     ast::types::ParserDataType,
     lexer::Token,
@@ -29,6 +29,7 @@ impl<'a> AstParser<'a> for AstList {
             .then(
                 data.node
                     .clone()
+                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()

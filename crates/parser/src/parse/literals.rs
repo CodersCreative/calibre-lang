@@ -11,7 +11,9 @@ use crate::{
         },
     },
     lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream},
+    parse::{
+        AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream, potential_new_line,
+    },
 };
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
@@ -100,6 +102,7 @@ impl<'a> AstParser<'a> for AstTuple {
             .ignore_then(
                 data.node
                     .clone()
+                    .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -132,6 +135,7 @@ impl<'a> AstParser<'a> for AstStruct {
                                     value.unwrap_or_else(|| AstNode::identifier(span, field)),
                                 )
                             })
+                            .padded_by(potential_new_line())
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
                             .collect::<Vec<_>>()
@@ -157,7 +161,7 @@ impl<'a> AstParser<'a> for AstEnum {
             .clone()
             .then_ignore(select! { Token::Dot => () })
             .then(data.dollar_ident.clone())
-            .then_ignore(select! { Token::Colon => () })
+            .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
             .then(data.node.clone().or_not())
             .map(|((identifier, value), data)| AstEnum {
                 identifier,

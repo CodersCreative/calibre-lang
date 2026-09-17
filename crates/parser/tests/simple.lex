@@ -2,3 +2,4 @@ Let
 Identifier
 Walrus
 IntLiteral
+NewLine

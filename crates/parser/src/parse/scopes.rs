@@ -1,5 +1,5 @@
 use crate::ast::nodes::scopes::{AstScopeAlias, AstScopeDef, NamedScope};
-use crate::parse::StatementData;
+use crate::parse::{StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -19,6 +19,7 @@ impl<'a> AstParser<'a> for AstScopeDef {
                 .ignore_then(
                     data.node
                         .clone()
+                        .padded_by(potential_new_line())
                         .repeated()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -31,6 +32,7 @@ impl<'a> AstParser<'a> for AstScopeDef {
                 .ignore_then(
                     data.node
                         .clone()
+                        .padded_by(potential_new_line())
                         .repeated()
                         .collect::<Vec<_>>()
                         .or_not()
@@ -57,6 +59,7 @@ impl<'a> AstParser<'a> for AstScopeDef {
                                     .ignore_then(data.node.clone())
                                     .or_not(),
                             )
+                            .padded_by(potential_new_line())
                             .map(|(ident, value)| (ident, value))
                             .separated_by(select! { Token::Comma => () })
                             .allow_trailing()
@@ -80,6 +83,7 @@ impl<'a> AstParser<'a> for AstScopeDef {
             });
 
         select! { Token::FatArrow => () }
+            .padded_by(potential_new_line())
             .ignore_then(named.or_not())
             .then(body)
             .map(|(named, (body, create_new_scope))| AstScopeDef {
@@ -106,6 +110,7 @@ impl<'a> AstParser<'a> for AstScopeAlias {
                             .ignore_then(data.node.clone())
                             .or_not(),
                     )
+                    .padded_by(potential_new_line())
                     .map(|(ident, value)| (ident, value))
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
@@ -132,7 +137,7 @@ impl<'a> AstParser<'a> for AstScopeAlias {
 
         select! { Token::Let => () }
             .ignore_then(data.dollar_ident.clone())
-            .then_ignore(select! { Token::FatArrow => () })
+            .then_ignore(select! { Token::FatArrow => () }.padded_by(potential_new_line()))
             .then(data.dollar_ident.clone())
             .then(args)
             .then(call_mode)
