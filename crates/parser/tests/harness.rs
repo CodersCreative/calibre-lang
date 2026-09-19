@@ -207,7 +207,7 @@ impl TestHarness {
 
         // Try to re-parse the formatted output
         let mut parser = Parser::default();
-        let _ = parser.produce_ast(&formatted);
+        let ast2 = parser.produce_ast(&formatted);
 
         if !parser.errors.is_empty() {
             let message = self.format_errors(file, &formatted, &parser.errors);
@@ -219,6 +219,14 @@ impl TestHarness {
                     message, ast, formatted
                 ),
             });
+            return;
+        }
+
+        if ast != ast2 {
+            self.failures.push(TestFailure { file: file.to_path_buf(), validation_type: ValidationType::Formatter, message: format!(
+                    "Formatter produced different code. Original output:\n{:?}\nFormatted output:\n{}",
+                    ast, formatted
+                ) });
         }
     }
 

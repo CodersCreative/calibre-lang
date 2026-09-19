@@ -112,14 +112,14 @@ impl<T> ObjectType<T> {
     pub fn len(&self) -> usize {
         match self {
             Self::Map(x) => x.len(),
-            Self::Tuple(x) => x.len()
+            Self::Tuple(x) => x.len(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Map(x) => x.is_empty(),
-            Self::Tuple(x) => x.is_empty()
+            Self::Tuple(x) => x.is_empty(),
         }
     }
 }

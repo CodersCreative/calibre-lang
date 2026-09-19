@@ -394,7 +394,10 @@ impl ParserDataType {
             )),
             ParserInnerType::Float => Some(AstNode::new(
                 self.span,
-                AstNodeType::FloatLiteral(AstFloat { value: 0.0 }),
+                AstNodeType::FloatLiteral(AstFloat {
+                    value: 0.0,
+                    format: None,
+                }),
             )),
             ParserInnerType::Auto(_) => Some(AstNode::new(self.span, AstNodeType::Null)),
             ParserInnerType::Dynamic => Some(AstNode::new(self.span, AstNodeType::Null)),

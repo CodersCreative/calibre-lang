@@ -173,6 +173,16 @@ fn main() -> Result<(), Box<dyn Error>> {
                     let content = std::fs::read_to_string(path).unwrap_or_default();
                     emit_error(path, &content, message.clone(), None);
                 }
+                FormatError::FormatterProducedDifferentAst {
+                    path,
+                    contents,
+                    formatted,
+                } => emit_error(
+                    path,
+                    contents,
+                    format!("original:\n{contents}\n\nbecame:\n{}", formatted),
+                    None,
+                ),
                 FormatError::Read { path, .. } | FormatError::Write { path, .. } => {
                     emit_error(path, "", fmt_err.to_string(), None);
                 }

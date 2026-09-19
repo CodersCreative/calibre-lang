@@ -760,15 +760,18 @@ impl From<MiddleNodeType> for AstNodeType {
             MiddleNodeType::CharLiteral(value) => {
                 AstNodeType::CharLiteral(AstChar { value: value.value })
             }
-            MiddleNodeType::FloatLiteral(value) => {
-                AstNodeType::FloatLiteral(AstFloat { value: value.value })
-            }
+            MiddleNodeType::FloatLiteral(value) => AstNodeType::FloatLiteral(AstFloat {
+                value: value.value,
+                format: None,
+            }),
             MiddleNodeType::BigLiteral(value) => AstNodeType::BigLiteral(AstBig {
                 value: ParserText::from(value.value),
+                format: None,
             }),
-            MiddleNodeType::IntLiteral(value) => {
-                AstNodeType::IntLiteral(AstInt { value: value.value })
-            }
+            MiddleNodeType::IntLiteral(value) => AstNodeType::IntLiteral(AstInt {
+                value: value.value,
+                format: None,
+            }),
             MiddleNodeType::FieldAccess(value) => AstNodeType::FieldAccess(AstField {
                 base: Box::new((*value.base).into()),
                 field: value.field.into(),

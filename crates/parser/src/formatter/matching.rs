@@ -88,7 +88,7 @@ impl AstFormatting for MatchBody {
                 let pattern_str = arm
                     .patterns
                     .iter()
-                    .map(|p| formatter.fmt_match_arm(p, false))
+                    .map(|p| formatter.fmt_match_arm(p, true))
                     .collect::<Vec<_>>()
                     .join(" | ");
                 let conditionals_str = if arm.conditionals.is_empty() {

@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         ObjectType,
-        idents::ParserText,
+        idents::{ParsedIntLiteral, ParserText},
         nodes::{
             AstNode,
             literals::{
@@ -26,13 +26,14 @@ impl<'a> AstParser<'a> for AstFloat {
         select! {
             Token::FloatLiteral(x) => x
         }
-        .map(|value| AstFloat {
+        .map_with_span(|value, sp| AstFloat {
             value: value
                 .replace('_', "")
                 .replace("f", "")
                 .trim()
                 .parse::<f64>()
                 .unwrap_or_default(),
+            format: Some(ParserText::new(sp, value)),
         })
     }
 }
@@ -47,6 +48,7 @@ impl<'a> AstParser<'a> for AstBig {
         }
         .map_with_span(|value, sp| AstBig {
             value: ParserText::new(sp, value.replace('_', "").replace("g", "").trim()),
+            format: Some(ParserText::new(sp, value)),
         })
     }
 }
@@ -59,7 +61,10 @@ impl<'a> AstParser<'a> for AstInt {
         select! {
             Token::IntLiteral(x) => x
         }
-        .map(|value| AstInt { value })
+        .map_with_span(|value, sp| AstInt {
+            format: Some(ParserText::new(sp, &value)),
+            value: ParsedIntLiteral::parse(value).unwrap_or_default(),
+        })
     }
 }
 

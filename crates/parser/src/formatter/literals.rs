@@ -229,12 +229,16 @@ impl AstFormatting for AstFloat {
     type PreFormat = ();
 
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
-        let mut temp = self.value.to_string();
-        if temp.contains(".") {
-            temp
+        if let Some(format) = &self.format {
+            format.text.clone()
         } else {
-            temp.push('f');
-            temp
+            let mut temp = self.value.to_string();
+            if temp.contains(".") {
+                temp
+            } else {
+                temp.push('f');
+                temp
+            }
         }
     }
 }
@@ -243,7 +247,11 @@ impl AstFormatting for AstInt {
     type PreFormat = ();
 
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
-        self.value.to_string()
+        if let Some(format) = &self.format {
+            format.text.clone()
+        } else {
+            self.value.to_string()
+        }
     }
 }
 
@@ -251,7 +259,11 @@ impl AstFormatting for AstBig {
     type PreFormat = ();
 
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
-        format!("{}g", self.value)
+        if let Some(format) = &self.format {
+            format.text.clone()
+        } else {
+            format!("{}g", self.value)
+        }
     }
 }
 

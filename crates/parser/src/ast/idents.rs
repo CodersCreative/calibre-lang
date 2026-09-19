@@ -205,7 +205,16 @@ pub struct ParsedIntLiteral {
 
 impl Display for ParsedIntLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value)
+        write!(
+            f,
+            "{}{}",
+            self.value,
+            match &self.int_type {
+                IntLiteralType::Byte => "b",
+                IntLiteralType::UInt => "u",
+                _ => "",
+            }
+        )
     }
 }
 
@@ -253,10 +262,16 @@ impl ParsedIntLiteral {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 pub struct ParserText {
     pub text: String,
     pub span: Span,
+}
+
+impl PartialEq for ParserText {
+    fn eq(&self, other: &Self) -> bool {
+        self.text.eq(&other.text)
+    }
 }
 
 impl Deref for ParserText {

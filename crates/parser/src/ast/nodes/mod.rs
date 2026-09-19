@@ -90,10 +90,16 @@ impl Display for VarType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AstNode {
     pub node_type: AstNodeType,
     pub span: Span,
+}
+
+impl PartialEq for AstNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.node_type.eq(&other.node_type)
+    }
 }
 
 impl AstNode {
@@ -110,6 +116,7 @@ impl AstNode {
             span,
             AstNodeType::IntLiteral(AstInt {
                 value: ParsedIntLiteral::parse(value).unwrap_or_default(),
+                format: None,
             }),
         )
     }

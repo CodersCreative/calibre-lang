@@ -1,7 +1,7 @@
 use calibre_frontend::config::ProjectContext;
 use calibre_parser::{
     Parser, ParserError,
-    ast::nodes::{AstNodeType, misc::AstImport},
+    ast::nodes::{AstNode, AstNodeType, misc::AstImport},
     formatter::Formatter,
 };
 use std::{
@@ -41,6 +41,11 @@ pub enum FormatError {
         formatted: String,
         errors: Vec<ParserError>,
     },
+    FormatterProducedDifferentAst {
+        path: PathBuf,
+        contents: String,
+        formatted: String,
+    },
     FormatterFailed {
         path: PathBuf,
         message: String,
@@ -59,6 +64,11 @@ impl fmt::Display for FormatError {
                     path.display()
                 )
             }
+            Self::FormatterProducedDifferentAst { path, .. } => write!(
+                f,
+                "refusing to write {}: formatted output produced a different AST from the original",
+                path.display()
+            ),
             Self::FormattedParseFailed { path, .. } => write!(
                 f,
                 "refusing to write {}: formatted output failed to parse",
@@ -81,11 +91,11 @@ impl Error for FormatError {
     }
 }
 
-fn parse_errors(text: &str) -> Result<(), Vec<ParserError>> {
+fn parse_errors(text: &str) -> Result<AstNode, Vec<ParserError>> {
     let mut parser = Parser::default();
-    let _ = parser.produce_ast(text);
+    let ast = parser.produce_ast(text);
     if parser.errors.is_empty() {
-        Ok(())
+        Ok(ast)
     } else {
         Err(parser.errors)
     }
@@ -106,14 +116,17 @@ pub fn format_file(
         source,
     })?;
 
-    if let Err(errors) = parse_errors(&contents) {
-        debug!(error_count = errors.len(), "source parse failed");
-        return Err(Box::new(FormatError::SourceParseFailed {
-            path: path.to_path_buf(),
-            contents,
-            errors,
-        }));
-    }
+    let ast = match parse_errors(&contents) {
+        Ok(x) => x,
+        Err(errors) => {
+            debug!(error_count = errors.len(), "source parse failed");
+            return Err(Box::new(FormatError::SourceParseFailed {
+                path: path.to_path_buf(),
+                contents,
+                errors,
+            }));
+        }
+    };
 
     debug!("applying formatter");
     let out = formatter.start_format(&contents, None).map_err(|err| {
@@ -123,12 +136,24 @@ pub fn format_file(
         }) as Box<dyn Error>
     })?;
 
-    if let Err(errors) = parse_errors(&out) {
-        debug!(error_count = errors.len(), "formatted parse failed");
-        return Err(Box::new(FormatError::FormattedParseFailed {
+    let ast2 = match parse_errors(&out) {
+        Ok(x) => x,
+        Err(errors) => {
+            debug!(error_count = errors.len(), "formatted parse failed");
+            return Err(Box::new(FormatError::FormattedParseFailed {
+                path: path.to_path_buf(),
+                formatted: out,
+                errors,
+            }));
+        }
+    };
+
+    if ast != ast2 {
+        println!("{:?}\n\n{:?}\n", ast, ast2);
+        return Err(Box::new(FormatError::FormatterProducedDifferentAst {
             path: path.to_path_buf(),
+            contents,
             formatted: out,
-            errors,
         }));
     }
 

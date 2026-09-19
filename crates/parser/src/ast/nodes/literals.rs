@@ -46,16 +46,19 @@ pub struct AstChar {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstFloat {
     pub value: f64,
+    pub format: Option<ParserText>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstInt {
     pub value: ParsedIntLiteral,
+    pub format: Option<ParserText>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstBig {
     pub value: ParserText,
+    pub format: Option<ParserText>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
