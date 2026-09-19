@@ -50,7 +50,7 @@ impl AstFormatting for AstIn {
     type PreFormat = ();
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        formatter.fmt_infix_expr(&*self.identifier, "is", &*self.value)
+        formatter.fmt_infix_expr(&*self.identifier, "in", &*self.value)
     }
 }
 

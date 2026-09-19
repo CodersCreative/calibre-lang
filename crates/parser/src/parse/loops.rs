@@ -1,4 +1,6 @@
+use crate::ast::nodes::binary::AstIn;
 use crate::ast::nodes::loops::{AstIter, AstLoop, LoopType};
+use crate::ast::nodes::{AstNode, AstNodeType};
 use crate::ast::types::ParserDataType;
 use crate::parse::{MapWithSpanExt, StatementData};
 use crate::{
@@ -16,13 +18,7 @@ impl<'a> AstParser<'a> for LoopType {
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
-            // ... in ...
-            data.dollar_ident
-                .clone()
-                .then_ignore(select! { Token::In => () })
-                .then(data.node.clone())
-                .map(|(ident, iter)| LoopType::For(ident, iter)),
-            // ...
+            // ... (covers in for now)
             data.node.clone().map(LoopType::While),
             // let ... <- ...
             select! { Token::Let => () }
@@ -35,7 +31,19 @@ impl<'a> AstParser<'a> for LoopType {
                 }),
         ))
         .or_not()
-        .map(|x| x.unwrap_or(LoopType::Loop))
+        .map(|x| match x.unwrap_or(LoopType::Loop) {
+            LoopType::While(AstNode {
+                node_type: AstNodeType::InDeclaration(AstIn { identifier, value }),
+                ..
+            }) => {
+                let AstNodeType::Identifier(ident) = identifier.node_type else {
+                    return LoopType::Loop;
+                };
+
+                LoopType::For(ident.value.get_ident().clone(), *value)
+            }
+            x => x,
+        })
     }
 }
 
