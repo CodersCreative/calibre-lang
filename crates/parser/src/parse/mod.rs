@@ -198,17 +198,17 @@ pub fn potential_new_line<'a>() -> impl Parser<'a, TokenStream<'a>, (), AstParse
 impl<'a> AstNode {
     fn parser(data: &StatementData<'a>) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let fn_start = just(Token::Fn).rewind().ignore_then(choice((
-            AstFunction::parser(data.clone()).map(AstNodeType::FunctionDeclaration),
             AstFnMatch::parser(data.clone()).map(AstNodeType::FnMatchDeclaration),
+            AstFunction::parser(data.clone()).map(AstNodeType::FunctionDeclaration),
             AstGenerator::parser(data.clone()).map(AstNodeType::InlineGenerator),
         )));
 
         let ident_start = select! {Token::Identifier(_) => ()}
             .rewind()
             .ignore_then(choice((
-                AstIdentifier::parser(data.clone()).map(AstNodeType::Identifier),
                 AstStruct::parser(data.clone()).map(AstNodeType::StructLiteral),
                 AstEnum::parser(data.clone()).map(AstNodeType::EnumExpression),
+                AstIdentifier::parser(data.clone()).map(AstNodeType::Identifier),
             )));
 
         let paren_start = just(Token::LeftParen).rewind().ignore_then(choice((
@@ -228,8 +228,8 @@ impl<'a> AstNode {
             select! {Token::LeftSquare => (), Token::Identifier(x) if x == "list" => ()}
                 .rewind()
                 .ignore_then(choice((
-                    AstList::parser(data.clone()).map(AstNodeType::ListLiteral),
                     AstIter::parser(data.clone()).map(AstNodeType::IterExpression),
+                    AstList::parser(data.clone()).map(AstNodeType::ListLiteral),
                 )));
 
         let spawn = select! {Token::Spawn | Token::AutoSpawn | Token::Select => ()}
@@ -264,8 +264,8 @@ impl<'a> AstNode {
             )));
 
         let impl_start = just(Token::Impl).rewind().ignore_then(choice((
-            AstImpl::parser(data.clone()).map(AstNodeType::ImplDeclaration),
             AstImplTrait::parser(data.clone()).map(AstNodeType::ImplTraitDeclaration),
+            AstImpl::parser(data.clone()).map(AstNodeType::ImplDeclaration),
         )));
 
         let type_start = just(Token::Type).rewind().ignore_then(choice((
