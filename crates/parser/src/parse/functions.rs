@@ -1,11 +1,16 @@
+use crate::CalibreError;
+use crate::Parser as CalibreParser;
 use crate::ast::idents::ParserText;
 use crate::ast::idents::PotentialDollarIdentifier;
 use crate::ast::nodes::DestructurePattern;
 use crate::ast::nodes::functions::{
     AstCall, AstCurry, AstExtern, AstFunction, CallArg, FunctionHeader,
 };
+use crate::ast::nodes::lists::AstList;
+use crate::ast::nodes::literals::AstString;
 use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserDataType;
+use crate::ast::types::ParserInnerType;
 use crate::parse::AstPrattParser;
 use crate::parse::MapWithSpanExt;
 use crate::parse::PrattData;
@@ -18,8 +23,9 @@ use crate::{
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream, typed_or_untyped_assignment},
 };
+use chumsky::Parser;
 use chumsky::prelude::*;
-use chumsky::{Parser, select};
+use chumsky::select;
 
 impl<'a> AstParser<'a> for CallArg {
     type Data = PrattData<'a>;
@@ -238,24 +244,177 @@ impl<'a> AstParser<'a> for AstCurry {
     }
 }
 
+pub fn template_call_parts(
+    raw_literal: &str,
+    span: Span,
+) -> Result<(ParserText, Vec<CallArg>), String> {
+    let decoded = ParserText::decode_literal(raw_literal);
+    let (texts, expressions) = split_template(&decoded)?;
+
+    let text_nodes = texts
+        .into_iter()
+        .map(|text| {
+            AstNode::new(
+                span,
+                AstNodeType::StringLiteral(AstString {
+                    value: ParserText::new(span, text),
+                }),
+            )
+        })
+        .collect();
+
+    let text_list = AstNode::new(
+        span,
+        AstNodeType::ListLiteral(AstList {
+            data_type: ParserDataType::new(span, ParserInnerType::Str),
+            values: text_nodes,
+        }),
+    );
+
+    let mut args = vec![CallArg::Value(text_list)];
+
+    for expression in expressions {
+        let expression = expression.trim();
+        if expression.is_empty() {
+            return Err("expected expression inside template".into());
+        }
+
+        let lexer = CalibreParser::default();
+        let tokens = lexer.lex(expression).map_err(|errors| {
+            errors
+                .into_iter()
+                .next()
+                .map(|error| error.message_with_hint())
+                .unwrap_or_else(|| "failed to lex template".into())
+        })?;
+
+        let parsed = super::parse_program_with_source(&tokens, None).map_err(|errors| {
+            errors
+                .into_iter()
+                .next()
+                .map(|error| error.message_with_hint())
+                .unwrap_or_else(|| "failed to parse template".into())
+        })?;
+
+        let AstNodeType::ScopeDeclaration(scope) = parsed.node_type else {
+            return Err("expected expression inside template".into());
+        };
+
+        let mut body = scope
+            .body
+            .ok_or_else(|| "expected expression inside template".to_string())?;
+
+        let node = body
+            .drain(..1)
+            .next()
+            .ok_or_else(|| "expected expression inside template".to_string())?;
+
+        args.push(CallArg::Value(node));
+    }
+
+    Ok((ParserText::new(span, decoded), args))
+}
+
+fn split_template(input: &str) -> Result<(Vec<String>, Vec<String>), String> {
+    let chars: Vec<char> = input.chars().collect();
+    let mut texts = Vec::new();
+    let mut expressions = Vec::new();
+    let mut text = String::new();
+    let mut index = 0;
+
+    while index < chars.len() {
+        match chars[index] {
+            '{' if chars.get(index + 1) == Some(&'{') => {
+                text.push('{');
+                index += 2;
+            }
+            '}' if chars.get(index + 1) == Some(&'}') => {
+                text.push('}');
+                index += 2;
+            }
+            '{' => {
+                texts.push(std::mem::take(&mut text));
+                index += 1;
+                let start = index;
+                let mut depth = 1usize;
+                let mut quote = None;
+                let mut escaped = false;
+
+                while index < chars.len() {
+                    let current = chars[index];
+                    if let Some(delimiter) = quote {
+                        if escaped {
+                            escaped = false;
+                        } else if current == '\\' {
+                            escaped = true;
+                        } else if current == delimiter {
+                            quote = None;
+                        }
+                        index += 1;
+                        continue;
+                    }
+
+                    match current {
+                        '"' | '\'' => quote = Some(current),
+                        '{' => depth += 1,
+                        '}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    index += 1;
+                }
+
+                if index == chars.len() || depth != 0 {
+                    return Err("unterminated template".into());
+                }
+                expressions.push(chars[start..index].iter().collect());
+                index += 1;
+            }
+            '}' => return Err("unmatched `}` in template string".into()),
+            current => {
+                text.push(current);
+                index += 1;
+            }
+        }
+    }
+
+    texts.push(text);
+    Ok((texts, expressions))
+}
+
 impl<'a> AstPrattParser<'a> for AstCall {
     type Data = PrattData<'a>;
-    type Value = ((Option<Vec<ParserDataType>>, Vec<CallArg>), Vec<AstNode>);
+    type Value = (
+        (Option<Vec<ParserDataType>>, (ParserText, Vec<CallArg>)),
+        Vec<AstNode>,
+    );
 
     fn operator(
         data: Self::Data,
     ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>> {
-        let call_args = select! { Token::LeftParen => () }
-            .ignore_then(
-                CallArg::parser(data.clone())
-                    .padded_by(potential_new_line())
-                    .separated_by(select! { Token::Comma => () })
-                    .allow_trailing()
-                    .collect::<Vec<_>>()
-                    .or_not()
-                    .map(|x| x.unwrap_or_default()),
-            )
-            .then_ignore(select! { Token::RightParen => () });
+        let call_args = choice((
+            select! { Token::LeftParen => () }
+                .ignore_then(
+                    CallArg::parser(data.clone())
+                        .padded_by(potential_new_line())
+                        .separated_by(select! { Token::Comma => () })
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
+                        .or_not()
+                        .map(|x| x.unwrap_or_default()),
+                )
+                .then_ignore(select! { Token::RightParen => () })
+                .map(|x| (ParserText::default(), x)),
+            select! { Token::StringLiteral(value) => value }.try_map(|value, span: SimpleSpan| {
+                let source_span: Span = span.into();
+                template_call_parts(value, source_span)
+                    .map_err(|message| chumsky::error::Rich::custom(span, message))
+            }),
+        ));
 
         let reverse_args = select! { Token::Lesser => () }
             .ignore_then(select! { Token::LeftParen => () })
@@ -291,10 +450,14 @@ impl<'a> AstPrattParser<'a> for AstCall {
         AstNode::new(
             span.into(),
             AstNodeType::CallExpression(AstCall {
-                string_fn: None,
+                string_fn: if value.0.1.0.is_empty() {
+                    None
+                } else {
+                    Some(value.0.1.0)
+                },
                 caller: Box::new(base),
                 generic_types: value.0.0.unwrap_or_default(),
-                args: value.0.1,
+                args: value.0.1.1,
                 reverse_args: value.1,
             }),
         )

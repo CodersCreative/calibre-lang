@@ -253,7 +253,7 @@ impl ParsedIntLiteral {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 pub struct ParserText {
     pub text: String,
     pub span: Span,

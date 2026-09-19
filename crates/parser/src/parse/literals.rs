@@ -63,7 +63,6 @@ impl<'a> AstParser<'a> for AstInt {
     }
 }
 
-// TODO Rewrite char handling
 impl<'a> AstParser<'a> for AstChar {
     type Data = ();
 
