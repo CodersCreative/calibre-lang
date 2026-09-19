@@ -13,8 +13,7 @@ use crate::{
             generator::AstGenerator,
             lists::AstList,
             literals::{
-                AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstString, AstStruct,
-                AstTuple,
+                AstBig, AstChar, AstDataType, AstFloat, AstInt, AstString, AstStruct, AstTuple,
             },
             loops::{AstIter, AstLoop},
             matching::{AstFnMatch, AstMatch},
@@ -207,7 +206,6 @@ impl<'a> AstNode {
             .rewind()
             .ignore_then(choice((
                 AstStruct::parser(data.clone()).map(AstNodeType::StructLiteral),
-                AstEnum::parser(data.clone()).map(AstNodeType::EnumExpression),
                 AstIdentifier::parser(data.clone()).map(AstNodeType::Identifier),
             )));
 

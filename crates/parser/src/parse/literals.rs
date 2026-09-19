@@ -5,8 +5,7 @@ use crate::{
         nodes::{
             AstNode,
             literals::{
-                AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstString, AstStruct,
-                AstTuple,
+                AstBig, AstChar, AstDataType, AstFloat, AstInt, AstString, AstStruct, AstTuple,
             },
         },
     },
@@ -150,25 +149,6 @@ impl<'a> AstParser<'a> for AstStruct {
             .map(|(identifier, fields)| AstStruct {
                 identifier,
                 value: ObjectType::Map(fields.unwrap_or_default()),
-            })
-    }
-}
-
-impl<'a> AstParser<'a> for AstEnum {
-    type Data = StatementData<'a>;
-
-    #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        data.generic_ident
-            .clone()
-            .then_ignore(select! { Token::Dot => () })
-            .then(data.dollar_ident.clone())
-            .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
-            .then(data.node.clone().or_not())
-            .map(|((identifier, value), data)| AstEnum {
-                identifier,
-                value,
-                data: data.map(Box::new),
             })
     }
 }
