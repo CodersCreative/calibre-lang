@@ -108,6 +108,20 @@ impl<T> ObjectType<T> {
     pub fn is_map(&self) -> bool {
         matches!(self, Self::Map(_))
     }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Map(x) => x.len(),
+            Self::Tuple(x) => x.len()
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Map(x) => x.is_empty(),
+            Self::Tuple(x) => x.is_empty()
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

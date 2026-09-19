@@ -318,7 +318,9 @@ impl<'a> AstParser<'a> for AstType {
                             Err(Rich::custom(sp, "expected 'overload'"))
                         }
                     })
-                    .ignore_then(select! { Token::LeftBracket => () })
+                    .ignore_then(
+                        select! { Token::LeftBracket => () }.padded_by(potential_new_line()),
+                    )
                     .ignore_then(
                         Overload::parser(data)
                             .padded_by(potential_new_line())

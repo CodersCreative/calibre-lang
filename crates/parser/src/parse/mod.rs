@@ -226,8 +226,8 @@ impl<'a> AstNode {
             select! {Token::LeftSquare => (), Token::Identifier(x) if x == "list" => ()}
                 .rewind()
                 .ignore_then(choice((
-                    AstIter::parser(data.clone()).map(AstNodeType::IterExpression),
                     AstList::parser(data.clone()).map(AstNodeType::ListLiteral),
+                    AstIter::parser(data.clone()).map(AstNodeType::IterExpression),
                 )));
 
         let spawn = select! {Token::Spawn | Token::AutoSpawn | Token::Select => ()}
@@ -279,10 +279,10 @@ impl<'a> AstNode {
             AstDefer::parser(data.clone()).map(AstNodeType::Defer),
             AstReturn::parser(data.clone()).map(AstNodeType::Return),
             AstTry::parser(data.clone()).map(AstNodeType::Try),
+            list_start,
             ident_start,
             paren_start,
             literal,
-            list_start,
             fn_start,
             spawn,
             memory,

@@ -194,6 +194,14 @@ impl AstFormatting for TypeDefType {
         }
     }
 
+    fn wide_override(&self, formatter: &Formatter) -> bool {
+        match self {
+            TypeDefType::Struct { fields } => fields.len() > formatter.max_values,
+            TypeDefType::Enum { variants, .. } => variants.len() > formatter.max_values,
+            _ => false,
+        }
+    }
+
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
         let preformat = self.preformat(formatter).unwrap();
 
@@ -683,7 +691,7 @@ impl Overload {
         }
 
         format!(
-            "@overload {{\n{}\n}}",
+            " @overload {{\n{}\n}}",
             overloads
                 .iter()
                 .enumerate()

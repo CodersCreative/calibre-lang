@@ -99,42 +99,9 @@ impl AstFormatting for MatchBody {
                 format!("{}{} {}", pattern_str, conditionals_str, arm.body_str)
             })
             .collect::<Vec<_>>()
-            .join(", ");
-
-        format!("{{{}}}", arms_str)
-    }
-
-    fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
-        let preformat = self.preformat(formatter).unwrap();
-
-        if preformat.arms.is_empty() {
-            return Some(String::from("{ }"));
-        }
-
-        let arms_str = preformat
-            .arms
-            .iter()
-            .map(|arm| {
-                let pattern_str = arm
-                    .patterns
-                    .iter()
-                    .map(|p| formatter.fmt_match_arm(p, false))
-                    .collect::<Vec<_>>()
-                    .join(" | ");
-                let conditionals_str = if arm.conditionals.is_empty() {
-                    String::new()
-                } else {
-                    format!(" {}", arm.conditionals.join(" "))
-                };
-                format!("{}{} {}", pattern_str, conditionals_str, arm.body_str)
-            })
-            .collect::<Vec<_>>()
             .join(",\n");
 
-        Some(format!(
-            "{{\n{}\n}}",
-            formatter.fmt_txt_with_tab(&arms_str, 1, true)
-        ))
+        format!("{{\n{}\n}}", formatter.fmt_txt_with_tab(&arms_str, 1, true))
     }
 }
 

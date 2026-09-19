@@ -1,6 +1,6 @@
 use crate::Span;
 use crate::ast::RefMutability;
-use crate::ast::idents::PotentialDollarIdentifier;
+use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::access::{AstField, AstIdentifier, AstIndex, AstScope};
 use crate::ast::nodes::assignment::AstAssignment;
 use crate::ast::nodes::binary::{
@@ -14,7 +14,7 @@ use crate::ast::nodes::literals::AstRange;
 use crate::ast::nodes::memory::{AstDeref, AstRef};
 use crate::ast::nodes::unary::{AstNeg, AstNot};
 use crate::ast::nodes::{AstNode, AstNodeType};
-use crate::parse::{AstPrattParser, PrattData, potential_new_line};
+use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, potential_new_line};
 use crate::{
     ast::{
         binary::BinaryOperator,
@@ -199,7 +199,11 @@ impl<'a> PrattParser {
 
         let access = select! { Token::Dot => true, Token::Scope => false }
             .padded_by(potential_new_line())
-            .then(data.dollar_ident.clone())
+            .then(data.dollar_ident.clone().or(
+                select! { Token::IntLiteral(value) => value }.map_with_span(|value, span| {
+                    PotentialDollarIdentifier::Identifier(ParserText::new(span, value.to_string()))
+                }),
+            ))
             .then(
                 select! { Token::Colon => () }
                     .padded_by(potential_new_line())
