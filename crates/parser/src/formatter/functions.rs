@@ -200,7 +200,7 @@ impl AstFormatting for AstFunction {
         if !preformat.param_groups.is_empty() {
             let param_str = preformat.format_params_grouped(formatter);
             txt = format!(
-                "{}\n{}\n{})",
+                "{}(\n{}\n{})",
                 txt,
                 formatter.fmt_txt_with_tab(&param_str, 1, true),
                 formatter.tab.get_tab_from_amt(0)
@@ -220,7 +220,7 @@ impl AstFormatting for AstFunction {
         if !preformat.param_groups.is_empty() {
             let param_str = preformat.format_params_expanded(formatter);
             txt = format!(
-                "{}\n{}\n{})",
+                "{}(\n{}\n{})",
                 txt,
                 formatter.fmt_txt_with_tab(&param_str, 1, true),
                 formatter.tab.get_tab_from_amt(0)
@@ -238,14 +238,16 @@ impl AstFormatting for AstExtern {
     type PreFormat = ();
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let mut txt = format!("extern \"{}\" const {} := fn(", self.abi, self.identifier);
+        let mut txt = format!("extern \"{}\" const {} := fn", self.abi, self.identifier);
         let params: Vec<String> = self
             .parameters
             .iter()
             .map(|p| formatter.fmt_ffi_type(p))
             .collect();
 
-        txt = format!("{}{})", txt, params.join(", "));
+        if !params.is_empty() {
+            txt = format!("{}({})", txt, params.join(", "));
+        }
 
         if !self.return_type.is_null() {
             txt.push_str(&format!(
@@ -264,19 +266,21 @@ impl AstFormatting for AstExtern {
     }
 
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
-        let mut txt = format!("extern \"{}\" const {} := fn(", self.abi, self.identifier);
+        let mut txt = format!("extern \"{}\" const {} := fn", self.abi, self.identifier);
         let params: Vec<String> = self
             .parameters
             .iter()
             .map(|p| formatter.fmt_ffi_type(p))
             .collect();
 
-        txt = format!(
-            "{}\n{}\n{})",
-            txt,
-            formatter.fmt_txt_with_tab(&params.join(",\n"), 1, true),
-            formatter.tab.get_tab_from_amt(0)
-        );
+        if !params.is_empty() {
+            txt = format!(
+                "{}(\n{}\n{})",
+                txt,
+                formatter.fmt_txt_with_tab(&params.join(",\n"), 1, true),
+                formatter.tab.get_tab_from_amt(0)
+            );
+        }
 
         if !self.return_type.is_null() {
             txt.push_str(&format!(

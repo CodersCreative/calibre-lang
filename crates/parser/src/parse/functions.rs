@@ -189,18 +189,14 @@ impl<'a> AstParser<'a> for AstExtern {
             .then(data.dollar_ident.clone())
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then_ignore(select! { Token::Fn => () })
-            .then_ignore(select! { Token::LeftParen => () })
-            .then(
-                data.data_type
+            .then(select! { Token::LeftParen => () }.ignore_then(data.data_type
                     .clone()
                     .padded_by(potential_new_line())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
                     .or_not()
-                    .map(|x| x.unwrap_or_default()),
-            )
-            .then_ignore(select! { Token::RightParen => () })
+                    .map(|x| x.unwrap_or_default()),).then_ignore(select! { Token::RightParen => () }).or_not().map(|x| x.unwrap_or_default()))
             .then(
                 select! { Token::RightArrow => () }
                     .padded_by(potential_new_line())
@@ -273,7 +269,9 @@ impl<'a> AstPrattParser<'a> for AstCall {
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
-            .then_ignore(select! { Token::RightParen => () });
+            .then_ignore(select! { Token::RightParen => () })
+            .or_not()
+            .map(|x| x.unwrap_or_default());
 
         select! { Token::Vampire => () }
             .ignore_then(

@@ -9,7 +9,7 @@ pub fn to_parser_errors(errs: Vec<Rich<'_, Token<'_>>>) -> Vec<ParserError> {
             } else {
                 let found = e
                     .found()
-                    .map(|t| format!("{}", ParserText::format_string_literal(&t.to_string())))
+                    .map(|t| ParserText::format_string_literal(&t.to_string()))
                     .unwrap_or_else(|| "EOF".to_string());
 
                 let expected: Vec<String> = e
