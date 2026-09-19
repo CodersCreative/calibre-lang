@@ -5,7 +5,7 @@ use logos::{Lexer, Logos};
 use logos_display::{Debug, Display};
 
 // Not Explict:
-// <( will have to be matched manually when needed
+// <(, << and >> will have to be matched manually when needed
 // _ will fall under Identifier
 // Comments need to be manually filtered out before parsing
 
@@ -88,10 +88,6 @@ pub enum Token<'a> {
     BitOr,
     #[token("&")]
     BitAnd,
-    #[token("<<")]
-    Shl,
-    #[token(">>")]
-    Shr,
 
     // BinaryEq
     #[token("+=")]
@@ -329,8 +325,6 @@ impl FromStr for Token<'static> {
             "BitXor" => Ok(Token::BitXor),
             "BitOr" => Ok(Token::BitOr),
             "BitAnd" => Ok(Token::BitAnd),
-            "Shl" => Ok(Token::Shl),
-            "Shr" => Ok(Token::Shr),
 
             // BinaryEq
             "AddEq" => Ok(Token::AddEq),
@@ -466,8 +460,6 @@ impl<'a> Token<'a> {
             Token::BitXor => "BitXor",
             Token::BitOr => "BitOr",
             Token::BitAnd => "BitAnd",
-            Token::Shl => "Shl",
-            Token::Shr => "Shr",
 
             // BinaryEq
             Token::AddEq => "AddEq",

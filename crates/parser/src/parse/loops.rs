@@ -18,6 +18,10 @@ impl<'a> AstParser<'a> for LoopType {
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
+            // loop
+            select! { Token::FatArrow => () }
+                .rewind()
+                .map(|_| LoopType::Loop),
             // ... (covers in for now)
             data.node.clone().map(LoopType::While),
             // let ... <- ...

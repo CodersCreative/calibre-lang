@@ -22,8 +22,12 @@ impl AstFormatting for AstStruct {
 
         let txt = match &self.value {
             ObjectType::Map(map) => {
+                if !map.is_empty() {
+                    return format!("{} {{}}", self.identifier);
+                }
+
                 format!(
-                    "{} {{{}}}",
+                    "{} {{ {} }}",
                     self.identifier,
                     map.iter()
                         .map(|(key, value)| {

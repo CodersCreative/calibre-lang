@@ -24,7 +24,7 @@ use crate::{
     parse::{AstParserErr, TokenStream},
 };
 use chumsky::pratt::{infix, left, postfix, prefix};
-use chumsky::primitive::just;
+use chumsky::primitive::{choice, just};
 use chumsky::span::SimpleSpan;
 use chumsky::{Parser, select};
 
@@ -140,12 +140,16 @@ impl<'a> PrattParser {
         }
         .padded_by(potential_new_line());
 
-        let shift = select! {
-            Token::Shl => (BinaryOperator::Shl, false),
-            Token::ShlEq => (BinaryOperator::Shl, true),
-            Token::Shr => (BinaryOperator::Shr, false),
-            Token::ShrEq => (BinaryOperator::Shr, true),
-        };
+        let shift = choice((
+            just(Token::ShlEq).map(|_| (BinaryOperator::Shl, true)),
+            just(Token::ShrEq).map(|_| (BinaryOperator::Shr, true)),
+            just(Token::Lesser)
+                .ignore_then(just(Token::Lesser))
+                .map(|_| (BinaryOperator::Shl, false)),
+            just(Token::Greater)
+                .ignore_then(just(Token::Greater))
+                .map(|_| (BinaryOperator::Shr, false)),
+        ));
 
         let add = select! {
             Token::Sub => (BinaryOperator::Sub, false),

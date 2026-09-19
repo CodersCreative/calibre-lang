@@ -60,7 +60,12 @@ impl AstFormatting for AstLoop {
             _ => formatted,
         };
 
-        let mut txt = format!("for {} {}", self.loop_type.format(formatter), body);
+        let loop_type = self.loop_type.format(formatter);
+        let mut txt = if loop_type.is_empty() {
+            format!("for {}", body)
+        } else {
+            format!("for {} {}", loop_type, body)
+        };
 
         if let Some(until) = &self.until {
             txt.push_str(&format!(" until {}", until.format(formatter)));

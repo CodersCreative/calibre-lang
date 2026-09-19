@@ -115,11 +115,11 @@ impl FunctionPreFormat {
         let expanded = {
             let mut txt = name.clone();
             if let Some(dt) = &data_type {
-                txt.push_str(&format!(": {}", dt));
+                txt.push_str(&format!(" : {}", dt));
             }
             if let Some(val) = &default_value {
                 txt.push_str(&format!(
-                    "{}= {}",
+                    " {}= {}",
                     if data_type.is_some() { " " } else { ":" },
                     val
                 ));
@@ -144,11 +144,12 @@ impl FunctionPreFormat {
                 let mut txt = names.join(", ");
 
                 if let Some(dt) = &last.data_type {
-                    txt.push_str(&format!(": {}", dt));
+                    txt.push_str(&format!(" : {}", dt));
                 }
+
                 if let Some(val) = &last.default_value {
                     txt.push_str(&format!(
-                        "{}= {}",
+                        " {}= {}",
                         if last.data_type.is_some() { " " } else { ":" },
                         val
                     ));
@@ -335,7 +336,7 @@ impl AstFormatting for AstCall {
 
         if !self.reverse_args.is_empty() {
             txt.push_str(&format!(
-                "<({})",
+                " <({})",
                 self.reverse_args
                     .iter()
                     .map(|x| x.format(formatter))
