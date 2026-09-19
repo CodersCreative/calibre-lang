@@ -41,7 +41,10 @@ impl<'a> AstParser<'a> for AstScopeDef {
                 .then_ignore(select! { Token::RightBracket => () })
                 .map(|items| (Some(items), Some(true))),
             // Im going to make node by itself produce a scope so that no scope is now an explicit action
-            data.stmt.clone().map(|body| (Some(vec![body]), Some(true))),
+            data.stmt
+                .clone()
+                .padded_by(potential_new_line())
+                .map(|body| (Some(vec![body]), Some(true))),
         ))
         .or_not()
         .map(|x| x.unwrap_or((None, None)));
@@ -82,9 +85,8 @@ impl<'a> AstParser<'a> for AstScopeDef {
             });
 
         select! { Token::FatArrow => () }
-            .padded_by(potential_new_line())
-            .ignore_then(named.or_not())
-            .then(body)
+            .ignore_then(named.padded_by(potential_new_line()).or_not())
+            .then(body.padded_by(potential_new_line()))
             .map(|(named, (body, create_new_scope))| AstScopeDef {
                 body,
                 named,
@@ -139,8 +141,8 @@ impl<'a> AstParser<'a> for AstScopeAlias {
             .ignore_then(just(Token::At).ignore_then(data.dollar_ident.clone()))
             .then_ignore(select! { Token::FatArrow => () }.padded_by(potential_new_line()))
             .then(data.dollar_ident.clone())
-            .then(args)
-            .then(call_mode)
+            .then(args.padded_by(potential_new_line()))
+            .then(call_mode.padded_by(potential_new_line()))
             .map(
                 |(((identifier, name), args), create_new_scope)| AstScopeAlias {
                     identifier,

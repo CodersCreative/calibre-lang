@@ -1,4 +1,4 @@
-use crate::{ParserError, Span, SyntaxErr, lexer::Token};
+use crate::{ParserError, Span, SyntaxErr, ast::idents::ParserText, lexer::Token};
 use chumsky::error::{Rich, RichPattern};
 
 pub fn to_parser_errors(errs: Vec<Rich<'_, Token<'_>>>) -> Vec<ParserError> {
@@ -9,7 +9,7 @@ pub fn to_parser_errors(errs: Vec<Rich<'_, Token<'_>>>) -> Vec<ParserError> {
             } else {
                 let found = e
                     .found()
-                    .map(|t| format!("`{t}`"))
+                    .map(|t| format!("{}", ParserText::format_string_literal(&t.to_string())))
                     .unwrap_or_else(|| "EOF".to_string());
 
                 let expected: Vec<String> = e

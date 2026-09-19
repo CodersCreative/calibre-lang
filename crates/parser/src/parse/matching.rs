@@ -3,7 +3,6 @@ use crate::ast::idents::PotentialDollarIdentifier;
 use crate::ast::nodes::DestructurePattern;
 use crate::ast::nodes::VarType;
 use crate::ast::nodes::functions::FunctionHeader;
-use crate::ast::nodes::literals::AstTuple;
 use crate::ast::nodes::matching::{
     AstFnMatch, AstMatch, MatchArmType, MatchBody, MatchStringPatternPart, MatchStructFieldPattern,
     MatchTupleItem,
@@ -13,9 +12,7 @@ use crate::parse::MapWithSpanExt;
 use crate::parse::StatementData;
 use crate::parse::potential_new_line;
 use crate::{
-    Span,
     ast::nodes::AstNode,
-    ast::nodes::AstNodeType,
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
@@ -399,8 +396,6 @@ impl<'a> AstParser<'a> for MatchArmType {
                 // wildcard
                 select! { Token::Identifier(x) if x == "_" => () }
                     .map_with_span(|_, span| MatchArmType::Wildcard(span)),
-                // value
-                data.node.clone().map(MatchArmType::Value),
                 // .enum @
                 select! { Token::Dot => () }
                     .ignore_then(data.dollar_ident.clone())
@@ -521,6 +516,8 @@ impl<'a> AstParser<'a> for MatchArmType {
                         name,
                         pattern: Box::new(pattern),
                     }),
+                // value
+                data.node.clone().map(MatchArmType::Value),
             ))
             .boxed()
         })
@@ -551,13 +548,10 @@ impl<'a> AstParser<'a> for MatchBody {
         let match_arm = MatchArmType::parser(data.clone())
             .padded_by(potential_new_line())
             .then(
-                choice((
-                    select! { Token::BitOr => () }.map(|_| '|'),
-                    select! { Token::Comma => () }.map(|_| ','),
-                ))
-                .then(MatchArmType::parser(data.clone()))
-                .repeated()
-                .collect::<Vec<(char, MatchArmType)>>(),
+                choice((select! { Token::BitOr => () }.map(|_| '|'),))
+                    .then(MatchArmType::parser(data.clone()))
+                    .repeated()
+                    .collect::<Vec<(char, MatchArmType)>>(),
             )
             .then(
                 select! { Token::If => () }
@@ -695,24 +689,7 @@ impl<'a> AstParser<'a> for AstMatch {
             .ignore_then(
                 data.node
                     .clone()
-                    .then(
-                        select! { Token::Comma => () }
-                            .ignore_then(data.node.clone())
-                            .repeated()
-                            .collect::<Vec<_>>(),
-                    )
-                    .map(|(first, rest)| {
-                        if rest.is_empty() {
-                            first
-                        } else {
-                            let span =
-                                Span::new(first.span.from, rest.last().unwrap_or(&first).span.to);
-                            let mut values = Vec::with_capacity(rest.len() + 1);
-                            values.push(first);
-                            values.extend(rest);
-                            AstNode::new(span, AstNodeType::TupleLiteral(AstTuple { values }))
-                        }
-                    })
+                    .padded_by(potential_new_line())
                     .or_not()
                     .map(|x| x.map(Box::new)),
             )
