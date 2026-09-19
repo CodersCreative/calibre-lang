@@ -234,13 +234,13 @@ pub enum Token<'a> {
     Until,
 
     // Ignore
-    #[token("\n")]
+    #[regex("[\n;]")]
     NewLine,
     #[regex(r"//[^\n]*", allow_greedy = true, callback = |lex| lex.slice())]
     LineComment(&'a str),
     #[regex(r"/\*", lex_block_comment)]
     BlockComment(&'a str),
-    #[regex(r"[ \t\f;]+", logos::skip)]
+    #[regex(r"[ \t\f]+", logos::skip)]
     Whitespace,
 }
 

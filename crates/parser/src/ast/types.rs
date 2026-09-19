@@ -829,14 +829,18 @@ impl Display for ParserInnerType {
                 return_type,
                 parameters,
             } => {
-                let mut txt = format!(
-                    "fn ({})",
-                    parameters
-                        .iter()
-                        .map(|x| x.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
+                let mut txt = String::from("fn");
+
+                if !parameters.is_empty() {
+                    txt.push_str(&format!(
+                        "({})",
+                        parameters
+                            .iter()
+                            .map(|x| x.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ))
+                }
 
                 if return_type.data_type != ParserInnerType::Null {
                     txt.push_str(&format!(" -> {}", return_type));

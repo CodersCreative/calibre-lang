@@ -277,6 +277,22 @@ impl<'a> AstParser<'a> for ParserDataType {
                             },
                         )
                     }),
+                    infix(left(90), select! { Token::Scope => () }, |left: ParserDataType, _, right: ParserDataType, _| {
+                        let span = Span::new_from_spans(left.span, right.span);
+                        let mut scopes = Vec::new();
+
+                        match left.data_type {
+                            ParserInnerType::Scope(mut x) => scopes.append(&mut x),
+                            _ => scopes.push(left),
+                        }
+
+                        match right.data_type {
+                            ParserInnerType::Scope(mut x) => scopes.append(&mut x),
+                            _ => scopes.push(right),
+                        }
+
+                        ParserDataType::new(span, ParserInnerType::Scope(scopes))
+                    }),
                     postfix(40, select! { Token::Question => () }, |inner: ParserDataType, _, _| {
                         ParserDataType::new(
                             inner.span,

@@ -1,0 +1,3 @@
+hello as int;
+100.9 as! int;
+bye as? int;

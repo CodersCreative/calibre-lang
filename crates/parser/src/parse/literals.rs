@@ -142,12 +142,11 @@ impl<'a> AstParser<'a> for AstStruct {
                             .or_not()
                             .map(|x| x.unwrap_or_default()),
                     )
-                    .then_ignore(select! { Token::RightBracket => () })
-                    .or_not(),
+                    .then_ignore(select! { Token::RightBracket => () }),
             )
             .map(|(identifier, fields)| AstStruct {
                 identifier,
-                value: ObjectType::Map(fields.unwrap_or_default()),
+                value: ObjectType::Map(fields),
             })
     }
 }

@@ -178,14 +178,16 @@ impl<'a> PrattParser {
         .padded_by(potential_new_line());
 
         let conversion = select! { Token::As => () }
+            .ignore_then(
+                select! {
+                    Token::Question => AsFailureMode::Option,
+                    Token::Not => AsFailureMode::Panic,
+                }
+                .or_not()
+                .map(|x| x.unwrap_or(AsFailureMode::Result)),
+            )
             .padded_by(potential_new_line())
-            .ignore_then(data.data_type.clone())
-            .then(
-                select! { Token::Question => () }
-                    .map(|_| AsFailureMode::Option)
-                    .or_not()
-                    .map(|x| x.unwrap_or(AsFailureMode::Result)),
-            );
+            .then(data.data_type.clone());
 
         let is = select! { Token::Is => () }
             .padded_by(potential_new_line())
@@ -288,7 +290,7 @@ impl<'a> PrattParser {
                     fold_binary(l, op, r, assignment, sp.span())
                 }),
                 // 70
-                postfix(70, conversion, |value, (data_type, failure_mode), sp| {
+                postfix(70, conversion, |value, (failure_mode, data_type), sp| {
                     let span: SimpleSpan = sp.span();
                     AstNode::new(
                         span.into(),
