@@ -12,7 +12,7 @@ use crate::parse::potential_new_line;
 use crate::{
     ast::nodes::AstNodeType,
     lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream, typed_or_untyped_assignment},
+    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream},
 };
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
@@ -187,8 +187,17 @@ impl<'a> AstParser<'a> for TraitMember {
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let const_member = select! { Token::Const => () }
             .ignore_then(data.dollar_ident.clone())
-            .then(typed_or_untyped_assignment(data.clone()))
-            .map_with_span(|(identifier, (data_type, value)), span| TraitMember {
+            .then(
+                select! { Token::Colon => () }
+                    .ignore_then(data.data_type.clone())
+                    .or_not(),
+            )
+            .then(
+                choice((select! { Token::Eq => () }, select! { Token::Walrus => () }))
+                    .ignore_then(data.node.clone())
+                    .or_not(),
+            )
+            .map_with_span(|((identifier, data_type), value), span| TraitMember {
                 kind: TraitMemberKind::Const,
                 identifier,
                 data_type: data_type.unwrap_or_else(|| ParserDataType::auto(span)),
@@ -221,8 +230,7 @@ impl<'a> AstParser<'a> for AstImpl {
                 data.node
                     .clone()
                     .padded_by(potential_new_line())
-                    .separated_by(select! { Token::Comma => () })
-                    .allow_trailing()
+                    .repeated()
                     .collect::<Vec<_>>()
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
@@ -251,8 +259,7 @@ impl<'a> AstParser<'a> for AstImplTrait {
                 data.node
                     .clone()
                     .padded_by(potential_new_line())
-                    .separated_by(select! { Token::Comma => () })
-                    .allow_trailing()
+                    .repeated()
                     .collect::<Vec<_>>()
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
@@ -278,13 +285,11 @@ impl<'a> AstParser<'a> for AstTrait {
             .ignore_then(data.generic_ident.clone())
             .then_ignore(select! { Token::LeftBracket => () })
             .then(
-                TraitMember::parser(data.clone())
+                potential_new_line()
+                    .ignore_then(TraitMember::parser(data.clone()))
                     .padded_by(potential_new_line())
-                    .separated_by(select! { Token::Comma => () })
-                    .allow_trailing()
-                    .collect::<Vec<_>>()
-                    .or_not()
-                    .map(|x| x.unwrap_or_default()),
+                    .repeated()
+                    .collect::<Vec<_>>(),
             )
             .then_ignore(select! { Token::RightBracket => () })
             .map(|(identifier, members)| AstTrait {
@@ -317,8 +322,7 @@ impl<'a> AstParser<'a> for AstType {
                     .ignore_then(
                         Overload::parser(data)
                             .padded_by(potential_new_line())
-                            .separated_by(select! { Token::Comma => () })
-                            .allow_trailing()
+                            .repeated()
                             .collect::<Vec<_>>()
                             .or_not()
                             .map(|x| x.unwrap_or_default()),

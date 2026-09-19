@@ -1,6 +1,6 @@
+use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::binary::AstIn;
 use crate::ast::nodes::loops::{AstIter, AstLoop, LoopType};
-use crate::ast::nodes::{AstNode, AstNodeType};
 use crate::ast::types::ParserDataType;
 use crate::parse::{MapWithSpanExt, StatementData};
 use crate::{
@@ -32,15 +32,14 @@ impl<'a> AstParser<'a> for LoopType {
         ))
         .or_not()
         .map(|x| match x.unwrap_or(LoopType::Loop) {
-            LoopType::While(AstNode {
-                node_type: AstNodeType::InDeclaration(AstIn { identifier, value }),
-                ..
-            }) => {
-                let AstNodeType::Identifier(ident) = identifier.node_type else {
-                    return LoopType::Loop;
-                };
-
-                LoopType::For(ident.value.get_ident().clone(), *value)
+            LoopType::While(node) => {
+                if let AstNodeType::InDeclaration(AstIn { identifier, value }) = &node.node_type
+                    && let AstNodeType::Identifier(ident) = &identifier.node_type
+                {
+                    LoopType::For(ident.value.get_ident().clone(), (**value).clone())
+                } else {
+                    LoopType::While(node)
+                }
             }
             x => x,
         })

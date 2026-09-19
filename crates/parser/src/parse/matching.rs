@@ -401,33 +401,6 @@ impl<'a> AstParser<'a> for MatchArmType {
                     .map_with_span(|_, span| MatchArmType::Wildcard(span)),
                 // value
                 data.node.clone().map(MatchArmType::Value),
-                // is
-                select! { Token::Is => () }
-                    .ignore_then(data.data_type.clone())
-                    .map(MatchArmType::IsType),
-                // in
-                select! { Token::In => () }
-                    .ignore_then(data.node.clone())
-                    .map(MatchArmType::In),
-                // string
-                select! { Token::StringLiteral(s) => s }
-                    .map_with_span(|s, span| {
-                        MatchStringPatternPart::Literal(ParserText::new(
-                            span,
-                            ParserText::decode_literal(s),
-                        ))
-                    })
-                    .then(
-                        select! { Token::BitAnd => () }
-                            .ignore_then(MatchStringPatternPart::parser(data.clone()))
-                            .repeated()
-                            .collect::<Vec<_>>(),
-                    )
-                    .map(|(head, mut tail)| {
-                        let mut parts = vec![head];
-                        parts.append(&mut tail);
-                        MatchArmType::StringPattern(parts)
-                    }),
                 // .enum @
                 select! { Token::Dot => () }
                     .ignore_then(data.dollar_ident.clone())
@@ -466,6 +439,33 @@ impl<'a> AstParser<'a> for MatchArmType {
                             destructure,
                             pattern: pattern.map(Box::new),
                         }
+                    }),
+                // is
+                select! { Token::Is => () }
+                    .ignore_then(data.data_type.clone())
+                    .map(MatchArmType::IsType),
+                // in
+                select! { Token::In => () }
+                    .ignore_then(data.node.clone())
+                    .map(MatchArmType::In),
+                // string
+                select! { Token::StringLiteral(s) => s }
+                    .map_with_span(|s, span| {
+                        MatchStringPatternPart::Literal(ParserText::new(
+                            span,
+                            ParserText::decode_literal(s),
+                        ))
+                    })
+                    .then(
+                        select! { Token::BitAnd => () }
+                            .ignore_then(MatchStringPatternPart::parser(data.clone()))
+                            .repeated()
+                            .collect::<Vec<_>>(),
+                    )
+                    .map(|(head, mut tail)| {
+                        let mut parts = vec![head];
+                        parts.append(&mut tail);
+                        MatchArmType::StringPattern(parts)
                     }),
                 // rest
                 select! { Token::Range => () }.map_with_span(|_, span| {

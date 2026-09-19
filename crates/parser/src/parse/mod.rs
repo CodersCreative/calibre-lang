@@ -202,7 +202,7 @@ impl<'a> AstNode {
             AstGenerator::parser(data.clone()).map(AstNodeType::InlineGenerator),
         )));
 
-        let ident_start = select! {Token::Identifier(_) => ()}
+        let ident_start = select! {Token::Identifier(_) | Token::Dollar => ()}
             .rewind()
             .ignore_then(choice((
                 AstStruct::parser(data.clone()).map(AstNodeType::StructLiteral),

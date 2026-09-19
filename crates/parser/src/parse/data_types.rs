@@ -106,7 +106,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
-                let struct_parser: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>> = select! { Token::Identifier(x) => x }
+                let struct_parser: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>> = select! { Token::Identifier(x) => x, Token::Dyn => "dyn" }
                     .then(
                         select! { Token::Vampire => () }
                             .ignore_then(

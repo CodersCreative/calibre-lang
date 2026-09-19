@@ -245,16 +245,20 @@ impl<'a> PrattParser {
                 infix(left(20), comparison, |l, op, r, sp| {
                     fold_comparison(l, op, r, sp.span())
                 }),
-                infix(left(20), just(Token::In), |l, _, r, sp| {
-                    let span: SimpleSpan = sp.span();
-                    AstNode::new(
-                        span.into(),
-                        AstNodeType::InDeclaration(AstIn {
-                            identifier: Box::new(l),
-                            value: Box::new(r),
-                        }),
-                    )
-                }),
+                infix(
+                    left(20),
+                    just(Token::In).padded_by(potential_new_line()),
+                    |l, _, r, sp| {
+                        let span: SimpleSpan = sp.span();
+                        AstNode::new(
+                            span.into(),
+                            AstNodeType::InDeclaration(AstIn {
+                                identifier: Box::new(l),
+                                value: Box::new(r),
+                            }),
+                        )
+                    },
+                ),
                 // 25
                 infix(left(20), range, |l, inclusive, r, sp| {
                     let span: SimpleSpan = sp.span();

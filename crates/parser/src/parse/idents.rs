@@ -30,8 +30,14 @@ impl<'a> AstParser<'a> for PotentialDollarIdentifier {
         select! {
             Token::Dollar => (),
         }
-        .ignore_then(ParserText::parser(()))
-        .map(PotentialDollarIdentifier::DollarIdentifier)
+        .ignore_then(ParserText::parser(()).or_not())
+        .map_with_span(|ident, span| {
+            ident
+                .map(PotentialDollarIdentifier::DollarIdentifier)
+                .unwrap_or_else(|| {
+                    PotentialDollarIdentifier::Identifier(ParserText::new(span, "$"))
+                })
+        })
         .or(ParserText::parser(()).map(PotentialDollarIdentifier::Identifier))
     }
 }
