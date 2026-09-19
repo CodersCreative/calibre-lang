@@ -65,8 +65,17 @@ impl<'a> AstParser<'a> for FnParamGroup {
             .repeated()
             .at_least(1)
             .collect::<Vec<_>>()
-            .then(typed_or_untyped_assignment(data.clone()))
-            .map(|(names, (ty, default))| {
+            .then(
+                select! { Token::Colon => () }
+                    .ignore_then(data.data_type.clone())
+                    .or_not(),
+            )
+            .then(
+                choice((select! { Token::Eq => () }, select! { Token::Walrus => () }))
+                    .ignore_then(data.node.clone())
+                    .or_not(),
+            )
+            .map(|((names, ty), default)| {
                 FnParamGroup::Plain(
                     names
                         .into_iter()

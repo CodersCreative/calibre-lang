@@ -73,17 +73,21 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
-                let function_parser = select! { Token::Fn => () }.ignore_then(
-                    select! { Token::LeftParen => () }
+                let function_parser = select! { Token::Fn => () }
                     .ignore_then(
-                        ty.clone().padded_by(potential_new_line())
-                            .separated_by(select! { Token::Comma => () })
-                            .allow_trailing()
-                            .collect::<Vec<_>>()
-                            .or_not()
-                            .map(|x| x.unwrap_or_default()),
+                        select! { Token::LeftParen => () }
+                            .ignore_then(
+                                ty.clone()
+                                    .padded_by(potential_new_line())
+                                    .separated_by(select! { Token::Comma => () })
+                                    .allow_trailing()
+                                    .collect::<Vec<_>>()
+                                    .or_not()
+                                    .map(|x| x.unwrap_or_default()),
+                            )
+                            .then_ignore(select! { Token::RightParen => () })
+                            .or_not(),
                     )
-                    .then_ignore(select! { Token::RightParen => () })).or_not()
                     .then(
                         select! { Token::RightArrow => () }
                             .ignore_then(ty.clone())
