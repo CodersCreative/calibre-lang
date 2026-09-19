@@ -71,7 +71,9 @@ impl<'a> AstParser<'a> for AstChar {
     #[inline(always)]
     fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! {
-            Token::CharLiteral(x) => AstChar{value : x.to_string().chars().next().unwrap_or_default()}
+            Token::CharLiteral(x) => AstChar {
+                value: ParserText::decode_literal(x).chars().next().unwrap_or_default(),
+            }
         }
     }
 }
@@ -86,7 +88,7 @@ impl<'a> AstParser<'a> for AstString {
         }
         .map_with_span(|value, span| AstString {
             value: ParserText {
-                text: value.to_string(),
+                text: ParserText::decode_literal(value),
                 span,
             },
         })

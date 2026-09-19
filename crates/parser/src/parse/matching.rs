@@ -152,7 +152,10 @@ impl<'a> AstParser<'a> for MatchStringPatternPart {
         choice((
             // string
             select! { Token::StringLiteral(s) => s }.map_with_span(|s, span| {
-                MatchStringPatternPart::Literal(ParserText::new(span, s.to_string()))
+                MatchStringPatternPart::Literal(ParserText::new(
+                    span,
+                    ParserText::decode_literal(s),
+                ))
             }),
             // binding
             VarType::parser(())
@@ -190,7 +193,10 @@ impl<'a> AstParser<'a> for MatchTupleItem {
                 // string
                 select! { Token::StringLiteral(s) => s }
                     .map_with_span(|s, span| {
-                        MatchStringPatternPart::Literal(ParserText::new(span, s.to_string()))
+                        MatchStringPatternPart::Literal(ParserText::new(
+                            span,
+                            ParserText::decode_literal(s),
+                        ))
                     })
                     .then(
                         select! { Token::BitAnd => () }
@@ -406,7 +412,10 @@ impl<'a> AstParser<'a> for MatchArmType {
                 // string
                 select! { Token::StringLiteral(s) => s }
                     .map_with_span(|s, span| {
-                        MatchStringPatternPart::Literal(ParserText::new(span, s.to_string()))
+                        MatchStringPatternPart::Literal(ParserText::new(
+                            span,
+                            ParserText::decode_literal(s),
+                        ))
                     })
                     .then(
                         select! { Token::BitAnd => () }

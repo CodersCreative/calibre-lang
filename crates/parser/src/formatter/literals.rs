@@ -1,6 +1,7 @@
 use crate::{
     ast::{
         ObjectType,
+        idents::ParserText,
         nodes::{
             AstNodeType,
             literals::{
@@ -195,61 +196,7 @@ impl AstFormatting for AstString {
     type PreFormat = ();
 
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
-        let raw = self
-            .value
-            .text
-            .strip_prefix('"')
-            .and_then(|s| s.strip_suffix('"'))
-            .unwrap_or(&self.value.text);
-        format!(
-            "\"{}\"",
-            Self::escape_string_literal(&Self::unescape_string_literal(raw))
-        )
-    }
-}
-
-impl AstString {
-    fn unescape_string_literal(input: &str) -> String {
-        let mut out = String::with_capacity(input.len());
-        let mut chars = input.chars();
-        while let Some(c) = chars.next() {
-            if c != '\\' {
-                out.push(c);
-                continue;
-            }
-            match chars.next() {
-                Some('n') => out.push('\n'),
-                Some('r') => out.push('\r'),
-                Some('t') => out.push('\t'),
-                Some('0') => out.push('\0'),
-                Some('\\') => out.push('\\'),
-                Some('"') => out.push('"'),
-                Some(c) => {
-                    out.push('\\');
-                    out.push(c);
-                }
-                None => out.push('\\'),
-            }
-        }
-        out
-    }
-
-    pub fn escape_string_literal(input: &str) -> String {
-        let mut out = String::with_capacity(input.len());
-        for ch in input.chars() {
-            match ch {
-                '\\' => out.push_str("\\\\"),
-                '"' => out.push_str("\\\""),
-                '\'' => out.push_str("\\'"),
-                '\n' => out.push_str("\\n"),
-                '\r' => out.push_str("\\r"),
-                '\t' => out.push_str("\\t"),
-                '\0' => out.push_str("\\0"),
-                c if c.is_control() => out.push_str(&format!("\\u{{{:x}}}", c as u32)),
-                c => out.push(c),
-            }
-        }
-        out
+        ParserText::format_string_value(&self.value.text)
     }
 }
 
@@ -270,13 +217,7 @@ impl AstFormatting for AstChar {
     type PreFormat = ();
 
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
-        format!("'{}'", Self::escape_char_literal(&self.value))
-    }
-}
-
-impl AstChar {
-    fn escape_char_literal(value: &char) -> String {
-        AstString::escape_string_literal(&value.to_string())
+        ParserText::format_char_literal(self.value)
     }
 }
 

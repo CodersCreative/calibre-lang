@@ -10,8 +10,8 @@ impl RuntimeValue {
         }
 
         match self {
-            Self::Str(x) => format!("\"{}\"", x),
-            Self::Char(x) => format!("'{}'", x),
+            Self::Str(x) => ParserText::format_string_value(x),
+            Self::Char(x) => ParserText::format_char_literal(*x),
             Self::Ref(x) => match vm.variables.get(x) {
                 Some(value) => value.clone().repr(vm),
                 None => RuntimeValue::Null.repr(vm),

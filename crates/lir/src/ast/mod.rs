@@ -4,6 +4,7 @@ use calibre_parser::{
         ObjectMap,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
+        idents::ParserText,
         nodes::binary::AsFailureMode,
         types::ParserDataType,
     },
@@ -55,9 +56,9 @@ impl Display for LirLiteral {
             Self::UInt(x) => write!(f, "{x}u"),
             Self::Byte(x) => write!(f, "{x}b"),
             Self::Float(x) => write!(f, "{x}f"),
-            Self::Char(x) => write!(f, "'{x}'"),
+            Self::Char(x) => write!(f, "{}", ParserText::format_char_literal(*x)),
             Self::Big(x) => write!(f, "{x}g"),
-            Self::String(x) => write!(f, "{x:?}"),
+            Self::String(x) => write!(f, "{}", ParserText::format_string_value(x)),
             Self::Null => write!(f, "null"),
         }
     }

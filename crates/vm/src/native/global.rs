@@ -29,7 +29,7 @@ impl NativeFunction for ConsoleOutput {
         let rendered = args
             .into_iter()
             .map(|arg| match arg {
-                RuntimeValue::Str(value) => calibre_parser::parse::util::unescape_string(&value),
+                RuntimeValue::Str(value) => value.to_string(),
                 other => other.display(env),
             })
             .collect::<String>();

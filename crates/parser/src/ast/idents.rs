@@ -280,6 +280,113 @@ impl ParserText {
         }
     }
 
+    pub fn decode_literal(input: &str) -> String {
+        let input = input
+            .strip_prefix('"')
+            .and_then(|value| value.strip_suffix('"'))
+            .or_else(|| {
+                input
+                    .strip_prefix('\'')
+                    .and_then(|value| value.strip_suffix('\''))
+            })
+            .unwrap_or(input);
+        let mut out = String::with_capacity(input.len());
+        let mut chars = input.chars().peekable();
+        while let Some(ch) = chars.next() {
+            if ch != '\\' {
+                out.push(ch);
+                continue;
+            }
+            let Some(escaped) = chars.next() else {
+                out.push('\\');
+                break;
+            };
+            match escaped {
+                'n' => out.push('\n'),
+                'r' => out.push('\r'),
+                't' => out.push('\t'),
+                '0' => out.push('\0'),
+                '\\' => out.push('\\'),
+                '"' => out.push('"'),
+                '\'' => out.push('\''),
+                'x' => {
+                    let digits: String = chars.by_ref().take(2).collect();
+                    match u8::from_str_radix(&digits, 16) {
+                        Ok(value) => out.push(value as char),
+                        Err(_) => {
+                            out.push('\\');
+                            out.push('x');
+                            out.push_str(&digits);
+                        }
+                    }
+                }
+                'u' if chars.next_if_eq(&'{').is_some() => {
+                    let mut digits = String::new();
+                    while let Some(&value) = chars.peek() {
+                        chars.next();
+                        if value == '}' {
+                            break;
+                        }
+                        digits.push(value);
+                    }
+                    match u32::from_str_radix(&digits, 16)
+                        .ok()
+                        .and_then(char::from_u32)
+                    {
+                        Some(value) => out.push(value),
+                        None => {
+                            out.push_str("\\u{");
+                            out.push_str(&digits);
+                            out.push('}');
+                        }
+                    }
+                }
+                other => {
+                    out.push('\\');
+                    out.push(other);
+                }
+            }
+        }
+        out
+    }
+
+    pub fn escape_literal(input: &str, delimiter: char) -> String {
+        let mut out = String::with_capacity(input.len());
+        for ch in input.chars() {
+            match ch {
+                '\\' => out.push_str("\\\\"),
+                '\n' => out.push_str("\\n"),
+                '\r' => out.push_str("\\r"),
+                '\t' => out.push_str("\\t"),
+                '\0' => out.push_str("\\0"),
+                ch if ch == delimiter => {
+                    out.push('\\');
+                    out.push(ch);
+                }
+                ch if ch.is_control() => out.push_str(&format!("\\u{{{:x}}}", ch as u32)),
+                ch => out.push(ch),
+            }
+        }
+        out
+    }
+
+    pub fn format_string_literal(input: &str) -> String {
+        let value = if input.starts_with('"') && input.ends_with('"') {
+            Self::decode_literal(input)
+        } else {
+            input.to_string()
+        };
+        Self::format_string_value(&value)
+    }
+
+    pub fn format_string_value(input: &str) -> String {
+        format!("\"{}\"", Self::escape_literal(input, '"'))
+    }
+
+    pub fn format_char_literal(input: char) -> String {
+        format!("'{}'", Self::escape_literal(&input.to_string(), '\''))
+    }
+
     pub fn temp_name(span: Span) -> Self {
         Self::new(
             span,

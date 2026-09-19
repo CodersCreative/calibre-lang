@@ -175,7 +175,7 @@ impl<'a> AstParser<'a> for AstExtern {
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Extern => () }
-            .ignore_then(select! { Token::StringLiteral(abi) => abi })
+            .ignore_then(select! { Token::StringLiteral(abi) => ParserText::decode_literal(abi) })
             .then_ignore(select! { Token::Const => () })
             .then(data.dollar_ident.clone())
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
@@ -199,11 +199,11 @@ impl<'a> AstParser<'a> for AstExtern {
                     .or_not(),
             )
             .then_ignore(select! { Token::From => () }.padded_by(potential_new_line()))
-            .then(select! { Token::StringLiteral(library) => library })
+            .then(select! { Token::StringLiteral(library) => ParserText::decode_literal(library) })
             .then(
                 select! { Token::As => () }
                     .padded_by(potential_new_line())
-                    .ignore_then(select! { Token::StringLiteral(symbol) => symbol })
+                    .ignore_then(select! { Token::StringLiteral(symbol) => ParserText::decode_literal(symbol) })
                     .or_not(),
             )
             .map(

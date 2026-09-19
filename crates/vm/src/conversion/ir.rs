@@ -6,6 +6,7 @@ use calibre_lir::{
 use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
+    idents::ParserText,
     types::ParserDataType,
 };
 use calibre_parser::{Span, ast::nodes::binary::AsFailureMode};
@@ -293,9 +294,9 @@ impl Display for VMLiteral {
             Self::UInt(x) => write!(f, "{x}u"),
             Self::Byte(x) => write!(f, "{x}b"),
             Self::Float(x) => write!(f, "{x}f"),
-            Self::Char(x) => write!(f, "'{x}'"),
+            Self::Char(x) => write!(f, "{}", ParserText::format_char_literal(*x)),
             Self::Big(x) => write!(f, "{x}g"),
-            Self::String(x) => write!(f, "{x:?}"),
+            Self::String(x) => write!(f, "{}", ParserText::format_string_value(x)),
             Self::Null => write!(f, "null"),
             Self::Closure { label, .. } => write!(f, "CLOSURE {label}"),
             Self::ExternFunction {

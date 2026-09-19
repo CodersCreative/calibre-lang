@@ -165,7 +165,7 @@ impl<'a> AstParser<'a> for Overload {
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Const => () }
-            .ignore_then(select! { Token::StringLiteral(op) => op })
+            .ignore_then(select! { Token::StringLiteral(op) => ParserText::decode_literal(op) })
             .map_with_span(|op, sp| ParserText::new(sp, op))
             .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
             .then(data.node.clone())

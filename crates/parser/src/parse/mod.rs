@@ -53,7 +53,6 @@ pub mod pratt;
 pub mod scopes;
 pub mod spawn;
 pub mod types;
-pub mod util;
 
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
 pub type TokenStream<'a> = &'a [Token<'a>];

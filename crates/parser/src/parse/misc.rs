@@ -28,7 +28,7 @@ impl<'a> AstParser<'a> for AstTest {
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         select! { Token::Test => () }
-            .ignore_then(select! { Token::StringLiteral(x) => x })
+            .ignore_then(select! { Token::StringLiteral(x) => ParserText::decode_literal(x) })
             .then(data.scope.clone())
             .map(|(name, body)| AstTest {
                 identifier: ParserText::from(name.to_string()),

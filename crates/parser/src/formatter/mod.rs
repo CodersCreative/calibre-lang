@@ -1,6 +1,7 @@
 use crate::{
     Parser, Span,
     ast::{
+        idents::ParserText,
         nodes::{
             AstNode, AstNodeType, DestructurePattern, VarType,
             matching::{
@@ -625,7 +626,9 @@ impl Formatter {
         parts
             .iter()
             .map(|part| match part {
-                MatchStringPatternPart::Literal(text) => format!("{:?}", text.text),
+                MatchStringPatternPart::Literal(text) => {
+                    ParserText::format_string_value(&text.text)
+                }
                 MatchStringPatternPart::Binding { var_type, name } => {
                     if *var_type == VarType::Immutable {
                         name.to_string()
