@@ -584,6 +584,8 @@ impl VM {
                         } else {
                             v
                         }
+                    } else if let Some(value) = self.get_function_ref(pointer) {
+                        self.make_runtime_function(value)
                     } else {
                         return Err(RuntimeError::DanglingRef(pointer.to_string()));
                     };

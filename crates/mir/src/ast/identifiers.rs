@@ -437,7 +437,7 @@ impl MiddleNode {
                 UstrSet::default()
             }
             MiddleNodeType::FunctionDeclaration(MirFunction { body, .. }) => {
-                body.identifiers_referenced(include_functions, in_ref)
+                body.identifiers_referenced(include_functions, true)
             }
             MiddleNodeType::Conditional(MirConditional {
                 comparison,

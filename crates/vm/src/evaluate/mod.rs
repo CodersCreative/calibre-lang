@@ -979,13 +979,16 @@ impl VM {
             self.set_reg_value(*reg, arg);
         }
 
-        for (name, reg) in function
+        for (i, (name, reg)) in function
             .params
             .iter()
             .zip(function.param_regs.iter().copied())
+            .enumerate()
         {
-            let value = self.get_reg_value(reg).clone();
-            let _ = self.variables.insert(*name, value);
+            if function.referenced_params & (1 << i) != 0 {
+                let value = self.get_reg_value(reg).clone();
+                let _ = self.variables.insert(*name, value);
+            }
         }
 
         let prev_vars = if captures.is_empty() {
@@ -1077,6 +1080,7 @@ impl VM {
         let prev_vars = if state.block.is_none() {
             let func_ptr = function as *const VMFunction as usize;
             self.push_frame(function.reg_count as usize, func_ptr, Some(function.name));
+
             for (reg, arg) in function.param_regs.iter().zip(args) {
                 self.set_reg_value(*reg, arg.clone());
             }
@@ -1090,11 +1094,10 @@ impl VM {
                 let _ = self.variables.insert(*name, value);
             }
 
-            let param_names: UstrSet = function.params.clone().into_iter().collect();
             let filtered_captures: Vec<(Ustr, RuntimeValue)> = captures
                 .iter()
                 .filter(|(name, _)| {
-                    Self::should_install_capture(name) && !param_names.contains(name)
+                    Self::should_install_capture(name) && !function.param_names.contains(name)
                 })
                 .cloned()
                 .collect();

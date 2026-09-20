@@ -1434,6 +1434,8 @@ impl VM {
                             let current =
                                 if let Some(value) = self.variables.get(&ref_name).cloned() {
                                     value
+                                } else if let Some(value) = self.get_function_ref(&ref_name) {
+                                    self.make_runtime_function(value)
                                 } else {
                                     return Err(RuntimeError::DanglingRef(ref_name.to_string()));
                                 };
@@ -1833,6 +1835,8 @@ impl VM {
                             let current =
                                 if let Some(value) = self.variables.get(&ref_name).cloned() {
                                     value
+                                } else if let Some(value) = self.get_function_ref(&ref_name) {
+                                    self.make_runtime_function(value)
                                 } else {
                                     return Err(RuntimeError::DanglingRef(ref_name.to_string()));
                                 };

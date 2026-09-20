@@ -16,22 +16,15 @@ impl VMFunction {
             blocks: blocks.into_boxed_slice(),
             pure: false,
             memo: false,
+            referenced_params : 0,
             memo_params: 0,
         };
+
         let mut lower = FunctionLowering::new(func, true);
         lower.build_cfg();
         lower.build_ssa();
         lower.emit_blocks();
         debug!("global lowering completed");
-
-        let needs_param_vars = lower.blocks.iter().any(|block| {
-            block.instructions.iter().any(|instr| {
-                matches!(
-                    instr,
-                    VMInstruction::LoadVar { .. } | VMInstruction::StoreVar { .. }
-                )
-            })
-        });
 
         FunctionLowering::optimize_blocks(&mut lower.blocks);
 
@@ -47,11 +40,11 @@ impl VMFunction {
             ret_reg: lower.ret_reg,
             entry: lower.entry,
             block_map: lower.block_map,
-            needs_param_vars,
             param_names: UstrSet::default(),
             pure: false,
             memo: false,
             memo_params: 0,
+            referenced_params : 0,
         }
     }
 }
@@ -87,14 +80,6 @@ impl FunctionLowering {
         lower.emit_blocks();
 
         debug!("function lowering completed");
-        let needs_param_vars = lower.blocks.iter().any(|block| {
-            block.instructions.iter().any(|instr| {
-                matches!(
-                    instr,
-                    VMInstruction::LoadVar { .. } | VMInstruction::StoreVar { .. }
-                )
-            })
-        });
 
         let param_names: UstrSet = lower.func.params.iter().map(|(n, _)| *n).collect();
 
@@ -125,11 +110,11 @@ impl FunctionLowering {
             ret_reg: lower.ret_reg,
             entry: lower.entry,
             block_map: lower.block_map,
-            needs_param_vars,
             param_names,
             pure: lower.func.pure,
             memo: lower.func.memo,
             memo_params: lower.func.memo_params,
+            referenced_params: lower.func.referenced_params,
         }
     }
 

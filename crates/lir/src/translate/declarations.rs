@@ -118,7 +118,14 @@ impl LirLowering for MirScopeDecl {
 impl LirLowering for MirFunction {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        let param_names: UstrSet = self.parameters.iter().map(|(name, _, _)| *name).collect();
+        let referenced_names = self.body.identifiers_referenced(true, false);
+        let mut referenced_params = 0;
+        let param_names: UstrSet = self.parameters.iter().enumerate().map(|(i, (name, _, _))| {
+            if referenced_names.contains(name) {
+                referenced_params |= 1 << i;
+            }
+            *name
+        }).collect();
 
         let captures: Vec<(Ustr, ParserDataType)> = self
             .body
@@ -143,7 +150,7 @@ impl LirLowering for MirFunction {
         let internal_name = env.next_function_label();
 
         let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
-        sub_lowerer.referenced_identifiers = self.body.identifiers_referenced(true, false);
+        sub_lowerer.referenced_identifiers = referenced_names;
 
         let body_span = self.body.span;
 
@@ -193,6 +200,7 @@ impl LirLowering for MirFunction {
                 return_type: self.return_type,
                 blocks: sub_lowerer.blocks.into_boxed_slice(),
                 pure: self.pure,
+                referenced_params,
                 memo_params,
                 memo: self.memo,
             },
