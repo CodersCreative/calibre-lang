@@ -1,3 +1,4 @@
+// TODO Fix - FAILING - Attempted to use int expected str (probably to do with str concat)
 trait Animal {
 	const name : fn (&Self) -> str;
 

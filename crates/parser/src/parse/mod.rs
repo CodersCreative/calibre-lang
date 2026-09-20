@@ -151,45 +151,6 @@ where
 {
 }
 
-pub fn typed_or_untyped_assignment<'a>(
-    data: StatementData<'a>,
-) -> impl Parser<'a, TokenStream<'a>, (Option<ParserDataType>, Option<AstNode>), AstParserErr<'a>> {
-    choice((
-        // : (= or :=)
-        select! { Token::Colon => () }
-            .ignore_then(data.data_type.clone())
-            .then(
-                choice((
-                    select! { Token::Eq => () }.map(|_| true),
-                    select! { Token::Walrus => () }.map(|_| false),
-                ))
-                .padded_by(potential_new_line())
-                .then(data.node.clone()),
-            )
-            .try_map(
-                |(data_type, (is_typed, value)), sp| match (true, is_typed) {
-                    (true, false) => Err(Rich::custom(sp, "expected `=` when a type is specified")),
-                    _ => Ok((Some(data_type), Some(value))),
-                },
-            ),
-        // =
-        select! { Token::Eq => () }
-            .padded_by(potential_new_line())
-            .ignore_then(data.node.clone())
-            .try_map(|_, sp| {
-                Err(Rich::custom(
-                    sp,
-                    "expected `:=` when a type is not specified",
-                ))
-            }),
-        // :=
-        select! { Token::Walrus => () }
-            .padded_by(potential_new_line())
-            .ignore_then(data.node.clone())
-            .map(|value| (None, Some(value))),
-    ))
-}
-
 pub fn potential_new_line<'a>() -> impl Parser<'a, TokenStream<'a>, (), AstParserErr<'a>> {
     just(Token::NewLine).repeated().ignored()
 }

@@ -1,10 +1,11 @@
+// TODO Fix - FAILING - NewLine parsing
 type Pair := struct { left right : int };
 
 type PairEnum := enum { Normal : Pair, Tuple : <int, int> };
 
 impl PairEnum {
 	const display := fn match &Self {
-		.Tuple : left, right => {
+		.Tuple : (left, right) => {
 			print(left + right);
 		},
 		.Normal : {left: l, right: r} => {
@@ -41,16 +42,16 @@ const parse_command := fn match str -> str {
 const main := fn => {
 	let pair := Pair { left : 10, right : 20 };
 	let {left, right} := pair;
-	let mut first, mut second := tuple(1, 2);
+	let (mut first, mut second) := tuple(1, 2);
 	print(first + second);
 	let t := 10, 20, 30, 40;
 	
-	let start, .., end := t;
+	let (start, .., end) := t;
 	print(start + end);
 	
 	let mut x := 0;
 	let mut y := 0;
-	x, y := tuple(5, 6);
+	(x, y) := tuple(5, 6);
 	print(x + y);
 	
 	let mut pair_enum := PairEnum.Tuple : (14, 25);
@@ -61,14 +62,14 @@ const main := fn => {
 	print(pair_enum);
 	pair_enum.display();
 	
-	match 10, 90, 20 {
-		20, 40, 80 | 30 | 90 => print(30),
-		10, .., 50 => print(10 + 50),
-		10, mut value, 20 => {
+	match (10, 90, 20) {
+		(20, 40, 80 | 30 | 90) => print(30),
+		(10, .., 50) => print(10 + 50),
+		(10, mut value, 20) => {
 			value += 90;
 			print(value);
 		},
-		10, const value, _ => print(value),
+		(10, const value, _) => print(value),
 		_ => {}
 	};
 	
@@ -106,7 +107,7 @@ const main := fn => {
 		print(0);
 	};
 	
-	for let .Tuple : x, y <- PairEnum.Tuple : (7, 8) => {
+	for let .Tuple : (x, y) <- PairEnum.Tuple : (7, 8) => {
 		print(x + y);
 		
 		break;

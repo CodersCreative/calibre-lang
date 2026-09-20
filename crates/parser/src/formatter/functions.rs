@@ -120,7 +120,7 @@ impl FunctionPreFormat {
             if let Some(val) = &default_value {
                 txt.push_str(&format!(
                     " {}= {}",
-                    if data_type.is_some() { " " } else { ":" },
+                    if data_type.is_some() { "" } else { ":" },
                     val
                 ));
             }
@@ -141,7 +141,7 @@ impl FunctionPreFormat {
             .map(|group| {
                 let names: Vec<String> = group.iter().map(|p| p.name.clone()).collect();
                 let last = group.last().unwrap();
-                let mut txt = names.join(", ");
+                let mut txt = names.join(" ");
 
                 if let Some(dt) = &last.data_type {
                     txt.push_str(&format!(" : {}", dt));

@@ -3,7 +3,7 @@ const steps := 50;
 
 const main := fn => {
 	const half_width : int = width / 2;
-	let mut cells := [(x > half_width) ? 1 : 0 for x in 0..=width];
+	let mut cells := list:<int>[(x > half_width) ? 1 : 0 for x in 0..=width];
 	
 	for step in steps => {
 		let mut line := "";

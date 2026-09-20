@@ -579,6 +579,7 @@ impl ParserInnerType {
             || self.is_dyn_trait()
             || other == self
             || self.impl_name() == other.impl_name()
+            || self.clone().resolve_ffi() == other.clone().resolve_ffi()
     }
 
     #[inline]

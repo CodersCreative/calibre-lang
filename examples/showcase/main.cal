@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Missing Member Optionals
+// TODO Fix - FAILING - NewLine parsing
 import * from data;
 import File from std::fs;
 import Channel from std::async;

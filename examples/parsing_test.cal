@@ -1,3 +1,0 @@
-const main := fn => {
-	print("Hello, World! at " & current_context.path);
-};

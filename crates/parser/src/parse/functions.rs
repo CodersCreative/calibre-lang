@@ -21,7 +21,7 @@ use crate::{
     ast::nodes::AstNode,
     ast::nodes::AstNodeType,
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream, typed_or_untyped_assignment},
+    parse::{AstParser, AstParserErr, TokenStream},
 };
 use chumsky::Parser;
 use chumsky::prelude::*;
@@ -91,9 +91,18 @@ impl<'a> AstParser<'a> for FnParamGroup {
             });
 
         let destructure = DestructurePattern::parser(data.clone())
-            .then(typed_or_untyped_assignment(data.clone()))
+            .then(
+                select! { Token::Colon => () }
+                    .ignore_then(data.data_type.clone())
+                    .or_not(),
+            )
+            .then(
+                choice((select! { Token::Eq => () }, select! { Token::Walrus => () }))
+                    .ignore_then(data.node.clone())
+                    .or_not(),
+            )
             .map_with_span(
-                move |(pattern, (ty, default)), sp| FnParamGroup::Destructure {
+                move |((pattern, ty), default), sp| FnParamGroup::Destructure {
                     span: sp,
                     pattern,
                     data_type: ty,

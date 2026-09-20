@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Async
+// TODO Fix - FAILING - NewLine parsing
 import (Channel, Mutex, WaitGroup) from std::async;
 import Duration from std::thread;
 

@@ -1,3 +1,4 @@
+// TODO Fix - FAILING - Invalid binary op null + 50
 const addtest3 := fn (a b c : int) -> int => {
     print("a " & a);
     print("b " & b);
@@ -8,7 +9,7 @@ const addtest3 := fn (a b c : int) -> int => {
 };
 
 const add3 := fn (a b c : int) -> int => return a + b + c;
-const mul2 := fn (a b : int) -> int => returnb a * b;
+const mul2 := fn (a b : int) -> int => return a * b;
 const TEN := 10;
 
 const main := fn => {

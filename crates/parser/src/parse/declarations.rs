@@ -7,7 +7,7 @@ use crate::parse::StatementData;
 use crate::parse::potential_new_line;
 use crate::{
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream, typed_or_untyped_assignment},
+    parse::{AstParser, AstParserErr, TokenStream},
 };
 use chumsky::error::Rich;
 use chumsky::prelude::*;
@@ -38,8 +38,17 @@ impl<'a> AstParser<'a> for AstDeclaration {
         ))
         .then(select! { Token::Mut => () }.or_not())
         .then(data.dollar_ident.clone())
-        .then(typed_or_untyped_assignment(data))
-        .try_map(|(((var_type, mut_tok), identifier), (data_type, value)), sp| {
+                    .then(
+                select! { Token::Colon => () }
+                    .ignore_then(data.data_type.clone())
+                    .or_not(),
+            )
+            .then(
+                choice((select! { Token::Eq => () }, select! { Token::Walrus => () }))
+                    .ignore_then(data.node.clone())
+                    .or_not(),
+            )
+        .try_map(|((((var_type, mut_tok), identifier),data_type ), value), sp| {
             let var_type = if mut_tok.is_some() {
                 match var_type {
                     VarType::Constant => {

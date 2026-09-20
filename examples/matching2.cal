@@ -1,3 +1,4 @@
+// TODO Fix - FAILING - NewLine parsing
 type Point := struct { x y : int };
 
 const main := fn => {

@@ -502,10 +502,6 @@ impl<'a> AstParser<'a> for MatchArmType {
                     )
                     .then_ignore(select! { Token::RightBracket => () })
                     .map(MatchArmType::StructPattern),
-                // binding
-                VarType::parser(())
-                    .then(data.dollar_ident.clone())
-                    .map(|(var_type, name)| MatchArmType::Let { var_type, name }),
                 // @
                 VarType::parser(())
                     .then(data.dollar_ident.clone())
@@ -518,6 +514,10 @@ impl<'a> AstParser<'a> for MatchArmType {
                     }),
                 // value
                 data.node.clone().map(MatchArmType::Value),
+                // binding
+                VarType::parser(())
+                    .then(data.dollar_ident.clone())
+                    .map(|(var_type, name)| MatchArmType::Let { var_type, name }),
             ))
             .boxed()
         })

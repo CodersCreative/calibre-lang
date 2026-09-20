@@ -1,3 +1,4 @@
+// TODO Fix - FAILING - Stabilize function refs
 import Duration from std::thread;
 
 const custom_wait_and_time := fn(time : int) -> int => {

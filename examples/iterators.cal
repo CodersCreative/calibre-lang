@@ -1,3 +1,4 @@
+// TODO Fix - FAILING - Attempted to return int from a function with bool return type
 type Counter := struct { current end : int };
 
 impl Iter for Counter {
