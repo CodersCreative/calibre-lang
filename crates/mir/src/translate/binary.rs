@@ -10,6 +10,7 @@ use calibre_parser::{
     Span,
     ast::{
         Operator,
+        binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
@@ -66,9 +67,28 @@ impl MirLowering for AstBinary {
         ) {
             Some(x.return_type.clone())
         } else {
-            self.left
-                .type_of(env, scope, span)
-                .or_else(|| self.right.type_of(env, scope, span))
+            let left = self.left.type_of(env, scope, span);
+            let right = self.right.type_of(env, scope, span);
+
+            #[allow(clippy::single_match)]
+            match &self.operator {
+                BinaryOperator::BitAnd => {
+                    if let Some(x) = &left
+                        && let ParserInnerType::Str = &x.data_type
+                    {
+                        return left;
+                    }
+
+                    if let Some(x) = &right
+                        && let ParserInnerType::Str = &x.data_type
+                    {
+                        return right;
+                    }
+                }
+                _ => {}
+            }
+
+            left.or(right)
         }
     }
 }

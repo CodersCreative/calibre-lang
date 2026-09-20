@@ -7,7 +7,7 @@ CallExpression
 */
 
 use crate::{
-    ast::{LirCall, LirIndex, LirLValue, LirLoad, LirMember, LirMove, LirNodeType, LirRef},
+    ast::{LirCall, LirIndex, LirLValue, LirLoad, LirMember, LirMove, LirNodeType},
     environment::LirEnvironment,
     translate::LirLowering,
 };
@@ -59,47 +59,19 @@ impl LirLowering for MirIndex {
 impl LirLowering for MirCall {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        let mut needs_ref_first_arg = false;
         let mut returns_value = true;
 
         let l_caller = env.lower_node(*self.caller);
-        let mut l_args = env.lower_nodes(self.args);
+        let l_args = env.lower_nodes(self.args);
 
         if let LirNodeType::Load(LirLoad { value }) | LirNodeType::Move(LirMove { value }) =
             &l_caller
             && let Some(var) = env.env.symbols.variables.get(value)
-            && let ParserInnerType::Function {
-                parameters,
-                return_type,
-                ..
-            }
-            | ParserInnerType::NativeFunction {
-                parameters,
-                return_type,
-                ..
-            } = &var.data_type.data_type
+            && let ParserInnerType::Function { return_type, .. }
+            | ParserInnerType::NativeFunction { return_type, .. } = &var.data_type.data_type
+            && return_type.is_null()
         {
-            if return_type.is_null() {
-                returns_value = false;
-            }
-
-            if let Some(first) = parameters.first() {
-                needs_ref_first_arg = matches!(first.data_type, ParserInnerType::Ref(_, _))
-            }
-
-            let expected = parameters.len();
-            while l_args.len() > expected {
-                l_args.remove(0);
-            }
-        }
-
-        if needs_ref_first_arg
-            && let Some(first_arg) = l_args.get_mut(0)
-            && matches!(first_arg, LirNodeType::Load(_))
-        {
-            *first_arg = LirNodeType::Ref(LirRef {
-                value: Box::new(std::mem::replace(first_arg, LirNodeType::null())),
-            });
+            returns_value = false;
         }
 
         LirNodeType::Call(LirCall {

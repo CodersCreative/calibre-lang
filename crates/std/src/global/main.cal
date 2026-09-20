@@ -42,7 +42,7 @@ const range := fn (start end : mut int, step : int = 1, inclusive : bool = false
 	return lst;
 };
 
-const fmt := fn (splits inputs : list:<str>) -> str => {
+const fmt := fn (splits : list:<str>, inputs : list:<dyn>) -> str => {
 	let mut txt : str = "";
 	
 	for i in 0..len(splits) => {

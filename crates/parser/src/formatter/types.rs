@@ -530,7 +530,7 @@ impl TypeDefPreFormat {
 
         let multi = format!(
             "struct {{\n{}\n}}",
-            formatter.fmt_txt_with_tab(&multi.trim(), 1, true)
+            formatter.fmt_txt_with_tab(multi.trim(), 1, true)
         );
 
         (single, multi, has_comments)
