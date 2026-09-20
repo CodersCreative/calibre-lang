@@ -28,6 +28,7 @@ impl LirLowering for MirVarDecl {
         }
 
         let val = env.lower_node(*self.value);
+        let is_referenced = env.referenced_identifiers.contains(&self.identifier);
 
         env.add_instr(LirNode::new(
             span,
@@ -35,6 +36,7 @@ impl LirLowering for MirVarDecl {
                 dest: self.identifier,
                 data_type: self.data_type,
                 value: Box::new(val),
+                is_referenced,
             }),
         ));
 
@@ -104,6 +106,7 @@ impl LirLowering for MirScopeDecl {
                     dest: temp,
                     data_type: ParserDataType::auto(span),
                     value: Box::new(lowered),
+                    is_referenced: false,
                 }),
             ));
 
@@ -140,6 +143,7 @@ impl LirLowering for MirFunction {
         let internal_name = env.next_function_label();
 
         let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
+        sub_lowerer.referenced_identifiers = self.body.identifiers_referenced(true, false);
 
         let body_span = self.body.span;
 

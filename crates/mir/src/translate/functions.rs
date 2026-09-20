@@ -9,7 +9,6 @@ use crate::{
     symbols::resolve::ResolutionOptions,
     tags::TagInfo,
     translate::MirLowering,
-    traversal::NodeVisitor,
 };
 use calibre_parser::{
     Span,
@@ -29,6 +28,7 @@ use calibre_parser::{
             literals::{AstString, AstStruct},
             scopes::AstScopeDef,
         },
+        traversal::NodeVisitor,
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };

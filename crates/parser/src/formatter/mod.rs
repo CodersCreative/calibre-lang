@@ -505,6 +505,7 @@ impl Formatter {
         for node in nodes {
             let leading = self.get_potential_comment(&node.span);
             let trailing = self.get_trailing_comment(&node.span);
+
             let formatted = handle_comment!(leading, node.format(self));
             let formatted = formatted.trim_end().trim_end_matches(';').to_string();
             let formatted = if let Some(trailing) = trailing {
@@ -512,6 +513,8 @@ impl Formatter {
             } else {
                 format!("{};", formatted)
             };
+
+            let mut line_added = false;
 
             if !self.range_to_line.is_empty() {
                 let current_line = self
@@ -521,21 +524,21 @@ impl Formatter {
                     .max_by_key(|(offset, _)| *offset)
                     .map(|(_, line)| *line);
 
-                if let (Some(current), Some(last)) = (current_line, last_line) {
-                    if current - last > 1 {
-                        lines.push(format!("\n{}\n", formatted));
-                    } else {
-                        lines.push(format!("{}\n", formatted));
-                    }
-                } else {
-                    lines.push(format!("{}\n", formatted));
+                if let (Some(current), Some(last)) = (current_line, last_line)
+                    && current.abs_diff(last) > 1
+                {
+                    lines.push(format!("\n{}\n", formatted));
+                    line_added = true;
                 }
-                last_line = current_line;
-            } else {
-                if let Some(end) = last_end {
-                    let gap = node.span.from.saturating_sub(end);
 
-                    if gap > 30 {
+                last_line = current_line;
+            }
+
+            if !line_added {
+                if let Some(end) = last_end {
+                    let gap = node.span.from.abs_diff(end);
+
+                    if gap > 10 {
                         lines.push(format!("\n{}\n", formatted));
                     } else {
                         lines.push(format!("{}\n", formatted));
@@ -545,7 +548,7 @@ impl Formatter {
                 }
             }
 
-            last_end = Some(node.span.to);
+            last_end = Some(node.span.from);
         }
 
         lines

@@ -17,6 +17,7 @@ pub mod comparison;
 pub mod ffi;
 pub mod idents;
 pub mod nodes;
+pub mod traversal;
 pub mod types;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

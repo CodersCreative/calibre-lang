@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::sync::atomic::Ordering;
 use tracing::{debug, instrument};
-use ustr::{Ustr, UstrMap};
+use ustr::{Ustr, UstrMap, UstrSet};
 
 use crate::{
     COUNTER,
@@ -104,6 +104,7 @@ pub struct LirEnvironment<'a> {
     pub registry: LirRegistry,
     pub blocks: Vec<LirBlock>,
     pub current_block: BlockId,
+    pub referenced_identifiers: UstrSet,
     pub loop_stack: Vec<(BlockId, BlockId, Option<Ustr>)>,
     pub allow_global_hoist: bool,
 }
@@ -150,6 +151,7 @@ impl<'a> LirEnvironment<'a> {
                 terminator: None,
             }],
             current_block: entry_id,
+            referenced_identifiers: UstrSet::default(),
             loop_stack: vec![],
             allow_global_hoist,
         }

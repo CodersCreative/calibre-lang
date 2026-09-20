@@ -20,14 +20,14 @@ const main := fn => {
     let add_curried := fn (a : int) -> fn (int) -> fn (int) -> int =>
         return fn (b : int) -> fn (int) -> int =>
             return fn (c : int) -> int =>
-                return a + b + c;
+                return addtest3(a, b, c);
 
     print(add_curried(10)(20)(30));
 
     let add_curried := fn (a : int) -> fn (int) -> fn (int) -> int =>
         return fn (b : int) -> fn (int) -> int =>
             return fn (c : int) -> int =>
-                return addtest3(a, b, c);
+                return a + b + c;
 
     print(add_curried(10)(20)(30));
 

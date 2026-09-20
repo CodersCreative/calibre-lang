@@ -43,6 +43,7 @@ impl AlphaRenamable for LirNodeType {
                 dest,
                 value,
                 data_type,
+                is_referenced: _,
             }) => {
                 let new_name = if !state.dont_change_local {
                     let name = Ustr::from(&format!("{}->{}", dest, fastrand::u32(0..u32::MAX)));

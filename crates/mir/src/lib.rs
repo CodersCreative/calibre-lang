@@ -13,5 +13,4 @@ pub mod symbols;
 pub mod tags;
 pub mod testing;
 pub mod translate;
-pub mod traversal;
 pub mod typing;

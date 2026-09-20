@@ -97,4 +97,3 @@ const main := fn => {
 	
 	print("concurrent list => " & concurrent);
 };
-// TODO Fix Spawn Iters

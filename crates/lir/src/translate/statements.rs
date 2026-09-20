@@ -45,6 +45,7 @@ impl LirLowering for MirAssignment {
                         dest: ptr_tmp,
                         data_type: ParserDataType::auto(ident_span),
                         value: Box::new(ptr_expr),
+                        is_referenced: false,
                     }),
                 ));
                 let ptr_load = LirNodeType::Load(LirLoad { value: ptr_tmp });
@@ -64,6 +65,7 @@ impl LirLowering for MirAssignment {
                         dest: base_tmp,
                         data_type: ParserDataType::auto(ident_span),
                         value: Box::new(base_expr),
+                        is_referenced: false,
                     }),
                 ));
                 let base_load = LirNodeType::Load(LirLoad { value: base_tmp });
@@ -93,6 +95,7 @@ impl LirLowering for MirAssignment {
                             dest: base_tmp,
                             data_type: ParserDataType::auto(ident_span),
                             value: Box::new(base_expr),
+                            is_referenced: false,
                         }),
                     ));
                     LirNodeType::Load(LirLoad { value: base_tmp })
@@ -125,6 +128,7 @@ impl LirLowering for MirAssignment {
                 dest: temp,
                 data_type: ParserDataType::auto(ident_span),
                 value: Box::new(old_expr),
+                is_referenced: false,
             }),
         ));
 

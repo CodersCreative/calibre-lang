@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Missing "inner" on Null
+// TODO Fix - FAILING - Unable to find WaitGroup.wait
 import (Channel, Mutex, WaitGroup) from std::async;
 
 const main := fn => {

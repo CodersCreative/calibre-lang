@@ -35,6 +35,11 @@ impl VMLowering for LirDeclare {
 
             env.lower_node_to(*self.value, target, span);
             env.map.insert(self.dest, target);
+
+            if self.is_referenced {
+                let name = env.add_string(self.dest);
+                env.emit(VMInstruction::StoreVar { name, src: target }, span);
+            }
         } else {
             let reg = env.lower_node(*self.value, span);
             let name = env.add_string(self.dest);

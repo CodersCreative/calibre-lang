@@ -195,6 +195,7 @@ pub struct LirDeclare {
     pub dest: Ustr,
     pub value: Box<LirNodeType>,
     pub data_type: ParserDataType,
+    pub is_referenced: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
@@ -343,7 +344,14 @@ impl Display for LirNodeType {
                     dest,
                     value,
                     data_type,
+                    is_referenced: false,
                 }) => format!("let {} : {} = {}", dest, data_type, value),
+                Self::Declare(LirDeclare {
+                    dest,
+                    value,
+                    data_type,
+                    is_referenced: _,
+                }) => format!("store {} : {} = {}", dest, data_type, value),
                 Self::Assign(LirAssign { dest, value }) => format!("{} := {}", dest, value),
                 Self::ExternFunction(LirExtern {
                     abi,

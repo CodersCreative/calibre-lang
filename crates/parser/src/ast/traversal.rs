@@ -1,4 +1,4 @@
-use calibre_parser::ast::{
+use crate::ast::{
     ObjectType,
     nodes::{
         AstNode, AstNodeType,

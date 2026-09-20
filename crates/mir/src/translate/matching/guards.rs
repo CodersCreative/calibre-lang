@@ -1,6 +1,9 @@
 use super::patterns::BindingDeclaration;
-use crate::{environment::MiddleEnvironment, traversal::NodeVisitor};
-use calibre_parser::ast::nodes::{AstNode, AstNodeType};
+use crate::environment::MiddleEnvironment;
+use calibre_parser::ast::{
+    nodes::{AstNode, AstNodeType},
+    traversal::NodeVisitor,
+};
 use ustr::Ustr;
 
 struct GuardRewriter<'a> {
