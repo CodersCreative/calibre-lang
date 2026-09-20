@@ -321,8 +321,7 @@ impl NativeFunction for MutexSet {
         let m = resolve_mutex(env, &pop_or_null(&mut args))?;
 
         let guard = m.lock();
-        guard.set_value(value);
-        Ok(RuntimeValue::Null)
+        Ok(guard.set_value(value))
     }
 }
 

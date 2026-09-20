@@ -363,6 +363,7 @@ pub enum VMInstruction {
         name: u16,
     },
     StoreVar {
+        dst: Option<Reg>,
         name: u16,
         src: Reg,
     },
@@ -457,6 +458,7 @@ pub enum VMInstruction {
         member: u16,
     },
     SetMember {
+        dst: Reg,
         target: Reg,
         member: u16,
         value: Reg,
@@ -467,6 +469,7 @@ pub enum VMInstruction {
         index: Reg,
     },
     SetIndex {
+        dst: Reg,
         target: Reg,
         index: Reg,
         value: Reg,
@@ -480,6 +483,7 @@ pub enum VMInstruction {
         value: Reg,
     },
     SetRef {
+        dst: Reg,
         target: Reg,
         value: Reg,
     },
@@ -502,7 +506,8 @@ impl Display for VMInstruction {
             VMInstruction::LoadVar { dst, name } => write!(f, "%r{dst} = LOAD {name}"),
             VMInstruction::MoveVar { dst, name } => write!(f, "%r{dst} = MOVE {name}"),
             VMInstruction::DropVar { name } => write!(f, "DROP {name}"),
-            VMInstruction::StoreVar { name, src } => write!(f, "STORE {name} <- %r{src}"),
+            VMInstruction::StoreVar { name, src, dst : Some(dst) } => write!(f, "%r{dst} = STORE {name} <- %r{src}"),
+            VMInstruction::StoreVar { name, src, dst : _ } => write!(f, "STORE {name} <- %r{src}"),
             VMInstruction::LoadVarRef { dst, name } => write!(f, "%r{dst} = VARREF {name}"),
             VMInstruction::LoadRegRef { dst, src } => write!(f, "%r{dst} = REGREF %r{src}"),
             VMInstruction::Copy { dst, src } => write!(f, "%r{dst} = %r{src}"),
@@ -590,25 +595,27 @@ impl Display for VMInstruction {
                 write!(f, "%r{dst} = LOADMEMBER %r{value}.{member}")
             }
             VMInstruction::SetMember {
+                dst,
                 target,
                 member,
                 value,
             } => {
-                write!(f, "SETMEMBER %r{target}.{member} = %r{value}")
+                write!(f, "%r{dst} = SETMEMBER %r{target}.{member} = %r{value}")
             }
             VMInstruction::Index { dst, value, index } => {
                 write!(f, "%r{dst} = INDEX %r{value}[%r{index}]")
             }
             VMInstruction::SetIndex {
+                dst,
                 target,
                 index,
                 value,
             } => {
-                write!(f, "SETINDEX %r{target}[%r{index}] = %r{value}")
+                write!(f, "%r{dst} = SETINDEX %r{target}[%r{index}] = %r{value}")
             }
             VMInstruction::Ref { dst, value } => write!(f, "%r{dst} = REF %r{value}"),
             VMInstruction::Deref { dst, value } => write!(f, "%r{dst} = DEREF %r{value}"),
-            VMInstruction::SetRef { target, value } => write!(f, "SETREF %r{target} = %r{value}"),
+            VMInstruction::SetRef { dst, target, value } => write!(f, "%r{dst} = SETREF %r{target} = %r{value}"),
             VMInstruction::Jump(id) => write!(f, "JMP BLK {}", id.0),
             VMInstruction::Branch {
                 cond,

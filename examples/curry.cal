@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Invalid binary op null + 50
 const addtest3 := fn (a b c : int) -> int => {
     print("a " & a);
     print("b " & b);

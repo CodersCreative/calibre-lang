@@ -485,16 +485,18 @@ impl VM {
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_value(&mut self, reg: Reg, value: RuntimeValue) {
+    pub(crate) fn set_reg_value(&mut self, reg: Reg, value: RuntimeValue) -> RuntimeValue{
         if let RuntimeValue::Null = value {
             let frame = self.current_frame();
             let idx = reg as usize;
             if idx < frame.reg_count && self.reg_arena[frame.reg_start + idx].is_null() {
-                return;
+                return RuntimeValue::Null;
             }
         }
-        let _ = self.replace_reg_value(reg, value);
+
+        let old = self.replace_reg_value(reg, value);
         self.current_frame_mut().member_sources.remove(&reg);
+        old
     }
 
     pub(crate) fn set_reg_value_in_frame(
@@ -502,15 +504,19 @@ impl VM {
         frame_idx: usize,
         reg: Reg,
         value: RuntimeValue,
-    ) {
+    ) -> RuntimeValue {
         if let Some(frame) = self.frames.get_mut(frame_idx) {
             let idx = reg as usize;
             if idx < frame.reg_count {
                 let pos = frame.reg_start + idx;
-                self.reg_arena[pos] = value;
+
+                let old = std::mem::replace(&mut self.reg_arena[pos], value);
                 frame.member_sources.remove(&reg);
+                return old
             }
         }
+
+        RuntimeValue::Null
     }
 
     #[inline(always)]

@@ -359,9 +359,10 @@ impl MutexInner {
         unsafe { (*self.value.get()).clone() }
     }
 
-    fn set_value(&self, value: RuntimeValue) {
+    fn set_value(&self, value: RuntimeValue) -> RuntimeValue {
         unsafe {
-            *self.value.get() = value;
+            let ptr = self.value.get();
+            std::ptr::replace(ptr, value)
         }
     }
 }
@@ -377,8 +378,8 @@ impl MutexGuardInner {
         self.inner.get_clone()
     }
 
-    pub fn set_value(&self, value: RuntimeValue) {
-        self.inner.set_value(value);
+    pub fn set_value(&self, value: RuntimeValue) -> RuntimeValue {
+        self.inner.set_value(value)
     }
 }
 

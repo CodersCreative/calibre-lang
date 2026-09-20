@@ -8,6 +8,7 @@ use calibre_parser::UstrIdentifiersUsed;
 use ustr::{Ustr, UstrSet};
 
 impl UstrIdentifiersUsed for MiddleNode {
+    /// I should probably mention that this INCLUDES identifiers used in closures within this function.
     fn identifiers_used(&self) -> Vec<&Ustr> {
         match &self.node_type {
             MiddleNodeType::Break(MirBreak { value: None, .. })
@@ -130,7 +131,7 @@ impl UstrIdentifiersUsed for MiddleNode {
                 amt.append(&mut index.identifiers_used());
                 amt
             }
-            MiddleNodeType::FunctionDeclaration(MirFunction { .. }) => Vec::new(),
+            MiddleNodeType::FunctionDeclaration(MirFunction { body, ..}) => body.identifiers_used(),
             MiddleNodeType::LoopDeclaration(MirLoop { body, .. }) => body.identifiers_used(),
             MiddleNodeType::Conditional(MirConditional {
                 comparison,
@@ -289,8 +290,10 @@ impl MiddleNode {
             MiddleNodeType::FunctionDeclaration(MirFunction { .. }) if !include_functions => {
                 UstrSet::default()
             }
-            MiddleNodeType::FunctionDeclaration(MirFunction { body, .. }) => {
-                body.identifiers_declared(include_functions)
+            MiddleNodeType::FunctionDeclaration(MirFunction { parameters,body, .. }) => {
+                let mut declared = body.identifiers_declared(include_functions);
+                declared.extend(parameters.iter().map(|x| x.0));
+                declared
             }
             MiddleNodeType::Conditional(MirConditional {
                 comparison,
