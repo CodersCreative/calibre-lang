@@ -3,7 +3,9 @@ use crate::{
     native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
     value::{GcMap, GcVec},
 };
-use calibre_parser::ast::{idents::ParserText, nodes::binary::AsFailureMode};
+use calibre_parser::ast::{
+    comparison::BooleanOperator, idents::ParserText, nodes::binary::AsFailureMode,
+};
 use wasm_sync::Mutex;
 
 impl VM {
@@ -572,7 +574,9 @@ impl VM {
                     },
                 );
 
-                if let Some(old) = old && let Some(dst) = dst {
+                if let Some(old) = old
+                    && let Some(dst) = dst
+                {
                     self.set_reg_value(*dst, old);
                 }
             }
@@ -696,8 +700,19 @@ impl VM {
                 left,
                 right,
             } => {
-                let right = self.resolve_operand_value(self.get_reg_value(*right).clone())?;
                 let left = self.resolve_operand_value(self.get_reg_value(*left).clone())?;
+
+                if let RuntimeValue::Bool(x) = &left {
+                    if &BooleanOperator::And == op && !*x {
+                        self.set_reg_value(*dst, RuntimeValue::Bool(false));
+                        return Ok(TerminateValue::None);
+                    } else if &BooleanOperator::Or == op && *x {
+                        self.set_reg_value(*dst, RuntimeValue::Bool(true));
+                        return Ok(TerminateValue::None);
+                    }
+                }
+
+                let right = self.resolve_operand_value(self.get_reg_value(*right).clone())?;
                 self.set_reg_value(*dst, boolean(op, left, right)?);
             }
             VMInstruction::Range {
@@ -901,6 +916,7 @@ impl VM {
 
                 let value =
                     self.run_function_from_regs(func, args, Self::empty_captures(), dst.is_some())?;
+
                 if let Some(dst) = dst {
                     self.set_reg_value(*dst, value);
                 }
@@ -1328,7 +1344,9 @@ impl VM {
                         }
                     }
                 };
+
                 self.set_reg_value(*dst, val);
+
                 match member_source {
                     Some((parent, field)) => {
                         self.current_frame_mut()
@@ -1456,9 +1474,7 @@ impl VM {
                                     self.variables
                                         .insert(ref_name, RuntimeValue::Aggregate(name, updated))
                                 }
-                                RuntimeValue::List(_list) => {
-                                    self.variables.insert(ref_name, value)
-                                }
+                                RuntimeValue::List(_list) => self.variables.insert(ref_name, value),
                                 RuntimeValue::Generator { .. } => {
                                     self.variables.insert(ref_name, update_generator(current)?)
                                 }
@@ -1468,7 +1484,7 @@ impl VM {
                                     });
                                 }
                             };
-                            
+
                             if let Some(old) = old {
                                 let _ = self.set_reg_value(*dst, old);
                             }
@@ -1491,16 +1507,12 @@ impl VM {
                                 }
                                 RuntimeValue::Aggregate(name, map) => {
                                     let updated = update_aggregate(&name, map)?;
-                                    self
-                                        .variables
+                                    self.variables
                                         .set_by_id(id, RuntimeValue::Aggregate(name, updated))
                                 }
-                                RuntimeValue::List(_list) => {
-                                    self.variables.set_by_id(id, value)
-                                }
+                                RuntimeValue::List(_list) => self.variables.set_by_id(id, value),
                                 RuntimeValue::Generator { .. } => {
-                                    
-                                        self.variables.set_by_id(id, update_generator(current)?)
+                                    self.variables.set_by_id(id, update_generator(current)?)
                                 }
                                 other => {
                                     return Err(RuntimeError::ExpectedGeneratorFound {
@@ -1583,9 +1595,10 @@ impl VM {
                             let updated = update_aggregate(&name, map)?;
                             let member_source =
                                 self.current_frame().member_sources.get(target).cloned();
-                            let old = self.set_reg_value(*target, RuntimeValue::Aggregate(name, updated));
+                            let old =
+                                self.set_reg_value(*target, RuntimeValue::Aggregate(name, updated));
                             let _ = self.set_reg_value(*dst, old);
-                            
+
                             if let Some(source) = member_source {
                                 self.current_frame_mut()
                                     .member_sources
@@ -1596,7 +1609,7 @@ impl VM {
                                 *target,
                                 self.frames.len().saturating_sub(1),
                             )?;
-                            
+
                             handled = true;
                             break;
                         }
@@ -1649,7 +1662,7 @@ impl VM {
                         RuntimeValue::Int(i) if *i >= 0 => Some(*i as usize),
                         _ => None,
                     };
-                    
+
                     if let Some(idx) = idx {
                         let out = list.as_ref().0.get(idx).cloned();
                         let out = out.unwrap_or_default();

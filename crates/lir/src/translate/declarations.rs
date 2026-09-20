@@ -120,12 +120,17 @@ impl LirLowering for MirFunction {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         let referenced_names = self.body.identifiers_referenced(true, false);
         let mut referenced_params = 0;
-        let param_names: UstrSet = self.parameters.iter().enumerate().map(|(i, (name, _, _))| {
-            if referenced_names.contains(name) {
-                referenced_params |= 1 << i;
-            }
-            *name
-        }).collect();
+        let param_names: UstrSet = self
+            .parameters
+            .iter()
+            .enumerate()
+            .map(|(i, (name, _, _))| {
+                if referenced_names.contains(name) {
+                    referenced_params |= 1 << i;
+                }
+                *name
+            })
+            .collect();
 
         let captures: Vec<(Ustr, ParserDataType)> = self
             .body

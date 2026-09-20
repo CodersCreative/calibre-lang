@@ -131,7 +131,9 @@ impl UstrIdentifiersUsed for MiddleNode {
                 amt.append(&mut index.identifiers_used());
                 amt
             }
-            MiddleNodeType::FunctionDeclaration(MirFunction { body, ..}) => body.identifiers_used(),
+            MiddleNodeType::FunctionDeclaration(MirFunction { body, .. }) => {
+                body.identifiers_used()
+            }
             MiddleNodeType::LoopDeclaration(MirLoop { body, .. }) => body.identifiers_used(),
             MiddleNodeType::Conditional(MirConditional {
                 comparison,
@@ -290,7 +292,9 @@ impl MiddleNode {
             MiddleNodeType::FunctionDeclaration(MirFunction { .. }) if !include_functions => {
                 UstrSet::default()
             }
-            MiddleNodeType::FunctionDeclaration(MirFunction { parameters,body, .. }) => {
+            MiddleNodeType::FunctionDeclaration(MirFunction {
+                parameters, body, ..
+            }) => {
                 let mut declared = body.identifiers_declared(include_functions);
                 declared.extend(parameters.iter().map(|x| x.0));
                 declared

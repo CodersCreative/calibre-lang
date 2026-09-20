@@ -38,12 +38,26 @@ impl VMLowering for LirDeclare {
 
             if self.is_referenced {
                 let name = env.add_string(self.dest);
-                env.emit(VMInstruction::StoreVar { dst : None, name, src: target }, span);
+                env.emit(
+                    VMInstruction::StoreVar {
+                        dst: None,
+                        name,
+                        src: target,
+                    },
+                    span,
+                );
             }
         } else {
             let reg = env.lower_node(*self.value, span);
             let name = env.add_string(self.dest);
-            env.emit(VMInstruction::StoreVar { dst : None, name, src: reg }, span);
+            env.emit(
+                VMInstruction::StoreVar {
+                    dst: None,
+                    name,
+                    src: reg,
+                },
+                span,
+            );
         }
     }
 }
@@ -71,7 +85,7 @@ impl VMLowering for LirExtern {
 impl VMLowering for LirAssign {
     #[inline(always)]
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
-        let dst= env.alloc_reg();
+        let dst = env.alloc_reg();
         match self.dest {
             LirLValue::Var(dest) => {
                 let name_idx = env.add_string(dest);
@@ -83,7 +97,7 @@ impl VMLowering for LirAssign {
 
                     env.emit(
                         VMInstruction::StoreVar {
-                            dst : Some(dst),
+                            dst: Some(dst),
                             name: name_idx,
                             src: target,
                         },
@@ -93,7 +107,7 @@ impl VMLowering for LirAssign {
                     let reg = env.lower_node(*self.value, span);
                     env.emit(
                         VMInstruction::StoreVar {
-                            dst : Some(dst),
+                            dst: Some(dst),
                             name: name_idx,
                             src: reg,
                         },
@@ -197,7 +211,7 @@ impl VMLowering for LirAssign {
                                 let base_reg = env.lower_node(other_base, span);
                                 env.emit(
                                     VMInstruction::SetIndex {
-                                    dst,
+                                        dst,
 
                                         target: base_reg,
                                         index: index_reg,
@@ -236,7 +250,7 @@ impl VMLowering for LirAssign {
     ) where
         Self: Sized,
     {
-        let dst= env.alloc_reg();
+        let dst = env.alloc_reg();
         match self.dest {
             LirLValue::Var(dest) => {
                 let name_idx = env.add_string(dest);
@@ -248,7 +262,7 @@ impl VMLowering for LirAssign {
 
                     env.emit(
                         VMInstruction::StoreVar {
-                            dst : None,
+                            dst: None,
                             name: name_idx,
                             src: target,
                         },
@@ -258,7 +272,7 @@ impl VMLowering for LirAssign {
                     let reg = env.lower_node(*self.value, span);
                     env.emit(
                         VMInstruction::StoreVar {
-                            dst : None,
+                            dst: None,
                             name: name_idx,
                             src: reg,
                         },

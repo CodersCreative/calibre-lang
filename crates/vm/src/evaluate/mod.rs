@@ -125,7 +125,9 @@ impl VM {
                     | RuntimeValue::RegRef { .. } => {
                         self.write_back_runtime_value(current, value);
                     }
-                    _ => {let _ = self.set_reg_value_in_frame(frame, reg, value);},
+                    _ => {
+                        let _ = self.set_reg_value_in_frame(frame, reg, value);
+                    }
                 }
             }
             _ => {}

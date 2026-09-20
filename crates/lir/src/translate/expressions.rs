@@ -9,18 +9,12 @@ IsExpression
 */
 
 use crate::{
-    ast::{
-        LirAs, LirBinary, LirBoolean, LirComparison, LirIs, LirLiteral,  LirNodeType,
-        
-    },
+    ast::{LirAs, LirBinary, LirBoolean, LirComparison, LirIs, LirLiteral, LirNodeType},
     environment::LirEnvironment,
     translate::LirLowering,
 };
 use calibre_mir::ast::{MirAs, MirBinary, MirBoolean, MirComparison, MirIs, MirNeg};
-use calibre_parser::{
-    Span,
-    ast::{binary::BinaryOperator},
-};
+use calibre_parser::{Span, ast::binary::BinaryOperator};
 
 impl LirLowering for MirBinary {
     #[inline(always)]

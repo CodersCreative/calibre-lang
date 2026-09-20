@@ -506,8 +506,12 @@ impl Display for VMInstruction {
             VMInstruction::LoadVar { dst, name } => write!(f, "%r{dst} = LOAD {name}"),
             VMInstruction::MoveVar { dst, name } => write!(f, "%r{dst} = MOVE {name}"),
             VMInstruction::DropVar { name } => write!(f, "DROP {name}"),
-            VMInstruction::StoreVar { name, src, dst : Some(dst) } => write!(f, "%r{dst} = STORE {name} <- %r{src}"),
-            VMInstruction::StoreVar { name, src, dst : _ } => write!(f, "STORE {name} <- %r{src}"),
+            VMInstruction::StoreVar {
+                name,
+                src,
+                dst: Some(dst),
+            } => write!(f, "%r{dst} = STORE {name} <- %r{src}"),
+            VMInstruction::StoreVar { name, src, dst: _ } => write!(f, "STORE {name} <- %r{src}"),
             VMInstruction::LoadVarRef { dst, name } => write!(f, "%r{dst} = VARREF {name}"),
             VMInstruction::LoadRegRef { dst, src } => write!(f, "%r{dst} = REGREF %r{src}"),
             VMInstruction::Copy { dst, src } => write!(f, "%r{dst} = %r{src}"),
@@ -615,7 +619,9 @@ impl Display for VMInstruction {
             }
             VMInstruction::Ref { dst, value } => write!(f, "%r{dst} = REF %r{value}"),
             VMInstruction::Deref { dst, value } => write!(f, "%r{dst} = DEREF %r{value}"),
-            VMInstruction::SetRef { dst, target, value } => write!(f, "%r{dst} = SETREF %r{target} = %r{value}"),
+            VMInstruction::SetRef { dst, target, value } => {
+                write!(f, "%r{dst} = SETREF %r{target} = %r{value}")
+            }
             VMInstruction::Jump(id) => write!(f, "JMP BLK {}", id.0),
             VMInstruction::Branch {
                 cond,

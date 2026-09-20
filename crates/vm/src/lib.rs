@@ -485,7 +485,7 @@ impl VM {
     }
 
     #[inline(always)]
-    pub(crate) fn set_reg_value(&mut self, reg: Reg, value: RuntimeValue) -> RuntimeValue{
+    pub(crate) fn set_reg_value(&mut self, reg: Reg, value: RuntimeValue) -> RuntimeValue {
         if let RuntimeValue::Null = value {
             let frame = self.current_frame();
             let idx = reg as usize;
@@ -512,7 +512,7 @@ impl VM {
 
                 let old = std::mem::replace(&mut self.reg_arena[pos], value);
                 frame.member_sources.remove(&reg);
-                return old
+                return old;
             }
         }
 

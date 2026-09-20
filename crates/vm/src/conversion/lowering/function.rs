@@ -16,7 +16,7 @@ impl VMFunction {
             blocks: blocks.into_boxed_slice(),
             pure: false,
             memo: false,
-            referenced_params : 0,
+            referenced_params: 0,
             memo_params: 0,
         };
 
@@ -44,7 +44,7 @@ impl VMFunction {
             pure: false,
             memo: false,
             memo_params: 0,
-            referenced_params : 0,
+            referenced_params: 0,
         }
     }
 }
