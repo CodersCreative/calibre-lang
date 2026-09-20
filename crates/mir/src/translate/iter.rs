@@ -1,5 +1,10 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirList}, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId, symbols::resolve::ResolutionOptions, translate::MirLowering,
+    ast::{MiddleNode, MiddleNodeType, MirList},
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    scoping::ScopeId,
+    symbols::resolve::ResolutionOptions,
+    translate::MirLowering,
 };
 use calibre_parser::{
     Span,
@@ -248,11 +253,21 @@ impl MirLowering for AstIter {
             env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?
         };
 
-
         // Basically optimizing [...; ...] since I recently removed it and [... for ...] is the closest alternative
-        if self.conditionals.is_empty() && self.until.is_none() && !self.spawned && let LoopType::While(condition) = *self.loop_type.clone() && let AstNodeType::IntLiteral(times) = condition.node_type {
+        if self.conditionals.is_empty()
+            && self.until.is_none()
+            && !self.spawned
+            && let LoopType::While(condition) = *self.loop_type.clone()
+            && let AstNodeType::IntLiteral(times) = condition.node_type
+        {
             let map = self.map.lower(env, scope, span)?;
-            return Ok(MiddleNode { node_type: MiddleNodeType::ListLiteral(MirList { data_type: resolved_data_type, values: (0..times.value.value).map(|_| map.clone()).collect() }), span })
+            return Ok(MiddleNode {
+                node_type: MiddleNodeType::ListLiteral(MirList {
+                    data_type: resolved_data_type,
+                    values: (0..times.value.value).map(|_| map.clone()).collect(),
+                }),
+                span,
+            });
         }
 
         if self.spawned {

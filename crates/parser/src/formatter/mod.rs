@@ -12,6 +12,7 @@ use crate::{
         types::{ParserDataType, ParserInnerType},
     },
 };
+use rustc_hash::FxHashMap;
 use std::error::Error;
 
 pub mod access;
@@ -188,6 +189,8 @@ pub enum CommentKind {
 
 pub struct Formatter {
     pub comments: Vec<Comment>,
+    // Contains the starting range from which a certain line number applies to
+    pub range_to_line: FxHashMap<usize, usize>,
     pub max_width: usize,
     pub max_values: usize,
     pub tab: Tab,
@@ -197,6 +200,7 @@ impl Default for Formatter {
     fn default() -> Self {
         Self {
             comments: Vec::new(),
+            range_to_line: FxHashMap::default(),
             max_width: 100,
             max_values: 3,
             tab: Tab::default(),
@@ -326,7 +330,7 @@ impl Formatter {
         text: &str,
         range: Option<Span>,
     ) -> Result<String, Box<dyn Error>> {
-        self.comments = Self::extract_comments(text);
+        (self.comments, self.range_to_line) = Self::extract_comments_and_lines(text);
         let mut parser = Parser::default();
         let ast = parser.produce_ast(text);
 
@@ -378,7 +382,7 @@ impl Formatter {
         text.get(span.to_range()).unwrap_or("").to_string()
     }
 
-    fn extract_comments(text: &str) -> Vec<Comment> {
+    fn extract_comments_and_lines(text: &str) -> (Vec<Comment>, FxHashMap<usize, usize>) {
         #[derive(Copy, Clone, PartialEq, Eq)]
         enum State {
             Normal,
@@ -388,9 +392,13 @@ impl Formatter {
 
         let chars: Vec<char> = text.chars().collect();
         let mut comments = Vec::new();
-        let mut i = 0usize;
+        let mut i = 0;
         let mut state = State::Normal;
         let mut escaped = false;
+
+        let mut range_to_line = FxHashMap::default();
+        let mut line = 1;
+        range_to_line.insert(0, line);
 
         while i < chars.len() {
             let c = chars[i];
@@ -460,6 +468,9 @@ impl Formatter {
                             span: Span::new(start_offset, end_offset),
                         });
                         continue;
+                    } else if c == '\n' {
+                        line += 1;
+                        range_to_line.insert(i + 1, line);
                     }
                 }
             }
@@ -467,7 +478,7 @@ impl Formatter {
             i += 1;
         }
 
-        comments
+        (comments, range_to_line)
     }
 
     pub fn should_wrap(&self, text: &str) -> bool {
@@ -487,6 +498,7 @@ impl Formatter {
     }
 
     pub(crate) fn get_scope_lines(&mut self, nodes: &[AstNode]) -> Vec<String> {
+        let mut last_line: Option<usize> = None;
         let mut last_end: Option<usize> = None;
         let mut lines = Vec::new();
 
@@ -501,17 +513,36 @@ impl Formatter {
                 format!("{};", formatted)
             };
 
-            // TODO Find a more certain way of finding out if theres a new line
-            if let Some(end) = last_end {
-                let gap = node.span.from.saturating_sub(end);
+            if !self.range_to_line.is_empty() {
+                let current_line = self
+                    .range_to_line
+                    .iter()
+                    .filter(|(offset, _)| *offset <= &node.span.from)
+                    .max_by_key(|(offset, _)| *offset)
+                    .map(|(_, line)| *line);
 
-                if gap > 50 {
-                    lines.push(format!("\n{}\n", formatted));
+                if let (Some(current), Some(last)) = (current_line, last_line) {
+                    if current - last > 1 {
+                        lines.push(format!("\n{}\n", formatted));
+                    } else {
+                        lines.push(format!("{}\n", formatted));
+                    }
                 } else {
                     lines.push(format!("{}\n", formatted));
                 }
+                last_line = current_line;
             } else {
-                lines.push(format!("{}\n", formatted));
+                if let Some(end) = last_end {
+                    let gap = node.span.from.saturating_sub(end);
+
+                    if gap > 30 {
+                        lines.push(format!("\n{}\n", formatted));
+                    } else {
+                        lines.push(format!("{}\n", formatted));
+                    }
+                } else {
+                    lines.push(format!("{}\n", formatted));
+                }
             }
 
             last_end = Some(node.span.to);
@@ -828,72 +859,3 @@ impl Formatter {
         }
     }
 }
-
-/*#[cfg(test)]
-mod tests {
-    use crate::{Parser, formatter::Formatter};
-
-    fn parse_has_no_errors(src: &str) -> bool {
-        let mut parser = Parser::default();
-        let _ = parser.produce_ast(src);
-        parser.errors.is_empty()
-    }
-
-    #[test]
-    fn tuple_literal_uses_parens_inside_other_expressions() {
-        let src = "let v = consume((1, 2));";
-        let mut formatter = Formatter::default();
-        let out = formatter.start_format(src, None).expect("format");
-        assert!(out.contains("consume((1, 2))"), "{out}");
-        assert!(parse_has_no_errors(&out), "{out}");
-    }
-
-    #[test]
-    fn tuple_literal_roundtrips_for_assignment_rhs() {
-        let src = "let tpl = (1, 2); tpl = (3, 4);";
-        let mut formatter = Formatter::default();
-        let out = formatter.start_format(src, None).expect("format");
-        assert!(out.contains("let tpl := (1, 2);"), "{out}");
-        assert!(out.contains("tpl = (3, 4);"), "{out}");
-        assert!(parse_has_no_errors(&out), "{out}");
-    }
-
-    #[test]
-    fn preserves_stacked_comments_before_statement() {
-        let src = "// one\n// two\nlet x = 1;";
-        let mut formatter = Formatter::default();
-        let out = formatter.start_format(src, None).expect("format");
-        assert!(out.contains("one"), "{out}");
-        assert!(out.contains("two"), "{out}");
-        assert!(out.contains("let x := 1;"), "{out}");
-        assert!(parse_has_no_errors(&out), "{out}");
-    }
-
-    #[test]
-    fn pow_expression_is_not_rewritten_as_deref() {
-        let src = "const bmi = fn (mass height : float) -> float => mass / height ** 2;";
-        let mut formatter = Formatter::default();
-        let out = formatter.start_format(src, None).expect("format");
-        assert!(out.contains("height ** 2"), "{out}");
-        assert!(!out.contains("* *2"), "{out}");
-        assert!(parse_has_no_errors(&out), "{out}");
-    }
-
-    #[test]
-    fn function_param_destructure_roundtrips() {
-        let src = "const sum_pair = fn ((a, b)) => a + b;";
-        let mut formatter = Formatter::default();
-        let out = formatter.start_format(src, None).expect("format");
-        assert!(out.contains("fn ((a, b))"), "{out}");
-        assert!(parse_has_no_errors(&out), "{out}");
-    }
-
-    #[test]
-    fn result_type_preserves_err_ok_order() {
-        let src = "const f = fn () -> str!int => 1;";
-        let mut formatter = Formatter::default();
-        let out = formatter.start_format(src, None).expect("format");
-        assert!(out.contains("-> str!int"), "{out}");
-        assert!(parse_has_no_errors(&out), "{out}");
-    }
-}*/
