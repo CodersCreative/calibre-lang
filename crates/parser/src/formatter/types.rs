@@ -34,7 +34,7 @@ impl AstFormatting for AstImpl {
                         format!("{};", formatter.fmt_txt_with_tab(&temp, 1, true))
                     })
                     .collect::<Vec<_>>()
-                    .join("\n")
+                    .join("\n\n")
             ));
         } else {
             txt.push('}');
@@ -68,7 +68,7 @@ impl AstFormatting for AstImplTrait {
                         format!("{};", formatter.fmt_txt_with_tab(&temp, 1, true))
                     })
                     .collect::<Vec<_>>()
-                    .join("\n")
+                    .join("\n\n")
             ));
         } else {
             txt.push('}');
@@ -133,7 +133,7 @@ impl AstFormatting for AstTrait {
                         format!("{};", formatter.fmt_txt_with_tab(&line, 1, true))
                     })
                     .collect::<Vec<_>>()
-                    .join("\n")
+                    .join("\n\n")
             ));
         } else {
             txt.push('}');
@@ -530,7 +530,7 @@ impl TypeDefPreFormat {
 
         let multi = format!(
             "struct {{\n{}\n}}",
-            formatter.fmt_txt_with_tab(&multi, 1, false)
+            formatter.fmt_txt_with_tab(&multi.trim(), 1, true)
         );
 
         (single, multi, has_comments)
@@ -707,7 +707,7 @@ impl Overload {
                     )
                 })
                 .collect::<Vec<_>>()
-                .join("\n")
+                .join("\n\n")
         )
     }
 }
