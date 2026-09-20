@@ -1,0 +1,2 @@
+let cut := if idx < 0 => emit 0 else => emit if idx > len(self) => emit len(self) else => emit idx;
+return tuple(self.slice(0, cut), self.slice(cut, len(self)));

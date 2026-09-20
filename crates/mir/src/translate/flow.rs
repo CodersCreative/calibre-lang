@@ -37,7 +37,16 @@ impl MirLowering for AstEmit {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         match self {
-            AstEmit::Channel { channel, value } => {
+            AstEmit::Channel {
+                left,
+                right,
+                left_channel,
+            } => {
+                let (channel, value) = if left_channel {
+                    (left, right)
+                } else {
+                    (right, left)
+                };
                 if !env.context.type_check {
                     let channel_ty = channel.type_of(env, scope, span);
                     let expected = env.resolve_to_data_type(scope, &"Channel").ok();

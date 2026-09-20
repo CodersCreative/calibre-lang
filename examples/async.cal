@@ -11,7 +11,7 @@ const worker := fn (id : int, jobs : &Channel:<int>, results : &mut Channel:<int
 		if let .Some : job <- value => {
 			let score := job * (id + 1);
 			print("worker " & id & " got " & job & " => " & score);
-			emit results score;
+			emit results <- score;
 			total.with(fn (x : int) -> int => emit x + score);
 			handled += 1;
 		};
@@ -42,7 +42,7 @@ const main := fn => {
 	
 	defer wg.wait();
 	
-	for i in 1..total_jobs + 1 => emit jobs i;
+	for i in 1..total_jobs + 1 => emit jobs <- i;
 	
 	jobs.close();
 	

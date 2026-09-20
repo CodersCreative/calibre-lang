@@ -19,10 +19,15 @@ impl<'a> AstParser<'a> for AstEmit {
         select! { Token::Emit => () }.ignore_then(choice((
             data.node
                 .clone()
+                .then(choice((
+                    just(Token::LeftArrow).map(|_| true),
+                    just(Token::RightArrow).map(|_| true),
+                )))
                 .then(data.node.clone())
-                .map(|(channel, value)| AstEmit::Channel {
-                    channel: Box::new(channel),
-                    value: Box::new(value),
+                .map(|((left, left_channel), right)| AstEmit::Channel {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    left_channel,
                 }),
             data.node
                 .clone()

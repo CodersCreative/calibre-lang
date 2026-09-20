@@ -16,7 +16,7 @@ impl<T> Channel:<T> {
 	const closed := fn (self : &Channel:<T>) -> bool => return channel_closed(self.inner);
 
 	const send_all := fn (self : &mut Channel:<T>, values : list:<T>) => {
-		for i in 0..len(values) => emit self values[i];
+		for i in 0..len(values) => emit self <- values[i];
 	};
 };
 

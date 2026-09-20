@@ -8,8 +8,9 @@ use serde::{Deserialize, Serialize};
 pub enum AstEmit {
     Scope(Box<AstNode>),
     Channel {
-        channel: Box<AstNode>,
-        value: Box<AstNode>,
+        left: Box<AstNode>,
+        right: Box<AstNode>,
+        left_channel: bool,
     },
 }
 

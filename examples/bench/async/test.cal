@@ -39,7 +39,7 @@ const main := fn => {
 	
 	defer wg.wait();
 	
-	for i in 1..(total_jobs + 1) => emit jobs i;
+	for i in 1..(total_jobs + 1) => emit jobs <- i;
 	
 	jobs.close();
 	

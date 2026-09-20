@@ -11,11 +11,26 @@ impl AstFormatting for AstEmit {
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         match self {
             AstEmit::Scope(x) => format!("emit {}", x.format(formatter)),
-            AstEmit::Channel { channel, value } => {
+            AstEmit::Channel {
+                left,
+                right,
+                left_channel: true,
+            } => {
                 format!(
-                    "emit {} {}",
-                    channel.format(formatter),
-                    value.format(formatter)
+                    "emit {} <- {}",
+                    left.format(formatter),
+                    right.format(formatter)
+                )
+            }
+            AstEmit::Channel {
+                left,
+                right,
+                left_channel: _,
+            } => {
+                format!(
+                    "emit {} -> {}",
+                    left.format(formatter),
+                    right.format(formatter)
                 )
             }
         }

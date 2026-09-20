@@ -215,8 +215,8 @@ impl TestHarness {
                 file: file.to_path_buf(),
                 validation_type: ValidationType::Formatter,
                 message: format!(
-                    "Formatter produced invalid code. Re-parse errors:\n{}\nOriginal output:\n{:?}\nFormatted output:\n{}",
-                    message, ast, formatted
+                    "Formatter produced invalid code. Re-parse errors:\n{}\nOriginal debug:\n{:#?}\n\nFormatted debug:\n{:#?}\n\nFormatted output:\n{}",
+                    message, ast, ast2, formatted
                 ),
             });
             return;
@@ -224,8 +224,8 @@ impl TestHarness {
 
         if ast != ast2 {
             self.failures.push(TestFailure { file: file.to_path_buf(), validation_type: ValidationType::Formatter, message: format!(
-                    "Formatter produced different code. Original output:\n{:?}\nFormatted output:\n{}",
-                    ast, formatted
+                    "Formatter produced different code. Original debug:\n{:#?}\n\nFormatted debug:\n{:#?}\n\nFormatted output:\n{}",
+                    ast,ast2, formatted
                 ) });
         }
     }

@@ -1,2 +1,2 @@
 emit 1000;
-emit ch 90;
+emit ch <- 90;

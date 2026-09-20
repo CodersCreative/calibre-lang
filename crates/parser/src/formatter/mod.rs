@@ -505,7 +505,7 @@ impl Formatter {
             if let Some(end) = last_end {
                 let gap = node.span.from.saturating_sub(end);
 
-                if gap > 100 {
+                if gap > 50 {
                     lines.push(format!("\n{}\n", formatted));
                 } else {
                     lines.push(format!("{}\n", formatted));
