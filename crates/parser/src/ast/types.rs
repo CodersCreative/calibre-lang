@@ -833,6 +833,29 @@ impl Display for ParserInnerType {
                 return_type,
                 parameters,
             } => {
+                if parameters.len() == 1 {
+                    let mut types = vec![parameters[0].to_string()];
+                    let mut return_type = return_type.as_ref();
+
+                    while let ParserInnerType::Function {
+                        return_type: nested_return,
+                        parameters: nested_parameters,
+                    } = &return_type.data_type
+                    {
+                        if nested_parameters.len() != 1 {
+                            break;
+                        }
+
+                        types.push(nested_parameters[0].to_string());
+                        return_type = nested_return.as_ref();
+                    }
+
+                    if types.len() > 1 {
+                        types.push(return_type.to_string());
+                        return write!(f, "curry {}", types.join(" -> "));
+                    }
+                }
+
                 let mut txt = String::from("fn");
 
                 if !parameters.is_empty() {

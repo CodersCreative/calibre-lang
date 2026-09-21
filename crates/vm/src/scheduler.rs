@@ -148,8 +148,6 @@ impl SchedulerHandle {
             vm.ptr_heap = base_vm.ptr_heap.clone();
         }
 
-        vm.moved_functions = Default::default();
-
         let mut queue = worker.queue.lock().unwrap();
         worker.tasks.fetch_add(1, Ordering::AcqRel);
         queue.push_back(Task {

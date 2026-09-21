@@ -512,8 +512,8 @@ impl VM {
                 let resolved = self.resolve_var_name(*name);
                 let value = self.remove_value(name).unwrap_or_else(|| match &resolved {
                     Some(VarName::Func(func)) => {
-                        if let Some(func) = self.take_function(func) {
-                            self.make_runtime_function(&func)
+                        if let Some(func) = self.get_function_ref(func) {
+                            self.make_runtime_function(func)
                         } else {
                             RuntimeValue::Null
                         }
@@ -532,16 +532,8 @@ impl VM {
             }
             VMInstruction::DropVar { name } => {
                 let name = self.local_string(block, *name)?;
-                match self.resolve_var_name(*name) {
-                    Some(VarName::Var(var)) => {
-                        if let Some(val) = self.variables.remove(&var) {
-                            self.drop_runtime_value(val);
-                        }
-                    }
-                    Some(VarName::Func(func)) => {
-                        self.moved_functions.insert(func);
-                    }
-                    None => {}
+                if let Some(val) = self.variables.remove(name) {
+                    self.drop_runtime_value(val);
                 }
             }
             VMInstruction::StoreVar { dst, name, src } => {
@@ -791,8 +783,6 @@ impl VM {
                         if !self.ptr_heap.is_empty() {
                             gen_vm.ptr_heap = self.ptr_heap.clone();
                         }
-
-                        gen_vm.moved_functions = self.moved_functions.clone();
 
                         self.set_reg_value(
                             *dst,

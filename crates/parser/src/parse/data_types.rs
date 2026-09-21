@@ -106,6 +106,29 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
+                let curry_parser = select! { Token::Curry => () }
+                    .ignore_then(
+                        ty.clone()
+                            .separated_by(select! { Token::RightArrow => () })
+                            .at_least(2)
+                            .collect::<Vec<_>>(),
+                    )
+                    .map_with_span(|types, span| {
+                        let mut types = types.into_iter().rev();
+                        let mut function = types.next().unwrap();
+
+                        for parameter in types {
+                            function = ParserDataType::function(
+                                span,
+                                vec![parameter],
+                                function,
+                            );
+                        }
+
+                        function
+                    })
+                    .boxed();
+
                 let struct_parser: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>> = select! { Token::Identifier(x) => x, Token::Dyn => "dyn" }
                     .then(
                         select! { Token::Vampire => () }
@@ -251,6 +274,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                     null_parser,
                     tuple_parser,
                     ffi_parser,
+                    curry_parser,
                     function_parser,
                     struct_parser,
                     dollar_parser,

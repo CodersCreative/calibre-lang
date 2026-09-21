@@ -89,7 +89,6 @@ pub struct VM {
     gc: VMGC,
     scheduler: Option<scheduler::SchedulerHandle>,
     task_state: TaskState,
-    pub(crate) moved_functions: UstrSet,
     pub suppress_output: bool,
     pub in_global: bool,
     pub captured_output: Vec<Ustr>,
@@ -116,7 +115,6 @@ impl Clone for VM {
             gc: self.gc.clone(),
             scheduler: self.scheduler.clone(),
             task_state: self.task_state.clone(),
-            moved_functions: self.moved_functions.clone(),
             suppress_output: self.suppress_output,
             captured_output: self.captured_output.clone(),
             input_buffer: self.input_buffer.clone(),
@@ -265,7 +263,6 @@ impl VM {
             gc: VMGC::default(),
             scheduler: None,
             task_state: TaskState::default(),
-            moved_functions: UstrSet::default(),
             suppress_output: false,
             in_global: false,
             captured_output: Vec::new(),
@@ -308,12 +305,6 @@ impl VM {
     #[inline]
     pub(crate) fn get_function_ref(&self, name: &Ustr) -> Option<&VMFunction> {
         self.registry.functions.get(name).map(Arc::as_ref)
-    }
-
-    pub(crate) fn take_function(&mut self, name: &Ustr) -> Option<VMFunction> {
-        // TODO fix taking functions
-        // self.registry.functions.get_mut(name).map(std::mem::take)
-        self.get_function_ref(name).cloned()
     }
 
     pub fn new(registry: VMRegistry, mappings: Vec<Ustr>, config: VMConfig) -> Self {

@@ -841,8 +841,8 @@ impl VM {
 
     #[inline]
     fn remove_value(&mut self, name: &Ustr) -> Option<RuntimeValue> {
-        if let Some(func) = self.take_function(name) {
-            return Some(self.make_runtime_function(&func));
+        if let Some(func) = self.get_function_ref(name) {
+            return Some(self.make_runtime_function(func));
         }
 
         self.variables

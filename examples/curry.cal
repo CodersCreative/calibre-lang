@@ -16,7 +16,7 @@ const main := fn => {
     print(ten);
     print(ten());
 
-    let add_curried := fn (a : int) -> fn (int) -> fn (int) -> int =>
+    let add_curried : curry int -> int -> int -> int = fn (a : int) -> fn (int) -> fn (int) -> int =>
         return fn (b : int) -> fn (int) -> int =>
             return fn (c : int) -> int =>
                 return addtest3(a, b, c);
@@ -30,7 +30,7 @@ const main := fn => {
 
     print(add_curried(10)(20)(30));
 
-    let add_curried := curry addtest3;
+    let add_curried : curry int -> int -> int -> int = curry addtest3;
     print(add_curried(10)(20)(30));
 
     let add_curried := fn (a : int) -> fn (int) -> fn (int) -> int =>
