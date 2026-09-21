@@ -162,80 +162,8 @@ impl From<VMRegistry> for VM {
 
 impl VM {
     #[inline]
-    fn list_identity_eq(a: &Gc<GcVec>, b: &Gc<GcVec>) -> bool {
+    pub(crate) fn list_identity_eq(a: &Gc<GcVec>, b: &Gc<GcVec>) -> bool {
         std::ptr::eq(a.as_ref(), b.as_ref())
-    }
-
-    #[instrument(skip_all)]
-    fn replace_list_aliases_in_runtime_value(
-        value: &mut RuntimeValue,
-        old_list: &Gc<GcVec>,
-        new_list: &Gc<GcVec>,
-    ) {
-        match value {
-            RuntimeValue::List(list) => {
-                if Self::list_identity_eq(list, old_list) {
-                    *list = new_list.clone();
-                }
-            }
-            RuntimeValue::Aggregate(_, map) => {
-                let entries = &mut Gc::make_mut(map).0.0;
-                for (_, field) in entries.iter_mut() {
-                    Self::replace_list_aliases_in_runtime_value(field, old_list, new_list);
-                }
-            }
-            RuntimeValue::Option(Some(inner))
-            | RuntimeValue::Result(Ok(inner))
-            | RuntimeValue::Result(Err(inner))
-            | RuntimeValue::Enum(_, _, Some(inner)) => {
-                Self::replace_list_aliases_in_runtime_value(
-                    Gc::make_mut(inner),
-                    old_list,
-                    new_list,
-                );
-            }
-            RuntimeValue::DynObject { value: inner, .. } => {
-                Self::replace_list_aliases_in_runtime_value(
-                    Gc::make_mut(inner),
-                    old_list,
-                    new_list,
-                );
-            }
-            _ => {}
-        }
-    }
-
-    pub(crate) fn propagate_list_aliases(&mut self, old_list: &Gc<GcVec>, new_list: &Gc<GcVec>) {
-        let frame_count = self.frames.len();
-        for frame_idx in 0..frame_count {
-            let reg_count = self.frames[frame_idx].reg_count as u16;
-            for reg in 0..reg_count {
-                let value = self.get_reg_value_in_frame(frame_idx, reg);
-
-                if !value.might_contain_list() {
-                    continue;
-                }
-
-                let mut value = value.clone();
-                Self::replace_list_aliases_in_runtime_value(&mut value, old_list, new_list);
-                self.set_reg_value_in_frame(frame_idx, reg, value);
-            }
-        }
-
-        let slot_len = self.variables.slot_len();
-        for id in 0..slot_len {
-            let Some(current) = self.variables.get_by_id(id) else {
-                continue;
-            };
-
-            if !current.might_contain_list() {
-                continue;
-            }
-
-            let mut value = current.clone();
-            Self::replace_list_aliases_in_runtime_value(&mut value, old_list, new_list);
-            let _ = self.variables.set_by_id(id, value);
-        }
     }
 
     fn from_shared_parts(
@@ -448,19 +376,6 @@ impl VM {
     }
 
     #[inline(always)]
-    #[instrument(skip_all)]
-    pub(crate) fn _take_reg_value(&mut self, reg: Reg) -> RuntimeValue {
-        let frame = self.current_frame_mut();
-        let idx = reg as usize;
-        if idx < frame.reg_count {
-            let arena_idx = frame.reg_start + idx;
-            std::mem::replace(&mut self.reg_arena[arena_idx], RuntimeValue::Null)
-        } else {
-            RuntimeValue::Null
-        }
-    }
-
-    #[inline(always)]
     pub(crate) fn get_reg_value_in_frame(&self, frame_idx: usize, reg: Reg) -> &RuntimeValue {
         if let Some(frame) = self.frames.get(frame_idx) {
             let idx = reg as usize;
@@ -469,6 +384,22 @@ impl VM {
             }
         }
         &NULL_RUNTIME_VALUE
+    }
+
+    #[inline(always)]
+    pub(crate) fn get_reg_value_in_frame_mut(
+        &mut self,
+        frame_idx: usize,
+        reg: Reg,
+    ) -> Option<&mut RuntimeValue> {
+        if let Some(frame) = self.frames.get(frame_idx) {
+            let idx = reg as usize;
+            if idx < frame.reg_count {
+                return self.reg_arena.get_mut(frame.reg_start + idx);
+            }
+        }
+
+        None
     }
 
     #[inline(always)]

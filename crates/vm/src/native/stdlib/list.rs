@@ -1,6 +1,7 @@
 use crate::{
     VM,
     error::RuntimeError,
+    evaluate::write_back::Propagation,
     native::NativeFunction,
     value::{GcVec, RuntimeValue},
 };

@@ -1,5 +1,7 @@
+use super::write_back::Propagation;
 use super::*;
 use crate::{
+    VarName,
     native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
     value::{GcMap, GcVec},
 };
@@ -9,19 +11,6 @@ use calibre_parser::ast::{
 use wasm_sync::Mutex;
 
 impl VM {
-    #[inline]
-    fn propagate_member_source_alias(&mut self, src: u16, dst: u16) {
-        let source = self.current_frame().member_sources.get(&src).cloned();
-        match source {
-            Some(v) => {
-                self.current_frame_mut().member_sources.insert(dst, v);
-            }
-            None => {
-                self.current_frame_mut().member_sources.remove(&dst);
-            }
-        }
-    }
-
     fn eval_branch_condition(
         &mut self,
         cond: u16,
@@ -1469,6 +1458,7 @@ impl VM {
                                 .get_by_id(id)
                                 .cloned()
                                 .ok_or(RuntimeError::DanglingRef(format!("#{}", id)))?;
+
                             let old = match current {
                                 RuntimeValue::Ref(_)
                                 | RuntimeValue::VarRef(_)
@@ -1516,13 +1506,11 @@ impl VM {
                                         .and_then(|vm_frame| vm_frame.member_sources.get(&reg))
                                         .cloned();
 
-                                    let old = self.set_reg_value_in_frame(
+                                    let _ = self.set_reg_value_in_frame(
                                         frame,
                                         reg,
                                         RuntimeValue::Aggregate(name, updated),
                                     );
-
-                                    let _ = self.set_reg_value(*dst, old);
 
                                     if let Some(source) = member_source
                                         && let Some(vm_frame) = self.frames.get_mut(frame)
@@ -1530,18 +1518,26 @@ impl VM {
                                         vm_frame.member_sources.insert(reg, source);
                                     }
 
-                                    self.propagate_member_source_reg(reg, frame)?;
+                                    let old = self.propagate_member_source_reg(reg, frame)?;
+
+                                    if let Some(old) = old {
+                                        let _ = self.set_reg_value(*dst, old);
+                                    }
                                 }
                                 RuntimeValue::List(_) => {
                                     if let Some((parent_reg, field_name)) =
                                         self.current_frame().member_sources.get(&reg).cloned()
                                     {
-                                        self.write_back_member_field_update(
+                                        let old = self.write_back_member_field_update(
                                             frame,
                                             reg,
                                             parent_reg,
                                             &field_name,
                                         )?;
+
+                                        if let Some(old) = old {
+                                            let _ = self.set_reg_value(*dst, old);
+                                        }
                                     }
                                 }
                                 RuntimeValue::Generator { .. } => {
@@ -1566,9 +1562,9 @@ impl VM {
                             let updated = update_aggregate(&name, map)?;
                             let member_source =
                                 self.current_frame().member_sources.get(target).cloned();
-                            let old =
+
+                            let _ =
                                 self.set_reg_value(*target, RuntimeValue::Aggregate(name, updated));
-                            let _ = self.set_reg_value(*dst, old);
 
                             if let Some(source) = member_source {
                                 self.current_frame_mut()
@@ -1576,10 +1572,14 @@ impl VM {
                                     .insert(*target, source);
                             }
 
-                            self.propagate_member_source_reg(
+                            let old = self.propagate_member_source_reg(
                                 *target,
                                 self.frames.len().saturating_sub(1),
                             )?;
+
+                            if let Some(old) = old {
+                                let _ = self.set_reg_value(*dst, old);
+                            }
 
                             handled = true;
                             break;
@@ -1588,12 +1588,16 @@ impl VM {
                             if let Some((parent_reg, field_name)) =
                                 self.current_frame().member_sources.get(target).cloned()
                             {
-                                self.write_back_member_field_update(
+                                let old = self.write_back_member_field_update(
                                     self.frames.len().saturating_sub(1),
                                     *target,
                                     parent_reg,
                                     &field_name,
                                 )?;
+
+                                if let Some(old) = old {
+                                    let _ = self.set_reg_value(*dst, old);
+                                }
                             }
 
                             handled = true;
@@ -1902,6 +1906,7 @@ impl VM {
                                 .get_by_id(id)
                                 .cloned()
                                 .ok_or(RuntimeError::DanglingRef(format!("#{}", id)))?;
+
                             match current {
                                 RuntimeValue::Ref(_)
                                 | RuntimeValue::VarRef(_)
