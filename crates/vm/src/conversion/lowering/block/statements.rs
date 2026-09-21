@@ -6,7 +6,8 @@ Assign
 */
 
 use crate::conversion::{
-    Reg, VMInstruction, VMLiteral,
+    Reg, VMLiteral,
+    instructions::VMInstruction,
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{

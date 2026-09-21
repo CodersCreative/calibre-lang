@@ -8,7 +8,8 @@ Is
 */
 
 use crate::conversion::{
-    Reg, VMInstruction,
+    Reg,
+    instructions::VMInstruction,
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{LirAs, LirBinary, LirBoolean, LirComparison, LirIs};
@@ -20,15 +21,17 @@ impl VMLowering for LirBinary {
         let left = env.lower_node(*self.left, span);
         let right = env.lower_node(*self.right, span);
         let dst = env.alloc_reg();
-        env.emit(VMInstruction::AccLoad { src: left }, span);
+
         env.emit(
-            VMInstruction::AccBinary {
+            VMInstruction::Binary {
+                dst,
                 op: self.operator,
+                left,
                 right,
             },
             span,
         );
-        env.emit(VMInstruction::AccStore { dst }, span);
+
         dst
     }
 }
@@ -39,6 +42,7 @@ impl VMLowering for LirComparison {
         let left = env.lower_node(*self.left, span);
         let right = env.lower_node(*self.right, span);
         let dst = env.alloc_reg();
+
         env.emit(
             VMInstruction::Comparison {
                 dst,
@@ -48,6 +52,7 @@ impl VMLowering for LirComparison {
             },
             span,
         );
+
         dst
     }
 }
@@ -78,6 +83,7 @@ impl VMLowering for LirAs {
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
         let src = env.lower_node(*self.value, span);
         let dst = env.alloc_reg();
+
         env.emit(
             VMInstruction::As {
                 dst,
@@ -87,6 +93,7 @@ impl VMLowering for LirAs {
             },
             span,
         );
+
         dst
     }
 }
@@ -96,6 +103,7 @@ impl VMLowering for LirIs {
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
         let src = env.lower_node(*self.value, span);
         let dst = env.alloc_reg();
+
         env.emit(
             VMInstruction::Is {
                 dst,
@@ -104,6 +112,7 @@ impl VMLowering for LirIs {
             },
             span,
         );
+
         dst
     }
 }

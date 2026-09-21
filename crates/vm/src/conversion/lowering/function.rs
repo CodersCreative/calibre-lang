@@ -1,3 +1,5 @@
+use crate::conversion::instructions::VMInstruction;
+
 use super::ssa::SSABuilder;
 use super::*;
 use calibre_lir::ast::LirDeclare;

@@ -1,4 +1,5 @@
 use super::*;
+use crate::conversion::instructions::VMInstruction;
 use tracing::{instrument, trace};
 
 pub mod access;

@@ -630,24 +630,6 @@ impl VM {
                 let value = binary(self, op, left, right)?;
                 self.set_reg_value(*dst, value);
             }
-            VMInstruction::AccLoad { src } => {
-                self.current_frame_mut().acc = self.get_reg_value(*src).clone();
-            }
-            VMInstruction::AccStore { dst } => {
-                self.set_reg_value(*dst, self.current_frame().acc.clone());
-            }
-            VMInstruction::AccBinary { op, right } => {
-                let right = self.resolve_value(self.get_reg_value(*right).clone())?;
-
-                let left = {
-                    let frame = self.current_frame_mut();
-                    std::mem::replace(&mut frame.acc, RuntimeValue::Null)
-                };
-                let left = self.resolve_value(left)?;
-
-                let value = binary(self, op, left, right)?;
-                self.current_frame_mut().acc = value;
-            }
             VMInstruction::Comparison {
                 dst,
                 op,

@@ -9,7 +9,8 @@ RefLoad
 */
 
 use crate::conversion::{
-    Reg, VMInstruction,
+    Reg,
+    instructions::VMInstruction,
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{

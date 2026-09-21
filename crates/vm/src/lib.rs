@@ -40,14 +40,13 @@ mod vm_lookup;
 
 pub(crate) use vm_lookup::VarName;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct VMFrame {
     pub reg_start: usize,
     pub reg_count: usize,
     pub member_sources: FxHashMap<Reg, (Reg, Ustr)>,
     pub func_ptr: usize,
     pub func_name: Option<Ustr>,
-    pub acc: RuntimeValue,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -56,19 +55,6 @@ pub struct TaskState {
     pub ip: usize,
     pub prev_block: Option<BlockId>,
     pub yielded: Option<RuntimeValue>,
-}
-
-impl Default for VMFrame {
-    fn default() -> Self {
-        Self {
-            reg_start: 0,
-            reg_count: 0,
-            member_sources: FxHashMap::default(),
-            func_ptr: 0,
-            func_name: None,
-            acc: RuntimeValue::Null,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -328,7 +314,6 @@ impl VM {
             frame.member_sources.clear();
             frame.func_ptr = func_ptr;
             frame.func_name = func_name;
-            frame.acc = RuntimeValue::Null;
             self.frames.push(frame);
         } else {
             self.frames.push(VMFrame {
@@ -337,7 +322,6 @@ impl VM {
                 member_sources: FxHashMap::default(),
                 func_ptr,
                 func_name,
-                acc: RuntimeValue::Null,
             });
         }
     }
