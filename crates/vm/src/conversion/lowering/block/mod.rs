@@ -160,6 +160,9 @@ impl<'a> BlockLoweringCtx<'a> {
             LirNodeType::List(x) => x.lower_to(self, target, span),
             LirNodeType::Aggregate(x) => x.lower_to(self, target, span),
             LirNodeType::Enum(x) => x.lower_to(self, target, span),
+            LirNodeType::Assign(value) => {
+                value.lower_instr(self, Some(target), false, span);
+            }
             other => {
                 let reg = self.lower_node(other, span);
                 if reg != target {

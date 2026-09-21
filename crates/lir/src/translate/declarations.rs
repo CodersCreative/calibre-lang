@@ -7,7 +7,7 @@ ExternFunction
 */
 
 use crate::{
-    ast::{LirClosure, LirDeclare, LirExtern, LirLoad, LirNode, LirNodeType},
+    ast::{LirClosure, LirDeclare, LirExtern, LirLiteral, LirLoad, LirNode, LirNodeType},
     environment::{LirEnvironment, LirFunction, LirGlobal},
     translate::LirLowering,
 };
@@ -54,30 +54,36 @@ impl LirLowering for MirScopeDecl {
             }
 
             for stmt in self.body {
-                // TODO remove clone
-                if let MiddleNodeType::VariableDeclaration(MirVarDecl {
-                    identifier,
-                    data_type,
-                    value,
-                    ..
-                }) = &stmt.node_type.clone()
-                    && !value.is_function()
-                {
-                    let global_type = data_type.clone();
-                    let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
+                let is_non_fn_var_decl = matches!(
+                    &stmt.node_type,
+                    MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. }) if !value.is_function()
+                );
 
-                    let _ = sub_lowerer.lower_node(stmt);
+                if is_non_fn_var_decl {
+                    if let MiddleNodeType::VariableDeclaration(MirVarDecl {
+                        identifier,
+                        data_type,
+                        ..
+                    }) = &stmt.node_type
+                    {
+                        let global_type = data_type.clone();
+                        let identifier = *identifier;
 
-                    env.registry.append(sub_lowerer.registry);
+                        let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
 
-                    env.registry.globals.insert(
-                        *identifier,
-                        LirGlobal {
-                            name: *identifier,
-                            data_type: global_type,
-                            blocks: sub_lowerer.blocks.into_boxed_slice(),
-                        },
-                    );
+                        let _ = sub_lowerer.lower_node(stmt);
+
+                        env.registry.append(sub_lowerer.registry);
+
+                        env.registry.globals.insert(
+                            identifier,
+                            LirGlobal {
+                                name: identifier,
+                                data_type: global_type,
+                                blocks: sub_lowerer.blocks.into_boxed_slice(),
+                            },
+                        );
+                    }
                 } else {
                     env.lower_and_add_node(stmt);
                 }
@@ -95,22 +101,26 @@ impl LirLowering for MirScopeDecl {
             let temp = env.get_temp();
             let lowered = env.lower_node(last.clone());
 
-            if lowered.is_null() {
-                env.lower_and_add_node(last);
-                return LirNodeType::null();
+            match lowered {
+                LirNodeType::Literal(LirLiteral::Null) => LirNodeType::null(),
+                LirNodeType::Assign(_) => {
+                    env.add_instr(LirNode::new(last.span, lowered.clone()));
+                    lowered
+                }
+                lowered => {
+                    env.add_instr(LirNode::new(
+                        span,
+                        LirNodeType::Declare(LirDeclare {
+                            dest: temp,
+                            data_type: ParserDataType::auto(span),
+                            value: Box::new(lowered),
+                            is_referenced: false,
+                        }),
+                    ));
+
+                    LirNodeType::Load(LirLoad { value: temp })
+                }
             }
-
-            env.add_instr(LirNode::new(
-                span,
-                LirNodeType::Declare(LirDeclare {
-                    dest: temp,
-                    data_type: ParserDataType::auto(span),
-                    value: Box::new(lowered),
-                    is_referenced: false,
-                }),
-            ));
-
-            LirNodeType::Load(LirLoad { value: temp })
         }
     }
 }
