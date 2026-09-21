@@ -629,7 +629,7 @@ impl VM {
     fn call_arg_from_frame_reg(&self, frame: usize, reg: u16) -> RuntimeValue {
         match self.get_reg_value_in_frame(frame, reg) {
             RuntimeValue::RegRef { frame, reg } => {
-                if let Ok(resolved) = self.resolve_value_ref(&RuntimeValue::RegRef {
+                if let Ok(resolved) = self.resolve_value(RuntimeValue::RegRef {
                     frame: *frame,
                     reg: *reg,
                 }) {
@@ -648,7 +648,7 @@ impl VM {
                 }
             }
             RuntimeValue::Ref(name) => {
-                if let Ok(resolved) = self.resolve_value_ref(&RuntimeValue::Ref(*name)) {
+                if let Ok(resolved) = self.resolve_value(RuntimeValue::Ref(*name)) {
                     if resolved.should_pass_by_reg_ref() {
                         RuntimeValue::Ref(*name)
                     } else {
@@ -659,7 +659,7 @@ impl VM {
                 }
             }
             RuntimeValue::VarRef(id) => {
-                if let Ok(resolved) = self.resolve_value_ref(&RuntimeValue::VarRef(*id)) {
+                if let Ok(resolved) = self.resolve_value(RuntimeValue::VarRef(*id)) {
                     if resolved.should_pass_by_reg_ref() {
                         RuntimeValue::VarRef(*id)
                     } else {
@@ -840,13 +840,13 @@ impl VM {
     }
 
     #[inline]
-    fn remove_value(&mut self, name: Ustr) -> Option<RuntimeValue> {
+    fn remove_value(&mut self, name: &Ustr) -> Option<RuntimeValue> {
         if let Some(func) = self.take_function(name) {
             return Some(self.make_runtime_function(&func));
         }
 
         self.variables
-            .remove(&name)
+            .remove(name)
             .map(|var| self.resolve_saveable_runtime_value(var))
     }
 

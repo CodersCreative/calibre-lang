@@ -510,9 +510,9 @@ impl VM {
             VMInstruction::MoveVar { dst, name } => {
                 let name = self.local_string(block, *name)?;
                 let resolved = self.resolve_var_name(*name);
-                let value = self.remove_value(*name).unwrap_or_else(|| match &resolved {
+                let value = self.remove_value(name).unwrap_or_else(|| match &resolved {
                     Some(VarName::Func(func)) => {
-                        if let Some(func) = self.take_function(*func) {
+                        if let Some(func) = self.take_function(func) {
                             self.make_runtime_function(&func)
                         } else {
                             RuntimeValue::Null

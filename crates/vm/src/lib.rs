@@ -278,19 +278,23 @@ impl VM {
         }
 
         vm.preallocate_execution_buffers();
+
         if install_builtins {
             vm.setup_stdlib();
         }
+
         vm
     }
 
     fn preallocate_execution_buffers(&mut self) {
-        let mut max_regs = 0usize;
+        let mut max_regs = 0;
         for func in self.registry.functions.values() {
             max_regs = max_regs.max(func.reg_count as usize);
         }
-        let frame_capacity = 256usize;
-        let reg_capacity = max_regs.max(32).saturating_mul(16).min(1_000_000);
+
+        let frame_capacity = 1024;
+        let reg_capacity = max_regs.max(32).saturating_mul(16).min(102_400);
+
         self.frames.reserve(frame_capacity);
         self.frame_pool.reserve(frame_capacity);
         self.reg_arena.reserve(reg_capacity);
@@ -303,21 +307,13 @@ impl VM {
 
     #[inline]
     pub(crate) fn get_function_ref(&self, name: &Ustr) -> Option<&VMFunction> {
-        if self.moved_functions.contains(name) {
-            return None;
-        }
         self.registry.functions.get(name).map(Arc::as_ref)
     }
 
-    pub(crate) fn take_function(&mut self, name: Ustr) -> Option<Arc<VMFunction>> {
-        if self.moved_functions.contains(&name) {
-            return None;
-        }
-        let func = self.registry.functions.get(&name).cloned();
-        if func.is_some() {
-            self.moved_functions.insert(name);
-        }
-        func
+    pub(crate) fn take_function(&mut self, name: &Ustr) -> Option<VMFunction> {
+        // TODO fix taking functions
+        // self.registry.functions.get_mut(name).map(std::mem::take)
+        self.get_function_ref(name).cloned()
     }
 
     pub fn new(registry: VMRegistry, mappings: Vec<Ustr>, config: VMConfig) -> Self {
