@@ -2,6 +2,7 @@ use crate::{
     config::VMConfig,
     conversion::{Reg, VMBlock, VMFunction, VMRegistry},
     error::RuntimeError,
+    evaluate::calling::CallSite,
     native::NativeFunction,
     value::{GcMap, GcVec, HashKey, RuntimeValue, WaitGroupInner},
     variables::VariableStore,
@@ -674,8 +675,7 @@ impl VM {
                     captures: Arc::new(Vec::new()),
                 },
                 args,
-                0,
-                0,
+                CallSite { block: 0, tag: 0 },
                 true,
             )
         } else {

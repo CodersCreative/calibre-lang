@@ -2,6 +2,7 @@ use super::write_back::Propagation;
 use super::*;
 use crate::{
     VarName,
+    evaluate::calling::{CallSite, RegisterCall},
     native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
     value::{GcMap, GcVec, HashKey},
 };
@@ -35,7 +36,15 @@ impl VM {
                     resolved_receiver,
                 );
             }
-            self.call_runtime_callable_at(callee, Vec::new(), block.id.0 as usize, ip, true)?
+            self.call_runtime_callable_at(
+                callee,
+                Vec::new(),
+                CallSite {
+                    block: block.id.0 as usize,
+                    tag: ip,
+                },
+                true,
+            )?
         } else {
             resolved
         };
@@ -561,9 +570,14 @@ impl VM {
                 }
             }
             VMInstruction::Call { dst, callee, args } => {
-                if let Some(step) =
-                    self.run_call_instruction(*dst, *callee, args, block, ip, prev_block)?
-                {
+                if let Some(step) = self.call_registers(RegisterCall {
+                    dst: *dst,
+                    callee: *callee,
+                    args,
+                    block,
+                    ip,
+                    prev_block,
+                })? {
                     return Ok(step);
                 }
             }

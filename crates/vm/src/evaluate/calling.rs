@@ -1,8 +1,9 @@
 use super::{super::VM, write_back::Propagation};
 use crate::{
+    VarName,
     conversion::{Reg, VMBlock, VMFunction},
     error::RuntimeError,
-    value::{HashKey, RuntimeValue, TerminateValue},
+    value::{RuntimeValue, TerminateValue},
 };
 use calibre_lir::ast::BlockId;
 use calibre_parser::ast::idents::ParserText;
@@ -14,83 +15,103 @@ use ustr::{Ustr, UstrSet};
 use wasm_sync::Mutex;
 
 impl VM {
-    #[instrument(skip_all, fields(args_count = args.len(), callsite_block = callsite_block))]
+    #[inline]
+    fn store_call_result(&mut self, destination: Option<Reg>, value: RuntimeValue) {
+        if let Some(destination) = destination {
+            self.set_reg_value(destination, value);
+        }
+    }
+
+    pub(crate) fn capture_value(&self, name: &Ustr, seen: &mut UstrSet) -> RuntimeValue {
+        match self.resolve_var_name(*name) {
+            Some(VarName::Var(var)) => {
+                if let Some(value) = self.variables.get(&var) {
+                    self.resolve_saveable_runtime_value_ref(value)
+                } else {
+                    unreachable!()
+                }
+            }
+            Some(VarName::Func(func)) => self
+                .registry
+                .functions
+                .get(&func)
+                .map(|f| self.make_runtime_function_inner(f, seen))
+                .unwrap_or_else(|| RuntimeValue::Null),
+            _ => RuntimeValue::Null,
+        }
+    }
+
+    fn refresh_captures(
+        &mut self,
+        captures: &[(Ustr, RuntimeValue)],
+    ) -> Arc<Vec<(Ustr, RuntimeValue)>> {
+        let mut seen = UstrSet::default();
+        let mut names = UstrSet::default();
+        let mut refreshed = Vec::with_capacity(captures.len());
+
+        for (name, old_value) in captures {
+            if !names.insert(*name) {
+                continue;
+            }
+            let value = self.capture_value(name, &mut seen);
+            refreshed.push((
+                *name,
+                if value.is_null() && !old_value.is_null() {
+                    old_value.clone()
+                } else {
+                    value
+                },
+            ));
+        }
+
+        Arc::new(refreshed)
+    }
+
+    fn resolve_vm_function(
+        &mut self,
+        name: Ustr,
+        site: CallSite,
+    ) -> Result<Arc<VMFunction>, RuntimeError> {
+        let callsite = (self.current_frame().func_ptr, site.block, site.tag);
+        self.resolve_callable_cached(name, callsite)
+            .ok_or_else(|| RuntimeError::FunctionNotFound(name.to_string()))
+    }
+
+    #[instrument(skip_all, fields(args_count = args.len(), callsite = ?site))]
     pub(crate) fn call_runtime_callable_at(
         &mut self,
         callable: RuntimeValue,
         args: Vec<RuntimeValue>,
-        callsite_block: usize,
-        callsite_tag: u32,
+        site: CallSite,
         get_result: bool,
     ) -> Result<RuntimeValue, RuntimeError> {
         match self.resolve_value_ref(&callable)? {
             RuntimeValue::Function { name, captures } => {
-                let callsite = (self.current_frame().func_ptr, callsite_block, callsite_tag);
-
-                let Some(func) = self.resolve_callable_cached(name, callsite) else {
-                    return Err(RuntimeError::FunctionNotFound(name.to_string()));
-                };
+                let func = self.resolve_vm_function(name, site)?;
 
                 if func.pure && (!get_result || !func.returns_value) {
                     return Ok(RuntimeValue::Null);
                 }
 
-                let mut seen = UstrSet::default();
-                let mut refreshed_caps = Vec::with_capacity(captures.len());
-                let mut seen_names = UstrSet::default();
+                let refreshed = self.refresh_captures(captures.as_ref());
+                if func.memo
+                    && let Some(key) = func.memo_key(&args)
+                {
+                    let cache = Arc::clone(
+                        self.caches
+                            .memo
+                            .entry(name)
+                            .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default()))),
+                    );
 
-                for (cap_name, old_value) in captures.iter() {
-                    if !seen_names.insert(*cap_name) {
-                        continue;
+                    if let Some(value) = cache.lock().unwrap().get(&key) {
+                        return Ok(value.clone());
                     }
 
-                    let value = self.capture_value(cap_name, &mut seen);
-                    refreshed_caps.push((
-                        *cap_name,
-                        if matches!(value, RuntimeValue::Null)
-                            && !matches!(old_value, RuntimeValue::Null)
-                        {
-                            old_value.clone()
-                        } else {
-                            value
-                        },
-                    ));
-                }
+                    let result = self.run_function(func.as_ref(), args, refreshed, get_result)?;
+                    cache.lock().unwrap().insert(key, result.clone());
 
-                let refreshed = Arc::new(refreshed_caps);
-                if func.memo {
-                    let mut key: Option<Vec<HashKey>> = Some(Vec::with_capacity(args.len()));
-
-                    for (i, arg) in args.iter().enumerate() {
-                        if func.memo_params == 0 || func.memo_params & (1 << i) != 0 {
-                            match HashKey::try_from(arg.clone()) {
-                                Ok(hash) => key.as_mut().unwrap().push(hash),
-                                Err(_) => {
-                                    key = None;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if let Some(key) = key {
-                        let cache = Arc::clone(
-                            self.caches
-                                .memo
-                                .entry(name)
-                                .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default()))),
-                        );
-
-                        if let Some(value) = cache.lock().unwrap().get(&key) {
-                            return Ok(value.clone());
-                        }
-
-                        let result =
-                            self.run_function(func.as_ref(), args, refreshed, get_result)?;
-                        cache.lock().unwrap().insert(key, result.clone());
-
-                        return Ok(result);
-                    }
+                    return Ok(result);
                 }
 
                 self.run_function(func.as_ref(), args, refreshed, get_result)
@@ -114,8 +135,10 @@ impl VM {
                 self.call_runtime_callable_at(
                     *callee,
                     full_args,
-                    callsite_block,
-                    callsite_tag.saturating_sub(1),
+                    CallSite {
+                        block: site.block,
+                        tag: site.tag.saturating_sub(1),
+                    },
                     get_result,
                 )
             }
@@ -127,6 +150,21 @@ impl VM {
 pub enum FunctionArgs<'a> {
     Values(&'a [RuntimeValue]),
     Regs(&'a [Reg]),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CallSite {
+    pub block: usize,
+    pub tag: u32,
+}
+
+pub(crate) struct RegisterCall<'a> {
+    pub dst: Option<Reg>,
+    pub callee: Reg,
+    pub args: &'a [Reg],
+    pub block: &'a VMBlock,
+    pub ip: u32,
+    pub prev_block: Option<BlockId>,
 }
 
 impl VM {
@@ -340,8 +378,15 @@ impl VM {
 
         let mut full_args = vec![receiver];
         full_args.extend(self.collect_call_args_vec(args));
-        let out =
-            self.call_runtime_callable_at(callee, full_args, block.id.0 as usize, ip, get_result)?;
+        let out = self.call_runtime_callable_at(
+            callee,
+            full_args,
+            CallSite {
+                block: block.id.0 as usize,
+                tag: ip,
+            },
+            get_result,
+        )?;
 
         if let Some((frame_idx, reg)) = receiver_reg
             && frame_idx == self.frames.len().saturating_sub(1)
@@ -423,20 +468,20 @@ impl VM {
                 yielded: Some(yielded),
             }));
         }
-        if let Some(dst) = dst {
-            self.set_reg_value(dst, result);
-        }
+        self.store_call_result(dst, result);
         Ok(None)
     }
 
-    pub(crate) fn run_call_instruction(
+    pub(crate) fn call_registers(
         &mut self,
-        dst: Option<u16>,
-        callee: u16,
-        args: &[u16],
-        block: &VMBlock,
-        ip: u32,
-        prev_block: Option<BlockId>,
+        RegisterCall {
+            dst,
+            callee,
+            args,
+            block,
+            ip,
+            prev_block,
+        }: RegisterCall<'_>,
     ) -> Result<Option<TerminateValue>, RuntimeError> {
         let func = {
             let value = self.get_reg_value(callee);
@@ -521,33 +566,18 @@ impl VM {
                     dst.is_some(),
                 )?;
 
-                if let Some(dst) = dst {
-                    self.set_reg_value(dst, value);
-                }
+                self.store_call_result(dst, value);
             }
             RuntimeValue::Function { name, captures } => {
-                let callsite = (self.current_frame().func_ptr, block.id.0 as usize, ip);
+                let func = self.resolve_vm_function(
+                    name,
+                    CallSite {
+                        block: block.id.0 as usize,
+                        tag: ip,
+                    },
+                )?;
 
-                let Some(func) = self.resolve_callable_cached(name, callsite) else {
-                    return Err(RuntimeError::FunctionNotFound(name.as_str().to_string()));
-                };
-
-                let mut refreshed_caps = Vec::with_capacity(captures.len());
-                let mut seen = UstrSet::default();
-
-                for (cap_name, old_value) in captures.iter() {
-                    let value = self.capture_value(cap_name, &mut seen);
-
-                    let value = if value.is_null() && !old_value.is_null() {
-                        old_value.clone()
-                    } else {
-                        value
-                    };
-
-                    refreshed_caps.push((*cap_name, value));
-                }
-
-                let refreshed = Arc::new(refreshed_caps);
+                let refreshed = self.refresh_captures(captures.as_ref());
                 let value = self.run_function_from_regs(
                     func.as_ref(),
                     args.iter().copied(),
@@ -555,9 +585,7 @@ impl VM {
                     dst.is_some(),
                 )?;
 
-                if let Some(dst) = dst {
-                    self.set_reg_value(dst, value);
-                }
+                self.store_call_result(dst, value);
 
                 return Ok(None);
             }
@@ -572,9 +600,7 @@ impl VM {
             RuntimeValue::ExternFunction(func) => {
                 let args = self.collect_call_args_vec(args);
                 let value = func.call(self, &args)?;
-                if let Some(dst) = dst {
-                    self.set_reg_value(dst, value);
-                }
+                self.store_call_result(dst, value);
             }
             other => return Err(RuntimeError::InvalidFunctionCallValue(Box::new(other))),
         }

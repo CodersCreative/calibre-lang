@@ -1,7 +1,7 @@
 use crate::{
     VM,
     error::RuntimeError,
-    evaluate::write_back::Propagation,
+    evaluate::{calling::CallSite, write_back::Propagation},
     native::NativeFunction,
     value::{GcVec, RuntimeValue},
 };
@@ -97,8 +97,10 @@ impl NativeFunction for ListSortBy {
                 .call_runtime_callable_at(
                     comparator.clone(),
                     vec![a.clone(), b.clone()],
-                    usize::MAX,
-                    u32::MAX.saturating_sub(2),
+                    CallSite {
+                        block: usize::MAX,
+                        tag: u32::MAX.saturating_sub(2),
+                    },
                     true,
                 )
                 .and_then(|x| compare_callback_result(env, x))
@@ -141,8 +143,10 @@ impl NativeFunction for ListBinarySearchBy {
                 .call_runtime_callable_at(
                     comparator.clone(),
                     vec![probe, needle.clone()],
-                    usize::MAX,
-                    u32::MAX.saturating_sub(3),
+                    CallSite {
+                        block: usize::MAX,
+                        tag: u32::MAX.saturating_sub(3),
+                    },
                     true,
                 )
                 .and_then(|x| compare_callback_result(env, x))?;

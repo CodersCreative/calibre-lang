@@ -71,25 +71,6 @@ impl VM {
         out.into_iter().filter(|c| !c.is_empty()).collect()
     }
 
-    pub(crate) fn capture_value(&self, name: &Ustr, seen: &mut UstrSet) -> RuntimeValue {
-        match self.resolve_var_name(*name) {
-            Some(VarName::Var(var)) => {
-                if let Some(value) = self.variables.get(&var) {
-                    self.resolve_saveable_runtime_value_ref(value)
-                } else {
-                    unreachable!()
-                }
-            }
-            Some(VarName::Func(func)) => self
-                .registry
-                .functions
-                .get(&func)
-                .map(|f| self.make_runtime_function_inner(f, seen))
-                .unwrap_or_else(|| RuntimeValue::Null),
-            _ => RuntimeValue::Null,
-        }
-    }
-
     #[instrument(skip_all)]
     pub(crate) fn capture_values(
         &self,
@@ -117,7 +98,11 @@ impl VM {
         self.make_runtime_function_inner(func, &mut seen)
     }
 
-    fn make_runtime_function_inner(&self, func: &VMFunction, seen: &mut UstrSet) -> RuntimeValue {
+    pub(crate) fn make_runtime_function_inner(
+        &self,
+        func: &VMFunction,
+        seen: &mut UstrSet,
+    ) -> RuntimeValue {
         let name = func.name;
 
         if !seen.insert(name) || func.captures.is_empty() {

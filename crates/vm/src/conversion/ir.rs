@@ -1,6 +1,6 @@
 use crate::{
     conversion::instructions::VMInstruction,
-    value::{BIG_PRECISION, BIG_ROUNDING},
+    value::{BIG_PRECISION, BIG_ROUNDING, HashKey, RuntimeValue},
 };
 use astro_float::{BigFloat, Consts};
 use calibre_lir::{
@@ -173,6 +173,16 @@ impl VMFunction {
 
         self.renamed = declared;
         self
+    }
+
+    pub fn memo_key(&self, args: &[RuntimeValue]) -> Option<Vec<HashKey>> {
+        let mut key = Vec::with_capacity(args.len());
+        for (index, arg) in args.iter().enumerate() {
+            if self.memo_params == 0 || self.memo_params & (1 << index) != 0 {
+                key.push(HashKey::try_from(arg.clone()).ok()?);
+            }
+        }
+        Some(key)
     }
 }
 
