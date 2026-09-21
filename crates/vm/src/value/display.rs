@@ -12,15 +12,13 @@ impl RuntimeValue {
         match self {
             Self::Str(x) => ParserText::format_string_value(x),
             Self::Char(x) => ParserText::format_char_literal(*x),
-            Self::Ref(x) => match vm.variables.get(x) {
-                Some(value) => value.clone().repr(vm),
-                None => RuntimeValue::Null.repr(vm),
-            },
-            Self::VarRef(id) => match vm.variables.get_by_id(*id) {
-                Some(value) => value.clone().repr(vm),
-                None => RuntimeValue::Null.repr(vm),
-            },
-            Self::RegRef { frame, reg } => vm.get_reg_value_in_frame(*frame, *reg).clone().repr(vm),
+            Self::Ref(_) | Self::VarRef(_) | Self::RegRef { .. } => {
+                if let Ok(x) = vm.resolve_value_ref(self) {
+                    x.clone().repr(vm)
+                } else {
+                    self.to_string()
+                }
+            }
             Self::HashMap(map) => {
                 if let Ok(guard) = map.try_lock() {
                     let mut parts = Vec::new();
@@ -150,16 +148,12 @@ impl RuntimeValue {
             Self::Byte(x) => format!("{}", x),
             Self::Ptr(x) => format!("{:x}", x),
             Self::Int(x) => format!("{}", x),
-            Self::Ref(x) => match vm.variables.get(x) {
-                Some(value) => value.clone().display(vm),
-                None => RuntimeValue::Null.display(vm),
-            },
-            Self::VarRef(id) => match vm.variables.get_by_id(*id) {
-                Some(value) => value.clone().display(vm),
-                None => RuntimeValue::Null.display(vm),
-            },
-            Self::RegRef { frame, reg } => {
-                vm.get_reg_value_in_frame(*frame, *reg).clone().display(vm)
+            Self::Ref(_) | Self::VarRef(_) | Self::RegRef { .. } => {
+                if let Ok(x) = vm.resolve_value_ref(self) {
+                    x.clone().display(vm)
+                } else {
+                    self.to_string()
+                }
             }
             Self::HashMap(map) => {
                 if let Ok(guard) = map.try_lock() {

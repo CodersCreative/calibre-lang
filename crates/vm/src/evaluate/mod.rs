@@ -292,7 +292,7 @@ impl VM {
         I: IntoIterator<Item = String>,
     {
         for candidate in candidates {
-            if let Some((resolved, _)) = self.resolve_runtime_value(&Ustr::from(&candidate)) {
+            if let Some(resolved) = self.get_value(&Ustr::from(&candidate)) {
                 if matches!(resolved, RuntimeValue::Null) {
                     continue;
                 }
@@ -504,13 +504,14 @@ impl VM {
     ) -> Option<RuntimeValue> {
         let candidates = Self::build_member_candidates(owner, member, short_member, true, None);
         for candidate in candidates {
-            if let Some((resolved, _)) = self.resolve_runtime_value(&Ustr::from(&candidate)) {
+            if let Some(resolved) = self.get_value(&Ustr::from(&candidate)) {
                 if matches!(resolved, RuntimeValue::Null) {
                     continue;
                 }
                 return Some(resolved);
             }
         }
+
         if !owner.contains(":<")
             && let Some(found) = self.resolve_struct_like_member(owner, member, short_member)
         {
@@ -522,7 +523,7 @@ impl VM {
             let candidates =
                 Self::build_member_candidates(&std_owner, member, short_member, true, None);
             for candidate in candidates {
-                if let Some((resolved, _)) = self.resolve_runtime_value(&Ustr::from(&candidate)) {
+                if let Some(resolved) = self.get_value(&Ustr::from(&candidate)) {
                     return Some(resolved);
                 }
             }
@@ -824,30 +825,29 @@ impl VM {
     }
 
     #[inline]
-    fn resolve_runtime_value(&self, name: &Ustr) -> Option<(RuntimeValue, String)> {
+    fn get_value(&self, name: &Ustr) -> Option<RuntimeValue> {
         if let Some(native) = RuntimeValue::natives().get(name.as_str()) {
-            return Some((native.clone(), name.to_string()));
-        }
-        if let Some(func) = self.get_function_ref(name) {
-            return Some((self.make_runtime_function(func), name.to_string()));
+            return Some(native.clone());
         }
 
-        self.variables.get(name).map(|var| {
-            (
-                self.resolve_saveable_runtime_value_ref(var),
-                name.to_string(),
-            )
-        })
+        if let Some(func) = self.get_function_ref(name) {
+            return Some(self.make_runtime_function(func));
+        }
+
+        self.variables
+            .get(name)
+            .map(|var| self.resolve_saveable_runtime_value_ref(var))
     }
 
     #[inline]
-    fn move_runtime_value(&mut self, name: Ustr) -> Option<RuntimeValue> {
+    fn remove_value(&mut self, name: Ustr) -> Option<RuntimeValue> {
         if let Some(func) = self.take_function(name) {
             return Some(self.make_runtime_function(&func));
         }
+
         self.variables
             .remove(&name)
-            .map(|var| self.resolve_saveable_runtime_value_ref(&var))
+            .map(|var| self.resolve_saveable_runtime_value(var))
     }
 
     pub fn run(

@@ -502,48 +502,31 @@ impl VM {
             }
             VMInstruction::LoadVar { dst, name } => {
                 let name = self.local_string(block, *name)?;
-                let value = match self.resolve_var_name(*name) {
-                    Some(VarName::Var(var)) => {
-                        if let Some(v) = self.variables.get(&var) {
-                            self.resolve_saveable_runtime_value_ref(v)
-                        } else {
-                            RuntimeValue::Null
-                        }
-                    }
-                    Some(VarName::Func(func)) => {
-                        if let Some(f) = self.get_function_ref(&func) {
-                            self.make_runtime_function(f)
-                        } else {
-                            RuntimeValue::Null
-                        }
-                    }
-                    None => RuntimeValue::Null,
-                };
-                self.set_reg_value(*dst, value);
+                if let Some(value) = self.get_value(name) {
+                    self.set_reg_value(*dst, value);
+                }
                 return Ok(TerminateValue::None);
             }
             VMInstruction::MoveVar { dst, name } => {
                 let name = self.local_string(block, *name)?;
                 let resolved = self.resolve_var_name(*name);
-                let value = self
-                    .move_runtime_value(*name)
-                    .unwrap_or_else(|| match &resolved {
-                        Some(VarName::Func(func)) => {
-                            if let Some(func) = self.take_function(*func) {
-                                self.make_runtime_function(&func)
-                            } else {
-                                RuntimeValue::Null
-                            }
+                let value = self.remove_value(*name).unwrap_or_else(|| match &resolved {
+                    Some(VarName::Func(func)) => {
+                        if let Some(func) = self.take_function(*func) {
+                            self.make_runtime_function(&func)
+                        } else {
+                            RuntimeValue::Null
                         }
-                        Some(VarName::Var(var)) => {
-                            if let Some(var) = self.variables.remove(var) {
-                                self.resolve_saveable_runtime_value_ref(&var)
-                            } else {
-                                RuntimeValue::Null
-                            }
+                    }
+                    Some(VarName::Var(var)) => {
+                        if let Some(var) = self.variables.remove(var) {
+                            self.resolve_saveable_runtime_value(var)
+                        } else {
+                            RuntimeValue::Null
                         }
-                        _ => RuntimeValue::Null,
-                    });
+                    }
+                    _ => RuntimeValue::Null,
+                });
 
                 self.set_reg_value(*dst, value);
             }
@@ -1050,8 +1033,8 @@ impl VM {
                                 Some(callee_name.as_str()),
                             ) {
                                 callee.bind_if_callable(value.as_ref().clone())
-                            } else if let Some(x) = self.resolve_runtime_value(callee_name) {
-                                x.0
+                            } else if let Some(x) = self.get_value(callee_name) {
+                                x
                             } else {
                                 return Err(RuntimeError::FunctionNotFound(
                                     callee_name.to_string(),
@@ -1069,11 +1052,10 @@ impl VM {
                             RuntimeValue::List(Gc::new(GcVec(
                                 constraints.iter().map(|x| RuntimeValue::Str(*x)).collect(),
                             )))
-                        } else if let Some(x) = self.resolve_runtime_value(&Ustr::from(&format!(
-                            "{}.{}",
-                            type_name, member_short
-                        ))) {
-                            x.0
+                        } else if let Some(x) =
+                            self.get_value(&Ustr::from(&format!("{}.{}", type_name, member_short)))
+                        {
+                            x
                         } else {
                             return Err(RuntimeError::MissingMember {
                                 target: Box::new(RuntimeValue::DynObject {

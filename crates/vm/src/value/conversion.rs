@@ -11,7 +11,7 @@ use ustr::Ustr;
 
 impl RuntimeValue {
     pub fn convert(
-        self,
+        mut self,
         env: &mut VM,
         data_type: &ParserInnerType,
     ) -> Result<RuntimeValue, RuntimeError> {
@@ -28,25 +28,10 @@ impl RuntimeValue {
             return Ok(self);
         }
 
+        self = env.resolve_value(self)?;
+
         if let ParserInnerType::DynamicTraits(traits) = data_type {
             return env.wrap_dyn_object(self, traits.iter().map(|x| Ustr::from(x)).collect());
-        }
-
-        if let RuntimeValue::Ref(name) = &self
-            && let Some(value) = env.variables.get(name).cloned()
-        {
-            return value.convert(env, data_type);
-        }
-
-        if let RuntimeValue::VarRef(id) = &self
-            && let Some(value) = env.variables.get_by_id(*id).cloned()
-        {
-            return value.convert(env, data_type);
-        }
-
-        if let RuntimeValue::RegRef { frame, reg } = &self {
-            let value = env.get_reg_value_in_frame(*frame, *reg).clone();
-            return value.convert(env, data_type);
         }
 
         match (self, data_type) {
