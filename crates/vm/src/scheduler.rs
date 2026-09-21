@@ -1,6 +1,7 @@
 use crate::{
     VM,
     config::VMConfig,
+    evaluate::calling::FunctionArgs,
     value::{RuntimeValue, WaitGroupInner},
 };
 use std::{
@@ -247,7 +248,7 @@ fn run_task_slice(
 
             let status = task.vm.run_function_with_budget(
                 func.as_ref(),
-                Vec::new(),
+                FunctionArgs::Values(&Vec::new()),
                 resolved_captures,
                 quantum,
                 &mut state,

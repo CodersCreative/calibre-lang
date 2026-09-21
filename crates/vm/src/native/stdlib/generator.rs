@@ -1,6 +1,7 @@
 use crate::{
     TaskState, VM,
     error::RuntimeError,
+    evaluate::calling::FunctionArgs,
     native::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null},
@@ -44,14 +45,16 @@ impl NativeFunction for GeneratorResumeFn {
 
         let captures = state.captures.clone();
         let mut task_state = std::mem::take(&mut state.task_state);
+
         let status = state.vm.run_function_with_budget(
             func.as_ref(),
-            Vec::new(),
+            FunctionArgs::Values(&Vec::new()),
             captures,
             usize::MAX,
             &mut task_state,
             true,
         )?;
+
         state.task_state = task_state;
 
         if let Some(yielded) = state.task_state.yielded.take() {

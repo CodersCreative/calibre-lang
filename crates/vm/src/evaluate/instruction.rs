@@ -3,11 +3,12 @@ use super::*;
 use crate::{
     VarName,
     native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
-    value::{GcMap, GcVec},
+    value::{GcMap, GcVec, HashKey},
 };
 use calibre_parser::ast::{
     comparison::BooleanOperator, idents::ParserText, nodes::binary::AsFailureMode,
 };
+use ustr::UstrSet;
 use wasm_sync::Mutex;
 
 impl VM {
@@ -370,8 +371,12 @@ impl VM {
                 }
 
                 let refreshed = Arc::new(refreshed_caps);
-                let value =
-                    self.run_function_from_regs(func.as_ref(), args, refreshed, dst.is_some())?;
+                let value = self.run_function_from_regs(
+                    func.as_ref(),
+                    args.iter().copied(),
+                    refreshed,
+                    dst.is_some(),
+                )?;
 
                 if let Some(dst) = dst {
                     self.set_reg_value(dst, value);
@@ -840,8 +845,12 @@ impl VM {
                             return Ok(TerminateValue::None);
                         }
 
-                        let value =
-                            self.run_function_from_regs(func, args, Self::empty_captures(), true)?;
+                        let value = self.run_function_from_regs(
+                            func,
+                            args.iter().copied(),
+                            Self::empty_captures(),
+                            true,
+                        )?;
 
                         {
                             let cache_entry = self
@@ -858,8 +867,12 @@ impl VM {
                     }
                 }
 
-                let value =
-                    self.run_function_from_regs(func, args, Self::empty_captures(), dst.is_some())?;
+                let value = self.run_function_from_regs(
+                    func,
+                    args.iter().copied(),
+                    Self::empty_captures(),
+                    dst.is_some(),
+                )?;
 
                 if let Some(dst) = dst {
                     self.set_reg_value(*dst, value);
