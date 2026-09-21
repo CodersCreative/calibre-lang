@@ -27,7 +27,7 @@ fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<Ustr>, RuntimeError>
 
     let mut out = Vec::with_capacity(values.0.len());
     for value in values.0.iter() {
-        let value = env.resolve_value_for_op_ref(value)?;
+        let value = env.resolve_value_ref(value)?;
         match value {
             RuntimeValue::Str(v) => out.push(v),
             other => {
@@ -53,7 +53,7 @@ fn resolve_field(
     key: &str,
 ) -> Result<Option<RuntimeValue>, RuntimeError> {
     field(map, key)
-        .map(|value| env.resolve_value_for_op_ref(&value).map(Some))
+        .map(|value| env.resolve_value_ref(&value).map(Some))
         .unwrap_or(Ok(None))
 }
 
@@ -168,17 +168,13 @@ fn process_result(command: Ustr, status: i64, stdout: Ustr, stderr: Ustr) -> Run
     )
 }
 
-fn shell_command_line(command: &Ustr, args: &[Ustr]) -> String {
-    format_command_line(command, args)
-}
-
 fn execute_raw(options: RawExecOptions) -> Result<RuntimeValue, String> {
     let mut command = if options.shell {
         #[cfg(target_os = "windows")]
         {
             let mut cmd = Command::new("cmd");
             cmd.arg("/C")
-                .arg(shell_command_line(&options.command, &options.args));
+                .arg(format_command_line(&options.command, &options.args));
             cmd
         }
 
@@ -186,7 +182,7 @@ fn execute_raw(options: RawExecOptions) -> Result<RuntimeValue, String> {
         {
             let mut cmd = Command::new("sh");
             cmd.arg("-lc")
-                .arg(shell_command_line(&options.command, &options.args));
+                .arg(format_command_line(&options.command, &options.args));
             cmd
         }
     } else {
@@ -248,7 +244,7 @@ impl NativeFunction for ProcessRawExec {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let mut parsed = None;
         for arg in args {
-            let value = env.resolve_value_for_op_ref(&arg)?;
+            let value = env.resolve_value_ref(&arg)?;
             if let RuntimeValue::Aggregate(_, map) = &value
                 && map.as_ref().0.get("command").is_some()
             {

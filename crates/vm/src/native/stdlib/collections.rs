@@ -3,7 +3,10 @@ use crate::{
     error::RuntimeError,
     native::{
         NativeFunction,
-        utils::{expect_num_args, pop_or_null, resolve_hash_key, resolve_hashmap, resolve_hashset},
+        utils::{
+            expect_num_args, pop_or_null, resolve_hash_key, resolve_hash_key_ref, resolve_hashmap,
+            resolve_hashset,
+        },
     },
     value::{GcVec, HashKey, RuntimeValue},
 };
@@ -54,7 +57,7 @@ impl NativeFunction for HashMapNew {
         #[allow(clippy::mutable_key_type)]
         let mut map: FxHashMap<HashKey, RuntimeValue> = FxHashMap::default();
 
-        let RuntimeValue::List(list) = env.resolve_value_for_op_ref(&entries)? else {
+        let RuntimeValue::List(list) = env.resolve_value(entries)? else {
             return Err(RuntimeError::UnexpectedTypeInConversion {
                 value: Box::new(RuntimeValue::Null),
                 target_type: ParserInnerType::Str,
@@ -64,7 +67,7 @@ impl NativeFunction for HashMapNew {
         for item in list.as_ref().0.iter().cloned() {
             let (key, value) = tuple_pair(item)?;
 
-            let key = resolve_hash_key(env, &key)?;
+            let key = resolve_hash_key(env, key)?;
             let value = env.convert_runtime_var_into_saveable(value);
 
             map.insert(key, value);
@@ -85,8 +88,8 @@ impl NativeFunction for HashMapSet {
         expect_num_args(&args, &[3])?;
 
         let value = pop_or_null(&mut args);
-        let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
-        let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
+        let key = resolve_hash_key(env, pop_or_null(&mut args))?;
+        let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
         if let Ok(mut guard) = map.try_lock() {
             guard.insert(key, value);
@@ -106,8 +109,8 @@ impl NativeFunction for HashMapGet {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
-        let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
+        let key = resolve_hash_key(env, pop_or_null(&mut args))?;
+        let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
         if let Ok(guard) = map.try_lock()
             && let Some(value) = guard.get(&key)
@@ -129,8 +132,8 @@ impl NativeFunction for HashMapRemove {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
-        let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
+        let key = resolve_hash_key(env, pop_or_null(&mut args))?;
+        let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
         if let Ok(mut guard) = map.try_lock()
             && let Some(value) = guard.remove(&key)
@@ -152,8 +155,8 @@ impl NativeFunction for HashMapContains {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
-        let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
+        let key = resolve_hash_key(env, pop_or_null(&mut args))?;
+        let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
         if let Ok(guard) = map.try_lock() {
             return Ok(RuntimeValue::Bool(guard.contains_key(&key)));
@@ -173,7 +176,7 @@ impl NativeFunction for HashMapLen {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
+        let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
         let len = map.lock().unwrap().len() as i64;
         Ok(RuntimeValue::Int(len))
@@ -190,7 +193,7 @@ impl NativeFunction for HashMapKeys {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
+        let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
         let mut out = Vec::new();
         if let Ok(guard) = map.try_lock() {
@@ -214,7 +217,7 @@ impl NativeFunction for HashMapValues {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
+        let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
         let mut out = Vec::new();
         if let Ok(guard) = map.try_lock() {
@@ -235,7 +238,7 @@ impl NativeFunction for HashMapEntries {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
+        let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
         let mut out = Vec::new();
         if let Ok(guard) = map.try_lock() {
@@ -271,7 +274,7 @@ impl NativeFunction for HashMapClear {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let map = resolve_hashmap(env, &pop_or_null(&mut args))?;
+        let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
         if let Ok(mut guard) = map.try_lock() {
             guard.clear();
@@ -295,20 +298,20 @@ impl NativeFunction for HashSetNew {
             .pop()
             .unwrap_or(RuntimeValue::List(Gc::new(GcVec(Vec::new()))));
 
-        #[allow(clippy::mutable_key_type)]
-        let mut set: FxHashSet<HashKey> = FxHashSet::default();
-
-        let RuntimeValue::List(list) = env.resolve_value_for_op_ref(&entries)? else {
+        let RuntimeValue::List(list) = env.resolve_value(entries)? else {
             return Err(RuntimeError::UnexpectedTypeInConversion {
                 value: Box::new(RuntimeValue::Null),
                 target_type: ParserInnerType::Str,
             });
         };
 
-        for item in list.as_ref().0.iter() {
-            let key = resolve_hash_key(env, item)?;
-            set.insert(key);
-        }
+        #[allow(clippy::mutable_key_type)]
+        let set: FxHashSet<HashKey> = list
+            .as_ref()
+            .0
+            .iter()
+            .map(|item| resolve_hash_key_ref(env, item))
+            .collect::<Result<FxHashSet<_>, RuntimeError>>()?;
 
         Ok(RuntimeValue::HashSet(Arc::new(Mutex::new(set))))
     }
@@ -324,8 +327,8 @@ impl NativeFunction for HashSetAdd {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
-        let set = resolve_hashset(env, &pop_or_null(&mut args))?;
+        let key = resolve_hash_key(env, pop_or_null(&mut args))?;
+        let set = resolve_hashset(env, pop_or_null(&mut args))?;
 
         let inserted = if let Ok(mut guard) = set.try_lock() {
             guard.insert(key)
@@ -347,8 +350,8 @@ impl NativeFunction for HashSetRemove {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
-        let set = resolve_hashset(env, &pop_or_null(&mut args))?;
+        let key = resolve_hash_key(env, pop_or_null(&mut args))?;
+        let set = resolve_hashset(env, pop_or_null(&mut args))?;
 
         let removed = if let Ok(mut guard) = set.try_lock() {
             guard.remove(&key)
@@ -370,8 +373,8 @@ impl NativeFunction for HashSetContains {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let key = resolve_hash_key(env, &pop_or_null(&mut args))?;
-        let set = resolve_hashset(env, &pop_or_null(&mut args))?;
+        let key = resolve_hash_key(env, pop_or_null(&mut args))?;
+        let set = resolve_hashset(env, pop_or_null(&mut args))?;
 
         let contains = if let Ok(guard) = set.try_lock() {
             guard.contains(&key)
@@ -393,7 +396,7 @@ impl NativeFunction for HashSetLen {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let set = resolve_hashset(env, &pop_or_null(&mut args))?;
+        let set = resolve_hashset(env, pop_or_null(&mut args))?;
 
         let len = set.lock().unwrap().len() as i64;
         Ok(RuntimeValue::Int(len))
@@ -410,7 +413,7 @@ impl NativeFunction for HashSetValues {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let set = resolve_hashset(env, &pop_or_null(&mut args))?;
+        let set = resolve_hashset(env, pop_or_null(&mut args))?;
 
         let mut out = Vec::new();
         if let Ok(guard) = set.try_lock() {
@@ -431,7 +434,7 @@ impl NativeFunction for HashSetClear {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let set = resolve_hashset(env, &pop_or_null(&mut args))?;
+        let set = resolve_hashset(env, pop_or_null(&mut args))?;
 
         if let Ok(mut guard) = set.try_lock() {
             guard.clear();

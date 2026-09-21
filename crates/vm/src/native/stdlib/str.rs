@@ -20,7 +20,7 @@ impl NativeFunction for CharLowercase {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let c = resolve_char(env, &pop_or_null(&mut args))?;
+        let c = resolve_char(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Char(c.to_lowercase().next().unwrap_or(c)))
     }
@@ -36,7 +36,7 @@ impl NativeFunction for CharUppercase {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let c = resolve_char(env, &pop_or_null(&mut args))?;
+        let c = resolve_char(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Char(c.to_uppercase().next().unwrap_or(c)))
     }
@@ -52,8 +52,8 @@ impl NativeFunction for StrSplit {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let delim = resolve_str(env, &pop_or_null(&mut args))?;
-        let text = resolve_str(env, &pop_or_null(&mut args))?;
+        let delim = resolve_str(env, pop_or_null(&mut args))?;
+        let text = resolve_str(env, pop_or_null(&mut args))?;
 
         let parts = if delim.is_empty() {
             text.chars()
@@ -79,8 +79,8 @@ impl NativeFunction for StrContains {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let needle = resolve_str(env, &pop_or_null(&mut args))?;
-        let text = resolve_str(env, &pop_or_null(&mut args))?;
+        let needle = resolve_str(env, pop_or_null(&mut args))?;
+        let text = resolve_str(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(text.as_str().contains(needle.as_str())))
     }
@@ -96,8 +96,8 @@ impl NativeFunction for StrStartsWith {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let prefix = resolve_str(env, &pop_or_null(&mut args))?;
-        let text = resolve_str(env, &pop_or_null(&mut args))?;
+        let prefix = resolve_str(env, pop_or_null(&mut args))?;
+        let text = resolve_str(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             text.as_str().starts_with(prefix.as_str()),
@@ -115,8 +115,8 @@ impl NativeFunction for StrEndsWith {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let suffix = resolve_str(env, &pop_or_null(&mut args))?;
-        let text = resolve_str(env, &pop_or_null(&mut args))?;
+        let suffix = resolve_str(env, pop_or_null(&mut args))?;
+        let text = resolve_str(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(text.as_str().ends_with(suffix.as_str())))
     }

@@ -34,8 +34,8 @@ impl NativeFunction for ChannelSend {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let value = env.resolve_value_for_op_ref(&pop_or_null(&mut args))?;
-        let ch = resolve_channel(env, &pop_or_null(&mut args))?;
+        let value = env.resolve_value(pop_or_null(&mut args))?;
+        let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
         if ch.closed.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(RuntimeValue::Null);
@@ -60,8 +60,8 @@ impl NativeFunction for ChannelTrySend {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let value = env.resolve_value_for_op_ref(&pop_or_null(&mut args))?;
-        let ch = resolve_channel(env, &pop_or_null(&mut args))?;
+        let value = env.resolve_value(pop_or_null(&mut args))?;
+        let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
         if ch.closed.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(RuntimeValue::Bool(false));
@@ -86,7 +86,7 @@ impl NativeFunction for ChannelGet {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let ch = resolve_channel(env, &pop_or_null(&mut args))?;
+        let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
         let mut guard = ch.queue.lock().unwrap();
 
@@ -114,7 +114,7 @@ impl NativeFunction for ChannelTryGet {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let ch = resolve_channel(env, &pop_or_null(&mut args))?;
+        let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
         let mut guard = ch.queue.lock().unwrap();
 
@@ -136,7 +136,7 @@ impl NativeFunction for ChannelClose {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let ch = resolve_channel(env, &pop_or_null(&mut args))?;
+        let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
         ch.closed.store(true, std::sync::atomic::Ordering::Release);
         ch.cvar.notify_all();
@@ -154,7 +154,7 @@ impl NativeFunction for ChannelClosed {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let ch = resolve_channel(env, &pop_or_null(&mut args))?;
+        let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
         if !ch.closed.load(std::sync::atomic::Ordering::Acquire) {
             return Ok(RuntimeValue::Bool(false));
@@ -188,8 +188,8 @@ impl NativeFunction for WaitGroupRawAdd {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let value = resolve_int(env, &pop_or_null(&mut args))?;
-        let wg = resolve_waitgroup(env, &pop_or_null(&mut args))?;
+        let value = resolve_int(env, pop_or_null(&mut args))?;
+        let wg = resolve_waitgroup(env, pop_or_null(&mut args))?;
 
         wg.count
             .fetch_add(value as isize, std::sync::atomic::Ordering::AcqRel);
@@ -208,7 +208,7 @@ impl NativeFunction for WaitGroupRawDone {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let wg = resolve_waitgroup(env, &pop_or_null(&mut args))?;
+        let wg = resolve_waitgroup(env, pop_or_null(&mut args))?;
 
         wg.done();
 
@@ -226,7 +226,7 @@ impl NativeFunction for WaitGroupJoin {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let wg = resolve_waitgroup(env, &pop_or_null(&mut args))?;
+        let wg = resolve_waitgroup(env, pop_or_null(&mut args))?;
         let func = pop_or_null(&mut args);
 
         wg.count.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
@@ -246,7 +246,7 @@ impl NativeFunction for WaitGroupWait {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let wg = resolve_waitgroup(env, &pop_or_null(&mut args))?;
+        let wg = resolve_waitgroup(env, pop_or_null(&mut args))?;
 
         wg.wait()?;
         Ok(RuntimeValue::Null)
@@ -263,7 +263,7 @@ impl NativeFunction for WaitGroupCount {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let wg = resolve_waitgroup(env, &pop_or_null(&mut args))?;
+        let wg = resolve_waitgroup(env, pop_or_null(&mut args))?;
 
         let count = wg.count.load(std::sync::atomic::Ordering::Acquire);
         Ok(RuntimeValue::Int(count as i64))
@@ -300,7 +300,7 @@ impl NativeFunction for MutexGet {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let m = resolve_mutex(env, &pop_or_null(&mut args))?;
+        let m = resolve_mutex(env, pop_or_null(&mut args))?;
         let guard = m.lock();
 
         Ok(guard.get_clone())
@@ -318,7 +318,7 @@ impl NativeFunction for MutexSet {
         expect_num_args(&args, &[2])?;
 
         let value = pop_or_null(&mut args);
-        let m = resolve_mutex(env, &pop_or_null(&mut args))?;
+        let m = resolve_mutex(env, pop_or_null(&mut args))?;
 
         let guard = m.lock();
         Ok(guard.set_value(value))
@@ -336,7 +336,7 @@ impl NativeFunction for MutexWith {
         expect_num_args(&args, &[2])?;
 
         let func = pop_or_null(&mut args);
-        let m = resolve_mutex(env, &pop_or_null(&mut args))?;
+        let m = resolve_mutex(env, pop_or_null(&mut args))?;
 
         let guard = m.lock();
         let current = guard.get_clone();
@@ -364,7 +364,7 @@ impl NativeFunction for MutexWrite {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let m = resolve_mutex(env, &pop_or_null(&mut args))?;
+        let m = resolve_mutex(env, pop_or_null(&mut args))?;
 
         let guard = m.lock();
         Ok(RuntimeValue::MutexGuard(Arc::new(guard)))

@@ -177,7 +177,7 @@ impl VM {
     ) -> Result<(), RuntimeError> {
         let updated_field = self.get_reg_value_in_frame(frame_idx, field_reg);
         let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg);
-        let parent_resolved = self.resolve_value_for_op_ref(parent_raw)?;
+        let parent_resolved = self.resolve_value_ref(parent_raw)?;
 
         fn update(
             value: RuntimeValue,
@@ -343,7 +343,7 @@ impl VM {
         get_result: bool,
     ) -> Result<RuntimeValue, RuntimeError> {
         trace!("calling runtime callable");
-        match self.resolve_value_for_op_ref(&callable)? {
+        match self.resolve_value_ref(&callable)? {
             RuntimeValue::Function { name, captures } => {
                 let callsite = (self.current_frame().func_ptr, callsite_block, callsite_tag);
                 let Some(func) = self.resolve_callable_cached(name, callsite) else {
@@ -418,7 +418,7 @@ impl VM {
             }
             RuntimeValue::NativeFunction(func) => func.run(self, args),
             #[cfg(feature = "native")]
-            RuntimeValue::ExternFunction(func) => func.call(self, args),
+            RuntimeValue::ExternFunction(func) => func.call(self, &args),
             RuntimeValue::BoundMethod { callee, receiver } => {
                 let mut full_args = vec![receiver.as_ref().clone()];
                 full_args.extend(args);
@@ -628,7 +628,7 @@ impl VM {
     fn call_arg_from_frame_reg(&self, frame: usize, reg: u16) -> RuntimeValue {
         match self.get_reg_value_in_frame(frame, reg) {
             RuntimeValue::RegRef { frame, reg } => {
-                if let Ok(resolved) = self.resolve_value_for_op_ref(&RuntimeValue::RegRef {
+                if let Ok(resolved) = self.resolve_value_ref(&RuntimeValue::RegRef {
                     frame: *frame,
                     reg: *reg,
                 }) {
@@ -647,7 +647,7 @@ impl VM {
                 }
             }
             RuntimeValue::Ref(name) => {
-                if let Ok(resolved) = self.resolve_value_for_op_ref(&RuntimeValue::Ref(*name)) {
+                if let Ok(resolved) = self.resolve_value_ref(&RuntimeValue::Ref(*name)) {
                     if resolved.should_pass_by_reg_ref() {
                         RuntimeValue::Ref(*name)
                     } else {
@@ -658,7 +658,7 @@ impl VM {
                 }
             }
             RuntimeValue::VarRef(id) => {
-                if let Ok(resolved) = self.resolve_value_for_op_ref(&RuntimeValue::VarRef(*id)) {
+                if let Ok(resolved) = self.resolve_value_ref(&RuntimeValue::VarRef(*id)) {
                     if resolved.should_pass_by_reg_ref() {
                         RuntimeValue::VarRef(*id)
                     } else {
@@ -679,20 +679,6 @@ impl VM {
         args.iter()
             .map(|reg| self.call_arg_from_frame_reg(frame, *reg))
             .collect()
-    }
-
-    #[inline]
-    pub(crate) fn resolve_operand_value(
-        &mut self,
-        value: RuntimeValue,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        match value {
-            RuntimeValue::Ref(_)
-            | RuntimeValue::VarRef(_)
-            | RuntimeValue::RegRef { .. }
-            | RuntimeValue::MutexGuard(_) => self.resolve_value_for_op_ref(&value),
-            other => Ok(other),
-        }
     }
 
     fn runtime_matches_type(&self, value: &RuntimeValue, target: &ParserInnerType) -> bool {

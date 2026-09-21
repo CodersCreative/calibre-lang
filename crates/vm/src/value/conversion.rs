@@ -20,7 +20,7 @@ impl RuntimeValue {
         } = &self
             && type_name == &data_type.impl_name()
         {
-            let resolved = env.resolve_operand_value(value.as_ref().clone())?;
+            let resolved = env.resolve_value(value.as_ref().clone())?;
             return Ok(resolved);
         }
 
@@ -301,7 +301,7 @@ impl VM {
                 (inner.clone(), inner)
             }
             other => {
-                let probe = self.resolve_operand_value(other.clone())?;
+                let probe = self.resolve_value(other.clone())?;
                 (other, probe)
             }
         };

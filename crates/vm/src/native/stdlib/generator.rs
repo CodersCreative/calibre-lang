@@ -77,14 +77,10 @@ impl NativeFunction for GeneratorSuspendFn {
         String::from("gen_suspend")
     }
 
-    fn run(
-        &self,
-        _env: &mut VM,
-        mut args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let value = pop_or_null(&mut args);
+        let value = env.resolve_value(pop_or_null(&mut args))?;
         Ok(RuntimeValue::GeneratorSuspend(Box::new(value)))
     }
 }

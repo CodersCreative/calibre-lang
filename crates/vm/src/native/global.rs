@@ -24,7 +24,7 @@ impl NativeFunction for ConsoleOutput {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let handle_type = resolve_int(env, &first_or_null(&mut args))?;
+        let handle_type = resolve_int(env, first_or_null(&mut args))?;
 
         let rendered = args
             .into_iter()
@@ -98,7 +98,7 @@ impl NativeFunction for ErrFn {
         expect_num_args(&args, &[1])?;
 
         Ok(RuntimeValue::Result(Err(Gc::new(
-            env.resolve_value_for_op_ref(&pop_or_null(&mut args))?,
+            env.resolve_value(pop_or_null(&mut args))?,
         ))))
     }
 }
@@ -142,7 +142,7 @@ impl NativeFunction for OkFn {
         expect_num_args(&args, &[1])?;
 
         Ok(RuntimeValue::Result(Ok(Gc::new(
-            env.resolve_value_for_op_ref(&pop_or_null(&mut args))?,
+            env.resolve_value_ref(&pop_or_null(&mut args))?,
         ))))
     }
 }
@@ -156,12 +156,10 @@ impl NativeFunction for Wait {
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
-        let val = resolve_int(env, &args[0])?;
-        thread::sleep(Duration::from_millis(val as u64));
+        let val = resolve_int(env, pop_or_null(&mut args))? as u64;
+        thread::sleep(Duration::from_millis(val));
 
-        Ok(RuntimeValue::Result(Ok(Gc::new(
-            env.resolve_value_for_op_ref(&pop_or_null(&mut args))?,
-        ))))
+        Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(val)))))
     }
 }
 
@@ -187,7 +185,7 @@ impl NativeFunction for SomeFn {
         expect_num_args(&args, &[1])?;
 
         Ok(RuntimeValue::Option(Some(Gc::new(
-            env.resolve_value_for_op_ref(&pop_or_null(&mut args))?,
+            env.resolve_value_ref(&pop_or_null(&mut args))?,
         ))))
     }
 }
@@ -214,7 +212,7 @@ impl NativeFunction for AssertFn {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1, 2])?;
 
-        match env.resolve_value_for_op_ref(&first_or_null(&mut args))? {
+        match env.resolve_value(first_or_null(&mut args))? {
             RuntimeValue::Option(Some(_))
             | RuntimeValue::Result(Ok(_))
             | RuntimeValue::Bool(true) => Ok(RuntimeValue::Null),
@@ -243,7 +241,7 @@ impl NativeFunction for Len {
         expect_num_args(&args, &[1])?;
 
         Ok(RuntimeValue::UInt(
-            match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
+            match env.resolve_value(pop_or_null(&mut args))? {
                 RuntimeValue::List(data) => data.as_ref().0.len() as u64,
                 RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as u64,
                 RuntimeValue::Range(from, to) => (to - from).max(0).unsigned_abs(),
@@ -276,7 +274,7 @@ impl NativeFunction for MinOrZero {
         expect_num_args(&args, &[1])?;
 
         Ok(RuntimeValue::Int(
-            match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
+            match env.resolve_value(pop_or_null(&mut args))? {
                 RuntimeValue::Range(from, _) => from,
                 _ => 0,
             },
@@ -294,7 +292,7 @@ impl NativeFunction for Trim {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
+        match env.resolve_value(pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Ustr::from(s.trim()))),
             other => Err(RuntimeError::UnexpectedTypeInConversion {
                 value: Box::new(other),
@@ -314,7 +312,7 @@ impl NativeFunction for TrimStart {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
+        match env.resolve_value(pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Ustr::from(s.trim_start()))),
             other => Err(RuntimeError::UnexpectedTypeInConversion {
                 value: Box::new(other),
@@ -334,7 +332,7 @@ impl NativeFunction for TrimEnd {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
+        match env.resolve_value(pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Ustr::from(s.trim_end()))),
             other => Err(RuntimeError::UnexpectedTypeInConversion {
                 value: Box::new(other),
@@ -353,7 +351,7 @@ impl NativeFunction for IsWhitespace {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
+        match env.resolve_value(pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Bool(s.chars().all(|c| c.is_whitespace()))),
             RuntimeValue::Char(c) => Ok(RuntimeValue::Bool(c.is_whitespace())),
             other => Err(RuntimeError::UnexpectedTypeInConversion {
@@ -374,7 +372,7 @@ impl NativeFunction for DiscriminantFn {
         expect_num_args(&args, &[1])?;
 
         Ok(RuntimeValue::Int(
-            match env.resolve_value_for_op_ref(&pop_or_null(&mut args))? {
+            match env.resolve_value(pop_or_null(&mut args))? {
                 RuntimeValue::Enum(_, index, _) => index as i64,
                 RuntimeValue::Option(Some(_)) | RuntimeValue::Result(Ok(_)) => 0,
                 RuntimeValue::Option(None) | RuntimeValue::Result(Err(_)) => 1,

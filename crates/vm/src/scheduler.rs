@@ -273,7 +273,7 @@ fn run_task_slice(
         }
         #[cfg(feature = "native")]
         RuntimeValue::ExternFunction(func) => {
-            let _ = func.call(&mut task.vm, Vec::new());
+            let _ = func.call(&mut task.vm, &[]);
             TaskStatus::Finished
         }
         _ => TaskStatus::Finished,

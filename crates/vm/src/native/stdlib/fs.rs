@@ -34,7 +34,7 @@ impl NativeFunction for FsPathNew {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_str(env, &pop_or_null(&mut args))?;
+        let path = resolve_str(env, pop_or_null(&mut args))?;
 
         let path_buf = PathBuf::from(path.as_str());
         Ok(RuntimeValue::Host(Arc::new(Mutex::new(path_buf))))
@@ -51,7 +51,7 @@ impl NativeFunction for FsPathAsStr {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Str(Ustr::from(
             &path
@@ -78,7 +78,7 @@ impl NativeFunction for FsPathExists {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             path.lock()
@@ -104,7 +104,7 @@ impl NativeFunction for FsPathIsFile {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             path.lock()
@@ -130,7 +130,7 @@ impl NativeFunction for FsPathIsDir {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             path.lock()
@@ -156,7 +156,7 @@ impl NativeFunction for FsPathCanonicalize {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         match path
             .lock()
@@ -186,7 +186,7 @@ impl NativeFunction for FsPathParent {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         match path
             .lock()
@@ -214,7 +214,7 @@ impl NativeFunction for FsPathFileName {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         match path
             .lock()
@@ -242,7 +242,7 @@ impl NativeFunction for FsPathExtension {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         match path
             .lock()
@@ -270,7 +270,7 @@ impl NativeFunction for FsPathStem {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         match path
             .lock()
@@ -298,8 +298,8 @@ impl NativeFunction for FsPathJoin {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let other = resolve_str(env, &pop_or_null(&mut args))?;
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let other = resolve_str(env, pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         path.lock()
             .unwrap()
@@ -321,8 +321,8 @@ impl NativeFunction for FsPathWithExtension {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let other = resolve_str(env, &pop_or_null(&mut args))?;
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let other = resolve_str(env, pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Host(Arc::new(Mutex::new(
             path.lock()
@@ -348,8 +348,8 @@ impl NativeFunction for FsPathWithFileName {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let other = resolve_str(env, &pop_or_null(&mut args))?;
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let other = resolve_str(env, pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Host(Arc::new(Mutex::new(
             path.lock()
@@ -375,7 +375,7 @@ impl NativeFunction for FsPathReadDir {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         match std::fs::read_dir(
             path.lock()
@@ -456,7 +456,7 @@ impl NativeFunction for FsDirEntryPath {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let entry = resolve_host(env, &pop_or_null(&mut args))?;
+        let entry = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Host(Arc::new(Mutex::new(
             entry
@@ -484,7 +484,7 @@ impl NativeFunction for FsDirEntryFileName {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let entry = resolve_host(env, &pop_or_null(&mut args))?;
+        let entry = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Str(Ustr::from(
             &entry
@@ -513,7 +513,7 @@ impl NativeFunction for FsDirEntryFileType {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let entry = resolve_host(env, &pop_or_null(&mut args))?;
+        let entry = resolve_host(env, pop_or_null(&mut args))?;
 
         match entry
             .lock()
@@ -544,7 +544,7 @@ impl NativeFunction for FsDirEntryMetadata {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let entry = resolve_host(env, &pop_or_null(&mut args))?;
+        let entry = resolve_host(env, pop_or_null(&mut args))?;
 
         match entry
             .lock()
@@ -577,7 +577,7 @@ impl NativeFunction for FsFileTypeIsFile {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let ft = resolve_host(env, &pop_or_null(&mut args))?;
+        let ft = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             ft.lock()
@@ -603,7 +603,7 @@ impl NativeFunction for FsFileTypeIsDir {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let ft = resolve_host(env, &pop_or_null(&mut args))?;
+        let ft = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             ft.lock()
@@ -629,7 +629,7 @@ impl NativeFunction for FsFileTypeIsSymlink {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let ft = resolve_host(env, &pop_or_null(&mut args))?;
+        let ft = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             ft.lock()
@@ -657,7 +657,7 @@ impl NativeFunction for FsMetadataIsFile {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let meta = resolve_host(env, &pop_or_null(&mut args))?;
+        let meta = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             meta.lock()
@@ -684,7 +684,7 @@ impl NativeFunction for FsMetadataIsDir {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let meta = resolve_host(env, &pop_or_null(&mut args))?;
+        let meta = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             meta.lock()
@@ -711,7 +711,7 @@ impl NativeFunction for FsMetadataLen {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let meta = resolve_host(env, &pop_or_null(&mut args))?;
+        let meta = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::UInt(
             meta.lock()
@@ -738,7 +738,7 @@ impl NativeFunction for FsMetadataModified {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let meta = resolve_host(env, &pop_or_null(&mut args))?;
+        let meta = resolve_host(env, pop_or_null(&mut args))?;
 
         match meta
             .lock()
@@ -774,7 +774,7 @@ impl NativeFunction for FsMetadataCreated {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let meta = resolve_host(env, &pop_or_null(&mut args))?;
+        let meta = resolve_host(env, pop_or_null(&mut args))?;
 
         match meta
             .lock()
@@ -810,7 +810,7 @@ impl NativeFunction for FsMetadataAccessed {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let meta = resolve_host(env, &pop_or_null(&mut args))?;
+        let meta = resolve_host(env, pop_or_null(&mut args))?;
 
         match meta
             .lock()
@@ -846,7 +846,7 @@ impl NativeFunction for FsMetadataIsReadOnly {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let meta = resolve_host(env, &pop_or_null(&mut args))?;
+        let meta = resolve_host(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
             meta.lock()
@@ -891,8 +891,8 @@ impl NativeFunction for FsFileOpen {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let mode = resolve_str(env, &pop_or_null(&mut args))?;
-        let path = resolve_host(env, &pop_or_null(&mut args))?;
+        let mode = resolve_str(env, pop_or_null(&mut args))?;
+        let path = resolve_host(env, pop_or_null(&mut args))?;
 
         let mut options = OpenOptions::new();
         match mode.as_str() {
@@ -939,7 +939,7 @@ impl NativeFunction for FsFileClose {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let file = resolve_host(env, &pop_or_null(&mut args))?;
+        let file = resolve_host(env, pop_or_null(&mut args))?;
 
         match file
             .lock()
@@ -971,8 +971,8 @@ impl NativeFunction for FsFileWrite {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let content = resolve_str(env, &pop_or_null(&mut args))?;
-        let file = resolve_host(env, &pop_or_null(&mut args))?;
+        let content = resolve_str(env, pop_or_null(&mut args))?;
+        let file = resolve_host(env, pop_or_null(&mut args))?;
 
         match file
             .lock()
@@ -1001,8 +1001,8 @@ impl NativeFunction for FsFileWriteLine {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let content = resolve_str(env, &pop_or_null(&mut args))?;
-        let file = resolve_host(env, &pop_or_null(&mut args))?;
+        let content = resolve_str(env, pop_or_null(&mut args))?;
+        let file = resolve_host(env, pop_or_null(&mut args))?;
 
         match writeln!(
             file.lock()
@@ -1035,7 +1035,7 @@ impl NativeFunction for FsFileReadAll {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let file = resolve_host(env, &pop_or_null(&mut args))?;
+        let file = resolve_host(env, pop_or_null(&mut args))?;
 
         let mut content = String::new();
 
@@ -1068,7 +1068,7 @@ impl NativeFunction for FsFileFlush {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let file = resolve_host(env, &pop_or_null(&mut args))?;
+        let file = resolve_host(env, pop_or_null(&mut args))?;
 
         match file
             .lock()
@@ -1099,7 +1099,7 @@ impl NativeFunction for FsDirCreate {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_str(env, &pop_or_null(&mut args))?;
+        let path = resolve_str(env, pop_or_null(&mut args))?;
 
         match std::fs::create_dir(path.as_str()) {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
@@ -1120,7 +1120,7 @@ impl NativeFunction for FsDirCreateAll {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_str(env, &pop_or_null(&mut args))?;
+        let path = resolve_str(env, pop_or_null(&mut args))?;
 
         match std::fs::create_dir_all(path.as_str()) {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
@@ -1141,7 +1141,7 @@ impl NativeFunction for FsDirRemove {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_str(env, &pop_or_null(&mut args))?;
+        let path = resolve_str(env, pop_or_null(&mut args))?;
 
         match std::fs::remove_dir(path.as_str()) {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
@@ -1162,7 +1162,7 @@ impl NativeFunction for FsDirRemoveAll {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let path = resolve_str(env, &pop_or_null(&mut args))?;
+        let path = resolve_str(env, pop_or_null(&mut args))?;
 
         match std::fs::remove_dir_all(path.as_str()) {
             Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),

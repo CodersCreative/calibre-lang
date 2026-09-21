@@ -9,8 +9,8 @@ use std::cmp::Ordering;
 
 // TODO limit num args in this file
 
-fn compare_callback_result(env: &VM, result: &RuntimeValue) -> Result<Ordering, RuntimeError> {
-    match env.resolve_value_for_op_ref(result)? {
+fn compare_callback_result(env: &VM, result: RuntimeValue) -> Result<Ordering, RuntimeError> {
+    match env.resolve_value(result)? {
         RuntimeValue::Int(v) => Ok(v.cmp(&0)),
         RuntimeValue::UInt(v) => Ok((v as i128).cmp(&0)),
         RuntimeValue::Float(v) => Ok(v.partial_cmp(&0.0).unwrap_or(Ordering::Equal)),
@@ -31,7 +31,7 @@ fn parse_list_callable_needle_args(
     let mut needle = None;
 
     for arg in args {
-        let resolved = env.resolve_value_for_op_ref(&arg)?;
+        let resolved = env.resolve_value(arg)?;
         if list_value.is_none()
             && let RuntimeValue::List(values) = &resolved
         {
@@ -100,7 +100,7 @@ impl NativeFunction for ListSortBy {
                     u32::MAX.saturating_sub(2),
                     true,
                 )
-                .and_then(|x| compare_callback_result(env, &x))
+                .and_then(|x| compare_callback_result(env, x))
             {
                 Ok(ordering) => ordering,
                 Err(err) => {
@@ -144,7 +144,7 @@ impl NativeFunction for ListBinarySearchBy {
                     u32::MAX.saturating_sub(3),
                     true,
                 )
-                .and_then(|x| compare_callback_result(env, &x))?;
+                .and_then(|x| compare_callback_result(env, x))?;
             match ordering {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid - 1,
@@ -246,7 +246,7 @@ fn remove_from_target(
             }
         }
         other => {
-            let resolved = env.resolve_value_for_op_ref(&other)?;
+            let resolved = env.resolve_value_ref(&other)?;
             let RuntimeValue::List(mut list) = resolved else {
                 return Err(RuntimeError::ExpectedListOrStrFound {
                     found: Box::new(other),
@@ -280,7 +280,7 @@ impl NativeFunction for ListRawRemove {
                 continue;
             }
             if idx.is_none() {
-                match env.resolve_value_for_op_ref(&arg)? {
+                match env.resolve_value(arg)? {
                     RuntimeValue::Int(v) => idx = Some(v),
                     RuntimeValue::UInt(v) => idx = Some(v as i64),
                     _ => {}

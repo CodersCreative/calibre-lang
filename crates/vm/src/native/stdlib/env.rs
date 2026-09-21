@@ -20,7 +20,7 @@ impl NativeFunction for EnvGet {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let idx = resolve_int(env, &pop_or_null(&mut args))? as usize;
+        let idx = resolve_int(env, pop_or_null(&mut args))? as usize;
 
         let Some(value) = env.program_args().get(idx) else {
             return Ok(RuntimeValue::Option(None));
@@ -42,7 +42,7 @@ impl NativeFunction for EnvVar {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let name = resolve_str(env, &pop_or_null(&mut args))?;
+        let name = resolve_str(env, pop_or_null(&mut args))?;
 
         match std::env::var(name.as_str()) {
             Ok(value) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
@@ -64,8 +64,8 @@ impl NativeFunction for EnvSetVar {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let value = resolve_str(env, &pop_or_null(&mut args))?;
-        let name = resolve_str(env, &pop_or_null(&mut args))?;
+        let value = resolve_str(env, pop_or_null(&mut args))?;
+        let name = resolve_str(env, pop_or_null(&mut args))?;
 
         unsafe { std::env::set_var(name.as_str(), value.as_str()) };
 
@@ -83,7 +83,7 @@ impl NativeFunction for EnvRemoveVar {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let name = resolve_str(env, &pop_or_null(&mut args))?;
+        let name = resolve_str(env, pop_or_null(&mut args))?;
 
         unsafe { std::env::remove_var(name.as_str()) };
 

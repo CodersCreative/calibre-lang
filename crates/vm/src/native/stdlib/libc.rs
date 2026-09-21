@@ -51,7 +51,7 @@ impl NativeFunction for SetCErrNo {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let code = resolve_int(env, &pop_or_null(&mut args))?;
+        let code = resolve_int(env, pop_or_null(&mut args))?;
         set_errno(Errno(code as i32));
         Ok(RuntimeValue::Null)
     }

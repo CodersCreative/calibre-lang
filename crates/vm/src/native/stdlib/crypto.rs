@@ -21,7 +21,7 @@ impl NativeFunction for Sha256Fn {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let s = resolve_str(env, &pop_or_null(&mut args))?;
+        let s = resolve_str(env, pop_or_null(&mut args))?;
 
         let mut hasher = Sha256::new();
         hasher.update(s.as_bytes());
@@ -40,7 +40,7 @@ impl NativeFunction for Sha512Fn {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let s = resolve_str(env, &pop_or_null(&mut args))?;
+        let s = resolve_str(env, pop_or_null(&mut args))?;
 
         let mut hasher = Sha512::new();
         hasher.update(s.as_bytes());
@@ -59,7 +59,7 @@ impl NativeFunction for Blake3Fn {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let s = resolve_str(env, &pop_or_null(&mut args))?;
+        let s = resolve_str(env, pop_or_null(&mut args))?;
 
         let mut hasher = Blake3::new();
         hasher.update(s.as_bytes());

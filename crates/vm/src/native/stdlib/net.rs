@@ -67,9 +67,9 @@ fn parse_http_args(
     expect_num_args(&args, &[3])?;
 
     let parts = [
-        resolve_str(env, &pop_or_null(&mut args))?,
-        resolve_str(env, &pop_or_null(&mut args))?,
-        resolve_str(env, &pop_or_null(&mut args))?,
+        resolve_str(env, pop_or_null(&mut args))?,
+        resolve_str(env, pop_or_null(&mut args))?,
+        resolve_str(env, pop_or_null(&mut args))?,
     ];
 
     let parts = [parts[0].as_str(), parts[1].as_str(), parts[2].as_str()];
@@ -166,8 +166,8 @@ impl NativeFunction for TcpConnect {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let port = resolve_int(env, &pop_or_null(&mut args))?;
-        let host = resolve_str(env, &pop_or_null(&mut args))?.to_string();
+        let port = resolve_int(env, pop_or_null(&mut args))?;
+        let host = resolve_str(env, pop_or_null(&mut args))?.to_string();
 
         let remapped_port = {
             let key = key_for(host.as_str(), port);
@@ -178,13 +178,16 @@ impl NativeFunction for TcpConnect {
                 .copied()
                 .unwrap_or(port)
         };
+
         let addr = format!("{}:{}", host, remapped_port);
         let stream = TcpStream::connect(addr).map_err(|e| RuntimeError::Io(e.to_string()))?;
         stream
             .set_nonblocking(false)
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
+
         let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
         let _ = stream.set_write_timeout(Some(Duration::from_secs(3)));
+
         Ok(RuntimeValue::Host(Arc::new(Mutex::new(
             HostTcpStream::from(stream),
         ))))
@@ -201,8 +204,8 @@ impl NativeFunction for TcpListen {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let port = resolve_int(env, &pop_or_null(&mut args))?;
-        let host = resolve_str(env, &pop_or_null(&mut args))?.to_string();
+        let port = resolve_int(env, pop_or_null(&mut args))?;
+        let host = resolve_str(env, pop_or_null(&mut args))?.to_string();
 
         let addr = format!("{}:{}", host, port);
         let socket_addr = addr
@@ -210,19 +213,23 @@ impl NativeFunction for TcpListen {
             .map_err(|e| RuntimeError::Io(e.to_string()))?
             .next()
             .ok_or_else(|| RuntimeError::Io("no socket address resolved".to_string()))?;
+
         let domain = if socket_addr.is_ipv4() {
             socket2::Domain::IPV4
         } else {
             socket2::Domain::IPV6
         };
+
         let socket =
             socket2::Socket::new(domain, socket2::Type::STREAM, Some(socket2::Protocol::TCP))
                 .map_err(|e| RuntimeError::Io(e.to_string()))?;
         socket
             .set_reuse_address(true)
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
+
         let requested = socket_addr;
         let bind_result = socket.bind(&requested.into());
+
         if let Err(err) = bind_result {
             if err.kind() == std::io::ErrorKind::AddrInUse {
                 let fallback_addr = format!("{}:0", host);
@@ -240,10 +247,13 @@ impl NativeFunction for TcpListen {
                 return Err(RuntimeError::Io(err.to_string()));
             }
         }
+
         socket
             .listen(128)
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
+
         let listener: TcpListener = socket.into();
+
         if let Ok(local_addr) = listener.local_addr()
             && let Ok(mut redirects) = port_redirects().try_lock()
         {
@@ -254,6 +264,7 @@ impl NativeFunction for TcpListen {
                 redirects.remove(&key);
             }
         }
+
         Ok(RuntimeValue::Host(Arc::new(Mutex::new(
             HostTcpListener::from(listener),
         ))))
@@ -270,7 +281,7 @@ impl NativeFunction for TcpAccept {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let listener = resolve_host(env, &pop_or_null(&mut args))?;
+        let listener = resolve_host(env, pop_or_null(&mut args))?;
 
         let (stream, _) = listener
             .lock()
@@ -301,8 +312,8 @@ impl NativeFunction for TcpRead {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let len = resolve_int(env, &pop_or_null(&mut args))?;
-        let stream = resolve_host(env, &pop_or_null(&mut args))?;
+        let len = resolve_int(env, pop_or_null(&mut args))?;
+        let stream = resolve_host(env, pop_or_null(&mut args))?;
 
         let mut buf = vec![0u8; len.max(0) as usize];
         let mut guard = stream.lock().unwrap();
@@ -340,11 +351,10 @@ impl NativeFunction for TcpWrite {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
-        let data = resolve_str(env, &pop_or_null(&mut args))?;
-        let stream = resolve_host(env, &pop_or_null(&mut args))?;
+        let data = resolve_str(env, pop_or_null(&mut args))?;
+        let stream = resolve_host(env, pop_or_null(&mut args))?;
 
         let mut guard = stream.lock().unwrap();
-
         let n = guard
             .as_any_mut()
             .downcast_mut::<HostTcpStream>()

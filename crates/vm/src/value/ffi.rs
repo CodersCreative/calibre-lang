@@ -1,30 +1,7 @@
+use super::*;
 use calibre_parser::ast::ffi::ParserFfiInnerType;
 
-use super::*;
-
 impl ExternFunction {
-    fn resolve_value(env: &mut VM, value: RuntimeValue) -> RuntimeValue {
-        match value {
-            RuntimeValue::Ref(name) => env
-                .variables
-                .get(&name)
-                .cloned()
-                .unwrap_or(RuntimeValue::Ref(name)),
-            RuntimeValue::VarRef(id) => env
-                .variables
-                .get_by_id(id)
-                .cloned()
-                .unwrap_or(RuntimeValue::VarRef(id)),
-            RuntimeValue::RegRef { frame, reg } => env.get_reg_value_in_frame(frame, reg).clone(),
-            RuntimeValue::Ptr(id) => env
-                .ptr_heap
-                .get(&id)
-                .cloned()
-                .unwrap_or(RuntimeValue::Ptr(id)),
-            RuntimeValue::MutexGuard(guard) => guard.get_clone(),
-            other => other,
-        }
-    }
     fn type_to_libffi_type(typ: &ParserDataType) -> Type {
         match &typ.data_type {
             ParserInnerType::Int => Type::i64(),
@@ -126,7 +103,7 @@ impl ExternFunction {
                 let mut max_align = 1usize;
 
                 for (_, field) in data.as_ref().0.0.iter() {
-                    let resolved = Self::resolve_value(env, field.clone());
+                    let resolved = env.resolve_value_ref(field).unwrap_or_default();
                     let (field_bytes, field_ty, size, align) =
                         Self::struct_field_to_bytes(resolved)?;
                     max_align = max_align.max(align);
@@ -193,11 +170,7 @@ impl ExternFunction {
         }
     }
 
-    pub fn call(
-        &self,
-        env: &mut VM,
-        args: Vec<RuntimeValue>,
-    ) -> Result<RuntimeValue, RuntimeError> {
+    pub fn call(&self, env: &mut VM, args: &[RuntimeValue]) -> Result<RuntimeValue, RuntimeError> {
         if self.memo {
             let mut key: Option<Vec<HashKey>> = Some(Vec::with_capacity(args.len()));
             for (i, a) in args.iter().enumerate() {
@@ -225,7 +198,7 @@ impl ExternFunction {
                 }
                 drop(guard);
 
-                let result = self.call_inner(env, args.clone())?;
+                let result = self.call_inner(env, args)?;
                 env.caches
                     .memo
                     .entry(self.symbol)
@@ -243,7 +216,7 @@ impl ExternFunction {
     fn call_inner(
         &self,
         env: &mut VM,
-        args: Vec<RuntimeValue>,
+        args: &[RuntimeValue],
     ) -> Result<RuntimeValue, RuntimeError> {
         let mut arg_types = Vec::with_capacity(self.parameters.len());
         let mut ffi_args: Vec<FfiArg> = Vec::with_capacity(self.parameters.len());
@@ -255,7 +228,7 @@ impl ExternFunction {
         for (param, value) in self.parameters.iter().zip(args) {
             match &param.data_type {
                 x if !matches!(x, ParserInnerType::FfiType(_)) => {
-                    match (Self::resolve_value(env, value), x) {
+                    match (env.resolve_value_ref(value).unwrap_or_default(), x) {
                         (RuntimeValue::Str(x), ParserInnerType::Str) => {
                             arg_types.push(Type::pointer());
                             let value = CString::new(x.as_str())
@@ -338,8 +311,7 @@ impl ExternFunction {
                             arg_types.push(Type::pointer());
                             let mut bytes = Vec::new();
                             for item in list.as_ref().0.iter() {
-                                let item = Self::resolve_value(env, item.clone());
-                                match item {
+                                match env.resolve_value_ref(item).unwrap_or_default() {
                                     RuntimeValue::UInt(x) => bytes.push(x as u8),
                                     RuntimeValue::Int(x) => bytes.push(x as u8),
                                     RuntimeValue::Float(x) => bytes.push(x as u8),
@@ -355,9 +327,9 @@ impl ExternFunction {
                         }
                         (value, ParserInnerType::Ptr(_)) => {
                             arg_types.push(Type::pointer());
-                            if let Some(bytes) =
-                                Self::pack_aggregate_bytes(&Self::resolve_value(env, value))
-                            {
+                            if let Some(bytes) = Self::pack_aggregate_bytes(
+                                &env.resolve_value(value).unwrap_or_default(),
+                            ) {
                                 let ptr = bytes.as_ptr() as *const c_void;
                                 Self::push_arg(&mut ffi_args, FfiArg::Bytes { _value: bytes, ptr });
                             } else {
@@ -366,24 +338,27 @@ impl ExternFunction {
                         }
                         (value, ParserInnerType::Struct(_))
                         | (value, ParserInnerType::StructWithGenerics { .. }) => {
-                            let resolved = Self::resolve_value(env, value);
-                            let (bytes, ty) = match Self::pack_struct_arg(env, resolved.clone()) {
+                            let resolved = env.resolve_value(value).unwrap_or_default();
+
+                            let (bytes, ty) = match Self::pack_struct_arg(env, resolved) {
                                 Some(data) => data,
                                 None => {
-                                    return Err(RuntimeError::Ffi(format!(
-                                        "unsupported struct arg {:?}",
-                                        resolved
+                                    return Err(RuntimeError::Ffi(String::from(
+                                        "unsupported struct arg",
                                     )));
                                 }
                             };
+
                             arg_types.push(ty.clone());
                             let mut backing = vec![0u64; bytes.len().div_ceil(8)];
+
                             if !bytes.is_empty() {
                                 let raw = backing.as_mut_ptr() as *mut u8;
                                 let raw_len = backing.len() * std::mem::size_of::<u64>();
                                 let dst = unsafe { std::slice::from_raw_parts_mut(raw, raw_len) };
                                 dst[..bytes.len()].copy_from_slice(&bytes);
                             }
+
                             Self::push_arg(&mut ffi_args, FfiArg::Struct { backing });
                         }
                         _ => return Err(RuntimeError::InvalidFunctionCall),
@@ -391,7 +366,7 @@ impl ExternFunction {
                 }
                 ParserInnerType::FfiType(x) => {
                     arg_types.push(Self::type_to_libffi_type(param));
-                    let value = Self::resolve_value(env, value);
+                    let value = env.resolve_value_ref(value).unwrap_or_default();
                     let arg = match (x, value) {
                         (
                             ParserFfiInnerType::U8 | ParserFfiInnerType::UChar,

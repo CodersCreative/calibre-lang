@@ -347,7 +347,7 @@ impl VM {
                 .iter()
                 .map(|(key, value)| {
                     let resolved = self
-                        .resolve_value_for_op_ref(value)
+                        .resolve_value_ref(value)
                         .unwrap_or_else(|_| RuntimeValue::Null);
                     let resolved = self.resolve_saveable_runtime_value_ref(
                         &self.convert_runtime_var_into_saveable(resolved),
@@ -562,8 +562,19 @@ impl VM {
         self.gc.in_flight.store(false, Ordering::Release);
     }
 
+    #[inline]
+    pub(crate) fn resolve_value(&self, value: RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
+        match value {
+            RuntimeValue::Ref(_)
+            | RuntimeValue::VarRef(_)
+            | RuntimeValue::RegRef { .. }
+            | RuntimeValue::MutexGuard(_) => self.resolve_value_ref(&value),
+            other => Ok(other),
+        }
+    }
+
     #[instrument(skip_all)]
-    pub(crate) fn resolve_value_for_op_ref(
+    pub(crate) fn resolve_value_ref(
         &self,
         value: &RuntimeValue,
     ) -> Result<RuntimeValue, RuntimeError> {
@@ -614,8 +625,7 @@ impl VM {
 
                     if matches!(&v, RuntimeValue::VarRef(next) if next == id) {
                         if let Some(name) = self.variables.name_of(*id)
-                            && let Ok(local) =
-                                self.resolve_value_for_op_ref(&RuntimeValue::Ref(name))
+                            && let Ok(local) = self.resolve_value(RuntimeValue::Ref(name))
                             && !matches!(&local, RuntimeValue::VarRef(next) if next == id)
                         {
                             owned = Some(local);

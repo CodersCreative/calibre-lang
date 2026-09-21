@@ -50,8 +50,8 @@ pub fn first_or_null(args: &mut Vec<RuntimeValue>) -> RuntimeValue {
 }
 
 #[inline]
-pub fn resolve_str(env: &VM, value: &RuntimeValue) -> Result<Ustr, RuntimeError> {
-    let value = env.resolve_value_for_op_ref(value)?;
+pub fn resolve_str(env: &VM, value: RuntimeValue) -> Result<Ustr, RuntimeError> {
+    let value = env.resolve_value(value)?;
     if let RuntimeValue::Str(s) = value {
         Ok(s)
     } else {
@@ -63,8 +63,8 @@ pub fn resolve_str(env: &VM, value: &RuntimeValue) -> Result<Ustr, RuntimeError>
 }
 
 #[inline]
-pub fn resolve_host(env: &VM, value: &RuntimeValue) -> Result<Host, RuntimeError> {
-    let value = env.resolve_value_for_op_ref(value)?;
+pub fn resolve_host(env: &VM, value: RuntimeValue) -> Result<Host, RuntimeError> {
+    let value = env.resolve_value(value)?;
     if let RuntimeValue::Host(v) = value {
         Ok(v)
     } else {
@@ -76,8 +76,8 @@ pub fn resolve_host(env: &VM, value: &RuntimeValue) -> Result<Host, RuntimeError
 }
 
 #[inline]
-pub fn resolve_int(env: &VM, value: &RuntimeValue) -> Result<i64, RuntimeError> {
-    Ok(match env.resolve_value_for_op_ref(value)? {
+pub fn resolve_int(env: &VM, value: RuntimeValue) -> Result<i64, RuntimeError> {
+    Ok(match env.resolve_value(value)? {
         RuntimeValue::Int(v) => v,
         RuntimeValue::Char(c) => c as i64,
         RuntimeValue::UInt(v) => v as i64,
@@ -88,8 +88,8 @@ pub fn resolve_int(env: &VM, value: &RuntimeValue) -> Result<i64, RuntimeError> 
 }
 
 #[inline]
-pub fn resolve_range(env: &VM, value: &RuntimeValue) -> Result<Range<i64>, RuntimeError> {
-    Ok(match env.resolve_value_for_op_ref(value)? {
+pub fn resolve_range(env: &VM, value: RuntimeValue) -> Result<Range<i64>, RuntimeError> {
+    Ok(match env.resolve_value(value)? {
         RuntimeValue::Range(from, to) => from..to,
         v => {
             return Err(RuntimeError::UnexpectedTypeInConversion {
@@ -101,8 +101,8 @@ pub fn resolve_range(env: &VM, value: &RuntimeValue) -> Result<Range<i64>, Runti
 }
 
 #[inline]
-pub fn resolve_char(env: &VM, value: &RuntimeValue) -> Result<char, RuntimeError> {
-    let value = env.resolve_value_for_op_ref(value)?;
+pub fn resolve_char(env: &VM, value: RuntimeValue) -> Result<char, RuntimeError> {
+    let value = env.resolve_value(value)?;
     if let RuntimeValue::Char(v) = value {
         Ok(v)
     } else {
@@ -115,8 +115,8 @@ pub fn resolve_char(env: &VM, value: &RuntimeValue) -> Result<char, RuntimeError
 
 // Async
 #[inline]
-pub fn resolve_channel(env: &VM, value: &RuntimeValue) -> Result<Arc<ChannelInner>, RuntimeError> {
-    let value = env.resolve_value_for_op_ref(value)?;
+pub fn resolve_channel(env: &VM, value: RuntimeValue) -> Result<Arc<ChannelInner>, RuntimeError> {
+    let value = env.resolve_value(value)?;
     if let RuntimeValue::Channel(ch) = value {
         Ok(ch)
     } else {
@@ -130,9 +130,9 @@ pub fn resolve_channel(env: &VM, value: &RuntimeValue) -> Result<Arc<ChannelInne
 #[inline]
 pub fn resolve_waitgroup(
     env: &VM,
-    value: &RuntimeValue,
+    value: RuntimeValue,
 ) -> Result<Arc<WaitGroupInner>, RuntimeError> {
-    let value = env.resolve_value_for_op_ref(value)?;
+    let value = env.resolve_value(value)?;
     if let RuntimeValue::WaitGroup(wg) = value {
         Ok(wg)
     } else {
@@ -144,8 +144,8 @@ pub fn resolve_waitgroup(
 }
 
 #[inline]
-pub fn resolve_mutex(env: &VM, value: &RuntimeValue) -> Result<Arc<MutexInner>, RuntimeError> {
-    let value = env.resolve_value_for_op_ref(value)?;
+pub fn resolve_mutex(env: &VM, value: RuntimeValue) -> Result<Arc<MutexInner>, RuntimeError> {
+    let value = env.resolve_value(value)?;
     if let RuntimeValue::Mutex(mutex) = value {
         Ok(mutex)
     } else {
@@ -158,14 +158,19 @@ pub fn resolve_mutex(env: &VM, value: &RuntimeValue) -> Result<Arc<MutexInner>, 
 
 // Collections
 
-pub fn resolve_hash_key(env: &VM, value: &RuntimeValue) -> Result<HashKey, RuntimeError> {
-    let resolved = env.resolve_value_for_op_ref(value)?;
+pub fn resolve_hash_key(env: &VM, value: RuntimeValue) -> Result<HashKey, RuntimeError> {
+    let resolved = env.resolve_value(value)?;
+    HashKey::try_from(resolved)
+}
+
+pub fn resolve_hash_key_ref(env: &VM, value: &RuntimeValue) -> Result<HashKey, RuntimeError> {
+    let resolved = env.resolve_value_ref(value)?;
     HashKey::try_from(resolved)
 }
 
 #[inline]
-pub fn resolve_hashmap(env: &mut VM, value: &RuntimeValue) -> Result<RuntimeHashMap, RuntimeError> {
-    let resolved = env.resolve_value_for_op_ref(value)?;
+pub fn resolve_hashmap(env: &mut VM, value: RuntimeValue) -> Result<RuntimeHashMap, RuntimeError> {
+    let resolved = env.resolve_value(value)?;
     if let RuntimeValue::HashMap(map) = resolved {
         Ok(map)
     } else {
@@ -177,8 +182,8 @@ pub fn resolve_hashmap(env: &mut VM, value: &RuntimeValue) -> Result<RuntimeHash
 }
 
 #[inline]
-pub fn resolve_hashset(env: &mut VM, value: &RuntimeValue) -> Result<RuntimeHashSet, RuntimeError> {
-    let resolved = env.resolve_value_for_op_ref(value)?;
+pub fn resolve_hashset(env: &mut VM, value: RuntimeValue) -> Result<RuntimeHashSet, RuntimeError> {
+    let resolved = env.resolve_value(value)?;
     if let RuntimeValue::HashSet(set) = resolved {
         Ok(set)
     } else {
