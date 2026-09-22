@@ -8,7 +8,7 @@ Enum
 
 use crate::conversion::{
     AggregateLayout, Reg, VMLiteral,
-    instructions::VMInstruction,
+    instructions::{VMInstruction, VMLoadLiteral},
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{LirAggregate, LirEnum, LirList, LirLiteral};
@@ -40,11 +40,12 @@ impl VMLowering for LirLiteral {
 
         let lit = VMLiteral::from_lir_literal(self, env.big_consts);
         let lit = env.add_literal(lit);
+
         env.emit(
-            VMInstruction::LoadLiteral {
+            VMInstruction::LoadLiteral(VMLoadLiteral {
                 dst: target,
                 literal: lit,
-            },
+            }),
             span,
         );
     }

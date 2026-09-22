@@ -1,4 +1,4 @@
-use crate::conversion::instructions::VMInstruction;
+use crate::conversion::instructions::{VMInstruction, VMLoadLiteral};
 
 use super::ssa::SSABuilder;
 use super::*;
@@ -139,10 +139,10 @@ impl FunctionLowering {
                 // Removes LoadLiteral followed by copy
                 if i + 1 < block.instructions.len()
                     && let (
-                        VMInstruction::LoadLiteral {
+                        VMInstruction::LoadLiteral(VMLoadLiteral {
                             dst: dst1,
                             literal: lit1,
-                        },
+                        }),
                         VMInstruction::Copy {
                             dst: dst2,
                             src: src1,
@@ -151,10 +151,10 @@ impl FunctionLowering {
                     && *dst1 == *src1
                     && *dst1 != *dst2
                 {
-                    block.instructions[i] = VMInstruction::LoadLiteral {
+                    block.instructions[i] = VMInstruction::LoadLiteral(VMLoadLiteral {
                         dst: *dst2,
                         literal: *lit1,
-                    };
+                    });
                     block.instructions.remove(i + 1);
                     block.instruction_spans.remove(i + 1);
                     continue;
@@ -309,10 +309,10 @@ impl FunctionLowering {
             if block.id == self.entry {
                 let lit = ctx.add_literal(VMLiteral::Null);
                 ctx.emit(
-                    VMInstruction::LoadLiteral {
+                    VMInstruction::LoadLiteral(VMLoadLiteral {
                         dst: self.null_reg,
                         literal: lit,
-                    },
+                    }),
                     Span::default(),
                 );
             }

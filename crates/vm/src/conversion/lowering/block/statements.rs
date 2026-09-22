@@ -7,7 +7,7 @@ Assign
 
 use crate::conversion::{
     Reg, VMLiteral,
-    instructions::VMInstruction,
+    instructions::{VMInstruction, VMLoadLiteral},
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{
@@ -78,7 +78,10 @@ impl VMLowering for LirExtern {
         });
         let lit = (env.block.local_literals.len() - 1) as u16;
         let dst = env.alloc_reg();
-        env.emit(VMInstruction::LoadLiteral { dst, literal: lit }, span);
+        env.emit(
+            VMInstruction::LoadLiteral(VMLoadLiteral { dst, literal: lit }),
+            span,
+        );
         dst
     }
 }

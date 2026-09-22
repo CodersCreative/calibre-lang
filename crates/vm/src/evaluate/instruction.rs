@@ -2,6 +2,7 @@ use super::write_back::Propagation;
 use super::*;
 use crate::{
     VarName,
+    conversion::instructions::{VMDropVar, VMLoadLiteral, VMLoadVar, VMMoveVar},
     evaluate::calling::{CallSite, RegisterCall},
     native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
     value::{GcMap, GcVec, HashKey},
@@ -107,12 +108,13 @@ impl VM {
         prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         match instruction {
-            VMInstruction::LoadLiteral { dst, literal } => {
+            VMInstruction::LoadLiteral(VMLoadLiteral { dst, literal }) => {
                 let lit = block
                     .local_literals
                     .get(*literal as usize)
                     .cloned()
                     .ok_or_else(|| RuntimeError::InvalidBytecode("missing literal".to_string()))?;
+
                 match lit {
                     VMLiteral::Closure { label, captures } => {
                         let mut seen = UstrSet::default();
@@ -185,14 +187,14 @@ impl VM {
                     }
                 }
             }
-            VMInstruction::LoadVar { dst, name } => {
+            VMInstruction::LoadVar(VMLoadVar { dst, name }) => {
                 let name = self.local_string(block, *name)?;
                 if let Some(value) = self.get_value(name) {
                     self.set_reg_value(*dst, value);
                 }
                 return Ok(TerminateValue::None);
             }
-            VMInstruction::MoveVar { dst, name } => {
+            VMInstruction::MoveVar(VMMoveVar { dst, name }) => {
                 let name = self.local_string(block, *name)?;
                 let resolved = self.resolve_var_name(*name);
                 let value = self.remove_value(name).unwrap_or_else(|| match &resolved {
@@ -215,7 +217,7 @@ impl VM {
 
                 self.set_reg_value(*dst, value);
             }
-            VMInstruction::DropVar { name } => {
+            VMInstruction::DropVar(VMDropVar { name }) => {
                 let name = self.local_string(block, *name)?;
                 if let Some(val) = self.variables.remove(name) {
                     self.drop_runtime_value(val);

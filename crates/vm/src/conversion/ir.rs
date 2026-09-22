@@ -1,5 +1,5 @@
 use crate::{
-    conversion::instructions::VMInstruction,
+    conversion::instructions::{VMDropVar, VMInstruction, VMLoadVar, VMMoveVar},
     value::{BIG_PRECISION, BIG_ROUNDING, HashKey, RuntimeValue},
 };
 use astro_float::{BigFloat, Consts};
@@ -139,9 +139,9 @@ impl VMFunction {
             for instruction in block.instructions.iter() {
                 match instruction {
                     VMInstruction::StoreVar { name, .. }
-                    | VMInstruction::DropVar { name }
-                    | VMInstruction::LoadVar { name, .. }
-                    | VMInstruction::MoveVar { name, .. }
+                    | VMInstruction::DropVar(VMDropVar { name })
+                    | VMInstruction::LoadVar(VMLoadVar { name, .. })
+                    | VMInstruction::MoveVar(VMMoveVar { name, .. })
                     | VMInstruction::LoadVarRef { name, .. } => {
                         if let Some(dest) = block.local_strings.get(*name as usize)
                             && !declared.contains_key(dest)

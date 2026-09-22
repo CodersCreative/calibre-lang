@@ -341,8 +341,10 @@ impl MutexInner {
         while self.locked.load(Ordering::Acquire) {
             guard = self.cvar.wait(guard).unwrap();
         }
+
         self.locked.store(true, Ordering::Release);
         drop(guard);
+
         MutexGuardInner {
             inner: self.clone(),
             released: AtomicBool::new(false),
@@ -417,6 +419,7 @@ impl<T: Debug + Any + Send + DynHash> HostInner for T {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }

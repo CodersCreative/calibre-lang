@@ -10,22 +10,34 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VMLoadLiteral {
+    pub dst: Reg,
+    pub literal: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VMLoadVar {
+    pub dst: Reg,
+    pub name: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VMMoveVar {
+    pub dst: Reg,
+    pub name: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VMDropVar {
+    pub name: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VMInstruction {
-    LoadLiteral {
-        dst: Reg,
-        literal: u16,
-    },
-    LoadVar {
-        dst: Reg,
-        name: u16,
-    },
-    MoveVar {
-        dst: Reg,
-        name: u16,
-    },
-    DropVar {
-        name: u16,
-    },
+    LoadLiteral(VMLoadLiteral),
+    LoadVar(VMLoadVar),
+    MoveVar(VMMoveVar),
+    DropVar(VMDropVar),
     StoreVar {
         dst: Option<Reg>,
         name: u16,
@@ -154,13 +166,37 @@ pub enum VMInstruction {
     Noop,
 }
 
+impl Display for VMLoadLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "%r{} = LITERAL {}", self.dst, self.literal)
+    }
+}
+
+impl Display for VMLoadVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "%r{} = LOAD {}", self.dst, self.name)
+    }
+}
+
+impl Display for VMMoveVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "%r{} = MOVE {}", self.dst, self.name)
+    }
+}
+
+impl Display for VMDropVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DROP {}", self.name)
+    }
+}
+
 impl Display for VMInstruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VMInstruction::LoadLiteral { dst, literal } => write!(f, "%r{dst} = LITERAL {literal}"),
-            VMInstruction::LoadVar { dst, name } => write!(f, "%r{dst} = LOAD {name}"),
-            VMInstruction::MoveVar { dst, name } => write!(f, "%r{dst} = MOVE {name}"),
-            VMInstruction::DropVar { name } => write!(f, "DROP {name}"),
+            VMInstruction::LoadLiteral(x) => x.fmt(f),
+            VMInstruction::LoadVar(x) => x.fmt(f),
+            VMInstruction::MoveVar(x) => x.fmt(f),
+            VMInstruction::DropVar(x) => x.fmt(f),
             VMInstruction::StoreVar {
                 name,
                 src,

@@ -8,7 +8,7 @@ Spawn
 
 use crate::conversion::{
     Reg,
-    instructions::VMInstruction,
+    instructions::{VMDropVar, VMInstruction, VMLoadVar, VMMoveVar},
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{LirDrop, LirLoad, LirMove, LirSpawn};
@@ -24,7 +24,7 @@ impl VMLowering for LirLoad {
         } else {
             let idx = env.add_string(self.value);
             let dst = env.alloc_reg();
-            env.emit(VMInstruction::LoadVar { dst, name: idx }, span);
+            env.emit(VMInstruction::LoadVar(VMLoadVar { dst, name: idx }), span);
             dst
         }
     }
@@ -36,7 +36,7 @@ impl VMLowering for LirMove {
         if env.captures.contains(&self.value) || !env.map.contains_key(&self.value) {
             let idx = env.add_string(self.value);
             let dst = env.alloc_reg();
-            env.emit(VMInstruction::MoveVar { dst, name: idx }, span);
+            env.emit(VMInstruction::MoveVar(VMMoveVar { dst, name: idx }), span);
             dst
         } else {
             env.map
@@ -51,7 +51,7 @@ impl VMLowering for LirDrop {
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
         if env.captures.contains(&self.value) || !env.map.contains_key(&self.value) {
             let idx = env.add_string(self.value);
-            env.emit(VMInstruction::DropVar { name: idx }, span);
+            env.emit(VMInstruction::DropVar(VMDropVar { name: idx }), span);
         } else {
             env.map.insert(self.value, env.null_reg);
         }
