@@ -20,7 +20,7 @@ use calibre_parser::{
             AstNode, AstNodeType, VarType,
             access::AstField,
             binary::AstComparison,
-            conditionals::AstTernary,
+            conditionals::{AstTernary, TernaryType},
             declaration::AstDeclaration,
             flow::AstReturn,
             functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
@@ -74,13 +74,14 @@ impl MiddleEnvironment {
                     }),
                 )),
                 then: Box::new(default),
-                otherwise: Box::new(AstNode::new(
+                otherwise: Some(Box::new(AstNode::new(
                     span,
                     AstNodeType::FieldAccess(AstField {
                         base: Box::new(value),
                         field: PotentialDollarIdentifier::new(span, "next"),
                     }),
-                )),
+                ))),
+                ternary_type: TernaryType::Normal,
             }),
         )
     }

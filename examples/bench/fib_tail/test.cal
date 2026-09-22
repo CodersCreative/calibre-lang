@@ -1,6 +1,6 @@
 const fib := fn (n : int) -> int => {
     const fib_helper := fn (n a b : int) -> int => 
-        return (n < 1) ? a : fib_helper(n - 1, b, a + b);
+        return a if n < 1 else fib_helper(n - 1, b, a + b);
     
     return fib_helper(n, 0, 1);
 };

@@ -16,7 +16,7 @@ impl Display for JsonValue {
 		match self {
 			.Number : x => "" & x,
 			.String : x => x,
-			.Bool : x => (x) ? "true" : "false",
+			.Bool : x => "true" if x else "false",
 			.Null => "null",
 			.List : lst => "" & lst,
 			.Map : map => "" & map

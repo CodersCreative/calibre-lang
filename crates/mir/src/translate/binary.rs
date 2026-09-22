@@ -193,6 +193,7 @@ impl MirLowering for AstAs {
             .unwrap_or_default()
         {
             match &self.failure_mode {
+                // TODO Handle AsFailureMode::Option
                 AsFailureMode::Result | AsFailureMode::Option => {}
                 AsFailureMode::Panic => {
                     let temp_ident = ParserText::temp_name_with_suffix("as_res", span);

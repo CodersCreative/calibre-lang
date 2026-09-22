@@ -14,7 +14,7 @@ use calibre_parser::{
             AstNode, AstNodeType, VarType,
             access::{AstField, AstIndex, AstScope},
             assignment::{AstAssignDestructure, AstAssignment},
-            conditionals::{AstIf, AstTernary, IfComparisonType},
+            conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType},
             declaration::AstDeclaration,
             memory::AstDeref,
         },
@@ -43,7 +43,8 @@ impl MirLowering for AstAssignment {
             AstNodeType::Ternary(AstTernary {
                 comparison,
                 then,
-                otherwise,
+                otherwise: Some(otherwise),
+                ternary_type: TernaryType::Normal,
             }) => AstNode {
                 node_type: AstNodeType::IfStatement(AstIf {
                     comparison: Box::new(IfComparisonType::If(*comparison)),
@@ -61,6 +62,26 @@ impl MirLowering for AstAssignment {
                             value: self.value,
                         }),
                     ))),
+                }),
+                span,
+            }
+            .lower(env, scope, span),
+            AstNodeType::Ternary(AstTernary {
+                comparison,
+                then,
+                otherwise: None,
+                ternary_type: TernaryType::Option,
+            }) => AstNode {
+                node_type: AstNodeType::IfStatement(AstIf {
+                    comparison: Box::new(IfComparisonType::If(*comparison)),
+                    then: Box::new(AstNode::new(
+                        span,
+                        AstNodeType::AssignmentExpression(AstAssignment {
+                            identifier: then,
+                            value: self.value.clone(),
+                        }),
+                    )),
+                    otherwise: None,
                 }),
                 span,
             }

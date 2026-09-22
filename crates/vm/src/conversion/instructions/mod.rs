@@ -290,8 +290,8 @@ impl Display for VMInstruction {
             } => {
                 write!(
                     f,
-                    "BRANCH %r{cond} ? JMP BLK {} : JMP BLK {}",
-                    then_block.0, else_block.0
+                    "BRANCH JMP BLK {} if %r{} else JMP BLK {}",
+                    then_block.0, cond, else_block.0
                 )
             }
             VMInstruction::Return { value } => {

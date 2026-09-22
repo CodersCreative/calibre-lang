@@ -1,6 +1,6 @@
 use super::matching::parse_pattern_list;
 use crate::ast::nodes::AstNodeType;
-use crate::ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType};
+use crate::ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType};
 use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
@@ -63,25 +63,52 @@ impl<'a> AstParser<'a> for AstIf {
 
 impl<'a> AstPrattParser<'a> for AstTernary {
     type Data = PrattData<'a>;
-    type Value = (AstNode, AstNode);
+    type Value = (TernaryType, AstNode, Option<AstNode>);
 
     fn operator(
         data: Self::Data,
     ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>> {
-        select! { Token::Question => () }
-            .padded_by(potential_new_line())
-            .ignore_then(data.stmt.clone())
-            .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
-            .then(data.stmt.clone())
+        choice((
+            just(Token::If).ignore_then(
+                data.stmt
+                    .clone()
+                    .then(
+                        just(Token::Else)
+                            .padded_by(potential_new_line())
+                            .ignore_then(data.stmt.clone()),
+                    )
+                    .map(|(condition, otherwise)| {
+                        (TernaryType::Normal, condition, Some(otherwise))
+                    }),
+            ),
+            just(Token::IfBang).ignore_then(
+                data.stmt
+                    .clone()
+                    .then(
+                        just(Token::Else)
+                            .padded_by(potential_new_line())
+                            .ignore_then(data.stmt.clone()),
+                    )
+                    .map(|(condition, otherwise)| {
+                        (TernaryType::Result, condition, Some(otherwise))
+                    }),
+            ),
+            just(Token::IfQuestion).ignore_then(
+                data.stmt
+                    .clone()
+                    .map(|condition| (TernaryType::Option, condition, None)),
+            ),
+        ))
     }
 
     fn fold_postfix(base: AstNode, value: Self::Value, sp: SimpleSpan) -> AstNode {
         AstNode::new(
             sp.into(),
             AstNodeType::Ternary(AstTernary {
-                comparison: Box::new(base),
-                then: Box::new(value.0),
-                otherwise: Box::new(value.1),
+                comparison: Box::new(value.1),
+                then: Box::new(base),
+                otherwise: value.2.map(Box::new),
+                ternary_type: value.0,
             }),
         )
     }

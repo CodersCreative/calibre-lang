@@ -17,9 +17,18 @@ pub struct AstIf {
     pub otherwise: Option<Box<AstNode>>,
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum TernaryType {
+    Option,
+    Result,
+    Normal,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstTernary {
     pub comparison: Box<AstNode>,
     pub then: Box<AstNode>,
-    pub otherwise: Box<AstNode>,
+    pub otherwise: Option<Box<AstNode>>,
+    pub ternary_type: TernaryType,
 }

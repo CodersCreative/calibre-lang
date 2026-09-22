@@ -1,4 +1,4 @@
-const fib := fn (n : big) -> big => return (n < 2g) ? n : (fib(n - 1g) + fib(n - 2g));
+const fib := fn (n : big) -> big => return n if n < 2g else (fib(n - 1g) + fib(n - 2g));
 
 const main := fn => {
 	let n := 28g;

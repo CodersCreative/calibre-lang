@@ -21,7 +21,7 @@ const count_zeros_part1 := fn (lines : list:<str>) -> int => {
 	for i in 0..len(lines) => {
 		let direction, distance := parse_direction(lines[i]), parse_distance(lines[i]);
 		
-		dial += (direction = 'L') ? -distance : distance;
+		dial += -distance if direction = 'L' else distance;
 		
 		for dial < 0 => dial += 100;
 		for dial > 99 => dial -= 100;

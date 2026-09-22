@@ -1,7 +1,7 @@
 use crate::{
     ast::nodes::{
         VarType,
-        conditionals::{AstIf, AstTernary, IfComparisonType},
+        conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType},
         matching::MatchArmType,
     },
     formatter::{AstFormatting, Formatter},
@@ -61,17 +61,21 @@ impl AstFormatting for AstTernary {
     type PreFormat = ();
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let cmp = self.comparison.format(formatter);
-        let cmp = if cmp.starts_with('(') && cmp.ends_with(')') {
-            cmp
-        } else {
-            format!("({cmp})")
-        };
-        format!(
-            "{} ? {} : {}",
-            cmp,
+        let mut txt = format!(
+            "{} if{} {}",
             self.then.format(formatter),
-            self.otherwise.format(formatter)
-        )
+            match self.ternary_type {
+                TernaryType::Normal => "",
+                TernaryType::Result => "!",
+                TernaryType::Option => "?",
+            },
+            self.comparison.format(formatter)
+        );
+
+        if let Some(otherwise) = &self.otherwise {
+            txt.push_str(&format!(" else {}", otherwise.format(formatter)));
+        }
+
+        txt
     }
 }

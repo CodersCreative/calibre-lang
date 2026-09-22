@@ -181,15 +181,7 @@ impl<'a> PrattParser {
         }
         .padded_by(potential_new_line());
 
-        let conversion = select! { Token::As => () }
-            .ignore_then(
-                select! {
-                    Token::Question => AsFailureMode::Option,
-                    Token::Not => AsFailureMode::Panic,
-                }
-                .or_not()
-                .map(|x| x.unwrap_or(AsFailureMode::Result)),
-            )
+        let conversion = select! { Token::As => AsFailureMode::Result, Token::AsBang => AsFailureMode::Panic, Token::AsQuestion => AsFailureMode::Option }
             .padded_by(potential_new_line())
             .then(data.data_type.clone());
 

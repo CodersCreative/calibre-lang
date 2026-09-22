@@ -480,8 +480,8 @@ impl Display for LirTerminator {
                 ..
             } => write!(
                 f,
-                "{} ? jmp blk {} : jmp blk {}",
-                condition, then_block.0, else_block.0
+                "jmp blk {} if {} else jmp blk {}",
+                then_block.0, condition, else_block.0
             ),
             Self::Return { value, .. } => write!(
                 f,

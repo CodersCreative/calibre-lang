@@ -184,6 +184,10 @@ pub enum Token<'a> {
     Impl,
     #[token("if")]
     If,
+    #[token("if!")]
+    IfBang,
+    #[token("if?")]
+    IfQuestion,
     #[token("else")]
     Else,
     #[token("match")]
@@ -204,6 +208,10 @@ pub enum Token<'a> {
     Try,
     #[token("as")]
     As,
+    #[token("as!")]
+    AsBang,
+    #[token("as?")]
+    AsQuestion,
     #[token("extern")]
     Extern,
     #[token("type")]
@@ -380,6 +388,8 @@ impl FromStr for Token<'static> {
             "Trait" => Ok(Token::Trait),
             "Impl" => Ok(Token::Impl),
             "If" => Ok(Token::If),
+            "If!" => Ok(Token::IfBang),
+            "If?" => Ok(Token::IfQuestion),
             "Else" => Ok(Token::Else),
             "Match" => Ok(Token::Match),
             "For" => Ok(Token::For),
@@ -390,6 +400,8 @@ impl FromStr for Token<'static> {
             "Continue" => Ok(Token::Continue),
             "Try" => Ok(Token::Try),
             "As" => Ok(Token::As),
+            "As!" => Ok(Token::AsBang),
+            "As?" => Ok(Token::AsQuestion),
             "Extern" => Ok(Token::Extern),
             "Type" => Ok(Token::Type),
             "Test" => Ok(Token::Test),
@@ -515,6 +527,8 @@ impl<'a> Token<'a> {
             Token::Trait => "Trait",
             Token::Impl => "Impl",
             Token::If => "If",
+            Token::IfBang => "If!",
+            Token::IfQuestion => "If?",
             Token::Else => "Else",
             Token::Match => "Match",
             Token::For => "For",
@@ -525,6 +539,8 @@ impl<'a> Token<'a> {
             Token::Continue => "Continue",
             Token::Try => "Try",
             Token::As => "As",
+            Token::AsBang => "As!",
+            Token::AsQuestion => "As?",
             Token::Extern => "Extern",
             Token::Type => "Type",
             Token::Test => "Test",

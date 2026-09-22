@@ -1,5 +1,5 @@
 @pure(memo)
-const fib := fn (n : int) -> int => return (n < 2) ? n : (fib(n - 1) + fib(n - 2));
+const fib := fn (n : int) -> int => return n if n < 2 else (fib(n - 1) + fib(n - 2));
 
 const main := fn => {
 	for i in 0..=30 => {

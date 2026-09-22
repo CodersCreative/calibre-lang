@@ -238,10 +238,12 @@ pub trait NodeVisitor {
                 comparison,
                 then,
                 otherwise,
+                ternary_type,
             }) => AstNodeType::Ternary(AstTernary {
                 comparison: Box::new(self.visit(*comparison)),
                 then: Box::new(self.visit(*then)),
-                otherwise: Box::new(self.visit(*otherwise)),
+                otherwise: otherwise.map(|otherwise| Box::new(self.visit(*otherwise))),
+                ternary_type,
             }),
             AstNodeType::FieldAccess(AstField { base, field }) => {
                 AstNodeType::FieldAccess(AstField {
@@ -608,7 +610,12 @@ pub trait NodeAnalyzer {
                 comparison,
                 then,
                 otherwise,
-            }) => self.analyze(comparison) && self.analyze(then) && self.analyze(otherwise),
+                ..
+            }) => {
+                self.analyze(comparison)
+                    && self.analyze(then)
+                    && otherwise.as_ref().is_none_or(|n| self.analyze(n))
+            }
             AstNodeType::Spawn(AstSpawn { items, .. }) => items.iter().all(|n| self.analyze(n)),
             AstNodeType::Return(AstReturn { value })
             | AstNodeType::Break(AstBreak { value, .. }) => {

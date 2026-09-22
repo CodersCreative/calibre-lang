@@ -3,18 +3,18 @@ const steps := 50;
 
 const main := fn => {
 	const half_width : int = width / 2;
-	let mut cells := list:<int>[(x > half_width) ? 1 : 0 for x in 0..=width];
+	let mut cells := list:<int>[1 if x > half_width else 0 for x in 0..=width];
 	
 	for step in steps => {
 		let mut line := "";
-		for i in 0..len(cells) => line &= (cells[i] = 1) ? "█" : " ";
+		for i in 0..len(cells) => line &= "█" if cells[i] = 1 else " ";
 		print(line);
 		let mut next_cells := list:<int>[];
 		
 		for i in 0..len(cells) => {
-			let left := (i > 0) ? cells[i - 1] : 0;
+			let left := cells[i - 1] if i > 0 else 0;
 			let center := cells[i];
-			let right := (i < len(cells) - 1) ? cells[i + 1] : 0;
+			let right := cells[i + 1] if i < len(cells) - 1 else 0;
 			
 			if left = 1 => {
 				if center = 1 => {

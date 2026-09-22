@@ -7,14 +7,10 @@ use crate::{
     translate::MirLowering,
 };
 use calibre_parser::{
-    Span,
-    ast::{
+    Span, ast::{
         nodes::{
-            AstNode, AstNodeType,
-            conditionals::{AstIf, AstTernary, IfComparisonType},
-            matching::{AstMatch, MatchArmType, MatchBody},
-        },
-        types::{ParserDataType, ParserInnerType},
+            AstNode, AstNodeType, conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType}, functions::CallArg, matching::{AstMatch, MatchArmType, MatchBody},
+        }, types::{ParserDataType, ParserInnerType},
     },
 };
 
@@ -116,37 +112,98 @@ impl MirLowering for AstTernary {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        if !env.context.type_check {
-            let then_type = self.then.type_of(env, scope, span);
-            let otherwise_type = self.otherwise.type_of(env, scope, span);
+        match self.ternary_type {
+            TernaryType::Normal => {
+                let otherwise = self.otherwise.expect("Otherwise with TernaryType::Normal should be Some");
 
-            if !then_type.as_ref().is_some_and(|x| x.is_null()) {
-                env.compare_types_ref(
-                    then_type.as_ref(),
-                    otherwise_type.as_ref(),
-                    Some(&TagInfo::IgnoreInvalidTypeCheck),
-                )?;
+                if !env.context.type_check {
+                    let then_type = self.then.type_of(env, scope, span);
+                    let otherwise_type = otherwise.type_of(env, scope, span);
+
+                    if !then_type.as_ref().is_some_and(|x| x.is_null()) {
+                        env.compare_types_ref(
+                            then_type.as_ref(),
+                            otherwise_type.as_ref(),
+                            Some(&TagInfo::IgnoreInvalidTypeCheck),
+                        )?;
+                    }
+                }
+
+                AstNode {
+                    node_type: AstNodeType::IfStatement(AstIf {
+                        comparison: Box::new(IfComparisonType::If(*self.comparison)),
+                        then: self.then,
+                        otherwise: Some(otherwise),
+                    }),
+                    span,
+                }
+                .lower(env, scope, span)
+            }
+            TernaryType::Option => {
+                AstNode {
+                    node_type: AstNodeType::IfStatement(AstIf {
+                        comparison: Box::new(IfComparisonType::If(*self.comparison)),
+                        then: Box::new(                            AstNode::call(
+                                span,
+                                AstNode::identifier(span, "some"),
+                                vec![CallArg::Value(*self.then)],
+                            )),
+                        otherwise: Some(Box::new(AstNode::identifier(span, "none"))),
+                    }),
+                    span,
+                }
+                .lower(env, scope, span)
+            }
+            TernaryType::Result => {
+                let otherwise = self.otherwise.expect("Otherwise with TernaryType::Result should be Some");
+
+                AstNode {
+                    node_type: AstNodeType::IfStatement(AstIf {
+                        comparison: Box::new(IfComparisonType::If(*self.comparison)),
+                        then: Box::new(                            AstNode::call(
+                                span,
+                                AstNode::identifier(span, "ok"),
+                                vec![CallArg::Value(*self.then)],
+                            )),
+                        otherwise: Some(Box::new(                            AstNode::call(
+                                span,
+                                AstNode::identifier(span, "err"),
+                                vec![CallArg::Value(*otherwise)],
+                            ))),
+                    }),
+                    span,
+                }
+                .lower(env, scope, span)
             }
         }
 
-        AstNode {
-            node_type: AstNodeType::IfStatement(AstIf {
-                comparison: Box::new(IfComparisonType::If(*self.comparison)),
-                then: self.then,
-                otherwise: Some(self.otherwise),
-            }),
-            span,
-        }
-        .lower(env, scope, span)
     }
 
-    // Add type checking
     fn type_of(
         &self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
     ) -> Option<ParserDataType> {
-        self.then.type_of(env, scope, span)
+        match self.ternary_type {
+            TernaryType::Normal => self.then.type_of(env, scope, span),
+            TernaryType::Option => Some(ParserDataType::new(
+                span,
+                ParserInnerType::Option(Box::new(self.then.type_of(env, scope, span)?)),
+            )),
+            TernaryType::Result => {
+                if let Some(otherwise) = &self.otherwise {
+                    Some(ParserDataType::new(
+                        span,
+                        ParserInnerType::Result {
+                            ok: Box::new(self.then.type_of(env, scope, span)?),
+                            err: Box::new(otherwise.type_of(env, scope, span)?),
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+        }
     }
 }
