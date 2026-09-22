@@ -96,31 +96,15 @@ fn lower_assignment<'a>(
     match node.dest {
         LirLValue::Var(dest) => {
             let name_idx = env.add_string(dest);
-            if !env.is_global && env.map.contains_key(&dest) {
-                let target = assigned.unwrap_or_else(|| env.alloc_reg());
-
-                env.lower_node_to(*node.value, target, span);
-                env.map.insert(dest, target);
-
-                env.emit(
-                    VMInstruction::StoreVar {
-                        dst: None,
-                        name: name_idx,
-                        src: target,
-                    },
-                    span,
-                );
-            } else if env.is_global {
-                let reg = env.lower_node(*node.value, span);
-                env.emit(
-                    VMInstruction::StoreVar {
-                        dst: None,
-                        name: name_idx,
-                        src: reg,
-                    },
-                    span,
-                );
-            }
+            let reg = env.lower_node(*node.value, span);
+            env.emit(
+                VMInstruction::StoreVar {
+                    dst: Some(assigned.unwrap_or(dst)),
+                    name: name_idx,
+                    src: reg,
+                },
+                span,
+            );
         }
         LirLValue::Ptr(ptr) => {
             let value_reg = env.lower_node(*node.value, span);

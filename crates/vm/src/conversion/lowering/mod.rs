@@ -18,6 +18,7 @@ struct BlockLoweringCtx<'a> {
     reg_count: &'a mut Reg,
     captures: UstrSet,
     map: UstrMap<Reg>,
+    referenced_variables: UstrSet,
     null_reg: Reg,
     ret_reg: Reg,
     is_global: bool,

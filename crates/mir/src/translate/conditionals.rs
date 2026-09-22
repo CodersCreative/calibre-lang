@@ -7,10 +7,15 @@ use crate::{
     translate::MirLowering,
 };
 use calibre_parser::{
-    Span, ast::{
+    Span,
+    ast::{
         nodes::{
-            AstNode, AstNodeType, conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType}, functions::CallArg, matching::{AstMatch, MatchArmType, MatchBody},
-        }, types::{ParserDataType, ParserInnerType},
+            AstNode, AstNodeType,
+            conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType},
+            functions::CallArg,
+            matching::{AstMatch, MatchArmType, MatchBody},
+        },
+        types::{ParserDataType, ParserInnerType},
     },
 };
 
@@ -114,7 +119,9 @@ impl MirLowering for AstTernary {
     ) -> Result<MiddleNode, MiddleErr> {
         match self.ternary_type {
             TernaryType::Normal => {
-                let otherwise = self.otherwise.expect("Otherwise with TernaryType::Normal should be Some");
+                let otherwise = self
+                    .otherwise
+                    .expect("Otherwise with TernaryType::Normal should be Some");
 
                 if !env.context.type_check {
                     let then_type = self.then.type_of(env, scope, span);
@@ -132,51 +139,52 @@ impl MirLowering for AstTernary {
                 AstNode {
                     node_type: AstNodeType::IfStatement(AstIf {
                         comparison: Box::new(IfComparisonType::If(*self.comparison)),
-                        then: self.then,
-                        otherwise: Some(otherwise),
+                        then: Box::new(AstNode::new_temp_scope(vec![*self.then])),
+                        otherwise: Some(Box::new(AstNode::new_temp_scope(vec![*otherwise]))),
                     }),
                     span,
                 }
                 .lower(env, scope, span)
             }
-            TernaryType::Option => {
-                AstNode {
-                    node_type: AstNodeType::IfStatement(AstIf {
-                        comparison: Box::new(IfComparisonType::If(*self.comparison)),
-                        then: Box::new(                            AstNode::call(
-                                span,
-                                AstNode::identifier(span, "some"),
-                                vec![CallArg::Value(*self.then)],
-                            )),
-                        otherwise: Some(Box::new(AstNode::identifier(span, "none"))),
-                    }),
-                    span,
-                }
-                .lower(env, scope, span)
+            TernaryType::Option => AstNode {
+                node_type: AstNodeType::IfStatement(AstIf {
+                    comparison: Box::new(IfComparisonType::If(*self.comparison)),
+                    then: Box::new(AstNode::new_temp_scope(vec![AstNode::call(
+                        span,
+                        AstNode::identifier(span, "some"),
+                        vec![CallArg::Value(*self.then)],
+                    )])),
+                    otherwise: Some(Box::new(AstNode::new_temp_scope(vec![
+                        AstNode::identifier(span, "none"),
+                    ]))),
+                }),
+                span,
             }
+            .lower(env, scope, span),
             TernaryType::Result => {
-                let otherwise = self.otherwise.expect("Otherwise with TernaryType::Result should be Some");
+                let otherwise = self
+                    .otherwise
+                    .expect("Otherwise with TernaryType::Result should be Some");
 
                 AstNode {
                     node_type: AstNodeType::IfStatement(AstIf {
                         comparison: Box::new(IfComparisonType::If(*self.comparison)),
-                        then: Box::new(                            AstNode::call(
-                                span,
-                                AstNode::identifier(span, "ok"),
-                                vec![CallArg::Value(*self.then)],
-                            )),
-                        otherwise: Some(Box::new(                            AstNode::call(
-                                span,
-                                AstNode::identifier(span, "err"),
-                                vec![CallArg::Value(*otherwise)],
-                            ))),
+                        then: Box::new(AstNode::new_temp_scope(vec![AstNode::call(
+                            span,
+                            AstNode::identifier(span, "ok"),
+                            vec![CallArg::Value(*self.then)],
+                        )])),
+                        otherwise: Some(Box::new(AstNode::new_temp_scope(vec![AstNode::call(
+                            span,
+                            AstNode::identifier(span, "err"),
+                            vec![CallArg::Value(*otherwise)],
+                        )]))),
                     }),
                     span,
                 }
                 .lower(env, scope, span)
             }
         }
-
     }
 
     fn type_of(

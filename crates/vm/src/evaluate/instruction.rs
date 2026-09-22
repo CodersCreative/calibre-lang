@@ -124,17 +124,8 @@ impl VM {
             VMInstruction::DropVar(x) => x.run(self, block, ip, prev_block),
             VMInstruction::StoreVar { dst, name, src } => {
                 let name = self.local_string(block, *name)?;
-                let old = self.variables.insert(
-                    *name,
-                    if self.in_global {
-                        self.get_reg_value(*src).clone()
-                    } else {
-                        RuntimeValue::RegRef {
-                            frame: self.frames.len().saturating_sub(1),
-                            reg: *src,
-                        }
-                    },
-                );
+                let stored = self.resolve_value_ref(self.get_reg_value(*src))?;
+                let old = self.variables.insert(*name, stored);
 
                 if let Some(old) = old
                     && let Some(dst) = dst

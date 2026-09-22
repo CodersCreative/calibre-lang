@@ -1,0 +1,34 @@
+const main := fn => {
+	// RHS Ternary
+	let text := "selected" if true else "fallback";
+	let option_int := 42 if? true;
+	let result_text := "ready" if! true else "not ready";
+
+	print(text);
+	print(option_int);
+	print(result_text);
+
+	// If Equivalent
+	let text := if true => "selected" else => "fallback";
+	let option_int := if true => some(42) else => none;
+	let result_text := if true => ok("ready") else => err("not ready");
+
+	print(text);
+	print(option_int);
+	print(result_text);
+
+	// LHS Ternary
+	let mut left := 0;
+	let mut right := 0;
+	left if true else right := 10;
+	left if false else right := 20;
+
+	print(left);
+	print(right);
+
+	// LHS Ternary Conditional Assignment
+	left if? true := 10;
+	left if? false := 20;
+
+	print(left);
+};

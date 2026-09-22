@@ -13,3 +13,11 @@ impl Display for VMLoadLiteral {
         write!(f, "%r{} = LITERAL {}", self.dst, self.literal)
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VMRange {
+    dst: Reg,
+    from: Reg,
+    to: Reg,
+    inclusive: bool,
+}

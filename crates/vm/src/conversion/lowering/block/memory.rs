@@ -20,7 +20,8 @@ use calibre_parser::Span;
 impl VMLowering for LirLoad {
     #[inline(always)]
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
-        if let Some(reg) = env.map.get(&self.value)
+        if !env.referenced_variables.contains(&self.value)
+            && let Some(reg) = env.map.get(&self.value)
             && reg != &env.null_reg
         {
             *reg

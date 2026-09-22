@@ -14,7 +14,10 @@ use crate::{
 use calibre_mir::ast::{MiddleNodeType, MirExtern, MirFunction, MirScopeDecl, MirVarDecl};
 use calibre_parser::{
     Span,
-    ast::types::{ParserDataType, ParserInnerType},
+    ast::{
+        nodes::VarType,
+        types::{ParserDataType, ParserInnerType},
+    },
 };
 use ustr::{Ustr, UstrSet};
 
@@ -28,7 +31,10 @@ impl LirLowering for MirVarDecl {
         }
 
         let val = env.lower_node(*self.value);
-        let is_referenced = env.referenced_identifiers.contains(&self.identifier);
+
+        // This works but theres definitely potential to reduce the number of referenced variables substantially
+        let is_referenced = self.var_type == VarType::Mutable
+            || env.referenced_identifiers.contains(&self.identifier);
 
         env.add_instr(LirNode::new(
             span,

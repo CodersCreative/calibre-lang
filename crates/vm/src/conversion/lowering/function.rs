@@ -69,6 +69,7 @@ struct FunctionLowering {
     null_reg: Reg,
     ret_reg: Reg,
     is_global: bool,
+    referenced_variables: UstrSet,
     big_consts: Consts,
 }
 
@@ -240,6 +241,16 @@ impl FunctionLowering {
             assign_regs.push(regs);
         }
 
+        let referenced_variables = func
+            .blocks
+            .iter()
+            .flat_map(|block| block.instructions.iter())
+            .filter_map(|node| match &node.node_type {
+                LirNodeType::Declare(decl) if decl.is_referenced => Some(decl.dest),
+                _ => None,
+            })
+            .collect();
+
         let ssa_builder = SSABuilder::new(
             block_map.clone(),
             locals,
@@ -261,6 +272,7 @@ impl FunctionLowering {
             null_reg,
             ret_reg,
             is_global,
+            referenced_variables,
             big_consts: Consts::new().unwrap(),
         }
     }
@@ -278,6 +290,7 @@ impl FunctionLowering {
         for block in &self.func.blocks {
             let idx = self.block_map[&block.id];
             let info = self.ssa_builder.get_block_info(idx).clone();
+
             let mut out = VMBlock {
                 id: block.id,
                 instructions: Vec::new(),
@@ -288,11 +301,15 @@ impl FunctionLowering {
                 phis: info.phis.clone(),
             };
 
+            let mut map = info.in_map.clone();
+            map.retain(|k, _| !self.referenced_variables.contains(k));
+
             let mut ctx = BlockLoweringCtx {
                 block: &mut out,
                 reg_count: &mut self.reg_count,
                 captures: self.captures.clone(),
-                map: info.in_map.clone(),
+                map,
+                referenced_variables: self.referenced_variables.clone(),
                 null_reg: self.null_reg,
                 ret_reg: self.ret_reg,
                 is_global: self.is_global,
