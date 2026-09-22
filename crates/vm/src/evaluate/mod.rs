@@ -1,6 +1,6 @@
 use crate::{
     VM,
-    conversion::{VMBlock, VMFunction, VMGlobal, VMLiteral, instructions::VMInstruction},
+    conversion::{VMBlock, VMFunction, VMGlobal, instructions::VMInstruction},
     error::RuntimeError,
     value::{
         RuntimeValue, TerminateValue, WaitGroupInner,
@@ -16,9 +16,11 @@ use std::sync::Arc;
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap};
 
-pub(crate) mod calling;
-pub(crate) mod instruction;
-pub(crate) mod write_back;
+pub mod calling;
+pub mod instruction;
+pub mod literals;
+pub mod variables;
+pub mod write_back;
 
 #[derive(Debug)]
 enum CaptureRestore {

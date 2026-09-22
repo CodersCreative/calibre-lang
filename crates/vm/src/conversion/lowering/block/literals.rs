@@ -8,7 +8,7 @@ Enum
 
 use crate::conversion::{
     AggregateLayout, Reg, VMLiteral,
-    instructions::{VMInstruction, VMLoadLiteral},
+    instructions::{VMInstruction, literals::VMLoadLiteral},
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{LirAggregate, LirEnum, LirList, LirLiteral};

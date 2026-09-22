@@ -1,15 +1,22 @@
 use super::write_back::Propagation;
 use super::*;
 use crate::{
-    VarName,
-    conversion::instructions::{VMDropVar, VMLoadLiteral, VMLoadVar, VMMoveVar},
     evaluate::calling::{CallSite, RegisterCall},
     native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
     value::{GcMap, GcVec, HashKey},
 };
 use calibre_parser::ast::{comparison::BooleanOperator, nodes::binary::AsFailureMode};
-use ustr::UstrSet;
 use wasm_sync::Mutex;
+
+pub trait VMEvaluation {
+    fn run(
+        &self,
+        vm: &mut VM,
+        block: &VMBlock,
+        ip: u32,
+        prev_block: Option<BlockId>,
+    ) -> Result<TerminateValue, RuntimeError>;
+}
 
 impl VM {
     fn eval_branch_condition(
@@ -108,121 +115,13 @@ impl VM {
         prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         match instruction {
-            VMInstruction::LoadLiteral(VMLoadLiteral { dst, literal }) => {
-                let lit = block
-                    .local_literals
-                    .get(*literal as usize)
-                    .cloned()
-                    .ok_or_else(|| RuntimeError::InvalidBytecode("missing literal".to_string()))?;
+            // Literals
+            VMInstruction::LoadLiteral(x) => x.run(self, block, ip, prev_block),
 
-                match lit {
-                    VMLiteral::Closure { label, captures } => {
-                        let mut seen = UstrSet::default();
-                        let caps = self.capture_values(&captures, &mut seen);
-                        self.set_reg_value(
-                            *dst,
-                            RuntimeValue::Function {
-                                name: label,
-                                captures: Arc::new(caps),
-                            },
-                        );
-                    }
-                    #[cfg(feature = "native")]
-                    VMLiteral::ExternFunction {
-                        abi,
-                        library,
-                        symbol,
-                        parameters,
-                        return_type,
-                        pure,
-                        memo,
-                        memo_params,
-                    } => {
-                        use crate::value::ExternFunction;
-
-                        let abi_lower = abi.to_ascii_lowercase();
-                        if abi_lower != "c" && abi_lower != "zig" {
-                            return Err(RuntimeError::Ffi(format!("unsupported ABI \"{}\"", abi)));
-                        }
-
-                        let mut last_err = None;
-                        let mut handle_opt = None;
-
-                        for candidate in Self::resolve_library_candidates(&library) {
-                            match unsafe { libloading::Library::new(&candidate) } {
-                                Ok(h) => {
-                                    handle_opt = Some(h);
-                                    break;
-                                }
-                                Err(e) => last_err = Some(e.to_string()),
-                            }
-                        }
-
-                        let handle = handle_opt.ok_or_else(|| {
-                            RuntimeError::Ffi(format!(
-                                "failed to load library {} ({})",
-                                library,
-                                last_err.unwrap_or_else(|| "no candidates".to_string())
-                            ))
-                        })?;
-
-                        let func = ExternFunction {
-                            abi,
-                            library,
-                            symbol,
-                            parameters,
-                            return_type,
-                            pure,
-                            memo,
-                            memo_params,
-                            handle: Arc::new(handle),
-                        };
-
-                        self.set_reg_value(*dst, RuntimeValue::ExternFunction(Arc::new(func)));
-                    }
-                    #[cfg(feature = "wasm")]
-                    VMLiteral::ExternFunction { .. } => {}
-                    other => {
-                        self.set_reg_value(*dst, RuntimeValue::from(other));
-                    }
-                }
-            }
-            VMInstruction::LoadVar(VMLoadVar { dst, name }) => {
-                let name = self.local_string(block, *name)?;
-                if let Some(value) = self.get_value(name) {
-                    self.set_reg_value(*dst, value);
-                }
-                return Ok(TerminateValue::None);
-            }
-            VMInstruction::MoveVar(VMMoveVar { dst, name }) => {
-                let name = self.local_string(block, *name)?;
-                let resolved = self.resolve_var_name(*name);
-                let value = self.remove_value(name).unwrap_or_else(|| match &resolved {
-                    Some(VarName::Func(func)) => {
-                        if let Some(func) = self.get_function_ref(func) {
-                            self.make_runtime_function(func)
-                        } else {
-                            RuntimeValue::Null
-                        }
-                    }
-                    Some(VarName::Var(var)) => {
-                        if let Some(var) = self.variables.remove(var) {
-                            self.resolve_saveable_runtime_value(var)
-                        } else {
-                            RuntimeValue::Null
-                        }
-                    }
-                    _ => RuntimeValue::Null,
-                });
-
-                self.set_reg_value(*dst, value);
-            }
-            VMInstruction::DropVar(VMDropVar { name }) => {
-                let name = self.local_string(block, *name)?;
-                if let Some(val) = self.variables.remove(name) {
-                    self.drop_runtime_value(val);
-                }
-            }
+            // Variables
+            VMInstruction::LoadVar(x) => x.run(self, block, ip, prev_block),
+            VMInstruction::MoveVar(x) => x.run(self, block, ip, prev_block),
+            VMInstruction::DropVar(x) => x.run(self, block, ip, prev_block),
             VMInstruction::StoreVar { dst, name, src } => {
                 let name = self.local_string(block, *name)?;
                 let old = self.variables.insert(
@@ -242,6 +141,8 @@ impl VM {
                 {
                     self.set_reg_value(*dst, old);
                 }
+
+                Ok(TerminateValue::None)
             }
             VMInstruction::LoadVarRef { dst, name } => {
                 let name = self.local_string(block, *name)?;
@@ -256,6 +157,8 @@ impl VM {
                 } else {
                     self.set_reg_value(*dst, RuntimeValue::Ref(*name));
                 }
+
+                Ok(TerminateValue::None)
             }
             VMInstruction::LoadRegRef { dst, src } => {
                 let value = match self.get_reg_value(*src) {
@@ -267,8 +170,11 @@ impl VM {
                     RuntimeValue::VarRef(id) => RuntimeValue::VarRef(*id),
                     other => other.clone(),
                 };
+
                 self.set_reg_value(*dst, value);
+                Ok(TerminateValue::None)
             }
+
             VMInstruction::Copy { dst, src } => {
                 if dst == src {
                     return Ok(TerminateValue::None);
@@ -276,6 +182,7 @@ impl VM {
                 let value = self.get_reg_value(*src).clone();
                 self.set_reg_value(*dst, value);
                 self.propagate_member_source_alias(*src, *dst);
+                Ok(TerminateValue::None)
             }
             VMInstruction::As {
                 dst,
@@ -306,7 +213,9 @@ impl VM {
                         )))),
                     },
                 };
+
                 self.set_reg_value(*dst, converted);
+                Ok(TerminateValue::None)
             }
             VMInstruction::Is {
                 dst,
@@ -316,6 +225,7 @@ impl VM {
                 let resolved = self.resolve_value(self.get_reg_value(*src).clone())?;
                 let out = self.runtime_matches_type(&resolved, &data_type.data_type);
                 self.set_reg_value(*dst, RuntimeValue::Bool(out));
+                Ok(TerminateValue::None)
             }
             VMInstruction::Binary {
                 dst,
@@ -327,6 +237,7 @@ impl VM {
                 let right = self.resolve_value(self.get_reg_value(*right).clone())?;
                 let value = binary(self, op, left, right)?;
                 self.set_reg_value(*dst, value);
+                Ok(TerminateValue::None)
             }
             VMInstruction::Comparison {
                 dst,
@@ -338,6 +249,7 @@ impl VM {
                 let left = self.resolve_value(self.get_reg_value(*left).clone())?;
                 let cmp_val = comparison(op, left, right)?;
                 self.set_reg_value(*dst, cmp_val);
+                Ok(TerminateValue::None)
             }
             VMInstruction::Boolean {
                 dst,
@@ -359,6 +271,7 @@ impl VM {
 
                 let right = self.resolve_value(self.get_reg_value(*right).clone())?;
                 self.set_reg_value(*dst, boolean(op, left, right)?);
+                Ok(TerminateValue::None)
             }
             VMInstruction::Range {
                 dst,
@@ -392,6 +305,7 @@ impl VM {
                     RuntimeValue::Range(from, to)
                 };
                 self.set_reg_value(*dst, range);
+                Ok(TerminateValue::None)
             }
             VMInstruction::List { dst, items } => {
                 let values = items
@@ -399,6 +313,7 @@ impl VM {
                     .map(|item| self.get_reg_value(*item).clone())
                     .collect();
                 self.set_reg_value(*dst, RuntimeValue::List(Gc::new(GcVec(values))));
+                Ok(TerminateValue::None)
             }
             VMInstruction::Aggregate {
                 dst,
@@ -480,6 +395,8 @@ impl VM {
                         ))),
                     ),
                 );
+
+                Ok(TerminateValue::None)
             }
             VMInstruction::Enum {
                 dst,
@@ -490,6 +407,7 @@ impl VM {
                 let name = self.local_string(block, *name)?;
                 let payload = payload.map(|reg| Gc::new(self.get_reg_value(reg).clone()));
                 self.set_reg_value(*dst, RuntimeValue::Enum(*name, *variant as usize, payload));
+                Ok(TerminateValue::None)
             }
             VMInstruction::CallSelf { dst, args } => {
                 let func_ptr = self.current_frame().func_ptr as *const VMFunction;
@@ -570,6 +488,8 @@ impl VM {
                 if let Some(dst) = dst {
                     self.set_reg_value(*dst, value);
                 }
+
+                Ok(TerminateValue::None)
             }
             VMInstruction::Call { dst, callee, args } => {
                 if let Some(step) = self.call_registers(RegisterCall {
@@ -582,6 +502,8 @@ impl VM {
                 })? {
                     return Ok(step);
                 }
+
+                Ok(TerminateValue::None)
             }
             VMInstruction::Spawn { dst, callee } => {
                 let resolved = self.resolve_value_ref(self.get_reg_value(*callee))?;
@@ -605,10 +527,13 @@ impl VM {
                     }
                     other => other,
                 };
+
                 let wg = Arc::new(WaitGroupInner::default());
                 wg.count.store(1, std::sync::atomic::Ordering::Release);
                 self.spawn_async_task(to_spawn, Some(wg.clone()));
                 self.set_reg_value(*dst, RuntimeValue::WaitGroup(wg));
+
+                Ok(TerminateValue::None)
             }
             VMInstruction::LoadMember { dst, value, member } => {
                 let source_reg = *value;
@@ -1022,6 +947,8 @@ impl VM {
                         );
                     }
                 }
+
+                Ok(TerminateValue::None)
             }
             VMInstruction::SetMember {
                 dst,
@@ -1059,6 +986,7 @@ impl VM {
                     }
                     Ok(map)
                 };
+
                 let update_generator =
                     |generator_value: RuntimeValue| -> Result<RuntimeValue, RuntimeError> {
                         let RuntimeValue::Generator { type_name, state } = generator_value else {
@@ -1315,6 +1243,8 @@ impl VM {
                         "<set-member-depth-limit>".to_string(),
                     ));
                 }
+
+                Ok(TerminateValue::None)
             }
             VMInstruction::Index { dst, value, index } => {
                 let value_ref = self.get_reg_value(*value);
@@ -1511,6 +1441,8 @@ impl VM {
                 if !self.current_frame().member_sources.contains_key(dst) {
                     self.propagate_member_source_alias(*value, *dst);
                 }
+
+                Ok(TerminateValue::None)
             }
             VMInstruction::SetIndex {
                 dst,
@@ -1755,11 +1687,14 @@ impl VM {
                         }
                     }
                 }
+
                 if !handled {
                     return Err(RuntimeError::DanglingRef(
                         "<set-index-depth-limit>".to_string(),
                     ));
                 }
+
+                Ok(TerminateValue::None)
             }
             VMInstruction::Ref { dst, value } => {
                 let out = match self.get_reg_value(*value).clone() {
@@ -1790,16 +1725,20 @@ impl VM {
                         RuntimeValue::VarRef(id)
                     },
                 };
+
                 self.set_reg_value(*dst, out);
                 self.propagate_member_source_alias(*value, *dst);
+                Ok(TerminateValue::None)
             }
             VMInstruction::Deref { dst, value } => {
                 let out = self.resolve_value_ref(self.get_reg_value(*value))?;
                 self.set_reg_value(*dst, out);
+                Ok(TerminateValue::None)
             }
             VMInstruction::SetRef { dst, target, value } => {
                 let target = self.get_reg_value(*target).clone();
                 let value = self.get_reg_value(*value).clone();
+
                 match target {
                     RuntimeValue::Ref(name) => {
                         if let Some(old) = self.variables.insert(name, value) {
@@ -1821,29 +1760,29 @@ impl VM {
                     }
                     _ => return Err(RuntimeError::InvalidBytecode("invalid ref".to_string())),
                 }
+
+                Ok(TerminateValue::None)
             }
-            VMInstruction::Jump(target) => return Ok(TerminateValue::Jump(*target)),
+            VMInstruction::Jump(target) => Ok(TerminateValue::Jump(*target)),
             VMInstruction::Branch {
                 cond,
                 then_block,
                 else_block,
             } => {
-                return if self.eval_branch_condition(*cond, block, ip)? {
+                if self.eval_branch_condition(*cond, block, ip)? {
                     Ok(TerminateValue::Jump(*then_block))
                 } else {
                     Ok(TerminateValue::Jump(*else_block))
-                };
+                }
             }
             VMInstruction::Return { value } => {
-                return if let Some(reg) = value {
+                if let Some(reg) = value {
                     Ok(TerminateValue::Return(self.get_reg_value(*reg).clone()))
                 } else {
                     Ok(TerminateValue::Return(RuntimeValue::Null))
-                };
+                }
             }
-            VMInstruction::Noop => {}
+            VMInstruction::Noop => Ok(TerminateValue::None),
         }
-
-        Ok(TerminateValue::None)
     }
 }

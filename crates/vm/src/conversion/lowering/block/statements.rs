@@ -7,7 +7,7 @@ Assign
 
 use crate::conversion::{
     Reg, VMLiteral,
-    instructions::{VMInstruction, VMLoadLiteral},
+    instructions::{VMInstruction, literals::VMLoadLiteral},
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{

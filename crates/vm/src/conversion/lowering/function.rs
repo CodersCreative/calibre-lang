@@ -1,4 +1,4 @@
-use crate::conversion::instructions::{VMInstruction, VMLoadLiteral};
+use crate::conversion::instructions::{VMInstruction, literals::VMLoadLiteral};
 
 use super::ssa::SSABuilder;
 use super::*;

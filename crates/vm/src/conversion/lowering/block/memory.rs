@@ -8,7 +8,10 @@ Spawn
 
 use crate::conversion::{
     Reg,
-    instructions::{VMDropVar, VMInstruction, VMLoadVar, VMMoveVar},
+    instructions::{
+        VMInstruction,
+        variables::{VMDropVar, VMLoadVar, VMMoveVar},
+    },
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{LirDrop, LirLoad, LirMove, LirSpawn};

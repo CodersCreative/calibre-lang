@@ -1,5 +1,8 @@
 use crate::{
-    conversion::instructions::{VMDropVar, VMInstruction, VMLoadVar, VMMoveVar},
+    conversion::instructions::{
+        VMInstruction,
+        variables::{VMDropVar, VMLoadVar, VMMoveVar},
+    },
     value::{BIG_PRECISION, BIG_ROUNDING, HashKey, RuntimeValue},
 };
 use astro_float::{BigFloat, Consts};
