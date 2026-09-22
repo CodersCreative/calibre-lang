@@ -120,7 +120,7 @@ impl LirLowering for MirScopeDecl {
                             dest: temp,
                             data_type: ParserDataType::auto(span),
                             value: Box::new(lowered),
-                            is_referenced: false,
+                            is_referenced: true,
                         }),
                     ));
 

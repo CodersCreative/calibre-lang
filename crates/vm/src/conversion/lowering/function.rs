@@ -246,7 +246,11 @@ impl FunctionLowering {
             .iter()
             .flat_map(|block| block.instructions.iter())
             .filter_map(|node| match &node.node_type {
-                LirNodeType::Declare(decl) if decl.is_referenced => Some(decl.dest),
+                LirNodeType::Declare(decl)
+                    if decl.is_referenced || decl.dest.as_str().starts_with("tmp_") =>
+                {
+                    Some(decl.dest)
+                }
                 _ => None,
             })
             .collect();

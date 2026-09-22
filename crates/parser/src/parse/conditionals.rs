@@ -1,5 +1,6 @@
 use super::matching::parse_pattern_list;
 use crate::ast::nodes::AstNodeType;
+use crate::ast::nodes::assignment::AstAssignment;
 use crate::ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType};
 use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, StatementData, potential_new_line};
 use crate::{
@@ -102,14 +103,35 @@ impl<'a> AstPrattParser<'a> for AstTernary {
     }
 
     fn fold_postfix(base: AstNode, value: Self::Value, sp: SimpleSpan) -> AstNode {
-        AstNode::new(
+        let ternary = AstNode::new(
             sp.into(),
             AstNodeType::Ternary(AstTernary {
                 comparison: Box::new(value.1),
                 then: Box::new(base),
-                otherwise: value.2.map(Box::new),
+                otherwise: value.2.clone().map(Box::new),
                 ternary_type: value.0,
             }),
-        )
+        );
+
+        if let Some(otherwise) = value.2
+            && let AstNodeType::AssignmentExpression(AstAssignment { identifier, value }) =
+                otherwise.node_type
+        {
+            let AstNodeType::Ternary(mut ternary) = ternary.node_type else {
+                return ternary;
+            };
+
+            ternary.otherwise = Some(identifier);
+
+            return AstNode::new(
+                sp.into(),
+                AstNodeType::AssignmentExpression(AstAssignment {
+                    identifier: Box::new(AstNode::new(sp.into(), AstNodeType::Ternary(ternary))),
+                    value,
+                }),
+            );
+        }
+
+        ternary
     }
 }

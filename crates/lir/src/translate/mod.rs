@@ -59,7 +59,7 @@ impl<'a> LirEnvironment<'a> {
                 dest,
                 data_type: ParserDataType::null(span),
                 value: Box::new(LirNodeType::null()),
-                is_referenced: false,
+                is_referenced: true,
             }),
         ));
     }
