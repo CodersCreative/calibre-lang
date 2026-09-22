@@ -2,7 +2,7 @@ use crate::conversion::instructions::{VMInstruction, literals::VMLoadLiteral};
 
 use super::ssa::SSABuilder;
 use super::*;
-use calibre_lir::ast::LirDeclare;
+use calibre_lir::ast::{LirDeclare, LirLValue};
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap, UstrSet};
 
@@ -245,13 +245,15 @@ impl FunctionLowering {
             .blocks
             .iter()
             .flat_map(|block| block.instructions.iter())
-            .filter_map(|node| match &node.node_type {
-                LirNodeType::Declare(decl)
-                    if decl.is_referenced || decl.dest.as_str().starts_with("tmp_") =>
-                {
-                    Some(decl.dest)
+            .flat_map(|node| match &node.node_type {
+                LirNodeType::Declare(decl) if decl.is_referenced => {
+                    Some(decl.dest).into_iter().collect::<Vec<_>>()
                 }
-                _ => None,
+                LirNodeType::Assign(assign) => match assign.dest {
+                    LirLValue::Var(name) => Some(name).into_iter().collect::<Vec<_>>(),
+                    _ => Vec::new(),
+                },
+                _ => Vec::new(),
             })
             .collect();
 

@@ -31,20 +31,12 @@ impl VMLowering for LirDeclare {
     ) where
         Self: Sized,
     {
-        if !env.is_global && !self.is_referenced {
+        let promoted = self.is_referenced || env.referenced_variables.contains(&self.dest);
+
+        if !env.is_global && !promoted {
             let target = assigned.unwrap_or_else(|| env.alloc_reg());
 
             env.lower_node_to(*self.value, target, span);
-            let name = env.add_string(self.dest);
-            env.emit(
-                VMInstruction::StoreVar {
-                    dst: None,
-                    name,
-                    src: target,
-                },
-                span,
-            );
-
             env.map.insert(self.dest, target);
         } else {
             let reg = env.lower_node(*self.value, span);
