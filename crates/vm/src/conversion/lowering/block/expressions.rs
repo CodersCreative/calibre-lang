@@ -9,7 +9,10 @@ Is
 
 use crate::conversion::{
     Reg,
-    instructions::VMInstruction,
+    instructions::{
+        VMInstruction,
+        binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
+    },
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{LirAs, LirBinary, LirBoolean, LirComparison, LirIs};
@@ -23,12 +26,12 @@ impl VMLowering for LirBinary {
         let dst = env.alloc_reg();
 
         env.emit(
-            VMInstruction::Binary {
+            VMInstruction::Binary(VMBinary {
                 dst,
                 op: self.operator,
                 left,
                 right,
-            },
+            }),
             span,
         );
 
@@ -44,12 +47,12 @@ impl VMLowering for LirComparison {
         let dst = env.alloc_reg();
 
         env.emit(
-            VMInstruction::Comparison {
+            VMInstruction::Comparison(VMComparison {
                 dst,
                 op: self.operator,
                 left,
                 right,
-            },
+            }),
             span,
         );
 
@@ -65,12 +68,12 @@ impl VMLowering for LirBoolean {
         let dst = env.alloc_reg();
 
         env.emit(
-            VMInstruction::Boolean {
+            VMInstruction::Boolean(VMBoolean {
                 dst,
                 op: self.operator,
                 left,
                 right,
-            },
+            }),
             span,
         );
 
@@ -85,12 +88,12 @@ impl VMLowering for LirAs {
         let dst = env.alloc_reg();
 
         env.emit(
-            VMInstruction::As {
+            VMInstruction::As(VMAs {
                 dst,
                 src,
                 data_type: self.data_type,
                 failure_mode: self.failure_mode,
-            },
+            }),
             span,
         );
 
@@ -105,11 +108,11 @@ impl VMLowering for LirIs {
         let dst = env.alloc_reg();
 
         env.emit(
-            VMInstruction::Is {
+            VMInstruction::Is(VMIs {
                 dst,
                 src,
                 data_type: self.data_type,
-            },
+            }),
             span,
         );
 

@@ -2,10 +2,9 @@ use super::write_back::Propagation;
 use super::*;
 use crate::{
     evaluate::calling::{CallSite, RegisterCall},
-    native::stdlib::generator::{GeneratorResumeFn, GeneratorState},
+    native::stdlib::generator::GeneratorResumeFn,
     value::{GcMap, GcVec, HashKey},
 };
-use calibre_parser::ast::{comparison::BooleanOperator, nodes::binary::AsFailureMode};
 use wasm_sync::Mutex;
 
 pub trait VMEvaluation {
@@ -117,289 +116,29 @@ impl VM {
         match instruction {
             // Literals
             VMInstruction::LoadLiteral(x) => x.run(self, block, ip, prev_block),
+            VMInstruction::Range(x) => x.run(self, block, ip, prev_block),
+            VMInstruction::List(x) => x.run(self, block, ip, prev_block),
+            VMInstruction::Aggregate(x) => x.run(self, block, ip, prev_block),
+            VMInstruction::Enum(x) => x.run(self, block, ip, prev_block),
 
             // Variables
             VMInstruction::LoadVar(x) => x.run(self, block, ip, prev_block),
             VMInstruction::MoveVar(x) => x.run(self, block, ip, prev_block),
             VMInstruction::DropVar(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::StoreVar { dst, name, src } => {
-                let name = self.local_string(block, *name)?;
-                let stored = self.resolve_value_ref(self.get_reg_value(*src))?;
-                let old = self.variables.insert(*name, stored);
+            VMInstruction::StoreVar(x) => x.run(self, block, ip, prev_block),
+            VMInstruction::LoadVarRef(x) => x.run(self, block, ip, prev_block),
 
-                if let Some(old) = old
-                    && let Some(dst) = dst
-                {
-                    self.set_reg_value(*dst, old);
-                }
+            // Registers
+            VMInstruction::LoadRegRef(x) => x.run(self, block, ip, prev_block),
+            VMInstruction::Copy(x) => x.run(self, block, ip, prev_block),
 
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::LoadVarRef { dst, name } => {
-                let name = self.local_string(block, *name)?;
-                if let Some(RuntimeValue::RegRef { frame, reg }) = self.variables.get(name) {
-                    self.set_reg_value(
-                        *dst,
-                        RuntimeValue::RegRef {
-                            frame: *frame,
-                            reg: *reg,
-                        },
-                    );
-                } else {
-                    self.set_reg_value(*dst, RuntimeValue::Ref(*name));
-                }
+            // Binary
+            VMInstruction::As(x) => x.run(self, block, ip, prev_block),
+            VMInstruction::Is(x) => x.run(self, block, ip, prev_block),
+            VMInstruction::Binary(x) => x.run(self, block, ip, prev_block),
+            VMInstruction::Comparison(x) => x.run(self, block, ip, prev_block),
+            VMInstruction::Boolean(x) => x.run(self, block, ip, prev_block),
 
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::LoadRegRef { dst, src } => {
-                let value = match self.get_reg_value(*src) {
-                    RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef {
-                        frame: *frame,
-                        reg: *reg,
-                    },
-                    RuntimeValue::Ref(name) => RuntimeValue::Ref(*name),
-                    RuntimeValue::VarRef(id) => RuntimeValue::VarRef(*id),
-                    other => other.clone(),
-                };
-
-                self.set_reg_value(*dst, value);
-                Ok(TerminateValue::None)
-            }
-
-            VMInstruction::Copy { dst, src } => {
-                if dst == src {
-                    return Ok(TerminateValue::None);
-                }
-                let value = self.get_reg_value(*src).clone();
-                self.set_reg_value(*dst, value);
-                self.propagate_member_source_alias(*src, *dst);
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::As {
-                dst,
-                src,
-                data_type,
-                failure_mode,
-            } => {
-                let value = self.get_reg_value(*src).clone();
-                let conversion = value.convert(self, &data_type.data_type);
-                let converted = match failure_mode {
-                    AsFailureMode::Panic => match conversion {
-                        Ok(value) => value,
-                        Err(err) => {
-                            return Err(RuntimeError::Panic(Some(format!(
-                                "failed `as!` conversion to {}: {}",
-                                data_type, err
-                            ))));
-                        }
-                    },
-                    AsFailureMode::Option => match conversion {
-                        Ok(value) => RuntimeValue::Option(Some(Gc::new(value))),
-                        Err(_) => RuntimeValue::Option(None),
-                    },
-                    AsFailureMode::Result => match conversion {
-                        Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
-                        Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
-                            Ustr::from(&err.to_string()),
-                        )))),
-                    },
-                };
-
-                self.set_reg_value(*dst, converted);
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::Is {
-                dst,
-                src,
-                data_type,
-            } => {
-                let resolved = self.resolve_value(self.get_reg_value(*src).clone())?;
-                let out = self.runtime_matches_type(&resolved, &data_type.data_type);
-                self.set_reg_value(*dst, RuntimeValue::Bool(out));
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::Binary {
-                dst,
-                op,
-                left,
-                right,
-            } => {
-                let left = self.resolve_value(self.get_reg_value(*left).clone())?;
-                let right = self.resolve_value(self.get_reg_value(*right).clone())?;
-                let value = binary(self, op, left, right)?;
-                self.set_reg_value(*dst, value);
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::Comparison {
-                dst,
-                op,
-                left,
-                right,
-            } => {
-                let right = self.resolve_value(self.get_reg_value(*right).clone())?;
-                let left = self.resolve_value(self.get_reg_value(*left).clone())?;
-                let cmp_val = comparison(op, left, right)?;
-                self.set_reg_value(*dst, cmp_val);
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::Boolean {
-                dst,
-                op,
-                left,
-                right,
-            } => {
-                let left = self.resolve_value(self.get_reg_value(*left).clone())?;
-
-                if let RuntimeValue::Bool(x) = &left {
-                    if &BooleanOperator::And == op && !*x {
-                        self.set_reg_value(*dst, RuntimeValue::Bool(false));
-                        return Ok(TerminateValue::None);
-                    } else if &BooleanOperator::Or == op && *x {
-                        self.set_reg_value(*dst, RuntimeValue::Bool(true));
-                        return Ok(TerminateValue::None);
-                    }
-                }
-
-                let right = self.resolve_value(self.get_reg_value(*right).clone())?;
-                self.set_reg_value(*dst, boolean(op, left, right)?);
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::Range {
-                dst,
-                from,
-                to,
-                inclusive,
-            } => {
-                let from = self.resolve_value_ref(self.get_reg_value(*from))?;
-                let to = self.resolve_value_ref(self.get_reg_value(*to))?;
-                let as_range_bound = |value: RuntimeValue| -> Result<i64, RuntimeError> {
-                    match value {
-                        RuntimeValue::Int(v) => Ok(v),
-                        RuntimeValue::UInt(v) => Ok(v as i64),
-                        RuntimeValue::Float(v) => Ok(v as i64),
-                        RuntimeValue::Bool(v) => Ok(v as i64),
-                        RuntimeValue::Char(v) => Ok(v as i64),
-                        RuntimeValue::List(v) => Ok(v.as_ref().0.len() as i64),
-                        RuntimeValue::Aggregate(_, v) => Ok(v.as_ref().0.0.len() as i64),
-                        RuntimeValue::Str(v) => Ok(v.len() as i64),
-                        RuntimeValue::Range(from, to) => Ok((to - from).max(0)),
-                        other => Err(RuntimeError::ExpectedNumericFound {
-                            found: Box::new(other),
-                        }),
-                    }
-                };
-                let from = as_range_bound(from)?;
-                let to = as_range_bound(to)?;
-                let range = if *inclusive {
-                    RuntimeValue::Range(from, to + 1)
-                } else {
-                    RuntimeValue::Range(from, to)
-                };
-                self.set_reg_value(*dst, range);
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::List { dst, items } => {
-                let values = items
-                    .iter()
-                    .map(|item| self.get_reg_value(*item).clone())
-                    .collect();
-                self.set_reg_value(*dst, RuntimeValue::List(Gc::new(GcVec(values))));
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::Aggregate {
-                dst,
-                layout,
-                fields,
-            } => {
-                let layout = block
-                    .aggregate_layouts
-                    .get(*layout as usize)
-                    .ok_or_else(|| {
-                        RuntimeError::InvalidBytecode("invalid aggregate layout".to_string())
-                    })?;
-                let mut entries = Vec::with_capacity(layout.members.len());
-                for (name, reg) in layout.members.iter().zip(fields.iter()) {
-                    let mut value = self.get_reg_value(*reg).clone();
-                    if value.is_ref_like()
-                        && let Ok(resolved) = self.resolve_value_ref(&value)
-                    {
-                        value = resolved;
-                    }
-                    entries.push((name, value));
-                }
-
-                if let Some(type_name) = layout.name
-                    && Self::is_gen_type_name(&type_name)
-                {
-                    let next_fn = entries.iter().find_map(|(field, value)| {
-                        let short = field.rsplit(".").next().unwrap_or(field.as_str());
-                        (short == "data").then(|| value.clone())
-                    });
-                    if let Some(RuntimeValue::Function { name, captures }) = next_fn {
-                        let resolved_caps: Vec<(Ustr, RuntimeValue)> = captures
-                            .iter()
-                            .map(|(k, v)| {
-                                let resolved =
-                                    self.resolve_value_ref(v).unwrap_or_else(|_| v.clone());
-                                (*k, resolved)
-                            })
-                            .collect();
-
-                        let mut gen_vm = VM::new_shared(
-                            self.registry.clone(),
-                            self.mappings.clone(),
-                            self.config.clone(),
-                        );
-
-                        for (k, v) in &resolved_caps {
-                            gen_vm.variables.insert(*k, v.clone());
-                        }
-
-                        if !self.ptr_heap.is_empty() {
-                            gen_vm.ptr_heap = self.ptr_heap.clone();
-                        }
-
-                        self.set_reg_value(
-                            *dst,
-                            RuntimeValue::Generator {
-                                type_name,
-                                state: Arc::new(Mutex::new(GeneratorState {
-                                    vm: gen_vm,
-                                    function_name: name,
-                                    captures: Arc::new(resolved_caps),
-                                    task_state: crate::TaskState::default(),
-                                    index: 0,
-                                    completed: false,
-                                })),
-                            },
-                        );
-                        return Ok(TerminateValue::None);
-                    }
-                }
-
-                self.set_reg_value(
-                    *dst,
-                    RuntimeValue::Aggregate(
-                        layout.name,
-                        Gc::new(GcMap(ObjectMap(
-                            entries.into_iter().map(|x| (*x.0, x.1)).collect(),
-                        ))),
-                    ),
-                );
-
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::Enum {
-                dst,
-                name,
-                variant,
-                payload,
-            } => {
-                let name = self.local_string(block, *name)?;
-                let payload = payload.map(|reg| Gc::new(self.get_reg_value(reg).clone()));
-                self.set_reg_value(*dst, RuntimeValue::Enum(*name, *variant as usize, payload));
-                Ok(TerminateValue::None)
-            }
             VMInstruction::CallSelf { dst, args } => {
                 let func_ptr = self.current_frame().func_ptr as *const VMFunction;
                 if func_ptr.is_null() {

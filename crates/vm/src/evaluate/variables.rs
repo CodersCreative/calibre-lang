@@ -2,7 +2,7 @@ use crate::{
     VM, VarName,
     conversion::{
         VMBlock,
-        instructions::variables::{VMDropVar, VMLoadVar, VMMoveVar},
+        instructions::variables::{VMDropVar, VMLoadVar, VMLoadVarRef, VMMoveVar, VMStoreVar},
     },
     error::RuntimeError,
     evaluate::instruction::VMEvaluation,
@@ -76,6 +76,54 @@ impl VMEvaluation for VMMoveVar {
         });
 
         vm.set_reg_value(self.dst, value);
+        Ok(TerminateValue::None)
+    }
+}
+
+impl VMEvaluation for VMStoreVar {
+    fn run(
+        &self,
+        vm: &mut VM,
+        block: &VMBlock,
+        _ip: u32,
+        _prev_block: Option<BlockId>,
+    ) -> Result<TerminateValue, RuntimeError> {
+        let name = vm.local_string(block, self.name)?;
+        let stored = vm.resolve_value_ref(vm.get_reg_value(self.src))?;
+        let old = vm.variables.insert(*name, stored);
+
+        if let Some(old) = old
+            && let Some(dst) = &self.dst
+        {
+            vm.set_reg_value(*dst, old);
+        }
+
+        Ok(TerminateValue::None)
+    }
+}
+
+impl VMEvaluation for VMLoadVarRef {
+    fn run(
+        &self,
+        vm: &mut VM,
+        block: &VMBlock,
+        _ip: u32,
+        _prev_block: Option<BlockId>,
+    ) -> Result<TerminateValue, RuntimeError> {
+        let name = vm.local_string(block, self.name)?;
+
+        if let Some(RuntimeValue::RegRef { frame, reg }) = vm.variables.get(name) {
+            vm.set_reg_value(
+                self.dst,
+                RuntimeValue::RegRef {
+                    frame: *frame,
+                    reg: *reg,
+                },
+            );
+        } else {
+            vm.set_reg_value(self.dst, RuntimeValue::Ref(*name));
+        }
+
         Ok(TerminateValue::None)
     }
 }

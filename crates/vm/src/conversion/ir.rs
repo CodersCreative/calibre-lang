@@ -1,7 +1,7 @@
 use crate::{
     conversion::instructions::{
         VMInstruction,
-        variables::{VMDropVar, VMLoadVar, VMMoveVar},
+        variables::{VMDropVar, VMLoadVar, VMLoadVarRef, VMMoveVar, VMStoreVar},
     },
     value::{BIG_PRECISION, BIG_ROUNDING, HashKey, RuntimeValue},
 };
@@ -141,11 +141,11 @@ impl VMFunction {
         for block in self.blocks.iter_mut() {
             for instruction in block.instructions.iter() {
                 match instruction {
-                    VMInstruction::StoreVar { name, .. }
+                    VMInstruction::StoreVar(VMStoreVar { name, .. })
                     | VMInstruction::DropVar(VMDropVar { name })
                     | VMInstruction::LoadVar(VMLoadVar { name, .. })
                     | VMInstruction::MoveVar(VMMoveVar { name, .. })
-                    | VMInstruction::LoadVarRef { name, .. } => {
+                    | VMInstruction::LoadVarRef(VMLoadVarRef { name, .. }) => {
                         if let Some(dest) = block.local_strings.get(*name as usize)
                             && !declared.contains_key(dest)
                         {

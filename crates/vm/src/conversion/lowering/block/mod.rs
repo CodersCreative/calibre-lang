@@ -1,5 +1,5 @@
 use super::*;
-use crate::conversion::instructions::VMInstruction;
+use crate::conversion::instructions::{VMInstruction, registers::VMCopy};
 use tracing::{instrument, trace};
 
 pub mod access;
@@ -21,10 +21,10 @@ pub trait VMLowering {
         let reg = self.lower(env, span);
         if reg != target {
             env.emit(
-                VMInstruction::Copy {
+                VMInstruction::Copy(VMCopy {
                     dst: target,
                     src: reg,
-                },
+                }),
                 span,
             );
         }
@@ -43,10 +43,10 @@ pub trait VMLowering {
         let reg = self.lower(env, span);
         if set_ret && reg != env.ret_reg {
             env.emit(
-                VMInstruction::Copy {
+                VMInstruction::Copy(VMCopy {
                     dst: env.ret_reg,
                     src: reg,
-                },
+                }),
                 span,
             );
         }
@@ -142,10 +142,10 @@ impl<'a> BlockLoweringCtx<'a> {
                 let reg = self.lower_node(other, node.span);
                 if set_ret && reg != self.ret_reg {
                     self.emit(
-                        VMInstruction::Copy {
+                        VMInstruction::Copy(VMCopy {
                             dst: self.ret_reg,
                             src: reg,
-                        },
+                        }),
                         node.span,
                     );
                 }
@@ -168,10 +168,10 @@ impl<'a> BlockLoweringCtx<'a> {
                 let reg = self.lower_node(other, span);
                 if reg != target {
                     self.emit(
-                        VMInstruction::Copy {
+                        VMInstruction::Copy(VMCopy {
                             dst: target,
                             src: reg,
-                        },
+                        }),
                         span,
                     );
                 }
@@ -232,10 +232,10 @@ impl<'a> BlockLoweringCtx<'a> {
                 let cond_reg = if cond == self.ret_reg {
                     let tmp = self.alloc_reg();
                     self.emit(
-                        VMInstruction::Copy {
+                        VMInstruction::Copy(VMCopy {
                             dst: tmp,
                             src: cond,
-                        },
+                        }),
                         span,
                     );
                     tmp

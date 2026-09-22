@@ -36,3 +36,31 @@ impl Display for VMDropVar {
         write!(f, "DROP {}", self.name)
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VMStoreVar {
+    pub dst: Option<Reg>,
+    pub name: u16,
+    pub src: Reg,
+}
+
+impl Display for VMStoreVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.dst {
+            Some(dst) => write!(f, "%r{} = STORE {} <- %r{}", dst, self.name, self.src),
+            _ => write!(f, "STORE {} <- %r{}", self.name, self.src),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct VMLoadVarRef {
+    pub dst: Reg,
+    pub name: u16,
+}
+
+impl Display for VMLoadVarRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "%r{} = VARREF {}", self.dst, self.name)
+    }
+}

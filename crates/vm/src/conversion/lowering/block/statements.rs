@@ -7,7 +7,12 @@ Assign
 
 use crate::conversion::{
     Reg, VMLiteral,
-    instructions::{VMInstruction, literals::VMLoadLiteral},
+    instructions::{
+        VMInstruction,
+        literals::VMLoadLiteral,
+        registers::VMCopy,
+        variables::{VMLoadVarRef, VMStoreVar},
+    },
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{
@@ -41,12 +46,13 @@ impl VMLowering for LirDeclare {
         } else {
             let reg = env.lower_node(*self.value, span);
             let name = env.add_string(self.dest);
+
             env.emit(
-                VMInstruction::StoreVar {
+                VMInstruction::StoreVar(VMStoreVar {
                     dst: None,
                     name,
                     src: reg,
-                },
+                }),
                 span,
             );
         }
@@ -88,11 +94,11 @@ fn lower_assignment<'a>(
             let name_idx = env.add_string(dest);
             let reg = env.lower_node(*node.value, span);
             env.emit(
-                VMInstruction::StoreVar {
+                VMInstruction::StoreVar(VMStoreVar {
                     dst: Some(assigned.unwrap_or(dst)),
                     name: name_idx,
                     src: reg,
-                },
+                }),
                 span,
             );
         }
@@ -153,10 +159,10 @@ fn lower_assignment<'a>(
                             let base_reg = env.alloc_reg();
                             if let Some(reg) = env.map.get(&value) {
                                 env.emit(
-                                    VMInstruction::Copy {
+                                    VMInstruction::Copy(VMCopy {
                                         dst: base_reg,
                                         src: *reg,
-                                    },
+                                    }),
                                     span,
                                 );
                                 env.emit(
@@ -171,10 +177,10 @@ fn lower_assignment<'a>(
                             } else {
                                 let idx = env.add_string(value);
                                 env.emit(
-                                    VMInstruction::LoadVarRef {
+                                    VMInstruction::LoadVarRef(VMLoadVarRef {
                                         dst: base_reg,
                                         name: idx,
-                                    },
+                                    }),
                                     span,
                                 );
                                 env.emit(

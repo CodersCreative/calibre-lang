@@ -8,7 +8,11 @@ Enum
 
 use crate::conversion::{
     AggregateLayout, Reg, VMLiteral,
-    instructions::{VMInstruction, literals::VMLoadLiteral},
+    instructions::{
+        VMInstruction,
+        literals::{VMAggregate, VMEnum, VMList, VMLoadLiteral},
+        registers::VMCopy,
+    },
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{LirAggregate, LirEnum, LirList, LirLiteral};
@@ -28,10 +32,10 @@ impl VMLowering for LirLiteral {
         if let LirLiteral::Null = self {
             if target != env.null_reg {
                 env.emit(
-                    VMInstruction::Copy {
+                    VMInstruction::Copy(VMCopy {
                         dst: target,
                         src: env.null_reg,
-                    },
+                    }),
                     span,
                 );
             }
@@ -68,10 +72,10 @@ impl VMLowering for LirList {
             .collect();
 
         env.emit(
-            VMInstruction::List {
+            VMInstruction::List(VMList {
                 dst: target,
                 items: regs,
-            },
+            }),
             span,
         );
     }
@@ -103,11 +107,11 @@ impl VMLowering for LirAggregate {
         let index = env.block.aggregate_layouts.len() - 1;
 
         env.emit(
-            VMInstruction::Aggregate {
+            VMInstruction::Aggregate(VMAggregate {
                 dst: target,
                 layout: index as u16,
                 fields: values,
-            },
+            }),
             span,
         );
     }
@@ -126,12 +130,12 @@ impl VMLowering for LirEnum {
         let payload = self.payload.map(|v| env.lower_node(*v, span));
         let name = env.add_string(self.name);
         env.emit(
-            VMInstruction::Enum {
+            VMInstruction::Enum(VMEnum {
                 dst: target,
                 name,
                 variant: self.variant as u16,
                 payload,
-            },
+            }),
             span,
         );
     }

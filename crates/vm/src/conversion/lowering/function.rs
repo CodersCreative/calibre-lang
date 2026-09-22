@@ -1,4 +1,4 @@
-use crate::conversion::instructions::{VMInstruction, literals::VMLoadLiteral};
+use crate::conversion::instructions::{VMInstruction, literals::VMLoadLiteral, registers::VMCopy};
 
 use super::ssa::SSABuilder;
 use super::*;
@@ -129,7 +129,7 @@ impl FunctionLowering {
             let mut i = 0;
             while i < block.instructions.len() {
                 // Removes self-copies: %rX = %rX
-                if let VMInstruction::Copy { dst, src } = block.instructions[i]
+                if let VMInstruction::Copy(VMCopy { dst, src }) = block.instructions[i]
                     && dst == src
                 {
                     block.instructions.remove(i);
@@ -144,10 +144,10 @@ impl FunctionLowering {
                             dst: dst1,
                             literal: lit1,
                         }),
-                        VMInstruction::Copy {
+                        VMInstruction::Copy(VMCopy {
                             dst: dst2,
                             src: src1,
-                        },
+                        }),
                     ) = (&block.instructions[i], &block.instructions[i + 1])
                     && *dst1 == *src1
                     && *dst1 != *dst2
@@ -164,22 +164,22 @@ impl FunctionLowering {
                 // Removes copy followed by copy: %r2 = %r1; %r3 = %r2; -> %r3 = %r1;
                 if i + 1 < block.instructions.len()
                     && let (
-                        VMInstruction::Copy {
+                        VMInstruction::Copy(VMCopy {
                             dst: dst1,
                             src: src1,
-                        },
-                        VMInstruction::Copy {
+                        }),
+                        VMInstruction::Copy(VMCopy {
                             dst: dst2,
                             src: src2,
-                        },
+                        }),
                     ) = (&block.instructions[i], &block.instructions[i + 1])
                     && *dst1 == *src2
                     && *dst1 != *dst2
                 {
-                    block.instructions[i] = VMInstruction::Copy {
+                    block.instructions[i] = VMInstruction::Copy(VMCopy {
                         dst: *dst2,
                         src: *src1,
-                    };
+                    });
                     block.instructions.remove(i + 1);
                     block.instruction_spans.remove(i + 1);
                     continue;

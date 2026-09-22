@@ -2,10 +2,7 @@ use crate::{
     VM,
     conversion::{VMBlock, VMFunction, VMGlobal, instructions::VMInstruction},
     error::RuntimeError,
-    value::{
-        RuntimeValue, TerminateValue, WaitGroupInner,
-        operation::{binary, boolean, comparison},
-    },
+    value::{RuntimeValue, TerminateValue, WaitGroupInner},
 };
 use calibre_lir::ast::BlockId;
 use calibre_parser::ast::types::ParserInnerType;
@@ -16,9 +13,11 @@ use std::sync::Arc;
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap};
 
+pub mod binary;
 pub mod calling;
 pub mod instruction;
 pub mod literals;
+pub mod registers;
 pub mod variables;
 pub mod write_back;
 

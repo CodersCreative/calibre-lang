@@ -10,7 +10,7 @@ RefLoad
 
 use crate::conversion::{
     Reg,
-    instructions::VMInstruction,
+    instructions::{VMInstruction, registers::VMCopy, variables::VMLoadVarRef},
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{
@@ -88,10 +88,13 @@ impl VMLowering for LirRef {
                 let dst = env.alloc_reg();
 
                 if let Some(reg) = env.map.get(&value) {
-                    env.emit(VMInstruction::Copy { dst, src: *reg }, span);
+                    env.emit(VMInstruction::Copy(VMCopy { dst, src: *reg }), span);
                 } else {
                     let idx = env.add_string(value);
-                    env.emit(VMInstruction::LoadVarRef { dst, name: idx }, span);
+                    env.emit(
+                        VMInstruction::LoadVarRef(VMLoadVarRef { dst, name: idx }),
+                        span,
+                    );
                 }
 
                 dst
@@ -112,10 +115,13 @@ impl VMLowering for LirRefLoad {
         let dst = env.alloc_reg();
 
         if let Some(reg) = env.map.get(&self.value) {
-            env.emit(VMInstruction::Copy { dst, src: *reg }, span);
+            env.emit(VMInstruction::Copy(VMCopy { dst, src: *reg }), span);
         } else {
             let idx = env.add_string(self.value);
-            env.emit(VMInstruction::LoadVarRef { dst, name: idx }, span);
+            env.emit(
+                VMInstruction::LoadVarRef(VMLoadVarRef { dst, name: idx }),
+                span,
+            );
         }
 
         dst

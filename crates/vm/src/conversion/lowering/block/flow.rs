@@ -6,7 +6,10 @@ Closure
 
 use crate::conversion::{
     Reg, VMLiteral,
-    instructions::{VMInstruction, literals::VMLoadLiteral},
+    instructions::{
+        VMInstruction,
+        literals::{VMLoadLiteral, VMRange},
+    },
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{LirClosure, LirRange};
@@ -19,12 +22,12 @@ impl VMLowering for LirRange {
         let to = env.lower_node(*self.to, span);
         let dst = env.alloc_reg();
         env.emit(
-            VMInstruction::Range {
+            VMInstruction::Range(VMRange {
                 dst,
                 from,
                 to,
                 inclusive: self.inclusive,
-            },
+            }),
             span,
         );
         dst
