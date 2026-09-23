@@ -2,6 +2,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{MiddleScope, ScopeId, Scoping},
+    translate::MirLowering,
 };
 use calibre_parser::{
     Parser,
@@ -83,7 +84,8 @@ impl MiddleEnvironment {
             }
 
             let error_count_before = self.context.errors.len();
-            let middle = self.evaluate(scope, program);
+            let span = program.span;
+            let middle = program.lower_or_empty(self, scope, span);
 
             if self.context.errors.len() > error_count_before {
                 let new_errors: Vec<_> = self.context.errors.drain(error_count_before..).collect();
@@ -160,7 +162,9 @@ impl MiddleEnvironment {
                 }
 
                 let error_count_before = self.context.errors.len();
-                let middle = self.evaluate(scope, program);
+                let span = program.span;
+                let middle = program.lower_or_empty(self, scope, span);
+
                 self.context.stdlib_nodes.push(middle);
 
                 if let Ok(x) = self.scoping.scope_mut_or_err(scope) {
@@ -266,7 +270,8 @@ impl MiddleEnvironment {
                 }
 
                 let error_count_before = self.context.errors.len();
-                let middle = self.evaluate(scope, program);
+                let span = program.span;
+                let middle = program.lower_or_empty(self, scope, span);
 
                 self.context.stdlib_nodes.push(middle);
                 if let Ok(x) = self.scoping.scope_mut_or_err(scope) {

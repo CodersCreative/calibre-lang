@@ -3,6 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
+    translate::MirLowering,
 };
 use calibre_parser::ast::{
     idents::ParserText,
@@ -95,10 +96,11 @@ impl MiddleEnvironment {
                 };
 
                 env.tagging.tag_info.push(TagInfo::Init(priority));
-                let middle = env.evaluate_inner(scope, node)?;
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
 
-                Ok(middle)
+                middle
             },
         ));
 
@@ -132,7 +134,8 @@ impl MiddleEnvironment {
                 }
 
                 if build {
-                    env.evaluate_inner(scope, node)
+                    let span = node.span;
+                    node.lower(env, scope, span)
                 } else {
                     Ok(MiddleNode::new(MiddleNodeType::EmptyLine, node.span))
                 }
@@ -165,7 +168,8 @@ impl MiddleEnvironment {
                 }
 
                 if build {
-                    env.evaluate_inner(scope, node)
+                    let span = node.span;
+                    node.lower(env, scope, span)
                 } else {
                     Ok(MiddleNode::new(MiddleNodeType::EmptyLine, node.span))
                 }
@@ -194,10 +198,11 @@ impl MiddleEnvironment {
                 };
 
                 env.tagging.tag_info.push(TagInfo::Fin(priority));
-                let middle = env.evaluate_inner(scope, node)?;
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
 
-                Ok(middle)
+                middle
             },
         ));
 
@@ -215,9 +220,11 @@ impl MiddleEnvironment {
              _tag: ParserText,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Default);
-                let middle = env.evaluate_inner(scope, node)?;
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
-                Ok(middle)
+
+                middle
             },
         ));
 
@@ -235,9 +242,11 @@ impl MiddleEnvironment {
              _tag: ParserText,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Builder);
-                let middle = env.evaluate_inner(scope, node)?;
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
-                Ok(middle)
+
+                middle
             },
         ));
 
@@ -255,9 +264,11 @@ impl MiddleEnvironment {
              _tag: ParserText,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Panics);
-                let middle = env.evaluate_inner(scope, node)?;
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
-                Ok(middle)
+
+                middle
             },
         ));
 
@@ -280,9 +291,12 @@ impl MiddleEnvironment {
                         _ => None,
                     },
                 )));
-                let middle = env.evaluate_inner(scope, node)?;
+
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
-                Ok(middle)
+
+                middle
             },
         ));
 
@@ -307,9 +321,11 @@ impl MiddleEnvironment {
                             _ => None,
                         },
                     )));
-                let middle = env.evaluate_inner(scope, node)?;
+
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
-                Ok(middle)
+                middle
             },
         ));
 
@@ -332,9 +348,11 @@ impl MiddleEnvironment {
                         _ => None,
                     },
                 )));
-                let middle = env.evaluate_inner(scope, node)?;
+
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
-                Ok(middle)
+                middle
             },
         ));
 
@@ -352,9 +370,11 @@ impl MiddleEnvironment {
              _tag: ParserText,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Bench);
-                let middle = env.evaluate_inner(scope, node)?;
+
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
-                Ok(middle)
+                middle
             },
         ));
 
@@ -379,9 +399,11 @@ impl MiddleEnvironment {
                         })
                         .unwrap_or_default(),
                 ));
-                let middle = env.evaluate_inner(scope, node)?;
+
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
-                Ok(middle)
+                middle
             },
         ));
 
@@ -417,9 +439,11 @@ impl MiddleEnvironment {
              _tag: ParserText,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::CallerContext);
-                let middle = env.evaluate_inner(scope, node)?;
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
-                Ok(middle)
+
+                middle
             },
         ));
 
@@ -437,9 +461,11 @@ impl MiddleEnvironment {
              _tag: ParserText,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::IgnoreInvalidReturn);
-                let middle = env.evaluate_inner(scope, node)?;
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
-                Ok(middle)
+
+                middle
             },
         ));
 
@@ -457,9 +483,11 @@ impl MiddleEnvironment {
              _tag: ParserText,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::IgnoreInvalidLet);
-                let middle = env.evaluate_inner(scope, node)?;
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
-                Ok(middle)
+
+                middle
             },
         ));
 
@@ -477,9 +505,11 @@ impl MiddleEnvironment {
              _tag: ParserText,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::IgnoreInvalidTypeCheck);
-                let middle = env.evaluate_inner(scope, node)?;
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
-                Ok(middle)
+
+                middle
             },
         ));
 
@@ -555,10 +585,12 @@ impl MiddleEnvironment {
                 env.tagging
                     .tag_info
                     .push(TagInfo::Pure(MemoInfo { memo, params }));
-                let middle = env.evaluate_inner(scope, node)?;
+
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
                 let _ = env.tagging.tag_info.pop();
 
-                Ok(middle)
+                middle
             },
         ));
 

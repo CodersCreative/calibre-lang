@@ -34,11 +34,14 @@ impl MiddleEnvironment {
         let mut lowered = Vec::with_capacity(args.len() + reverse_args.len());
 
         for arg in args {
-            lowered.push(self.evaluate(scope, arg.into()));
+            let arg = AstNode::from(arg);
+            let span = arg.span;
+            lowered.push(arg.lower_or_empty(self, scope, span));
         }
 
         for arg in reverse_args {
-            lowered.push(self.evaluate(scope, arg));
+            let span = arg.span;
+            lowered.push(arg.lower_or_empty(self, scope, span));
         }
 
         lowered

@@ -80,31 +80,32 @@ impl MiddleEnvironment {
         scope: ScopeId,
         node: AstNode,
     ) -> Result<MiddleNode, MiddleErr> {
+        let span = node.span;
+
         let Ok(scope_ref) = self.scoping.scope_or_err(scope) else {
-            return self.evaluate_inner(scope, node);
+            return node.lower(self, scope, span);
         };
 
-        let sp = node.span;
         let meta = self.package_metadata_for_scope(scope_ref);
         let value = |v: Ustr| {
             AstNode::new(
-                sp,
+                span,
                 AstNodeType::StringLiteral(AstString {
-                    value: ParserText::new(sp, v),
+                    value: ParserText::new(span, v),
                 }),
             )
         };
 
         let mut prefix = vec![AstNode::new(
-            sp,
+            span,
             AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Constant,
-                identifier: PotentialDollarIdentifier::new(sp, "package"),
-                data_type: ParserDataType::object(sp, "Package"),
+                identifier: PotentialDollarIdentifier::new(span, "package"),
+                data_type: ParserDataType::object(span, "Package"),
                 value: Box::new(AstNode::new(
-                    sp,
+                    span,
                     AstNodeType::StructLiteral(AstStruct {
-                        identifier: PotentialGenericTypeIdentifier::new(sp, "Package"),
+                        identifier: PotentialGenericTypeIdentifier::new(span, "Package"),
                         value: ObjectType::Map(vec![
                             (Ustr::from("name"), value(meta.name)),
                             (Ustr::from("version"), value(meta.version)),
@@ -133,7 +134,7 @@ impl MiddleEnvironment {
             create_new_scope: Some(false),
             define: false,
         }
-        .lower(self, scope, sp)
+        .lower(self, scope, span)
     }
 
     pub fn evaluate_with_current_context_injection(
@@ -141,16 +142,17 @@ impl MiddleEnvironment {
         scope: ScopeId,
         node: AstNode,
     ) -> Result<MiddleNode, MiddleErr> {
+        let span = node.span;
+
         let Ok(scope_ref) = self.scoping.scope_or_err(scope) else {
-            return self.evaluate_inner(scope, node);
+            return node.lower(self, scope, span);
         };
 
-        let sp = node.span;
         let value = |v: Ustr| {
             AstNode::new(
-                sp,
+                span,
                 AstNodeType::StringLiteral(AstString {
-                    value: ParserText::new(sp, v),
+                    value: ParserText::new(span, v),
                 }),
             )
         };
@@ -166,15 +168,15 @@ impl MiddleEnvironment {
         };
 
         let mut nodes = vec![AstNode::new(
-            sp,
+            span,
             AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Constant,
-                identifier: PotentialDollarIdentifier::new(sp, "current_context"),
-                data_type: ParserDataType::object(sp, "ExecContext"),
+                identifier: PotentialDollarIdentifier::new(span, "current_context"),
+                data_type: ParserDataType::object(span, "ExecContext"),
                 value: Box::new(AstNode::new(
-                    sp,
+                    span,
                     AstNodeType::StructLiteral(AstStruct {
-                        identifier: PotentialGenericTypeIdentifier::new(sp, "ExecContext"),
+                        identifier: PotentialGenericTypeIdentifier::new(span, "ExecContext"),
                         value: ObjectType::Map(vec![
                             (Ustr::from("function_name"), value(function_name)),
                             (Ustr::from("module_name"), value(scope_ref.namespace)),
@@ -188,7 +190,7 @@ impl MiddleEnvironment {
                                         .to_string_lossy(),
                                 )),
                             ),
-                            (Ustr::from("span"), AstNode::range(sp, sp.to_range())),
+                            (Ustr::from("span"), AstNode::range(span, span.to_range())),
                         ]),
                     }),
                 )),
@@ -208,6 +210,6 @@ impl MiddleEnvironment {
             create_new_scope: Some(false),
             define: false,
         }
-        .lower(self, scope, sp)
+        .lower(self, scope, span)
     }
 }

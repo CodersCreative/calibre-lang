@@ -3,6 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
+    translate::MirLowering,
 };
 use calibre_parser::{
     Parser,
@@ -154,7 +155,8 @@ impl MiddleEnvironment {
                 }
 
                 debug!("evaluating build scope");
-                let node = self.evaluate(scope, program);
+                let span = program.span;
+                let node = program.lower_or_empty(self, scope, span);
                 self.scoping.scope_mut_or_err(scope)?.built = true;
                 Some(node)
             }
@@ -202,7 +204,8 @@ impl MiddleEnvironment {
         }
 
         debug!("evaluating imported scope");
-        let node = self.evaluate(scope, program);
+        let span = program.span;
+        let node = program.lower_or_empty(self, scope, span);
         self.scoping.scope_mut_or_err(scope)?.built = true;
 
         let node = match (node.node_type.clone(), build_node) {

@@ -4,6 +4,7 @@ use crate::{
     errors::MiddleErr,
     scoping::ScopeId,
     symbols::MiddleOverload,
+    translate::MirLowering,
 };
 use calibre_parser::{
     Span,
@@ -73,10 +74,10 @@ impl MiddleEnvironment {
             {
                 return Ok(Some(MiddleNode {
                     node_type: MiddleNodeType::CallExpression(MirCall {
-                        caller: Box::new(self.evaluate_inner(scope, overload.func.clone())?),
+                        caller: Box::new(overload.func.clone().lower(self, scope, span)?),
                         args: vec![
-                            self.evaluate_inner(scope, left)?,
-                            self.evaluate_inner(scope, right)?,
+                            left.lower(self, scope, span)?,
+                            right.lower(self, scope, span)?,
                         ],
                     }),
                     span,
@@ -129,8 +130,8 @@ impl MiddleEnvironment {
         if let Some(overload) = overload {
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {
-                    caller: Box::new(self.evaluate_inner(scope, overload.func.clone())?),
-                    args: vec![self.evaluate_inner(scope, value)?],
+                    caller: Box::new(overload.func.clone().lower(self, scope, span)?),
+                    args: vec![value.lower(self, scope, span)?],
                 }),
                 span,
             }));
@@ -227,11 +228,11 @@ impl MiddleEnvironment {
         if let Some(overload) = overload {
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {
-                    caller: Box::new(self.evaluate_inner(scope, overload.func.clone())?),
+                    caller: Box::new(overload.func.clone().lower(self, scope, span)?),
                     args: vec![
-                        self.evaluate_inner(scope, base)?,
-                        self.evaluate_inner(scope, index)?,
-                        self.evaluate_inner(scope, value)?,
+                        base.lower(self, scope, span)?,
+                        index.lower(self, scope, span)?,
+                        value.lower(self, scope, span)?,
                     ],
                 }),
                 span,

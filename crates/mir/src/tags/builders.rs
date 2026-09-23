@@ -249,7 +249,7 @@ impl MiddleEnvironment {
 
         let tags = std::mem::take(&mut self.tagging.tag_info);
         self.tagging.tag_info.push(TagInfo::Default);
-        let builder = self.evaluate(scope, builder);
+        let builder = builder.lower_or_empty(self, scope, span);
         self.tagging.tag_info = tags;
 
         Ok((

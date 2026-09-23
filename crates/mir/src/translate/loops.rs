@@ -67,7 +67,8 @@ impl MiddleEnvironment {
             scope_id: scope,
         };
         self.scoping.loop_stack.push(ctx);
-        let out = self.evaluate_inner(scope, body_node);
+        let span = body_node.span;
+        let out = body_node.lower(self, scope, span);
         self.scoping.loop_stack.pop();
         out
     }
@@ -119,10 +120,10 @@ impl MiddleEnvironment {
         );
 
         let stmts = vec![
-            self.evaluate(scope, result_decl),
-            self.evaluate(scope, broke_decl),
+            result_decl.lower_or_empty(self, scope, span),
+            broke_decl.lower_or_empty(self, scope, span),
             loop_node,
-            self.evaluate(scope, AstNode::identifier(span, result_ident)),
+            AstNode::identifier(span, result_ident).lower_or_empty(self, scope, span),
         ];
 
         Ok(MiddleNode {

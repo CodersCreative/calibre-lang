@@ -8,6 +8,7 @@ use crate::symbols::{MiddleOverload, MiddleVariable, Symbols};
 use crate::tags::Tagging;
 use crate::tags::context::PackageMetadata;
 use crate::testing::Testing;
+use crate::translate::MirLowering;
 use crate::typing::{
     MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType, Typing,
 };
@@ -203,7 +204,8 @@ impl MiddleEnvironment {
         }
 
         debug!("translating AST to MIR");
-        let inner = env.evaluate(scope, node.clone());
+        let span = node.span;
+        let inner = node.clone().lower_or_empty(&mut env, scope, span);
         let mut middle = wrap(&env, scope, node.span, inner);
 
         if let Some(mut decls) = env.symbols.specialization_decls_by_scope.remove(&scope)

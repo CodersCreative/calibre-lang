@@ -7,7 +7,10 @@ use crate::{
         instructions::access::{VMIndex, VMLoadMember, VMSetIndex, VMSetMember},
     },
     error::RuntimeError,
-    evaluate::{instruction::VMEvaluation, write_back::Propagation},
+    evaluate::{
+        instruction::{VMEvaluation, resolve_index, resolve_slice_range},
+        write_back::Propagation,
+    },
     native::stdlib::generator::GeneratorResumeFn,
     value::{GcMap, GcVec, HashKey, RuntimeValue, TerminateValue},
 };
@@ -701,7 +704,8 @@ impl VMEvaluation for VMIndex {
 
         let index_list = |list: &Gc<GcVec>| -> Result<RuntimeValue, RuntimeError> {
             match &index_val {
-                RuntimeValue::Int(index) => Ok(VM::resolve_index(list.as_ref().0.len(), *index)
+                RuntimeValue::Int(index) => Ok(resolve_index(list.as_ref().0.len(), *index)
+                    .ok()
                     .and_then(|i| list.as_ref().0.get(i).cloned())
                     .unwrap_or_else(|| RuntimeValue::Null)),
                 RuntimeValue::UInt(index) => Ok(list
@@ -711,7 +715,7 @@ impl VMEvaluation for VMIndex {
                     .cloned()
                     .unwrap_or_else(|| RuntimeValue::Null)),
                 RuntimeValue::Range(start, end) => {
-                    let (s, e) = VM::resolve_slice_range(list.as_ref().0.len(), *start, *end);
+                    let (s, e) = resolve_slice_range(list.as_ref().0.len(), *start, *end);
                     let slice = list.as_ref().0[s..e].to_vec();
                     Ok(RuntimeValue::List(Gc::new(GcVec(slice))))
                 }
@@ -737,9 +741,9 @@ impl VMEvaluation for VMIndex {
             RuntimeValue::Range(start, end) => match &index_val {
                 RuntimeValue::Int(index) => {
                     let len = (end - start).max(0) as usize;
-                    VM::resolve_index(len, *index)
+                    resolve_index(len, *index)
                         .map(|i| RuntimeValue::Int(start + i as i64))
-                        .unwrap_or_else(|| RuntimeValue::Null)
+                        .unwrap_or_else(|_| RuntimeValue::Null)
                 }
                 RuntimeValue::UInt(index) => {
                     let len = (end - start).max(0) as usize;
@@ -751,7 +755,7 @@ impl VMEvaluation for VMIndex {
                 }
                 RuntimeValue::Range(slice_start, slice_end) => {
                     let len = (end - start).max(0) as usize;
-                    let (s, e) = VM::resolve_slice_range(len, *slice_start, *slice_end);
+                    let (s, e) = resolve_slice_range(len, *slice_start, *slice_end);
                     RuntimeValue::Range(start + s as i64, start + e as i64)
                 }
                 _ => {
@@ -761,7 +765,8 @@ impl VMEvaluation for VMIndex {
                 }
             },
             RuntimeValue::Aggregate(None, tuple) => match &index_val {
-                RuntimeValue::Int(index) => VM::resolve_index(tuple.as_ref().0.0.len(), *index)
+                RuntimeValue::Int(index) => resolve_index(tuple.as_ref().0.0.len(), *index)
+                    .ok()
                     .and_then(|i| tuple.as_ref().0.0.get(i).map(|(_, v)| v.clone()))
                     .unwrap_or_else(|| RuntimeValue::Null),
                 RuntimeValue::UInt(index) => tuple
@@ -772,7 +777,7 @@ impl VMEvaluation for VMIndex {
                     .map(|(_, v)| v.clone())
                     .unwrap_or_else(|| RuntimeValue::Null),
                 RuntimeValue::Range(start, end) => {
-                    let (s, e) = VM::resolve_slice_range(tuple.as_ref().0.0.len(), *start, *end);
+                    let (s, e) = resolve_slice_range(tuple.as_ref().0.0.len(), *start, *end);
                     let slice = tuple.as_ref().0.0[s..e].to_vec();
                     RuntimeValue::Aggregate(None, Gc::new(GcMap(ObjectMap(slice))))
                 }
@@ -796,7 +801,8 @@ impl VMEvaluation for VMIndex {
                         .cloned()
                         .unwrap_or(RuntimeValue::Null)
                 }
-                RuntimeValue::Int(index) => VM::resolve_index(tuple.as_ref().0.0.len(), *index)
+                RuntimeValue::Int(index) => resolve_index(tuple.as_ref().0.0.len(), *index)
+                    .ok()
                     .and_then(|i| tuple.as_ref().0.0.get(i).map(|(_, v)| v.clone()))
                     .unwrap_or_else(|| RuntimeValue::Null),
                 RuntimeValue::UInt(index) => tuple
@@ -816,10 +822,11 @@ impl VMEvaluation for VMIndex {
                 RuntimeValue::Int(index) => {
                     let resolved = if *index < 0 {
                         let len = s.chars().count();
-                        VM::resolve_index(len, *index)
+                        resolve_index(len, *index).ok()
                     } else {
                         Some(*index as usize)
                     };
+
                     resolved
                         .and_then(|i| s.chars().nth(i))
                         .map(RuntimeValue::Char)
@@ -832,7 +839,7 @@ impl VMEvaluation for VMIndex {
                     .unwrap_or_else(|| RuntimeValue::Null),
                 RuntimeValue::Range(start, end) => {
                     let v = s.chars().collect::<Vec<char>>();
-                    let (s, e) = VM::resolve_slice_range(v.len(), *start, *end);
+                    let (s, e) = resolve_slice_range(v.len(), *start, *end);
                     let slice: String = v[s..e].iter().collect();
                     RuntimeValue::Str(Ustr::from(&slice))
                 }
@@ -916,8 +923,8 @@ impl VMEvaluation for VMSetIndex {
                                 });
                             }
 
-                            let vec = &mut Gc::make_mut(&mut list).0;
-                            let idx = VM::resolve_index_or_err(vec.len(), index)?;
+                            let vec: &mut Vec<RuntimeValue> = &mut Gc::make_mut(&mut list).0;
+                            let idx = resolve_index(vec.len(), index)?;
                             let old = std::mem::replace(&mut vec[idx], value);
                             let _ = vm.set_reg_value(self.dst, old);
 
@@ -968,7 +975,7 @@ impl VMEvaluation for VMSetIndex {
                             }
 
                             let vec = &mut Gc::make_mut(&mut list).0;
-                            let idx = VM::resolve_index_or_err(vec.len(), index)?;
+                            let idx = resolve_index(vec.len(), index)?;
                             let old = std::mem::replace(&mut vec[idx], value);
                             let _ = vm.set_reg_value(self.dst, old);
 
@@ -1015,7 +1022,7 @@ impl VMEvaluation for VMSetIndex {
                             }
 
                             let vec = &mut Gc::make_mut(&mut list).0;
-                            let idx = VM::resolve_index_or_err(vec.len(), index)?;
+                            let idx = resolve_index(vec.len(), index)?;
                             let old = std::mem::replace(&mut vec[idx], value);
                             let _ = vm.set_reg_value(self.dst, old);
 
@@ -1063,7 +1070,7 @@ impl VMEvaluation for VMSetIndex {
                     }
 
                     let vec = &mut Gc::make_mut(&mut list).0;
-                    let idx = VM::resolve_index_or_err(vec.len(), index)?;
+                    let idx = resolve_index(vec.len(), index)?;
                     let old = std::mem::replace(&mut vec[idx], value);
                     let _ = vm.set_reg_value(self.dst, old);
 

@@ -260,16 +260,16 @@ impl MiddleEnvironment {
         for (idx, node) in slots.into_iter().enumerate() {
             let node = node?;
             if wrap_with_some.get(idx).copied().unwrap_or(false) {
-                lowered.push(self.evaluate(
-                    scope,
+                lowered.push(
                     AstNode::call(
                         span,
                         AstNode::identifier(span, "some"),
                         vec![CallArg::Value(node)],
-                    ),
-                ));
+                    )
+                    .lower_or_empty(self, scope, span),
+                );
             } else {
-                lowered.push(self.evaluate(scope, node));
+                lowered.push(node.lower_or_empty(self, scope, span));
             }
         }
         Some(lowered)
@@ -294,7 +294,7 @@ impl MiddleEnvironment {
         let value = Self::collect_call_nodes(args, reverse_args)
             .into_iter()
             .enumerate()
-            .map(|(i, arg)| (i.to_string(), self.evaluate(scope, arg)))
+            .map(|(i, arg)| (i.to_string(), arg.lower_or_empty(self, scope, span)))
             .collect::<Vec<_>>()
             .into();
 

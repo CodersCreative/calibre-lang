@@ -26,11 +26,20 @@ impl VMEvaluation for VMBranch {
     fn run(
         &self,
         vm: &mut VM,
-        block: &VMBlock,
-        ip: u32,
+        _block: &VMBlock,
+        _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        if vm.eval_branch_condition(self.cond, block, ip)? {
+        let is_true = match vm.get_reg_value(self.cond).clone() {
+            RuntimeValue::Bool(x) => x,
+            other => {
+                return Err(RuntimeError::ExpectedBoolFound {
+                    found: Box::new(other),
+                });
+            }
+        };
+
+        if is_true {
             Ok(TerminateValue::Jump(self.then_block))
         } else {
             Ok(TerminateValue::Jump(self.else_block))
