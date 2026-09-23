@@ -1,5 +1,9 @@
 use super::*;
-use crate::conversion::instructions::{VMInstruction, registers::VMCopy};
+use crate::conversion::instructions::{
+    VMInstruction,
+    registers::VMCopy,
+    termination::{VMBranch, VMJump, VMReturn},
+};
 use tracing::{instrument, trace};
 
 pub mod access;
@@ -220,7 +224,7 @@ impl<'a> BlockLoweringCtx<'a> {
     pub(super) fn lower_terminator(&mut self, node: LirTerminator) {
         match node {
             LirTerminator::Jump { span, target } => {
-                self.emit(VMInstruction::Jump(target), span);
+                self.emit(VMInstruction::Jump(VMJump { target }), span);
             }
             LirTerminator::Branch {
                 span,
@@ -243,11 +247,11 @@ impl<'a> BlockLoweringCtx<'a> {
                     cond
                 };
                 self.emit(
-                    VMInstruction::Branch {
+                    VMInstruction::Branch(VMBranch {
                         cond: cond_reg,
                         then_block,
                         else_block,
-                    },
+                    }),
                     span,
                 );
             }
@@ -260,7 +264,7 @@ impl<'a> BlockLoweringCtx<'a> {
                     Some(v) => Some(self.lower_node(v, span)),
                     None => Some(self.ret_reg),
                 };
-                self.emit(VMInstruction::Return { value }, span);
+                self.emit(VMInstruction::Return(VMReturn { value }), span);
             }
         }
     }

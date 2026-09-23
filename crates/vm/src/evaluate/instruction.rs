@@ -1,6 +1,12 @@
-use super::write_back::Propagation;
-use super::*;
-use crate::evaluate::calling::CallSite;
+use crate::{
+    VM,
+    conversion::{VMBlock, instructions::VMInstruction},
+    error::RuntimeError,
+    evaluate::calling::CallSite,
+    value::{RuntimeValue, TerminateValue},
+};
+use calibre_lir::ast::BlockId;
+use tracing::instrument;
 
 pub trait VMEvaluation {
     fn run(
@@ -12,8 +18,69 @@ pub trait VMEvaluation {
     ) -> Result<TerminateValue, RuntimeError>;
 }
 
+impl VMEvaluation for VMInstruction {
+    #[instrument(skip_all)]
+    fn run(
+        &self,
+        vm: &mut VM,
+        block: &VMBlock,
+        ip: u32,
+        prev_block: Option<BlockId>,
+    ) -> Result<TerminateValue, RuntimeError> {
+        match self {
+            VMInstruction::Noop => Ok(TerminateValue::None),
+
+            // Literals
+            VMInstruction::LoadLiteral(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Range(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::List(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Aggregate(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Enum(x) => x.run(vm, block, ip, prev_block),
+
+            // Variables
+            VMInstruction::LoadVar(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::MoveVar(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::DropVar(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::StoreVar(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::LoadVarRef(x) => x.run(vm, block, ip, prev_block),
+
+            // Registers
+            VMInstruction::LoadRegRef(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Copy(x) => x.run(vm, block, ip, prev_block),
+
+            // Binary
+            VMInstruction::As(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Is(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Binary(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Comparison(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Boolean(x) => x.run(vm, block, ip, prev_block),
+
+            // Functions
+            VMInstruction::CallSelf(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Call(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Spawn(x) => x.run(vm, block, ip, prev_block),
+
+            // Access
+            VMInstruction::LoadMember(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::SetMember(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Index(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::SetIndex(x) => x.run(vm, block, ip, prev_block),
+
+            // Memory
+            VMInstruction::Ref(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Deref(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::SetRef(x) => x.run(vm, block, ip, prev_block),
+
+            // Termination
+            VMInstruction::Jump(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Branch(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Return(x) => x.run(vm, block, ip, prev_block),
+        }
+    }
+}
+
 impl VM {
-    fn eval_branch_condition(
+    pub(crate) fn eval_branch_condition(
         &mut self,
         cond: u16,
         block: &VMBlock,
@@ -98,140 +165,5 @@ impl VM {
         let s = s.min(len as i64) as usize;
         let e = e.min(len as i64) as usize;
         if e < s { (s, s) } else { (s, e) }
-    }
-
-    #[instrument(skip_all)]
-    pub(super) fn run_instruction(
-        &mut self,
-        instruction: &VMInstruction,
-        block: &VMBlock,
-        ip: u32,
-        prev_block: Option<BlockId>,
-    ) -> Result<TerminateValue, RuntimeError> {
-        match instruction {
-            // Literals
-            VMInstruction::LoadLiteral(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::Range(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::List(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::Aggregate(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::Enum(x) => x.run(self, block, ip, prev_block),
-
-            // Variables
-            VMInstruction::LoadVar(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::MoveVar(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::DropVar(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::StoreVar(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::LoadVarRef(x) => x.run(self, block, ip, prev_block),
-
-            // Registers
-            VMInstruction::LoadRegRef(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::Copy(x) => x.run(self, block, ip, prev_block),
-
-            // Binary
-            VMInstruction::As(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::Is(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::Binary(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::Comparison(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::Boolean(x) => x.run(self, block, ip, prev_block),
-
-            // Functions
-            VMInstruction::CallSelf(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::Call(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::Spawn(x) => x.run(self, block, ip, prev_block),
-
-            // Access
-            VMInstruction::LoadMember(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::SetMember(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::Index(x) => x.run(self, block, ip, prev_block),
-            VMInstruction::SetIndex(x) => x.run(self, block, ip, prev_block),
-
-            VMInstruction::Ref { dst, value } => {
-                let out = match self.get_reg_value(*value).clone() {
-                    RuntimeValue::Ref(name) => RuntimeValue::Ref(name),
-                    RuntimeValue::VarRef(id) => RuntimeValue::VarRef(id),
-                    RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef { frame, reg },
-                    other => if let Some(id) = (0..self.variables.slot_len()).find(|id| {
-                        matches!(
-                            self.variables.get_by_id(*id),
-                            Some(RuntimeValue::RegRef { frame, reg })
-                                if *frame == self.frames.len().saturating_sub(1) && *reg == *value
-                        )
-                    }) {
-                        RuntimeValue::VarRef(id)
-                    } else if let RuntimeValue::List(list) = &other
-                        && let Some(id) = (0..self.variables.slot_len()).find(|id| {
-                            matches!(
-                                self.variables.get_by_id(*id),
-                                Some(RuntimeValue::List(other_list))
-                                    if std::ptr::eq(list.as_ref(), other_list.as_ref())
-                            )
-                        })
-                    {
-                        RuntimeValue::VarRef(id)
-                    } else {
-                        let name = Ustr::from(&self.get_ref_id().to_string());
-                        let id = self.variables.insert_with_id(name, other);
-                        RuntimeValue::VarRef(id)
-                    },
-                };
-
-                self.set_reg_value(*dst, out);
-                self.propagate_member_source_alias(*value, *dst);
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::Deref { dst, value } => {
-                let out = self.resolve_value_ref(self.get_reg_value(*value))?;
-                self.set_reg_value(*dst, out);
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::SetRef { dst, target, value } => {
-                let target = self.get_reg_value(*target).clone();
-                let value = self.get_reg_value(*value).clone();
-
-                match target {
-                    RuntimeValue::Ref(name) => {
-                        if let Some(old) = self.variables.insert(name, value) {
-                            let _ = self.set_reg_value(*dst, old);
-                        }
-                    }
-                    RuntimeValue::VarRef(id) => {
-                        if let Some(old) = self.variables.set_by_id(id, value) {
-                            let _ = self.set_reg_value(*dst, old);
-                        }
-                    }
-                    RuntimeValue::RegRef { frame, reg } => {
-                        let old = self.set_reg_value_in_frame(frame, reg, value);
-                        let _ = self.set_reg_value(*dst, old);
-                    }
-                    RuntimeValue::MutexGuard(guard) => {
-                        let old = guard.set_value(value);
-                        let _ = self.set_reg_value(*dst, old);
-                    }
-                    _ => return Err(RuntimeError::InvalidBytecode("invalid ref".to_string())),
-                }
-
-                Ok(TerminateValue::None)
-            }
-            VMInstruction::Jump(target) => Ok(TerminateValue::Jump(*target)),
-            VMInstruction::Branch {
-                cond,
-                then_block,
-                else_block,
-            } => {
-                if self.eval_branch_condition(*cond, block, ip)? {
-                    Ok(TerminateValue::Jump(*then_block))
-                } else {
-                    Ok(TerminateValue::Jump(*else_block))
-                }
-            }
-            VMInstruction::Return { value } => {
-                if let Some(reg) = value {
-                    Ok(TerminateValue::Return(self.get_reg_value(*reg).clone()))
-                } else {
-                    Ok(TerminateValue::Return(RuntimeValue::Null))
-                }
-            }
-            VMInstruction::Noop => Ok(TerminateValue::None),
-        }
     }
 }

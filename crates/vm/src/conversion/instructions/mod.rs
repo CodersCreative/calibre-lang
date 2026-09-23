@@ -1,15 +1,13 @@
-use crate::conversion::{
-    Reg,
-    instructions::{
-        access::{VMIndex, VMLoadMember, VMSetIndex, VMSetMember},
-        binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
-        functions::{VMCall, VMCallSelf, VMSpawn},
-        literals::{VMAggregate, VMEnum, VMList, VMRange},
-        registers::{VMCopy, VMLoadRegRef},
-        variables::{VMLoadVarRef, VMStoreVar},
-    },
+use crate::conversion::instructions::{
+    access::{VMIndex, VMLoadMember, VMSetIndex, VMSetMember},
+    binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
+    functions::{VMCall, VMCallSelf, VMSpawn},
+    literals::{VMAggregate, VMEnum, VMList, VMRange},
+    memory::{VMDeref, VMRef, VMSetRef},
+    registers::{VMCopy, VMLoadRegRef},
+    termination::{VMBranch, VMJump, VMReturn},
+    variables::{VMLoadVarRef, VMStoreVar},
 };
-use calibre_lir::ast::BlockId;
 use literals::VMLoadLiteral;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -19,7 +17,9 @@ pub mod access;
 pub mod binary;
 pub mod functions;
 pub mod literals;
+pub mod memory;
 pub mod registers;
+pub mod termination;
 pub mod variables;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -62,30 +62,14 @@ pub enum VMInstruction {
     SetIndex(VMSetIndex),
 
     // Memory
-    Ref {
-        dst: Reg,
-        value: Reg,
-    },
-    Deref {
-        dst: Reg,
-        value: Reg,
-    },
-    SetRef {
-        dst: Reg,
-        target: Reg,
-        value: Reg,
-    },
+    Ref(VMRef),
+    Deref(VMDeref),
+    SetRef(VMSetRef),
 
     // Termination
-    Jump(BlockId),
-    Branch {
-        cond: Reg,
-        then_block: BlockId,
-        else_block: BlockId,
-    },
-    Return {
-        value: Option<Reg>,
-    },
+    Jump(VMJump),
+    Branch(VMBranch),
+    Return(VMReturn),
 }
 
 impl Display for VMInstruction {
@@ -116,6 +100,7 @@ impl Display for VMInstruction {
             VMInstruction::Comparison(x) => x.fmt(f),
             VMInstruction::Boolean(x) => x.fmt(f),
 
+            // Functions
             VMInstruction::Call(x) => x.fmt(f),
             VMInstruction::CallSelf(x) => x.fmt(f),
             VMInstruction::Spawn(x) => x.fmt(f),
@@ -126,30 +111,15 @@ impl Display for VMInstruction {
             VMInstruction::Index(x) => x.fmt(f),
             VMInstruction::SetIndex(x) => x.fmt(f),
 
-            VMInstruction::Ref { dst, value } => write!(f, "%r{dst} = REF %r{value}"),
-            VMInstruction::Deref { dst, value } => write!(f, "%r{dst} = DEREF %r{value}"),
-            VMInstruction::SetRef { dst, target, value } => {
-                write!(f, "%r{dst} = SETREF %r{target} = %r{value}")
-            }
-            VMInstruction::Jump(id) => write!(f, "JMP BLK {}", id.0),
-            VMInstruction::Branch {
-                cond,
-                then_block,
-                else_block,
-            } => {
-                write!(
-                    f,
-                    "BRANCH JMP BLK {} if %r{} else JMP BLK {}",
-                    then_block.0, cond, else_block.0
-                )
-            }
-            VMInstruction::Return { value } => {
-                if let Some(r) = value {
-                    write!(f, "RETURN %r{r}")
-                } else {
-                    write!(f, "RETURN")
-                }
-            }
+            // Memory
+            VMInstruction::Ref(x) => x.fmt(f),
+            VMInstruction::Deref(x) => x.fmt(f),
+            VMInstruction::SetRef(x) => x.fmt(f),
+
+            // Termination
+            VMInstruction::Jump(x) => x.fmt(f),
+            VMInstruction::Branch(x) => x.fmt(f),
+            VMInstruction::Return(x) => x.fmt(f),
             VMInstruction::Noop => write!(f, "NOOP"),
         }
     }

@@ -11,6 +11,7 @@ use crate::conversion::{
         VMInstruction,
         access::{VMLoadMember, VMSetIndex, VMSetMember},
         literals::VMLoadLiteral,
+        memory::VMSetRef,
         registers::VMCopy,
         variables::{VMLoadVarRef, VMStoreVar},
     },
@@ -217,11 +218,11 @@ fn lower_assignment<'a>(
                 other => {
                     let target_reg = env.lower_node(other, span);
                     env.emit(
-                        VMInstruction::SetRef {
+                        VMInstruction::SetRef(VMSetRef {
                             dst,
                             target: target_reg,
                             value: value_reg,
-                        },
+                        }),
                         span,
                     );
                 }

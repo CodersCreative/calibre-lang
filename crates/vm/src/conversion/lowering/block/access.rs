@@ -14,6 +14,7 @@ use crate::conversion::{
         VMInstruction,
         access::{VMIndex, VMLoadMember},
         functions::{VMCall, VMCallSelf},
+        memory::{VMDeref, VMRef},
         registers::VMCopy,
         variables::VMLoadVarRef,
     },
@@ -84,7 +85,7 @@ impl VMLowering for LirDeref {
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
         let value = env.lower_node(*self.value, span);
         let dst = env.alloc_reg();
-        env.emit(VMInstruction::Deref { dst, value }, span);
+        env.emit(VMInstruction::Deref(VMDeref { dst, value }), span);
         dst
     }
 }
@@ -111,7 +112,7 @@ impl VMLowering for LirRef {
             other => {
                 let value = env.lower_node(other, span);
                 let dst = env.alloc_reg();
-                env.emit(VMInstruction::Ref { dst, value }, span);
+                env.emit(VMInstruction::Ref(VMRef { dst, value }), span);
                 dst
             }
         }

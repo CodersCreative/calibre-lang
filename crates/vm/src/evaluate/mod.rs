@@ -1,7 +1,8 @@
 use crate::{
     VM,
-    conversion::{VMBlock, VMFunction, VMGlobal, instructions::VMInstruction},
+    conversion::{VMBlock, VMFunction, VMGlobal},
     error::RuntimeError,
+    evaluate::instruction::VMEvaluation,
     value::{RuntimeValue, TerminateValue},
 };
 use calibre_lir::ast::BlockId;
@@ -17,7 +18,9 @@ pub mod calling;
 pub mod functions;
 pub mod instruction;
 pub mod literals;
+pub mod memory;
 pub mod registers;
+pub mod termination;
 pub mod variables;
 pub mod write_back;
 
@@ -627,7 +630,7 @@ impl VM {
                 self.maybe_collect_garbage();
             }
 
-            let step = match self.run_instruction(instruction, block, ip as u32, prev) {
+            let step = match instruction.run(self, block, ip as u32, prev) {
                 Ok(step) => step,
                 Err(e) => {
                     let span = block.instruction_spans.get(ip).cloned().unwrap_or_default();
