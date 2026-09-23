@@ -1,33 +1,31 @@
 use crate::{
     VM,
     conversion::{
-        VMBlock,
-        instructions::binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
+        VMBlock, VMFunction,
+        instructions::functions::{VMCall, VMCallSelf, VMSpawn},
     },
     error::RuntimeError,
-    evaluate::instruction::VMEvaluation,
-    value::{
-        RuntimeValue, TerminateValue,
-        operation::{binary, boolean, comparison},
-    },
+    evaluate::{calling::RegisterCall, instruction::VMEvaluation},
+    value::{HashKey, RuntimeValue, TerminateValue, WaitGroupInner},
 };
 use calibre_lir::ast::BlockId;
-use calibre_parser::ast::{comparison::BooleanOperator, nodes::binary::AsFailureMode};
-use dumpster::sync::Gc;
+use rustc_hash::FxHashMap;
+use std::sync::Arc;
 use ustr::Ustr;
+use wasm_sync::Mutex;
 
 impl VMEvaluation for VMCall {
     fn run(
         &self,
         vm: &mut VM,
-        _block: &VMBlock,
-        _ip: u32,
-        _prev_block: Option<BlockId>,
+        block: &VMBlock,
+        ip: u32,
+        prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        if let Some(step) = self.call_registers(RegisterCall {
-            dst: *dst,
-            callee: *callee,
-            args,
+        if let Some(step) = vm.call_registers(RegisterCall {
+            dst: self.dst,
+            callee: self.callee,
+            args: &self.args,
             block,
             ip,
             prev_block,
@@ -47,7 +45,7 @@ impl VMEvaluation for VMCallSelf {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let func_ptr = self.current_frame().func_ptr as *const VMFunction;
+        let func_ptr = vm.current_frame().func_ptr as *const VMFunction;
         if func_ptr.is_null() {
             return Err(RuntimeError::InvalidBytecode(
                 "missing current function frame".to_string(),
@@ -56,19 +54,19 @@ impl VMEvaluation for VMCallSelf {
 
         let func = unsafe { &*func_ptr };
 
-        if func.pure && (dst.is_none() || !func.returns_value) {
+        if func.pure && (self.dst.is_none() || !func.returns_value) {
             return Ok(TerminateValue::None);
         }
 
-        if let Some(dst) = dst
+        if let Some(dst) = &self.dst
             && func.memo
         {
-            let caller_frame = self.frames.len().saturating_sub(1);
-            let mut key: Option<Vec<HashKey>> = Some(Vec::with_capacity(args.len()));
+            let caller_frame = vm.frames.len().saturating_sub(1);
+            let mut key: Option<Vec<HashKey>> = Some(Vec::with_capacity(self.args.len()));
 
-            for (i, reg) in args.iter().enumerate() {
+            for (i, reg) in self.args.iter().enumerate() {
                 if func.memo_params == 0 || func.memo_params & (1 << i) != 0 {
-                    let val = self.get_reg_value_in_frame(caller_frame, *reg).clone();
+                    let val = vm.get_reg_value_in_frame(caller_frame, *reg).clone();
                     match HashKey::try_from(val) {
                         Ok(k) => key.as_mut().unwrap().push(k),
                         Err(_) => {
@@ -81,7 +79,7 @@ impl VMEvaluation for VMCallSelf {
 
             if let Some(k) = key {
                 if let Some(val) = {
-                    let cache_entry = self
+                    let cache_entry = vm
                         .caches
                         .memo
                         .entry(func.name)
@@ -90,19 +88,19 @@ impl VMEvaluation for VMCallSelf {
                     let guard = cache_entry.lock().unwrap();
                     guard.get(&k).cloned()
                 } {
-                    self.set_reg_value(*dst, val);
+                    vm.set_reg_value(*dst, val);
                     return Ok(TerminateValue::None);
                 }
 
-                let value = self.run_function_from_regs(
+                let value = vm.run_function_from_regs(
                     func,
-                    args.iter().copied(),
-                    Self::empty_captures(),
+                    self.args.iter().copied(),
+                    VM::empty_captures(),
                     true,
                 )?;
 
                 {
-                    let cache_entry = self
+                    let cache_entry = vm
                         .caches
                         .memo
                         .entry(func.name)
@@ -111,20 +109,20 @@ impl VMEvaluation for VMCallSelf {
                     cache_entry.lock().unwrap().insert(k, value.clone());
                 }
 
-                self.set_reg_value(*dst, value);
+                vm.set_reg_value(*dst, value);
                 return Ok(TerminateValue::None);
             }
         }
 
-        let value = self.run_function_from_regs(
+        let value = vm.run_function_from_regs(
             func,
-            args.iter().copied(),
-            Self::empty_captures(),
-            dst.is_some(),
+            self.args.iter().copied(),
+            VM::empty_captures(),
+            self.dst.is_some(),
         )?;
 
-        if let Some(dst) = dst {
-            self.set_reg_value(*dst, value);
+        if let Some(dst) = &self.dst {
+            vm.set_reg_value(*dst, value);
         }
 
         Ok(TerminateValue::None)
@@ -139,17 +137,18 @@ impl VMEvaluation for VMSpawn {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let resolved = self.resolve_value_ref(self.get_reg_value(*callee))?;
+        let resolved = vm.resolve_value_ref(vm.get_reg_value(self.callee))?;
+
         let to_spawn = match resolved {
             RuntimeValue::Function { name, captures } => {
                 let resolved_caps: Vec<(Ustr, RuntimeValue)> = captures
                     .as_ref()
                     .iter()
                     .map(|(k, v)| {
-                        let resolved = self
+                        let resolved = vm
                             .resolve_value_ref(v)
                             .unwrap_or_else(|_| RuntimeValue::Null);
-                        let resolved = self.convert_runtime_var_into_saveable(resolved);
+                        let resolved = vm.convert_runtime_var_into_saveable(resolved);
                         (*k, resolved)
                     })
                     .collect();
@@ -163,8 +162,8 @@ impl VMEvaluation for VMSpawn {
 
         let wg = Arc::new(WaitGroupInner::default());
         wg.count.store(1, std::sync::atomic::Ordering::Release);
-        self.spawn_async_task(to_spawn, Some(wg.clone()));
-        self.set_reg_value(*dst, RuntimeValue::WaitGroup(wg));
+        vm.spawn_async_task(to_spawn, Some(wg.clone()));
+        vm.set_reg_value(self.dst, RuntimeValue::WaitGroup(wg));
 
         Ok(TerminateValue::None)
     }

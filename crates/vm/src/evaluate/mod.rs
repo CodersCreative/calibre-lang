@@ -2,19 +2,19 @@ use crate::{
     VM,
     conversion::{VMBlock, VMFunction, VMGlobal, instructions::VMInstruction},
     error::RuntimeError,
-    value::{RuntimeValue, TerminateValue, WaitGroupInner},
+    value::{RuntimeValue, TerminateValue},
 };
 use calibre_lir::ast::BlockId;
+use calibre_parser::ast::idents::ParserText;
 use calibre_parser::ast::types::ParserInnerType;
-use calibre_parser::ast::{ObjectMap, idents::ParserText};
-use dumpster::sync::Gc;
-use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap};
 
+pub mod access;
 pub mod binary;
 pub mod calling;
+pub mod functions;
 pub mod instruction;
 pub mod literals;
 pub mod registers;

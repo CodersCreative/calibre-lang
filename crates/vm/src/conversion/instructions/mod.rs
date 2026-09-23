@@ -1,6 +1,7 @@
 use crate::conversion::{
     Reg,
     instructions::{
+        access::{VMIndex, VMLoadMember, VMSetIndex, VMSetMember},
         binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
         functions::{VMCall, VMCallSelf, VMSpawn},
         literals::{VMAggregate, VMEnum, VMList, VMRange},
@@ -14,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use variables::{VMDropVar, VMLoadVar, VMMoveVar};
 
+pub mod access;
 pub mod binary;
 pub mod functions;
 pub mod literals;
@@ -54,28 +56,10 @@ pub enum VMInstruction {
     Spawn(VMSpawn),
 
     // Access
-    LoadMember {
-        dst: Reg,
-        value: Reg,
-        member: u16,
-    },
-    SetMember {
-        dst: Reg,
-        target: Reg,
-        member: u16,
-        value: Reg,
-    },
-    Index {
-        dst: Reg,
-        value: Reg,
-        index: Reg,
-    },
-    SetIndex {
-        dst: Reg,
-        target: Reg,
-        index: Reg,
-        value: Reg,
-    },
+    LoadMember(VMLoadMember),
+    SetMember(VMSetMember),
+    Index(VMIndex),
+    SetIndex(VMSetIndex),
 
     // Memory
     Ref {
@@ -136,28 +120,12 @@ impl Display for VMInstruction {
             VMInstruction::CallSelf(x) => x.fmt(f),
             VMInstruction::Spawn(x) => x.fmt(f),
 
-            VMInstruction::LoadMember { dst, value, member } => {
-                write!(f, "%r{dst} = LOADMEMBER %r{value}.{member}")
-            }
-            VMInstruction::SetMember {
-                dst,
-                target,
-                member,
-                value,
-            } => {
-                write!(f, "%r{dst} = SETMEMBER %r{target}.{member} = %r{value}")
-            }
-            VMInstruction::Index { dst, value, index } => {
-                write!(f, "%r{dst} = INDEX %r{value}[%r{index}]")
-            }
-            VMInstruction::SetIndex {
-                dst,
-                target,
-                index,
-                value,
-            } => {
-                write!(f, "%r{dst} = SETINDEX %r{target}[%r{index}] = %r{value}")
-            }
+            // Access
+            VMInstruction::LoadMember(x) => x.fmt(f),
+            VMInstruction::SetMember(x) => x.fmt(f),
+            VMInstruction::Index(x) => x.fmt(f),
+            VMInstruction::SetIndex(x) => x.fmt(f),
+
             VMInstruction::Ref { dst, value } => write!(f, "%r{dst} = REF %r{value}"),
             VMInstruction::Deref { dst, value } => write!(f, "%r{dst} = DEREF %r{value}"),
             VMInstruction::SetRef { dst, target, value } => {

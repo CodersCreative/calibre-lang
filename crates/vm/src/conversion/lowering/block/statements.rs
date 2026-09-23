@@ -9,6 +9,7 @@ use crate::conversion::{
     Reg, VMLiteral,
     instructions::{
         VMInstruction,
+        access::{VMLoadMember, VMSetIndex, VMSetMember},
         literals::VMLoadLiteral,
         registers::VMCopy,
         variables::{VMLoadVarRef, VMStoreVar},
@@ -109,12 +110,12 @@ fn lower_assignment<'a>(
                     let base_reg = env.lower_node(*base, span);
                     let member = env.add_string(field);
                     env.emit(
-                        VMInstruction::SetMember {
+                        VMInstruction::SetMember(VMSetMember {
                             dst,
                             target: base_reg,
                             member,
                             value: value_reg,
-                        },
+                        }),
                         span,
                     );
                 }
@@ -128,30 +129,33 @@ fn lower_assignment<'a>(
                             let owner_reg = env.lower_node(*owner, span);
                             let member_idx = env.add_string(member);
                             let member_val_reg = env.alloc_reg();
+
                             env.emit(
-                                VMInstruction::LoadMember {
+                                VMInstruction::LoadMember(VMLoadMember {
                                     dst: member_val_reg,
                                     value: owner_reg,
                                     member: member_idx,
-                                },
+                                }),
                                 span,
                             );
+
                             env.emit(
-                                VMInstruction::SetIndex {
+                                VMInstruction::SetIndex(VMSetIndex {
                                     dst,
                                     target: member_val_reg,
                                     index: index_reg,
                                     value: value_reg,
-                                },
+                                }),
                                 span,
                             );
+
                             env.emit(
-                                VMInstruction::SetMember {
+                                VMInstruction::SetMember(VMSetMember {
                                     dst,
                                     target: owner_reg,
                                     member: member_idx,
                                     value: member_val_reg,
-                                },
+                                }),
                                 span,
                             );
                         }
@@ -165,13 +169,14 @@ fn lower_assignment<'a>(
                                     }),
                                     span,
                                 );
+
                                 env.emit(
-                                    VMInstruction::SetIndex {
+                                    VMInstruction::SetIndex(VMSetIndex {
                                         dst,
                                         target: base_reg,
                                         index: index_reg,
                                         value: value_reg,
-                                    },
+                                    }),
                                     span,
                                 );
                             } else {
@@ -183,13 +188,14 @@ fn lower_assignment<'a>(
                                     }),
                                     span,
                                 );
+
                                 env.emit(
-                                    VMInstruction::SetIndex {
+                                    VMInstruction::SetIndex(VMSetIndex {
                                         dst,
                                         target: base_reg,
                                         index: index_reg,
                                         value: value_reg,
-                                    },
+                                    }),
                                     span,
                                 );
                             }
@@ -197,12 +203,12 @@ fn lower_assignment<'a>(
                         other_base => {
                             let base_reg = env.lower_node(other_base, span);
                             env.emit(
-                                VMInstruction::SetIndex {
+                                VMInstruction::SetIndex(VMSetIndex {
                                     dst,
                                     target: base_reg,
                                     index: index_reg,
                                     value: value_reg,
-                                },
+                                }),
                                 span,
                             );
                         }

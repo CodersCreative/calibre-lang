@@ -49,7 +49,7 @@ impl MiddleEnvironment {
         if let Some(first) = list.first() {
             debug!(first = %first, "importing scope");
             let scope = self.import_next_scope(scope, first);
-            self.import_scope_list_with_depth(scope?.0, list, depth - 1)
+            self.import_scope_list_with_depth(scope?.0, &list[1..], depth - 1)
         } else {
             Ok((scope, None))
         }

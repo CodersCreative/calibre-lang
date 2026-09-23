@@ -5,8 +5,12 @@ use crate::{
 use calibre_parser::ast::{
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::{
-        AstNode, AstNodeType, VarType, declaration::AstDeclaration, functions::AstExtern,
-        misc::AstTag, types::AstType,
+        AstNode, AstNodeType, DestructurePattern, VarType,
+        assignment::AstAssignDestructure,
+        declaration::AstDeclaration,
+        functions::{AstExtern, AstFunction},
+        misc::AstTag,
+        types::AstType,
     },
     types::ParserDataType,
 };
@@ -21,6 +25,45 @@ impl MiddleEnvironment {
 
     fn predeclare_node(&mut self, scope: ScopeId, node: &mut AstNode) -> Result<(), MiddleErr> {
         match &mut node.node_type {
+            AstNodeType::DestructureAssignment(AstAssignDestructure {
+                pattern: DestructurePattern::Tuple(bindings),
+                value,
+            }) if matches!(value.node_type, AstNodeType::FunctionDeclaration(_)) => {
+                let AstNodeType::FunctionDeclaration(AstFunction { header, .. }) = &value.node_type
+                else {
+                    unreachable!()
+                };
+                let data_type = ParserDataType::function(
+                    node.span,
+                    header
+                        .parameters
+                        .iter()
+                        .map(|(_, ty, _)| {
+                            ty.clone()
+                                .unwrap_or_else(|| ParserDataType::auto(node.span))
+                        })
+                        .collect(),
+                    header.return_type.clone(),
+                );
+
+                for binding in bindings.iter().flatten() {
+                    let (var_type, identifier) = binding;
+                    if *var_type != VarType::Mutable {
+                        let original = Ustr::from(&identifier.to_string());
+                        let renamed = Ustr::from(
+                            &ParserText::temp_name_with_suffix(identifier, node.span).text,
+                        );
+                        self.register_variable(
+                            scope,
+                            original,
+                            renamed,
+                            data_type.clone(),
+                            *var_type,
+                        )?;
+                    }
+                }
+                Ok(())
+            }
             AstNodeType::Tag(AstTag { node: inner, .. }) => {
                 self.predeclare_node(scope, inner.as_mut())
             }

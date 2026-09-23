@@ -42,9 +42,9 @@ impl Display for VMCallSelf {
             .join(", ");
 
         if let Some(dst) = &self.dst {
-            write!(f, "%r{} = CALL_SELF ({})", dst, args)
+            write!(f, "%r{} = CALLSELF ({})", dst, args)
         } else {
-            write!(f, "%CALL_SELF ({})", args)
+            write!(f, "%CALLSELF ({})", args)
         }
     }
 }

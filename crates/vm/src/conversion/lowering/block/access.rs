@@ -12,6 +12,7 @@ use crate::conversion::{
     Reg,
     instructions::{
         VMInstruction,
+        access::{VMIndex, VMLoadMember},
         functions::{VMCall, VMCallSelf},
         registers::VMCopy,
         variables::VMLoadVarRef,
@@ -59,7 +60,7 @@ impl VMLowering for LirIndex {
         let index = env.lower_node(*self.index, span);
         let value = env.lower_node(*self.base, span);
         let dst = env.alloc_reg();
-        env.emit(VMInstruction::Index { dst, value, index }, span);
+        env.emit(VMInstruction::Index(VMIndex { dst, value, index }), span);
         dst
     }
 }
@@ -70,7 +71,10 @@ impl VMLowering for LirMember {
         let value = env.lower_node(*self.base, span);
         let member = env.add_string(self.field);
         let dst = env.alloc_reg();
-        env.emit(VMInstruction::LoadMember { dst, value, member }, span);
+        env.emit(
+            VMInstruction::LoadMember(VMLoadMember { dst, value, member }),
+            span,
+        );
         dst
     }
 }
