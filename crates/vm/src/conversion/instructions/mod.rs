@@ -2,6 +2,7 @@ use crate::conversion::{
     Reg,
     instructions::{
         binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
+        functions::{VMCall, VMCallSelf, VMSpawn},
         literals::{VMAggregate, VMEnum, VMList, VMRange},
         registers::{VMCopy, VMLoadRegRef},
         variables::{VMLoadVarRef, VMStoreVar},
@@ -14,6 +15,7 @@ use std::fmt::Display;
 use variables::{VMDropVar, VMLoadVar, VMMoveVar};
 
 pub mod binary;
+pub mod functions;
 pub mod literals;
 pub mod registers;
 pub mod variables;
@@ -47,19 +49,9 @@ pub enum VMInstruction {
     Boolean(VMBoolean),
 
     // Functions
-    Call {
-        dst: Option<Reg>,
-        callee: Reg,
-        args: Vec<Reg>,
-    },
-    CallSelf {
-        dst: Option<Reg>,
-        args: Vec<Reg>,
-    },
-    Spawn {
-        dst: Reg,
-        callee: Reg,
-    },
+    Call(VMCall),
+    CallSelf(VMCallSelf),
+    Spawn(VMSpawn),
 
     // Access
     LoadMember {
@@ -140,23 +132,10 @@ impl Display for VMInstruction {
             VMInstruction::Comparison(x) => x.fmt(f),
             VMInstruction::Boolean(x) => x.fmt(f),
 
-            VMInstruction::Call {
-                dst: Some(dst),
-                callee,
-                args,
-            } => {
-                write!(f, "%r{dst} = CALL %r{callee} {:?}", args)
-            }
-            VMInstruction::Call {
-                dst: _,
-                callee,
-                args,
-            } => {
-                write!(f, "CALL %r{callee} {:?}", args)
-            }
-            VMInstruction::CallSelf { dst: Some(dst), .. } => write!(f, "%r{dst} = CALL_SELF"),
-            VMInstruction::CallSelf { .. } => write!(f, "CALL_SELF"),
-            VMInstruction::Spawn { dst, callee } => write!(f, "SPAWN %r{dst}, %r{callee}"),
+            VMInstruction::Call(x) => x.fmt(f),
+            VMInstruction::CallSelf(x) => x.fmt(f),
+            VMInstruction::Spawn(x) => x.fmt(f),
+
             VMInstruction::LoadMember { dst, value, member } => {
                 write!(f, "%r{dst} = LOADMEMBER %r{value}.{member}")
             }

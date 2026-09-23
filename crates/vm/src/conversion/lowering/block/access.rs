@@ -10,7 +10,12 @@ RefLoad
 
 use crate::conversion::{
     Reg,
-    instructions::{VMInstruction, registers::VMCopy, variables::VMLoadVarRef},
+    instructions::{
+        VMInstruction,
+        functions::{VMCall, VMCallSelf},
+        registers::VMCopy,
+        variables::VMLoadVarRef,
+    },
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{
@@ -36,11 +41,11 @@ impl VMLowering for LirCall {
             LirNodeType::Load(LirLoad { value }) | LirNodeType::Move(LirMove { value })
                 if value == env.current_fn_name =>
             {
-                env.emit(VMInstruction::CallSelf { dst, args }, span);
+                env.emit(VMInstruction::CallSelf(VMCallSelf { dst, args }), span);
             }
             other => {
                 let callee = env.lower_node(other, span);
-                env.emit(VMInstruction::Call { dst, callee, args }, span);
+                env.emit(VMInstruction::Call(VMCall { dst, callee, args }), span);
             }
         }
 

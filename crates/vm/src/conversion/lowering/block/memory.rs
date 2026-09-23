@@ -10,6 +10,7 @@ use crate::conversion::{
     Reg,
     instructions::{
         VMInstruction,
+        functions::VMSpawn,
         variables::{VMDropVar, VMLoadVar, VMMoveVar},
     },
     lowering::{BlockLoweringCtx, block::VMLowering},
@@ -68,7 +69,7 @@ impl VMLowering for LirSpawn {
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
         let value = env.lower_node(*self.value, span);
         let dst = env.alloc_reg();
-        env.emit(VMInstruction::Spawn { dst, callee: value }, span);
+        env.emit(VMInstruction::Spawn(VMSpawn { dst, callee: value }), span);
         dst
     }
 }
