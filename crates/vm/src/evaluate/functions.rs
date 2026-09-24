@@ -6,7 +6,7 @@ use crate::{
     },
     error::RuntimeError,
     evaluate::{calling::RegisterCall, instruction::VMEvaluation},
-    value::{HashKey, RuntimeValue, TerminateValue, WaitGroupInner},
+    value::{RuntimeValue, TerminateValue, hashable::HashKey, spawn::WaitGroupInner},
 };
 use calibre_lir::ast::BlockId;
 use rustc_hash::FxHashMap;

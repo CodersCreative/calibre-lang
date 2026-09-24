@@ -115,26 +115,30 @@ impl VM {
                 #[allow(clippy::mutable_key_type)]
                 let mut new_map = FxHashMap::default();
 
-                if let Ok(guard) = map.try_lock() {
+                if let Ok(guard) = map.map.try_lock() {
                     for (k, v) in guard.iter() {
                         new_map
                             .insert(k.clone(), self.convert_runtime_var_into_saveable(v.clone()));
                     }
                 }
 
-                RuntimeValue::HashMap(Arc::new(Mutex::new(new_map)))
+                RuntimeValue::HashMap(RuntimeHashMap {
+                    map: Arc::new(Mutex::new(new_map)),
+                })
             }
             RuntimeValue::HashSet(set) => {
                 #[allow(clippy::mutable_key_type)]
                 let mut new_set = rustc_hash::FxHashSet::default();
 
-                if let Ok(guard) = set.try_lock() {
+                if let Ok(guard) = set.set.try_lock() {
                     for k in guard.iter() {
                         new_set.insert(k.clone());
                     }
                 }
 
-                RuntimeValue::HashSet(Arc::new(Mutex::new(new_set)))
+                RuntimeValue::HashSet(RuntimeHashSet {
+                    set: Arc::new(Mutex::new(new_set)),
+                })
             }
             RuntimeValue::Generator { type_name, state } => {
                 RuntimeValue::Generator { type_name, state }

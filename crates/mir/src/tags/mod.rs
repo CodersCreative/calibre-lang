@@ -553,6 +553,7 @@ impl MiddleEnvironment {
                             let AstNodeType::Identifier(x) = caller.node_type else {
                                 continue;
                             };
+
                             #[allow(clippy::single_match)]
                             match x.value.get_ident().text().trim() {
                                 "memo" => memo = true,

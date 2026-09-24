@@ -2,7 +2,7 @@ use crate::{
     VM,
     config::VMConfig,
     evaluate::calling::FunctionArgs,
-    value::{RuntimeValue, WaitGroupInner},
+    value::{RuntimeValue, spawn::WaitGroupInner},
 };
 use std::{
     collections::VecDeque,

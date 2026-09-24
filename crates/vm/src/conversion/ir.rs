@@ -3,7 +3,7 @@ use crate::{
         VMInstruction,
         variables::{VMDropVar, VMLoadVar, VMLoadVarRef, VMMoveVar, VMStoreVar},
     },
-    value::{BIG_PRECISION, BIG_ROUNDING, HashKey, RuntimeValue},
+    value::{BIG_PRECISION, BIG_ROUNDING, RuntimeValue, hashable::HashKey},
 };
 use astro_float::{BigFloat, Consts};
 use calibre_lir::{

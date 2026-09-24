@@ -1,8 +1,10 @@
 use crate::error::RuntimeError;
-use crate::value::{BIG_PRECISION, GcVec, HashKey, RuntimeValue};
+use crate::value::hashable::{HashKey, RuntimeHashMap, RuntimeHashSet};
+use crate::value::{BIG_PRECISION, GcVec, RuntimeValue};
 use astro_float::BigFloat;
 use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use ustr::Ustr;
 use wasm_sync::Mutex;
@@ -247,26 +249,28 @@ impl<T: Into<RuntimeValue>> From<Vec<T>> for RuntimeValue {
     }
 }
 
-impl<K: Into<HashKey>, V: Into<RuntimeValue>> From<std::collections::HashMap<K, V>>
-    for RuntimeValue
-{
-    fn from(value: std::collections::HashMap<K, V>) -> Self {
+impl<K: Into<HashKey>, V: Into<RuntimeValue>> From<HashMap<K, V>> for RuntimeValue {
+    fn from(value: HashMap<K, V>) -> Self {
         #[allow(clippy::mutable_key_type)]
         let map = value
             .into_iter()
             .map(|(k, v)| (k.into(), v.into()))
             .collect();
 
-        Self::HashMap(Arc::new(Mutex::new(map)))
+        Self::HashMap(RuntimeHashMap {
+            map: Arc::new(Mutex::new(map)),
+        })
     }
 }
 
-impl<K: Into<HashKey>> From<std::collections::HashSet<K>> for RuntimeValue {
-    fn from(value: std::collections::HashSet<K>) -> Self {
+impl<K: Into<HashKey>> From<HashSet<K>> for RuntimeValue {
+    fn from(value: HashSet<K>) -> Self {
         #[allow(clippy::mutable_key_type)]
         let set = value.into_iter().map(|k| k.into()).collect();
 
-        Self::HashSet(Arc::new(Mutex::new(set)))
+        Self::HashSet(RuntimeHashSet {
+            set: Arc::new(Mutex::new(set)),
+        })
     }
 }
 
@@ -539,14 +543,14 @@ impl<T: TryFrom<RuntimeValue, Error = RuntimeError>> TryFrom<RuntimeValue> for V
 impl<
     K: TryFrom<HashKey, Error = RuntimeError> + std::hash::Hash + Eq,
     V: TryFrom<RuntimeValue, Error = RuntimeError>,
-> TryFrom<RuntimeValue> for std::collections::HashMap<K, V>
+> TryFrom<RuntimeValue> for HashMap<K, V>
 {
     type Error = RuntimeError;
 
     fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
         match value {
             RuntimeValue::HashMap(arc_map) => {
-                let map = arc_map.lock().unwrap();
+                let map = arc_map.map.lock().unwrap();
                 map.iter()
                     .map(|(k, v)| Ok((K::try_from(k.clone())?, V::try_from(v.clone())?)))
                     .collect()
@@ -560,14 +564,14 @@ impl<
 }
 
 impl<K: TryFrom<HashKey, Error = RuntimeError> + std::hash::Hash + Eq> TryFrom<RuntimeValue>
-    for std::collections::HashSet<K>
+    for HashSet<K>
 {
     type Error = RuntimeError;
 
     fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
         match value {
             RuntimeValue::HashSet(arc_set) => {
-                let set = arc_set.lock().unwrap();
+                let set = arc_set.set.lock().unwrap();
                 set.iter().cloned().map(|k| K::try_from(k)).collect()
             }
             _ => Err(RuntimeError::UnexpectedTypeInConversion {

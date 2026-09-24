@@ -12,7 +12,7 @@ use crate::{
         write_back::Propagation,
     },
     native::stdlib::generator::GeneratorResumeFn,
-    value::{GcMap, GcVec, HashKey, RuntimeValue, TerminateValue},
+    value::{GcMap, GcVec, RuntimeValue, TerminateValue, hashable::HashKey},
 };
 use calibre_lir::ast::BlockId;
 use calibre_parser::ast::ObjectMap;
@@ -737,7 +737,7 @@ impl VMEvaluation for VMIndex {
         let resolved = vm.resolve_value_ref(vm.get_reg_value(self.value))?;
         let val = match resolved {
             RuntimeValue::List(list) => index_list(&list)?,
-            RuntimeValue::HashMap(map) => index_map(&map)?,
+            RuntimeValue::HashMap(map) => index_map(&map.map)?,
             RuntimeValue::Range(start, end) => match &index_val {
                 RuntimeValue::Int(index) => {
                     let len = (end - start).max(0) as usize;
@@ -937,7 +937,7 @@ impl VMEvaluation for VMSetIndex {
                         RuntimeValue::HashMap(map) => {
                             let key = hash_index()?;
 
-                            let mut guard = map.lock().unwrap();
+                            let mut guard = map.map.lock().unwrap();
 
                             if let Some(old) = guard.insert(key, value) {
                                 let _ = vm.set_reg_value(self.dst, old);
@@ -988,7 +988,7 @@ impl VMEvaluation for VMSetIndex {
                         RuntimeValue::HashMap(map) => {
                             let key = hash_index()?;
 
-                            let mut guard = map.lock().unwrap();
+                            let mut guard = map.map.lock().unwrap();
 
                             if let Some(old) = guard.insert(key, value) {
                                 let _ = vm.set_reg_value(self.dst, old);
@@ -1044,7 +1044,7 @@ impl VMEvaluation for VMSetIndex {
                         }
                         RuntimeValue::HashMap(map) => {
                             let key = hash_index()?;
-                            let guard = map.lock().unwrap();
+                            let guard = map.map.lock().unwrap();
 
                             let mut guard = guard;
                             if let Some(old) = guard.insert(key, value) {
@@ -1092,7 +1092,7 @@ impl VMEvaluation for VMSetIndex {
                 RuntimeValue::HashMap(map) => {
                     let key = hash_index()?;
 
-                    let mut guard = map.lock().unwrap();
+                    let mut guard = map.map.lock().unwrap();
                     if let Some(old) = guard.insert(key, value) {
                         let _ = vm.set_reg_value(self.dst, old);
                     }

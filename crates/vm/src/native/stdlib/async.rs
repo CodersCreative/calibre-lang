@@ -9,7 +9,10 @@ use crate::{
             resolve_waitgroup,
         },
     },
-    value::{ChannelInner, MutexInner, RuntimeValue, WaitGroupInner},
+    value::{
+        RuntimeValue,
+        spawn::{ChannelInner, MutexInner, WaitGroupInner},
+    },
 };
 use std::sync::Arc;
 

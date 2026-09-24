@@ -2,8 +2,9 @@ use crate::{
     VM,
     error::RuntimeError,
     value::{
-        ChannelInner, HashKey, Host, MutexInner, RuntimeHashMap, RuntimeHashSet, RuntimeValue,
-        WaitGroupInner,
+        Host, RuntimeValue,
+        hashable::{HashKey, RuntimeHashMap, RuntimeHashSet},
+        spawn::{ChannelInner, MutexInner, WaitGroupInner},
     },
 };
 use calibre_parser::ast::types::ParserInnerType;

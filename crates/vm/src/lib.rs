@@ -4,7 +4,7 @@ use crate::{
     error::RuntimeError,
     evaluate::calling::CallSite,
     native::NativeFunction,
-    value::{GcMap, GcVec, HashKey, RuntimeValue, WaitGroupInner},
+    value::{GcMap, GcVec, RuntimeValue, hashable::HashKey, spawn::WaitGroupInner},
     variables::VariableStore,
 };
 use astro_float::Consts;
@@ -618,7 +618,7 @@ impl VM {
                 }
             }
             RuntimeValue::HashMap(map) => {
-                if let Ok(guard) = map.try_lock() {
+                if let Ok(guard) = map.map.try_lock() {
                     for value in guard.values() {
                         self.drop_runtime_value_inner_ref(value, seen, seen_regs);
                     }

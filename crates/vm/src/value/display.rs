@@ -20,7 +20,7 @@ impl RuntimeValue {
                 }
             }
             Self::HashMap(map) => {
-                if let Ok(guard) = map.try_lock() {
+                if let Ok(guard) = map.map.try_lock() {
                     let mut parts = Vec::new();
                     for (k, v) in guard.iter() {
                         parts.push(format!(
@@ -35,7 +35,7 @@ impl RuntimeValue {
                 }
             }
             Self::HashSet(set) => {
-                if let Ok(guard) = set.try_lock() {
+                if let Ok(guard) = set.set.try_lock() {
                     let mut parts = Vec::new();
                     for k in guard.iter() {
                         parts.push(RuntimeValue::from(k.clone()).repr(vm));
@@ -156,7 +156,7 @@ impl RuntimeValue {
                 }
             }
             Self::HashMap(map) => {
-                if let Ok(guard) = map.try_lock() {
+                if let Ok(guard) = map.map.try_lock() {
                     let mut parts = Vec::new();
                     for (k, v) in guard.iter() {
                         parts.push(format!(
@@ -171,7 +171,7 @@ impl RuntimeValue {
                 }
             }
             Self::HashSet(set) => {
-                if let Ok(guard) = set.try_lock() {
+                if let Ok(guard) = set.set.try_lock() {
                     let mut parts = Vec::new();
                     for k in guard.iter() {
                         parts.push(RuntimeValue::from(k.clone()).display(vm));

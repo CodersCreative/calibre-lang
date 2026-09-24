@@ -54,7 +54,7 @@ impl VMEvaluation for VMLoadLiteral {
                 memo,
                 memo_params,
             } => {
-                use crate::value::ExternFunction;
+                use crate::value::ffi::ExternFunction;
 
                 let abi_lower = abi.to_ascii_lowercase();
                 if abi_lower != "c" && abi_lower != "zig" {

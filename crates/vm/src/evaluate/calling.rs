@@ -125,8 +125,8 @@ impl VM {
 
                 if full_args.len() >= 2 {
                     let same_identity = matches!((&full_args[0], &full_args[1]), (RuntimeValue::List(a), RuntimeValue::List(b)) if std::ptr::eq(a.as_ref(), b.as_ref()))
-                        || matches!((&full_args[0], &full_args[1]), (RuntimeValue::HashMap(a), RuntimeValue::HashMap(b)) if std::ptr::eq(a.as_ref(), b.as_ref()))
-                        || matches!((&full_args[0], &full_args[1]), (RuntimeValue::HashSet(a), RuntimeValue::HashSet(b)) if std::ptr::eq(a.as_ref(), b.as_ref()));
+                        || matches!((&full_args[0], &full_args[1]), (RuntimeValue::HashMap(a), RuntimeValue::HashMap(b)) if std::ptr::eq(a.map.as_ref(), b.map.as_ref()))
+                        || matches!((&full_args[0], &full_args[1]), (RuntimeValue::HashSet(a), RuntimeValue::HashSet(b)) if std::ptr::eq(a.set.as_ref(), b.set.as_ref()));
                     if same_identity {
                         full_args.truncate(1);
                     }
