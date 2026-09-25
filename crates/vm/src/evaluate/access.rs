@@ -32,72 +32,49 @@ impl VMEvaluation for VMLoadMember {
         let name = vm.local_string(block, self.member)?;
         let raw_receiver = vm.get_reg_value(self.value).clone();
         let (short_name, tuple_index) = VM::member_parts(name);
-
-        let mut resolved = vm.resolve_value_ref(&raw_receiver)?;
-        if resolved.is_null()
-            && let RuntimeValue::Ref(owner) = &raw_receiver
-            && let Some(callee) = vm.resolve_associated_member_value(owner, name, short_name)
-        {
-            vm.set_reg_value(self.dst, callee);
-            vm.current_frame_mut()
-                .member_sources
-                .insert(self.dst, (source_reg, *name));
-            return Ok(TerminateValue::None);
-        }
-
+        let is_next_or_zero = name == "next" || name == "0";
         let member_short = short_name.unwrap_or(name);
-        let bind_assoc = |vm: &mut VM,
-                          type_name: &str,
-                          value: RuntimeValue|
-         -> Result<RuntimeValue, RuntimeError> {
+
+        let missing = |target: RuntimeValue| RuntimeError::MissingMember {
+            target: Box::new(target),
+            member: name.to_string(),
+        };
+
+        let bind_assoc = |vm: &mut VM, type_name: &str, value: RuntimeValue| {
             if let Some(callee) = vm.resolve_associated_member_value(type_name, name, short_name) {
                 Ok(vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, value))
             } else {
-                Err(RuntimeError::MissingMember {
-                    target: Box::new(value),
-                    member: name.to_string(),
-                })
+                Err(missing(value))
             }
         };
-        for _ in 0..4 {
-            match &resolved {
-                RuntimeValue::Result(Ok(inner)) if member_short == "next" => {
-                    vm.set_reg_value(self.dst, inner.as_ref().clone());
-                    return Ok(TerminateValue::None);
-                }
-                RuntimeValue::Result(Ok(inner)) => {
-                    resolved = inner.as_ref().clone();
-                }
-                _ => break,
-            }
-        }
 
+        let resolved = vm.resolve_value_ref(&raw_receiver)?;
         let mut member_source: Option<(u16, Ustr)> = None;
 
         let val = match resolved {
+            RuntimeValue::Null => {
+                if let RuntimeValue::Ref(owner) = &raw_receiver
+                    && let Some(callee) =
+                        vm.resolve_associated_member_value(owner, name, short_name)
+                {
+                    vm.set_reg_value(self.dst, callee);
+                    vm.current_frame_mut()
+                        .member_sources
+                        .insert(self.dst, (source_reg, *name));
+                    return Ok(TerminateValue::None);
+                } else {
+                    return Err(missing(RuntimeValue::Null));
+                }
+            }
             RuntimeValue::Generator { type_name, state } => match member_short {
                 "data" | "next" => RuntimeValue::NativeFunction(Arc::new(GeneratorResumeFn {
                     state: state.clone(),
                 })),
-                "index" => {
-                    let guard = state.lock().unwrap();
-                    RuntimeValue::Int(guard.index)
-                }
-                "done" => {
-                    let guard = state.lock().unwrap();
-                    RuntimeValue::Bool(guard.completed)
-                }
-                _ => {
-                    match vm.resolve_associated_member_value(type_name.as_str(), name, short_name) {
-                        Some(value) => value,
-                        None => {
-                            return Err(RuntimeError::MissingMember {
-                                target: Box::new(RuntimeValue::Generator { type_name, state }),
-                                member: name.to_string(),
-                            });
-                        }
-                    }
-                }
+                "index" => RuntimeValue::Int(state.lock().unwrap().index),
+                "done" => RuntimeValue::Bool(state.lock().unwrap().completed),
+                _ => vm
+                    .resolve_associated_member_value(type_name.as_str(), name, short_name)
+                    .ok_or_else(|| missing(RuntimeValue::Generator { type_name, state }))?,
             },
             RuntimeValue::DynObject {
                 type_name,
@@ -105,22 +82,26 @@ impl VMEvaluation for VMLoadMember {
                 vtable,
                 constraints,
             } => {
-                let member_short = Ustr::from(short_name.unwrap_or(name));
-                if let Some(callee_name) = vtable.get(&member_short).or_else(|| vtable.get(name)) {
+                let member_short_ustr = Ustr::from(member_short);
+                if let Some(callee_name) =
+                    vtable.get(&member_short_ustr).or_else(|| vtable.get(name))
+                {
                     if let Some(callee) = vm.resolve_dyn_method_callable(
                         type_name.as_str(),
-                        member_short.as_str(),
+                        member_short_ustr.as_str(),
                         Some(callee_name.as_str()),
                     ) {
                         callee.bind_if_callable(value.as_ref().clone())
-                    } else if let Some(x) = vm.get_value(callee_name) {
-                        x
                     } else {
-                        return Err(RuntimeError::FunctionNotFound(callee_name.to_string()));
+                        vm.get_value(callee_name).ok_or_else(|| {
+                            RuntimeError::FunctionNotFound(callee_name.to_string())
+                        })?
                     }
-                } else if let Some(callee) =
-                    vm.resolve_dyn_method_callable(type_name.as_str(), member_short.as_str(), None)
-                {
+                } else if let Some(callee) = vm.resolve_dyn_method_callable(
+                    type_name.as_str(),
+                    member_short_ustr.as_str(),
+                    None,
+                ) {
                     callee.bind_if_callable(value.as_ref().clone())
                 } else if member_short == "type" {
                     RuntimeValue::Str(type_name)
@@ -129,215 +110,140 @@ impl VMEvaluation for VMLoadMember {
                         constraints.iter().map(|x| RuntimeValue::Str(*x)).collect(),
                     )))
                 } else if let Some(x) =
-                    vm.get_value(&Ustr::from(&format!("{}.{}", type_name, member_short)))
+                    vm.get_value(&Ustr::from(&format!("{type_name}.{member_short}")))
                 {
                     x
                 } else {
-                    return Err(RuntimeError::MissingMember {
-                        target: Box::new(RuntimeValue::DynObject {
-                            type_name,
-                            constraints,
-                            value,
-                            vtable,
-                        }),
-                        member: name.to_string(),
-                    });
+                    return Err(missing(RuntimeValue::DynObject {
+                        type_name,
+                        constraints,
+                        value,
+                        vtable,
+                    }));
                 }
             }
             RuntimeValue::Aggregate(None, map) => {
                 let idx = tuple_index.ok_or(RuntimeError::ExpectedIntIndexFound {
                     found: Box::new(RuntimeValue::Null),
                 })?;
-                if let Some((_, value)) = map.as_ref().0.0.get(idx) {
-                    value.clone()
-                } else {
-                    return Err(RuntimeError::MissingMember {
-                        target: Box::new(RuntimeValue::Aggregate(None, map)),
-                        member: name.to_string(),
-                    });
-                }
+                map.as_ref()
+                    .0
+                    .0
+                    .get(idx)
+                    .map(|(_, val)| val.clone())
+                    .ok_or_else(|| missing(RuntimeValue::Aggregate(None, map)))?
             }
             RuntimeValue::Aggregate(Some(type_name), map) => {
                 if let Some(idx) =
                     vm.resolve_aggregate_member_slot(&type_name, &map, name, short_name)
                 {
+                    let field_name = &map.0.0[idx].0;
                     member_source = Some(
                         vm.current_frame()
                             .member_sources
                             .get(&source_reg)
                             .map(|(parent, path)| {
-                                (
-                                    parent.to_owned(),
-                                    Ustr::from(&format!("{path}.{}", map.0.0[idx].0)),
-                                )
+                                (*parent, Ustr::from(&format!("{path}.{field_name}")))
                             })
-                            .unwrap_or((source_reg, Ustr::from(&map.0.0[idx].0))),
+                            .unwrap_or((source_reg, Ustr::from(field_name))),
                     );
-
                     map.0.0[idx].1.clone()
                 } else if let Some((_, wrapped)) = map.0.0.iter().find(|(field, _)| field == "0") {
-                    let wrapped = vm.resolve_value_ref(wrapped)?;
+                    let wrapped_val = vm.resolve_value_ref(wrapped)?;
                     if tuple_index.is_some() {
                         member_source = Some(
                             vm.current_frame()
                                 .member_sources
                                 .get(&source_reg)
-                                .map(|(parent, path)| {
-                                    (parent.to_owned(), Ustr::from(&format!("{path}.0")))
-                                })
+                                .map(|(parent, path)| (*parent, Ustr::from(&format!("{path}.0"))))
                                 .unwrap_or((source_reg, Ustr::from("0"))),
                         );
-                        wrapped
+                        wrapped_val
                     } else {
-                        let RuntimeValue::Aggregate(inner_type, inner_map) = wrapped.clone() else {
-                            return Err(RuntimeError::MissingMember {
-                                target: Box::new(RuntimeValue::Aggregate(Some(type_name), map)),
-                                member: name.to_string(),
-                            });
+                        let RuntimeValue::Aggregate(inner_type, inner_map) = wrapped_val else {
+                            return Err(missing(RuntimeValue::Aggregate(Some(type_name), map)));
                         };
                         let inner_name = inner_type.as_deref().unwrap_or_default();
-                        if let Some(idx) = vm
+                        let idx = vm
                             .resolve_aggregate_member_slot(inner_name, &inner_map, name, short_name)
-                        {
-                            inner_map.0.0[idx].1.clone()
-                        } else {
-                            return Err(RuntimeError::MissingMember {
-                                target: Box::new(RuntimeValue::Aggregate(Some(type_name), map)),
-                                member: name.to_string(),
-                            });
-                        }
+                            .ok_or_else(|| {
+                                missing(RuntimeValue::Aggregate(Some(type_name), map.clone()))
+                            })?;
+                        inner_map.0.0[idx].1.clone()
                     }
                 } else {
-                    match vm.resolve_associated_member_value(type_name.as_str(), name, short_name) {
-                        Some(value) => {
-                            let resolved_receiver =
-                                RuntimeValue::Aggregate(Some(type_name), map.clone());
-
-                            vm.bind_member_receiver_if_callable(
-                                value,
-                                name,
-                                &raw_receiver,
-                                resolved_receiver,
-                            )
-                        }
-                        None => {
-                            return Err(RuntimeError::MissingMember {
-                                target: Box::new(RuntimeValue::Aggregate(Some(type_name), map)),
-                                member: name.to_string(),
-                            });
-                        }
-                    }
+                    let value = vm
+                        .resolve_associated_member_value(type_name.as_str(), name, short_name)
+                        .ok_or_else(|| {
+                            missing(RuntimeValue::Aggregate(
+                                Some(type_name.clone()),
+                                map.clone(),
+                            ))
+                        })?;
+                    vm.bind_member_receiver_if_callable(
+                        value,
+                        name,
+                        &raw_receiver,
+                        RuntimeValue::Aggregate(Some(type_name), map),
+                    )
                 }
             }
-            RuntimeValue::Enum(_, _, Some(x)) if name == "next" || name == "0" => {
-                x.as_ref().clone()
-            }
+            RuntimeValue::Enum(_, _, Some(x)) if is_next_or_zero => x.as_ref().clone(),
             RuntimeValue::Enum(_, _, Some(x)) => x.as_ref().clone(),
-            RuntimeValue::Enum(_, _, None) if name == "next" || name == "0" => RuntimeValue::Null,
-            RuntimeValue::Option(Some(x)) if name == "next" || name == "0" => x.as_ref().clone(),
-            RuntimeValue::Option(Some(inner)) if !(name == "next" || name == "0") => {
+            RuntimeValue::Enum(_, _, None) if is_next_or_zero => RuntimeValue::Null,
+            RuntimeValue::Option(Some(x)) if is_next_or_zero => x.as_ref().clone(),
+            RuntimeValue::Option(Some(inner)) => {
                 if let Some(callee) = vm.resolve_associated_member_value("option", name, short_name)
                 {
                     vm.bind_member_receiver_if_callable(
                         callee,
                         name,
                         &raw_receiver,
-                        RuntimeValue::Option(Some(inner.clone())),
+                        RuntimeValue::Option(Some(inner)),
                     )
                 } else {
-                    let mut inner_value = vm.resolve_value_ref(&inner.as_ref().clone())?;
-
-                    while let RuntimeValue::Option(Some(nested)) = inner_value.clone() {
-                        inner_value = vm.resolve_value_ref(&nested.as_ref().clone())?;
-                    }
-
-                    match inner_value.clone() {
-                        RuntimeValue::Aggregate(type_name, map) => {
-                            if let Some(idx) = vm.resolve_aggregate_member_slot(
-                                type_name.as_deref().unwrap_or_default(),
-                                &map,
-                                name,
-                                short_name,
-                            ) {
-                                map.0.0[idx].1.clone()
-                            } else if let Some(callee) = vm.resolve_associated_member_value(
-                                type_name.as_deref().unwrap_or("T"),
-                                name,
-                                short_name,
-                            ) {
-                                vm.bind_member_receiver_if_callable(
-                                    callee,
-                                    name,
-                                    &inner_value,
-                                    inner_value.clone(),
-                                )
-                            } else {
-                                return Err(RuntimeError::MissingMember {
-                                    target: Box::new(RuntimeValue::Option(Some(inner))),
-                                    member: name.to_string(),
-                                });
-                            }
-                        }
-                        other => {
-                            return Err(RuntimeError::MissingMember {
-                                target: Box::new(RuntimeValue::Option(Some(Gc::new(other)))),
-                                member: name.to_string(),
-                            });
-                        }
-                    }
+                    return Err(missing(RuntimeValue::Option(Some(inner))));
                 }
             }
-            RuntimeValue::Option(None) if name == "next" || name == "0" => RuntimeValue::Null,
+            RuntimeValue::Option(None) if is_next_or_zero => RuntimeValue::Null,
             option @ RuntimeValue::Option(_) => {
-                if let Some(callee) = vm.resolve_associated_member_value("T?", name, short_name) {
-                    vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, option)
-                } else {
-                    return Err(RuntimeError::MissingMember {
-                        target: Box::new(option),
-                        member: name.to_string(),
-                    });
-                }
+                let callee = vm
+                    .resolve_associated_member_value("T?", name, short_name)
+                    .ok_or_else(|| missing(option.clone()))?;
+                vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, option)
             }
-            RuntimeValue::Result(Ok(x)) if name == "next" || name == "0" => x.as_ref().clone(),
-            RuntimeValue::Result(Err(x)) if name == "next" || name == "0" => x.as_ref().clone(),
+
+            RuntimeValue::Result(Ok(x)) | RuntimeValue::Result(Err(x)) if is_next_or_zero => {
+                x.as_ref().clone()
+            }
             result @ RuntimeValue::Result(_) => {
-                if let Some(callee) = vm.resolve_associated_member_value("result", name, short_name)
-                {
-                    vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, result)
-                } else {
-                    return Err(RuntimeError::MissingMember {
-                        target: Box::new(result),
-                        member: name.to_string(),
-                    });
-                }
+                let callee = vm
+                    .resolve_associated_member_value("result", name, short_name)
+                    .ok_or_else(|| missing(result.clone()))?;
+                vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, result)
             }
-            RuntimeValue::Ptr(id) if name == "next" || name == "0" => {
+
+            RuntimeValue::Ptr(id) if is_next_or_zero => {
                 vm.ptr_heap.get(&id).cloned().unwrap_or_default()
             }
-            RuntimeValue::Char(value) => bind_assoc(vm, "char", RuntimeValue::Char(value))?,
-            RuntimeValue::Str(value) => bind_assoc(vm, "str", RuntimeValue::Str(value))?,
-            RuntimeValue::List(value) => {
+
+            RuntimeValue::Char(v) => bind_assoc(vm, "char", RuntimeValue::Char(v))?,
+            RuntimeValue::Str(v) => bind_assoc(vm, "str", RuntimeValue::Str(v))?,
+            RuntimeValue::List(v) => {
                 if let Some(index) = tuple_index {
-                    value
-                        .as_ref()
+                    v.as_ref()
                         .0
                         .get(index)
                         .cloned()
-                        .unwrap_or_else(|| RuntimeValue::Null)
+                        .unwrap_or(RuntimeValue::Null)
                 } else {
-                    bind_assoc(vm, "list", RuntimeValue::List(value))?
+                    bind_assoc(vm, "list", RuntimeValue::List(v))?
                 }
             }
-            RuntimeValue::Int(value) => bind_assoc(vm, "int", RuntimeValue::Int(value))?,
-            RuntimeValue::UInt(value) => bind_assoc(vm, "uint", RuntimeValue::UInt(value))?,
-            RuntimeValue::Float(value) => bind_assoc(vm, "float", RuntimeValue::Float(value))?,
-            RuntimeValue::Bool(value) => bind_assoc(vm, "bool", RuntimeValue::Bool(value))?,
-            RuntimeValue::Null => {
-                return Err(RuntimeError::MissingMember {
-                    target: Box::new(RuntimeValue::Null),
-                    member: name.to_string(),
-                });
-            }
+            RuntimeValue::Int(v) => bind_assoc(vm, "int", RuntimeValue::Int(v))?,
+            RuntimeValue::UInt(v) => bind_assoc(vm, "uint", RuntimeValue::UInt(v))?,
+            RuntimeValue::Float(v) => bind_assoc(vm, "float", RuntimeValue::Float(v))?,
+            RuntimeValue::Bool(v) => bind_assoc(vm, "bool", RuntimeValue::Bool(v))?,
             other => {
                 if let Some(type_name) = other.impl_name() {
                     bind_assoc(vm, type_name.as_str(), other)?
@@ -351,22 +257,15 @@ impl VMEvaluation for VMLoadMember {
 
         vm.set_reg_value(self.dst, val);
 
-        match member_source {
-            Some((parent, field)) => {
-                vm.current_frame_mut()
-                    .member_sources
-                    .insert(self.dst, (parent, Ustr::from(&field)));
-            }
-            None => {
-                let source = vm.current_frame().member_sources.get(&source_reg).cloned();
-                vm.current_frame_mut().member_sources.insert(
-                    self.dst,
-                    source
-                        .map(|(parent, path)| (parent, Ustr::from(&format!("{path}.{name}"))))
-                        .unwrap_or((source_reg, Ustr::from(name))),
-                );
-            }
-        }
+        let frame = vm.current_frame_mut();
+        let final_source = match member_source {
+            Some(source) => source,
+            None => match frame.member_sources.get(&source_reg).cloned() {
+                Some((parent, path)) => (parent, Ustr::from(&format!("{path}.{name}"))),
+                None => (source_reg, Ustr::from(name)),
+            },
+        };
+        frame.member_sources.insert(self.dst, final_source);
 
         Ok(TerminateValue::None)
     }
