@@ -6,6 +6,7 @@ use calibre_parser::ast::{
     nodes::{AstNode, AstNodeType, flow::AstEmit},
     types::{ParserDataType, ParserInnerType},
 };
+use tracing::instrument;
 
 impl MiddleEnvironment {
     pub fn resolve_emit_type_from_node(
@@ -64,6 +65,7 @@ impl MiddleEnvironment {
         }
     }
 
+    #[instrument(skip_all)]
     pub fn resolve_type_from_node(
         &mut self,
         scope: ScopeId,

@@ -5,7 +5,6 @@ use crate::{
     value::TerminateValue,
 };
 use calibre_lir::ast::BlockId;
-use tracing::instrument;
 
 pub trait VMEvaluation {
     fn run(
@@ -18,7 +17,6 @@ pub trait VMEvaluation {
 }
 
 impl VMEvaluation for VMInstruction {
-    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,

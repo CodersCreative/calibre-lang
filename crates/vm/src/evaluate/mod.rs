@@ -121,6 +121,7 @@ impl VM {
         None
     }
 
+    #[instrument(skip_all)]
     pub(crate) fn build_dyn_vtable_for_value(
         &self,
         value: &RuntimeValue,

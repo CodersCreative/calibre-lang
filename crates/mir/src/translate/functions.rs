@@ -32,6 +32,7 @@ use calibre_parser::{
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
+use tracing::instrument;
 use ustr::Ustr;
 
 struct GeneratorReturnsRewriter;
@@ -498,6 +499,7 @@ impl MirLowering for FunctionHeader {
 }
 
 impl MirLowering for AstExtern {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -598,6 +600,7 @@ impl MirLowering for AstExtern {
 }
 
 impl MirLowering for AstFunction {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -905,6 +908,7 @@ impl MirLowering for AstFunction {
 
 impl MirLowering for AstCall {
     // TODO Deal with generics
+    #[instrument(skip_all)]
     fn lower(
         mut self,
         env: &mut MiddleEnvironment,

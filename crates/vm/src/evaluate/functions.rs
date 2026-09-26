@@ -11,10 +11,12 @@ use crate::{
 use calibre_lir::ast::BlockId;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
+use tracing::instrument;
 use ustr::Ustr;
 use wasm_sync::Mutex;
 
 impl VMEvaluation for VMCall {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -38,6 +40,7 @@ impl VMEvaluation for VMCall {
 }
 
 impl VMEvaluation for VMCallSelf {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -130,6 +133,7 @@ impl VMEvaluation for VMCallSelf {
 }
 
 impl VMEvaluation for VMSpawn {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,

@@ -11,6 +11,7 @@ use std::{
     ops::{Deref, DerefMut},
     str::FromStr,
 };
+use tracing::instrument;
 use ustr::Ustr;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -402,6 +403,7 @@ impl ParserText {
         format!("'{}'", Self::escape_literal(&input.to_string(), '\''))
     }
 
+    #[instrument(skip_all)]
     pub fn temp_name(span: Span) -> Self {
         Self::new(
             span,
@@ -413,6 +415,7 @@ impl ParserText {
         )
     }
 
+    #[instrument(skip_all)]
     pub fn temp_name_with_suffix(suffix: impl ToString, span: Span) -> Self {
         let suffix = suffix.to_string();
         if Self::is_temp_name(&suffix) {

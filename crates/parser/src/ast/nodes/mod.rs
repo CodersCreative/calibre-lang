@@ -188,6 +188,45 @@ impl AstNode {
         )
     }
 
+    pub fn binary(span: Span, left: AstNode, right: AstNode, op: BinaryOperator) -> AstNode {
+        AstNode::new(
+            span,
+            AstNodeType::BinaryExpression(AstBinary {
+                left: Box::new(left),
+                right: Box::new(right),
+                operator: op,
+            }),
+        )
+    }
+
+    pub fn assign(span: Span, identifier: AstNode, value: AstNode) -> AstNode {
+        AstNode::new(
+            span,
+            AstNodeType::AssignmentExpression(AstAssignment {
+                identifier: Box::new(identifier),
+                value: Box::new(value),
+            }),
+        )
+    }
+
+    pub fn var_decl(
+        span: Span,
+        identifier: PotentialDollarIdentifier,
+        var_type: VarType,
+        value: AstNode,
+        data_type: ParserDataType,
+    ) -> Self {
+        AstNode::new(
+            span,
+            AstNodeType::VariableDeclaration(AstDeclaration {
+                identifier,
+                var_type,
+                value: Box::new(value),
+                data_type,
+            }),
+        )
+    }
+
     pub fn emit(node: AstNode) -> Self {
         Self::new(node.span, AstNodeType::Emit(AstEmit::Scope(Box::new(node))))
     }

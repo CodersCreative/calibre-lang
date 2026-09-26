@@ -25,6 +25,7 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
+use tracing::instrument;
 use ustr::Ustr;
 
 impl MiddleEnvironment {
@@ -173,6 +174,7 @@ impl MiddleEnvironment {
 }
 
 impl MirLowering for AstDeclaration {
+    #[instrument(skip_all)]
     fn lower(
         mut self,
         env: &mut MiddleEnvironment,
@@ -357,6 +359,7 @@ impl MirLowering for AstDeclaration {
 }
 
 impl MirLowering for AstDeclareDestructure {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,

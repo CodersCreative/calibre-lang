@@ -71,10 +71,8 @@ impl MiddleEnvironment {
             ResolutionOptions::typing(),
         )?;
 
-        let mut params = Vec::new();
         let mut contains_target = false;
-
-        for param in overload.header.parameters.iter() {
+        let params = overload.header.parameters.iter().map(|param| {
             let ty = match param.1.clone() {
                 Some(x) if param.2.is_none() => {
                     self.resolve_data_type(scope, &x, ResolutionOptions::typing())?
@@ -93,8 +91,8 @@ impl MiddleEnvironment {
                 contains_target = true;
             }
 
-            params.push(ty);
-        }
+            Ok(ty)
+        }).collect::<Result<Vec<_>, MiddleErr>>()?;
 
         if target_name.is_some() && !contains_target {
             debug!("overload does not contain target, skipping");
@@ -256,6 +254,7 @@ impl MiddleEnvironment {
     }
 
     // TODO Reduce cloning
+    #[instrument(skip_all)]
     pub fn import_manifest(&mut self, mut manifest: Manifest) -> Result<(), MiddleErr> {
         let mut rename_state = AlphaRenameState::default();
         rename_state.from_native_mappings(
@@ -399,19 +398,18 @@ impl MiddleEnvironment {
 
         for overload in std::mem::take(&mut manifest.symbols.overloads) {
             let overload = MiddleOverload {
-                operator: overload.operator.clone(),
-                return_type: overload.return_type.clone().rename_owned(&mut rename_state),
+                return_type: overload.return_type.rename_owned(&mut rename_state),
                 parameters: overload
                     .parameters
-                    .iter()
-                    .map(|p| p.clone().rename_owned(&mut rename_state))
+                    .into_iter()
+                    .map(|p| p.rename_owned(&mut rename_state))
                     .collect(),
-                func: overload.func.clone(),
                 generic_params: overload
                     .generic_params
-                    .iter()
-                    .map(|p| rename_state.mapped_name_or_original(*p))
+                    .into_iter()
+                    .map(|p| rename_state.mapped_name_or_original(p))
                     .collect(),
+                ..overload
             };
 
             if !self.symbols.overloads.contains(&overload) {

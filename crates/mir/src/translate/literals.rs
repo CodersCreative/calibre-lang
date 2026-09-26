@@ -27,9 +27,11 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
+use tracing::instrument;
 use ustr::Ustr;
 
 impl MirLowering for AstStruct {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -128,6 +130,7 @@ impl MirLowering for AstStruct {
 }
 
 impl MirLowering for AstEnum {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -191,6 +194,7 @@ impl MirLowering for AstEnum {
 }
 
 impl MirLowering for AstTuple {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -222,6 +226,7 @@ impl MirLowering for AstTuple {
 }
 
 impl MirLowering for AstRange {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -267,6 +272,7 @@ impl MirLowering for AstRange {
 }
 
 impl MirLowering for AstString {
+    #[instrument(skip_all)]
     fn lower(
         self,
         _env: &mut MiddleEnvironment,
@@ -295,6 +301,7 @@ impl MirLowering for AstString {
 }
 
 impl MirLowering for AstInt {
+    #[instrument(skip_all)]
     fn lower(
         self,
         _env: &mut MiddleEnvironment,
@@ -332,6 +339,7 @@ impl MirLowering for AstInt {
 }
 
 impl MirLowering for AstBig {
+    #[instrument(skip_all)]
     fn lower(
         self,
         _env: &mut MiddleEnvironment,
@@ -365,6 +373,7 @@ impl MirLowering for AstBig {
 }
 
 impl MirLowering for AstFloat {
+    #[instrument(skip_all)]
     fn lower(
         self,
         _env: &mut MiddleEnvironment,
@@ -391,6 +400,7 @@ impl MirLowering for AstFloat {
 }
 
 impl MirLowering for AstChar {
+    #[instrument(skip_all)]
     fn lower(
         self,
         _env: &mut MiddleEnvironment,

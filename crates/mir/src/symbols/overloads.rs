@@ -14,6 +14,7 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
+use tracing::instrument;
 
 impl MiddleEnvironment {
     #[inline]
@@ -30,6 +31,7 @@ impl MiddleEnvironment {
             .or_else(|| Some(ParserDataType::new(span, ParserInnerType::Bool)))
     }
 
+    #[instrument(skip_all)]
     pub fn handle_operator_overloads(
         &mut self,
         scope: ScopeId,
@@ -88,6 +90,7 @@ impl MiddleEnvironment {
         Ok(None)
     }
 
+    #[instrument(skip_all)]
     pub fn handle_as_overload(
         &mut self,
         scope: ScopeId,
@@ -140,6 +143,7 @@ impl MiddleEnvironment {
         Ok(None)
     }
 
+    #[instrument(skip_all)]
     pub fn handle_as_overload_exists(
         &mut self,
         scope: ScopeId,
@@ -180,6 +184,7 @@ impl MiddleEnvironment {
         Ok(overload.is_some())
     }
 
+    #[instrument(skip_all)]
     pub fn handle_index_assign_overload(
         &mut self,
         scope: ScopeId,

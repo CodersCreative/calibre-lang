@@ -27,9 +27,11 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
+use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
 impl MirLowering for AstEmit {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -88,6 +90,7 @@ impl MirLowering for AstEmit {
 }
 
 impl MirLowering for AstBreak {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -196,6 +199,7 @@ impl MirLowering for AstBreak {
 }
 
 impl MirLowering for AstDefer {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -217,6 +221,7 @@ impl MirLowering for AstDefer {
 }
 
 impl MirLowering for AstTry {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -331,6 +336,7 @@ impl MirLowering for AstTry {
 }
 
 impl MirLowering for AstContinue {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -403,6 +409,7 @@ impl MirLowering for AstContinue {
 }
 
 impl MirLowering for AstReturn {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -477,6 +484,7 @@ impl MirLowering for AstReturn {
 
 // TODO Probably rewrite it to be more iterator heavy
 impl MirLowering for AstPipe {
+    #[instrument(skip_all)]
     fn lower(
         mut self,
         env: &mut MiddleEnvironment,

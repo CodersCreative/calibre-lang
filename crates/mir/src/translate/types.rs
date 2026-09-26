@@ -267,6 +267,7 @@ impl MirLowering for AstType {
 }
 
 impl MirLowering for AstTrait {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -381,6 +382,7 @@ impl MirLowering for AstTrait {
 }
 
 impl MirLowering for AstImpl {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -674,6 +676,7 @@ impl MirLowering for AstImpl {
 }
 
 impl MirLowering for AstImplTrait {
+    #[instrument(skip_all)]
     fn lower(
         mut self,
         env: &mut MiddleEnvironment,

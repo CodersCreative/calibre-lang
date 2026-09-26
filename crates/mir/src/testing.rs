@@ -1,20 +1,20 @@
+use crate::{environment::MiddleEnvironment, scoping::ScopeId, tags::TagInfo};
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use ustr::Ustr;
 
-use crate::{environment::MiddleEnvironment, scoping::ScopeId, tags::TagInfo};
-use std::path::PathBuf;
-
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Testing {
     pub tests: Vec<Test>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TestOrBench {
     Test,
     Bench,
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Test {
     pub name: Ustr,
     pub function_name: Ustr,

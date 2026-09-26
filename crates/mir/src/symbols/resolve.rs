@@ -301,6 +301,7 @@ impl MiddleEnvironment {
         })
     }
 
+    #[instrument(skip_all)]
     pub fn resolve<'a>(
         &'a self,
         scope: ScopeId,
@@ -326,6 +327,7 @@ impl MiddleEnvironment {
         Ok(current)
     }
 
+    #[instrument(skip_all)]
     pub fn resolve_potential_node<'a>(
         &'a self,
         scope: ScopeId,

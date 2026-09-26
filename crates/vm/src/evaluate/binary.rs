@@ -14,9 +14,11 @@ use crate::{
 use calibre_lir::ast::BlockId;
 use calibre_parser::ast::{comparison::BooleanOperator, nodes::binary::AsFailureMode};
 use dumpster::sync::Gc;
+use tracing::instrument;
 use ustr::Ustr;
 
 impl VMEvaluation for VMAs {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -54,6 +56,7 @@ impl VMEvaluation for VMAs {
 }
 
 impl VMEvaluation for VMIs {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -70,6 +73,7 @@ impl VMEvaluation for VMIs {
 }
 
 impl VMEvaluation for VMBinary {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -88,6 +92,7 @@ impl VMEvaluation for VMBinary {
 }
 
 impl VMEvaluation for VMComparison {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -106,6 +111,7 @@ impl VMEvaluation for VMComparison {
 }
 
 impl VMEvaluation for VMBoolean {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,

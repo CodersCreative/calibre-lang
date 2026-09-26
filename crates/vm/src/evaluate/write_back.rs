@@ -38,6 +38,7 @@ pub(crate) trait Propagation {
 }
 
 impl Propagation for VM {
+    #[instrument(skip_all)]
     fn propagate_list_aliases(&mut self, old_list: &Gc<GcVec>, new_list: &Gc<GcVec>) {
         let frame_count = self.frames.len();
         for frame_idx in 0..frame_count {
@@ -69,6 +70,7 @@ impl Propagation for VM {
         }
     }
 
+    #[instrument(skip_all)]
     fn propagate_member_source_alias(&mut self, src: Reg, dst: Reg) {
         let source = self.current_frame().member_sources.get(&src).cloned();
         match source {
@@ -81,6 +83,7 @@ impl Propagation for VM {
         }
     }
 
+    #[instrument(skip_all)]
     fn propagate_member_source_args(
         &mut self,
         args: &[Reg],
@@ -117,6 +120,7 @@ impl Propagation for VM {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     fn propagate_member_source_reg(
         &mut self,
         reg: Reg,
@@ -129,6 +133,7 @@ impl Propagation for VM {
         self.write_back_member_field_update(frame_idx, reg, parent, &field)
     }
 
+    #[instrument(skip_all)]
     fn write_back_member_field_update(
         &mut self,
         frame_idx: usize,

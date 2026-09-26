@@ -56,6 +56,7 @@ impl MiddleEnvironment {
         }
     }
 
+    #[instrument(skip_all)]
     pub fn import_next_scope(
         &mut self,
         scope: ScopeId,
@@ -238,6 +239,7 @@ impl MiddleEnvironment {
         Ok((scope, Some(node)))
     }
 
+    #[instrument(skip_all)]
     pub fn get_next_scope(&self, scope: ScopeId, key: &Ustr) -> Result<ScopeId, MiddleErr> {
         Ok(match key {
             x if x.contains("super") => {

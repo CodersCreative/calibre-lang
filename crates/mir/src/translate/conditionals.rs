@@ -18,8 +18,10 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
+use tracing::instrument;
 
 impl MirLowering for AstIf {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,
@@ -111,6 +113,7 @@ impl MirLowering for AstIf {
 }
 
 impl MirLowering for AstTernary {
+    #[instrument(skip_all)]
     fn lower(
         self,
         env: &mut MiddleEnvironment,

@@ -14,6 +14,7 @@ use calibre_parser::{
 };
 use calibre_std::{get_globals_path, get_stdlib_file, get_stdlib_module_path, get_stdlib_path};
 use std::path::PathBuf;
+use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
 impl Scoping {
@@ -43,6 +44,7 @@ impl Scoping {
 }
 
 impl MiddleEnvironment {
+    #[instrument(skip_all)]
     pub fn new_root_scope_with_std(
         &mut self,
         parent: Option<ScopeId>,
@@ -116,6 +118,7 @@ impl MiddleEnvironment {
             .new_scope(Some(scope), path, Some(&Ustr::from("root")))
     }
 
+    #[instrument(skip_all)]
     pub fn setup_global(&mut self, scope: ScopeId) {
         let mut funcs = ParserDataType::natives()
             .iter()
@@ -136,6 +139,7 @@ impl MiddleEnvironment {
         }
     }
 
+    #[instrument(skip_all)]
     pub fn setup_std(&mut self, scope: ScopeId) {
         let mut parser = Parser::default();
 
@@ -214,6 +218,7 @@ impl MiddleEnvironment {
         add("json", false);
     }
 
+    #[instrument(skip_all)]
     pub fn setup_std_module(&mut self, parent: ScopeId, name: Ustr, load_source: bool) {
         self.context.in_stdlib = Some(name);
 

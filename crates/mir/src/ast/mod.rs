@@ -29,6 +29,7 @@ use calibre_parser::{
 };
 use derive_builder::Builder;
 use std::fmt::Display;
+use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
 use crate::{errors::MiddleErr, scoping::ScopeId};
@@ -139,6 +140,7 @@ impl MiddleNode {
         self.len() == 0
     }
 
+    #[instrument(skip_all)]
     pub fn substitute(&mut self, repl: &UstrMap<MiddleNode>) {
         match &mut self.node_type {
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => {

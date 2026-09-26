@@ -14,9 +14,11 @@ use calibre_parser::ast::{
     },
     types::ParserDataType,
 };
+use tracing::instrument;
 use ustr::Ustr;
 
 impl MiddleEnvironment {
+    #[instrument(skip_all)]
     pub fn predeclare_nodes(&mut self, scope: ScopeId, nodes: &mut [AstNode]) {
         for node in nodes {
             let _ = self.predeclare_node(scope, node);

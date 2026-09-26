@@ -13,10 +13,12 @@ use calibre_lir::ast::BlockId;
 use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
 use std::sync::Arc;
+use tracing::instrument;
 use ustr::{Ustr, UstrSet};
 use wasm_sync::Mutex;
 
 impl VMEvaluation for VMLoadLiteral {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -108,6 +110,7 @@ impl VMEvaluation for VMLoadLiteral {
 }
 
 impl VMEvaluation for VMRange {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -150,6 +153,7 @@ impl VMEvaluation for VMRange {
 }
 
 impl VMEvaluation for VMList {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -169,6 +173,7 @@ impl VMEvaluation for VMList {
 }
 
 impl VMEvaluation for VMAggregate {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -256,6 +261,7 @@ impl VMEvaluation for VMAggregate {
 }
 
 impl VMEvaluation for VMEnum {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,

@@ -9,8 +9,10 @@ use crate::{
     value::{RuntimeValue, TerminateValue},
 };
 use calibre_lir::ast::BlockId;
+use tracing::instrument;
 
 impl VMEvaluation for VMLoadRegRef {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -34,6 +36,7 @@ impl VMEvaluation for VMLoadRegRef {
 }
 
 impl VMEvaluation for VMCopy {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,

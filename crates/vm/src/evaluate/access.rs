@@ -17,10 +17,12 @@ use crate::{
 use calibre_lir::ast::BlockId;
 use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
+use tracing::instrument;
 use ustr::Ustr;
 use wasm_sync::Mutex;
 
 impl VMEvaluation for VMLoadMember {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -175,11 +177,9 @@ impl VMEvaluation for VMLoadMember {
                     let value = vm
                         .resolve_associated_member_value(type_name.as_str(), name, short_name)
                         .ok_or_else(|| {
-                            missing(RuntimeValue::Aggregate(
-                                Some(type_name.clone()),
-                                map.clone(),
-                            ))
+                            missing(RuntimeValue::Aggregate(Some(type_name), map.clone()))
                         })?;
+
                     vm.bind_member_receiver_if_callable(
                         value,
                         name,
@@ -272,6 +272,7 @@ impl VMEvaluation for VMLoadMember {
 }
 
 impl VMEvaluation for VMSetMember {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -567,6 +568,7 @@ impl VMEvaluation for VMSetMember {
 }
 
 impl VMEvaluation for VMIndex {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,
@@ -770,6 +772,7 @@ impl VMEvaluation for VMIndex {
 }
 
 impl VMEvaluation for VMSetIndex {
+    #[instrument(skip_all)]
     fn run(
         &self,
         vm: &mut VM,

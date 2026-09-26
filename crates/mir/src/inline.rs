@@ -3,6 +3,7 @@ use crate::ast::{
     MirComparison, MirDeref, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex, MirIs,
     MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
 };
+use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
 struct InlineFn {
@@ -10,6 +11,7 @@ struct InlineFn {
     body: MiddleNode,
 }
 
+#[instrument(skip_all)]
 pub fn inline_small_calls(root: &mut MiddleNode, max_nodes: usize) {
     let mut inline_map: UstrMap<InlineFn> = UstrMap::default();
     collect_inlineable(root, &mut inline_map, max_nodes);

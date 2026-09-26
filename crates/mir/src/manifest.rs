@@ -12,6 +12,7 @@ use calibre_parser::ast::{
 use indextree::Arena;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 use ustr::{Ustr, UstrMap, UstrSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -100,6 +101,7 @@ pub struct ManifestScoping {
 }
 
 impl ManifestScoping {
+    #[instrument(skip_all)]
     fn from_scoping(root_name: Ustr, value: &Scoping) -> Self {
         let mut scopes = Arena::default();
         let mut ids = FxHashMap::default();
@@ -157,6 +159,7 @@ impl ManifestScoping {
 }
 
 impl Scoping {
+    #[instrument(skip_all)]
     pub fn append_manifest(&mut self, root_name: Ustr, value: ManifestScoping) {
         let mut ids = FxHashMap::default();
 

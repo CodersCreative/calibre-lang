@@ -15,10 +15,8 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType, VarType,
             access::{AstField, AstIndex},
-            assignment::AstAssignment,
-            binary::{AstBinary, AstComparison},
+            binary::AstComparison,
             conditionals::{AstIf, IfComparisonType},
-            declaration::AstDeclaration,
             flow::AstBreak,
             functions::CallArg,
             literals::AstRange,
@@ -42,7 +40,10 @@ impl MiddleEnvironment {
     ) -> AstNode {
         let mut instructions = target_body.nodes();
         if at_start {
-            instructions.insert(0, injection);
+            let mut reversed = Vec::with_capacity(instructions.len() + 1);
+            reversed.push(injection);
+            reversed.extend(instructions);
+            instructions = reversed;
         } else {
             instructions.push(injection);
         }
@@ -99,24 +100,20 @@ impl MiddleEnvironment {
         let result_ident = ParserText::from(result_raw);
         let broke_ident = ParserText::from(broke_raw);
 
-        let result_decl = AstNode::new(
+        let result_decl = AstNode::var_decl(
             span,
-            AstNodeType::VariableDeclaration(AstDeclaration {
-                var_type: VarType::Mutable,
-                identifier: result_ident.clone().into(),
-                value: else_body.clone(),
-                data_type: ParserDataType::auto(span),
-            }),
+            result_ident.clone().into(),
+            VarType::Mutable,
+            (*else_body).clone(),
+            ParserDataType::auto(span),
         );
 
-        let broke_decl = AstNode::new(
+        let broke_decl = AstNode::var_decl(
             span,
-            AstNodeType::VariableDeclaration(AstDeclaration {
-                var_type: VarType::Mutable,
-                identifier: broke_ident.clone().into(),
-                value: Box::new(AstNode::int(span, 0)),
-                data_type: ParserDataType::new(span, ParserInnerType::Int),
-            }),
+            broke_ident.clone().into(),
+            VarType::Mutable,
+            AstNode::int(span, 0),
+            ParserDataType::new(span, ParserInnerType::Int),
         );
 
         let stmts = vec![
@@ -138,6 +135,197 @@ impl MiddleEnvironment {
     }
 }
 
+fn extract_label_from_named_scope(
+    body: AstNode,
+    span: Span,
+) -> (Option<PotentialDollarIdentifier>, AstNode) {
+    match body.node_type {
+        AstNodeType::ScopeDeclaration(AstScopeDef {
+            body: scope_body,
+            named: Some(named),
+            is_temp,
+            create_new_scope,
+            define: false,
+        }) if named.args.is_empty() => {
+            let new_body = AstNode::new(
+                span,
+                AstNodeType::ScopeDeclaration(AstScopeDef {
+                    body: scope_body,
+                    named: None,
+                    is_temp,
+                    create_new_scope,
+                    define: false,
+                }),
+            );
+            (Some(named.name), new_body)
+        }
+        _ => (None, body),
+    }
+}
+
+struct LoopTempNames {
+    result: Option<Ustr>,
+    broke: Option<Ustr>,
+    iter: PotentialDollarIdentifier,
+    idx: PotentialDollarIdentifier,
+    next: PotentialDollarIdentifier,
+}
+
+impl LoopTempNames {
+    fn new(span: Span, needs_else: bool) -> Self {
+        let (result, broke) = if needs_else {
+            let result = Ustr::from(&ParserText::temp_name_with_suffix("loop_result", span).text);
+            let broke = Ustr::from(&ParserText::temp_name_with_suffix("loop_broke", span).text);
+            (Some(result), Some(broke))
+        } else {
+            (None, None)
+        };
+
+        let iter = ParserText::temp_name_with_suffix("loop_iterable", span).into();
+        let idx = ParserText::temp_name_with_suffix("loop_index", span).into();
+        let next = ParserText::temp_name_with_suffix("loop_next", span).into();
+
+        Self {
+            result,
+            broke,
+            iter,
+            idx,
+            next,
+        }
+    }
+}
+
+fn prepare_for_loop_state(
+    env: &mut MiddleEnvironment,
+    scope: ScopeId,
+    span: Span,
+    temp_names: &LoopTempNames,
+    iter_value: AstNode,
+    idx_initial: AstNode,
+    is_indexable_loop: bool,
+) -> Option<Box<MiddleNode>> {
+    let mut state_nodes = Vec::new();
+
+    let iter_decl = AstNode::var_decl(
+        span,
+        temp_names.iter.clone(),
+        if is_indexable_loop {
+            VarType::Immutable
+        } else {
+            VarType::Mutable
+        },
+        iter_value,
+        ParserDataType::auto(span),
+    )
+    .lower_or_empty(env, scope, span);
+
+    state_nodes.push(iter_decl);
+
+    if is_indexable_loop {
+        state_nodes.push(
+            AstNode::var_decl(
+                span,
+                temp_names.idx.clone(),
+                VarType::Mutable,
+                idx_initial,
+                ParserDataType::new(span, ParserInnerType::Int),
+            )
+            .lower_or_empty(env, scope, span),
+        );
+    } else {
+        state_nodes.push(
+            AstNode::var_decl(
+                span,
+                temp_names.next.clone(),
+                VarType::Mutable,
+                AstNode::none(span),
+                ParserDataType::auto(span),
+            )
+            .lower_or_empty(env, scope, span),
+        );
+    }
+
+    Some(Box::new(MiddleNode {
+        node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+            body: state_nodes,
+            create_new_scope: false,
+            is_temp: true,
+            scope_id: scope,
+        }),
+        span,
+    }))
+}
+
+fn create_for_loop_break_condition(
+    span: Span,
+    temp_names: &LoopTempNames,
+    iter_node: &AstNode,
+    is_indexable_loop: bool,
+    is_count_loop: bool,
+) -> AstNode {
+    let idx_node = AstNode::identifier(span, &temp_names.idx);
+    let next_node = AstNode::identifier(span, &temp_names.next);
+
+    AstNode::new(
+        span,
+        AstNodeType::IfStatement(AstIf {
+            comparison: Box::new(IfComparisonType::If(AstNode::new(
+                span,
+                if is_indexable_loop {
+                    AstNodeType::ComparisonExpression(AstComparison {
+                        left: Box::new(idx_node),
+                        right: Box::new(if is_count_loop {
+                            iter_node.clone()
+                        } else {
+                            AstNode::call(
+                                span,
+                                AstNode::identifier(span, "len"),
+                                vec![CallArg::Value(iter_node.clone())],
+                            )
+                        }),
+                        operator: ComparisonOperator::GreaterEqual,
+                    })
+                } else {
+                    AstNodeType::ComparisonExpression(AstComparison {
+                        left: Box::new(next_node),
+                        right: Box::new(AstNode::none(span)),
+                        operator: ComparisonOperator::Equal,
+                    })
+                },
+            ))),
+            then: Box::new(AstNode::new(
+                span,
+                AstNodeType::Break(AstBreak {
+                    label: None,
+                    value: None,
+                }),
+            )),
+            otherwise: None,
+        }),
+    )
+}
+
+fn create_next_assign_node(
+    span: Span,
+    temp_names: &LoopTempNames,
+    iter_node: &AstNode,
+    is_indexable_loop: bool,
+) -> Option<AstNode> {
+    if is_indexable_loop {
+        return None;
+    }
+
+    Some(AstNode::assign(
+        span,
+        AstNode::identifier(span, &temp_names.next),
+        AstNode::call(
+            span,
+            AstNode::member(span, iter_node.clone(), "next"),
+            vec![],
+        ),
+    ))
+}
+
 impl MirLowering for AstLoop {
     #[instrument(skip_all)]
     fn lower(
@@ -146,27 +334,13 @@ impl MirLowering for AstLoop {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        if self.label.is_none()
-            && let AstNodeType::ScopeDeclaration(AstScopeDef {
-                body: scope_body,
-                named: Some(named),
-                is_temp,
-                create_new_scope,
-                define: false,
-            }) = &self.body.node_type
-            && named.args.is_empty()
-        {
-            self.label = Some(named.name.clone());
-            *self.body = AstNode::new(
-                span,
-                AstNodeType::ScopeDeclaration(AstScopeDef {
-                    body: scope_body.clone(),
-                    named: None,
-                    is_temp: *is_temp,
-                    create_new_scope: *create_new_scope,
-                    define: false,
-                }),
-            );
+        // Extract label from named scope if present
+        if self.label.is_none() {
+            let (label, new_body) = extract_label_from_named_scope((*self.body).clone(), span);
+            if let Some(label) = label {
+                self.label = Some(label);
+                self.body = Box::new(new_body);
+            }
         }
 
         let scope = env.scoping.new_scope_from_parent_shallow(scope);
@@ -193,23 +367,24 @@ impl MirLowering for AstLoop {
             *self.body = env.wrap_loop_body(*self.body, until_node, false);
         }
 
-        let (result_raw, broke_raw) = if self.else_body.is_some() {
-            let result = Ustr::from(&ParserText::temp_name_with_suffix("loop_result", span).text);
-            let broke = Ustr::from(&ParserText::temp_name_with_suffix("loop_broke", span).text);
+        let temp_names = LoopTempNames::new(span, self.else_body.is_some());
 
-            if let Ok(scope_data) = env.scoping.scope_mut_or_err(scope) {
-                scope_data.mappings.insert(result, result);
-                scope_data.mappings.insert(broke, broke);
-            }
-            (Some(result), Some(broke))
-        } else {
-            (None, None)
-        };
+        if let (Some(result), Some(broke)) = (temp_names.result, temp_names.broke)
+            && let Ok(scope_data) = env.scoping.scope_mut_or_err(scope)
+        {
+            scope_data.mappings.insert(result, result);
+            scope_data.mappings.insert(broke, broke);
+        }
 
         match *self.loop_type {
             LoopType::Loop => {
                 let body = env.eval_loop_body_with_ctx(
-                    scope, label_text, result_raw, broke_raw, None, *self.body,
+                    scope,
+                    label_text,
+                    temp_names.result,
+                    temp_names.broke,
+                    None,
+                    *self.body,
                 )?;
 
                 let loop_node = MiddleNode {
@@ -227,8 +402,8 @@ impl MirLowering for AstLoop {
                     scope,
                     span,
                     self.else_body,
-                    result_raw,
-                    broke_raw,
+                    temp_names.result,
+                    temp_names.broke,
                 )
             }
             LoopType::While(condition) => {
@@ -255,7 +430,12 @@ impl MirLowering for AstLoop {
                 let wrapped = env.wrap_loop_body(*self.body, break_if_not, true);
 
                 let body = env.eval_loop_body_with_ctx(
-                    scope, label_text, result_raw, broke_raw, None, wrapped,
+                    scope,
+                    label_text,
+                    temp_names.result,
+                    temp_names.broke,
+                    None,
+                    wrapped,
                 )?;
 
                 let loop_node = MiddleNode {
@@ -273,8 +453,8 @@ impl MirLowering for AstLoop {
                     scope,
                     span,
                     self.else_body,
-                    result_raw,
-                    broke_raw,
+                    temp_names.result,
+                    temp_names.broke,
                 )
             }
 
@@ -282,8 +462,8 @@ impl MirLowering for AstLoop {
                 let body = env.eval_loop_body_with_ctx(
                     scope,
                     label_text,
-                    result_raw,
-                    broke_raw,
+                    temp_names.result,
+                    temp_names.broke,
                     None,
                     AstNode::new(
                         span,
@@ -316,8 +496,8 @@ impl MirLowering for AstLoop {
                     scope,
                     span,
                     self.else_body,
-                    result_raw,
-                    broke_raw,
+                    temp_names.result,
+                    temp_names.broke,
                 )
             }
             LoopType::For(name, range) => {
@@ -342,16 +522,9 @@ impl MirLowering for AstLoop {
                     _ => None,
                 };
 
-                let iter_id: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_suffix("loop_iterable", range.span).into();
-
-                let iter_node = AstNode::identifier(span, &iter_id);
-
-                let idx_id: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_suffix("loop_index", range.span).into();
-
-                let next_id: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_suffix("loop_next", range.span).into();
+                let iter_node = AstNode::identifier(span, &temp_names.iter);
+                let idx_node = AstNode::identifier(span, &temp_names.idx);
+                let next_node = AstNode::identifier(span, &temp_names.next);
 
                 let is_count_loop = explicit_range.is_some()
                     || matches!(
@@ -370,14 +543,7 @@ impl MirLowering for AstLoop {
                 let (iter_value, idx_initial) = if let Some((from, to, inclusive)) = explicit_range
                 {
                     let end = if inclusive {
-                        AstNode::new(
-                            span,
-                            AstNodeType::BinaryExpression(AstBinary {
-                                left: Box::new(to),
-                                right: Box::new(AstNode::int(span, 1)),
-                                operator: BinaryOperator::Add,
-                            }),
-                        )
+                        AstNode::binary(span, to, AstNode::int(span, 1), BinaryOperator::Add)
                     } else {
                         to
                     };
@@ -403,186 +569,89 @@ impl MirLowering for AstLoop {
                     )
                 };
 
-                let mut state_nodes = Vec::new();
-
-                let iter_decl = AstNode::new(
+                let state = prepare_for_loop_state(
+                    env,
+                    scope,
                     span,
-                    AstNodeType::VariableDeclaration(AstDeclaration {
-                        var_type: if is_indexable_loop {
-                            VarType::Immutable
-                        } else {
-                            VarType::Mutable
-                        },
-                        identifier: iter_id.clone(),
-                        value: Box::new(iter_value),
-                        data_type: ParserDataType::auto(span),
-                    }),
-                )
-                .lower_or_empty(env, scope, span);
-
-                state_nodes.push(iter_decl);
-
-                if is_indexable_loop {
-                    state_nodes.push(
-                        AstNode::new(
-                            span,
-                            AstNodeType::VariableDeclaration(AstDeclaration {
-                                var_type: VarType::Mutable,
-                                identifier: idx_id.clone(),
-                                value: Box::new(idx_initial),
-                                data_type: ParserDataType::new(span, ParserInnerType::Int),
-                            }),
-                        )
-                        .lower_or_empty(env, scope, span),
-                    );
-                } else {
-                    state_nodes.push(
-                        AstNode::new(
-                            span,
-                            AstNodeType::VariableDeclaration(AstDeclaration {
-                                var_type: VarType::Mutable,
-                                identifier: next_id.clone(),
-                                value: Box::new(AstNode::none(span)),
-                                data_type: ParserDataType::auto(span),
-                            }),
-                        )
-                        .lower_or_empty(env, scope, span),
-                    );
-                }
-
-                let state = Some(Box::new(MiddleNode {
-                    node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                        body: state_nodes,
-                        create_new_scope: false,
-                        is_temp: true,
-                        scope_id: scope,
-                    }),
-                    span,
-                }));
-
-                let break_node = AstNode::new(
-                    span,
-                    AstNodeType::IfStatement(AstIf {
-                        comparison: Box::new(IfComparisonType::If(AstNode::new(
-                            span,
-                            if is_indexable_loop {
-                                AstNodeType::ComparisonExpression(AstComparison {
-                                    left: Box::new(AstNode::identifier(span, &idx_id)),
-                                    right: Box::new(if is_count_loop {
-                                        iter_node.clone()
-                                    } else {
-                                        AstNode::call(
-                                            span,
-                                            AstNode::identifier(span, "len"),
-                                            vec![CallArg::Value(iter_node.clone())],
-                                        )
-                                    }),
-                                    operator: ComparisonOperator::GreaterEqual,
-                                })
-                            } else {
-                                AstNodeType::ComparisonExpression(AstComparison {
-                                    left: Box::new(AstNode::identifier(span, &next_id)),
-                                    right: Box::new(AstNode::none(span)),
-                                    operator: ComparisonOperator::Equal,
-                                })
-                            },
-                        ))),
-                        then: Box::new(AstNode::new(
-                            span,
-                            AstNodeType::Break(AstBreak {
-                                label: None,
-                                value: None,
-                            }),
-                        )),
-                        otherwise: None,
-                    }),
+                    &temp_names,
+                    iter_value,
+                    idx_initial,
+                    is_indexable_loop,
                 );
 
-                let next_assign_node = if is_indexable_loop {
-                    None
-                } else {
-                    Some(AstNode::new(
-                        span,
-                        AstNodeType::AssignmentExpression(AstAssignment {
-                            identifier: Box::new(AstNode::identifier(span, &next_id)),
-                            value: Box::new(AstNode::call(
-                                span,
-                                AstNode::member(span, iter_node.clone(), "next"),
-                                vec![],
-                            )),
-                        }),
-                    ))
-                };
+                let break_node = create_for_loop_break_condition(
+                    span,
+                    &temp_names,
+                    &iter_node,
+                    is_indexable_loop,
+                    is_count_loop,
+                );
+
+                let next_assign_node =
+                    create_next_assign_node(span, &temp_names, &iter_node, is_indexable_loop);
 
                 let indexed_value_node = AstNode::new(
                     span,
                     AstNodeType::IndexAccess(AstIndex {
                         base: Box::new(iter_node.clone()),
-                        index: Box::new(AstNode::identifier(span, &idx_id)),
+                        index: Box::new(idx_node.clone()),
                     }),
                 );
 
                 let next_value_node = AstNode::new(
                     span,
                     AstNodeType::FieldAccess(AstField {
-                        base: Box::new(AstNode::identifier(span, &next_id)),
+                        base: Box::new(next_node.clone()),
                         field: PotentialDollarIdentifier::new(span, "next"),
                     }),
                 );
+
                 let loop_item_value = if is_count_loop {
-                    AstNode::identifier(span, &idx_id)
+                    idx_node.clone()
                 } else if is_indexable_loop {
                     indexed_value_node
                 } else {
                     next_value_node
                 };
 
-                let var_name_node = AstNode::new(
+                let var_name_node = AstNode::var_decl(
                     span,
-                    AstNodeType::VariableDeclaration(AstDeclaration {
-                        identifier: name,
-                        var_type: VarType::Mutable,
-                        data_type: ParserDataType::auto(span),
-                        value: Box::new(loop_item_value),
-                    }),
+                    name,
+                    VarType::Mutable,
+                    loop_item_value,
+                    ParserDataType::auto(span),
                 );
 
-                let increment_node = AstNode::new(
+                let increment_node = AstNode::assign(
                     span,
-                    AstNodeType::AssignmentExpression(AstAssignment {
-                        identifier: Box::new(AstNode::identifier(span, &idx_id)),
-                        value: Box::new(AstNode::new(
-                            span,
-                            AstNodeType::BinaryExpression(AstBinary {
-                                left: Box::new(AstNode::identifier(span, &idx_id)),
-                                right: Box::new(AstNode::int(span, 1)),
-                                operator: BinaryOperator::Add,
-                            }),
-                        )),
-                    }),
+                    idx_node.clone(),
+                    AstNode::binary(
+                        span,
+                        idx_node.clone(),
+                        AstNode::int(span, 1),
+                        BinaryOperator::Add,
+                    ),
                 );
 
                 let mut instructions = self.body.nodes();
 
+                let mut reversed_instructions = Vec::with_capacity(instructions.len() + 3);
+                reversed_instructions.push(break_node);
+                reversed_instructions.push(var_name_node);
+
                 if let Some(next_assign) = next_assign_node {
-                    instructions.insert(0, next_assign);
+                    reversed_instructions.push(next_assign);
                 }
 
-                instructions.insert(0, var_name_node);
-                instructions.insert(0, break_node);
+                reversed_instructions.extend(instructions);
+                instructions = reversed_instructions;
 
                 if is_indexable_loop {
                     instructions.push(increment_node.clone());
                 }
 
                 if let Some(target) = iter_target {
-                    instructions.push(AstNode::new(
-                        span,
-                        AstNodeType::AssignmentExpression(AstAssignment {
-                            identifier: Box::new(target),
-                            value: Box::new(iter_node.clone()),
-                        }),
-                    ));
+                    instructions.push(AstNode::assign(span, target, iter_node.clone()));
                 }
 
                 let final_body = AstNode::new_temp_scope(instructions);
@@ -590,8 +659,8 @@ impl MirLowering for AstLoop {
                 let body = env.eval_loop_body_with_ctx(
                     scope,
                     label_text,
-                    result_raw,
-                    broke_raw,
+                    temp_names.result,
+                    temp_names.broke,
                     if is_indexable_loop {
                         Some(increment_node.clone())
                     } else {
@@ -615,8 +684,8 @@ impl MirLowering for AstLoop {
                     scope,
                     span,
                     self.else_body,
-                    result_raw,
-                    broke_raw,
+                    temp_names.result,
+                    temp_names.broke,
                 )
             }
         }
