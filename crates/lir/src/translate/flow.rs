@@ -127,10 +127,6 @@ impl LirLowering for MirLoop {
         let body_id = env.create_block();
         let exit_id = env.create_block();
 
-        if let Some(s) = self.state {
-            env.lower_and_add_node(*s);
-        }
-
         env.set_terminator(LirTerminator::Jump {
             span,
             target: header_id,

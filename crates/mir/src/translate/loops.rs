@@ -391,7 +391,6 @@ impl MirLowering for AstLoop {
 
                 let loop_node = MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration(MirLoop {
-                        state: None,
                         body: Box::new(body),
                         scope_id: scope,
                         label: label_text,
@@ -442,7 +441,6 @@ impl MirLowering for AstLoop {
 
                 let loop_node = MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration(MirLoop {
-                        state: None,
                         body: Box::new(body),
                         scope_id: scope,
                         label: label_text,
@@ -485,7 +483,6 @@ impl MirLowering for AstLoop {
 
                 let loop_node = MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration(MirLoop {
-                        state: None,
                         body: Box::new(body),
                         scope_id: scope,
                         label: label_text,
@@ -673,7 +670,6 @@ impl MirLowering for AstLoop {
 
                 let loop_node = MiddleNode {
                     node_type: MiddleNodeType::LoopDeclaration(MirLoop {
-                        state,
                         body: Box::new(body),
                         scope_id: scope,
                         label: label_text,
@@ -681,14 +677,15 @@ impl MirLowering for AstLoop {
                     span,
                 };
 
-                env.finish_loop_with_else(
+                Ok(MiddleNode::new(MiddleNodeType::ScopeDeclaration(MirScopeDecl { body: state.map(|x|x.nodes() ).unwrap_or_default().into_iter().chain(env.finish_loop_with_else(
                     loop_node,
                     scope,
                     span,
                     self.else_body,
                     temp_names.result,
                     temp_names.broke,
-                )
+                )?.nodes()).collect(), create_new_scope: false, is_temp: true, scope_id: scope }), span))
+                
             }
         }
     }

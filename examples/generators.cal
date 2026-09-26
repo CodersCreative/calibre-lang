@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - shorthand generator lowering
+// TODO Fix - FAILING - Expected list or string for index access, found: Null
 const count_up := fn (start end : int) -> gen:<int> => {
 	let mut i := start;
 	
@@ -13,7 +13,7 @@ const evens_from := fn (start : int) -> gen:<int> => {
 	let mut i := start;
 	
 	for  => {
-		if i % 2 = 0 => return i;
+		if (i % 2) = 0 => return i;
 		
 		i += 1;
 	};
@@ -24,17 +24,17 @@ const main := fn => {
 	for let .Some : value <- g.next() => print(value);
 	
 	let evens := fn(x for x in 0..20 if (x % 2) = 0);
-	print(evens.collect());
+	print([evens.collect()]);
 	
 	let odds := fn(x for x in 0..20 if (x % 2) != 0) -> gen:<int>;
 	print("odds " & odds.collect());
 	
-	let mapped := fn(x + 1 for x in 0..5).map(fn (x : int) -> int => return x * 10).collect();
-	print(mapped);
-	
-	let mut infinite := evens_from(0);
+	let mut infinite := evens_from(10);
 	
 	for i in 0..10 => {
 		print(infinite.next());
 	};
+
+	let mapped := fn(x + 1 for x in 0..5).map(fn (x : int) -> int => return x * 10).collect();
+	print([mapped]);
 };

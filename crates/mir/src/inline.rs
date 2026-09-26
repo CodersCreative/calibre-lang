@@ -121,10 +121,7 @@ fn inline_in_node(node: &mut MiddleNode, map: &UstrMap<InlineFn>) {
                 inline_in_node(v, map);
             }
         }
-        MiddleNodeType::LoopDeclaration(MirLoop { state, body, .. }) => {
-            if let Some(s) = state.as_mut() {
-                inline_in_node(s, map);
-            }
+        MiddleNodeType::LoopDeclaration(MirLoop { body, .. }) => {
             inline_in_node(body, map);
         }
         _ => {}

@@ -132,10 +132,7 @@ impl MiddleNode {
                     count += v.len();
                 }
             }
-            MiddleNodeType::LoopDeclaration(MirLoop { state, body, .. }) => {
-                if let Some(s) = state.as_ref() {
-                    count += s.len();
-                }
+            MiddleNodeType::LoopDeclaration(MirLoop { body, .. }) => {
                 count += body.len();
             }
             _ => {}
@@ -203,10 +200,7 @@ impl MiddleNode {
                     v.substitute(repl);
                 }
             }
-            MiddleNodeType::LoopDeclaration(MirLoop { state, body, .. }) => {
-                if let Some(s) = state.as_mut() {
-                    s.substitute(repl);
-                }
+            MiddleNodeType::LoopDeclaration(MirLoop {body, .. }) => {
                 body.substitute(repl);
             }
             MiddleNodeType::FieldAccess(MirField { base, .. }) => base.substitute(repl),
@@ -262,8 +256,8 @@ impl MiddleNode {
                 data_type: _,
                 values,
             }) => values.iter().any(|v| v.calls_self(name)),
-            MiddleNodeType::LoopDeclaration(MirLoop { state, body, .. }) => {
-                state.as_ref().is_some_and(|s| s.calls_self(name)) || body.calls_self(name)
+            MiddleNodeType::LoopDeclaration(MirLoop { body, .. }) => {
+                body.calls_self(name)
             }
             MiddleNodeType::FieldAccess(MirField { base, .. }) => base.calls_self(name),
             MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
@@ -405,7 +399,6 @@ pub struct MirRange {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirLoop {
-    pub state: Option<Box<MiddleNode>>,
     pub body: Box<MiddleNode>,
     pub scope_id: ScopeId,
     pub label: Option<Ustr>,
@@ -718,32 +711,13 @@ impl From<MiddleNodeType> for AstNodeType {
                 to: Box::new((*value.to).into()),
                 inclusive: value.inclusive,
             }),
-            MiddleNodeType::LoopDeclaration(value) => AstNodeType::ScopeDeclaration(AstScopeDef {
-                body: {
-                    let mut lst = Vec::new();
-
-                    if let Some(state) = value.state {
-                        lst.push((*state).into());
-                    }
-
-                    lst.push(AstNode::new(
-                        value.body.span,
-                        AstNodeType::LoopDeclaration(AstLoop {
+            MiddleNodeType::LoopDeclaration(value) => AstNodeType::LoopDeclaration(AstLoop {
                             loop_type: Box::new(LoopType::Loop),
                             body: Box::new((*value.body).into()),
                             until: None,
                             label: value.label.map(Into::into),
                             else_body: None,
                         }),
-                    ));
-
-                    Some(lst)
-                },
-                named: None,
-                is_temp: true,
-                create_new_scope: Some(false),
-                define: false,
-            }),
             MiddleNodeType::Return(value) => AstNodeType::Return(AstReturn {
                 value: value.value.map(|x| Box::new((*x).into())),
             }),

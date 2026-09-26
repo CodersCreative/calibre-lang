@@ -141,14 +141,10 @@ impl AlphaRenamable for MiddleNodeType {
                 to.rename(state);
             }
             MiddleNodeType::LoopDeclaration(MirLoop {
-                state: loop_state,
                 body,
                 scope_id: _,
                 label: _,
             }) => {
-                if let Some(s) = loop_state {
-                    s.rename(state);
-                }
                 body.rename(state);
             }
             MiddleNodeType::Return(MirReturn { value }) => {

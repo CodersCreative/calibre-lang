@@ -67,10 +67,7 @@ impl CalibreLanguageServer {
                         traverse(stmt, pos, text, current_scope, smallest_span);
                     }
                 }
-                MiddleNodeType::LoopDeclaration(MirLoop { state, body, .. }) => {
-                    if let Some(state) = state {
-                        traverse(state, pos, text, current_scope, smallest_span);
-                    }
+                MiddleNodeType::LoopDeclaration(MirLoop { body, .. }) => {
                     traverse(body, pos, text, current_scope, smallest_span);
                 }
                 MiddleNodeType::ListLiteral(MirList {
