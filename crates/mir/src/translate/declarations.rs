@@ -18,7 +18,7 @@ use calibre_parser::{
             assignment::AstAssignment,
             binary::{AsFailureMode, AstBinary},
             declaration::{AstDeclaration, AstDeclareDestructure},
-            functions::{AstCall, AstFunction},
+            functions::{AstCall, AstFunction, FunctionHeader},
             memory::AstRef,
             scopes::AstScopeDef,
         },
@@ -69,38 +69,21 @@ impl MiddleEnvironment {
     fn process_parameter_defaults(
         &mut self,
         scope: ScopeId,
-        span: Span,
-        header: &AstFunction,
+        header: &FunctionHeader,
         new_name: Ustr,
         identifier: Ustr,
     ) {
-        let defaults: Vec<FunctionParamDefault> = header
-            .header
-            .parameters
-            .iter()
-            .map(|(name, declared_ty, default)| FunctionParamDefault {
-                name: Ustr::from(&name.to_string()),
-                explicit_default: default
-                    .clone()
-                    .map(|node| Box::new(node.lower_or_empty(self, scope, span)))
-                    .map(|x| *x),
-                implicit_none: default.is_none()
-                    && matches!(
-                        declared_ty,
-                        Some(ParserDataType {
-                            data_type: ParserInnerType::Option(_),
-                            ..
-                        })
-                    ),
-            })
-            .collect();
+        let defaults = FunctionParamDefault::get(self, scope, header);
 
-        self.symbols
-            .function_param_defaults
-            .insert(new_name, defaults.clone());
-        self.symbols
-            .function_param_defaults
-            .insert(identifier, defaults);
+        if !defaults.is_empty() {
+            let index = self.context.increment_counter();
+
+            self.symbols.function_param_defaults.insert(index, defaults);
+            self.symbols.name_to_param_defaults.insert(new_name, index);
+            self.symbols
+                .name_to_param_defaults
+                .insert(identifier, index);
+        }
     }
 
     pub fn emit_destructure_statements(
@@ -320,7 +303,7 @@ impl MirLowering for AstDeclaration {
                 }
             }
 
-            env.process_parameter_defaults(scope, span, func, new_name, identifier);
+            env.process_parameter_defaults(scope, &func.header, new_name, identifier);
         }
 
         let node_ty = self.value.type_of(env, scope, span);

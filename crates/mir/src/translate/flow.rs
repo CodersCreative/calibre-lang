@@ -207,7 +207,7 @@ impl MirLowering for AstDefer {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         if self.function {
-            env.symbols.func_defers.push(*self.value);
+            env.symbols.function_defers.push(*self.value);
         } else {
             let scope_data = env.scoping.scope_mut_or_err(scope)?;
             scope_data.defers.push(*self.value);
@@ -451,7 +451,7 @@ impl MirLowering for AstReturn {
                         .scoping
                         .collect_defers_until(scope, None)
                         .into_iter()
-                        .chain(env.symbols.func_defers.clone().into_iter())
+                        .chain(env.symbols.function_defers.clone().into_iter())
                         .map(|x| x.lower_or_empty(env, scope, span))
                         .collect();
 

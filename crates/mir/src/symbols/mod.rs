@@ -1,10 +1,12 @@
-use crate::{ast::MiddleNode, scoping::ScopeId};
+use crate::{
+    ast::MiddleNode, environment::MiddleEnvironment, scoping::ScopeId, translate::MirLowering,
+};
 use calibre_parser::{
     Location,
     ast::{
         Operator,
         nodes::{AstNode, VarType, functions::FunctionHeader},
-        types::ParserDataType,
+        types::{ParserDataType, ParserInnerType},
     },
 };
 use rustc_hash::FxHashMap;
@@ -22,10 +24,12 @@ pub struct Symbols {
     pub native_mappings: UstrMap<Ustr>,
     pub overloads: Vec<MiddleOverload>,
     pub generic_fn_templates: UstrMap<(Vec<Ustr>, FunctionHeader, AstNode)>,
-    pub function_param_defaults: UstrMap<Vec<FunctionParamDefault>>,
-    pub fn_specializations: UstrMap<Ustr>,
     pub specialization_decls_by_scope: FxHashMap<ScopeId, Vec<MiddleNode>>,
-    pub func_defers: Vec<AstNode>,
+
+    pub name_to_param_defaults: UstrMap<usize>,
+    pub function_param_defaults: FxHashMap<usize, Vec<FunctionParamDefault>>,
+    pub function_specializations: UstrMap<Ustr>,
+    pub function_defers: Vec<AstNode>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -33,6 +37,33 @@ pub struct FunctionParamDefault {
     pub name: Ustr,
     pub explicit_default: Option<MiddleNode>,
     pub implicit_none: bool,
+}
+
+impl FunctionParamDefault {
+    pub fn get(env: &mut MiddleEnvironment, scope: ScopeId, header: &FunctionHeader) -> Vec<Self> {
+        header
+            .parameters
+            .iter()
+            .map(|(name, declared_ty, default)| FunctionParamDefault {
+                name: Ustr::from(&name.to_string()),
+                explicit_default: default
+                    .clone()
+                    .map(|node| {
+                        let span = node.span;
+                        Box::new(node.lower_or_empty(env, scope, span))
+                    })
+                    .map(|x| *x),
+                implicit_none: default.is_none()
+                    && matches!(
+                        declared_ty,
+                        Some(ParserDataType {
+                            data_type: ParserInnerType::Option(_),
+                            ..
+                        })
+                    ),
+            })
+            .collect()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

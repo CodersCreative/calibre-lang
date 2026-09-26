@@ -97,6 +97,7 @@ impl AlphaRenamable for MiddleNodeType {
                 memo: _,
                 memo_params,
                 pure: _,
+                default_args_id: _,
             }) => {
                 for param in parameters {
                     let new_name =

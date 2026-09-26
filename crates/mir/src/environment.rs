@@ -526,7 +526,7 @@ impl MiddleEnvironment {
         }
 
         for (original, specialized) in manifest.symbols.fn_specializations {
-            self.symbols.fn_specializations.insert(
+            self.symbols.function_specializations.insert(
                 rename_state.mapped_name_or_original(original),
                 rename_state.mapped_name_or_original(specialized),
             );

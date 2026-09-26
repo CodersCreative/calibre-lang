@@ -81,7 +81,7 @@ impl From<&Symbols> for ManifestSymbols {
             native_mappings: value.native_mappings.clone(),
             overloads: value.overloads.clone(),
             generic_fn_templates: value.generic_fn_templates.clone(),
-            fn_specializations: value.fn_specializations.clone(),
+            fn_specializations: value.function_specializations.clone(),
         }
     }
 }

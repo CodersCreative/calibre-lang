@@ -270,9 +270,6 @@ impl MiddleNode {
     }
 }
 
-// TODO split Data in the struct into their own structs
-// Have those structs implement a Translate trait in the LIR
-
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirBreak {
     pub label: Option<Ustr>,
@@ -476,6 +473,7 @@ pub struct MirFunction {
     pub body: Box<MiddleNode>,
     pub return_type: ParserDataType,
     pub scope_id: ScopeId,
+    pub default_args_id: Option<usize>,
     pub memo_params: Vec<Ustr>,
     pub memo: bool,
     pub pure: bool,

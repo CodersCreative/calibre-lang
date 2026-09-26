@@ -10,6 +10,7 @@ pub struct MiddleContext {
     pub package_metadata: Option<PackageMetadata>,
     pub type_check: bool,
     pub in_stdlib: Option<Ustr>,
+    pub counter: usize,
 }
 
 impl MiddleContext {
@@ -34,6 +35,12 @@ impl MiddleContext {
             .as_ref()
             .map(|loc| loc.span)
             .unwrap_or_default()
+    }
+
+    pub fn increment_counter(&mut self) -> usize {
+        let value = self.counter;
+        self.counter += 1;
+        value
     }
 
     pub fn err_at_current(&self, err: MiddleErr) -> MiddleErr {

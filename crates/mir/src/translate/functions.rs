@@ -6,7 +6,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::resolve::ResolutionOptions,
+    symbols::{FunctionParamDefault, resolve::ResolutionOptions},
     tags::TagInfo,
     translate::MirLowering,
 };
@@ -125,6 +125,7 @@ impl MiddleEnvironment {
                 ResolutionOptions::default().with_dollar(),
             )
             .ok()?;
+
         let resolved_name = self
             .resolve(scope, name, ResolutionOptions::idents())
             .map(|x| x.to_string());
@@ -132,10 +133,9 @@ impl MiddleEnvironment {
         let defaults_key = Ustr::from(resolved_name.as_deref().unwrap_or(name.as_str()));
         let defaults = self
             .symbols
-            .function_param_defaults
+            .name_to_param_defaults
             .get(&defaults_key)
-            .or_else(|| self.symbols.function_param_defaults.get(&name))
-            .cloned()?;
+            .and_then(|key| self.symbols.function_param_defaults.get(key).cloned())?;
 
         if !defaults
             .iter()
@@ -607,9 +607,10 @@ impl MirLowering for AstFunction {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
+        let default_params = FunctionParamDefault::get(env, scope, &self.header);
         let mut params = Vec::with_capacity(self.header.parameters.len());
         let mut param_idents = Vec::with_capacity(self.header.parameters.len());
-        let mut old_func_defers = std::mem::take(&mut env.symbols.func_defers);
+        let mut old_func_defers = std::mem::take(&mut env.symbols.function_defers);
         let new_scope = env.scoping.new_scope_from_parent_shallow(scope);
 
         let generic_params: Vec<Ustr> = self
@@ -633,6 +634,7 @@ impl MirLowering for AstFunction {
                 &param.0,
                 ResolutionOptions::default().with_dollar(),
             )?;
+
             let new_name =
                 Ustr::from(&ParserText::temp_name_with_suffix(og_name.trim(), span).text);
 
@@ -742,7 +744,7 @@ impl MirLowering for AstFunction {
 
         let body = body.lower(env, new_scope, span)?;
         let mut func_defers = Vec::new();
-        func_defers.append(&mut env.symbols.func_defers);
+        func_defers.append(&mut env.symbols.function_defers);
 
         let body = if let MiddleNodeType::ScopeDeclaration(MirScopeDecl {
             body: mut scope_body,
@@ -837,7 +839,7 @@ impl MirLowering for AstFunction {
         } else {
             body
         };
-        env.symbols.func_defers.append(&mut old_func_defers);
+        env.symbols.function_defers.append(&mut old_func_defers);
 
         let mut memo = false;
         let mut memo_params = Vec::new();
@@ -864,12 +866,23 @@ impl MirLowering for AstFunction {
             );
         }
 
+        let default_args_id = if default_params.is_empty() {
+            None
+        } else {
+            let index = env.context.increment_counter();
+            env.symbols
+                .function_param_defaults
+                .insert(index, default_params);
+            Some(index)
+        };
+
         let fn_node = MiddleNode {
             node_type: MiddleNodeType::FunctionDeclaration(MirFunction {
                 parameters: params.clone(),
                 body: Box::new(body.clone()),
                 return_type: return_type.clone(),
                 scope_id: new_scope,
+                default_args_id,
                 memo,
                 memo_params,
                 pure,
@@ -1054,6 +1067,8 @@ impl MirLowering for AstCall {
             self.reverse_args.clone(),
         );
 
+        let caller = self.caller.lower(env, scope, span)?;
+
         Ok(MiddleNode {
             node_type: MiddleNodeType::CallExpression(MirCall {
                 args: if let Some(lowered) = lowered_args {
@@ -1132,7 +1147,7 @@ impl MirLowering for AstCall {
                         _ => env.lower_call_args(scope, self.args, self.reverse_args),
                     }
                 },
-                caller: Box::new(self.caller.lower(env, scope, span)?),
+                caller: Box::new(caller),
             }),
             span,
         })
