@@ -660,46 +660,51 @@ impl MirLowering for AstImpl {
                 .insert(Ustr::from("Self"), resolved.data_type.clone())
         });
 
-        let mut statements = Vec::new();
+        let statements = self
+            .variables
+            .into_iter()
+            .filter_map(|var| {
+                let processed = match ProcessedVariable::process(
+                    env,
+                    scope,
+                    &resolved,
+                    generic_params,
+                    impl_key,
+                    var,
+                ) {
+                    Ok(Some(x)) => x,
+                    Ok(None) => return None,
+                    Err(e) => return Some(Err(e)),
+                };
 
-        for var in self.variables {
-            let processed = match ProcessedVariable::process(
-                env,
-                scope,
-                &resolved,
-                generic_params,
-                impl_key,
-                var,
-            )? {
-                Some(x) => x,
-                None => continue,
-            };
+                let dec = processed.node.lower_or_empty(env, scope, span);
 
-            let dec = processed.node.lower_or_empty(env, scope, span);
+                let new_name = match &dec.node_type {
+                    MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => {
+                        identifier
+                    }
+                    _ => {
+                        return Some(Err(MiddleErr::At(
+                            dec.span,
+                            Box::new(MiddleErr::InternalImplBodyNotVariableDeclaration),
+                        )));
+                    }
+                };
 
-            let new_name = match &dec.node_type {
-                MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => identifier,
-                _ => {
-                    return Err(MiddleErr::At(
-                        dec.span,
-                        Box::new(MiddleErr::InternalImplBodyNotVariableDeclaration),
-                    ));
+                if let Some(impl_ref) = env.typing.impls.get_mut(&impl_key) {
+                    impl_ref.insert_member(
+                        &processed.identifier,
+                        MiddleImplMember::new(
+                            *new_name,
+                            generic_params.clone(),
+                            processed.is_dependant,
+                        ),
+                    );
                 }
-            };
 
-            if let Some(impl_ref) = env.typing.impls.get_mut(&impl_key) {
-                impl_ref.insert_member(
-                    &processed.identifier,
-                    MiddleImplMember::new(
-                        *new_name,
-                        generic_params.clone(),
-                        processed.is_dependant,
-                    ),
-                );
-            }
-
-            statements.push(dec);
-        }
+                Some(Ok(dec))
+            })
+            .collect::<Result<Vec<_>, MiddleErr>>()?;
 
         generic_state.restore(env, scope, previous_self_type, None);
 
@@ -820,58 +825,63 @@ impl MirLowering for AstImplTrait {
             }
         }
 
-        let mut statements = Vec::new();
+        let statements = self
+            .variables
+            .into_iter()
+            .filter_map(|var| {
+                let processed = match ProcessedVariable::process(
+                    env,
+                    scope,
+                    &resolved_target,
+                    generic_params,
+                    impl_key,
+                    var,
+                ) {
+                    Ok(Some(x)) => x,
+                    Ok(None) => return None,
+                    Err(e) => return Some(Err(e)),
+                };
 
-        for var in self.variables {
-            let processed = match ProcessedVariable::process(
-                env,
-                scope,
-                &resolved_target,
-                generic_params,
-                impl_key,
-                var,
-            )? {
-                Some(x) => x,
-                None => continue,
-            };
+                let dec = processed.node.lower_or_empty(env, scope, span);
 
-            let dec = processed.node.lower_or_empty(env, scope, span);
+                let new_name = match &dec.node_type {
+                    MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => {
+                        identifier
+                    }
+                    _ => {
+                        return Some(Err(MiddleErr::At(
+                            dec.span,
+                            Box::new(MiddleErr::InternalImplBodyNotVariableDeclaration),
+                        )));
+                    }
+                };
 
-            let new_name = match &dec.node_type {
-                MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => identifier,
-                _ => {
-                    return Err(MiddleErr::At(
-                        dec.span,
-                        Box::new(MiddleErr::InternalImplBodyNotVariableDeclaration),
-                    ));
-                }
-            };
+                if let Some(impl_ref) = env.typing.impls.get_mut(&impl_key) {
+                    impl_ref.insert_member(
+                        &processed.identifier,
+                        MiddleImplMember::new(
+                            *new_name,
+                            generic_params.clone(),
+                            processed.is_dependant,
+                        ),
+                    );
 
-            if let Some(impl_ref) = env.typing.impls.get_mut(&impl_key) {
-                impl_ref.insert_member(
-                    &processed.identifier,
-                    MiddleImplMember::new(
-                        *new_name,
-                        generic_params.clone(),
-                        processed.is_dependant,
-                    ),
-                );
+                    if !impl_ref.traits.contains(&resolved_trait) {
+                        impl_ref.traits.push(resolved_trait);
+                    }
 
-                if !impl_ref.traits.contains(&resolved_trait) {
-                    impl_ref.traits.push(resolved_trait);
-                }
-
-                if let Some(trait_def) = env.typing.trait_defs.get(&resolved_trait) {
-                    for implied in &trait_def.implied_traits {
-                        if !impl_ref.traits.contains(implied) {
-                            impl_ref.traits.push(*implied);
+                    if let Some(trait_def) = env.typing.trait_defs.get(&resolved_trait) {
+                        for implied in &trait_def.implied_traits {
+                            if !impl_ref.traits.contains(implied) {
+                                impl_ref.traits.push(*implied);
+                            }
                         }
                     }
                 }
-            }
 
-            statements.push(dec);
-        }
+                Some(Ok(dec))
+            })
+            .collect::<Result<Vec<_>, MiddleErr>>()?;
 
         generic_state.restore(env, scope, previous_self_type, previous_self_mapping);
 

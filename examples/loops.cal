@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Expected bool found int within the VM?
+// TODO Fix - FAILING - Invalid function call: Null
 import range from std::random;
 
 const main := fn => {

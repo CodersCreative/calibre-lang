@@ -1078,7 +1078,7 @@ impl MirLowering for AstCall {
             self.reverse_args.push(x);
         }
 
-        let caller = self.caller.lower(env, scope, span)?;
+        let caller = self.caller.lower(env, scope, span).unwrap();
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::CallExpression(MirCall {

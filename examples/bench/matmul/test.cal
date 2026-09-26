@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Unexpected type in index access 23[50]
+// TODO Fix - FAILING - Invalid binary operation: 0f * null
 const matmul := fn (n : int, a b : list:<list:<float>>) -> list:<list:<float>> => {
 	let mut c := list:<list:<float>>[];
 	

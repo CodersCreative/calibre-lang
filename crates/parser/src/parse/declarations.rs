@@ -44,7 +44,7 @@ impl<'a> AstParser<'a> for AstDeclaration {
                     .or_not(),
             )
             .then(
-                choice((select! { Token::Eq => () }, select! { Token::Walrus => () }))
+                choice((select! { Token::Eq => () }, select! { Token::Walrus => () })).padded_by(potential_new_line())
                     .ignore_then(data.node.clone())
                     .or_not(),
             )

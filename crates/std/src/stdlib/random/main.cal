@@ -14,7 +14,7 @@ const range := fn (min max : int, inclusive : bool = false) -> int => {
 };
 
 const float_range := fn (min max : int) -> float => {
-	if max <= min => return min else => return rand(min..max);
+	if max <= min => return min as! float else => return rand(min..max);
 };
 
 const choice := fn <T> (values : list:<T>) -> T? => {

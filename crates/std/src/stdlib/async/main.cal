@@ -38,12 +38,12 @@ impl WaitGroup {
 
 	const raw_done := fn (self : &mut WaitGroup) => waitgroup_raw_done(self if !(self.* is WaitGroup) else self.inner);
 
-	const join :=
-		fn (self : &mut WaitGroup, other : WaitGroup) => waitgroup_join(self if !(self.* is WaitGroup) else self.inner, other if !(other.* is WaitGroup) else other.inner);
-
 	const wait := fn (self : &WaitGroup) => waitgroup_wait(self if !(self.* is WaitGroup) else self.inner);
 
 	const count := fn (self : &WaitGroup) -> int => return waitgroup_count(self if !(self.* is WaitGroup) else self.inner);
+
+	const join :=
+		fn (self : &mut WaitGroup, other : WaitGroup) => waitgroup_join(self if !(self.* is WaitGroup) else self.inner, other if !(other is WaitGroup) else other.inner);
 };
 
 impl<T> Mutex:<T> {

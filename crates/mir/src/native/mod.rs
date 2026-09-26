@@ -195,6 +195,7 @@ impl MiddleEnvironment {
 
         let mut add = |name, load| self.setup_std_module(scope, Ustr::from(name), load);
 
+        // TODO Fix stdlib modules that arent auto-loaded not being imported properly later.
         add("traits", true);
         add("thread", true);
         add("libc", true);
