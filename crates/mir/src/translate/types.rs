@@ -21,7 +21,7 @@ use calibre_parser::{
             misc::AstTag,
             types::{AstImpl, AstImplTrait, AstTrait, AstType, TraitMemberKind, TypeDefType},
         },
-        types::{ParserDataType, ParserInnerType},
+        types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
 use tracing::instrument;
@@ -381,25 +381,28 @@ impl MirLowering for AstTrait {
     }
 }
 
-impl MirLowering for AstImpl {
-    #[instrument(skip_all)]
-    fn lower(
-        self,
+struct GenericParamState {
+    params: Vec<Ustr>,
+    prev_mappings: Vec<(Ustr, Option<Ustr>)>,
+}
+
+impl GenericParamState {
+    fn setup(
         env: &mut MiddleEnvironment,
         scope: ScopeId,
-        span: Span,
-    ) -> Result<MiddleNode, MiddleErr> {
-        let mut prev_generics = Vec::new();
+        generics: &GenericTypes,
+    ) -> Result<Self, MiddleErr> {
+        let mut prev_mappings = Vec::new();
+
         if let Ok(scope_ref) = env.scoping.scope_mut_or_err(scope) {
-            for generic in self.generics.0.iter() {
+            for generic in generics.0.iter() {
                 let name = Ustr::from(&generic.identifier.to_string());
-                prev_generics.push((name, scope_ref.mappings.get(&name).cloned()));
+                prev_mappings.push((name, scope_ref.mappings.get(&name).cloned()));
                 scope_ref.mappings.insert(name, name);
             }
         }
 
-        let generic_params: Vec<Ustr> = self
-            .generics
+        let params: Vec<Ustr> = generics
             .0
             .iter()
             .map(|g| {
@@ -412,131 +415,84 @@ impl MirLowering for AstImpl {
             })
             .collect();
 
-        if !generic_params.is_empty() {
-            env.scoping.push_generic_params(generic_params.clone());
+        if !params.is_empty() {
+            env.scoping.push_generic_params(params.clone());
         }
 
-        let resolved = env
-            .resolve_data_type(scope, &self.target, ResolutionOptions::typing())
-            .unwrap()
-            .unwrap_all_refs();
+        Ok(GenericParamState {
+            params,
+            prev_mappings,
+        })
+    }
 
-        let impl_key = Ustr::from(&resolved.impl_name());
+    fn restore(
+        self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        previous_self_type: Option<ParserInnerType>,
+        previous_self_mapping: Option<Ustr>,
+    ) {
+        let scope = env.scoping.scope_mut_or_err(scope);
 
-        env.typing
-            .get_or_create_impl(impl_key, env.context.current_location.clone());
-
-        {
-            let placeholders = self
-                .variables
-                .iter()
-                .filter_map(|var| {
-                    if let AstNodeType::VariableDeclaration(AstDeclaration { identifier, .. }) =
-                        &var.node_type
-                    {
-                        let identifier = env
-                            .resolve(
-                                scope,
-                                identifier,
-                                ResolutionOptions::default().with_dollar(),
-                            )
-                            .ok()?;
-
-                        let resolved_iden = Ustr::from(&format!("{}.{}", impl_key, identifier));
-
-                        Some((identifier, resolved_iden, generic_params.clone()))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-
-            let type_defs = self
-                .variables
-                .iter()
-                .filter_map(|var| {
-                    if let AstNodeType::TypeDeclaration(AstType {
-                        identifier, object, ..
-                    }) = &var.node_type
-                    {
-                        let ident = env
-                            .resolve(
-                                scope,
-                                identifier.get_ident(),
-                                ResolutionOptions::default().with_dollar(),
-                            )
-                            .ok()?;
-                        if let TypeDefType::NewType(inner) = object {
-                            let resolved_ty = env
-                                .resolve_data_type(
-                                    scope,
-                                    inner.as_ref(),
-                                    ResolutionOptions::typing(),
-                                )
-                                .ok()?
-                                .unwrap_all_refs();
-                            Some((ident, resolved_ty))
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-
-            let impl_ref = env.typing.impls.get_mut(&impl_key).ok_or_else(|| {
-                MiddleErr::At(
-                    span,
-                    Box::new(MiddleErr::InternalMissingImpl(format!("{impl_key:?}"))),
-                )
-            })?;
-
-            for var in placeholders {
-                impl_ref.insert_member_placeholder(&var.0, var.1, var.2);
+        if let Ok(scope) = scope {
+            if let Some(prev) = previous_self_type {
+                scope.type_mappings.insert(Ustr::from("Self"), prev);
             }
 
-            for (ident, ty) in type_defs {
-                impl_ref.assoc_types.insert(ident, ty);
+            if let Some(prev) = previous_self_mapping {
+                scope.mappings.insert(Ustr::from("Self"), prev);
+            }
+
+            for (name, prev) in self.prev_mappings {
+                if let Some(prev) = prev {
+                    scope.mappings.insert(name, prev);
+                } else {
+                    scope.mappings.remove(&name);
+                }
+            }
+
+            if !self.params.is_empty() {
+                env.scoping.pop_generic_params();
             }
         }
+    }
+}
 
-        let previous_self_type = {
-            let scope = env.scoping.scope_mut_or_err(scope)?;
+struct ProcessedVariable {
+    node: AstNode,
+    identifier: Ustr,
+    is_dependant: bool,
+}
 
-            scope
-                .type_mappings
-                .insert(Ustr::from("Self"), resolved.data_type.clone())
-        };
+impl ProcessedVariable {
+    fn process(
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        resolved_target: &ParserDataType,
+        generic_params: &[Ustr],
+        impl_key: Ustr,
+        var: AstNode,
+    ) -> Result<Option<Self>, MiddleErr> {
+        let span = var.span;
 
-        let mut statements = Vec::new();
+        match var.node_type {
+            AstNodeType::VariableDeclaration(AstDeclaration {
+                var_type,
+                identifier,
+                value,
+                data_type,
+            }) => {
+                let identifier = env.resolve(
+                    scope,
+                    &identifier,
+                    ResolutionOptions::default().with_dollar(),
+                )?;
+                let resolved_iden = format!("{}.{}", impl_key, identifier);
 
-        fn process_var(
-            env: &mut MiddleEnvironment,
-            scope: ScopeId,
-            resolved: &ParserDataType,
-            generic_params: &[Ustr],
-            var: AstNode,
-        ) -> Result<Option<(AstNode, Ustr, bool)>, MiddleErr> {
-            match var.node_type {
-                AstNodeType::VariableDeclaration(AstDeclaration {
-                    var_type,
-                    identifier,
-                    value,
-                    data_type,
-                }) => {
-                    let identifier = env.resolve(
-                        scope,
-                        &identifier,
-                        ResolutionOptions::default().with_dollar(),
-                    )?;
-                    let resolved_iden = format!("{}.{}", resolved.impl_name(), identifier);
-
-                    let dependant = match &value.node_type {
-                        AstNodeType::FunctionDeclaration(AstFunction { header, .. }) => {
-                            let param_type = if let Some(Some(param)) =
-                                header.parameters.first().map(|x| &x.1)
-                            {
+                let is_dependant = match &value.node_type {
+                    AstNodeType::FunctionDeclaration(AstFunction { header, .. }) => {
+                        let param_type =
+                            if let Some(Some(param)) = header.parameters.first().map(|x| &x.1) {
                                 env.resolve_data_type(scope, param, ResolutionOptions::typing())
                                     .ok()
                                     .map(|x| x.unwrap_all_refs())
@@ -549,72 +505,177 @@ impl MirLowering for AstImpl {
                                 None
                             };
 
-                            if let Some(param_type) = param_type {
-                                resolved.data_type.matches(
-                                    &param_type.data_type,
-                                    &generic_params
-                                        .iter()
-                                        .map(|x| x.as_ref())
-                                        .collect::<Vec<_>>(),
-                                )
-                            } else {
-                                false
-                            }
+                        if let Some(param_type) = param_type {
+                            resolved_target.data_type.matches(
+                                &param_type.data_type,
+                                &generic_params
+                                    .iter()
+                                    .map(|x| x.as_ref())
+                                    .collect::<Vec<_>>(),
+                            )
+                        } else {
+                            false
                         }
-                        _ => false,
-                    };
+                    }
+                    _ => false,
+                };
 
-                    Ok(Some((
-                        AstNode {
-                            span: var.span,
-                            node_type: AstNodeType::VariableDeclaration(AstDeclaration {
-                                var_type,
-                                identifier: PotentialDollarIdentifier::Identifier(
-                                    ParserText::from(resolved_iden),
-                                ),
-                                value,
-                                data_type,
-                            }),
-                        },
-                        identifier,
-                        dependant,
-                    )))
-                }
-                AstNodeType::Tag(AstTag {
-                    node,
-                    tag,
-                    arguments,
-                }) => match process_var(env, scope, resolved, generic_params, *node) {
-                    Ok(Some(x)) => Ok(Some((
-                        AstNode::new(
+                Ok(Some(ProcessedVariable {
+                    node: AstNode {
+                        span,
+                        node_type: AstNodeType::VariableDeclaration(AstDeclaration {
+                            var_type,
+                            identifier: PotentialDollarIdentifier::Identifier(ParserText::from(
+                                resolved_iden,
+                            )),
+                            value,
+                            data_type,
+                        }),
+                    },
+                    identifier,
+                    is_dependant,
+                }))
+            }
+            AstNodeType::Tag(AstTag {
+                node,
+                tag,
+                arguments,
+            }) => {
+                if let Some(inner) =
+                    Self::process(env, scope, resolved_target, generic_params, impl_key, *node)?
+                {
+                    Ok(Some(ProcessedVariable {
+                        node: AstNode::new(
                             Span::default(),
                             AstNodeType::Tag(AstTag {
-                                node: Box::new(x.0),
+                                node: Box::new(inner.node),
                                 tag,
                                 arguments,
                             }),
                         ),
-                        x.1,
-                        x.2,
-                    ))),
-                    x => x,
-                },
-                AstNodeType::TypeDeclaration { .. } => Ok(None),
-                _ => Err(MiddleErr::At(
-                    var.span,
-                    Box::new(MiddleErr::InternalExpectedVariableInImpl),
-                )),
+                        identifier: inner.identifier,
+                        is_dependant: inner.is_dependant,
+                    }))
+                } else {
+                    Ok(None)
+                }
+            }
+            AstNodeType::TypeDeclaration { .. } => Ok(None),
+            _ => Err(MiddleErr::At(
+                span,
+                Box::new(MiddleErr::InternalExpectedVariableInImpl),
+            )),
+        }
+    }
+}
+
+impl MirLowering for AstImpl {
+    #[instrument(skip_all)]
+    fn lower(
+        self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Result<MiddleNode, MiddleErr> {
+        let generic_state = GenericParamState::setup(env, scope, &self.generics)?;
+        let generic_params = &generic_state.params;
+
+        let resolved = env
+            .resolve_data_type(scope, &self.target, ResolutionOptions::typing())
+            .unwrap()
+            .unwrap_all_refs();
+
+        let impl_key = Ustr::from(&resolved.impl_name());
+
+        env.typing
+            .get_or_create_impl(impl_key, env.context.current_location.clone());
+
+        let placeholders: Vec<_> = self
+            .variables
+            .iter()
+            .filter_map(|var| {
+                if let AstNodeType::VariableDeclaration(AstDeclaration { identifier, .. }) =
+                    &var.node_type
+                {
+                    let identifier = env
+                        .resolve(
+                            scope,
+                            identifier,
+                            ResolutionOptions::default().with_dollar(),
+                        )
+                        .ok()?;
+
+                    let resolved_iden = Ustr::from(&format!("{}.{}", impl_key, identifier));
+
+                    Some((identifier, resolved_iden, generic_params.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let type_defs: Vec<_> = self
+            .variables
+            .iter()
+            .filter_map(|var| {
+                if let AstNodeType::TypeDeclaration(AstType {
+                    identifier, object, ..
+                }) = &var.node_type
+                {
+                    let ident = env
+                        .resolve(
+                            scope,
+                            identifier.get_ident(),
+                            ResolutionOptions::default().with_dollar(),
+                        )
+                        .ok()?;
+                    if let TypeDefType::NewType(inner) = object {
+                        let resolved_ty = env
+                            .resolve_data_type(scope, inner.as_ref(), ResolutionOptions::typing())
+                            .ok()?
+                            .unwrap_all_refs();
+                        Some((ident, resolved_ty))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if let Some(impl_ref) = env.typing.impls.get_mut(&impl_key) {
+            for var in placeholders {
+                impl_ref.insert_member_placeholder(&var.0, var.1, var.2);
+            }
+
+            for (ident, ty) in type_defs {
+                impl_ref.assoc_types.insert(ident, ty);
             }
         }
 
-        for var in self.variables {
-            let (dec, iden, dependant) =
-                match process_var(env, scope, &resolved, &generic_params, var)? {
-                    Some(x) => x,
-                    None => continue,
-                };
+        let previous_self_type = env.scoping.scope_mut_or_err(scope).ok().and_then(|scope| {
+            scope
+                .type_mappings
+                .insert(Ustr::from("Self"), resolved.data_type.clone())
+        });
 
-            let dec = dec.lower_or_empty(env, scope, span);
+        let mut statements = Vec::new();
+
+        for var in self.variables {
+            let processed = match ProcessedVariable::process(
+                env,
+                scope,
+                &resolved,
+                generic_params,
+                impl_key,
+                var,
+            )? {
+                Some(x) => x,
+                None => continue,
+            };
+
+            let dec = processed.node.lower_or_empty(env, scope, span);
 
             let new_name = match &dec.node_type {
                 MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => identifier,
@@ -626,42 +687,21 @@ impl MirLowering for AstImpl {
                 }
             };
 
-            env.typing
-                .impls
-                .get_mut(&impl_key)
-                .ok_or_else(|| {
-                    MiddleErr::At(
-                        dec.span,
-                        Box::new(MiddleErr::InternalMissingImpl(format!("{impl_key:?}"))),
-                    )
-                })?
-                .insert_member(
-                    &iden,
-                    MiddleImplMember::new(*new_name, generic_params.clone(), dependant),
+            if let Some(impl_ref) = env.typing.impls.get_mut(&impl_key) {
+                impl_ref.insert_member(
+                    &processed.identifier,
+                    MiddleImplMember::new(
+                        *new_name,
+                        generic_params.clone(),
+                        processed.is_dependant,
+                    ),
                 );
+            }
 
             statements.push(dec);
         }
 
-        {
-            let scope = env.scoping.scope_mut_or_err(scope)?;
-
-            if let Some(prev) = previous_self_type {
-                scope.type_mappings.insert(Ustr::from("Self"), prev);
-            }
-
-            for (name, prev) in prev_generics {
-                if let Some(prev) = prev {
-                    scope.mappings.insert(name, prev);
-                } else {
-                    scope.mappings.remove(&name);
-                }
-            }
-
-            if !generic_params.is_empty() {
-                env.scoping.pop_generic_params();
-            }
-        }
+        generic_state.restore(env, scope, previous_self_type, None);
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
@@ -683,32 +723,8 @@ impl MirLowering for AstImplTrait {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let mut prev_generics = Vec::new();
-        if let Ok(scope_ref) = env.scoping.scope_mut_or_err(scope) {
-            for generic in self.generics.0.iter() {
-                let name = Ustr::from(&generic.identifier.to_string());
-                prev_generics.push((name, scope_ref.mappings.get(&name).cloned()));
-                scope_ref.mappings.insert(name, name);
-            }
-        }
-
-        let generic_params: Vec<Ustr> = self
-            .generics
-            .0
-            .iter()
-            .map(|g| {
-                env.resolve(
-                    scope,
-                    &g.identifier,
-                    ResolutionOptions::default().with_dollar(),
-                )
-                .unwrap_or(Ustr::from(&g.identifier.to_string()))
-            })
-            .collect();
-
-        if !generic_params.is_empty() {
-            env.scoping.push_generic_params(generic_params.clone());
-        }
+        let generic_state = GenericParamState::setup(env, scope, &self.generics)?;
+        let generic_params = &generic_state.params;
 
         let resolved_trait = env.resolve(scope, &self.trait_ident, ResolutionOptions::typing())?;
 
@@ -754,16 +770,19 @@ impl MirLowering for AstImplTrait {
             ));
         }
 
-        let (previous_self, previous_self_type) = {
-            let scope = env.scoping.scope_mut_or_err(scope)?;
-
-            (
-                scope.mappings.insert(Ustr::from("Self"), impl_key),
-                scope
-                    .type_mappings
-                    .insert(Ustr::from("Self"), resolved_target.data_type.clone()),
-            )
-        };
+        let (previous_self_mapping, previous_self_type) = env
+            .scoping
+            .scope_mut_or_err(scope)
+            .ok()
+            .map(|scope| {
+                (
+                    scope.mappings.insert(Ustr::from("Self"), impl_key),
+                    scope
+                        .type_mappings
+                        .insert(Ustr::from("Self"), resolved_target.data_type.clone()),
+                )
+            })
+            .unwrap_or((None, None));
 
         env.typing
             .get_or_create_impl(impl_key, env.context.current_location.clone());
@@ -780,25 +799,13 @@ impl MirLowering for AstImplTrait {
                     ResolutionOptions::default().with_dollar(),
                 )?;
 
-                let impl_ref = env.typing.impls.get_mut(&impl_key).ok_or_else(|| {
-                    MiddleErr::At(
-                        span,
-                        Box::new(MiddleErr::InternalMissingImpl(format!("{impl_key:?}"))),
-                    )
-                })?;
-
-                impl_ref.assoc_types.insert(ident, resolved_ty);
+                if let Some(impl_ref) = env.typing.impls.get_mut(&impl_key) {
+                    impl_ref.assoc_types.insert(ident, resolved_ty);
+                }
             }
         }
 
-        {
-            let impl_ref = env.typing.impls.get_mut(&impl_key).ok_or_else(|| {
-                MiddleErr::At(
-                    span,
-                    Box::new(MiddleErr::InternalMissingImpl(format!("{impl_key:?}"))),
-                )
-            })?;
-
+        if let Some(impl_ref) = env.typing.impls.get_mut(&impl_key) {
             for var in &self.variables {
                 if let AstNodeType::VariableDeclaration(AstDeclaration { identifier, .. }) =
                     &var.node_type
@@ -816,112 +823,49 @@ impl MirLowering for AstImplTrait {
         let mut statements = Vec::new();
 
         for var in self.variables {
-            let (dec, iden, dependant) = match var.node_type {
-                AstNodeType::VariableDeclaration(AstDeclaration {
-                    var_type,
-                    identifier,
-                    value,
-                    data_type,
-                }) => {
-                    // TODO Deal with dollar ident
-                    let iden = identifier.to_string();
-                    let resolved_iden = format!("{}.{}", impl_key, identifier);
-
-                    let dependant = match &value.node_type {
-                        AstNodeType::FunctionDeclaration(AstFunction { header, .. }) => {
-                            let param_type = if let Some(Some(param)) =
-                                header.parameters.first().map(|x| &x.1)
-                            {
-                                Some(
-                                    env.resolve_data_type(
-                                        scope,
-                                        param,
-                                        ResolutionOptions::typing(),
-                                    )?
-                                    .unwrap_all_refs(),
-                                )
-                            } else if let Some(Some(node)) =
-                                header.parameters.first().map(|x| x.2.clone())
-                            {
-                                env.resolve_type_from_node(scope, &node)
-                                    .map(|x| x.unwrap_all_refs())
-                            } else {
-                                None
-                            };
-
-                            if let Some(param_type) = param_type {
-                                resolved_target.data_type.matches(
-                                    &param_type.data_type,
-                                    &generic_params
-                                        .iter()
-                                        .map(|x| x.as_ref())
-                                        .collect::<Vec<_>>(),
-                                )
-                            } else {
-                                false
-                            }
-                        }
-                        _ => false,
-                    };
-
-                    (
-                        AstNode {
-                            span: var.span,
-                            node_type: AstNodeType::VariableDeclaration(AstDeclaration {
-                                var_type,
-                                identifier: PotentialDollarIdentifier::Identifier(
-                                    ParserText::from(resolved_iden),
-                                ),
-                                value,
-                                data_type,
-                            }),
-                        },
-                        iden,
-                        dependant,
-                    )
-                }
-                AstNodeType::TypeDeclaration { .. } => {
-                    continue;
-                }
-                _ => {
-                    return Err(MiddleErr::At(
-                        var.span,
-                        Box::new(MiddleErr::InternalExpectedVariableInImpl),
-                    ));
-                }
+            let processed = match ProcessedVariable::process(
+                env,
+                scope,
+                &resolved_target,
+                generic_params,
+                impl_key,
+                var,
+            )? {
+                Some(x) => x,
+                None => continue,
             };
 
-            let dec = dec.lower_or_empty(env, scope, span);
+            let dec = processed.node.lower_or_empty(env, scope, span);
 
             let new_name = match &dec.node_type {
                 MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => identifier,
                 _ => {
                     return Err(MiddleErr::At(
-                        var.span,
+                        dec.span,
                         Box::new(MiddleErr::InternalImplBodyNotVariableDeclaration),
                     ));
                 }
             };
 
-            let impl_ref = env.typing.impls.get_mut(&impl_key).ok_or_else(|| {
-                MiddleErr::At(
-                    var.span,
-                    Box::new(MiddleErr::InternalMissingImpl(format!("{impl_key:?}"))),
-                )
-            })?;
+            if let Some(impl_ref) = env.typing.impls.get_mut(&impl_key) {
+                impl_ref.insert_member(
+                    &processed.identifier,
+                    MiddleImplMember::new(
+                        *new_name,
+                        generic_params.clone(),
+                        processed.is_dependant,
+                    ),
+                );
 
-            impl_ref.insert_member(
-                &iden,
-                MiddleImplMember::new(*new_name, generic_params.clone(), dependant),
-            );
-            if !impl_ref.traits.contains(&resolved_trait) {
-                impl_ref.traits.push(resolved_trait);
-            }
+                if !impl_ref.traits.contains(&resolved_trait) {
+                    impl_ref.traits.push(resolved_trait);
+                }
 
-            if let Some(trait_def) = env.typing.trait_defs.get(&resolved_trait) {
-                for implied in &trait_def.implied_traits {
-                    if !impl_ref.traits.contains(implied) {
-                        impl_ref.traits.push(*implied);
+                if let Some(trait_def) = env.typing.trait_defs.get(&resolved_trait) {
+                    for implied in &trait_def.implied_traits {
+                        if !impl_ref.traits.contains(implied) {
+                            impl_ref.traits.push(*implied);
+                        }
                     }
                 }
             }
@@ -929,29 +873,7 @@ impl MirLowering for AstImplTrait {
             statements.push(dec);
         }
 
-        {
-            let scope = env.scoping.scope_mut_or_err(scope)?;
-
-            if let Some(prev) = previous_self {
-                scope.mappings.insert(Ustr::from("Self"), prev);
-            }
-
-            if let Some(prev) = previous_self_type {
-                scope.type_mappings.insert(Ustr::from("Self"), prev);
-            }
-
-            for (name, prev) in prev_generics {
-                if let Some(prev) = prev {
-                    scope.mappings.insert(name, prev);
-                } else {
-                    scope.mappings.remove(&name);
-                }
-            }
-
-            if !generic_params.is_empty() {
-                env.scoping.pop_generic_params();
-            }
-        }
+        generic_state.restore(env, scope, previous_self_type, previous_self_mapping);
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {

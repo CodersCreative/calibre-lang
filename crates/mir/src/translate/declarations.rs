@@ -29,6 +29,80 @@ use tracing::instrument;
 use ustr::Ustr;
 
 impl MiddleEnvironment {
+    fn handle_function_template(
+        &mut self,
+        scope: ScopeId,
+        header: &AstFunction,
+        new_name: Ustr,
+    ) -> bool {
+        if header.header.generics.0.is_empty() {
+            return false;
+        }
+
+        let template_params: Vec<Ustr> = header
+            .header
+            .generics
+            .0
+            .iter()
+            .map(|g| {
+                self.resolve(
+                    scope,
+                    &g.identifier,
+                    ResolutionOptions::default().with_dollar(),
+                )
+            })
+            .collect::<Result<Vec<_>, MiddleErr>>()
+            .unwrap_or_default();
+
+        self.symbols
+            .generic_fn_templates
+            .entry(new_name)
+            .or_insert((
+                template_params,
+                header.header.clone(),
+                (*header.body).clone(),
+            ));
+
+        true
+    }
+
+    fn process_parameter_defaults(
+        &mut self,
+        scope: ScopeId,
+        span: Span,
+        header: &AstFunction,
+        new_name: Ustr,
+        identifier: Ustr,
+    ) {
+        let defaults: Vec<FunctionParamDefault> = header
+            .header
+            .parameters
+            .iter()
+            .map(|(name, declared_ty, default)| FunctionParamDefault {
+                name: Ustr::from(&name.to_string()),
+                explicit_default: default
+                    .clone()
+                    .map(|node| Box::new(node.lower_or_empty(self, scope, span)))
+                    .map(|x| *x),
+                implicit_none: default.is_none()
+                    && matches!(
+                        declared_ty,
+                        Some(ParserDataType {
+                            data_type: ParserInnerType::Option(_),
+                            ..
+                        })
+                    ),
+            })
+            .collect();
+
+        self.symbols
+            .function_param_defaults
+            .insert(new_name, defaults.clone());
+        self.symbols
+            .function_param_defaults
+            .insert(identifier, defaults);
+    }
+
     pub fn emit_destructure_statements(
         &self,
         tmp_ident: &PotentialDollarIdentifier,
@@ -189,26 +263,25 @@ impl MirLowering for AstDeclaration {
 
         let new_name = Ustr::from(&ParserText::temp_name_with_suffix(identifier.trim(), span).text);
 
-        // TODO Remove clone, this function gets called a lot in a project and cloning the value each time is highkey atrocious
         if let AstNodeType::CallExpression(AstCall {
             caller,
             generic_types,
             args,
             reverse_args,
             ..
-        }) = self.value.clone().node_type
+        }) = &self.value.node_type
             && let AstNodeType::Identifier(callee_ident) = &caller.node_type
             && callee_ident.value.get_ident().text() == identifier
-            && let Some(first_arg) = args.first().cloned().map(|a| -> AstNode { a.into() })
+            && let Some(first_arg) = args.first()
         {
-            let first_ty =
-                env.resolve_type_from_node(scope, &first_arg).or_else(|| {
-                    match &first_arg.node_type {
-                        AstNodeType::RefStatement(AstRef { value, .. }) => {
-                            env.resolve_type_from_node(scope, value.as_ref())
-                        }
-                        _ => None,
+            let first_arg_node: AstNode = first_arg.clone().into();
+            let first_ty = env
+                .resolve_type_from_node(scope, &first_arg_node)
+                .or_else(|| match &first_arg_node.node_type {
+                    AstNodeType::RefStatement(AstRef { value, .. }) => {
+                        env.resolve_type_from_node(scope, value.as_ref())
                     }
+                    _ => None,
                 });
 
             if let Some(first_ty) = first_ty
@@ -223,46 +296,20 @@ impl MirLowering for AstDeclaration {
                     AstNodeType::CallExpression(AstCall {
                         string_fn: None,
                         caller: Box::new(AstNode::identifier(self.value.span, mapped_name)),
-                        generic_types,
-                        args,
-                        reverse_args,
+                        generic_types: generic_types.clone(),
+                        args: args.clone(),
+                        reverse_args: reverse_args.clone(),
                     }),
                 );
             }
         }
 
-        let function_decl = match &self.value.node_type {
-            AstNodeType::FunctionDeclaration(AstFunction { header, body, .. }) => {
-                Some((header, body))
-            }
-            _ => None,
-        };
+        let mut is_function = false;
 
-        if let Some((header, body)) = function_decl
-            && !header.generics.0.is_empty()
-        {
-            let template_params: Vec<Ustr> = header
-                .generics
-                .0
-                .iter()
-                .map(|g| {
-                    env.resolve(
-                        scope,
-                        &g.identifier,
-                        ResolutionOptions::default().with_dollar(),
-                    )
-                })
-                .collect::<Result<Vec<_>, MiddleErr>>()
-                .unwrap_or_default();
+        if let AstNodeType::FunctionDeclaration(func) = &self.value.node_type {
+            is_function = true;
+            env.handle_function_template(scope, func, new_name);
 
-            env.symbols.generic_fn_templates.entry(new_name).or_insert((
-                template_params,
-                (*header).clone(),
-                (**body).clone(),
-            ));
-        }
-
-        if let Some((header, _)) = function_decl {
             for tag in &env.tagging.tag_info {
                 match tag {
                     TagInfo::Init(priority) => {
@@ -273,32 +320,7 @@ impl MirLowering for AstDeclaration {
                 }
             }
 
-            let defaults: Vec<FunctionParamDefault> = header
-                .parameters
-                .iter()
-                .map(|(name, declared_ty, default)| FunctionParamDefault {
-                    name: Ustr::from(&name.to_string()),
-                    explicit_default: default
-                        .clone()
-                        .map(|node| Box::new(node.lower_or_empty(env, scope, span)))
-                        .map(|x| *x),
-                    implicit_none: default.is_none()
-                        && matches!(
-                            declared_ty,
-                            Some(ParserDataType {
-                                data_type: ParserInnerType::Option(_),
-                                ..
-                            })
-                        ),
-                })
-                .collect();
-
-            env.symbols
-                .function_param_defaults
-                .insert(new_name, defaults.clone());
-            env.symbols
-                .function_param_defaults
-                .insert(identifier, defaults);
+            env.process_parameter_defaults(scope, span, func, new_name, identifier);
         }
 
         let node_ty = self.value.type_of(env, scope, span);
@@ -311,7 +333,7 @@ impl MirLowering for AstDeclaration {
 
         let data_type = env.compare_types(data_type, node_ty, Some(&TagInfo::IgnoreInvalidLet))?;
 
-        let mut value = if function_decl.is_some() {
+        if is_function {
             env.register_variable(
                 scope,
                 identifier,
@@ -319,11 +341,11 @@ impl MirLowering for AstDeclaration {
                 data_type.clone(),
                 self.var_type,
             )?;
+        }
 
-            self.value.lower_or_empty(env, scope, span)
-        } else {
-            let value = self.value.lower_or_empty(env, scope, span);
+        let mut value = self.value.lower_or_empty(env, scope, span);
 
+        if !is_function {
             env.register_variable(
                 scope,
                 identifier,
@@ -331,9 +353,7 @@ impl MirLowering for AstDeclaration {
                 data_type.clone(),
                 self.var_type,
             )?;
-
-            value
-        };
+        }
 
         if matches!(data_type.data_type, ParserInnerType::DynamicTraits(_)) {
             value = MiddleNode::new(
@@ -344,17 +364,17 @@ impl MirLowering for AstDeclaration {
                 }),
                 span,
             );
-        };
+        }
 
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
+        Ok(MiddleNode::new(
+            MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: self.var_type,
                 identifier: new_name,
                 value: Box::new(value),
                 data_type,
             }),
             span,
-        })
+        ))
     }
 }
 

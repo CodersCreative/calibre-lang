@@ -419,8 +419,6 @@ impl MirLowering for AstReturn {
         Ok(MiddleNode {
             node_type: MiddleNodeType::Return(MirReturn {
                 value: {
-                    let mut lst = Vec::new();
-
                     if !env.tagging.tag_info.contains(&TagInfo::IgnoreInvalidReturn) {
                         if let Some(ret_ty) = env.scoping.return_type_stack.last().cloned() {
                             let node_ty = if let Some(value) = &self.value {
@@ -449,14 +447,13 @@ impl MirLowering for AstReturn {
 
                     let value = self.value.map(|x| x.lower_or_empty(env, scope, span));
 
-                    let chain_defers = env.scoping.collect_defers_until(scope, None);
-                    for x in chain_defers {
-                        lst.push(x.lower_or_empty(env, scope, span));
-                    }
-
-                    for x in env.symbols.func_defers.clone() {
-                        lst.push(x.lower_or_empty(env, scope, span));
-                    }
+                    let mut lst: Vec<MiddleNode> = env
+                        .scoping
+                        .collect_defers_until(scope, None)
+                        .into_iter()
+                        .chain(env.symbols.func_defers.clone().into_iter())
+                        .map(|x| x.lower_or_empty(env, scope, span))
+                        .collect();
 
                     if lst.is_empty() {
                         value.map(Box::new)
