@@ -79,7 +79,7 @@ const main := fn => {
 	print("uint => is_prime(97u) => " & uint.is_prime(97u));
 	
 	print("float => floor/ceil/round => " & float.floor(3.7) & ", " & float.ceil(3.2) & ", " & float.round(3.5));
-	print("float => frac/sqrt/cbrt => " & float.frac(3.25) & ", " & float.sqrt(9f) & ", " & float.cbrt(27f));
+	print("float => frac/cbrt => " & float.frac(3.25) & ", " & float.cbrt(27f));
 	print("float => ln/log10/log2 => " & float.ln(E) & ", " & float.log10(1000f) & ", " & float.log2(8f));
 	print("float => sin/cos/tan(PI/4) => " & float.sin(PI / 4f) & ", " & float.cos(PI / 4f) & ", " & float.tan(PI / 4f));
 	print("float => deg/rad => " & float.deg_to_rad(180f) & ", " & float.rad_to_deg(PI));
@@ -91,7 +91,7 @@ const main := fn => {
 		75f
 	));
 	
-	print("float approx_eq => " & float.approx_eq(float.sqrt(2f) * float.sqrt(2f), 2f, EPSILON));
+	print("float approx_eq => " & float.approx_eq(2f ** 0.5 * 2f ** 0.5, 2f, EPSILON));
 	
 	let stats := list:<float>[
 		1f,

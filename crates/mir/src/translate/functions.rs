@@ -852,13 +852,22 @@ impl MirLowering for AstFunction {
                 node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                     body: scope_body.into_boxed_slice(),
                     create_new_scope,
-                    is_temp: false,
+                    is_temp: true,
                     scope_id,
                 }),
             }
         } else {
-            body
+            MiddleNode {
+                span: body.span,
+                node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                    body: Box::new([body]),
+                    create_new_scope: true,
+                    is_temp: true,
+                    scope_id: scope,
+                }),
+            }
         };
+
         env.symbols.function_defers.append(&mut old_func_defers);
 
         let mut memo = false;
@@ -1078,7 +1087,7 @@ impl MirLowering for AstCall {
             self.reverse_args.push(x);
         }
 
-        let caller = self.caller.lower(env, scope, span).unwrap();
+        let caller = self.caller.lower(env, scope, span)?;
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::CallExpression(MirCall {

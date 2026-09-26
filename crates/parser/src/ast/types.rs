@@ -16,7 +16,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, hash::Hash, ops::Deref, str::FromStr};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ParserDataType {
     pub data_type: ParserInnerType,
     pub span: Span,
@@ -184,13 +184,14 @@ impl Deref for ParserDataType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum ParserInnerType {
     Float,
     UInt,
     Byte,
     Int,
     Big,
+    #[default]
     Null,
     Bool,
     Str,

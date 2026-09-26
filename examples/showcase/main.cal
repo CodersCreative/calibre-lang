@@ -62,7 +62,6 @@ impl Describe for Pair {
 test "showcase_core_math" => {
 	assert(factorial(6) = 720, "factorial(6) should equal 720");
 	assert(int.gcd(84, 18) = 6, "int.gcd(84, 18) should equal 6");
-	assert(float.sqrt(9f) = 3f, "float.sqrt(9f) should equal 3f");
 };
 
 test "showcase_conversions" => {
@@ -367,5 +366,4 @@ const main := fn => {
 	// Static functions on primitive families.
 	print("int gcd/lcm => " & int.gcd(84, 18) & ", " & int.lcm(12, 18));
 	print("uint pow => " & uint.pow(2u, 10u));
-	print("float sqrt => " & float.sqrt(9f));
 };

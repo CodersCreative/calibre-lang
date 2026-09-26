@@ -41,11 +41,11 @@ impl MiddleEnvironment {
         let mut instructions = target_body.nodes();
         if at_start {
             let mut reversed = Vec::with_capacity(instructions.len() + 1);
-            reversed.push(injection);
+            reversed.append(&mut injection.nodes());
             reversed.extend(instructions);
             instructions = reversed;
         } else {
-            instructions.push(injection);
+            instructions.append(&mut injection.nodes());
         }
 
         AstNode::new_temp_scope(instructions)
@@ -116,16 +116,18 @@ impl MiddleEnvironment {
             ParserDataType::new(span, ParserInnerType::Int),
         );
 
-        let stmts = Box::new([
-            result_decl.lower_or_empty(self, scope, span),
-            broke_decl.lower_or_empty(self, scope, span),
-            loop_node,
-            AstNode::identifier(span, result_ident).lower_or_empty(self, scope, span),
-        ]);
-
         Ok(MiddleNode {
             node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                body: stmts,
+                body: [
+                    result_decl.lower_or_empty(self, scope, span),
+                    broke_decl.lower_or_empty(self, scope, span),
+                ]
+                .into_iter()
+                .chain(loop_node.nodes())
+                .chain(std::iter::once(
+                    AstNode::identifier(span, result_ident).lower_or_empty(self, scope, span),
+                ))
+                .collect(),
                 create_new_scope: true,
                 is_temp: true,
                 scope_id: scope,

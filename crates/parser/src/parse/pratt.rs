@@ -218,103 +218,6 @@ impl<'a> PrattParser {
         data.stmt
             .clone()
             .pratt((
-                // 0
-                infix(left(0), assignment, |left, _, right, sp| {
-                    let span: SimpleSpan = sp.span();
-                    AstNode::new(
-                        span.into(),
-                        AstNodeType::AssignmentExpression(AstAssignment {
-                            identifier: Box::new(left),
-                            value: Box::new(right),
-                        }),
-                    )
-                }),
-                // 5
-                postfix(5, AstPipe::operator(data.clone()), |base, value, extra| {
-                    AstPipe::fold_postfix(base, value, extra.span())
-                }),
-                // 10
-                infix(left(10), boolean, |l, (op, assignment), r, sp| {
-                    fold_boolean(l, op, r, assignment, sp.span())
-                }),
-                // 15
-                postfix(
-                    15,
-                    AstTernary::operator(data.clone()),
-                    |base, value, extra| AstTernary::fold_postfix(base, value, extra.span()),
-                ),
-                // 20
-                infix(left(20), comparison, |l, op, r, sp| {
-                    fold_comparison(l, op, r, sp.span())
-                }),
-                infix(
-                    left(20),
-                    just(Token::In).padded_by(potential_new_line()),
-                    |l, _, r, sp| {
-                        let span: SimpleSpan = sp.span();
-                        AstNode::new(
-                            span.into(),
-                            AstNodeType::InDeclaration(AstIn {
-                                identifier: Box::new(l),
-                                value: Box::new(r),
-                            }),
-                        )
-                    },
-                ),
-                // 25
-                infix(left(20), range, |l, inclusive, r, sp| {
-                    let span: SimpleSpan = sp.span();
-                    AstNode::new(
-                        span.into(),
-                        AstNodeType::RangeDeclaration(AstRange {
-                            from: Box::new(l),
-                            to: Box::new(r),
-                            inclusive,
-                        }),
-                    )
-                }),
-                // 30
-                infix(left(30), bitwise, |l, (op, assignment), r, sp| {
-                    fold_binary(l, op, r, assignment, sp.span())
-                }),
-                // 40
-                infix(left(40), shift, |l, (op, assignment), r, sp| {
-                    fold_binary(l, op, r, assignment, sp.span())
-                }),
-                // 50
-                infix(left(50), add, |l, (op, assignment), r, sp| {
-                    fold_binary(l, op, r, assignment, sp.span())
-                }),
-                // 60
-                infix(left(60), mul, |l, (op, assignment), r, sp| {
-                    fold_binary(l, op, r, assignment, sp.span())
-                }),
-                // 70
-                postfix(70, conversion, |value, (failure_mode, data_type), sp| {
-                    let span: SimpleSpan = sp.span();
-                    AstNode::new(
-                        span.into(),
-                        AstNodeType::AsExpression(AstAs {
-                            value: Box::new(value),
-                            data_type,
-                            failure_mode,
-                        }),
-                    )
-                }),
-                postfix(70, is, |value, data_type, sp| {
-                    let span: SimpleSpan = sp.span();
-                    AstNode::new(
-                        span.into(),
-                        AstNodeType::IsExpression(AstIs {
-                            value: Box::new(value),
-                            data_type,
-                        }),
-                    )
-                }),
-                // 80
-                infix(left(80), pow, |l, (op, assignment), r, sp| {
-                    fold_binary(l, op, r, assignment, sp.span())
-                }),
                 // 90
                 prefix(
                     90,
@@ -412,6 +315,103 @@ impl<'a> PrattParser {
                             }),
                         ),
                     }
+                }),
+                // 80
+                infix(left(80), pow, |l, (op, assignment), r, sp| {
+                    fold_binary(l, op, r, assignment, sp.span())
+                }),
+                // 70
+                postfix(70, conversion, |value, (failure_mode, data_type), sp| {
+                    let span: SimpleSpan = sp.span();
+                    AstNode::new(
+                        span.into(),
+                        AstNodeType::AsExpression(AstAs {
+                            value: Box::new(value),
+                            data_type,
+                            failure_mode,
+                        }),
+                    )
+                }),
+                postfix(70, is, |value, data_type, sp| {
+                    let span: SimpleSpan = sp.span();
+                    AstNode::new(
+                        span.into(),
+                        AstNodeType::IsExpression(AstIs {
+                            value: Box::new(value),
+                            data_type,
+                        }),
+                    )
+                }),
+                // 60
+                infix(left(60), mul, |l, (op, assignment), r, sp| {
+                    fold_binary(l, op, r, assignment, sp.span())
+                }),
+                // 50
+                infix(left(50), add, |l, (op, assignment), r, sp| {
+                    fold_binary(l, op, r, assignment, sp.span())
+                }),
+                // 40
+                infix(left(40), shift, |l, (op, assignment), r, sp| {
+                    fold_binary(l, op, r, assignment, sp.span())
+                }),
+                // 30
+                infix(left(30), bitwise, |l, (op, assignment), r, sp| {
+                    fold_binary(l, op, r, assignment, sp.span())
+                }),
+                // 25
+                infix(left(20), range, |l, inclusive, r, sp| {
+                    let span: SimpleSpan = sp.span();
+                    AstNode::new(
+                        span.into(),
+                        AstNodeType::RangeDeclaration(AstRange {
+                            from: Box::new(l),
+                            to: Box::new(r),
+                            inclusive,
+                        }),
+                    )
+                }),
+                // 20
+                infix(left(20), comparison, |l, op, r, sp| {
+                    fold_comparison(l, op, r, sp.span())
+                }),
+                infix(
+                    left(20),
+                    just(Token::In).padded_by(potential_new_line()),
+                    |l, _, r, sp| {
+                        let span: SimpleSpan = sp.span();
+                        AstNode::new(
+                            span.into(),
+                            AstNodeType::InDeclaration(AstIn {
+                                identifier: Box::new(l),
+                                value: Box::new(r),
+                            }),
+                        )
+                    },
+                ),
+                // 15
+                postfix(
+                    15,
+                    AstTernary::operator(data.clone()),
+                    |base, value, extra| AstTernary::fold_postfix(base, value, extra.span()),
+                ),
+                // 10
+                infix(left(10), boolean, |l, (op, assignment), r, sp| {
+                    fold_boolean(l, op, r, assignment, sp.span())
+                }),
+                // 5
+                postfix(5, AstPipe::operator(data.clone()), |base, value, extra| {
+                    AstPipe::fold_postfix(base, value, extra.span())
+                }),
+                // 0
+                infix(left(0), assignment, |left, _, right, sp| {
+                    let span: SimpleSpan = sp.span();
+                    AstNode::new(
+                        span.into(),
+                        AstNodeType::AssignmentExpression(AstAssignment {
+                            identifier: Box::new(left),
+                            value: Box::new(right),
+                        }),
+                    )
                 }),
             ))
             .boxed()

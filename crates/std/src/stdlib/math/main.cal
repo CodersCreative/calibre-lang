@@ -28,21 +28,6 @@ impl int {
 		if r != 0 && ((r > 0) = (b > 0)) => return q + 1 else => return q;
 	};
 
-	const pow := fn (base exp : int) -> int => {
-		if exp < 0 => return 0;
-		let mut b := base;
-		let mut e := exp;
-		let mut out := 1;
-		
-		for e > 0 => {
-			if e % 2 = 1 => out *= b;
-			b *= b;
-			e /= 2;
-		};
-		
-		return out;
-	};
-
 	const gcd := fn (a b : int) -> int => {
 		let mut x := int.abs(a);
 		let mut y := int.abs(b);
@@ -113,20 +98,6 @@ impl uint {
 		if b = 0u => return 0u;
 		let q := a / b;
 		if a % b = 0u => return q else => return q + 1u;
-	};
-
-	const pow := fn (base exp : uint) -> uint => {
-		let mut b := base;
-		let mut e := exp;
-		let mut out := 1u;
-		
-		for e > 0u => {
-			if e % 2u = 1u => out *= b;
-			b *= b;
-			e /= 2u;
-		};
-		
-		return out;
 	};
 
 	const gcd := fn (a b : uint) -> uint => {
@@ -215,37 +186,6 @@ impl float {
 	};
 
 	const frac := fn (x : float) -> float => return x - (try float.floor(x) as float => 0f);
-
-	const pow := fn (base : float, exp : int) -> float => {
-		if exp = 0 => return 1f;
-		if exp < 0 => return 1f / float.pow(base, -exp);
-		
-		let mut b := base;
-		let mut e := exp;
-		let mut out := 1f;
-		
-		for e > 0 => {
-			if e % 2 = 1 => out *= b;
-			b *= b;
-			e /= 2;
-		};
-		
-		return out;
-	};
-
-	const sqrt := fn (x : float) -> float => {
-		if x <= 0f => return 0f;
-		let mut guess := if x < 1f => emit 1f else => emit x;
-		
-		let mut i := 0;
-		
-		for i < 32 => {
-			guess := 0.5 * (guess + (x / guess));
-			i += 1;
-		};
-		
-		return guess;
-	};
 
 	const cbrt := fn (x : float) -> float => {
 		if x = 0f => return 0f;

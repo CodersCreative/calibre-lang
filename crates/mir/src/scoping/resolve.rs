@@ -49,8 +49,31 @@ impl MiddleEnvironment {
         debug!("importing scope list at depth {}", depth);
         if let Some(first) = list.first() {
             debug!(first = %first, "importing scope");
-            let scope = self.import_next_scope(scope, first);
-            self.import_scope_list_with_depth(scope?.0, &list[1..], depth - 1)
+
+            let scope = self.import_next_scope(scope, first)?;
+            let new_scope = self.import_scope_list_with_depth(scope.0, &list[1..], depth - 1)?;
+
+            let scope_id = new_scope.0;
+
+            Ok((
+                scope_id,
+                match (scope.1, new_scope.1) {
+                    (None, Some(x)) | (Some(x), None) => Some(x),
+                    (Some(x), Some(y)) => {
+                        let span = y.span;
+                        Some(MiddleNode::new(
+                            MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                                body: x.nodes().into_iter().chain(y.nodes()).collect(),
+                                create_new_scope: false,
+                                is_temp: false,
+                                scope_id,
+                            }),
+                            span,
+                        ))
+                    }
+                    _ => None,
+                },
+            ))
         } else {
             Ok((scope, None))
         }

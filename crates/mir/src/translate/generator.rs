@@ -11,6 +11,7 @@ use calibre_parser::{
             binary::AstBoolean,
             conditionals::{AstIf, IfComparisonType},
             flow::{AstContinue, AstReturn},
+            functions::{AstFunction, FunctionHeader},
             generator::AstGenerator,
             loops::AstLoop,
         },
@@ -27,6 +28,7 @@ impl MirLowering for AstGenerator {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
+        let return_type = self.type_of(env, scope, span).unwrap();
         let guard = self.conditionals.into_iter().reduce(|left, right| {
             AstNode::new(
                 span,
@@ -73,10 +75,19 @@ impl MirLowering for AstGenerator {
             }),
         );
 
-        MiddleEnvironment::wrap_generator_body(
-            AstNode::new_temp_scope_with_create(vec![loop_node], Some(false)),
-            self.data_type.unwrap_or(ParserDataType::auto(span)),
+        AstNode::call(
             span,
+            AstNode::new(
+                span,
+                AstNodeType::FunctionDeclaration(AstFunction {
+                    header: FunctionHeader {
+                        return_type,
+                        ..Default::default()
+                    },
+                    body: Box::new(AstNode::new_temp_scope(vec![loop_node])),
+                }),
+            ),
+            Vec::new(),
         )
         .lower(env, scope, span)
     }

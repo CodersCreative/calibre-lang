@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Attempted to use int expected str (probably to do with str concat)
+// TODO Fix - FAILING - Wrong Output with fmt
 const hour : int = 15;
 const min := 10;
 const sec := 30;

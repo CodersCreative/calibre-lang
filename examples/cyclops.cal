@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Attempted to use int expected str (probably to do with str concat)
 const main := fn => {
 	let first50 := first_cyclops(50);
 	print("First 50 cyclops numbers:");
@@ -22,7 +21,7 @@ const print_vector := fn (v : list:<int>, nc : int) => {
 	let txt := "";
 	
 	for e in v => {
-		txt &= fmt"{e}\t";
+		txt &= fmt"{e}  ";
 		col += 1;
 		if col = nc => {
 			txt &= "\n";
@@ -57,7 +56,7 @@ const is_cyclops_number := fn (num : int) -> bool => {
 		m := num % 10;
 	};
 	
-	return num = 0 && count = 0;
+	return (num = 0) && (count = 0);
 };
 
 const first_cyclops := fn (n : int) -> list:<int> => {
@@ -76,9 +75,9 @@ const first_cyclops := fn (n : int) -> list:<int> => {
 const is_prime := fn (n : int) -> bool => {
 	if n < 2 => return false;
 	
-	let sqrt_n := float.sqrt(n as! float) as! int;
+	let sqrt_n := ((n as! float) ** 0.5) as! int;
 	
-	for i in 2..=sqrt_n => if n % i = 0 => return false;
+	for i in 2..=sqrt_n => if (n % i) = 0 => return false;
 	
 	return true;
 };

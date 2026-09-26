@@ -241,7 +241,7 @@ impl list:<float> {
 		return acc / (try n as float => 1f);
 	};
 
-	const std_dev := fn (values : list:<float>) -> float => return float.sqrt(values.variance());
+	const std_dev := fn (values : list:<float>) -> float => return values.variance() ** 0.5;
 
 	const median := fn (values : list:<float>) -> float => {
 		let n := len(values);

@@ -77,6 +77,13 @@ impl MiddleNode {
         })
     }
 
+    pub fn nodes(self) -> Box<[Self]> {
+        match self.node_type {
+            MiddleNodeType::ScopeDeclaration(MirScopeDecl { body: items, .. }) => items,
+            _ => Box::new([self]),
+        }
+    }
+
     pub fn len(&self) -> usize {
         let mut count = 1;
         match &self.node_type {
