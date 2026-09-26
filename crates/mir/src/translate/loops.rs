@@ -116,12 +116,12 @@ impl MiddleEnvironment {
             ParserDataType::new(span, ParserInnerType::Int),
         );
 
-        let stmts = vec![
+        let stmts = Box::new([
             result_decl.lower_or_empty(self, scope, span),
             broke_decl.lower_or_empty(self, scope, span),
             loop_node,
             AstNode::identifier(span, result_ident).lower_or_empty(self, scope, span),
-        ];
+        ]);
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
@@ -247,7 +247,7 @@ fn prepare_for_loop_state(
 
     Some(Box::new(MiddleNode {
         node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-            body: state_nodes,
+            body: state_nodes.into_boxed_slice(),
             create_new_scope: false,
             is_temp: true,
             scope_id: scope,

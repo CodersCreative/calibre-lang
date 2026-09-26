@@ -35,7 +35,10 @@ pub trait LirLowering {
 }
 
 impl<'a> LirEnvironment<'a> {
-    fn lower_nodes(&mut self, nodes: Vec<MiddleNode>) -> Vec<LirNodeType> {
+    fn lower_nodes<I>(&mut self, nodes: I) -> Box<[LirNodeType]>
+    where
+        I: IntoIterator<Item = MiddleNode>,
+    {
         nodes
             .into_iter()
             .map(|node| self.lower_node(node))
@@ -90,7 +93,10 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
-    fn lower_scope_items(&mut self, body: Vec<MiddleNode>) {
+    fn lower_scope_items<I>(&mut self, body: I)
+    where
+        I: IntoIterator<Item = MiddleNode>,
+    {
         for stmt in body {
             if !self.current_block_open() {
                 break;

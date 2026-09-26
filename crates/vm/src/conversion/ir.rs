@@ -179,13 +179,11 @@ impl VMFunction {
     }
 
     pub fn memo_key(&self, args: &[RuntimeValue]) -> Option<Vec<HashKey>> {
-        let mut key = Vec::with_capacity(args.len());
-        for (index, arg) in args.iter().enumerate() {
-            if self.memo_params == 0 || self.memo_params & (1 << index) != 0 {
-                key.push(HashKey::try_from(arg.clone()).ok()?);
-            }
-        }
-        Some(key)
+        args.iter()
+            .enumerate()
+            .filter(|(index, _)| self.memo_params == 0 || self.memo_params & (1 << index) != 0)
+            .map(|(_, arg)| HashKey::try_from(arg.clone()).ok())
+            .collect()
     }
 }
 
@@ -282,13 +280,13 @@ pub enum VMLiteral {
     Null,
     Closure {
         label: Ustr,
-        captures: Vec<Ustr>,
+        captures: Box<[Ustr]>,
     },
     ExternFunction {
         abi: Ustr,
         library: Ustr,
         symbol: Ustr,
-        parameters: Vec<ParserDataType>,
+        parameters: Box<[ParserDataType]>,
         return_type: ParserDataType,
         memo_params: usize,
         memo: bool,

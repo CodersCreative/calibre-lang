@@ -177,7 +177,7 @@ impl MiddleEnvironment {
                 body.push(inner);
                 MiddleNode {
                     node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                        body,
+                        body: body.into_boxed_slice(),
                         create_new_scope: false,
                         is_temp: false,
                         scope_id: scope,
@@ -215,19 +215,18 @@ impl MiddleEnvironment {
             );
             match &mut middle.node_type {
                 MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
-                    let mut new_body = Vec::new();
-                    new_body.append(&mut decls);
-                    new_body.append(body);
-                    *body = new_body;
+                    let mut new_body = std::mem::take(&mut decls);
+                    new_body.extend(std::mem::take(body).into_vec());
+                    *body = new_body.into_boxed_slice();
                 }
                 _ => {
-                    let mut body = Vec::new();
-                    body.append(&mut decls);
+                    let mut body = std::mem::take(&mut decls);
                     let middle_span = middle.span;
                     body.push(middle);
+
                     middle = MiddleNode::new(
                         MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                            body,
+                            body: body.into_boxed_slice(),
                             create_new_scope: false,
                             is_temp: false,
                             scope_id: scope,

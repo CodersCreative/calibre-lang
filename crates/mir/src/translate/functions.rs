@@ -105,51 +105,31 @@ impl MiddleEnvironment {
                 || parameters.len() == total_args)
     }
 
-    pub(crate) fn lower_defaulted_call_args(
+    pub(crate) fn lower_args(
         &mut self,
         scope: ScopeId,
         span: Span,
-        caller: &AstNode,
+        caller: &MiddleNode,
         data_type: &Option<ParserInnerType>,
-        args: Vec<CallArg>,
+        mut args: Vec<CallArg>,
         reverse_args: Vec<AstNode>,
-    ) -> Option<Vec<MiddleNode>> {
-        let AstNodeType::Identifier(name) = &caller.node_type else {
-            return None;
-        };
-
-        let name = self
-            .resolve(
-                scope,
-                name.value.get_ident(),
-                ResolutionOptions::default().with_dollar(),
-            )
-            .ok()?;
-
-        let resolved_name = self
-            .resolve(scope, name, ResolutionOptions::idents())
-            .map(|x| x.to_string());
-
-        let defaults_key = Ustr::from(resolved_name.as_deref().unwrap_or(name.as_str()));
-        let defaults = self
-            .symbols
-            .name_to_param_defaults
-            .get(&defaults_key)
-            .and_then(|key| self.symbols.function_param_defaults.get(key).cloned())?;
-
-        if !defaults
-            .iter()
-            .any(|d| d.explicit_default.is_some() || d.implicit_none)
-        {
-            return None;
-        }
-
-        let parameters = match data_type {
-            Some(ParserInnerType::Function { parameters, .. }) => Some(parameters.clone()),
+    ) -> Option<Box<[MiddleNode]>> {
+        let defaults_id = match &caller.node_type {
+            MiddleNodeType::Identifier(x) => self.symbols.name_to_param_defaults.get(&x.identifier),
+            MiddleNodeType::FunctionDeclaration(x) => x.default_args_id.as_ref(),
             _ => None,
         };
 
-        if let Some(params) = &parameters
+        let defaults = defaults_id
+            .and_then(|id| self.symbols.function_param_defaults.get(id).cloned())
+            .unwrap_or_default();
+
+        let parameters = match data_type {
+            Some(ParserInnerType::Function { parameters, .. }) => Some(parameters.as_slice()),
+            _ => None,
+        };
+
+        if let Some(params) = parameters
             && Self::should_combine_excess_args_into_list_param(
                 params,
                 args.iter()
@@ -158,35 +138,80 @@ impl MiddleEnvironment {
                 reverse_args.len(),
             )
         {
-            return None;
+            let normal_count = params
+                .len()
+                .saturating_sub(1 + reverse_args.len())
+                .min(args.len());
+            let mut lst = Vec::with_capacity(params.len());
+
+            for arg in args.drain(..normal_count) {
+                let node: AstNode = arg.into();
+                lst.push(node.lower_or_empty(self, scope, span));
+            }
+
+            let list_inner_type = params
+                .last()
+                .map(|p| p.clone().unwrap_all_refs().data_type)
+                .and_then(|dt| match dt {
+                    ParserInnerType::List(x) => Some(*x),
+                    _ => None,
+                })
+                .unwrap_or_else(|| ParserDataType::auto(span));
+
+            let list_arg = if args.len() == 1 {
+                let arg: AstNode = args.pop().unwrap().into();
+                let is_already_list = matches!(arg.node_type, AstNodeType::ListLiteral(_))
+                    || arg
+                        .type_of(self, scope, span)
+                        .is_some_and(|dt| dt.is_list());
+
+                if is_already_list {
+                    arg
+                } else {
+                    AstNode::new(
+                        span,
+                        AstNodeType::ListLiteral(AstList {
+                            data_type: list_inner_type,
+                            values: vec![arg],
+                        }),
+                    )
+                }
+            } else {
+                AstNode::new(
+                    span,
+                    AstNodeType::ListLiteral(AstList {
+                        data_type: list_inner_type,
+                        values: args.into_iter().map(Into::into).collect(),
+                    }),
+                )
+            };
+
+            lst.push(list_arg.lower_or_empty(self, scope, span));
+
+            for arg in reverse_args {
+                lst.push(arg.lower_or_empty(self, scope, span));
+            }
+
+            return Some(lst.into_boxed_slice());
         }
 
-        let param_len = parameters
-            .as_ref()
-            .map(|params| params.len())
-            .unwrap_or_else(|| defaults.len());
-
+        let param_len = parameters.map_or(defaults.len(), |p| p.len());
         if defaults.is_empty() || param_len == 0 {
             return None;
         }
 
         let mut slots: Vec<Option<AstNode>> = vec![None; param_len];
-        let mut wrap_with_some = vec![false; param_len];
         let reverse_len = reverse_args.len().min(param_len);
 
         for (i, node) in reverse_args.into_iter().enumerate().take(reverse_len) {
-            let idx = param_len - reverse_len + i;
-            slots[idx] = Some(node);
+            slots[param_len - reverse_len + i] = Some(node);
         }
-
-        let find_named_index =
-            |name: &str| -> Option<usize> { defaults.iter().position(|d| d.name == name) };
 
         let mut next_pos = 0usize;
         for arg in args {
             match arg {
                 CallArg::Named(name, value) => {
-                    if let Some(idx) = find_named_index(&name.to_string()) {
+                    if let Some(idx) = defaults.iter().position(|d| d.name == name.to_string()) {
                         slots[idx] = Some(value);
                     }
                 }
@@ -202,78 +227,70 @@ impl MiddleEnvironment {
             }
         }
 
-        for i in 0..param_len {
-            let meta = defaults.get(i)?;
-
-            if slots[i].is_none() {
-                if let Some(default) = &meta.explicit_default {
-                    slots[i] = Some(default.clone().into());
-                } else if meta.implicit_none {
-                    slots[i] = Some(AstNode::none(span));
-                }
-                continue;
-            }
-
-            let current = slots[i].take()?;
-            if current.is_none() {
-                slots[i] = Some(meta.explicit_default.as_ref()?.clone().into());
-                continue;
-            }
-
-            if meta.implicit_none {
-                let arg_type = self.resolve_type_from_node(scope, &current);
-                if current.is_raw_option_value()
-                    || matches!(
-                        arg_type
-                            .as_ref()
-                            .map(|x| x.data_type.unwrap_all_refs().clone()),
-                        Some(ParserInnerType::Option(_))
-                    )
-                {
-                    slots[i] = Some(current);
-                } else {
-                    slots[i] = Some(current);
-                    wrap_with_some[i] = true;
-                }
-                continue;
-            } else if meta.explicit_default.is_none() {
-                slots[i] = Some(current);
-                continue;
-            }
-
-            if matches!(
-                self.resolve_type_from_node(scope, &current)
+        let is_option_type = |env: &mut MiddleEnvironment, node: &AstNode| {
+            matches!(
+                env.resolve_type_from_node(scope, node)
                     .as_ref()
-                    .map(|x| x.data_type.unwrap_all_refs().clone()),
+                    .map(|x| x.data_type.unwrap_all_refs()),
                 Some(ParserInnerType::Option(_))
-            ) {
-                slots[i] = Some(Self::unwrap_option_or_default_expr(
-                    span,
-                    current,
-                    meta.explicit_default.as_ref()?.clone().into(),
-                ));
-            } else {
-                slots[i] = Some(current);
-            }
-        }
+            )
+        };
 
-        let mut lowered = Vec::with_capacity(param_len);
-        for (idx, node) in slots.into_iter().enumerate() {
-            let node = node?;
-            if wrap_with_some.get(idx).copied().unwrap_or(false) {
-                lowered.push(
-                    AstNode::call(
-                        span,
-                        AstNode::identifier(span, "some"),
-                        vec![CallArg::Value(node)],
+        slots
+            .into_iter()
+            .enumerate()
+            .map(|(i, slot)| {
+                let meta = defaults.get(i)?;
+                let mut wrap_some = false;
+
+                let node = match slot {
+                    None => {
+                        if let Some(default) = &meta.explicit_default {
+                            default.clone().into()
+                        } else if meta.implicit_none {
+                            AstNode::none(span)
+                        } else {
+                            return None;
+                        }
+                    }
+                    Some(current) => {
+                        if current.is_none() {
+                            meta.explicit_default.as_ref()?.clone().into()
+                        } else if meta.implicit_none {
+                            if !current.is_raw_option_value() && !is_option_type(self, &current) {
+                                wrap_some = true;
+                            }
+                            current
+                        } else if let Some(default) = &meta.explicit_default {
+                            if is_option_type(self, &current) {
+                                Self::unwrap_option_or_default_expr(
+                                    span,
+                                    current,
+                                    default.clone().into(),
+                                )
+                            } else {
+                                current
+                            }
+                        } else {
+                            current
+                        }
+                    }
+                };
+
+                if wrap_some {
+                    Some(
+                        AstNode::call(
+                            span,
+                            AstNode::identifier(span, "some"),
+                            vec![CallArg::Value(node)],
+                        )
+                        .lower_or_empty(self, scope, span),
                     )
-                    .lower_or_empty(self, scope, span),
-                );
-            } else {
-                lowered.push(node.lower_or_empty(self, scope, span));
-            }
-        }
-        Some(lowered)
+                } else {
+                    Some(node.lower_or_empty(self, scope, span))
+                }
+            })
+            .collect::<Option<Box<[_]>>>()
     }
 
     #[inline]
@@ -514,14 +531,16 @@ impl MirLowering for AstExtern {
 
         let new_name = Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
 
-        let mut params = Vec::new();
-        for ty in &self.parameters {
-            let ty = ty.clone().resolve_ffi();
-            params.push(
+        let params = self
+            .parameters
+            .iter()
+            .map(|ty| {
+                let ty = ty.clone().resolve_ffi();
+
                 env.resolve_data_type(scope, &ty, ResolutionOptions::typing())
-                    .unwrap_or(ty),
-            );
-        }
+                    .unwrap_or(ty)
+            })
+            .collect::<Vec<_>>();
 
         let return_type = env.resolve_data_type(
             scope,
@@ -554,11 +573,11 @@ impl MirLowering for AstExtern {
                         abi: Ustr::from(&self.abi),
                         library: Ustr::from(&self.library),
                         symbol: self.symbol.map(|x| Ustr::from(&x)).unwrap_or_else(|| ident),
-                        parameters: params,
+                        parameters: params.into_boxed_slice(),
                         return_type,
                         pure,
                         memo,
-                        memo_params,
+                        memo_params: memo_params.into_boxed_slice(),
                     }),
                     span,
                 )),
@@ -747,12 +766,13 @@ impl MirLowering for AstFunction {
         func_defers.append(&mut env.symbols.function_defers);
 
         let body = if let MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-            body: mut scope_body,
+            body: scope_body,
             create_new_scope,
             is_temp: _,
             scope_id,
         }) = body.node_type
         {
+            let mut scope_body = scope_body.into_vec();
             let mut last = scope_body.pop();
             for defer in func_defers {
                 scope_body.push(defer.lower(env, scope_id, span)?);
@@ -830,7 +850,7 @@ impl MirLowering for AstFunction {
             MiddleNode {
                 span: body.span,
                 node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                    body: scope_body,
+                    body: scope_body.into_boxed_slice(),
                     create_new_scope,
                     is_temp: false,
                     scope_id,
@@ -878,13 +898,13 @@ impl MirLowering for AstFunction {
 
         let fn_node = MiddleNode {
             node_type: MiddleNodeType::FunctionDeclaration(MirFunction {
-                parameters: params.clone(),
+                parameters: params.clone().into_boxed_slice(),
                 body: Box::new(body.clone()),
                 return_type: return_type.clone(),
                 scope_id: new_scope,
                 default_args_id,
                 memo,
-                memo_params,
+                memo_params: memo_params.into_boxed_slice(),
                 pure,
             }),
             span,
@@ -1058,94 +1078,21 @@ impl MirLowering for AstCall {
             self.reverse_args.push(x);
         }
 
-        let lowered_args = env.lower_defaulted_call_args(
-            scope,
-            span,
-            &self.caller,
-            &data_type,
-            self.args.clone(),
-            self.reverse_args.clone(),
-        );
-
         let caller = self.caller.lower(env, scope, span)?;
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::CallExpression(MirCall {
-                args: if let Some(lowered) = lowered_args {
-                    lowered
+                args: if let Some(x) = env.lower_args(
+                    scope,
+                    span,
+                    &caller,
+                    &data_type,
+                    self.args.clone(),
+                    self.reverse_args.clone(),
+                ) {
+                    x
                 } else {
-                    match data_type {
-                        Some(ParserInnerType::Function {
-                            return_type: _,
-                            parameters,
-                        }) if MiddleEnvironment::should_combine_excess_args_into_list_param(
-                            &parameters,
-                            self.args.len(),
-                            self.reverse_args.len(),
-                        ) =>
-                        {
-                            let mut lst: Vec<MiddleNode> =
-                                (0..(parameters.len() - 1 - self.reverse_args.len()))
-                                    .map(|_| {
-                                        let arg = self.args.remove(0);
-                                        AstNode::from(arg).lower_or_empty(env, scope, span)
-                                    })
-                                    .collect();
-
-                            let list_arg = if self.args.len() == 1 {
-                                let arg: AstNode = self.args.remove(0).into();
-                                let is_already_list =
-                                    matches!(arg.node_type, AstNodeType::ListLiteral(_))
-                                        || arg
-                                            .type_of(env, scope, span)
-                                            .is_some_and(|dt| dt.is_list());
-                                if is_already_list {
-                                    arg
-                                } else {
-                                    AstNode::new(
-                                        span,
-                                        AstNodeType::ListLiteral(AstList {
-                                            data_type: match parameters
-                                                .last()
-                                                .cloned()
-                                                .map(|p| p.unwrap_all_refs().data_type)
-                                            {
-                                                Some(ParserInnerType::List(x)) => *x,
-                                                _ => ParserDataType::auto(span),
-                                            },
-                                            values: vec![arg],
-                                        }),
-                                    )
-                                }
-                            } else {
-                                AstNode::new(
-                                    span,
-                                    AstNodeType::ListLiteral(AstList {
-                                        data_type: match parameters
-                                            .last()
-                                            .cloned()
-                                            .map(|p| p.unwrap_all_refs().data_type)
-                                        {
-                                            Some(ParserInnerType::List(x)) => *x,
-                                            _ => ParserDataType::auto(env.context.current_span()),
-                                        },
-                                        values: self.args.into_iter().map(|x| x.into()).collect(),
-                                    }),
-                                )
-                            };
-
-                            lst.push(list_arg.lower_or_empty(env, scope, span));
-
-                            for _ in 0..self.reverse_args.len() {
-                                lst.push(
-                                    self.reverse_args.remove(0).lower_or_empty(env, scope, span),
-                                );
-                            }
-
-                            lst
-                        }
-                        _ => env.lower_call_args(scope, self.args, self.reverse_args),
-                    }
+                    env.lower_call_args(scope, self.args, self.reverse_args)
                 },
                 caller: Box::new(caller),
             }),

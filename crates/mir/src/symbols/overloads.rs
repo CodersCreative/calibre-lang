@@ -77,10 +77,10 @@ impl MiddleEnvironment {
                 return Ok(Some(MiddleNode {
                     node_type: MiddleNodeType::CallExpression(MirCall {
                         caller: Box::new(overload.func.clone().lower(self, scope, span)?),
-                        args: vec![
+                        args: Box::new([
                             left.lower(self, scope, span)?,
                             right.lower(self, scope, span)?,
-                        ],
+                        ]),
                     }),
                     span,
                 }));
@@ -134,7 +134,7 @@ impl MiddleEnvironment {
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {
                     caller: Box::new(overload.func.clone().lower(self, scope, span)?),
-                    args: vec![value.lower(self, scope, span)?],
+                    args: Box::new([value.lower(self, scope, span)?]),
                 }),
                 span,
             }));
@@ -234,11 +234,11 @@ impl MiddleEnvironment {
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {
                     caller: Box::new(overload.func.clone().lower(self, scope, span)?),
-                    args: vec![
+                    args: Box::new([
                         base.lower(self, scope, span)?,
                         index.lower(self, scope, span)?,
                         value.lower(self, scope, span)?,
-                    ],
+                    ]),
                 }),
                 span,
             }));

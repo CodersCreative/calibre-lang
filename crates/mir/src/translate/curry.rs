@@ -1,5 +1,11 @@
+use std::rc::Rc;
+
 use crate::{
-    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+    ast::MiddleNode,
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    scoping::ScopeId,
+    symbols::{FunctionParamDefault, resolve::ResolutionOptions},
     translate::MirLowering,
 };
 use calibre_parser::{
@@ -9,6 +15,7 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType,
             functions::{AstCurry, AstFunction, CallArg, FunctionHeader},
+            matching::AstFnMatch,
         },
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
@@ -151,6 +158,22 @@ impl MiddleEnvironment {
                 .err_at_current(MiddleErr::CannotInferCurryTargetType)
         })?;
 
+        let defaults: Rc<[FunctionParamDefault]> = match &target.node_type {
+            AstNodeType::Identifier(x) => {
+                let ident = self.resolve(scope, &x.value, ResolutionOptions::idents())?;
+                self.symbols
+                    .name_to_param_defaults
+                    .get(&ident)
+                    .and_then(|x| self.symbols.function_param_defaults.get(x).cloned())
+                    .unwrap_or_default()
+            }
+            AstNodeType::FunctionDeclaration(AstFunction { header, .. })
+            | AstNodeType::FnMatchDeclaration(AstFnMatch { header, .. }) => {
+                FunctionParamDefault::get(self, scope, header)
+            }
+            _ => Rc::default(),
+        };
+
         match ty.unwrap_all_refs().data_type {
             ParserInnerType::Function {
                 return_type,
@@ -160,10 +183,6 @@ impl MiddleEnvironment {
                 return_type,
                 parameters,
             } => {
-                // TODO Deal with defaults
-                let defaults: Box<[&crate::symbols::FunctionParamDefault]> =
-                    Vec::new().into_boxed_slice();
-
                 let params = parameters
                     .into_iter()
                     .enumerate()

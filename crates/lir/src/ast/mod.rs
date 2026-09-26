@@ -72,12 +72,12 @@ pub struct LirSpawn {
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirClosure {
     pub label: Ustr,
-    pub captures: Vec<Ustr>,
+    pub captures: Box<[Ustr]>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirList {
-    pub values: Vec<LirNodeType>,
+    pub values: Box<[LirNodeType]>,
     pub data_type: ParserDataType,
 }
 
@@ -133,7 +133,7 @@ pub struct LirComparison {
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirCall {
     pub caller: Box<LirNodeType>,
-    pub args: Vec<LirNodeType>,
+    pub args: Box<[LirNodeType]>,
     pub returns_value: bool,
 }
 
@@ -203,7 +203,7 @@ pub struct LirExtern {
     pub abi: Ustr,
     pub library: Ustr,
     pub symbol: Ustr,
-    pub parameters: Vec<ParserDataType>,
+    pub parameters: Box<[ParserDataType]>,
     pub return_type: ParserDataType,
     pub memo_params: usize,
     pub memo: bool,

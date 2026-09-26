@@ -44,7 +44,7 @@ impl MirLowering for AstList {
                     )?);
                     item.lower(env, scope, span)
                 })
-                .collect::<Result<Vec<_>, MiddleErr>>()?,
+                .collect::<Result<Box<[_]>, MiddleErr>>()?,
         );
 
         if let Some(x) = data_type {

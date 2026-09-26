@@ -12,7 +12,7 @@ pub struct ExternFunction {
     pub abi: Ustr,
     pub library: Ustr,
     pub symbol: Ustr,
-    pub parameters: Vec<ParserDataType>,
+    pub parameters: Box<[ParserDataType]>,
     pub return_type: ParserDataType,
     pub handle: Arc<Library>,
     pub memo_params: usize,

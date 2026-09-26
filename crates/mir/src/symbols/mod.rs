@@ -11,7 +11,7 @@ use calibre_parser::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{fmt::Debug, rc::Rc};
 use ustr::{Ustr, UstrMap};
 
 pub mod node;
@@ -27,7 +27,7 @@ pub struct Symbols {
     pub specialization_decls_by_scope: FxHashMap<ScopeId, Vec<MiddleNode>>,
 
     pub name_to_param_defaults: UstrMap<usize>,
-    pub function_param_defaults: FxHashMap<usize, Vec<FunctionParamDefault>>,
+    pub function_param_defaults: FxHashMap<usize, Rc<[FunctionParamDefault]>>,
     pub function_specializations: UstrMap<Ustr>,
     pub function_defers: Vec<AstNode>,
 }
@@ -40,7 +40,7 @@ pub struct FunctionParamDefault {
 }
 
 impl FunctionParamDefault {
-    pub fn get(env: &mut MiddleEnvironment, scope: ScopeId, header: &FunctionHeader) -> Vec<Self> {
+    pub fn get(env: &mut MiddleEnvironment, scope: ScopeId, header: &FunctionHeader) -> Rc<[Self]> {
         header
             .parameters
             .iter()

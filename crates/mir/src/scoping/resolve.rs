@@ -210,12 +210,13 @@ impl MiddleEnvironment {
         self.scoping.scope_mut_or_err(scope)?.built = true;
 
         let node = match (node.node_type.clone(), build_node) {
-            (MiddleNodeType::ScopeDeclaration(MirScopeDecl { mut body, .. }), Some(build_node)) => {
+            (MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }), Some(build_node)) => {
                 MiddleNode {
                     node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                         body: {
-                            body.insert(0, build_node);
-                            body
+                            std::iter::once(build_node)
+                                .chain(body.into_iter())
+                                .collect()
                         },
                         create_new_scope: true,
                         is_temp: false,
@@ -226,7 +227,7 @@ impl MiddleEnvironment {
             }
             (_, Some(build_node)) => MiddleNode::new(
                 MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                    body: vec![node, build_node],
+                    body: Box::new([node, build_node]),
                     create_new_scope: false,
                     is_temp: false,
                     scope_id: scope,

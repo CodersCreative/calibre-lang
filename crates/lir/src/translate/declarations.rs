@@ -97,8 +97,11 @@ impl LirLowering for MirScopeDecl {
 
             LirNodeType::null()
         } else {
-            let last = self.body.pop();
-            env.lower_scope_items(self.body);
+            let body = std::mem::take(&mut self.body);
+            let mut body = body.into_vec();
+            let last = body.pop();
+
+            env.lower_scope_items(body);
 
             let Some(last) = last else {
                 return LirNodeType::null();
@@ -229,7 +232,7 @@ impl LirLowering for MirFunction {
 
         LirNodeType::Closure(LirClosure {
             label: internal_name,
-            captures: capture_names,
+            captures: capture_names.into_boxed_slice(),
         })
     }
 }

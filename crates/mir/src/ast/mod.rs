@@ -320,7 +320,7 @@ pub struct MirString {
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirList {
     pub data_type: ParserDataType,
-    pub values: Vec<MiddleNode>,
+    pub values: Box<[MiddleNode]>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -429,7 +429,7 @@ pub struct MirIndex {
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirCall {
     pub caller: Box<MiddleNode>,
-    pub args: Vec<MiddleNode>,
+    pub args: Box<[MiddleNode]>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -461,7 +461,7 @@ pub struct MirVarDecl {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirScopeDecl {
-    pub body: Vec<MiddleNode>,
+    pub body: Box<[MiddleNode]>,
     pub create_new_scope: bool,
     pub is_temp: bool,
     pub scope_id: ScopeId,
@@ -469,12 +469,13 @@ pub struct MirScopeDecl {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirFunction {
-    pub parameters: Vec<(Ustr, ParserDataType, Option<Box<MiddleNode>>)>,
+    #[allow(clippy::complexity)]
+    pub parameters: Box<[(Ustr, ParserDataType, Option<Box<MiddleNode>>)]>,
     pub body: Box<MiddleNode>,
     pub return_type: ParserDataType,
     pub scope_id: ScopeId,
     pub default_args_id: Option<usize>,
-    pub memo_params: Vec<Ustr>,
+    pub memo_params: Box<[Ustr]>,
     pub memo: bool,
     pub pure: bool,
 }
@@ -484,9 +485,9 @@ pub struct MirExtern {
     pub abi: Ustr,
     pub library: Ustr,
     pub symbol: Ustr,
-    pub parameters: Vec<ParserDataType>,
+    pub parameters: Box<[ParserDataType]>,
     pub return_type: ParserDataType,
-    pub memo_params: Vec<Ustr>,
+    pub memo_params: Box<[Ustr]>,
     pub memo: bool,
     pub pure: bool,
 }
@@ -674,7 +675,7 @@ impl From<MiddleNodeType> for AstNodeType {
                 AstNodeType::ExternFunctionDeclaration(AstExtern {
                     abi: value.abi.to_string(),
                     identifier: ParserText::from(value.symbol).into(),
-                    parameters: value.parameters,
+                    parameters: value.parameters.to_vec(),
                     return_type: value.return_type,
                     library: value.library.to_string(),
                     symbol: None,

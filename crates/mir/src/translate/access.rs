@@ -31,21 +31,15 @@ impl MiddleEnvironment {
         scope: ScopeId,
         args: Vec<CallArg>,
         reverse_args: Vec<AstNode>,
-    ) -> Vec<MiddleNode> {
-        let mut lowered = Vec::with_capacity(args.len() + reverse_args.len());
-
-        for arg in args {
-            let arg = AstNode::from(arg);
-            let span = arg.span;
-            lowered.push(arg.lower_or_empty(self, scope, span));
-        }
-
-        for arg in reverse_args {
-            let span = arg.span;
-            lowered.push(arg.lower_or_empty(self, scope, span));
-        }
-
-        lowered
+    ) -> Box<[MiddleNode]> {
+        args.into_iter()
+            .map(AstNode::from)
+            .chain(reverse_args)
+            .map(|arg| {
+                let span = arg.span;
+                arg.lower_or_empty(self, scope, span)
+            })
+            .collect()
     }
 
     pub fn resolve_impl_member(
