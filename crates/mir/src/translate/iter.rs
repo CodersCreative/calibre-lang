@@ -244,6 +244,20 @@ impl MirLowering for AstIter {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
+        if let LoopType::While(x) = &*self.loop_type
+            && let Some(condition_type) = x.type_of(env, scope, span)
+            && !condition_type.is_bool()
+        {
+            return AstIter {
+                loop_type: Box::new(LoopType::For(
+                    PotentialDollarIdentifier::new(span, "_"),
+                    x.clone(),
+                )),
+                ..self
+            }
+            .lower(env, scope, span);
+        }
+
         let resolved_data_type = if self.data_type.is_auto() {
             self.map.type_of(env, scope, span).ok_or_else(|| {
                 env.context

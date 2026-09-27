@@ -295,13 +295,13 @@ fn create_for_loop_break_condition(
                     })
                 },
             ))),
-            then: Box::new(AstNode::new(
+            then: Box::new(AstNode::new_temp_scope(vec![AstNode::new(
                 span,
                 AstNodeType::Break(AstBreak {
                     label: None,
                     value: None,
                 }),
-            )),
+            )])),
             otherwise: None,
         }),
     )
@@ -336,7 +336,20 @@ impl MirLowering for AstLoop {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        // Extract label from named scope if present
+        if let LoopType::While(x) = &*self.loop_type
+            && let Some(condition_type) = x.type_of(env, scope, span)
+            && !condition_type.is_bool()
+        {
+            return AstLoop {
+                loop_type: Box::new(LoopType::For(
+                    PotentialDollarIdentifier::new(span, "_"),
+                    x.clone(),
+                )),
+                ..self
+            }
+            .lower(env, scope, span);
+        }
+
         if self.label.is_none() {
             let (label, new_body) = extract_label_from_named_scope((*self.body).clone(), span);
             if let Some(label) = label {
@@ -417,13 +430,13 @@ impl MirLowering for AstLoop {
                                 value: Box::new(condition),
                             }),
                         ))),
-                        then: Box::new(AstNode::new(
+                        then: Box::new(AstNode::new_temp_scope(vec![AstNode::new(
                             span,
                             AstNodeType::Break(AstBreak {
                                 label: None,
                                 value: None,
                             }),
-                        )),
+                        )])),
                         otherwise: None,
                     }),
                 );

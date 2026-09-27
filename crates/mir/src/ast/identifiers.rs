@@ -366,11 +366,10 @@ impl MiddleNode {
             | MiddleNodeType::Return(MirReturn { value: Some(value) })
             | MiddleNodeType::EnumExpression(MirEnum {
                 data: Some(value), ..
-            })
-            | MiddleNodeType::Emit(MirEmit { value }) => {
-                value.identifiers_referenced(include_functions, in_ref)
+            }) => value.identifiers_referenced(include_functions, in_ref),
+            MiddleNodeType::Emit(MirEmit { value }) => {
+                value.identifiers_referenced(include_functions, true)
             }
-
             MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. }) => {
                 value.identifiers_referenced(include_functions, in_ref)
             }

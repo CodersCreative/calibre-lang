@@ -186,7 +186,7 @@ impl VM {
             function,
             FunctionArgs::Values(&args),
             captures,
-            usize::MAX,
+            None,
             &mut state,
             get_result,
         )? {
@@ -215,7 +215,7 @@ impl VM {
             function,
             FunctionArgs::Regs(&args),
             captures,
-            usize::MAX,
+            None,
             &mut state,
             get_result,
         )? {
@@ -230,7 +230,7 @@ impl VM {
         function: &VMFunction,
         args: FunctionArgs<'b>,
         captures: Arc<Vec<(Ustr, RuntimeValue)>>,
-        budget: usize,
+        budget: Option<usize>,
         state: &mut crate::TaskState,
         get_result: bool,
     ) -> Result<Option<RuntimeValue>, RuntimeError> {
@@ -293,13 +293,7 @@ impl VM {
         let mut returned = false;
 
         loop {
-            let slice_budget = if budget == usize::MAX {
-                None
-            } else {
-                Some(budget.max(1))
-            };
-
-            match self.run_block_with_budget(block, prev_block, state.ip, slice_budget)? {
+            match self.run_block_with_budget(block, prev_block, state.ip, budget)? {
                 TerminateValue::Jump(target) => {
                     prev_block = Some(block.id);
                     block_id = target;

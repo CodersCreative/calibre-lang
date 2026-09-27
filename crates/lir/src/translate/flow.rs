@@ -10,7 +10,7 @@ Emit
 */
 
 use crate::{
-    ast::{LirLoad, LirNodeType, LirRange, LirTerminator},
+    ast::{LirEmit, LirLoad, LirNodeType, LirRange, LirTerminator},
     environment::LirEnvironment,
     translate::LirLowering,
 };
@@ -123,28 +123,21 @@ impl LirLowering for MirConditional {
 impl LirLowering for MirLoop {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
-        let header_id = env.create_block();
         let body_id = env.create_block();
         let exit_id = env.create_block();
 
         env.set_terminator(LirTerminator::Jump {
             span,
-            target: header_id,
-        });
-
-        env.switch_to(header_id);
-        env.set_terminator(LirTerminator::Jump {
-            span,
             target: body_id,
         });
 
-        env.loop_stack.push((header_id, exit_id, self.label));
+        env.loop_stack.push((body_id, exit_id, self.label));
 
         env.switch_to(body_id);
         env.lower_and_add_node(*self.body);
         env.set_terminator(LirTerminator::Jump {
             span,
-            target: header_id,
+            target: body_id,
         });
 
         env.loop_stack.pop();
@@ -170,7 +163,8 @@ impl LirLowering for MirRange {
 impl LirLowering for MirEmit {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        // TODO Add emit support
-        env.lower_node(*self.value)
+        LirNodeType::Emit(LirEmit {
+            value: Box::new(env.lower_node(*self.value)),
+        })
     }
 }

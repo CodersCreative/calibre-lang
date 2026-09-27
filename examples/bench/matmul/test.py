@@ -7,13 +7,14 @@ def matmul(a, b):
         ci = [0.0] * m
         for k in range(p):
             aik, bk = a[i][k], b[k]
+            print(aik);
             for j in range(m):
                 ci[j] += aik * bk[j]
         c.append(ci)
     return c
 
 def main():
-    n = 100;
+    n = 10;
     if (len(sys.argv) > 1): n = int(sys.argv[1])
     tmp = 1. / n / n
     a = [[tmp * (i - j) * (i + j) for j in range(n)] for i in range(n)]

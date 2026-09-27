@@ -50,7 +50,7 @@ impl NativeFunction for GeneratorResumeFn {
             func.as_ref(),
             FunctionArgs::Values(&Vec::new()),
             captures,
-            usize::MAX,
+            None,
             &mut task_state,
             true,
         )?;

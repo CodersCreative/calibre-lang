@@ -350,6 +350,20 @@ impl VM {
 
     #[inline(always)]
     #[instrument(skip_all)]
+    #[allow(unused)]
+    pub(crate) fn take_reg_value(&mut self, reg: Reg) -> RuntimeValue {
+        let frame = self.current_frame_mut();
+        let idx = reg as usize;
+        if idx < frame.reg_count {
+            let arena_idx = frame.reg_start + idx;
+            std::mem::replace(&mut self.reg_arena[arena_idx], RuntimeValue::Null)
+        } else {
+            RuntimeValue::Null
+        }
+    }
+
+    #[inline(always)]
+    #[instrument(skip_all)]
     pub(crate) fn get_reg_value(&self, reg: Reg) -> &RuntimeValue {
         let frame = self.current_frame();
         let idx = reg as usize;
@@ -473,6 +487,17 @@ impl VM {
             | RuntimeValue::RegRef { .. }
             | RuntimeValue::MutexGuard(_) => self.resolve_value_ref(&value),
             other => Ok(other),
+        }
+    }
+
+    #[inline]
+    pub(crate) fn resolve_and_unwrap_values_ref(
+        &self,
+        value: &RuntimeValue,
+    ) -> Result<RuntimeValue, RuntimeError> {
+        match self.resolve_value_ref(value)? {
+            RuntimeValue::Option(Some(x)) => self.resolve_and_unwrap_values_ref(x.as_ref()),
+            x => Ok(x),
         }
     }
 

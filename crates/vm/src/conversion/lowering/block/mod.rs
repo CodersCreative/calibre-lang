@@ -199,6 +199,7 @@ impl<'a> BlockLoweringCtx<'a> {
             LirNodeType::Aggregate(x) => x.lower(self, span),
             LirNodeType::Enum(x) => x.lower(self, span),
 
+            LirNodeType::Emit(x) => x.lower(self, span),
             LirNodeType::Range(x) => x.lower(self, span),
             LirNodeType::Closure(x) => x.lower(self, span),
 

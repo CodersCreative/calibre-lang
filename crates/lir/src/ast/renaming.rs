@@ -1,6 +1,6 @@
 use crate::ast::{
     LirAggregate, LirAs, LirAssign, LirBinary, LirBoolean, LirCall, LirClosure, LirComparison,
-    LirDeclare, LirDeref, LirDrop, LirEnum, LirIndex, LirIs, LirLValue, LirList, LirLoad,
+    LirDeclare, LirDeref, LirDrop, LirEmit, LirEnum, LirIndex, LirIs, LirLValue, LirList, LirLoad,
     LirMember, LirMove, LirNode, LirNodeType, LirRange, LirRef, LirRefLoad, LirSpawn,
 };
 use calibre_parser::{AlphaRenamable, AlphaRenameState};
@@ -37,6 +37,9 @@ impl AlphaRenamable for LirNodeType {
             }
             Self::Assign(LirAssign { dest, value }) => {
                 dest.rename(state);
+                value.rename(state);
+            }
+            Self::Emit(LirEmit { value }) => {
                 value.rename(state);
             }
             Self::Declare(LirDeclare {

@@ -1,15 +1,18 @@
 // TODO Fix - FAILING - Invalid binary operation: 0f * null
-const matmul := fn (n : int, a b : list:<list:<float>>) -> list:<list:<float>> => {
+const matmul := fn (a b : list:<list:<float>>) -> list:<list:<float>> => {
+	let n := len(a);
+	let m := len(try!! b[0]);
+	let p := len(try!! a[0]);
 	let mut c := list:<list:<float>>[];
 	
-	for i in 0..n => {
-		let mut ci := list:<float>[0f for _ in 0..n];
+	for i in n => {
+		let mut ci := list:<float>[0f for n];
 		
-		for k in 0..n => {
-			let aik : float = try!! (try!! a[i])[k];
+		for k in p => {
+			let aik : float = try!! a[i][k];
 			let bk : list:<float> = try!! b[k];
 			
-			for j in 0..n => ci[j] += aik * bk[j];
+			for j in m => ci[j] := (try ci[j] => 0) + (aik * try bk[j] => 0);
 		};
 		
 		c <<= ci;
@@ -20,15 +23,16 @@ const matmul := fn (n : int, a b : list:<list:<float>>) -> list:<list:<float>> =
 
 const main := fn => {
 	print("Starting");
-	let n : int = 100;
-	let tmp : float = 1f / n / n;
-	let a := list:<list:<float>>[list:<float>[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n];
-	let b := list:<list:<float>>[list:<float>[tmp * (i - j) * (i + j) for j in 0..n] for i in 0..n];
-	print("a and b success");
+	const n : int = 100;
+	let tmp : float = (1f / n) / n;
 
-	let d := matmul(n, a, b);
+	let a := list:<list:<float>>[list:<float>[tmp * (i - j) * (i + j) for j in n] for i in n];
+	let b := list:<list:<float>>[list:<float>[tmp * (i - j) * (i + j) for j in n] for i in n];
+
+	let d := matmul(a, b);
+
 	print("Finished");
-	print(try!! (try!! d[n / 2])[n / 2]);
+	print(try!! d[n / 2][n / 2]);
 	print("Success");
 };
 

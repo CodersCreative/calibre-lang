@@ -210,6 +210,11 @@ pub struct LirExtern {
     pub pure: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
+pub struct LirEmit {
+    pub value: Box<LirNodeType>,
+}
+
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LirNodeType {
@@ -221,6 +226,7 @@ pub enum LirNodeType {
     RefLoad(LirRefLoad),
     Index(LirIndex),
     Member(LirMember),
+    Emit(LirEmit),
 
     Boolean(LirBoolean),
     Binary(LirBinary),
@@ -291,6 +297,11 @@ impl LirNodeType {
     pub fn is_noop(&self) -> bool {
         matches!(self, LirNodeType::Noop)
     }
+
+    #[inline]
+    pub fn is_assignment(&self) -> bool {
+        matches!(self, LirNodeType::Assign(_))
+    }
 }
 
 impl Display for LirNodeType {
@@ -300,6 +311,7 @@ impl Display for LirNodeType {
             "{}",
             match self {
                 Self::Noop => "noop".to_string(),
+                Self::Emit(LirEmit { value }) => format!("emit {}", value),
                 Self::Spawn(LirSpawn { value }) => format!("spawn {}", value),
                 Self::List(LirList { values, data_type }) => {
                     format!(

@@ -12,8 +12,15 @@ use crate::conversion::{
     },
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
-use calibre_lir::ast::{LirClosure, LirRange};
+use calibre_lir::ast::{LirClosure, LirEmit, LirRange};
 use calibre_parser::Span;
+
+impl VMLowering for LirEmit {
+    #[inline(always)]
+    fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
+        env.lower_node(*self.value, span)
+    }
+}
 
 impl VMLowering for LirRange {
     #[inline(always)]

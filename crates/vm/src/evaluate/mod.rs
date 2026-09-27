@@ -579,26 +579,26 @@ impl VM {
     }
 
     #[instrument(skip_all)]
-    fn apply_phis(&mut self, block: &VMBlock, prev: Option<BlockId>) -> Result<(), RuntimeError> {
+    #[inline]
+    fn apply_phis(&mut self, block: &VMBlock, prev: &BlockId) -> Result<(), RuntimeError> {
         if block.phis.is_empty() {
             return Ok(());
         }
-        let Some(prev) = prev else {
-            return Ok(());
-        };
 
         for phi in &block.phis {
             let mut selected = None;
             for (pred, reg) in &phi.sources {
-                if *pred == prev {
+                if pred == prev {
                     selected = Some(*reg);
                     break;
                 }
             }
+
             let reg = selected.unwrap_or_else(|| phi.sources.first().map(|x| x.1).unwrap_or(0));
             let value = self.get_reg_value(reg).clone();
             self.set_reg_value(phi.dest, value);
         }
+
         Ok(())
     }
 
@@ -617,16 +617,15 @@ impl VM {
         block: &VMBlock,
         prev: Option<BlockId>,
         start_ip: usize,
-        budget: Option<usize>,
+        mut budget: Option<usize>,
     ) -> Result<TerminateValue, RuntimeError> {
-        if start_ip == 0 {
+        if let Some(prev) = &prev
+            && start_ip == 0
+        {
             self.apply_phis(block, prev)?;
         }
 
-        let mut fuel = budget.unwrap_or(usize::MAX);
-
         for (ip, instruction) in block.instructions.iter().enumerate().skip(start_ip) {
-            tracing::trace!(ip, instruction = ?instruction, "executing instruction");
             if (ip & 0x3f) == 0 {
                 self.maybe_collect_garbage();
             }
@@ -649,9 +648,9 @@ impl VM {
                 x => return Ok(x),
             }
 
-            if fuel != usize::MAX {
-                fuel = fuel.saturating_sub(1);
-                if fuel == 0 {
+            if let Some(fuel) = &mut budget {
+                *fuel = (*fuel).saturating_sub(1);
+                if *fuel == 0 {
                     return Ok(TerminateValue::Yield {
                         block: block.id,
                         ip: ip + 1,

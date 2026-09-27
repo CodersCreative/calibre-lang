@@ -250,7 +250,11 @@ fn run_task_slice(
                 func.as_ref(),
                 FunctionArgs::Values(&Vec::new()),
                 resolved_captures,
-                quantum,
+                if quantum == usize::MAX {
+                    None
+                } else {
+                    Some(quantum)
+                },
                 &mut state,
                 true,
             );

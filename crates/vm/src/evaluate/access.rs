@@ -574,8 +574,9 @@ impl VMEvaluation for VMIndex {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
+        let target_val = vm.resolve_and_unwrap_values_ref(vm.get_reg_value(self.value))?;
+
         let index_val = vm.resolve_value_ref(vm.get_reg_value(self.index))?;
-        let target_val = vm.resolve_value_ref(vm.get_reg_value(self.value))?;
 
         let resolve_single_index =
             |len: usize, idx: &RuntimeValue| -> Result<Option<usize>, RuntimeError> {
