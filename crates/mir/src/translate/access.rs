@@ -255,8 +255,6 @@ impl MirLowering for AstIndex {
     ) -> Option<ParserDataType> {
         let base_type = self.base.type_of(env, scope, span).map(|x| x.data_type);
 
-        println!("{}\n{:?}\n", self.base, base_type);
-
         let index_type = self.index.type_of(env, scope, span).map(|x| x.data_type);
 
         match (base_type, index_type) {

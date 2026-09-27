@@ -60,6 +60,8 @@ impl MirLowering for AstStruct {
                 let mut map = Vec::new();
 
                 for itm in x {
+                    let span = itm.1.span;
+
                     if !env.context.type_check {
                         let node_ty = itm.1.type_of(env, scope, span);
                         if let Some(obj) = &obj
@@ -71,9 +73,11 @@ impl MirLowering for AstStruct {
                                 Some(expected_ty),
                                 node_ty.as_ref(),
                                 Some(&TagInfo::IgnoreInvalidTypeCheck),
+                                span,
                             )?;
                         }
                     }
+
                     map.push((itm.0, itm.1.lower_or_empty(env, scope, span)));
                 }
 
@@ -83,6 +87,8 @@ impl MirLowering for AstStruct {
                 let mut map = Vec::new();
 
                 for (idx, itm) in x.into_iter().enumerate() {
+                    let span = itm.span;
+
                     if !env.context.type_check {
                         let node_ty = itm.type_of(env, scope, span);
                         if let Some(obj) = &obj
@@ -96,10 +102,12 @@ impl MirLowering for AstStruct {
                                     Some(expected_ty),
                                     node_ty.as_ref(),
                                     Some(&TagInfo::IgnoreInvalidTypeCheck),
+                                    span,
                                 )?;
                             }
                         }
                     }
+
                     map.push((
                         Ustr::from(&idx.to_string()),
                         itm.lower_or_empty(env, scope, span),
@@ -171,6 +179,7 @@ impl MirLowering for AstEnum {
                             node_ty.as_ref(),
                             data_type.as_ref(),
                             Some(&TagInfo::IgnoreInvalidTypeCheck),
+                            data.span,
                         )?;
                     }
 
@@ -237,14 +246,21 @@ impl MirLowering for AstRange {
             let from_type = self.from.type_of(env, scope, span);
             let to_type = self.to.type_of(env, scope, span);
 
-            let data_type =
-                env.compare_types(from_type, to_type, Some(&TagInfo::IgnoreInvalidTypeCheck))?;
+            let data_type = env.compare_types(
+                from_type,
+                to_type,
+                Some(&TagInfo::IgnoreInvalidTypeCheck),
+                span,
+            )?;
 
             if !data_type.clone().is_int() {
-                return Err(env.context.err_at_current(MiddleErr::InvalidType {
-                    expected: Box::new(ParserDataType::new(span, ParserInnerType::Int)),
-                    found: Box::new(data_type),
-                }));
+                return Err(env.context.err_at_span(
+                    span,
+                    MiddleErr::InvalidType {
+                        expected: Box::new(ParserDataType::new(span, ParserInnerType::Int)),
+                        found: Box::new(data_type),
+                    },
+                ));
             }
         }
 

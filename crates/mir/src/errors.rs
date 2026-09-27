@@ -73,6 +73,12 @@ pub enum MiddleErr {
         contents: String,
         error: Box<MiddleErr>,
     },
+    #[error("Error at")]
+    AtWithFile {
+        path: PathBuf,
+        span: Span,
+        error: Box<MiddleErr>,
+    },
     #[error("Multiple middle errors")]
     Multiple(Vec<MiddleErr>),
     // Type inference failures (codes 210-229)
@@ -174,6 +180,7 @@ impl calibre_parser::CalibreError for MiddleErr {
     fn code(&self) -> &'static str {
         match self {
             Self::At(_, inner) => inner.code(),
+            Self::AtWithFile { error, .. } => error.code(),
             Self::ExpectedOperation(_) => "M001",
             Self::InvalidTag(_) => "M002",
             Self::ExpectedFunctions => "M003",
@@ -253,6 +260,7 @@ impl calibre_parser::CalibreError for MiddleErr {
     fn hint(&self) -> Option<String> {
         match self {
             Self::At(_, inner) => inner.hint(),
+            Self::AtWithFile { error, .. } => error.hint(),
             Self::InvalidDefaultFuncArg => {
                 Some("default value name must be an identifier".to_string())
             }
@@ -414,6 +422,16 @@ impl calibre_parser::CalibreError for MiddleErr {
         match self {
             Self::At(span, _) => *span,
             _ => Span::default(),
+        }
+    }
+}
+
+impl MiddleErr {
+    pub fn unwrap(self) -> (Span, MiddleErr) {
+        match self {
+            Self::At(span, inner) => (span, *inner),
+            Self::AtWithFile { span, error, .. } => (span, *error),
+            other => (Span::default(), other),
         }
     }
 }

@@ -35,7 +35,8 @@ impl<T> list:<T> {
 		let mut i := len(self) - 1;
 		
 		for i >= 0 => {
-			if (try!! self[i]) = needle => return i;
+			let value : T? = try!! self[i];
+			if value = needle => return i;
 			i -= 1;
 		};
 		
@@ -89,10 +90,6 @@ impl<T> list:<T> {
 		return out;
 	};
 
-	const push := fn (self : &mut list:<T>, value : T) => {
-		self <<= value;
-	};
-
 	const pop := fn (self : &mut list:<T>) -> T? => {
 		let l := len(self);
 		if l = 0 => return none;
@@ -115,17 +112,7 @@ impl<T> list:<T> {
 	};
 
 	const insert := fn (self : &mut list:<T>, idx : int, value : T) -> bool => {
-		let l := len(self);
-		if idx < 0 || idx > l => return false;
-		let mut out := list:<T>[];
-		
-		for i in 0..(l + 1) => {
-			if i = idx => out <<= value;
-			if i < l => out <<= try!! self[i];
-		};
-		
-		self := move out;
-		return true;
+		return raw_insert(self, idx, value);
 	};
 
 	const extend := fn (self : &mut list:<T>, other : list:<T>) => {

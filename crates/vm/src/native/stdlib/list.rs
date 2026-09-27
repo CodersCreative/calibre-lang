@@ -163,6 +163,7 @@ impl NativeFunction for ListBinarySearchBy {
     }
 }
 
+// TODO add raw_insert
 pub struct ListRawRemove;
 
 fn normalize_remove_index(len: usize, idx: i64) -> Option<usize> {

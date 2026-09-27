@@ -1,0 +1,4 @@
+@current_context const main := fn => {
+	// Parser error in following statement between the arguments of print
+	print("Hello, World! at " current_context.path);
+};

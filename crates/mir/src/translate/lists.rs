@@ -36,11 +36,13 @@ impl MirLowering for AstList {
             self.values
                 .into_iter()
                 .map(|item| {
+                    let span = item.span;
                     let node_ty = item.type_of(env, scope, span);
                     data_type = Some(env.compare_types(
                         data_type.clone(),
                         node_ty,
                         Some(&TagInfo::IgnoreInvalidTypeCheck),
+                        span,
                     )?);
                     item.lower(env, scope, span)
                 })
@@ -50,11 +52,10 @@ impl MirLowering for AstList {
         if let Some(x) = data_type {
             value.data_type(x);
         } else {
-            return Err(env
-                .context
-                .err_at_current(MiddleErr::CannotInferFromExpression(
-                    "list literal".to_string(),
-                )));
+            return Err(env.context.err_at_span(
+                span,
+                MiddleErr::CannotInferFromExpression("list literal".to_string()),
+            ));
         }
 
         Ok(MiddleNode {

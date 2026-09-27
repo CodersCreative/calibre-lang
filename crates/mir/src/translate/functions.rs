@@ -1014,12 +1014,14 @@ impl MirLowering for AstCall {
                 .collect();
 
             for (i, arg) in all_args.iter().enumerate() {
+                let span = arg.span;
                 if let Some(param) = parameters.get(i) {
                     let arg_ty = arg.type_of(env, scope, span);
                     env.compare_types_ref(
                         Some(param),
                         arg_ty.as_ref(),
                         Some(&TagInfo::IgnoreInvalidTypeCheck),
+                        span,
                     )?;
                 }
             }

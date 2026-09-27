@@ -89,6 +89,18 @@ pub fn emit_mir_error(path: &Path, contents: &str, err: &MiddleErr) {
             debug!(error_path = ?err_path, "emitting MIR error in file");
             emit_mir_error(err_path, err_contents, error);
         }
+        MiddleErr::AtWithFile {
+            path: err_path,
+            span,
+            error,
+        } => {
+            let file_contents = std::fs::read_to_string(err_path).unwrap_or_else(|_| String::new());
+            if span.is_none() {
+                emit_calibre_error(err_path, &file_contents, &**error, None);
+            } else {
+                emit_calibre_error(err_path, &file_contents, &**error, Some(*span));
+            }
+        }
         other => {
             debug!("emitting generic MIR error");
             emit_calibre_error(path, contents, other, None);

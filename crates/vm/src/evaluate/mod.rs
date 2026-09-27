@@ -8,7 +8,7 @@ use crate::{
 use calibre_lir::ast::BlockId;
 use calibre_parser::ast::idents::ParserText;
 use calibre_parser::ast::types::ParserInnerType;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap};
 
@@ -635,7 +635,12 @@ impl VM {
                 Ok(step) => step,
                 Err(e) => {
                     let span = block.instruction_spans.get(ip).cloned().unwrap_or_default();
-                    return Err(RuntimeError::at(span, e));
+                    let path = self
+                        .source_file_override
+                        .as_ref()
+                        .map(|s| PathBuf::from(s.as_str()))
+                        .unwrap_or_else(|| std::path::PathBuf::from("<unknown>"));
+                    return Err(RuntimeError::at(path, span, e));
                 }
             };
 

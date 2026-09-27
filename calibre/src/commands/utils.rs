@@ -96,7 +96,7 @@ pub fn run_named_function_once(
     match vm.run(func.as_ref(), Vec::new()) {
         Ok(_) => Ok((start.elapsed(), vm.take_captured_output())),
         Err(e) => Err((
-            runtime_error_message(e.innermost().1),
+            runtime_error_message(e.innermost().2),
             vm.take_captured_output(),
         )),
     }

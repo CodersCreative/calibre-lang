@@ -44,10 +44,18 @@ impl MiddleContext {
     }
 
     pub fn err_at_current(&self, err: MiddleErr) -> MiddleErr {
-        if let Some(location) = &self.current_location {
-            MiddleErr::At(location.span, Box::new(err))
+        self.err_at_span(Span::default(), err)
+    }
+
+    pub fn err_at_span(&self, span: Span, err: MiddleErr) -> MiddleErr {
+        if span.is_none() {
+            if let Some(location) = &self.current_location {
+                MiddleErr::At(location.span, Box::new(err))
+            } else {
+                err
+            }
         } else {
-            err
+            MiddleErr::At(span, Box::new(err))
         }
     }
 }

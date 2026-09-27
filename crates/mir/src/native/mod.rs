@@ -71,8 +71,11 @@ impl MiddleEnvironment {
         self.setup_global(scope);
         self.context.stdlib_nodes.clear();
         let mut parser = Parser::default();
+
         let global_path = get_globals_path();
+        parser.set_source_path(Some(global_path.clone()));
         let globals = get_stdlib_file(global_path.to_str().unwrap_or("global/main.cal"));
+
         if let Some(globals) = globals {
             let program = parser.produce_ast(globals);
 
@@ -92,9 +95,15 @@ impl MiddleEnvironment {
             if self.context.errors.len() > error_count_before {
                 let new_errors: Vec<_> = self.context.errors.drain(error_count_before..).collect();
                 for err in new_errors {
-                    self.context.errors.push(MiddleErr::InFile {
+                    let (extracted_span, err) = err.unwrap();
+
+                    self.context.errors.push(MiddleErr::AtWithFile {
                         path: global_path.clone(),
-                        contents: globals.to_string(),
+                        span: if extracted_span.is_none() {
+                            span
+                        } else {
+                            extracted_span
+                        },
                         error: Box::new(err),
                     });
                 }
@@ -145,6 +154,7 @@ impl MiddleEnvironment {
 
         if let Ok(scope_ref) = self.scoping.scope_or_err(scope) {
             let scope_path = scope_ref.path.clone();
+            parser.set_source_path(Some(scope_path.clone()));
             let stdlib = get_stdlib_file(scope_path.to_str().unwrap_or("stdlib/main.cal"));
             if let Some(stdlib) = stdlib {
                 let mut program = parser.produce_ast(stdlib);
@@ -179,9 +189,14 @@ impl MiddleEnvironment {
                     let new_errors: Vec<_> =
                         self.context.errors.drain(error_count_before..).collect();
                     for err in new_errors {
-                        self.context.errors.push(MiddleErr::InFile {
+                        let (extracted_span, err) = err.unwrap();
+                        self.context.errors.push(MiddleErr::AtWithFile {
                             path: scope_path.clone(),
-                            contents: stdlib.to_string(),
+                            span: if extracted_span.is_none() {
+                                span
+                            } else {
+                                extracted_span
+                            },
                             error: Box::new(err),
                         });
                     }

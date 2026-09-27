@@ -1,4 +1,4 @@
-const main := fn => {
+const main := fn -> str!null => {
     let res1 : str!int = ok(42);
     let val1 : int = try res1;
     print("val1: " & val1);

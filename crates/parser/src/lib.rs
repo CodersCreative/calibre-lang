@@ -13,7 +13,7 @@ use std::{
     sync::{LazyLock, RwLock},
 };
 use thiserror::Error;
-use tracing::{debug, info, instrument};
+use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap};
 
 pub mod ast;
@@ -105,7 +105,7 @@ pub struct Span {
 
 impl Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}) -> ({})", self.from, self.to)
+        write!(f, "({} -> {})", self.from, self.to)
     }
 }
 
@@ -259,7 +259,6 @@ impl Parser {
         }) {
             Ok(ast) => {
                 self.errors.clear();
-                info!("parse completed");
                 ast
             }
             Err(errs) => {

@@ -314,7 +314,8 @@ impl MirLowering for AstDeclaration {
             Some(env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?)
         };
 
-        let data_type = env.compare_types(data_type, node_ty, Some(&TagInfo::IgnoreInvalidLet))?;
+        let data_type =
+            env.compare_types(data_type, node_ty, Some(&TagInfo::IgnoreInvalidLet), span)?;
 
         if is_function {
             env.register_variable(

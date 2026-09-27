@@ -170,6 +170,7 @@ impl MirLowering for AstScopeDef {
 
         if let Some(mut body) = self.body {
             for stmt in body.iter() {
+                let span = stmt.span;
                 if let AstNodeType::VariableDeclaration(AstDeclaration {
                     identifier, value, ..
                 }) = &stmt.node_type
@@ -195,16 +196,21 @@ impl MirLowering for AstScopeDef {
             if self.is_temp {
                 let last = body.pop();
                 for statement in body.into_iter() {
+                    let span = statement.span;
                     stmts.push(statement.lower_or_empty(env, new_scope, span));
                 }
 
-                let last = last.map(|x| x.lower_or_empty(env, new_scope, span));
+                let last = last.map(|x| {
+                    let span = x.span;
+                    x.lower_or_empty(env, new_scope, span)
+                });
 
                 if !last
                     .as_ref()
                     .is_some_and(MiddleEnvironment::ends_in_control_flow)
                 {
                     for x in env.scoping.scope_or_err(new_scope)?.defers.clone() {
+                        let span = x.span;
                         stmts.push(x.lower_or_empty(env, new_scope, span));
                     }
                 }
@@ -214,7 +220,7 @@ impl MirLowering for AstScopeDef {
                 }
             } else {
                 for statement in body.into_iter() {
-                    if let Ok(x) = statement.clone().lower(env, new_scope, span) {
+                    if let Ok(x) = statement.clone().lower(env, new_scope, statement.span) {
                         stmts.push(x);
                     }
                 }

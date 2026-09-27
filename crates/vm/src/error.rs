@@ -6,10 +6,15 @@ use calibre_parser::ast::{
     types::ParserInnerType,
 };
 use std::num::{ParseFloatError, ParseIntError};
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum RuntimeError {
-    At(Span, Box<RuntimeError>),
+    At {
+        path: PathBuf,
+        span: Span,
+        error: Box<RuntimeError>,
+    },
     Boolean(Box<RuntimeValue>, Box<RuntimeValue>, BooleanOperator),
     Comparison(Box<RuntimeValue>, Box<RuntimeValue>, ComparisonOperator),
     Binary(Box<RuntimeValue>, Box<RuntimeValue>, BinaryOperator),
@@ -146,7 +151,7 @@ impl From<ParseIntError> for RuntimeError {
 impl std::fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RuntimeError::At(_, inner) => write!(f, "{}", inner),
+            RuntimeError::At { error: inner, .. } => write!(f, "{}", inner),
             RuntimeError::Boolean(left, right, op) => {
                 write!(f, "Invalid boolean operation: {left} {op} {right}")
             }
@@ -298,7 +303,7 @@ impl std::fmt::Display for RuntimeError {
 impl calibre_parser::CalibreError for RuntimeError {
     fn code(&self) -> &'static str {
         match self {
-            Self::At(_, inner) => inner.code(),
+            Self::At { error: inner, .. } => inner.code(),
             Self::Boolean(_, _, _) => "V001",
             Self::Comparison(_, _, _) => "V002",
             Self::Binary(_, _, _) => "V003",
@@ -357,7 +362,7 @@ impl calibre_parser::CalibreError for RuntimeError {
 
     fn hint(&self) -> Option<String> {
         match self {
-            Self::At(_, inner) => inner.hint(),
+            Self::At { error: inner, .. } => inner.hint(),
             Self::Boolean(_, _, _) => Some(
                 "Ensure both operands are booleans (true/false) when using boolean operators."
                     .to_string(),
@@ -512,32 +517,43 @@ impl calibre_parser::CalibreError for RuntimeError {
 
     fn span(&self) -> Span {
         match self {
-            Self::At(span, _) => *span,
+            Self::At { span, .. } => *span,
             _ => Span::default(),
         }
     }
 }
 
 impl RuntimeError {
-    pub fn at(span: Span, err: RuntimeError) -> RuntimeError {
-        if span == Span::default() {
+    pub fn at(path: PathBuf, span: Span, err: RuntimeError) -> RuntimeError {
+        if span.is_none() {
             err
         } else {
-            RuntimeError::At(span, Box::new(err))
+            RuntimeError::At {
+                path,
+                span,
+                error: Box::new(err),
+            }
         }
     }
 
-    pub fn innermost(&self) -> (Option<Span>, &RuntimeError) {
+    pub fn innermost(&self) -> (Option<PathBuf>, Option<Span>, &RuntimeError) {
+        let mut path = None;
         let mut span = None;
         let mut current = self;
 
-        while let RuntimeError::At(inner_span, inner) = current {
-            if *inner_span != Span::default() {
+        while let RuntimeError::At {
+            path: inner_path,
+            span: inner_span,
+            error: inner,
+        } = current
+        {
+            if !inner_span.is_none() {
+                path = Some(inner_path.clone());
                 span = Some(*inner_span);
             }
             current = inner.as_ref();
         }
 
-        (span, current)
+        (path, span, current)
     }
 }

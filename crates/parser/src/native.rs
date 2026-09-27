@@ -689,13 +689,30 @@ impl ParserDataType {
                 ),
                 (
                     "list.raw_remove",
-                    vec![ParserInnerType::Ref(
-                        Box::new(Self::native_type(ParserInnerType::List(Box::new(
-                            Self::native_type(ParserInnerType::Dynamic),
-                        )))),
-                        RefMutability::MutRef,
-                    )],
+                    vec![
+                        ParserInnerType::Ref(
+                            Box::new(Self::native_type(ParserInnerType::List(Box::new(
+                                Self::native_type(ParserInnerType::Dynamic),
+                            )))),
+                            RefMutability::MutRef,
+                        ),
+                        ParserInnerType::Int,
+                    ],
                     ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Dynamic))),
+                ),
+                (
+                    "list.raw_insert",
+                    vec![
+                        ParserInnerType::Ref(
+                            Box::new(Self::native_type(ParserInnerType::List(Box::new(
+                                Self::native_type(ParserInnerType::Dynamic),
+                            )))),
+                            RefMutability::MutRef,
+                        ),
+                        ParserInnerType::Int,
+                        ParserInnerType::Dynamic,
+                    ],
+                    ParserInnerType::Bool,
                 ),
                 #[cfg(feature = "native")]
                 (

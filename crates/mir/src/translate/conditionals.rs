@@ -40,6 +40,7 @@ impl MirLowering for AstIf {
                 then_type.as_ref(),
                 Some(&otherwise_type),
                 Some(&TagInfo::IgnoreInvalidTypeCheck),
+                span,
             )?;
         }
 
@@ -127,14 +128,15 @@ impl MirLowering for AstTernary {
                     .expect("Otherwise with TernaryType::Normal should be Some");
 
                 if !env.context.type_check {
-                    let then_type = self.then.type_of(env, scope, span);
-                    let otherwise_type = otherwise.type_of(env, scope, span);
+                    let then_type = self.then.type_of(env, scope, self.then.span);
+                    let otherwise_type = otherwise.type_of(env, scope, otherwise.span);
 
                     if !then_type.as_ref().is_some_and(|x| x.is_null()) {
                         env.compare_types_ref(
                             then_type.as_ref(),
                             otherwise_type.as_ref(),
                             Some(&TagInfo::IgnoreInvalidTypeCheck),
+                            span,
                         )?;
                     }
                 }

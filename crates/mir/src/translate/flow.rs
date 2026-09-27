@@ -58,6 +58,7 @@ impl MirLowering for AstEmit {
                         expected.as_ref(),
                         channel_ty.as_ref(),
                         Some(&TagInfo::IgnoreInvalidTypeCheck),
+                        span,
                     )?;
                 }
 
@@ -263,6 +264,17 @@ impl MirLowering for AstTry {
             )
         };
 
+        let emit_call = |name: &str, args: Vec<CallArg>| {
+            AstNode::new(
+                Span::default(),
+                AstNodeType::Emit(AstEmit::Scope(Box::new(AstNode::call(
+                    span,
+                    AstNode::identifier(span, name),
+                    args,
+                )))),
+            )
+        };
+
         match self.try_type {
             TryType::Normal => AstNode {
                 node_type: AstNodeType::MatchStatement(AstMatch {
@@ -279,7 +291,11 @@ impl MirLowering for AstTry {
                         let err_arm = if let Some(catch) = self.catch {
                             enum_arm("None", catch.name, *catch.body)
                         } else {
-                            enum_arm("None", None, return_call("none", Vec::new()))
+                            enum_arm(
+                                "None",
+                                None,
+                                AstNode::ret(AstNode::identifier(span, "none")),
+                            )
                         };
 
                         MatchBody {
@@ -325,13 +341,17 @@ impl MirLowering for AstTry {
                     let ok_arm = enum_arm(
                         "Ok",
                         Some(ParserText::from(ok_name.to_string()).into()),
-                        return_call(
+                        emit_call(
                             "some",
                             vec![CallArg::Value(AstNode::identifier(span, ok_name))],
                         ),
                     );
 
-                    let err_arm = enum_arm("Err", None, return_call("none", Vec::new()));
+                    let err_arm = enum_arm(
+                        "Err",
+                        None,
+                        AstNode::emit(AstNode::identifier(span, "none")),
+                    );
 
                     AstNode {
                         node_type: AstNodeType::MatchStatement(AstMatch {
@@ -352,7 +372,7 @@ impl MirLowering for AstTry {
                 let ok_arm_some = enum_arm(
                     "Some",
                     Some(ParserText::from(ok_name.to_string()).into()),
-                    return_call(
+                    emit_call(
                         "ok",
                         vec![CallArg::Value(AstNode::identifier(span, ok_name))],
                     ),
@@ -368,7 +388,7 @@ impl MirLowering for AstTry {
                     enum_arm(
                         "None",
                         None,
-                        return_call(
+                        emit_call(
                             "err",
                             vec![CallArg::Value(AstNode::call(
                                 span,
@@ -381,7 +401,7 @@ impl MirLowering for AstTry {
                     enum_arm(
                         "None",
                         None,
-                        return_call(
+                        emit_call(
                             "err",
                             vec![CallArg::Value(AstNode::identifier(span, "none"))],
                         ),
@@ -392,7 +412,7 @@ impl MirLowering for AstTry {
                     enum_arm(
                         "Err",
                         Some(ParserText::from(err_name.to_string()).into()),
-                        return_call(
+                        emit_call(
                             "err",
                             vec![CallArg::Value(AstNode::call(
                                 span,
@@ -405,7 +425,7 @@ impl MirLowering for AstTry {
                     enum_arm(
                         "Err",
                         Some(ParserText::from(err_name.to_string()).into()),
-                        return_call(
+                        emit_call(
                             "err",
                             vec![CallArg::Value(AstNode::identifier(span, err_name))],
                         ),
@@ -445,8 +465,9 @@ impl MirLowering for AstTry {
                         enum_arm(
                             "None",
                             None,
-                            return_call(
-                                "panic",
+                            AstNode::call(
+                                span,
+                                AstNode::identifier(span, "panic"),
                                 vec![CallArg::Value(AstNode::call(
                                     span,
                                     AstNode::identifier(span, "panic"),
@@ -459,8 +480,9 @@ impl MirLowering for AstTry {
                         enum_arm(
                             "Err",
                             Some(ParserText::from(err_name.to_string()).into()),
-                            return_call(
-                                "panic",
+                            AstNode::call(
+                                span,
+                                AstNode::identifier(span, "panic"),
                                 vec![CallArg::Value(AstNode::call(
                                     span,
                                     AstNode::identifier(span, "panic"),
@@ -471,13 +493,17 @@ impl MirLowering for AstTry {
                     }
                 } else {
                     if is_option {
-                        enum_arm("None", None, return_call("panic", Vec::new()))
+                        enum_arm(
+                            "None",
+                            None,
+                            AstNode::call(span, AstNode::identifier(span, "panic"), Vec::new()),
+                        )
                     } else {
                         let err_name = "anon_err_value";
                         enum_arm(
                             "Err",
                             Some(ParserText::from(err_name.to_string()).into()),
-                            return_call("panic", Vec::new()),
+                            AstNode::call(span, AstNode::identifier(span, "panic"), Vec::new()),
                         )
                     }
                 };

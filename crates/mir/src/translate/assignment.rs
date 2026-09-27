@@ -32,12 +32,14 @@ impl MirLowering for AstAssignment {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         if !env.context.type_check {
-            let identifier_type = self.identifier.type_of(env, scope, span);
-            let value_type = self.value.type_of(env, scope, span);
+            let identifier_type = self.identifier.type_of(env, scope, self.identifier.span);
+            let value_type = self.value.type_of(env, scope, self.value.span);
+
             env.compare_types_ref(
                 identifier_type.as_ref(),
                 value_type.as_ref(),
                 Some(&TagInfo::IgnoreInvalidTypeCheck),
+                span,
             )?;
         }
 
