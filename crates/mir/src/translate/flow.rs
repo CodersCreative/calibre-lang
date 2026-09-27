@@ -253,7 +253,7 @@ impl MirLowering for AstTry {
 
         let return_call = |name: &str, args: Vec<CallArg>| {
             AstNode::new(
-                Span::default(),
+                span,
                 AstNodeType::Return(AstReturn {
                     value: Some(Box::new(AstNode::call(
                         span,
@@ -266,7 +266,7 @@ impl MirLowering for AstTry {
 
         let emit_call = |name: &str, args: Vec<CallArg>| {
             AstNode::new(
-                Span::default(),
+                span,
                 AstNodeType::Emit(AstEmit::Scope(Box::new(AstNode::call(
                     span,
                     AstNode::identifier(span, name),
@@ -369,79 +369,78 @@ impl MirLowering for AstTry {
                 let ok_name = "anon_ok_value";
                 let err_name = "anon_err_value";
 
-                let ok_arm_some = enum_arm(
-                    "Some",
-                    Some(ParserText::from(ok_name.to_string()).into()),
-                    emit_call(
-                        "ok",
-                        vec![CallArg::Value(AstNode::identifier(span, ok_name))],
-                    ),
-                );
-
-                let ok_arm_ok = enum_arm(
-                    "Ok",
-                    Some(ParserText::from(ok_name.to_string()).into()),
-                    AstNode::identifier(span, ok_name),
-                );
-
-                let err_arm_none = if let Some(ref catch) = self.catch {
-                    enum_arm(
-                        "None",
-                        None,
+                if is_option {
+                    let ok_arm_some = enum_arm(
+                        "Some",
+                        Some(ParserText::from(ok_name.to_string()).into()),
                         emit_call(
-                            "err",
-                            vec![CallArg::Value(AstNode::call(
-                                span,
-                                AstNode::identifier(span, "err"),
-                                vec![CallArg::Value(*catch.body.clone())],
-                            ))],
+                            "ok",
+                            vec![CallArg::Value(AstNode::identifier(span, ok_name))],
                         ),
-                    )
+                    );
+
+                    let err_arm_none = if let Some(ref catch) = self.catch {
+                        enum_arm(
+                            "None",
+                            None,
+                            emit_call("err", vec![CallArg::Value(*catch.body.clone())]),
+                        )
+                    } else {
+                        enum_arm(
+                            "None",
+                            None,
+                            emit_call("err", vec![CallArg::Value(AstNode::null(span))]),
+                        )
+                    };
+
+                    AstNode {
+                        node_type: AstNodeType::MatchStatement(AstMatch {
+                            value: Some(self.value),
+                            body: MatchBody {
+                                values: vec![ok_arm_some, err_arm_none],
+                            },
+                        }),
+                        span,
+                    }
+                    .lower(env, scope, span)
                 } else {
-                    enum_arm(
-                        "None",
-                        None,
+                    let ok_arm_ok = enum_arm(
+                        "Ok",
+                        Some(ParserText::from(ok_name.to_string()).into()),
                         emit_call(
-                            "err",
-                            vec![CallArg::Value(AstNode::identifier(span, "none"))],
+                            "ok",
+                            vec![CallArg::Value(AstNode::identifier(span, ok_name))],
                         ),
-                    )
-                };
+                    );
 
-                let err_arm_err = if let Some(ref catch) = self.catch {
-                    enum_arm(
-                        "Err",
-                        Some(ParserText::from(err_name.to_string()).into()),
-                        emit_call(
-                            "err",
-                            vec![CallArg::Value(AstNode::call(
-                                span,
-                                AstNode::identifier(span, "err"),
-                                vec![CallArg::Value(*catch.body.clone())],
-                            ))],
-                        ),
-                    )
-                } else {
-                    enum_arm(
-                        "Err",
-                        Some(ParserText::from(err_name.to_string()).into()),
-                        emit_call(
-                            "err",
-                            vec![CallArg::Value(AstNode::identifier(span, err_name))],
-                        ),
-                    )
-                };
+                    let err_arm_err = if let Some(ref catch) = self.catch {
+                        enum_arm(
+                            "Err",
+                            Some(ParserText::from(err_name.to_string()).into()),
+                            emit_call("err", vec![CallArg::Value(*catch.body.clone())]),
+                        )
+                    } else {
+                        enum_arm(
+                            "Err",
+                            Some(ParserText::from(err_name.to_string()).into()),
+                            emit_call(
+                                "err",
+                                vec![CallArg::Value(AstNode::identifier(span, err_name))],
+                            ),
+                        )
+                    };
 
-                AstNode {
-                    node_type: AstNodeType::MatchStatement(AstMatch {
-                        value: Some(self.value),
-                        body: MatchBody {
-                            values: vec![ok_arm_some, ok_arm_ok, err_arm_none, err_arm_err],
-                        },
-                    }),
-                    span,
+                    AstNode {
+                        node_type: AstNodeType::MatchStatement(AstMatch {
+                            value: Some(self.value),
+                            body: MatchBody {
+                                values: vec![ok_arm_ok, err_arm_err],
+                            },
+                        }),
+                        span,
+                    }
+                    .lower(env, scope, span)
                 }
-                .lower(env, scope, span)
             }
             TryType::Panic => {
                 let ok_name = "anon_ok_value";
@@ -468,11 +467,7 @@ impl MirLowering for AstTry {
                             AstNode::call(
                                 span,
                                 AstNode::identifier(span, "panic"),
-                                vec![CallArg::Value(AstNode::call(
-                                    span,
-                                    AstNode::identifier(span, "panic"),
-                                    vec![CallArg::Value(*catch.body)],
-                                ))],
+                                vec![CallArg::Value(*catch.body)],
                             ),
                         )
                     } else {
@@ -483,11 +478,7 @@ impl MirLowering for AstTry {
                             AstNode::call(
                                 span,
                                 AstNode::identifier(span, "panic"),
-                                vec![CallArg::Value(AstNode::call(
-                                    span,
-                                    AstNode::identifier(span, "panic"),
-                                    vec![CallArg::Value(*catch.body)],
-                                ))],
+                                vec![CallArg::Value(*catch.body)],
                             ),
                         )
                     }
