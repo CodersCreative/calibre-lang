@@ -11,7 +11,7 @@ use calibre_parser::{
     Span,
     ast::{
         Operator,
-        idents::{ParsedIntLiteral, PotentialDollarIdentifier},
+        idents::PotentialDollarIdentifier,
         nodes::{
             AstNode, AstNodeType,
             access::{AstField, AstIdentifier, AstIndex, AstScope},
@@ -253,43 +253,73 @@ impl MirLowering for AstIndex {
         scope: ScopeId,
         span: Span,
     ) -> Option<ParserDataType> {
-        let base_type = self.base.type_of(env, scope, span).or_else(|| {
-            if let AstNodeType::Identifier(id) = &self.base.node_type {
-                env.resolve_to_data_type(scope, &id.value).ok()
-            } else {
-                None
-            }
-        });
-
-        if let Some(base_type) = base_type {
-            let resolved_type =
-                match env.resolve_data_type(scope, &base_type, ResolutionOptions::typing()) {
-                    Ok(ty) => ty.unwrap_all_refs(),
-                    Err(_) => return Some(ParserDataType::auto(span)),
-                };
-
-            let index_type = match resolved_type.data_type {
-                ParserInnerType::List(inner)
-                | ParserInnerType::Option(inner)
-                | ParserInnerType::Ptr(inner) => *inner,
-                ParserInnerType::Tuple(values) => match &self.index.node_type {
-                    AstNodeType::IntLiteral(i) => ParsedIntLiteral::parse(&i.value)
-                        .and_then(|idx| values.get(idx.value as usize).cloned())
-                        .unwrap_or_else(|| ParserDataType::new(span, ParserInnerType::Auto(None))),
-                    _ => ParserDataType::new(span, ParserInnerType::Auto(None)),
-                },
-                ParserInnerType::Result { ok, err } => {
-                    if ok.data_type == err.data_type {
-                        *ok
-                    } else {
-                        ParserDataType::new(span, ParserInnerType::Dynamic)
-                    }
+        let base_type = self
+            .base
+            .type_of(env, scope, span)
+            .or_else(|| {
+                if let AstNodeType::Identifier(id) = &self.base.node_type {
+                    env.resolve_to_data_type(scope, &id.value).ok()
+                } else {
+                    None
                 }
-                _ => ParserDataType::new(span, ParserInnerType::Auto(None)),
-            };
-            Some(index_type)
-        } else {
-            Some(ParserDataType::auto(span))
+            })
+            .map(|x| x.data_type);
+
+        let index_type = self
+            .index
+            .type_of(env, scope, span)
+            .or_else(|| {
+                if let AstNodeType::Identifier(id) = &self.base.node_type {
+                    env.resolve_to_data_type(scope, &id.value).ok()
+                } else {
+                    None
+                }
+            })
+            .map(|x| x.data_type);
+
+        match (base_type, index_type) {
+            (Some(base_type), Some(ParserInnerType::Range)) => Some(match base_type {
+                ParserInnerType::List(_) => ParserDataType::new(
+                    span,
+                    ParserInnerType::Option(Box::new(ParserDataType::new(span, base_type))),
+                ),
+                ParserInnerType::Str => ParserDataType::new(
+                    span,
+                    ParserInnerType::Option(Box::new(ParserDataType::new(
+                        span,
+                        ParserInnerType::Str,
+                    ))),
+                ),
+                ParserInnerType::Range => ParserDataType::new(
+                    span,
+                    ParserInnerType::Option(Box::new(ParserDataType::new(
+                        span,
+                        ParserInnerType::Range,
+                    ))),
+                ),
+                _ => return None,
+            }),
+            (Some(base_type), _) => Some(match base_type {
+                ParserInnerType::List(inner) => {
+                    ParserDataType::new(span, ParserInnerType::Option(inner))
+                }
+                ParserInnerType::Str => ParserDataType::new(
+                    span,
+                    ParserInnerType::Option(Box::new(ParserDataType::new(
+                        span,
+                        ParserInnerType::Char,
+                    ))),
+                ),
+                ParserInnerType::Range => ParserDataType::new(
+                    span,
+                    ParserInnerType::Option(Box::new(ParserDataType::new(
+                        span,
+                        ParserInnerType::Int,
+                    ))),
+                ),
+                _ => return None,
+            }),
+            _ => None,
         }
     }
 }

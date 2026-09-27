@@ -15,11 +15,9 @@ use crate::{
     value::{GcMap, GcVec, RuntimeValue, TerminateValue, hashable::HashKey},
 };
 use calibre_lir::ast::BlockId;
-use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
 use tracing::instrument;
 use ustr::Ustr;
-use wasm_sync::Mutex;
 
 impl VMEvaluation for VMLoadMember {
     #[instrument(skip_all)]
@@ -576,190 +574,127 @@ impl VMEvaluation for VMIndex {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let value_ref = vm.get_reg_value(self.value);
-        let mut index_val = vm.get_reg_value(self.index).clone();
+        let index_val = vm.resolve_value_ref(vm.get_reg_value(self.index))?;
+        let target_val = vm.resolve_value_ref(vm.get_reg_value(self.value))?;
 
-        if index_val.is_ref_like() {
-            index_val = vm.resolve_value_ref(&index_val)?;
-        }
-
-        if let RuntimeValue::List(list) = value_ref {
-            let idx = match &index_val {
-                RuntimeValue::UInt(i) => Some(*i as usize),
-                RuntimeValue::Int(i) if *i >= 0 => Some(*i as usize),
-                _ => None,
+        let resolve_single_index =
+            |len: usize, idx: &RuntimeValue| -> Result<Option<usize>, RuntimeError> {
+                match idx {
+                    RuntimeValue::Int(i) => Ok(resolve_index(len, *i).ok()),
+                    RuntimeValue::UInt(u) => {
+                        let idx_usize = *u as usize;
+                        Ok((idx_usize < len).then_some(idx_usize))
+                    }
+                    other => Err(RuntimeError::ExpectedIntIndexFound {
+                        found: Box::new(other.clone()),
+                    }),
+                }
             };
 
-            if let Some(idx) = idx {
-                let out = list.as_ref().0.get(idx).cloned();
-                let out = out.unwrap_or_default();
-                vm.set_reg_value(self.dst, out);
-                if let Some(source) = vm.current_frame().member_sources.get(&self.value).cloned() {
-                    vm.current_frame_mut()
-                        .member_sources
-                        .insert(self.dst, source);
-                }
-                return Ok(TerminateValue::None);
-            }
-        }
-
-        let index_list = |list: &Gc<GcVec>| -> Result<RuntimeValue, RuntimeError> {
-            match &index_val {
-                RuntimeValue::Int(index) => Ok(resolve_index(list.as_ref().0.len(), *index)
-                    .ok()
-                    .and_then(|i| list.as_ref().0.get(i).cloned())
-                    .unwrap_or_else(|| RuntimeValue::Null)),
-                RuntimeValue::UInt(index) => Ok(list
-                    .as_ref()
-                    .0
-                    .get(*index as usize)
-                    .cloned()
-                    .unwrap_or_else(|| RuntimeValue::Null)),
-                RuntimeValue::Range(start, end) => {
-                    let (s, e) = resolve_slice_range(list.as_ref().0.len(), *start, *end);
-                    let slice = list.as_ref().0[s..e].to_vec();
-                    Ok(RuntimeValue::List(Gc::new(GcVec(slice))))
-                }
-                _ => Err(RuntimeError::ExpectedListOrStrFound {
-                    found: Box::new(RuntimeValue::Null),
-                }),
-            }
-        };
-
-        let index_map = |map: &Arc<
-            Mutex<rustc_hash::FxHashMap<HashKey, RuntimeValue>>,
-        >|
-         -> Result<RuntimeValue, RuntimeError> {
-            let key = HashKey::try_from(index_val.clone())?;
-            let guard = map.lock().unwrap();
-            Ok(guard.get(&key).cloned().unwrap_or(RuntimeValue::Null))
-        };
-
-        let resolved = vm.resolve_value_ref(vm.get_reg_value(self.value))?;
-        let val = match resolved {
-            RuntimeValue::List(list) => index_list(&list)?,
-            RuntimeValue::HashMap(map) => index_map(&map.map)?,
-            RuntimeValue::Range(start, end) => match &index_val {
-                RuntimeValue::Int(index) => {
-                    let len = (end - start).max(0) as usize;
-                    resolve_index(len, *index)
-                        .map(|i| RuntimeValue::Int(start + i as i64))
-                        .unwrap_or_else(|_| RuntimeValue::Null)
-                }
-                RuntimeValue::UInt(index) => {
-                    let len = (end - start).max(0) as usize;
-                    if (*index as usize) < len {
-                        RuntimeValue::Int(start + *index as i64)
-                    } else {
-                        RuntimeValue::Null
+        let val = match target_val {
+            RuntimeValue::List(list) => {
+                let items = &list.as_ref().0;
+                match &index_val {
+                    RuntimeValue::Range(start, end) => {
+                        resolve_slice_range(items.len(), *start, *end)
+                            .and_then(|(s, e)| items.get(s..e))
+                            .map(|x| {
+                                RuntimeValue::Option(Some(Gc::new(RuntimeValue::List(Gc::new(
+                                    GcVec(x.to_vec()),
+                                )))))
+                            })
+                            .unwrap_or_else(|| RuntimeValue::Option(None))
+                    }
+                    other => {
+                        let resolved = resolve_single_index(items.len(), other)?;
+                        match resolved {
+                            Some(i) => RuntimeValue::Option(Some(Gc::new(items[i].clone()))),
+                            None => RuntimeValue::Option(None),
+                        }
                     }
                 }
-                RuntimeValue::Range(slice_start, slice_end) => {
-                    let len = (end - start).max(0) as usize;
-                    let (s, e) = resolve_slice_range(len, *slice_start, *slice_end);
-                    RuntimeValue::Range(start + s as i64, start + e as i64)
-                }
-                _ => {
-                    return Err(RuntimeError::ExpectedIntIndexFound {
-                        found: Box::new(RuntimeValue::Null),
-                    });
-                }
-            },
-            RuntimeValue::Aggregate(None, tuple) => match &index_val {
-                RuntimeValue::Int(index) => resolve_index(tuple.as_ref().0.0.len(), *index)
-                    .ok()
-                    .and_then(|i| tuple.as_ref().0.0.get(i).map(|(_, v)| v.clone()))
-                    .unwrap_or_else(|| RuntimeValue::Null),
-                RuntimeValue::UInt(index) => tuple
-                    .as_ref()
-                    .0
-                    .0
-                    .get(*index as usize)
-                    .map(|(_, v)| v.clone())
-                    .unwrap_or_else(|| RuntimeValue::Null),
-                RuntimeValue::Range(start, end) => {
-                    let (s, e) = resolve_slice_range(tuple.as_ref().0.0.len(), *start, *end);
-                    let slice = tuple.as_ref().0.0[s..e].to_vec();
-                    RuntimeValue::Aggregate(None, Gc::new(GcMap(ObjectMap(slice))))
-                }
-                _ => {
-                    return Err(RuntimeError::ExpectedIntIndexFound {
-                        found: Box::new(RuntimeValue::Null),
-                    });
-                }
-            },
-            RuntimeValue::Aggregate(Some(_), tuple) => match &index_val {
-                RuntimeValue::Int(0) | RuntimeValue::UInt(0)
-                    if tuple.as_ref().0.0.len() == 1
-                        && matches!(tuple.as_ref().0.0[0].1, RuntimeValue::List(_)) =>
-                {
-                    let RuntimeValue::List(list) = &tuple.as_ref().0.0[0].1 else {
-                        unreachable!()
-                    };
-                    list.as_ref()
-                        .0
-                        .first()
-                        .cloned()
-                        .unwrap_or(RuntimeValue::Null)
-                }
-                RuntimeValue::Int(index) => resolve_index(tuple.as_ref().0.0.len(), *index)
-                    .ok()
-                    .and_then(|i| tuple.as_ref().0.0.get(i).map(|(_, v)| v.clone()))
-                    .unwrap_or_else(|| RuntimeValue::Null),
-                RuntimeValue::UInt(index) => tuple
-                    .as_ref()
-                    .0
-                    .0
-                    .get(*index as usize)
-                    .map(|(_, v)| v.clone())
-                    .unwrap_or_else(|| RuntimeValue::Null),
-                _ => {
-                    return Err(RuntimeError::ExpectedIntIndexFound {
-                        found: Box::new(RuntimeValue::Null),
-                    });
-                }
-            },
-            RuntimeValue::Str(s) => match &index_val {
-                RuntimeValue::Int(index) => {
-                    let resolved = if *index < 0 {
-                        let len = s.chars().count();
-                        resolve_index(len, *index).ok()
-                    } else {
-                        Some(*index as usize)
-                    };
-
-                    resolved
-                        .and_then(|i| s.chars().nth(i))
-                        .map(RuntimeValue::Char)
-                        .unwrap_or_else(|| RuntimeValue::Null)
-                }
-                RuntimeValue::UInt(index) => s
-                    .chars()
-                    .nth(*index as usize)
-                    .map(RuntimeValue::Char)
-                    .unwrap_or_else(|| RuntimeValue::Null),
-                RuntimeValue::Range(start, end) => {
-                    let v = s.chars().collect::<Vec<char>>();
-                    let (s, e) = resolve_slice_range(v.len(), *start, *end);
-                    let slice: String = v[s..e].iter().collect();
-                    RuntimeValue::Str(Ustr::from(&slice))
-                }
-                _ => {
-                    return Err(RuntimeError::ExpectedIntIndexFound {
-                        found: Box::new(RuntimeValue::Null),
-                    });
-                }
-            },
-            RuntimeValue::Enum(_, _, Some(x)) => x.as_ref().clone(),
-            RuntimeValue::Option(Some(x)) => x.as_ref().clone(),
-            RuntimeValue::Result(Ok(x)) => x.as_ref().clone(),
-            RuntimeValue::Result(Err(x)) => x.as_ref().clone(),
-            other => {
-                return Err(RuntimeError::UnexpectedTypeInIndexAccess {
-                    target: Box::new(other),
-                    index: Box::new(index_val.clone()),
-                });
             }
+            RuntimeValue::Range(start, end) => {
+                let len = (end - start).max(0) as usize;
+                match &index_val {
+                    RuntimeValue::Range(slice_start, slice_end) => {
+                        resolve_slice_range(len, *slice_start, *slice_end)
+                            .map(|(s, e)| {
+                                RuntimeValue::Option(Some(Gc::new(RuntimeValue::Range(
+                                    start + s as i64,
+                                    start + e as i64,
+                                ))))
+                            })
+                            .unwrap_or_else(|| RuntimeValue::Option(None))
+                    }
+                    other => {
+                        let resolved = resolve_single_index(len, other)?;
+                        match resolved {
+                            Some(i) => {
+                                let num = start + i as i64;
+                                if num > end {
+                                    RuntimeValue::Option(None)
+                                } else {
+                                    RuntimeValue::Option(Some(Gc::new(RuntimeValue::Int(num))))
+                                }
+                            }
+                            None => RuntimeValue::Option(None),
+                        }
+                    }
+                }
+            }
+            RuntimeValue::Str(s) => {
+                let chars: Vec<char> = s.chars().collect();
+                match &index_val {
+                    RuntimeValue::Range(start, end) => {
+                        resolve_slice_range(chars.len(), *start, *end)
+                            .and_then(|(s, e)| chars.get(s..e))
+                            .map(|x| {
+                                RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(Ustr::from(
+                                    &x.iter().collect::<String>(),
+                                )))))
+                            })
+                            .unwrap_or_else(|| RuntimeValue::Option(None))
+                    }
+                    other => {
+                        let resolved = match other {
+                            RuntimeValue::Int(i) => {
+                                if *i < 0 {
+                                    resolve_index(chars.len(), *i).ok()
+                                } else {
+                                    Some(*i as usize)
+                                }
+                            }
+                            RuntimeValue::UInt(u) => Some(*u as usize),
+                            x => {
+                                return Err(RuntimeError::ExpectedIntIndexFound {
+                                    found: Box::new(x.clone()),
+                                });
+                            }
+                        };
+
+                        match resolved.and_then(|i| chars.get(i)) {
+                            Some(&ch) => {
+                                RuntimeValue::Option(Some(Gc::new(RuntimeValue::Char(ch))))
+                            }
+                            None => RuntimeValue::Option(None),
+                        }
+                    }
+                }
+            }
+            other => match &index_val {
+                RuntimeValue::Range(..) => {
+                    return Err(RuntimeError::ExpectedListOrStrFound {
+                        found: Box::new(other),
+                    });
+                }
+                _ => {
+                    return Err(RuntimeError::UnexpectedTypeInIndexAccess {
+                        target: Box::new(other),
+                        index: Box::new(index_val),
+                    });
+                }
+            },
         };
 
         vm.set_reg_value(self.dst, val);

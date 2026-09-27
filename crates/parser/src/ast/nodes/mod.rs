@@ -2,6 +2,7 @@ use crate::{
     IdentifiersUsed, Span,
     ast::{
         binary::BinaryOperator,
+        comparison::ComparisonOperator,
         idents::{
             ParsedIntLiteral, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
         },
@@ -9,7 +10,7 @@ use crate::{
             access::{AstField, AstIdentifier, AstIndex, AstScope},
             assignment::{AstAssignDestructure, AstAssignment},
             binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
-            conditionals::{AstIf, AstTernary},
+            conditionals::{AstIf, AstTernary, TernaryType},
             declaration::{AstDeclaration, AstDeclareDestructure},
             flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
             functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
@@ -335,6 +336,26 @@ impl AstNode {
         matches!(
             &self.node_type,
             AstNodeType::Identifier(id) if id.value.get_ident().text() == "none"
+        )
+    }
+
+    #[inline]
+    pub fn unwrap_option_or(span: Span, value: AstNode, default: AstNode) -> AstNode {
+        AstNode::new(
+            span,
+            AstNodeType::Ternary(AstTernary {
+                comparison: Box::new(AstNode::new(
+                    span,
+                    AstNodeType::ComparisonExpression(AstComparison {
+                        left: Box::new(value.clone()),
+                        right: Box::new(AstNode::none(span)),
+                        operator: ComparisonOperator::Equal,
+                    }),
+                )),
+                then: Box::new(default),
+                otherwise: Some(Box::new(AstNode::member(span, value, "next"))),
+                ternary_type: TernaryType::Normal,
+            }),
         )
     }
 

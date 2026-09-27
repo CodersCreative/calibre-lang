@@ -200,7 +200,7 @@ impl MiddleNode {
                     v.substitute(repl);
                 }
             }
-            MiddleNodeType::LoopDeclaration(MirLoop {body, .. }) => {
+            MiddleNodeType::LoopDeclaration(MirLoop { body, .. }) => {
                 body.substitute(repl);
             }
             MiddleNodeType::FieldAccess(MirField { base, .. }) => base.substitute(repl),
@@ -256,9 +256,7 @@ impl MiddleNode {
                 data_type: _,
                 values,
             }) => values.iter().any(|v| v.calls_self(name)),
-            MiddleNodeType::LoopDeclaration(MirLoop { body, .. }) => {
-                body.calls_self(name)
-            }
+            MiddleNodeType::LoopDeclaration(MirLoop { body, .. }) => body.calls_self(name),
             MiddleNodeType::FieldAccess(MirField { base, .. }) => base.calls_self(name),
             MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
                 base.calls_self(name) || index.calls_self(name)
@@ -712,12 +710,12 @@ impl From<MiddleNodeType> for AstNodeType {
                 inclusive: value.inclusive,
             }),
             MiddleNodeType::LoopDeclaration(value) => AstNodeType::LoopDeclaration(AstLoop {
-                            loop_type: Box::new(LoopType::Loop),
-                            body: Box::new((*value.body).into()),
-                            until: None,
-                            label: value.label.map(Into::into),
-                            else_body: None,
-                        }),
+                loop_type: Box::new(LoopType::Loop),
+                body: Box::new((*value.body).into()),
+                until: None,
+                label: value.label.map(Into::into),
+                else_body: None,
+            }),
             MiddleNodeType::Return(value) => AstNodeType::Return(AstReturn {
                 value: value.value.map(|x| Box::new((*x).into())),
             }),

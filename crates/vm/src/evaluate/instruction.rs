@@ -92,7 +92,7 @@ pub(crate) fn resolve_index(len: usize, idx: i64) -> Result<usize, RuntimeError>
 }
 
 #[inline]
-pub(crate) fn resolve_slice_range(len: usize, start: i64, end: i64) -> (usize, usize) {
+pub(crate) fn resolve_slice_range(len: usize, start: i64, end: i64) -> Option<(usize, usize)> {
     let mut s = start;
     let mut e = end;
     if s < 0 {
@@ -107,7 +107,14 @@ pub(crate) fn resolve_slice_range(len: usize, start: i64, end: i64) -> (usize, u
     if e < 0 {
         e = 0;
     }
-    let s = s.min(len as i64) as usize;
-    let e = e.min(len as i64) as usize;
-    if e < s { (s, s) } else { (s, e) }
+
+    if s > len as i64 || e > len as i64 {
+        return None;
+    }
+
+    Some(if e < s {
+        (e as usize, s as usize)
+    } else {
+        (s as usize, e as usize)
+    })
 }

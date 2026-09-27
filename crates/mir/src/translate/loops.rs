@@ -14,7 +14,7 @@ use calibre_parser::{
         idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
             AstNode, AstNodeType, VarType,
-            access::{AstField, AstIndex},
+            access::AstIndex,
             binary::AstComparison,
             conditionals::{AstIf, IfComparisonType},
             flow::AstBreak,
@@ -589,20 +589,22 @@ impl MirLowering for AstLoop {
                 let next_assign_node =
                     create_next_assign_node(span, &temp_names, &iter_node, is_indexable_loop);
 
-                let indexed_value_node = AstNode::new(
+                let indexed_value_node = AstNode::unwrap_option_or(
                     span,
-                    AstNodeType::IndexAccess(AstIndex {
-                        base: Box::new(iter_node.clone()),
-                        index: Box::new(idx_node.clone()),
-                    }),
+                    AstNode::new(
+                        span,
+                        AstNodeType::IndexAccess(AstIndex {
+                            base: Box::new(iter_node.clone()),
+                            index: Box::new(idx_node.clone()),
+                        }),
+                    ),
+                    AstNode::call(span, AstNode::identifier(span, "panic"), Vec::new()),
                 );
 
-                let next_value_node = AstNode::new(
+                let next_value_node = AstNode::call(
                     span,
-                    AstNodeType::FieldAccess(AstField {
-                        base: Box::new(next_node.clone()),
-                        field: PotentialDollarIdentifier::new(span, "next"),
-                    }),
+                    AstNode::member(span, next_node.clone(), "next"),
+                    Vec::new(),
                 );
 
                 let loop_item_value = if is_count_loop {
@@ -677,15 +679,30 @@ impl MirLowering for AstLoop {
                     span,
                 };
 
-                Ok(MiddleNode::new(MiddleNodeType::ScopeDeclaration(MirScopeDecl { body: state.map(|x|x.nodes() ).unwrap_or_default().into_iter().chain(env.finish_loop_with_else(
-                    loop_node,
-                    scope,
+                Ok(MiddleNode::new(
+                    MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                        body: state
+                            .map(|x| x.nodes())
+                            .unwrap_or_default()
+                            .into_iter()
+                            .chain(
+                                env.finish_loop_with_else(
+                                    loop_node,
+                                    scope,
+                                    span,
+                                    self.else_body,
+                                    temp_names.result,
+                                    temp_names.broke,
+                                )?
+                                .nodes(),
+                            )
+                            .collect(),
+                        create_new_scope: false,
+                        is_temp: true,
+                        scope_id: scope,
+                    }),
                     span,
-                    self.else_body,
-                    temp_names.result,
-                    temp_names.broke,
-                )?.nodes()).collect(), create_new_scope: false, is_temp: true, scope_id: scope }), span))
-                
+                ))
             }
         }
     }

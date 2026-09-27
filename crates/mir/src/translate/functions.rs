@@ -14,13 +14,10 @@ use calibre_parser::{
     Span,
     ast::{
         ObjectType,
-        comparison::ComparisonOperator,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, VarType,
             access::AstField,
-            binary::AstComparison,
-            conditionals::{AstTernary, TernaryType},
             declaration::AstDeclaration,
             flow::AstReturn,
             functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
@@ -61,32 +58,6 @@ impl NodeVisitor for GeneratorReturnsRewriter {
 }
 
 impl MiddleEnvironment {
-    #[inline]
-    fn unwrap_option_or_default_expr(span: Span, value: AstNode, default: AstNode) -> AstNode {
-        AstNode::new(
-            span,
-            AstNodeType::Ternary(AstTernary {
-                comparison: Box::new(AstNode::new(
-                    span,
-                    AstNodeType::ComparisonExpression(AstComparison {
-                        left: Box::new(value.clone()),
-                        right: Box::new(AstNode::none(span)),
-                        operator: ComparisonOperator::Equal,
-                    }),
-                )),
-                then: Box::new(default),
-                otherwise: Some(Box::new(AstNode::new(
-                    span,
-                    AstNodeType::FieldAccess(AstField {
-                        base: Box::new(value),
-                        field: PotentialDollarIdentifier::new(span, "next"),
-                    }),
-                ))),
-                ternary_type: TernaryType::Normal,
-            }),
-        )
-    }
-
     #[inline]
     fn should_combine_excess_args_into_list_param(
         parameters: &[ParserDataType],
@@ -263,11 +234,7 @@ impl MiddleEnvironment {
                             current
                         } else if let Some(default) = &meta.explicit_default {
                             if is_option_type(self, &current) {
-                                Self::unwrap_option_or_default_expr(
-                                    span,
-                                    current,
-                                    default.clone().into(),
-                                )
+                                AstNode::unwrap_option_or(span, current, default.clone().into())
                             } else {
                                 current
                             }
