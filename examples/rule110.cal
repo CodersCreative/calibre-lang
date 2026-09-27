@@ -12,9 +12,9 @@ const main := fn => {
 		let mut next_cells := list:<int>[];
 		
 		for i in 0..len(cells) => {
-			let left := cells[i - 1] if i > 0 else 0;
-			let center := cells[i];
-			let right := cells[i + 1] if i < len(cells) - 1 else 0;
+			let left := try cells[i - 1] => 0;
+			let center := try cells[i] => 0;
+			let right := try cells[i + 1] => 0;
 			
 			if left = 1 => {
 				if center = 1 => {

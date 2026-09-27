@@ -1,0 +1,49 @@
+const main := fn => {
+    let res1 : str!int = ok(42);
+    let val1 : int = try res1;
+    print("val1: " & val1);
+
+    let res2 : str!int = err("failed");
+    let val2 : int = try res2 => 0;
+    print("val2: " & val2);
+
+    let res3 : str!int = err("error message");
+    let val3 : int = try res3 : e => 100;
+    print("val3: " & val3);
+
+    let res4 : str!int = ok(100);
+    let opt4 : int? = try? res4;
+    print("opt4: " & opt4);
+
+    let res5 : str!int = err("conversion error");
+    let opt5 : int? = try? res5;
+    print("opt5: " & opt5);
+
+    let opt6 : int? = some(50);
+    let opt7 : int? = try? opt6;
+    print("opt7: " & opt7);
+
+    let opt8 : int? = some(75);
+    let res8 : str!int = try! opt8 => "conversion error";
+    print("res8: " & res8);
+
+    let opt9 : int? = none;
+    let res9 : str!int = try! opt9 => "option was none";
+    print("res9: " & res9);
+
+    let res10 : str!int = ok(200);
+    let res11 : int!int = try! res10 : int => 404;
+    print("res11: " & res11);
+
+    let res12 : str!int = ok(300);
+    let val12 : int = try!! res12;
+    print("val12: " & val12);
+
+    let res13 : str!int = err("panic!");
+    let val13 : int = try!! res13 => "custom panic message";
+    print("val13: " & val13);
+
+    let opt14 : int? = none;
+    let val14 : int = try!! opt14 => "option was none!";
+    print("val14: " & val14);
+};

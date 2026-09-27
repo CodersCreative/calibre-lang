@@ -153,7 +153,7 @@ const main := fn => {
 	let mut lst : list:<int> = [n ** 2 for n in 0..20 if n % 2 = 0 if n % 4 != 0];
 	
 	for i in len(lst) => {
-		lst[i] *= 2;
+		lst[i] := (try!! list[i]) * 2;
 	} until i > 15;
 	
 	print("list comp => " & lst);
@@ -259,8 +259,8 @@ const main := fn => {
 		let mut txt : str = "";
 		
 		for i in len(splits) => {
-			txt &= splits[i];
-			if i < len(inputs) => txt &= inputs[i];
+			txt &= try splits[i] => "";
+			if i < len(inputs) => txt &= try inputs[i] => "";
 		};
 		
 		return txt;

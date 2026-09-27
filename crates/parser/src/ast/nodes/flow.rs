@@ -31,10 +31,20 @@ pub struct TryCatch {
     pub body: Box<AstNode>,
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum TryType {
+    Option,
+    Result,
+    Panic,
+    Normal,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstTry {
     pub value: Box<AstNode>,
     pub catch: Option<TryCatch>,
+    pub try_type: TryType,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

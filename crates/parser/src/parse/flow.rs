@@ -1,6 +1,7 @@
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment, TryCatch,
+    TryType,
 };
 use crate::parse::{AstPrattParser, PrattData, StatementData, potential_new_line};
 use crate::{
@@ -129,13 +130,39 @@ impl<'a> AstParser<'a> for AstTry {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Try => () }
-            .ignore_then(data.node.clone())
-            .then(TryCatch::parser(data).or_not())
-            .map(|(value, catch)| AstTry {
-                value: Box::new(value),
-                catch,
-            })
+        choice((
+            just(Token::Try)
+                .ignore_then(data.node.clone())
+                .then(TryCatch::parser(data.clone()).or_not())
+                .map(|(value, catch)| AstTry {
+                    value: Box::new(value),
+                    catch,
+                    try_type: TryType::Normal,
+                }),
+            just(Token::TryBang)
+                .ignore_then(data.node.clone())
+                .then(TryCatch::parser(data.clone()).or_not())
+                .map(|(value, catch)| AstTry {
+                    value: Box::new(value),
+                    catch,
+                    try_type: TryType::Result,
+                }),
+            just(Token::TryPanic)
+                .ignore_then(data.node.clone())
+                .then(TryCatch::parser(data.clone()).or_not())
+                .map(|(value, catch)| AstTry {
+                    value: Box::new(value),
+                    catch,
+                    try_type: TryType::Panic,
+                }),
+            just(Token::TryQuestion)
+                .ignore_then(data.node.clone())
+                .map(|value| AstTry {
+                    value: Box::new(value),
+                    catch: None,
+                    try_type: TryType::Option,
+                }),
+        ))
     }
 }
 

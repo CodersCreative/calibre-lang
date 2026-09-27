@@ -7,11 +7,12 @@ const get_tree_output := fn (path : Path, depth : int = 2) -> str => {
 	let objects : list:<DirEntry> = try objects => panic();
 	
 	for i in 0..len(objects) => {
-		out &= objects[i].file_name() & "\n";
-		let typ : str!FileType = objects[i].file_type();
+		let object := try!! objects[i];
+		out &= object.file_name() & "\n";
+		let typ : str!FileType = object.file_type();
 		let typ : FileType = try typ => panic();
 		if typ.is_dir() => {
-			out &= get_tree_output(objects[i].path(), depth - 1);
+			out &= get_tree_output(object.path(), depth - 1);
 			out &= "\n";
 		};
 	};

@@ -452,9 +452,14 @@ pub trait NodeVisitor {
                     body: Box::new(self.visit(*body)),
                 })
             }
-            AstNodeType::Try(AstTry { value, catch }) => AstNodeType::Try(AstTry {
+            AstNodeType::Try(AstTry {
+                value,
+                catch,
+                try_type,
+            }) => AstNodeType::Try(AstTry {
                 value: Box::new(self.visit(*value)),
                 catch,
+                try_type,
             }),
             AstNodeType::PipeExpression(AstPipe { values }) => {
                 AstNodeType::PipeExpression(AstPipe {

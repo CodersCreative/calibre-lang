@@ -46,8 +46,8 @@ const fmt := fn (splits : list:<str>, inputs : list:<dyn>) -> str => {
 	let mut txt : str = "";
 	
 	for i in 0..len(splits) => {
-		txt &= splits[i];
-		if i < len(inputs) => txt &= inputs[i];
+		txt &= try!! splits[i];
+		if i < len(inputs) => txt &= try!! inputs[i];
 	};
 	
 	return txt;
@@ -304,9 +304,7 @@ impl<T> Iter for ListIter:<T> {
 		let mut i := 0;
 		
 		for  => {
-			if i >= len(self.data) => break;
-			
-			let value : T = self.data[i += 1];
+			let value : T = try self.data[i += 1] => break;
 			if pred(value) => left <<= value else => right <<= value;
 		};
 		
@@ -315,7 +313,7 @@ impl<T> Iter for ListIter:<T> {
 
 	const next := fn (self : &mut ListIter:<T>) -> T? => {
 		if self.index >= len(self.data) => return none;
-		return some(self.data[self.index += 1]);
+		return self.data[self.index += 1];
 	};
 };
 
@@ -336,7 +334,7 @@ impl Iter for StrIter {
 
 	const next := fn (self : &mut StrIter) -> char? => {
 		if self.index >= len(self.data) => return none;
-		return some(self.data[self.index += 1]);
+		return self.data[self.index += 1];
 	};
 };
 

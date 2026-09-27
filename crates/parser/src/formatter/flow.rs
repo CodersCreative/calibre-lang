@@ -1,6 +1,7 @@
 use crate::{
     ast::nodes::flow::{
-        AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment, TryCatch,
+        AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment,
+        TryCatch, TryType,
     },
     formatter::{AstFormatting, Formatter},
 };
@@ -112,7 +113,16 @@ impl AstFormatting for AstTry {
     type PreFormat = ();
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let mut txt = format!("try {}", self.value.format(formatter));
+        let mut txt = format!(
+            "try{} {}",
+            match self.try_type {
+                TryType::Normal => "",
+                TryType::Option => "?",
+                TryType::Result => "!",
+                TryType::Panic => "!!",
+            },
+            self.value.format(formatter)
+        );
 
         if let Some(catch) = &self.catch {
             txt.push_str(&catch.format(formatter));

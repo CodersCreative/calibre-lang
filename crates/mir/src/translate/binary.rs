@@ -12,12 +12,12 @@ use calibre_parser::{
         Operator,
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
-        idents::{ParserText, PotentialDollarIdentifier},
+        idents::PotentialDollarIdentifier,
         nodes::{
             AstNode, AstNodeType,
             access::AstField,
             binary::{AsFailureMode, AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
-            flow::{AstTry, TryCatch},
+            flow::{AstTry, TryType},
             functions::CallArg,
             lists::AstList,
             literals::AstRange,
@@ -198,10 +198,8 @@ impl MirLowering for AstAs {
             .unwrap_or_default()
         {
             match &self.failure_mode {
-                // TODO Handle AsFailureMode::Option
-                AsFailureMode::Result | AsFailureMode::Option => {}
-                AsFailureMode::Panic => {
-                    let temp_ident = ParserText::temp_name_with_suffix("as_res", span);
+                AsFailureMode::Result => {}
+                AsFailureMode::Option => {
                     return AstNode {
                         node_type: AstNodeType::Try(AstTry {
                             value: Box::new(AstNode {
@@ -212,17 +210,26 @@ impl MirLowering for AstAs {
                                 }),
                                 span,
                             }),
-                            catch: Some(TryCatch {
-                                name: Some(PotentialDollarIdentifier::new(
-                                    span,
-                                    temp_ident.clone(),
-                                )),
-                                body: Box::new(AstNode::call(
-                                    span,
-                                    AstNode::identifier(span, "panic"),
-                                    vec![CallArg::Value(AstNode::identifier(span, &temp_ident))],
-                                )),
+                            catch: None,
+                            try_type: TryType::Option,
+                        }),
+                        span,
+                    }
+                    .lower(env, scope, span);
+                }
+                AsFailureMode::Panic => {
+                    return AstNode {
+                        node_type: AstNodeType::Try(AstTry {
+                            value: Box::new(AstNode {
+                                node_type: AstNodeType::AsExpression(AstAs {
+                                    value: self.value,
+                                    data_type: self.data_type,
+                                    failure_mode: AsFailureMode::Result,
+                                }),
+                                span,
                             }),
+                            catch: None,
+                            try_type: TryType::Panic,
                         }),
                         span,
                     }

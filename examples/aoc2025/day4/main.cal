@@ -22,7 +22,7 @@ const CELL_KEY := 1000000;
 const build_grid := fn (lines : list:<str>) -> list:<list:<char>> => {
 	let mut grid : list:<list:<char>> = [];
 	
-	for i in 0..len(lines) => grid <<= trim(lines[i]).to_chars();
+	for i in 0..len(lines) => grid <<= trim(try lines[i] => "").to_chars();
 	return grid;
 };
 
@@ -46,7 +46,7 @@ const count_neighbors := fn (grid : list:<list:<char>>, row col : int) -> int =>
 			let nr := row + dr;
 			let nc := col + dc;
 			
-			if nr >= 0 && nr < rows && nc >= 0 && nc < len(grid[nr]) && grid[nr][nc] = '@' => count += 1;
+			if nr >= 0 && nr < rows && nc >= 0 && try (try!! grid[nr])[nc] => ' ' = '@' => count += 1;
 			
 			dc += 1;
 		};
@@ -62,8 +62,8 @@ const solve_part1 := fn (lines : list:<str>) -> int => {
 	let mut accessible := 0;
 	
 	for r in 0..len(grid) => {
-		for c in 0..len(grid[r]) => {
-			if grid[r][c] = '@' && count_neighbors(grid, r, c) < 4 => accessible += 1;
+		for c in 0..len(try!! grid[r]) => {
+			if try!! (try!! grid[r])[c] = '@' && count_neighbors(grid, r, c) < 4 => accessible += 1;
 		};
 	};
 	
@@ -75,8 +75,9 @@ const build_degrees := fn (grid : list:<list:<char>>) -> list:<list:<int>> => {
 	
 	for r in 0..len(grid) => {
 		let mut row_deg : list:<int> = [];
+		let row := try grid[r] => continue;
 		
-		for c in 0..len(grid[r]) => row_deg <<= count_neighbors(grid, r, c);
+		for c in 0..len(row) => row_deg <<= count_neighbors(grid, r, c);
 		degree <<= move row_deg;
 	};
 	
@@ -89,8 +90,9 @@ const solve_part2 := fn (lines : list:<str>) -> int => {
 	let mut queue : list:<int> = [];
 	
 	for r in 0..len(grid) => {
-		for c in 0..len(grid[r]) => {
-			if grid[r][c] = '@' && degree[r][c] < 4 => queue <<= (r * CELL_KEY + c);
+		let row := try grid[r] => continue;
+		for c in 0..len(row) => {
+			if try row[c] => ' ' = '@' && try (try!! degree[r])[c] => 0 < 4 => queue <<= (r * CELL_KEY + c);
 		};
 	};
 	
@@ -98,15 +100,15 @@ const solve_part2 := fn (lines : list:<str>) -> int => {
 	let mut total_removed := 0;
 	
 	for head < len(queue) => {
-		let key := queue[head];
+		let key := try queue[head] => continue;
 		head += 1;
 		
 		let r := key / CELL_KEY;
 		let c := key % CELL_KEY;
 		
-		if degree[r][c] >= 4 || grid[r][c] != '@' || (r < 0 || r >= len(grid)) || (c < 0 || c >= len(grid[r])) => continue;
+		if try (try!! degree[r])[c] => 0 >= 4 || try (try!! grid[r])[c] => ' ' != '@' || (r < 0 || r >= len(grid)) || (c < 0 || c >= len(try!! grid[r])) => continue;
 		
-		let mut row := grid[r];
+		let mut row := try!! grid[r];
 		row[c] := '.';
 		grid[r] := move row;
 		total_removed += 1;
@@ -126,10 +128,10 @@ const solve_part2 := fn (lines : list:<str>) -> int => {
 				let nr := r + dr;
 				let nc := c + dc;
 				
-				if nr >= 0 && nr < len(grid) && nc >= 0 && nc < len(grid[nr]) && grid[nr][nc] = '@' => {
-					let mut drow := degree[nr];
+				if nr >= 0 && nr < len(grid) && nc >= 0 && nc < len(try!! grid[nr]) && try!! (try!! grid[nr])[nc] = '@' => {
+					let mut drow := try!! degree[nr];
 					drow[nc] -= 1;
-					let new_deg := drow[nc];
+					let new_deg := try!! drow[nc];
 					degree[nr] := move drow;
 					if new_deg < 4 => queue <<= (nr * CELL_KEY + nc);
 				};

@@ -9,26 +9,25 @@ impl<T> list:<T> {
 
 	const is_empty := fn (self : list:<T>) -> bool => return len(self) = 0;
 
-	const first := fn (self : list:<T>) -> T? => if len(self) = 0 => return none else => return some(self[0]);
+	const first := fn (self : list:<T>) -> T? => return self[0];
 
 	const last := fn (self : list:<T>) -> T? => {
-		let l := len(self);
-		if l = 0 => return none else => return some(self[l - 1]);
+		return self[-1];
 	};
 
 	const get := fn (self : list:<T>, idx : int) -> T? => {
-		if idx < 0 || idx >= len(self) => return none else => return some(self[idx]);
+		if idx < 0 || idx >= len(self) => return none else => return self[idx];
 	};
 
-	const clone := fn (self : list:<T>) -> list:<T> => return list:<T>[self[i] for i in 0..len(self)];
+	const clone := fn (self : list:<T>) -> list:<T> => return list:<T>[(try!! self[i]) for i in 0..len(self)];
 
 	const contains := fn (self : list:<T>, needle : T) -> bool => {
-		for i in 0..len(self) => if self[i] = needle => return true;
+		for i in 0..len(self) => if (try!! self[i]) = needle => return true;
 		return false;
 	};
 
 	const index_of := fn (self : list:<T>, needle : T) -> int => {
-		for i in 0..len(self) => if self[i] = needle => return i;
+		for i in 0..len(self) => if (try!! self[i]) = needle => return i;
 		return -1;
 	};
 
@@ -36,7 +35,7 @@ impl<T> list:<T> {
 		let mut i := len(self) - 1;
 		
 		for i >= 0 => {
-			if self[i] = needle => return i;
+			if (try!! self[i]) = needle => return i;
 			i -= 1;
 		};
 		
@@ -45,7 +44,7 @@ impl<T> list:<T> {
 
 	const count := fn (self : list:<T>, needle : T) -> int => {
 		let mut n := 0;
-		for i in 0..len(self) => if self[i] = needle => n += 1;
+		for i in 0..len(self) => if (try!! self[i]) = needle => n += 1;
 		return n;
 	};
 
@@ -57,7 +56,7 @@ impl<T> list:<T> {
 		
 		let mut out := list:<T>[];
 		
-		for i in s..e => out <<= self[i];
+		for i in s..e => out <<= try!! self[i];
 		return out;
 	};
 
@@ -84,7 +83,7 @@ impl<T> list:<T> {
 		let mut i := len(self) - 1;
 		
 		for i >= 0 => {
-			out <<= self[i -= 1];
+			out <<= try!! self[i -= 1];
 		};
 		
 		return out;
@@ -122,7 +121,7 @@ impl<T> list:<T> {
 		
 		for i in 0..(l + 1) => {
 			if i = idx => out <<= value;
-			if i < l => out <<= self[i];
+			if i < l => out <<= try!! self[i];
 		};
 		
 		self := move out;
@@ -130,12 +129,11 @@ impl<T> list:<T> {
 	};
 
 	const extend := fn (self : &mut list:<T>, other : list:<T>) => {
-		for i in 0..len(other) => self <<= other[i];
+		for i in 0..len(other) => self <<= try!! other[i];
 	};
 
 	const concat := fn (self other : list:<T>) -> list:<T> => {
-		let mut out := list:<T>[self[i] for i in 0..len(self)];
-		for i in 0..len(other) => out <<= other[i];
+		for i in 0..len(other) => self <<= try!! other[i];
 		return out;
 	};
 
@@ -148,7 +146,7 @@ impl<T> list:<T> {
 		
 		for i in 0..len(self) => {
 			if i > 0 => out &= sep;
-			out &= self[i];
+			out &= try!! self[i];
 		};
 		
 		return out;
@@ -158,21 +156,21 @@ impl<T> list:<T> {
 impl list:<int> {
 	const sum := fn (self : list:<int>) -> int => {
 		let mut acc := 0;
-		for i in 0..len(self) => acc += self[i];
+		for i in 0..len(self) => acc += try!! self[i];
 		return acc;
 	};
 
 	const min := fn (self : list:<int>) -> int? => {
 		if len(self) = 0 => return none;
-		let mut m := self[0];
-		for i in 1..len(self) => if self[i] < m => m := self[i];
+		let mut m := try!! self[0];
+		for i in 1..len(self) => if (try!! self[i]) < m => m := try!! self[i];
 		return some(m);
 	};
 
 	const max := fn (self : list:<int>) -> int? => {
 		if len(self) = 0 => return none;
-		let mut m := self[0];
-		for i in 1..len(self) => if self[i] > m => m := self[i];
+		let mut m := try!! self[0];
+		for i in 1..len(self) => if (try!! self[i]) > m => m := try!! self[i];
 		return some(m);
 	};
 };
@@ -180,21 +178,21 @@ impl list:<int> {
 impl list:<uint> {
 	const sum := fn (self : list:<uint>) -> uint => {
 		let mut acc := 0u;
-		for i in 0..len(self) => acc += self[i];
+		for i in 0..len(self) => acc += try!! self[i];
 		return acc;
 	};
 
 	const min := fn (self : list:<uint>) -> uint? => {
 		if len(self) = 0 => return none;
-		let mut m := self[0];
-		for i in 1..len(self) => if self[i] < m => m := self[i];
+		let mut m := try!! self[0];
+		for i in 1..len(self) => if (try!! self[i]) < m => m := try!! self[i];
 		return some(m);
 	};
 
 	const max := fn (self : list:<uint>) -> uint? => {
 		if len(self) = 0 => return none;
-		let mut m := self[0];
-		for i in 1..len(self) => if self[i] > m => m := self[i];
+		let mut m := try!! self[0];
+		for i in 1..len(self) => if (try!! self[i]) > m => m := try!! self[i];
 		return some(m);
 	};
 };
@@ -202,28 +200,28 @@ impl list:<uint> {
 impl list:<float> {
 	const sum := fn (self : list:<float>) -> float => {
 		let mut acc := 0f;
-		for i in 0..len(self) => acc += self[i];
+		for i in 0..len(self) => acc += try!! self[i];
 		return acc;
 	};
 
 	const min := fn (self : list:<float>) -> float? => {
 		if len(self) = 0 => return none;
-		let mut m := self[0];
-		for i in 1..len(self) => if self[i] < m => m := self[i];
+		let mut m := try!! self[0];
+		for i in 1..len(self) => if (try!! self[i]) < m => m := try!! self[i];
 		return some(m);
 	};
 
 	const max := fn (self : list:<float>) -> float? => {
 		if len(self) = 0 => return none;
-		let mut m := self[0];
-		for i in 1..len(self) => if self[i] > m => m := self[i];
+		let mut m := try!! self[0];
+		for i in 1..len(self) => if (try!! self[i]) > m => m := try!! self[i];
 		return some(m);
 	};
 
 	const mean := fn (values : list:<float>) -> float => {
 		if len(values) = 0 => return 0f;
 		let mut acc := 0f;
-		for i in 0..len(values) => acc += values[i];
+		for i in 0..len(values) => acc += try!! values[i];
 		return acc / (try len(values) as float => 1f);
 	};
 
@@ -234,7 +232,7 @@ impl list:<float> {
 		let mut acc := 0f;
 		
 		for i in 0..n => {
-			let d := values[i] - m;
+			let d := (try!! values[i]) - m;
 			acc += (d * d);
 		};
 		
@@ -247,7 +245,7 @@ impl list:<float> {
 		let n := len(values);
 		if n = 0 => return 0f;
 		
-		let mut tmp := list:<float>[values[i] for i in 0..n];
+		let mut tmp := list:<float>[(try!! values[i]) for i in 0..n];
 		
 		let mut i := 0;
 		
@@ -255,9 +253,9 @@ impl list:<float> {
 			let mut j := 0;
 			
 			for j + 1 < n - i => {
-				if tmp[j] > tmp[j + 1] => {
-					let t := tmp[j];
-					tmp[j] := tmp[j + 1];
+				if (try!! tmp[j]) > (try!! tmp[j + 1]) => {
+					let t := try!! tmp[j];
+					tmp[j] := try!! tmp[j + 1];
 					tmp[j + 1] := t;
 				};
 				
@@ -267,6 +265,6 @@ impl list:<float> {
 			i += 1;
 		};
 		
-		if n % 2 = 1 => return tmp[n / 2] else => return (tmp[(n / 2) - 1] + tmp[n / 2]) / 2f;
+		if n % 2 = 1 => return try!! tmp[n / 2] else => return ((try!! tmp[(n / 2) - 1]) + try!! tmp[n / 2]) / 2f;
 	};
 };

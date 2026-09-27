@@ -19,6 +19,7 @@ use calibre_parser::{
             declaration::AstDeclaration,
             flow::{
                 AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment,
+                TryType,
             },
             functions::CallArg,
             matching::{AstMatch, MatchArmType, MatchBody},
@@ -229,7 +230,8 @@ impl MirLowering for AstTry {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         let resolved_type = self.value.type_of(env, scope, span);
-        let is_option_try = matches!(
+
+        let is_option = matches!(
             resolved_type.as_ref().map(|t| t.key()),
             Some(ParserInnerType::Option(_))
         );
@@ -261,58 +263,237 @@ impl MirLowering for AstTry {
             )
         };
 
-        AstNode {
-            node_type: AstNodeType::MatchStatement(AstMatch {
-                value: Some(self.value),
-                body: if is_option_try {
-                    let ok_name = "anon_ok_value";
+        match self.try_type {
+            TryType::Normal => AstNode {
+                node_type: AstNodeType::MatchStatement(AstMatch {
+                    value: Some(self.value),
+                    body: if is_option {
+                        let ok_name = "anon_ok_value";
 
-                    let ok_arm = enum_arm(
-                        "Some",
-                        Some(ParserText::from(ok_name.to_string()).into()),
-                        AstNode::identifier(span, ok_name),
-                    );
+                        let ok_arm = enum_arm(
+                            "Some",
+                            Some(ParserText::from(ok_name.to_string()).into()),
+                            AstNode::identifier(span, ok_name),
+                        );
 
-                    let err_arm = if let Some(catch) = self.catch {
-                        enum_arm("None", catch.name, *catch.body)
+                        let err_arm = if let Some(catch) = self.catch {
+                            enum_arm("None", catch.name, *catch.body)
+                        } else {
+                            enum_arm("None", None, return_call("none", Vec::new()))
+                        };
+
+                        MatchBody {
+                            values: vec![ok_arm, err_arm],
+                        }
                     } else {
-                        enum_arm("None", None, return_call("none", Vec::new()))
-                    };
+                        let ok_name = "anon_ok_value";
 
-                    MatchBody {
-                        values: vec![ok_arm, err_arm],
-                    }
+                        let ok_arm = enum_arm(
+                            "Ok",
+                            Some(ParserText::from(ok_name.to_string()).into()),
+                            AstNode::identifier(span, ok_name),
+                        );
+
+                        let err_arm = if let Some(catch) = self.catch {
+                            enum_arm("Err", catch.name, *catch.body)
+                        } else {
+                            let err_name = "anon_err_value";
+                            enum_arm(
+                                "Err",
+                                Some(ParserText::from(err_name.to_string()).into()),
+                                return_call(
+                                    "err",
+                                    vec![CallArg::Value(AstNode::identifier(span, err_name))],
+                                ),
+                            )
+                        };
+
+                        MatchBody {
+                            values: vec![ok_arm, err_arm],
+                        }
+                    },
+                }),
+                span,
+            }
+            .lower(env, scope, span),
+            TryType::Option => {
+                if is_option {
+                    self.value.lower(env, scope, span)
                 } else {
                     let ok_name = "anon_ok_value";
 
                     let ok_arm = enum_arm(
                         "Ok",
                         Some(ParserText::from(ok_name.to_string()).into()),
-                        AstNode::identifier(span, ok_name),
+                        return_call(
+                            "some",
+                            vec![CallArg::Value(AstNode::identifier(span, ok_name))],
+                        ),
                     );
 
-                    let err_arm = if let Some(catch) = self.catch {
-                        enum_arm("Err", catch.name, *catch.body)
+                    let err_arm = enum_arm("Err", None, return_call("none", Vec::new()));
+
+                    AstNode {
+                        node_type: AstNodeType::MatchStatement(AstMatch {
+                            value: Some(self.value),
+                            body: MatchBody {
+                                values: vec![ok_arm, err_arm],
+                            },
+                        }),
+                        span,
+                    }
+                    .lower(env, scope, span)
+                }
+            }
+            TryType::Result => {
+                let ok_name = "anon_ok_value";
+                let err_name = "anon_err_value";
+
+                let ok_arm_some = enum_arm(
+                    "Some",
+                    Some(ParserText::from(ok_name.to_string()).into()),
+                    return_call(
+                        "ok",
+                        vec![CallArg::Value(AstNode::identifier(span, ok_name))],
+                    ),
+                );
+
+                let ok_arm_ok = enum_arm(
+                    "Ok",
+                    Some(ParserText::from(ok_name.to_string()).into()),
+                    AstNode::identifier(span, ok_name),
+                );
+
+                let err_arm_none = if let Some(ref catch) = self.catch {
+                    enum_arm(
+                        "None",
+                        None,
+                        return_call(
+                            "err",
+                            vec![CallArg::Value(AstNode::call(
+                                span,
+                                AstNode::identifier(span, "err"),
+                                vec![CallArg::Value(*catch.body.clone())],
+                            ))],
+                        ),
+                    )
+                } else {
+                    enum_arm(
+                        "None",
+                        None,
+                        return_call(
+                            "err",
+                            vec![CallArg::Value(AstNode::identifier(span, "none"))],
+                        ),
+                    )
+                };
+
+                let err_arm_err = if let Some(ref catch) = self.catch {
+                    enum_arm(
+                        "Err",
+                        Some(ParserText::from(err_name.to_string()).into()),
+                        return_call(
+                            "err",
+                            vec![CallArg::Value(AstNode::call(
+                                span,
+                                AstNode::identifier(span, "err"),
+                                vec![CallArg::Value(*catch.body.clone())],
+                            ))],
+                        ),
+                    )
+                } else {
+                    enum_arm(
+                        "Err",
+                        Some(ParserText::from(err_name.to_string()).into()),
+                        return_call(
+                            "err",
+                            vec![CallArg::Value(AstNode::identifier(span, err_name))],
+                        ),
+                    )
+                };
+
+                AstNode {
+                    node_type: AstNodeType::MatchStatement(AstMatch {
+                        value: Some(self.value),
+                        body: MatchBody {
+                            values: vec![ok_arm_some, ok_arm_ok, err_arm_none, err_arm_err],
+                        },
+                    }),
+                    span,
+                }
+                .lower(env, scope, span)
+            }
+            TryType::Panic => {
+                let ok_name = "anon_ok_value";
+
+                let ok_arm = if is_option {
+                    enum_arm(
+                        "Some",
+                        Some(ParserText::from(ok_name.to_string()).into()),
+                        AstNode::identifier(span, ok_name),
+                    )
+                } else {
+                    enum_arm(
+                        "Ok",
+                        Some(ParserText::from(ok_name.to_string()).into()),
+                        AstNode::identifier(span, ok_name),
+                    )
+                };
+
+                let panic_arm = if let Some(catch) = self.catch {
+                    if is_option {
+                        enum_arm(
+                            "None",
+                            None,
+                            return_call(
+                                "panic",
+                                vec![CallArg::Value(AstNode::call(
+                                    span,
+                                    AstNode::identifier(span, "panic"),
+                                    vec![CallArg::Value(*catch.body)],
+                                ))],
+                            ),
+                        )
                     } else {
                         let err_name = "anon_err_value";
                         enum_arm(
                             "Err",
                             Some(ParserText::from(err_name.to_string()).into()),
                             return_call(
-                                "err",
-                                vec![CallArg::Value(AstNode::identifier(span, err_name))],
+                                "panic",
+                                vec![CallArg::Value(AstNode::call(
+                                    span,
+                                    AstNode::identifier(span, "panic"),
+                                    vec![CallArg::Value(*catch.body)],
+                                ))],
                             ),
                         )
-                    };
-
-                    MatchBody {
-                        values: vec![ok_arm, err_arm],
                     }
-                },
-            }),
-            span,
+                } else {
+                    if is_option {
+                        enum_arm("None", None, return_call("panic", Vec::new()))
+                    } else {
+                        let err_name = "anon_err_value";
+                        enum_arm(
+                            "Err",
+                            Some(ParserText::from(err_name.to_string()).into()),
+                            return_call("panic", Vec::new()),
+                        )
+                    }
+                };
+
+                AstNode {
+                    node_type: AstNodeType::MatchStatement(AstMatch {
+                        value: Some(self.value),
+                        body: MatchBody {
+                            values: vec![ok_arm, panic_arm],
+                        },
+                    }),
+                    span,
+                }
+                .lower(env, scope, span)
+            }
         }
-        .lower(env, scope, span)
     }
 
     fn type_of(
@@ -321,16 +502,65 @@ impl MirLowering for AstTry {
         scope: ScopeId,
         span: Span,
     ) -> Option<ParserDataType> {
-        match self.value.type_of(env, scope, span) {
-            Some(ParserDataType {
-                data_type: ParserInnerType::Result { ok: x, err: _ },
-                ..
-            })
-            | Some(ParserDataType {
-                data_type: ParserInnerType::Option(x),
-                ..
-            }) => Some(*x),
-            x => x,
+        match self.try_type {
+            TryType::Normal => match self.value.type_of(env, scope, span) {
+                Some(ParserDataType {
+                    data_type: ParserInnerType::Result { ok: x, err: _ },
+                    ..
+                })
+                | Some(ParserDataType {
+                    data_type: ParserInnerType::Option(x),
+                    ..
+                }) => Some(*x),
+                x => x,
+            },
+            TryType::Option => match self.value.type_of(env, scope, span) {
+                Some(ParserDataType {
+                    data_type: ParserInnerType::Result { ok, .. },
+                    ..
+                }) => Some(ParserDataType::new(span, ParserInnerType::Option(ok))),
+                Some(
+                    opt @ ParserDataType {
+                        data_type: ParserInnerType::Option(_),
+                        ..
+                    },
+                ) => Some(opt),
+                _ => None,
+            },
+            TryType::Result => match self.value.type_of(env, scope, span) {
+                Some(ParserDataType {
+                    data_type: ParserInnerType::Option(ok),
+                    ..
+                }) => Some(ParserDataType::new(
+                    span,
+                    ParserInnerType::Result {
+                        ok,
+                        err: Box::new(ParserDataType::new(span, ParserInnerType::Dynamic)),
+                    },
+                )),
+                Some(ParserDataType {
+                    data_type: ParserInnerType::Result { ok, .. },
+                    ..
+                }) => Some(ParserDataType::new(
+                    span,
+                    ParserInnerType::Result {
+                        ok,
+                        err: Box::new(ParserDataType::new(span, ParserInnerType::Dynamic)),
+                    },
+                )),
+                _ => None,
+            },
+            TryType::Panic => match self.value.type_of(env, scope, span) {
+                Some(ParserDataType {
+                    data_type: ParserInnerType::Result { ok, .. },
+                    ..
+                })
+                | Some(ParserDataType {
+                    data_type: ParserInnerType::Option(ok),
+                    ..
+                }) => Some(*ok),
+                x => x,
+            },
         }
     }
 }

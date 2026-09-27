@@ -8,11 +8,6 @@ impl<T> option:<T> {
 		.Some : _ => return false,
 		.None => return true
 	};
-
-	const unwrap := fn (self : T?) -> T => match self {
-		.Some : v => return v,
-		.None => panic("unwrap on none")
-	};
 	
 	const map := fn <U> (self : T?, op : fn (T) -> U) -> U? => match self {
 		.Some : v => return some(op(v)),

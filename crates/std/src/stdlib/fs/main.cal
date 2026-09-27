@@ -53,7 +53,7 @@ impl Path {
 		match path_read_dir(self.inner) {
 			.Ok : entries => {
 				let entries : list:<host> = entries;
-				return ok(list:<DirEntry>[DirEntry { inner : entries[i] } for i in 0..len(entries)]);
+				return ok(list:<DirEntry>[DirEntry { inner : try entries[i] => null } for i in 0..len(entries)]);
 			},
 			.Err : e => return err(e)
 		};

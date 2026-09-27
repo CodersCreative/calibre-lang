@@ -206,6 +206,12 @@ pub enum Token<'a> {
     Continue,
     #[token("try")]
     Try,
+    #[token("try!!")]
+    TryPanic,
+    #[token("try!")]
+    TryBang,
+    #[token("try?")]
+    TryQuestion,
     #[token("as")]
     As,
     #[token("as!")]
@@ -399,6 +405,9 @@ impl FromStr for Token<'static> {
             "Break" => Ok(Token::Break),
             "Continue" => Ok(Token::Continue),
             "Try" => Ok(Token::Try),
+            "Try!" => Ok(Token::TryBang),
+            "Try!!" => Ok(Token::TryPanic),
+            "Try?" => Ok(Token::TryQuestion),
             "As" => Ok(Token::As),
             "As!" => Ok(Token::AsBang),
             "As?" => Ok(Token::AsQuestion),
@@ -538,6 +547,9 @@ impl<'a> Token<'a> {
             Token::Break => "Break",
             Token::Continue => "Continue",
             Token::Try => "Try",
+            Token::TryBang => "Try!",
+            Token::TryPanic => "Try!!",
+            Token::TryQuestion => "Try?",
             Token::As => "As",
             Token::AsBang => "As!",
             Token::AsQuestion => "As?",

@@ -2,7 +2,6 @@ use crate::{
     IdentifiersUsed, Span,
     ast::{
         binary::BinaryOperator,
-        comparison::ComparisonOperator,
         idents::{
             ParsedIntLiteral, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
         },
@@ -10,9 +9,12 @@ use crate::{
             access::{AstField, AstIdentifier, AstIndex, AstScope},
             assignment::{AstAssignDestructure, AstAssignment},
             binary::{AstAs, AstBinary, AstBoolean, AstComparison, AstIn, AstIs},
-            conditionals::{AstIf, AstTernary, TernaryType},
+            conditionals::{AstIf, AstTernary},
             declaration::{AstDeclaration, AstDeclareDestructure},
-            flow::{AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry},
+            flow::{
+                AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, TryCatch,
+                TryType,
+            },
             functions::{AstCall, AstCurry, AstExtern, AstFunction, CallArg},
             generator::AstGenerator,
             lists::AstList,
@@ -340,23 +342,18 @@ impl AstNode {
     }
 
     #[inline]
-    pub fn unwrap_option_or(span: Span, value: AstNode, default: AstNode) -> AstNode {
-        AstNode::new(
-            span,
-            AstNodeType::Ternary(AstTernary {
-                comparison: Box::new(AstNode::new(
-                    span,
-                    AstNodeType::ComparisonExpression(AstComparison {
-                        left: Box::new(value.clone()),
-                        right: Box::new(AstNode::none(span)),
-                        operator: ComparisonOperator::Equal,
-                    }),
-                )),
-                then: Box::new(default),
-                otherwise: Some(Box::new(AstNode::member(span, value, "next"))),
-                ternary_type: TernaryType::Normal,
+    pub fn unwrap_or(span: Span, value: AstNode, default: AstNode) -> AstNode {
+        AstNode {
+            node_type: AstNodeType::Try(AstTry {
+                value: Box::new(value),
+                catch: Some(TryCatch {
+                    name: None,
+                    body: Box::new(default),
+                }),
+                try_type: TryType::Normal,
             }),
-        )
+            span,
+        }
     }
 
     pub fn unwrap_bit_ors(self) -> Vec<Self> {

@@ -10,7 +10,7 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType, VarType,
             declaration::AstDeclaration,
-            flow::{AstTry, TryCatch},
+            flow::{AstTry, TryCatch, TryType},
             functions::{AstFunction, CallArg, FunctionHeader},
             literals::{AstString, AstStruct},
             types::{AstImpl, AstType, TypeDefType},
@@ -174,6 +174,7 @@ impl MiddleEnvironment {
                                     )))
                                 },
                             }),
+                            try_type: TryType::Normal,
                         }),
                     ),
                 )

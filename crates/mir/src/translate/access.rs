@@ -253,29 +253,11 @@ impl MirLowering for AstIndex {
         scope: ScopeId,
         span: Span,
     ) -> Option<ParserDataType> {
-        let base_type = self
-            .base
-            .type_of(env, scope, span)
-            .or_else(|| {
-                if let AstNodeType::Identifier(id) = &self.base.node_type {
-                    env.resolve_to_data_type(scope, &id.value).ok()
-                } else {
-                    None
-                }
-            })
-            .map(|x| x.data_type);
+        let base_type = self.base.type_of(env, scope, span).map(|x| x.data_type);
 
-        let index_type = self
-            .index
-            .type_of(env, scope, span)
-            .or_else(|| {
-                if let AstNodeType::Identifier(id) = &self.base.node_type {
-                    env.resolve_to_data_type(scope, &id.value).ok()
-                } else {
-                    None
-                }
-            })
-            .map(|x| x.data_type);
+        println!("{}\n{:?}\n", self.base, base_type);
+
+        let index_type = self.index.type_of(env, scope, span).map(|x| x.data_type);
 
         match (base_type, index_type) {
             (Some(base_type), Some(ParserInnerType::Range)) => Some(match base_type {

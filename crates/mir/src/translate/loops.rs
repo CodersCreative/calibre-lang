@@ -589,7 +589,7 @@ impl MirLowering for AstLoop {
                 let next_assign_node =
                     create_next_assign_node(span, &temp_names, &iter_node, is_indexable_loop);
 
-                let indexed_value_node = AstNode::unwrap_option_or(
+                let indexed_value_node = AstNode::unwrap_or(
                     span,
                     AstNode::new(
                         span,

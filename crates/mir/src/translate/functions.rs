@@ -234,7 +234,7 @@ impl MiddleEnvironment {
                             current
                         } else if let Some(default) = &meta.explicit_default {
                             if is_option_type(self, &current) {
-                                AstNode::unwrap_option_or(span, current, default.clone().into())
+                                AstNode::unwrap_or(span, current, default.clone().into())
                             } else {
                                 current
                             }

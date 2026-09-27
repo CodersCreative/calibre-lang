@@ -53,7 +53,7 @@ const worker_part1 := fn (banks : list:<str>, start_idx step : int, out : Channe
 	let mut local := 0;
 	
 	for idx < len(banks) => {
-		local += handle_part1(banks[idx]);
+		local += handle_part1(try banks[idx] => "");
 		idx += step;
 	};
 	
@@ -65,7 +65,7 @@ const worker_part2 := fn (banks : list:<str>, start_idx step : int, out : Channe
 	let mut local := 0;
 	
 	for idx < len(banks) => {
-		local += max_joltage_for_count_part2(banks[idx], 12);
+		local += max_joltage_for_count_part2(try banks[idx] => "", 12);
 		idx += step;
 	};
 	
@@ -75,11 +75,11 @@ const worker_part2 := fn (banks : list:<str>, start_idx step : int, out : Channe
 const handle_part1 := fn (bank : str) -> int => {
 	let bank : list:<int> = bank.to_chars();
 	
-	let mut current := bank[0] & bank[1];
+	let mut current := try!! bank[0] & try!! bank[1];
 	
 	for i in 1..(len(bank) - 1) => {
-		let mut x := bank[i] & bank[i + 1];
-		let mut biggest := current[0] & bank[i + 1];
+		let mut x := try!! bank[i] & try!! bank[i + 1];
+		let mut biggest := try!! current[0] & try!! bank[i + 1];
 		
 		if (x as! int) > (biggest as! int) => {
 			biggest := move x;
@@ -106,12 +106,12 @@ const max_joltage_for_count_part2 := fn (bank : str, count : int) -> int => {
 	for picked < count => {
 		let end := n - (count - picked);
 		let mut best_idx := start;
-		let mut best := bank[start];
+		let mut best := try!! bank[start];
 		let mut i := start + 1;
 		
 		for i <= end => {
-			if bank[i] > best => {
-				best := bank[i];
+			if (try!! bank[i]) > best => {
+				best := try!! bank[i];
 				best_idx := i;
 			};
 			

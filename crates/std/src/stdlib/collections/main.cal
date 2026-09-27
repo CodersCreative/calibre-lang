@@ -41,7 +41,7 @@ impl<K, V> HashMap:<K, V> {
 
 	const set_all := fn (self : &mut HashMap:<K, V>, entries : list:<<K, V>>) => {
 		for i in 0..len(entries) => {
-			let pair := entries[i];
+			let pair := try!! entries[i];
 			self.set(pair.0, pair.1);
 		};
 	};
@@ -82,7 +82,7 @@ impl<K, V> Iter for HashMapIter:<K, V> {
 
 	const next := fn (self : &mut Self) -> Self::Item? => {
 		if self.index >= len(self.data) => none else => {
-			return some(self.data[self.index += 1]);
+			return self.data[self.index += 1];
 		};
 		
 		return none;
@@ -94,7 +94,7 @@ impl<T> Iter for HashSetIter:<T> {
 
 	const next := fn (self : &mut Self) -> Self::Item? => {
 		if self.index >= len(self.data) => none else => {
-			return some(self.data[self.index += 1]);
+			return self.data[self.index += 1];
 		};
 		
 		return none;

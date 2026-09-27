@@ -46,7 +46,7 @@ const show := fn (label : str, p : dyn:<Human>) => {
 	print(user.greeting());
 	
 	let parts := "a,b,c".split(",");
-	print(parts[1]);
+	print(try parts[1] => "");
 	print("calibre".starts_with("cal"));
 	
 	let ty := Ty { };
