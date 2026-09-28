@@ -7,7 +7,6 @@ use dumpster::sync::Gc;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use ustr::Ustr;
-use wasm_sync::Mutex;
 
 // Into HashKey
 
@@ -245,7 +244,7 @@ impl From<&str> for RuntimeValue {
 impl<T: Into<RuntimeValue>> From<Vec<T>> for RuntimeValue {
     fn from(value: Vec<T>) -> Self {
         let vec = value.into_iter().map(|v| v.into()).collect();
-        Self::List(Gc::new(GcVec(vec)))
+        Self::List(Arc::new(GcVec::new(vec)))
     }
 }
 
@@ -254,12 +253,10 @@ impl<K: Into<HashKey>, V: Into<RuntimeValue>> From<HashMap<K, V>> for RuntimeVal
         #[allow(clippy::mutable_key_type)]
         let map = value
             .into_iter()
-            .map(|(k, v)| (k.into(), v.into()))
+            .map(|(k, v)| (k.into(), v.into().into()))
             .collect();
 
-        Self::HashMap(RuntimeHashMap {
-            map: Arc::new(Mutex::new(map)),
-        })
+        Self::HashMap(RuntimeHashMap { map: Arc::new(map) })
     }
 }
 
@@ -268,9 +265,7 @@ impl<K: Into<HashKey>> From<HashSet<K>> for RuntimeValue {
         #[allow(clippy::mutable_key_type)]
         let set = value.into_iter().map(|k| k.into()).collect();
 
-        Self::HashSet(RuntimeHashSet {
-            set: Arc::new(Mutex::new(set)),
-        })
+        Self::HashSet(RuntimeHashSet { set: Arc::new(set) })
     }
 }
 
@@ -530,7 +525,10 @@ impl<T: TryFrom<RuntimeValue, Error = RuntimeError>> TryFrom<RuntimeValue> for V
         match value {
             RuntimeValue::List(gc_vec) => {
                 let vec = gc_vec.as_ref();
-                vec.0.iter().cloned().map(|v| T::try_from(v)).collect()
+                vec.0
+                    .iter()
+                    .map(|v| T::try_from(RuntimeValue::from(v.clone())))
+                    .collect()
             }
             _ => Err(RuntimeError::UnexpectedTypeInConversion {
                 value: Box::new(value),
@@ -549,12 +547,16 @@ impl<
 
     fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
         match value {
-            RuntimeValue::HashMap(arc_map) => {
-                let map = arc_map.map.lock().unwrap();
-                map.iter()
-                    .map(|(k, v)| Ok((K::try_from(k.clone())?, V::try_from(v.clone())?)))
-                    .collect()
-            }
+            RuntimeValue::HashMap(arc_map) => arc_map
+                .map
+                .iter()
+                .map(|(k, v)| {
+                    Ok((
+                        K::try_from(k.clone())?,
+                        V::try_from(RuntimeValue::from(v.clone()))?,
+                    ))
+                })
+                .collect(),
             _ => Err(RuntimeError::UnexpectedTypeInConversion {
                 value: Box::new(value),
                 target_type: ParserInnerType::Str,
@@ -570,10 +572,12 @@ impl<K: TryFrom<HashKey, Error = RuntimeError> + std::hash::Hash + Eq> TryFrom<R
 
     fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
         match value {
-            RuntimeValue::HashSet(arc_set) => {
-                let set = arc_set.set.lock().unwrap();
-                set.iter().cloned().map(|k| K::try_from(k)).collect()
-            }
+            RuntimeValue::HashSet(arc_set) => arc_set
+                .set
+                .iter()
+                .cloned()
+                .map(|k| K::try_from(k))
+                .collect(),
             _ => Err(RuntimeError::UnexpectedTypeInConversion {
                 value: Box::new(value),
                 target_type: ParserInnerType::Str,

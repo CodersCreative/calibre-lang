@@ -7,7 +7,7 @@ use crate::{
     },
     value::{GcVec, RuntimeValue},
 };
-use dumpster::sync::Gc;
+use std::sync::Arc;
 use ustr::Ustr;
 
 pub struct CharLowercase;
@@ -65,7 +65,7 @@ impl NativeFunction for StrSplit {
                 .collect::<Vec<_>>()
         };
 
-        Ok(RuntimeValue::List(Gc::new(GcVec(parts))))
+        Ok(RuntimeValue::List(Arc::new(GcVec::new(parts))))
     }
 }
 

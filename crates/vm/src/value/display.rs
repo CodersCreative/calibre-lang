@@ -20,30 +20,24 @@ impl RuntimeValue {
                 }
             }
             Self::HashMap(map) => {
-                if let Ok(guard) = map.map.try_lock() {
-                    let mut parts = Vec::new();
-                    for (k, v) in guard.iter() {
-                        parts.push(format!(
-                            "{} : {}",
-                            RuntimeValue::from(k.clone()).repr(vm),
-                            v.repr(vm)
-                        ));
-                    }
-                    format!("HashMap {{ {} }}", parts.join(", "))
-                } else {
-                    String::from("HashMap")
+                let mut parts = Vec::new();
+
+                for (k, v) in map.map.iter() {
+                    parts.push(format!(
+                        "{} : {}",
+                        RuntimeValue::from(k.clone()).repr(vm),
+                        RuntimeValue::from(v.clone()).repr(vm)
+                    ));
                 }
+
+                format!("HashMap {{ {} }}", parts.join(", "))
             }
             Self::HashSet(set) => {
-                if let Ok(guard) = set.set.try_lock() {
-                    let mut parts = Vec::new();
-                    for k in guard.iter() {
-                        parts.push(RuntimeValue::from(k.clone()).repr(vm));
-                    }
-                    format!("HashSet [{}]", parts.join(", "))
-                } else {
-                    String::from("HashSet")
+                let mut parts = Vec::new();
+                for k in set.set.iter() {
+                    parts.push(RuntimeValue::from(k.clone()).repr(vm));
                 }
+                format!("HashSet [{}]", parts.join(", "))
             }
             Self::List(x) => {
                 format!(
@@ -156,30 +150,24 @@ impl RuntimeValue {
                 }
             }
             Self::HashMap(map) => {
-                if let Ok(guard) = map.map.try_lock() {
-                    let mut parts = Vec::new();
-                    for (k, v) in guard.iter() {
-                        parts.push(format!(
-                            "{} : {}",
-                            RuntimeValue::from(k.clone()).display(vm),
-                            v.display(vm)
-                        ));
-                    }
-                    format!("HashMap {{ {} }}", parts.join(", "))
-                } else {
-                    String::from("HashMap")
+                let mut parts = Vec::new();
+
+                for (k, v) in map.map.iter() {
+                    parts.push(format!(
+                        "{} : {}",
+                        RuntimeValue::from(k.clone()).display(vm),
+                        RuntimeValue::from(v.clone()).display(vm)
+                    ));
                 }
+
+                format!("HashMap {{ {} }}", parts.join(", "))
             }
             Self::HashSet(set) => {
-                if let Ok(guard) = set.set.try_lock() {
-                    let mut parts = Vec::new();
-                    for k in guard.iter() {
-                        parts.push(RuntimeValue::from(k.clone()).display(vm));
-                    }
-                    format!("HashSet [{}]", parts.join(", "))
-                } else {
-                    String::from("HashSet")
+                let mut parts = Vec::new();
+                for k in set.set.iter() {
+                    parts.push(RuntimeValue::from(k.clone()).display(vm));
                 }
+                format!("HashSet [{}]", parts.join(", "))
             }
             Self::List(x) => {
                 format!(
@@ -319,7 +307,11 @@ impl Display for RuntimeValue {
                     let mut txt = format!("{}{{\n", name);
 
                     for val in data.as_ref().0.iter() {
-                        txt.push_str(&format!("\t{} : {},\n", val.0, val.1));
+                        txt.push_str(&format!(
+                            "\t{} : {},\n",
+                            val.0,
+                            RuntimeValue::from(val.1.clone())
+                        ));
                     }
 
                     txt = txt.trim().trim_end_matches(",").trim().to_string();

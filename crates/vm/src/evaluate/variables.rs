@@ -1,5 +1,5 @@
 use crate::{
-    VM, VarName,
+    VM,
     conversion::{
         VMBlock,
         instructions::variables::{VMDropVar, VMLoadVar, VMLoadVarRef, VMMoveVar, VMStoreVar},
@@ -59,27 +59,11 @@ impl VMEvaluation for VMMoveVar {
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         let name = vm.local_string(block, self.name)?;
-        let resolved = vm.resolve_var_name(*name);
 
-        let value = vm.remove_value(name).unwrap_or_else(|| match &resolved {
-            Some(VarName::Func(func)) => {
-                if let Some(func) = vm.get_function_ref(func) {
-                    vm.make_runtime_function(func)
-                } else {
-                    RuntimeValue::Null
-                }
-            }
-            Some(VarName::Var(var)) => {
-                if let Some(var) = vm.variables.remove(var) {
-                    vm.resolve_saveable_runtime_value(var)
-                } else {
-                    RuntimeValue::Null
-                }
-            }
-            _ => RuntimeValue::Null,
-        });
+        if let Some(value) = vm.remove_value(name) {
+            vm.set_reg_value(self.dst, value);
+        }
 
-        vm.set_reg_value(self.dst, value);
         Ok(TerminateValue::None)
     }
 }

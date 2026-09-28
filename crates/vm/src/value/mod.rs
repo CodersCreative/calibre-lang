@@ -15,14 +15,13 @@ use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
 use dumpster::{TraceWith, Visitor};
 
-use rustc_hash::FxHashMap;
-use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
 use dyn_hash::DynHash;
-use std::any::Any;
+use std::{any::Any, ops::DerefMut};
 use std::{
     fmt::{Debug, Display},
+    ops::Deref,
     sync::Arc,
 };
 use wasm_sync::Mutex;
@@ -45,10 +44,114 @@ pub const BIG_PRECISION: usize = 128;
 pub const BIG_ROUNDING: RoundingMode = RoundingMode::ToEven;
 
 #[derive(Debug, Clone)]
-pub struct GcVec(pub Vec<RuntimeValue>);
+pub struct ValueSlot(Arc<RuntimeValue>);
+
+impl ValueSlot {
+    #[inline]
+    pub fn new(value: RuntimeValue) -> Self {
+        Self(Arc::new(value))
+    }
+
+    #[inline]
+    pub fn make_mut(&mut self) -> &mut RuntimeValue {
+        Arc::make_mut(&mut self.0)
+    }
+}
+
+impl From<ValueSlot> for RuntimeValue {
+    fn from(value: ValueSlot) -> Self {
+        value.as_ref().clone()
+    }
+}
+
+impl AsRef<RuntimeValue> for ValueSlot {
+    fn as_ref(&self) -> &RuntimeValue {
+        self.0.as_ref()
+    }
+}
+
+impl From<RuntimeValue> for ValueSlot {
+    fn from(value: RuntimeValue) -> Self {
+        Self::new(value)
+    }
+}
+
+impl Deref for ValueSlot {
+    type Target = RuntimeValue;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_ref()
+    }
+}
+
+unsafe impl<V: Visitor> TraceWith<V> for ValueSlot {
+    fn accept(&self, visitor: &mut V) -> Result<(), ()> {
+        self.as_ref().accept(visitor)
+    }
+}
 
 #[derive(Debug, Clone)]
-pub struct GcMap(pub ObjectMap<RuntimeValue>);
+pub struct GcVec(pub Vec<ValueSlot>);
+
+impl GcVec {
+    pub fn new(values: Vec<RuntimeValue>) -> Self {
+        Self(values.into_iter().map(ValueSlot::new).collect())
+    }
+}
+
+impl Deref for GcVec {
+    type Target = Vec<ValueSlot>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for GcVec {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl From<Vec<ValueSlot>> for GcVec {
+    fn from(value: Vec<ValueSlot>) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GcMap(pub ObjectMap<ValueSlot>);
+
+impl GcMap {
+    pub fn new(map: ObjectMap<RuntimeValue>) -> Self {
+        Self(ObjectMap(
+            map.0
+                .into_iter()
+                .map(|(key, value)| (key, ValueSlot::new(value)))
+                .collect(),
+        ))
+    }
+}
+
+impl Deref for GcMap {
+    type Target = ObjectMap<ValueSlot>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for GcMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl From<ObjectMap<ValueSlot>> for GcMap {
+    fn from(value: ObjectMap<ValueSlot>) -> Self {
+        Self(value)
+    }
+}
 
 unsafe impl<V: Visitor> TraceWith<V> for GcVec {
     fn accept(&self, visitor: &mut V) -> Result<(), ()> {
@@ -101,7 +204,7 @@ pub enum RuntimeValue {
     Bool(bool),
     Str(Ustr),
     Char(char),
-    Aggregate(Option<Ustr>, Gc<GcMap>),
+    Aggregate(Option<Ustr>, Arc<GcMap>),
     Enum(Ustr, usize, Option<Gc<RuntimeValue>>),
     Ref(Ustr),
     VarRef(usize),
@@ -109,7 +212,7 @@ pub enum RuntimeValue {
         frame: usize,
         reg: Reg,
     },
-    List(Gc<GcVec>),
+    List(Arc<GcVec>),
     Option(Option<Gc<RuntimeValue>>),
     Result(Result<Gc<RuntimeValue>, Gc<RuntimeValue>>),
     Channel(Arc<ChannelInner>),
@@ -146,9 +249,9 @@ pub enum RuntimeValue {
 unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
     fn accept(&self, visitor: &mut V) -> Result<(), ()> {
         match self {
-            RuntimeValue::Aggregate(_, map) => map.accept(visitor),
+            RuntimeValue::Aggregate(_, map) => map.as_ref().accept(visitor),
             RuntimeValue::Enum(_, _, Some(x)) => x.accept(visitor),
-            RuntimeValue::List(x) => x.accept(visitor),
+            RuntimeValue::List(x) => x.as_ref().accept(visitor),
             RuntimeValue::Option(Some(x)) => x.accept(visitor),
             RuntimeValue::Result(Ok(x)) => x.accept(visitor),
             RuntimeValue::Result(Err(x)) => x.accept(visitor),
@@ -167,10 +270,8 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
             }
             RuntimeValue::MutexGuard(guard) => guard.get_clone().accept(visitor),
             RuntimeValue::HashMap(map) => {
-                if let Ok(guard) = map.map.try_lock() {
-                    for value in guard.values() {
-                        value.accept(visitor)?;
-                    }
+                for value in map.map.values() {
+                    value.accept(visitor)?;
                 }
                 Ok(())
             }
@@ -199,33 +300,6 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
 }
 
 impl RuntimeValue {
-    #[instrument(skip_all)]
-    pub fn replace_list_aliases(&mut self, old_list: &Gc<GcVec>, new_list: &Gc<GcVec>) {
-        match self {
-            RuntimeValue::List(list) => {
-                if VM::list_identity_eq(list, old_list) {
-                    *list = new_list.clone();
-                }
-            }
-            RuntimeValue::Aggregate(_, map) => {
-                let entries = &mut Gc::make_mut(map).0.0;
-                for (_, field) in entries.iter_mut() {
-                    field.replace_list_aliases(old_list, new_list);
-                }
-            }
-            RuntimeValue::Option(Some(inner))
-            | RuntimeValue::Result(Ok(inner))
-            | RuntimeValue::Result(Err(inner))
-            | RuntimeValue::Enum(_, _, Some(inner)) => {
-                Gc::make_mut(inner).replace_list_aliases(old_list, new_list);
-            }
-            RuntimeValue::DynObject { value: inner, .. } => {
-                Gc::make_mut(inner).replace_list_aliases(old_list, new_list);
-            }
-            _ => {}
-        }
-    }
-
     #[inline]
     pub(crate) fn is_callable(&self) -> bool {
         let val = matches!(

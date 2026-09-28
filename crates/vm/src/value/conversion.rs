@@ -180,7 +180,7 @@ impl RuntimeValue {
             (RuntimeValue::Str(x), ParserInnerType::List(t))
                 if t.data_type == ParserInnerType::Str =>
             {
-                Ok(RuntimeValue::List(Gc::new(GcVec(
+                Ok(RuntimeValue::List(Arc::new(GcVec::new(
                     x.chars()
                         .map(|x| RuntimeValue::Str(Ustr::from(&x.to_string())))
                         .collect::<Vec<RuntimeValue>>(),
@@ -189,7 +189,7 @@ impl RuntimeValue {
             (RuntimeValue::Str(x), ParserInnerType::List(t))
                 if t.data_type == ParserInnerType::Char =>
             {
-                Ok(RuntimeValue::List(Gc::new(GcVec(
+                Ok(RuntimeValue::List(Arc::new(GcVec::new(
                     x.chars()
                         .map(RuntimeValue::Char)
                         .collect::<Vec<RuntimeValue>>(),
@@ -221,15 +221,15 @@ impl RuntimeValue {
             (RuntimeValue::List(data), ParserInnerType::List(t)) => {
                 let mut lst = Vec::new();
 
-                for d in data.as_ref().0.iter().cloned() {
-                    lst.push(d.convert(env, &t.data_type)?);
+                for d in data.as_ref().0.iter() {
+                    lst.push(RuntimeValue::from(d.clone()).convert(env, &t.data_type)?);
                 }
 
-                Ok(RuntimeValue::List(Gc::new(GcVec(lst))))
+                Ok(RuntimeValue::List(Arc::new(GcVec::new(lst))))
             }
             (x, ParserInnerType::List(t)) => {
                 let x = x.convert(env, t)?;
-                Ok(RuntimeValue::List(Gc::new(GcVec(vec![x]))))
+                Ok(RuntimeValue::List(Arc::new(GcVec::new(vec![x]))))
             }
             (RuntimeValue::Option(x), ParserInnerType::Option(t)) => {
                 if let Some(x) = x {

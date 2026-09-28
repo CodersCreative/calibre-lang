@@ -40,6 +40,10 @@ use tracing_subscriber::{EnvFilter, Registry, fmt};
 mod features;
 mod model;
 
+#[cfg(not(target_arch = "wasm32"))]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[derive(ClapParser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {

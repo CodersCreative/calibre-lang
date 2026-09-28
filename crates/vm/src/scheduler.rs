@@ -137,10 +137,9 @@ impl SchedulerHandle {
         };
 
         for id in 0..vm.variables.slot_len() {
-            if let Some(value) = vm.variables.get_by_id(id).cloned() {
-                let resolved = base_vm.resolve_saveable_runtime_value(
-                    base_vm.convert_runtime_var_into_saveable(value),
-                );
+            if let Some(value) = vm.variables.get_by_id(id)
+                && let Ok(resolved) = base_vm.resolve_value_ref(value)
+            {
                 let _ = vm.variables.set_by_id(id, resolved);
             }
         }

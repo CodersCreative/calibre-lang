@@ -17,7 +17,6 @@ use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
-use wasm_sync::Mutex;
 
 fn tuple_pair(value: RuntimeValue) -> Result<(RuntimeValue, RuntimeValue), RuntimeError> {
     match value {
@@ -28,13 +27,15 @@ fn tuple_pair(value: RuntimeValue) -> Result<(RuntimeValue, RuntimeValue), Runti
                     target_type: ParserInnerType::Str,
                 },
             )?;
+
             let right = map.as_ref().0.get("1").cloned().ok_or(
                 RuntimeError::UnexpectedTypeInConversion {
                     value: Box::new(RuntimeValue::Null),
                     target_type: ParserInnerType::Str,
                 },
             )?;
-            Ok((left, right))
+
+            Ok((RuntimeValue::from(left), RuntimeValue::from(right)))
         }
         other => Err(RuntimeError::UnexpectedTypeInConversion {
             value: Box::new(other),
@@ -55,10 +56,10 @@ impl NativeFunction for HashMapNew {
 
         let entries = args
             .pop()
-            .unwrap_or(RuntimeValue::List(Gc::new(GcVec(Vec::new()))));
+            .unwrap_or(RuntimeValue::List(Arc::new(GcVec::new(Vec::new()))));
 
         #[allow(clippy::mutable_key_type)]
-        let mut map: FxHashMap<HashKey, RuntimeValue> = FxHashMap::default();
+        let mut map: FxHashMap<HashKey, crate::value::ValueSlot> = FxHashMap::default();
 
         let RuntimeValue::List(list) = env.resolve_value(entries)? else {
             return Err(RuntimeError::UnexpectedTypeInConversion {
@@ -67,18 +68,14 @@ impl NativeFunction for HashMapNew {
             });
         };
 
-        for item in list.as_ref().0.iter().cloned() {
-            let (key, value) = tuple_pair(item)?;
+        for item in list.as_ref().0.iter() {
+            let (key, value) = tuple_pair(RuntimeValue::from(item.clone()))?;
 
             let key = resolve_hash_key(env, key)?;
-            let value = env.convert_runtime_var_into_saveable(value);
-
-            map.insert(key, value);
+            map.insert(key, value.into());
         }
 
-        Ok(RuntimeValue::HashMap(RuntimeHashMap {
-            map: Arc::new(Mutex::new(map)),
-        }))
+        Ok(RuntimeValue::HashMap(RuntimeHashMap { map: Arc::new(map) }))
     }
 }
 
@@ -94,11 +91,11 @@ impl NativeFunction for HashMapSet {
 
         let value = pop_or_null(&mut args);
         let key = resolve_hash_key(env, pop_or_null(&mut args))?;
-        let map = resolve_hashmap(env, pop_or_null(&mut args))?;
+        let target = pop_or_null(&mut args);
+        let mut map = resolve_hashmap(env, target.clone())?;
 
-        if let Ok(mut guard) = map.map.try_lock() {
-            guard.insert(key, value);
-        }
+        Arc::make_mut(&mut map.map).insert(key, value.into());
+        env.update_ref_value(target, RuntimeValue::HashMap(map));
 
         Ok(RuntimeValue::Null)
     }
@@ -117,10 +114,10 @@ impl NativeFunction for HashMapGet {
         let key = resolve_hash_key(env, pop_or_null(&mut args))?;
         let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
-        if let Ok(guard) = map.map.try_lock()
-            && let Some(value) = guard.get(&key)
-        {
-            return Ok(RuntimeValue::Option(Some(Gc::new(value.clone()))));
+        if let Some(value) = map.map.get(&key) {
+            return Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::from(
+                value.clone(),
+            )))));
         }
 
         Ok(RuntimeValue::Option(None))
@@ -138,12 +135,15 @@ impl NativeFunction for HashMapRemove {
         expect_num_args(&args, &[2])?;
 
         let key = resolve_hash_key(env, pop_or_null(&mut args))?;
-        let map = resolve_hashmap(env, pop_or_null(&mut args))?;
+        let target = pop_or_null(&mut args);
+        let mut map = resolve_hashmap(env, target.clone())?;
+        let removed = Arc::make_mut(&mut map.map).remove(&key);
+        env.update_ref_value(target, RuntimeValue::HashMap(map));
 
-        if let Ok(mut guard) = map.map.try_lock()
-            && let Some(value) = guard.remove(&key)
-        {
-            return Ok(RuntimeValue::Option(Some(Gc::new(value))));
+        if let Some(value) = removed {
+            return Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::from(
+                value.clone(),
+            )))));
         }
 
         Ok(RuntimeValue::Option(None))
@@ -163,11 +163,7 @@ impl NativeFunction for HashMapContains {
         let key = resolve_hash_key(env, pop_or_null(&mut args))?;
         let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
-        if let Ok(guard) = map.map.try_lock() {
-            return Ok(RuntimeValue::Bool(guard.contains_key(&key)));
-        }
-
-        Ok(RuntimeValue::Bool(false))
+        Ok(RuntimeValue::Bool(map.map.contains_key(&key)))
     }
 }
 
@@ -183,7 +179,7 @@ impl NativeFunction for HashMapLen {
 
         let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
-        let len = map.map.lock().unwrap().len() as i64;
+        let len = map.map.len() as i64;
         Ok(RuntimeValue::Int(len))
     }
 }
@@ -200,15 +196,13 @@ impl NativeFunction for HashMapKeys {
 
         let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
-        let mut out = Vec::new();
-        if let Ok(guard) = map.map.try_lock() {
-            out = guard
-                .keys()
-                .map(|key| RuntimeValue::from(key.clone()))
-                .collect();
-        }
+        let out: Vec<_> = map
+            .map
+            .keys()
+            .map(|key| RuntimeValue::from(key.clone()))
+            .collect();
 
-        Ok(RuntimeValue::List(Gc::new(GcVec(out))))
+        Ok(RuntimeValue::List(Arc::new(GcVec::new(out))))
     }
 }
 
@@ -224,12 +218,13 @@ impl NativeFunction for HashMapValues {
 
         let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
-        let mut out = Vec::new();
-        if let Ok(guard) = map.map.try_lock() {
-            out = guard.values().cloned().collect();
-        }
+        let out: Vec<_> = map
+            .map
+            .values()
+            .map(|value| RuntimeValue::from(value.clone()))
+            .collect();
 
-        Ok(RuntimeValue::List(Gc::new(GcVec(out))))
+        Ok(RuntimeValue::List(Arc::new(GcVec::new(out))))
     }
 }
 
@@ -245,27 +240,25 @@ impl NativeFunction for HashMapEntries {
 
         let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
-        let mut out = Vec::new();
-        if let Ok(guard) = map.map.try_lock() {
-            out = guard
-                .clone()
-                .into_iter()
-                .map(|(key, value)| {
-                    RuntimeValue::Aggregate(
-                        None,
-                        Gc::new(crate::value::GcMap(
-                            vec![
-                                ("0".to_string(), RuntimeValue::from(key)),
-                                ("1".to_string(), value),
-                            ]
-                            .into(),
-                        )),
-                    )
-                })
-                .collect();
-        }
+        let out: Vec<_> = map
+            .map
+            .iter()
+            .map(|(key, value)| (key.clone(), RuntimeValue::from(value.clone())))
+            .map(|(key, value)| {
+                RuntimeValue::Aggregate(
+                    None,
+                    Arc::new(crate::value::GcMap::new(
+                        vec![
+                            ("0".to_string(), RuntimeValue::from(key)),
+                            ("1".to_string(), value),
+                        ]
+                        .into(),
+                    )),
+                )
+            })
+            .collect();
 
-        Ok(RuntimeValue::List(Gc::new(GcVec(out))))
+        Ok(RuntimeValue::List(Arc::new(GcVec::new(out))))
     }
 }
 
@@ -279,11 +272,11 @@ impl NativeFunction for HashMapClear {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let map = resolve_hashmap(env, pop_or_null(&mut args))?;
+        let target = pop_or_null(&mut args);
+        let mut map = resolve_hashmap(env, target.clone())?;
 
-        if let Ok(mut guard) = map.map.try_lock() {
-            guard.clear();
-        }
+        Arc::make_mut(&mut map.map).clear();
+        env.update_ref_value(target, RuntimeValue::HashMap(map));
 
         Ok(RuntimeValue::Null)
     }
@@ -301,7 +294,7 @@ impl NativeFunction for HashSetNew {
 
         let entries = args
             .pop()
-            .unwrap_or(RuntimeValue::List(Gc::new(GcVec(Vec::new()))));
+            .unwrap_or(RuntimeValue::List(Arc::new(GcVec::new(Vec::new()))));
 
         let RuntimeValue::List(list) = env.resolve_value(entries)? else {
             return Err(RuntimeError::UnexpectedTypeInConversion {
@@ -318,9 +311,7 @@ impl NativeFunction for HashSetNew {
             .map(|item| resolve_hash_key_ref(env, item))
             .collect::<Result<FxHashSet<_>, RuntimeError>>()?;
 
-        Ok(RuntimeValue::HashSet(RuntimeHashSet {
-            set: Arc::new(Mutex::new(set)),
-        }))
+        Ok(RuntimeValue::HashSet(RuntimeHashSet { set: Arc::new(set) }))
     }
 }
 
@@ -335,14 +326,12 @@ impl NativeFunction for HashSetAdd {
         expect_num_args(&args, &[2])?;
 
         let key = resolve_hash_key(env, pop_or_null(&mut args))?;
-        let set = resolve_hashset(env, pop_or_null(&mut args))?;
+        let target = pop_or_null(&mut args);
+        let mut set = resolve_hashset(env, target.clone())?;
 
-        let inserted = if let Ok(mut guard) = set.set.try_lock() {
-            guard.insert(key)
-        } else {
-            false
-        };
+        let inserted = Arc::make_mut(&mut set.set).insert(key);
 
+        env.update_ref_value(target, RuntimeValue::HashSet(set));
         Ok(RuntimeValue::Bool(inserted))
     }
 }
@@ -358,14 +347,12 @@ impl NativeFunction for HashSetRemove {
         expect_num_args(&args, &[2])?;
 
         let key = resolve_hash_key(env, pop_or_null(&mut args))?;
-        let set = resolve_hashset(env, pop_or_null(&mut args))?;
+        let target = pop_or_null(&mut args);
+        let mut set = resolve_hashset(env, target.clone())?;
 
-        let removed = if let Ok(mut guard) = set.set.try_lock() {
-            guard.remove(&key)
-        } else {
-            false
-        };
+        let removed = Arc::make_mut(&mut set.set).remove(&key);
 
+        env.update_ref_value(target, RuntimeValue::HashSet(set));
         Ok(RuntimeValue::Bool(removed))
     }
 }
@@ -383,11 +370,7 @@ impl NativeFunction for HashSetContains {
         let key = resolve_hash_key(env, pop_or_null(&mut args))?;
         let set = resolve_hashset(env, pop_or_null(&mut args))?;
 
-        let contains = if let Ok(guard) = set.set.try_lock() {
-            guard.contains(&key)
-        } else {
-            false
-        };
+        let contains = set.set.contains(&key);
 
         Ok(RuntimeValue::Bool(contains))
     }
@@ -405,7 +388,7 @@ impl NativeFunction for HashSetLen {
 
         let set = resolve_hashset(env, pop_or_null(&mut args))?;
 
-        let len = set.set.lock().unwrap().len() as i64;
+        let len = set.set.len() as i64;
         Ok(RuntimeValue::Int(len))
     }
 }
@@ -422,12 +405,9 @@ impl NativeFunction for HashSetValues {
 
         let set = resolve_hashset(env, pop_or_null(&mut args))?;
 
-        let mut out = Vec::new();
-        if let Ok(guard) = set.set.try_lock() {
-            out = guard.clone().into_iter().map(RuntimeValue::from).collect();
-        }
+        let out: Vec<_> = set.set.iter().cloned().map(RuntimeValue::from).collect();
 
-        Ok(RuntimeValue::List(Gc::new(GcVec(out))))
+        Ok(RuntimeValue::List(Arc::new(GcVec::new(out))))
     }
 }
 
@@ -441,11 +421,11 @@ impl NativeFunction for HashSetClear {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        let set = resolve_hashset(env, pop_or_null(&mut args))?;
+        let target = pop_or_null(&mut args);
+        let mut set = resolve_hashset(env, target.clone())?;
 
-        if let Ok(mut guard) = set.set.try_lock() {
-            guard.clear();
-        }
+        Arc::make_mut(&mut set.set).clear();
+        env.update_ref_value(target, RuntimeValue::HashSet(set));
 
         Ok(RuntimeValue::Null)
     }

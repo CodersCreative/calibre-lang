@@ -1,10 +1,12 @@
 use super::super::VM;
 use crate::{
+    MutationHandle, PathSegment, RootBinding,
     conversion::Reg,
     error::RuntimeError,
-    value::{GcVec, RuntimeValue},
+    value::{RuntimeValue, ValueSlot},
 };
 use dumpster::sync::Gc;
+use std::sync::Arc;
 use tracing::{instrument, trace};
 
 pub(crate) trait WriteBack {
@@ -12,8 +14,6 @@ pub(crate) trait WriteBack {
 }
 
 pub(crate) trait Propagation {
-    fn propagate_list_aliases(&mut self, old_list: &Gc<GcVec>, new_list: &Gc<GcVec>);
-
     fn propagate_member_source_alias(&mut self, src: Reg, dst: Reg);
 
     fn propagate_member_source_args(
@@ -27,58 +27,289 @@ pub(crate) trait Propagation {
         reg: Reg,
         frame_idx: usize,
     ) -> Result<Option<RuntimeValue>, RuntimeError>;
+}
 
-    fn write_back_member_field_update(
+#[derive(Debug, Clone)]
+pub(crate) struct PropagatedValue {
+    pub value: RuntimeValue,
+    pub handle: Option<MutationHandle>,
+}
+
+impl VM {
+    pub(crate) fn get_propagated_value(&self, reg: Reg) -> PropagatedValue {
+        PropagatedValue {
+            value: self.get_reg_value(reg).clone(),
+            handle: self.get_mutation_handle(reg),
+        }
+    }
+
+    pub(crate) fn set_propagated_value(
         &mut self,
-        frame_idx: usize,
-        field_reg: Reg,
-        parent_reg: Reg,
-        field_name: &str,
-    ) -> Result<Option<RuntimeValue>, RuntimeError>;
+        reg: Reg,
+        propagated: PropagatedValue,
+    ) -> RuntimeValue {
+        let old = self.set_reg_value(reg, propagated.value);
+
+        if let Some(handle) = propagated.handle {
+            self.current_frame_mut()
+                .mutation_handles
+                .insert(reg, handle);
+        }
+
+        old
+    }
+
+    pub(crate) fn propagate_member_source_args_into(
+        &mut self,
+        args: &[Reg],
+        caller_frame: usize,
+        params: &[Reg],
+    ) {
+        if self
+            .frames
+            .get(caller_frame)
+            .is_none_or(|frame| frame.mutation_handles.is_empty())
+        {
+            return;
+        }
+
+        for (arg, param) in args.iter().copied().zip(params.iter().copied()) {
+            let handle = self
+                .frames
+                .get(caller_frame)
+                .and_then(|frame| frame.mutation_handles.get(&arg))
+                .cloned();
+            if let Some(handle) = handle {
+                self.current_frame_mut()
+                    .mutation_handles
+                    .insert(param, handle);
+            }
+        }
+    }
+
+    fn get_root_binding(&self, source: Reg) -> RootBinding {
+        match self.get_reg_value(source) {
+            RuntimeValue::Ref(name) => RootBinding::Ref(*name),
+            RuntimeValue::VarRef(id) => RootBinding::VarRef(*id),
+            RuntimeValue::RegRef { frame, reg } => RootBinding::RegRef {
+                frame: *frame,
+                reg: *reg,
+            },
+            _ => RootBinding::FrameReg {
+                frame: self.frames.len().saturating_sub(1),
+                reg: source,
+            },
+        }
+    }
+
+    pub(crate) fn new_mutation_handle(&self, source: Reg, segment: PathSegment) -> MutationHandle {
+        let mut handle = self
+            .current_frame()
+            .mutation_handles
+            .get(&source)
+            .cloned()
+            .unwrap_or_else(|| MutationHandle {
+                root: self.get_root_binding(source),
+                path: Vec::new(),
+            });
+
+        handle.path.push(segment);
+        handle
+    }
+
+    pub(crate) fn extend_mutation_handle(
+        &self,
+        source: Reg,
+        segments: &[PathSegment],
+    ) -> MutationHandle {
+        let mut handle = self
+            .current_frame()
+            .mutation_handles
+            .get(&source)
+            .cloned()
+            .unwrap_or_else(|| MutationHandle {
+                root: self.get_root_binding(source),
+                path: Vec::new(),
+            });
+
+        handle.path.extend_from_slice(segments);
+        handle
+    }
+
+    pub(crate) fn get_mutation_handle(&self, reg: Reg) -> Option<MutationHandle> {
+        self.current_frame().mutation_handles.get(&reg).cloned()
+    }
+
+    pub(crate) fn unwrap_mutation_handle(&self, source: Reg) -> MutationHandle {
+        self.get_mutation_handle(source)
+            .unwrap_or_else(|| self.new_mutation_handle(source, PathSegment::Payload))
+    }
+
+    fn get_root(&self, root: &RootBinding) -> RuntimeValue {
+        match root {
+            RootBinding::FrameReg { frame, reg } | RootBinding::RegRef { frame, reg } => {
+                RuntimeValue::RegRef {
+                    frame: *frame,
+                    reg: *reg,
+                }
+            }
+            RootBinding::Ref(name) => RuntimeValue::Ref(*name),
+            RootBinding::VarRef(id) => RuntimeValue::VarRef(*id),
+        }
+    }
+
+    fn replace_path(
+        value: &mut RuntimeValue,
+        path: &[PathSegment],
+        replacement: RuntimeValue,
+    ) -> Option<RuntimeValue> {
+        let Some((segment, rest)) = path.split_first() else {
+            return Some(std::mem::replace(value, replacement));
+        };
+
+        match segment {
+            PathSegment::Field(field) => match value {
+                RuntimeValue::Aggregate(_, map) => {
+                    let entries = &mut Arc::make_mut(map);
+                    let slot = entries
+                        .iter_mut()
+                        .find(|(name, _)| name == field)
+                        .map(|(_, slot)| slot)?;
+                    Self::replace_slot(slot, rest, replacement)
+                }
+                _ => None,
+            },
+            PathSegment::Index(index) => match value {
+                RuntimeValue::List(list) => {
+                    let values = Arc::make_mut(list);
+                    Self::replace_slot(values.get_mut(*index)?, rest, replacement)
+                }
+                RuntimeValue::Aggregate(_, map) => {
+                    let entries = &mut Arc::make_mut(map);
+                    Self::replace_slot(&mut entries.get_mut(*index)?.1, rest, replacement)
+                }
+                _ => None,
+            },
+            PathSegment::MapKey(key) => match value {
+                RuntimeValue::HashMap(map) => {
+                    let slot = Arc::make_mut(&mut map.map).get_mut(key)?;
+                    Self::replace_slot(slot, rest, replacement)
+                }
+                _ => None,
+            },
+            PathSegment::Payload => match value {
+                RuntimeValue::Option(Some(inner)) => Self::replace_gc(inner, rest, replacement),
+                RuntimeValue::Result(Ok(inner)) | RuntimeValue::Result(Err(inner)) => {
+                    Self::replace_gc(inner, rest, replacement)
+                }
+                RuntimeValue::Enum(_, _, Some(inner)) => Self::replace_gc(inner, rest, replacement),
+                RuntimeValue::DynObject { value: inner, .. } => {
+                    Self::replace_gc(inner, rest, replacement)
+                }
+                _ => None,
+            },
+        }
+    }
+
+    fn read_path(value: &RuntimeValue, path: &[PathSegment]) -> Option<RuntimeValue> {
+        let Some((segment, rest)) = path.split_first() else {
+            return Some(value.clone());
+        };
+        match segment {
+            PathSegment::Field(field) => match value {
+                RuntimeValue::Aggregate(_, map) => map
+                    .as_ref()
+                    .0
+                    .0
+                    .iter()
+                    .find(|(name, _)| name == field)
+                    .and_then(|(_, slot)| Self::read_path(slot.as_ref(), rest)),
+                _ => None,
+            },
+            PathSegment::Index(index) => match value {
+                RuntimeValue::List(list) => list
+                    .as_ref()
+                    .0
+                    .get(*index)
+                    .and_then(|slot| Self::read_path(slot.as_ref(), rest)),
+                RuntimeValue::Aggregate(_, map) => map
+                    .as_ref()
+                    .0
+                    .0
+                    .get(*index)
+                    .and_then(|(_, slot)| Self::read_path(slot.as_ref(), rest)),
+                _ => None,
+            },
+            PathSegment::MapKey(key) => match value {
+                RuntimeValue::HashMap(map) => map
+                    .map
+                    .get(key)
+                    .and_then(|slot| Self::read_path(slot.as_ref(), rest)),
+                _ => None,
+            },
+            PathSegment::Payload => match value {
+                RuntimeValue::Option(Some(inner)) => Self::read_path(inner.as_ref(), rest),
+                RuntimeValue::Result(Ok(inner)) | RuntimeValue::Result(Err(inner)) => {
+                    Self::read_path(inner.as_ref(), rest)
+                }
+                RuntimeValue::Enum(_, _, Some(inner)) => Self::read_path(inner.as_ref(), rest),
+                RuntimeValue::DynObject { value: inner, .. } => {
+                    Self::read_path(inner.as_ref(), rest)
+                }
+                _ => None,
+            },
+        }
+    }
+
+    fn replace_gc(
+        inner: &mut Gc<RuntimeValue>,
+        path: &[PathSegment],
+        replacement: RuntimeValue,
+    ) -> Option<RuntimeValue> {
+        Self::replace_path(Gc::make_mut(inner), path, replacement)
+    }
+
+    fn replace_slot(
+        slot: &mut ValueSlot,
+        path: &[PathSegment],
+        replacement: RuntimeValue,
+    ) -> Option<RuntimeValue> {
+        Self::replace_path(slot.make_mut(), path, replacement)
+    }
+
+    pub(crate) fn replace_mutation_handle(
+        &mut self,
+        handle: &MutationHandle,
+        replacement: RuntimeValue,
+    ) -> Option<RuntimeValue> {
+        let target = self.get_root(&handle.root);
+        let mut root = self.resolve_value_ref(&target).ok()?;
+
+        let old = Self::replace_path(&mut root, &handle.path, replacement)?;
+        let _ = self.write_back(target, root);
+        Some(old)
+    }
+
+    pub(crate) fn read_mutation_handle(&self, handle: &MutationHandle) -> Option<RuntimeValue> {
+        let target = self.get_root(&handle.root);
+        let root = self.resolve_value_ref(&target).ok()?;
+        Self::read_path(&root, &handle.path)
+    }
 }
 
 impl Propagation for VM {
     #[instrument(skip_all)]
-    fn propagate_list_aliases(&mut self, old_list: &Gc<GcVec>, new_list: &Gc<GcVec>) {
-        let frame_count = self.frames.len();
-        for frame_idx in 0..frame_count {
-            let reg_count = self.frames[frame_idx].reg_count as u16;
-            for reg in 0..reg_count {
-                let Some(value) = self.get_reg_value_in_frame_mut(frame_idx, reg) else {
-                    continue;
-                };
-
-                if !value.might_contain_list() {
-                    continue;
-                }
-
-                value.replace_list_aliases(old_list, new_list);
-            }
-        }
-
-        let slot_len = self.variables.slot_len();
-        for id in 0..slot_len {
-            let Some(current) = self.variables.get_mut_by_id(id) else {
-                continue;
-            };
-
-            if !current.might_contain_list() {
-                continue;
-            }
-
-            current.replace_list_aliases(old_list, new_list);
-        }
-    }
-
-    #[instrument(skip_all)]
     fn propagate_member_source_alias(&mut self, src: Reg, dst: Reg) {
-        let source = self.current_frame().member_sources.get(&src).cloned();
+        let source = self.current_frame().mutation_handles.get(&src).cloned();
+
         match source {
             Some(source) => {
-                self.current_frame_mut().member_sources.insert(dst, source);
+                self.current_frame_mut()
+                    .mutation_handles
+                    .insert(dst, source);
             }
             None => {
-                self.current_frame_mut().member_sources.remove(&dst);
+                self.current_frame_mut().mutation_handles.remove(&dst);
             }
         }
     }
@@ -89,7 +320,7 @@ impl Propagation for VM {
         args: &[Reg],
         caller_frame: usize,
     ) -> Result<(), RuntimeError> {
-        let args = args
+        let handles = args
             .iter()
             .filter_map(|arg| {
                 let RuntimeValue::RegRef { frame, reg } =
@@ -102,21 +333,22 @@ impl Propagation for VM {
                     return None;
                 }
 
-                let (parent, field) = self
-                    .frames
-                    .get(caller_frame)?
-                    .member_sources
-                    .get(reg)
-                    .cloned()?;
-
-                Some((caller_frame, *reg, parent, field))
+                Some((
+                    self.frames
+                        .get(caller_frame)?
+                        .mutation_handles
+                        .get(reg)
+                        .cloned()?,
+                    *frame,
+                    *reg,
+                ))
             })
             .collect::<Vec<_>>();
 
-        for (frame, field, parent, name) in args {
-            self.write_back_member_field_update(frame, field, parent, &name)?;
+        for (handle, frame, reg) in handles {
+            let field = self.get_reg_value_in_frame(frame, reg).clone();
+            let _ = self.replace_mutation_handle(&handle, field);
         }
-
         Ok(())
     }
 
@@ -126,97 +358,17 @@ impl Propagation for VM {
         reg: Reg,
         frame_idx: usize,
     ) -> Result<Option<RuntimeValue>, RuntimeError> {
-        let Some((parent, field)) = self.recover_member_source_for_list(reg, frame_idx) else {
+        let Some(handle) = self
+            .frames
+            .get(frame_idx)
+            .and_then(|frame| frame.mutation_handles.get(&reg))
+            .cloned()
+        else {
             return Ok(None);
         };
 
-        self.write_back_member_field_update(frame_idx, reg, parent, &field)
-    }
-
-    #[instrument(skip_all)]
-    fn write_back_member_field_update(
-        &mut self,
-        frame_idx: usize,
-        field_reg: Reg,
-        parent_reg: Reg,
-        field_name: &str,
-    ) -> Result<Option<RuntimeValue>, RuntimeError> {
-        let field = self.get_reg_value_in_frame(frame_idx, field_reg).clone();
-
-        let parent_raw = self.get_reg_value_in_frame(frame_idx, parent_reg).clone();
-        let parent = self.resolve_value_ref(&parent_raw)?;
-
-        fn update(
-            value: RuntimeValue,
-            field: &str,
-            replacement: &RuntimeValue,
-        ) -> Option<RuntimeValue> {
-            match value {
-                RuntimeValue::Aggregate(name, mut map) => {
-                    let entries = &mut dumpster::sync::Gc::make_mut(&mut map).0.0;
-
-                    if let Some(entry) = entries.iter_mut().find(|(name, _)| name == field) {
-                        entry.1 = replacement.clone();
-                        return Some(RuntimeValue::Aggregate(name, map));
-                    }
-
-                    let (_, wrapped) = entries.iter_mut().find(|(name, _)| name == "0")?;
-                    *wrapped = update(wrapped.clone(), field, replacement)?;
-                    Some(RuntimeValue::Aggregate(name, map))
-                }
-                RuntimeValue::List(mut list) => {
-                    let values = &mut dumpster::sync::Gc::make_mut(&mut list).0;
-                    let mut changed = false;
-
-                    for item in values.iter_mut() {
-                        if let Some(nested) = update(item.clone(), field, replacement) {
-                            *item = nested;
-                            changed = true;
-                        }
-                    }
-
-                    changed.then_some(RuntimeValue::List(list))
-                }
-                _ => None,
-            }
-        }
-
-        let leaf = field_name
-            .rsplit('.')
-            .next()
-            .unwrap_or(field_name)
-            .rsplit_once(']')
-            .map(|(_, name)| name)
-            .unwrap_or(field_name);
-
-        if let Some(updated) = update(parent, leaf, &field) {
-            let source = self
-                .frames
-                .get(frame_idx)
-                .and_then(|frame| frame.member_sources.get(&parent_reg))
-                .cloned();
-
-            match parent_raw {
-                RuntimeValue::Ref(_) | RuntimeValue::VarRef(_) | RuntimeValue::RegRef { .. } => {
-                    Ok(self.write_back(parent_raw, updated))
-                }
-                _ => {
-                    let old = self.set_reg_value_in_frame(frame_idx, parent_reg, updated);
-                    if let Some(source) = source {
-                        self.frames
-                            .get_mut(frame_idx)
-                            .unwrap()
-                            .member_sources
-                            .insert(parent_reg, source);
-                        self.propagate_member_source_reg(parent_reg, frame_idx)
-                    } else {
-                        Ok(Some(old))
-                    }
-                }
-            }
-        } else {
-            Ok(None)
-        }
+        let field = self.get_reg_value_in_frame(frame_idx, reg).clone();
+        Ok(self.replace_mutation_handle(&handle, field))
     }
 }
 
@@ -228,45 +380,6 @@ impl WriteBack for VM {
 }
 
 impl VM {
-    fn recover_member_source_for_list(
-        &self,
-        reg: Reg,
-        frame_idx: usize,
-    ) -> Option<(Reg, ustr::Ustr)> {
-        if let Some(source) = self
-            .frames
-            .get(frame_idx)?
-            .member_sources
-            .get(&reg)
-            .cloned()
-        {
-            return Some(source);
-        }
-
-        let RuntimeValue::List(target) = self.get_reg_value_in_frame(frame_idx, reg) else {
-            return None;
-        };
-
-        self.frames
-            .get(frame_idx)?
-            .member_sources
-            .iter()
-            .find_map(|(candidate, source)| {
-                if *candidate == reg {
-                    return None;
-                }
-
-                if let RuntimeValue::List(other) =
-                    self.get_reg_value_in_frame(frame_idx, *candidate)
-                    && std::ptr::eq(other.as_ref(), target.as_ref())
-                {
-                    Some(*source)
-                } else {
-                    None
-                }
-            })
-    }
-
     fn write_back_at_depth(
         &mut self,
         target: RuntimeValue,
@@ -274,10 +387,9 @@ impl VM {
         depth: usize,
     ) -> Option<RuntimeValue> {
         if depth == 0 {
-            trace!("write-back alias depth exceeded; forcing the write");
+            trace!("write-back reference depth exceeded; forcing the write");
             return self.force_write_back(target, value);
         }
-
         match target {
             RuntimeValue::Ref(name) => match self.variables.get(&name).cloned() {
                 Some(current) if current.is_ref_like() => {
@@ -293,6 +405,7 @@ impl VM {
             },
             RuntimeValue::RegRef { frame, reg } => {
                 let current = self.get_reg_value_in_frame(frame, reg).clone();
+
                 if current.is_ref_like() {
                     self.write_back_at_depth(current, value, depth - 1)
                 } else {

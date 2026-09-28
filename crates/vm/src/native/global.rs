@@ -11,6 +11,7 @@ use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
 use std::{
     io::{self, BufRead, Write},
+    sync::Arc,
     time::Duration,
 };
 use ustr::Ustr;
@@ -171,7 +172,10 @@ impl NativeFunction for TupleFn {
     }
 
     fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        Ok(RuntimeValue::Aggregate(None, Gc::new(GcMap(args.into()))))
+        Ok(RuntimeValue::Aggregate(
+            None,
+            Arc::new(GcMap::new(args.into())),
+        ))
     }
 }
 
@@ -247,8 +251,8 @@ impl NativeFunction for Len {
                 RuntimeValue::Range(from, to) => (to - from).max(0).unsigned_abs(),
                 RuntimeValue::Str(x) => x.len() as u64,
                 RuntimeValue::Null => 0,
-                RuntimeValue::HashMap(map) => map.map.lock().unwrap().len() as u64,
-                RuntimeValue::HashSet(set) => set.set.lock().unwrap().len() as u64,
+                RuntimeValue::HashMap(map) => map.map.len() as u64,
+                RuntimeValue::HashSet(set) => set.set.len() as u64,
                 RuntimeValue::Int(x) => x as u64,
                 RuntimeValue::UInt(x) => x,
                 RuntimeValue::Float(x) => x as u64,

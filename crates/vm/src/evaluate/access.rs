@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    VM,
+    MutationHandle, PathSegment, VM,
     conversion::{
         VMBlock,
         instructions::access::{VMIndex, VMLoadMember, VMSetIndex, VMSetMember},
@@ -49,7 +49,7 @@ impl VMEvaluation for VMLoadMember {
         };
 
         let resolved = vm.resolve_value_ref(&raw_receiver)?;
-        let mut member_source: Option<(u16, Ustr)> = None;
+        let mut member_source: Option<MutationHandle> = None;
 
         let val = match resolved {
             RuntimeValue::Null => {
@@ -58,9 +58,13 @@ impl VMEvaluation for VMLoadMember {
                         vm.resolve_associated_member_value(owner, name, short_name)
                 {
                     vm.set_reg_value(self.dst, callee);
+
+                    let handle = vm.new_mutation_handle(source_reg, PathSegment::Field(*name));
+
                     vm.current_frame_mut()
-                        .member_sources
-                        .insert(self.dst, (source_reg, *name));
+                        .mutation_handles
+                        .insert(self.dst, handle);
+
                     return Ok(TerminateValue::None);
                 } else {
                     return Err(missing(RuntimeValue::Null));
@@ -106,7 +110,7 @@ impl VMEvaluation for VMLoadMember {
                 } else if member_short == "type" {
                     RuntimeValue::Str(type_name)
                 } else if member_short == "traits" {
-                    RuntimeValue::List(Gc::new(GcVec(
+                    RuntimeValue::List(Arc::new(GcVec::new(
                         constraints.iter().map(|x| RuntimeValue::Str(*x)).collect(),
                     )))
                 } else if let Some(x) =
@@ -126,11 +130,12 @@ impl VMEvaluation for VMLoadMember {
                 let idx = tuple_index.ok_or(RuntimeError::ExpectedIntIndexFound {
                     found: Box::new(RuntimeValue::Null),
                 })?;
+
                 map.as_ref()
                     .0
                     .0
                     .get(idx)
-                    .map(|(_, val)| val.clone())
+                    .map(|(_, v)| RuntimeValue::from(v.clone()))
                     .ok_or_else(|| missing(RuntimeValue::Aggregate(None, map)))?
             }
             RuntimeValue::Aggregate(Some(type_name), map) => {
@@ -138,38 +143,44 @@ impl VMEvaluation for VMLoadMember {
                     vm.resolve_aggregate_member_slot(&type_name, &map, name, short_name)
                 {
                     let field_name = &map.0.0[idx].0;
-                    member_source = Some(
-                        vm.current_frame()
-                            .member_sources
-                            .get(&source_reg)
-                            .map(|(parent, path)| {
-                                (*parent, Ustr::from(&format!("{path}.{field_name}")))
-                            })
-                            .unwrap_or((source_reg, Ustr::from(field_name))),
-                    );
-                    map.0.0[idx].1.clone()
+
+                    member_source = Some(vm.new_mutation_handle(
+                        source_reg,
+                        PathSegment::Field(Ustr::from(field_name)),
+                    ));
+
+                    RuntimeValue::from(map.0.0[idx].1.clone())
                 } else if let Some((_, wrapped)) = map.0.0.iter().find(|(field, _)| field == "0") {
-                    let wrapped_val = vm.resolve_value_ref(wrapped)?;
+                    let wrapped_val = vm.resolve_value_ref(wrapped.as_ref())?;
                     if tuple_index.is_some() {
-                        member_source = Some(
-                            vm.current_frame()
-                                .member_sources
-                                .get(&source_reg)
-                                .map(|(parent, path)| (*parent, Ustr::from(&format!("{path}.0"))))
-                                .unwrap_or((source_reg, Ustr::from("0"))),
-                        );
+                        member_source = Some(vm.new_mutation_handle(
+                            source_reg,
+                            PathSegment::Index(tuple_index.unwrap_or_default()),
+                        ));
+
                         wrapped_val
                     } else {
                         let RuntimeValue::Aggregate(inner_type, inner_map) = wrapped_val else {
                             return Err(missing(RuntimeValue::Aggregate(Some(type_name), map)));
                         };
+
                         let inner_name = inner_type.as_deref().unwrap_or_default();
+
                         let idx = vm
                             .resolve_aggregate_member_slot(inner_name, &inner_map, name, short_name)
                             .ok_or_else(|| {
                                 missing(RuntimeValue::Aggregate(Some(type_name), map.clone()))
                             })?;
-                        inner_map.0.0[idx].1.clone()
+
+                        member_source = Some(vm.extend_mutation_handle(
+                            source_reg,
+                            &[
+                                PathSegment::Field(Ustr::from("0")),
+                                PathSegment::Field(Ustr::from(inner_map.0.0[idx].0.as_str())),
+                            ],
+                        ));
+
+                        RuntimeValue::from(inner_map.0.0[idx].1.clone())
                     }
                 } else {
                     let value = vm
@@ -186,10 +197,16 @@ impl VMEvaluation for VMLoadMember {
                     )
                 }
             }
-            RuntimeValue::Enum(_, _, Some(x)) if is_next_or_zero => x.as_ref().clone(),
+            RuntimeValue::Enum(_, _, Some(x)) if is_next_or_zero => {
+                member_source = Some(vm.unwrap_mutation_handle(source_reg));
+                x.as_ref().clone()
+            }
             RuntimeValue::Enum(_, _, Some(x)) => x.as_ref().clone(),
             RuntimeValue::Enum(_, _, None) if is_next_or_zero => RuntimeValue::Null,
-            RuntimeValue::Option(Some(x)) if is_next_or_zero => x.as_ref().clone(),
+            RuntimeValue::Option(Some(x)) if is_next_or_zero => {
+                member_source = Some(vm.unwrap_mutation_handle(source_reg));
+                x.as_ref().clone()
+            }
             RuntimeValue::Option(Some(inner)) => {
                 if let Some(callee) = vm.resolve_associated_member_value("option", name, short_name)
                 {
@@ -212,6 +229,7 @@ impl VMEvaluation for VMLoadMember {
             }
 
             RuntimeValue::Result(Ok(x)) | RuntimeValue::Result(Err(x)) if is_next_or_zero => {
+                member_source = Some(vm.unwrap_mutation_handle(source_reg));
                 x.as_ref().clone()
             }
             result @ RuntimeValue::Result(_) => {
@@ -232,7 +250,7 @@ impl VMEvaluation for VMLoadMember {
                     v.as_ref()
                         .0
                         .get(index)
-                        .cloned()
+                        .map(|slot| RuntimeValue::from(slot.clone()))
                         .unwrap_or(RuntimeValue::Null)
                 } else {
                     bind_assoc(vm, "list", RuntimeValue::List(v))?
@@ -255,15 +273,16 @@ impl VMEvaluation for VMLoadMember {
 
         vm.set_reg_value(self.dst, val);
 
-        let frame = vm.current_frame_mut();
-        let final_source = match member_source {
-            Some(source) => source,
-            None => match frame.member_sources.get(&source_reg).cloned() {
-                Some((parent, path)) => (parent, Ustr::from(&format!("{path}.{name}"))),
-                None => (source_reg, Ustr::from(name)),
-            },
-        };
-        frame.member_sources.insert(self.dst, final_source);
+        let final_source = member_source.unwrap_or_else(|| {
+            if let Some(index) = tuple_index {
+                vm.new_mutation_handle(source_reg, PathSegment::Index(index))
+            } else {
+                vm.new_mutation_handle(source_reg, PathSegment::Field(*name))
+            }
+        });
+        vm.current_frame_mut()
+            .mutation_handles
+            .insert(self.dst, final_source);
 
         Ok(TerminateValue::None)
     }
@@ -282,20 +301,21 @@ impl VMEvaluation for VMSetMember {
         let value = vm.get_reg_value(self.value).clone();
         let (short_name, tuple_index) = VM::member_parts(name);
 
-        let update_aggregate = |agg_name: &Option<Ustr>, mut map: Gc<GcMap>| {
-            let entries = &mut Gc::make_mut(&mut map).0.0;
+        let update_aggregate = |agg_name: &Option<Ustr>, mut map: Arc<GcMap>| {
+            let entries = &mut Arc::make_mut(&mut map);
+
             match (agg_name.as_ref(), tuple_index) {
                 (None, Some(idx)) => {
                     if idx >= entries.len() {
                         return Err(RuntimeError::StackUnderflow);
                     }
-                    entries[idx].1 = value.clone();
+                    entries[idx].1 = value.clone().into();
                 }
                 (Some(_), _) => {
                     if let Some(entry) = entries.iter_mut().find(|entry| {
                         entry.0 == *name || short_name.is_some_and(|short| entry.0 == short)
                     }) {
-                        entry.1 = value.clone();
+                        entry.1 = value.clone().into();
                     } else {
                         return Err(RuntimeError::StackUnderflow);
                     }
@@ -306,6 +326,7 @@ impl VMEvaluation for VMSetMember {
                     });
                 }
             }
+
             Ok(map)
         };
 
@@ -445,7 +466,7 @@ impl VMEvaluation for VMSetMember {
                             let member_source = vm
                                 .frames
                                 .get(frame)
-                                .and_then(|vm_frame| vm_frame.member_sources.get(&reg))
+                                .and_then(|vm_frame| vm_frame.mutation_handles.get(&reg))
                                 .cloned();
 
                             let _ = vm.set_reg_value_in_frame(
@@ -457,7 +478,7 @@ impl VMEvaluation for VMSetMember {
                             if let Some(source) = member_source
                                 && let Some(vm_frame) = vm.frames.get_mut(frame)
                             {
-                                vm_frame.member_sources.insert(reg, source);
+                                vm_frame.mutation_handles.insert(reg, source);
                             }
 
                             let old = vm.propagate_member_source_reg(reg, frame)?;
@@ -467,17 +488,15 @@ impl VMEvaluation for VMSetMember {
                             }
                         }
                         RuntimeValue::List(_) => {
-                            if let Some((parent_reg, field_name)) =
-                                vm.current_frame().member_sources.get(&reg).cloned()
+                            if let Some(handle) = vm
+                                .frames
+                                .get(frame)
+                                .and_then(|frame| frame.mutation_handles.get(&reg))
+                                .cloned()
                             {
-                                let old = vm.write_back_member_field_update(
-                                    frame,
-                                    reg,
-                                    parent_reg,
-                                    &field_name,
-                                )?;
+                                let field = vm.get_reg_value_in_frame(frame, reg).clone();
 
-                                if let Some(old) = old {
+                                if let Some(old) = vm.replace_mutation_handle(&handle, field) {
                                     let _ = vm.set_reg_value(self.dst, old);
                                 }
                             }
@@ -499,14 +518,17 @@ impl VMEvaluation for VMSetMember {
                 }
                 RuntimeValue::Aggregate(name, map) => {
                     let updated = update_aggregate(&name, map)?;
-                    let member_source =
-                        vm.current_frame().member_sources.get(&self.target).cloned();
+                    let member_source = vm
+                        .current_frame()
+                        .mutation_handles
+                        .get(&self.target)
+                        .cloned();
 
                     let _ = vm.set_reg_value(self.target, RuntimeValue::Aggregate(name, updated));
 
                     if let Some(source) = member_source {
                         vm.current_frame_mut()
-                            .member_sources
+                            .mutation_handles
                             .insert(self.target, source);
                     }
 
@@ -523,17 +545,10 @@ impl VMEvaluation for VMSetMember {
                     break;
                 }
                 RuntimeValue::List(_) => {
-                    if let Some((parent_reg, field_name)) =
-                        vm.current_frame().member_sources.get(&self.target).cloned()
-                    {
-                        let old = vm.write_back_member_field_update(
-                            vm.frames.len().saturating_sub(1),
-                            self.target,
-                            parent_reg,
-                            &field_name,
-                        )?;
+                    if let Some(handle) = vm.get_mutation_handle(self.target) {
+                        let field = vm.get_reg_value(self.target).clone();
 
-                        if let Some(old) = old {
+                        if let Some(old) = vm.replace_mutation_handle(&handle, field) {
                             let _ = vm.set_reg_value(self.dst, old);
                         }
                     }
@@ -592,6 +607,19 @@ impl VMEvaluation for VMIndex {
                 }
             };
 
+        let indexed_segment = match &target_val {
+            RuntimeValue::List(list) => match &index_val {
+                RuntimeValue::Range(..) => None,
+                other => {
+                    resolve_single_index(list.as_ref().0.len(), other)?.map(PathSegment::Index)
+                }
+            },
+            RuntimeValue::HashMap(_) => {
+                Some(PathSegment::MapKey(HashKey::try_from(index_val.clone())?))
+            }
+            _ => None,
+        };
+
         let val = match target_val {
             RuntimeValue::List(list) => {
                 let items = &list.as_ref().0;
@@ -600,8 +628,8 @@ impl VMEvaluation for VMIndex {
                         resolve_slice_range(items.len(), *start, *end)
                             .and_then(|(s, e)| items.get(s..e))
                             .map(|x| {
-                                RuntimeValue::Option(Some(Gc::new(RuntimeValue::List(Gc::new(
-                                    GcVec(x.to_vec()),
+                                RuntimeValue::Option(Some(Gc::new(RuntimeValue::List(Arc::new(
+                                    GcVec::from(x.to_vec()),
                                 )))))
                             })
                             .unwrap_or_else(|| RuntimeValue::Option(None))
@@ -609,11 +637,27 @@ impl VMEvaluation for VMIndex {
                     other => {
                         let resolved = resolve_single_index(items.len(), other)?;
                         match resolved {
-                            Some(i) => RuntimeValue::Option(Some(Gc::new(items[i].clone()))),
+                            Some(i) => RuntimeValue::Option(Some(Gc::new(RuntimeValue::from(
+                                items[i].clone(),
+                            )))),
                             None => RuntimeValue::Option(None),
                         }
                     }
                 }
+            }
+            RuntimeValue::HashMap(map) => {
+                let key = HashKey::try_from(index_val.clone()).map_err(|_| {
+                    RuntimeError::UnexpectedTypeInIndexAccess {
+                        target: Box::new(RuntimeValue::HashMap(map.clone())),
+                        index: Box::new(index_val.clone()),
+                    }
+                })?;
+
+                RuntimeValue::Option(
+                    map.map
+                        .get(&key)
+                        .map(|slot| Gc::new(RuntimeValue::from(slot.clone()))),
+                )
             }
             RuntimeValue::Range(start, end) => {
                 let len = (end - start).max(0) as usize;
@@ -699,7 +743,14 @@ impl VMEvaluation for VMIndex {
         };
 
         vm.set_reg_value(self.dst, val);
-        if !vm.current_frame().member_sources.contains_key(&self.dst) {
+
+        if let Some(segment) = indexed_segment {
+            let handle = vm.new_mutation_handle(self.value, segment);
+
+            vm.current_frame_mut()
+                .mutation_handles
+                .insert(self.dst, handle);
+        } else if !vm.current_frame().mutation_handles.contains_key(&self.dst) {
             vm.propagate_member_source_alias(self.value, self.dst);
         }
 
@@ -708,6 +759,7 @@ impl VMEvaluation for VMIndex {
 }
 
 impl VMEvaluation for VMSetIndex {
+    #[allow(clippy::mutable_key_type)]
     #[instrument(skip_all)]
     fn run(
         &self,
@@ -732,7 +784,12 @@ impl VMEvaluation for VMSetIndex {
         };
 
         let hash_index = || HashKey::try_from(index_val.clone());
-        let mut target_value = vm.get_reg_value(self.target).clone();
+
+        let mut target_value = match vm.get_reg_value(self.target) {
+            RuntimeValue::List(_) if numeric_index().is_ok() => vm.take_reg_value(self.target),
+            x => x.clone(),
+        };
+
         let mut handled = false;
 
         for _ in 0..64 {
@@ -761,10 +818,10 @@ impl VMEvaluation for VMSetIndex {
                                 });
                             }
 
-                            let vec: &mut Vec<RuntimeValue> = &mut Gc::make_mut(&mut list).0;
+                            let vec = Arc::make_mut(&mut list);
                             let idx = resolve_index(vec.len(), index)?;
-                            let old = std::mem::replace(&mut vec[idx], value);
-                            let _ = vm.set_reg_value(self.dst, old);
+                            let old = std::mem::replace(&mut vec[idx], value.clone().into());
+                            let _ = vm.set_reg_value(self.dst, RuntimeValue::from(old));
 
                             vm.variables.insert(ref_name, RuntimeValue::List(list));
                             vm.propagate_member_source_reg(
@@ -772,14 +829,18 @@ impl VMEvaluation for VMSetIndex {
                                 vm.frames.len().saturating_sub(1),
                             )?;
                         }
-                        RuntimeValue::HashMap(map) => {
+                        RuntimeValue::HashMap(mut map) => {
                             let key = hash_index()?;
 
-                            let mut guard = map.map.lock().unwrap();
+                            let table = Arc::make_mut(&mut map.map);
+                            let old = table.get(&key).map(|v| RuntimeValue::from(v.clone()));
+                            table.insert(key, value.clone().into());
 
-                            if let Some(old) = guard.insert(key, value) {
+                            if let Some(old) = old {
                                 let _ = vm.set_reg_value(self.dst, old);
                             }
+
+                            vm.variables.insert(ref_name, RuntimeValue::HashMap(map));
                         }
                         _ => {
                             return Err(RuntimeError::ExpectedListOrStrFound {
@@ -812,10 +873,10 @@ impl VMEvaluation for VMSetIndex {
                                 });
                             }
 
-                            let vec = &mut Gc::make_mut(&mut list).0;
+                            let vec = Arc::make_mut(&mut list);
                             let idx = resolve_index(vec.len(), index)?;
-                            let old = std::mem::replace(&mut vec[idx], value);
-                            let _ = vm.set_reg_value(self.dst, old);
+                            let old = std::mem::replace(&mut vec[idx], value.clone().into());
+                            let _ = vm.set_reg_value(self.dst, RuntimeValue::from(old));
 
                             let _ = vm.variables.set_by_id(id, RuntimeValue::List(list));
                             vm.propagate_member_source_reg(
@@ -823,14 +884,18 @@ impl VMEvaluation for VMSetIndex {
                                 vm.frames.len().saturating_sub(1),
                             )?;
                         }
-                        RuntimeValue::HashMap(map) => {
+                        RuntimeValue::HashMap(mut map) => {
                             let key = hash_index()?;
 
-                            let mut guard = map.map.lock().unwrap();
+                            let table = Arc::make_mut(&mut map.map);
+                            let old = table.get(&key).map(|v| RuntimeValue::from(v.clone()));
+                            table.insert(key, value.clone().into());
 
-                            if let Some(old) = guard.insert(key, value) {
+                            if let Some(old) = old {
                                 let _ = vm.set_reg_value(self.dst, old);
                             }
+
+                            let _ = vm.variables.set_by_id(id, RuntimeValue::HashMap(map));
                         }
                         _ => {
                             return Err(RuntimeError::ExpectedListOrStrFound {
@@ -842,7 +907,13 @@ impl VMEvaluation for VMSetIndex {
                     break;
                 }
                 RuntimeValue::RegRef { frame, reg } => {
-                    let current = vm.get_reg_value_in_frame(frame, reg).clone();
+                    let current = match vm.get_reg_value_in_frame(frame, reg) {
+                        RuntimeValue::List(_) if numeric_index().is_ok() => {
+                            vm.take_reg_value_in_frame(frame, reg)
+                        }
+                        x => x.clone(),
+                    };
+
                     match current {
                         RuntimeValue::Ref(_)
                         | RuntimeValue::VarRef(_)
@@ -859,15 +930,15 @@ impl VMEvaluation for VMSetIndex {
                                 });
                             }
 
-                            let vec = &mut Gc::make_mut(&mut list).0;
+                            let vec = Arc::make_mut(&mut list);
                             let idx = resolve_index(vec.len(), index)?;
-                            let old = std::mem::replace(&mut vec[idx], value);
-                            let _ = vm.set_reg_value(self.dst, old);
+                            let old = std::mem::replace(&mut vec[idx], value.clone().into());
+                            let _ = vm.set_reg_value(self.dst, RuntimeValue::from(old));
 
                             let member_source = vm
                                 .frames
                                 .get(frame)
-                                .and_then(|vm_frame| vm_frame.member_sources.get(&reg))
+                                .and_then(|vm_frame| vm_frame.mutation_handles.get(&reg))
                                 .cloned();
 
                             vm.set_reg_value_in_frame(frame, reg, RuntimeValue::List(list.clone()));
@@ -875,18 +946,32 @@ impl VMEvaluation for VMSetIndex {
                             if let Some(source) = member_source
                                 && let Some(vm_frame) = vm.frames.get_mut(frame)
                             {
-                                vm_frame.member_sources.insert(reg, source);
+                                vm_frame.mutation_handles.insert(reg, source);
                             }
 
                             vm.propagate_member_source_reg(reg, frame)?;
                         }
-                        RuntimeValue::HashMap(map) => {
+                        RuntimeValue::HashMap(mut map) => {
                             let key = hash_index()?;
-                            let guard = map.map.lock().unwrap();
 
-                            let mut guard = guard;
-                            if let Some(old) = guard.insert(key, value) {
+                            let table = Arc::make_mut(&mut map.map);
+                            let old = table.get(&key).map(|v| RuntimeValue::from(v.clone()));
+                            table.insert(key, value.clone().into());
+
+                            if let Some(old) = old {
                                 let _ = vm.set_reg_value(self.dst, old);
+                            }
+
+                            vm.set_reg_value_in_frame(frame, reg, RuntimeValue::HashMap(map));
+
+                            if let Some(handle) = vm
+                                .frames
+                                .get(frame)
+                                .and_then(|vm_frame| vm_frame.mutation_handles.get(&reg))
+                                .cloned()
+                            {
+                                let updated = vm.get_reg_value_in_frame(frame, reg).clone();
+                                let _ = vm.replace_mutation_handle(&handle, updated);
                             }
                         }
                         _ => {
@@ -907,18 +992,21 @@ impl VMEvaluation for VMSetIndex {
                         });
                     }
 
-                    let vec = &mut Gc::make_mut(&mut list).0;
+                    let vec = Arc::make_mut(&mut list);
                     let idx = resolve_index(vec.len(), index)?;
-                    let old = std::mem::replace(&mut vec[idx], value);
-                    let _ = vm.set_reg_value(self.dst, old);
+                    let old = std::mem::replace(&mut vec[idx], value.into());
+                    let _ = vm.set_reg_value(self.dst, RuntimeValue::from(old));
 
-                    let member_source =
-                        vm.current_frame().member_sources.get(&self.target).cloned();
+                    let member_source = vm
+                        .current_frame()
+                        .mutation_handles
+                        .get(&self.target)
+                        .cloned();
                     vm.set_reg_value(self.target, RuntimeValue::List(list));
 
                     if let Some(source) = member_source {
                         vm.current_frame_mut()
-                            .member_sources
+                            .mutation_handles
                             .insert(self.target, source);
                     }
 
@@ -927,12 +1015,22 @@ impl VMEvaluation for VMSetIndex {
                     handled = true;
                     break;
                 }
-                RuntimeValue::HashMap(map) => {
+                RuntimeValue::HashMap(mut map) => {
                     let key = hash_index()?;
 
-                    let mut guard = map.map.lock().unwrap();
-                    if let Some(old) = guard.insert(key, value) {
+                    let table = Arc::make_mut(&mut map.map);
+                    let old = table.get(&key).map(|v| RuntimeValue::from(v.clone()));
+                    table.insert(key, value.into());
+
+                    if let Some(old) = old {
                         let _ = vm.set_reg_value(self.dst, old);
+                    }
+
+                    vm.set_reg_value(self.target, RuntimeValue::HashMap(map));
+
+                    if let Some(handle) = vm.get_mutation_handle(self.target) {
+                        let updated = vm.get_reg_value(self.target).clone();
+                        let _ = vm.replace_mutation_handle(&handle, updated);
                     }
 
                     handled = true;

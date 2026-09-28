@@ -7,8 +7,8 @@ use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
-use dumpster::sync::Gc;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
+use std::sync::Arc;
 use ustr::Ustr;
 
 fn comparison_value_handle<T: PartialEq + PartialOrd>(
@@ -492,14 +492,14 @@ impl RuntimeValue {
         match rhs {
             Self::Aggregate(None, data) => {
                 let mut data = data.clone();
-                let entries = &mut Gc::make_mut(&mut data).0.0;
+                let entries = &mut Arc::make_mut(&mut data);
                 let key = Ustr::from(&entries.len().to_string());
-                entries.push((key, self));
+                entries.push((key, self.into()));
                 Ok(Self::Aggregate(None, data))
             }
             Self::List(data) => {
                 let mut data = data.clone();
-                Gc::make_mut(&mut data).0.push(self);
+                Arc::make_mut(&mut data).push(self.into());
                 Ok(Self::List(data))
             }
             _ => Err((self, rhs)),
@@ -514,14 +514,14 @@ impl RuntimeValue {
         match self {
             Self::Aggregate(None, data) => {
                 let mut data = data.clone();
-                let entries = &mut Gc::make_mut(&mut data).0.0;
+                let entries = &mut Arc::make_mut(&mut data);
                 let key = Ustr::from(&entries.len().to_string());
-                entries.push((key, rhs));
+                entries.push((key, rhs.into()));
                 Ok(Self::Aggregate(None, data))
             }
             Self::List(data) => {
                 let mut data = data.clone();
-                Gc::make_mut(&mut data).0.push(rhs);
+                Arc::make_mut(&mut data).push(rhs.into());
                 Ok(Self::List(data))
             }
             _ => Err((self, rhs)),

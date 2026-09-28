@@ -492,7 +492,7 @@ impl VM {
 
         self.variables
             .get(name)
-            .map(|var| self.resolve_saveable_runtime_value_ref(var))
+            .and_then(|var| self.resolve_value_ref(var).ok())
     }
 
     #[inline]
@@ -503,7 +503,7 @@ impl VM {
 
         self.variables
             .remove(name)
-            .map(|var| self.resolve_saveable_runtime_value(var))
+            .and_then(|var| self.resolve_value(var).ok())
     }
 
     pub fn run(
@@ -595,8 +595,8 @@ impl VM {
             }
 
             let reg = selected.unwrap_or_else(|| phi.sources.first().map(|x| x.1).unwrap_or(0));
-            let value = self.get_reg_value(reg).clone();
-            self.set_reg_value(phi.dest, value);
+            let value = self.get_propagated_value(reg);
+            self.set_propagated_value(phi.dest, value);
         }
 
         Ok(())

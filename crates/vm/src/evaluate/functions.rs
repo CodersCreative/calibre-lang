@@ -152,7 +152,6 @@ impl VMEvaluation for VMSpawn {
                         let resolved = vm
                             .resolve_value_ref(v)
                             .unwrap_or_else(|_| RuntimeValue::Null);
-                        let resolved = vm.convert_runtime_var_into_saveable(resolved);
                         (*k, resolved)
                     })
                     .collect();

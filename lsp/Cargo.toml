@@ -28,3 +28,5 @@ ustr = { workspace = true }
 async-lsp = { version = "0.2.2", features = ["async-io"] }
 tower = { version = "0.5", default-features = false, features = ["util"] }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+mimalloc = { workspace = true }

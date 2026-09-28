@@ -167,7 +167,7 @@ impl VMEvaluation for VMList {
             .map(|item| vm.get_reg_value(*item).clone())
             .collect();
 
-        vm.set_reg_value(self.dst, RuntimeValue::List(Gc::new(GcVec(values))));
+        vm.set_reg_value(self.dst, RuntimeValue::List(Arc::new(GcVec::new(values))));
         Ok(TerminateValue::None)
     }
 }
@@ -250,7 +250,7 @@ impl VMEvaluation for VMAggregate {
             self.dst,
             RuntimeValue::Aggregate(
                 layout.name,
-                Gc::new(GcMap(ObjectMap(
+                Arc::new(GcMap::new(ObjectMap(
                     entries.into_iter().map(|x| (*x.0, x.1)).collect(),
                 ))),
             ),

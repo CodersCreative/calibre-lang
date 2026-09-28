@@ -1,12 +1,13 @@
 use crate::{
     VM,
     error::RuntimeError,
-    evaluate::{calling::CallSite, write_back::Propagation},
+    evaluate::calling::CallSite,
     native::NativeFunction,
     value::{GcVec, RuntimeValue},
 };
 use dumpster::sync::Gc;
 use std::cmp::Ordering;
+use std::sync::Arc;
 
 // TODO limit num args in this file
 
@@ -36,7 +37,14 @@ fn parse_list_callable_needle_args(
         if list_value.is_none()
             && let RuntimeValue::List(values) = &resolved
         {
-            list_value = Some(values.as_ref().0.clone());
+            list_value = Some(
+                values
+                    .as_ref()
+                    .0
+                    .iter()
+                    .map(|v| RuntimeValue::from(v.clone()))
+                    .collect(),
+            );
             continue;
         }
         if callable.is_none() && resolved.is_callable() {
@@ -116,7 +124,7 @@ impl NativeFunction for ListSortBy {
             return Err(err);
         }
 
-        Ok(RuntimeValue::List(Gc::new(GcVec(items))))
+        Ok(RuntimeValue::List(Arc::new(GcVec::new(items))))
     }
 }
 
@@ -173,10 +181,10 @@ fn normalize_remove_index(len: usize, idx: i64) -> Option<usize> {
     Some(idx as usize)
 }
 
-fn remove_from_list_value(list: &mut Gc<GcVec>, idx: i64) -> Option<RuntimeValue> {
-    let vec = &mut Gc::make_mut(list).0;
+fn remove_from_list_value(list: &mut Arc<GcVec>, idx: i64) -> Option<RuntimeValue> {
+    let vec = Arc::make_mut(list);
     let idx = normalize_remove_index(vec.len(), idx)?;
-    Some(vec.remove(idx))
+    Some(RuntimeValue::from(vec.remove(idx)))
 }
 
 fn remove_from_target(
@@ -193,9 +201,7 @@ fn remove_from_target(
             };
             match current {
                 RuntimeValue::List(mut list) => {
-                    let old_list = list.clone();
                     let removed = remove_from_list_value(&mut list, idx);
-                    env.propagate_list_aliases(&old_list, &list);
                     env.variables.insert(name, RuntimeValue::List(list));
                     Ok(removed)
                 }
@@ -215,9 +221,7 @@ fn remove_from_target(
             };
             match current {
                 RuntimeValue::List(mut list) => {
-                    let old_list = list.clone();
                     let removed = remove_from_list_value(&mut list, idx);
-                    env.propagate_list_aliases(&old_list, &list);
                     let _ = env.variables.set_by_id(id, RuntimeValue::List(list));
                     Ok(removed)
                 }
@@ -233,14 +237,14 @@ fn remove_from_target(
             let current = env.get_reg_value_in_frame(frame, reg).clone();
             match current {
                 RuntimeValue::List(mut list) => {
-                    let old_list = list.clone();
                     let removed = remove_from_list_value(&mut list, idx);
                     env.set_reg_value_in_frame(frame, reg, RuntimeValue::List(list));
-                    let updated = match env.get_reg_value_in_frame(frame, reg).clone() {
-                        RuntimeValue::List(new_list) => new_list,
-                        _ => return Ok(removed),
-                    };
-                    env.propagate_list_aliases(&old_list, &updated);
+
+                    if let Some(handle) = env.get_mutation_handle(reg) {
+                        let updated = env.get_reg_value_in_frame(frame, reg).clone();
+                        let _ = env.replace_mutation_handle(&handle, updated);
+                    }
+
                     Ok(removed)
                 }
                 alias @ (RuntimeValue::Ref(_)
@@ -285,6 +289,7 @@ impl NativeFunction for ListRawRemove {
                 list_target = Some(arg);
                 continue;
             }
+
             if idx.is_none() {
                 match env.resolve_value(arg)? {
                     RuntimeValue::Int(v) => idx = Some(v),
@@ -297,6 +302,7 @@ impl NativeFunction for ListRawRemove {
         let Some(target) = list_target else {
             return Err(RuntimeError::InvalidFunctionCall);
         };
+
         let Some(idx) = idx else {
             return Err(RuntimeError::InvalidFunctionCall);
         };

@@ -1,13 +1,12 @@
 use super::{super::VM, write_back::Propagation};
 use crate::{
-    VarName,
+    PathSegment, RootBinding, VarName,
     conversion::{Reg, VMBlock, VMFunction},
     error::RuntimeError,
     value::{RuntimeValue, TerminateValue},
 };
 use calibre_lir::ast::BlockId;
 use calibre_parser::ast::idents::ParserText;
-use dumpster::sync::Gc;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::{instrument, trace};
@@ -26,9 +25,9 @@ impl VM {
         match self.resolve_var_name(*name) {
             Some(VarName::Var(var)) => {
                 if let Some(value) = self.variables.get(&var) {
-                    self.resolve_saveable_runtime_value_ref(value)
+                    value.clone()
                 } else {
-                    unreachable!()
+                    RuntimeValue::Null
                 }
             }
             Some(VarName::Func(func)) => self
@@ -251,10 +250,17 @@ impl VM {
                 }
                 FunctionArgs::Regs(args) => {
                     propagateable_args = Some(args.to_vec());
+
                     for (reg, arg_reg) in function.param_regs.iter().zip(args.iter().copied()) {
                         let arg = self.get_reg_value_in_frame(caller_frame, arg_reg).clone();
                         self.set_reg_value(*reg, arg);
                     }
+
+                    self.propagate_member_source_args_into(
+                        args,
+                        caller_frame,
+                        &function.param_regs,
+                    );
                 }
             }
 
@@ -384,55 +390,12 @@ impl VM {
 
         if let Some((frame_idx, reg)) = receiver_reg
             && frame_idx == self.frames.len().saturating_sub(1)
+            && let Some(handle) = self.current_frame().mutation_handles.get(&reg).cloned()
         {
-            let mut source = self.current_frame().member_sources.get(&reg).cloned();
-
-            if source.is_none()
-                && let RuntimeValue::List(target_list) = self.get_reg_value(reg)
-            {
-                for (candidate_reg, candidate_source) in self.current_frame().member_sources.iter()
-                {
-                    if let RuntimeValue::List(other_list) = self.get_reg_value(*candidate_reg)
-                        && std::ptr::eq(other_list.as_ref(), target_list.as_ref())
-                    {
-                        source = Some(*candidate_source);
-                        break;
-                    }
-                }
-            }
-
-            if let Some((parent_reg, member_name)) = source {
-                let updated_field = self.get_reg_value(reg).clone();
-                let parent_raw = self.get_reg_value(parent_reg);
-                let parent_resolved = self.resolve_value_ref(parent_raw)?;
-                if let RuntimeValue::Aggregate(type_name, mut map) = parent_resolved
-                    && let Some(entry) = Gc::make_mut(&mut map)
-                        .0
-                        .0
-                        .iter_mut()
-                        .find(|(field, _)| field == &member_name)
-                {
-                    entry.1 = updated_field;
-
-                    let updated_parent = RuntimeValue::Aggregate(type_name, map);
-
-                    match parent_raw.clone() {
-                        RuntimeValue::RegRef { frame, reg } => {
-                            self.set_reg_value_in_frame(frame, reg, updated_parent);
-                        }
-                        RuntimeValue::Ref(name) => {
-                            self.variables.insert(name, updated_parent);
-                        }
-                        RuntimeValue::VarRef(id) => {
-                            let _ = self.variables.set_by_id(id, updated_parent);
-                        }
-                        _ => {
-                            self.set_reg_value(parent_reg, updated_parent);
-                        }
-                    }
-                }
-            }
+            let updated_field = self.get_reg_value(reg).clone();
+            let _ = self.replace_mutation_handle(&handle, updated_field);
         }
+
         Ok(out)
     }
 
@@ -488,34 +451,49 @@ impl VM {
 
         let func = if func.is_callable() {
             func
-        } else if let Some((source_reg, member_name)) =
-            self.current_frame().member_sources.get(&callee).cloned()
-        {
-            let (short_name, _) = Self::member_parts(&member_name);
-            let raw_receiver = self.get_reg_value(source_reg).clone();
+        } else if let Some(handle) = self.current_frame().mutation_handles.get(&callee).cloned() {
+            let Some(PathSegment::Field(member_name)) = handle.path.last() else {
+                return Err(RuntimeError::FunctionNotFound(
+                    "<mutation-handle>".to_string(),
+                ));
+            };
+
+            let RootBinding::FrameReg {
+                frame,
+                reg: source_reg,
+            } = handle.root
+            else {
+                return Err(RuntimeError::FunctionNotFound(member_name.to_string()));
+            };
+
+            let (short_name, _) = Self::member_parts(member_name);
+            let raw_receiver = self
+                .read_mutation_handle(&handle)
+                .unwrap_or_else(|| self.get_reg_value_in_frame(frame, source_reg).clone());
             let resolved_receiver = self
                 .resolve_value_ref(&raw_receiver)
                 .unwrap_or(func.clone());
+
             let resolved = match &resolved_receiver {
                 RuntimeValue::Aggregate(Some(type_name), _) => self
-                    .resolve_associated_member_value(type_name, &member_name, short_name)
+                    .resolve_associated_member_value(type_name, member_name, short_name)
                     .map(|callee| {
                         self.bind_member_receiver_if_callable(
                             callee,
-                            &member_name,
+                            member_name,
                             &raw_receiver,
                             resolved_receiver.clone(),
                         )
                     }),
                 RuntimeValue::Ref(owner) => self
-                    .resolve_associated_member_value(owner, &member_name, short_name)
+                    .resolve_associated_member_value(owner, member_name, short_name)
                     .or_else(|| {
                         let owner_short =
                             ParserText::get_temp_name_suffix(owner).unwrap_or(owner.to_string());
                         if &owner_short != owner {
                             self.resolve_associated_member_value(
                                 &owner_short,
-                                &member_name,
+                                member_name,
                                 short_name,
                             )
                         } else {
@@ -524,6 +502,7 @@ impl VM {
                     }),
                 _ => None,
             };
+
             resolved.unwrap_or(func)
         } else {
             func

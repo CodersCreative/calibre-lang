@@ -8,6 +8,7 @@ use calibre_parser::ast::{ObjectMap, types::ParserInnerType};
 use dumpster::sync::Gc;
 use std::io::Write;
 use std::process::{Command, Stdio};
+use std::sync::Arc;
 use ustr::Ustr;
 
 #[derive(Debug, Clone)]
@@ -42,14 +43,17 @@ fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<Ustr>, RuntimeError>
     Ok(out)
 }
 
-fn field(map: &Gc<GcMap>, key: &str) -> Option<RuntimeValue> {
-    map.as_ref().0.get(key).cloned()
+fn field(map: &Arc<GcMap>, key: &str) -> Option<RuntimeValue> {
+    map.as_ref()
+        .0
+        .get(key)
+        .map(|value| RuntimeValue::from(value.clone()))
 }
 
 #[inline]
 fn resolve_field(
     env: &VM,
-    map: &Gc<GcMap>,
+    map: &Arc<GcMap>,
     key: &str,
 ) -> Result<Option<RuntimeValue>, RuntimeError> {
     field(map, key)
@@ -58,7 +62,7 @@ fn resolve_field(
 }
 
 #[inline]
-fn required_str_field(env: &VM, map: &Gc<GcMap>, key: &str) -> Result<Ustr, RuntimeError> {
+fn required_str_field(env: &VM, map: &Arc<GcMap>, key: &str) -> Result<Ustr, RuntimeError> {
     let Some(value) = resolve_field(env, map, key)? else {
         return Err(RuntimeError::InvalidFunctionCall);
     };
@@ -158,7 +162,7 @@ fn format_command_line(command: &Ustr, args: &[Ustr]) -> String {
 fn process_result(command: Ustr, status: i64, stdout: Ustr, stderr: Ustr) -> RuntimeValue {
     RuntimeValue::Aggregate(
         Some(Ustr::from("ProcessResult")),
-        Gc::new(GcMap(ObjectMap::from(vec![
+        Arc::new(GcMap::new(ObjectMap::from(vec![
             (String::from("command"), RuntimeValue::Str(command)),
             (String::from("status"), RuntimeValue::Int(status)),
             (String::from("success"), RuntimeValue::Bool(status == 0)),

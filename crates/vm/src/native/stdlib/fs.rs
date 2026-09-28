@@ -404,7 +404,7 @@ impl NativeFunction for FsPathReadDir {
                     }
                 }
                 Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::List(
-                    Gc::new(GcVec(out)),
+                    Arc::new(GcVec::new(out)),
                 )))))
             }
             Err(err) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(

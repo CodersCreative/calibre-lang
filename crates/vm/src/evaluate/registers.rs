@@ -5,7 +5,7 @@ use crate::{
         instructions::registers::{VMCopy, VMLoadRegRef},
     },
     error::RuntimeError,
-    evaluate::{instruction::VMEvaluation, write_back::Propagation},
+    evaluate::instruction::VMEvaluation,
     value::{RuntimeValue, TerminateValue},
 };
 use calibre_lir::ast::BlockId;
@@ -48,9 +48,8 @@ impl VMEvaluation for VMCopy {
             return Ok(TerminateValue::None);
         }
 
-        let value = vm.get_reg_value(self.src).clone();
-        vm.set_reg_value(self.dst, value);
-        vm.propagate_member_source_alias(self.src, self.dst);
+        let value = vm.get_propagated_value(self.src);
+        vm.set_propagated_value(self.dst, value);
 
         Ok(TerminateValue::None)
     }

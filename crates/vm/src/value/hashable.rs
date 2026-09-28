@@ -5,13 +5,12 @@ use std::{
 
 use crate::{
     error::RuntimeError,
-    value::{GcVec, Host, RuntimeValue},
+    value::{GcVec, Host, RuntimeValue, ValueSlot},
 };
 use calibre_parser::ast::{ObjectMap, types::ParserInnerType};
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use ustr::Ustr;
-use wasm_sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub enum HashKey {
@@ -124,8 +123,8 @@ impl TryFrom<RuntimeValue> for HashKey {
             RuntimeValue::List(lst) => {
                 let mut out = Vec::with_capacity(lst.as_ref().0.len());
 
-                for v in &lst.as_ref().0 {
-                    out.push(HashKey::try_from(v.clone())?);
+                for v in lst.as_ref().0.iter() {
+                    out.push(HashKey::try_from(RuntimeValue::from(v.clone()))?);
                 }
 
                 Ok(Self::List(out))
@@ -135,7 +134,7 @@ impl TryFrom<RuntimeValue> for HashKey {
 
                 for (k, v) in map.as_ref().0.0.iter() {
                     let key = Ustr::from(k.as_str());
-                    let hk = HashKey::try_from(v.clone())?;
+                    let hk = HashKey::try_from(RuntimeValue::from(v.clone()))?;
                     entries.push((key, hk));
                 }
 
@@ -181,7 +180,7 @@ impl From<HashKey> for RuntimeValue {
             HashKey::Big(s) => RuntimeValue::Str(s),
             HashKey::Ptr(p) => RuntimeValue::Ptr(p),
             HashKey::Range(a, b) => RuntimeValue::Range(a, b),
-            HashKey::List(values) => RuntimeValue::List(Gc::new(GcVec(
+            HashKey::List(values) => RuntimeValue::List(Arc::new(GcVec::new(
                 values.into_iter().map(RuntimeValue::from).collect(),
             ))),
             HashKey::Option(opt) => match opt {
@@ -203,7 +202,7 @@ impl From<HashKey> for RuntimeValue {
                     entries.push((k, RuntimeValue::from(v)));
                 }
 
-                RuntimeValue::Aggregate(name, Gc::new(super::GcMap(ObjectMap(entries))))
+                RuntimeValue::Aggregate(name, Arc::new(super::GcMap::new(ObjectMap(entries))))
             }
             HashKey::Function(name, captures) => RuntimeValue::Function {
                 name,
@@ -224,10 +223,10 @@ impl From<HashKey> for RuntimeValue {
 
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeHashMap {
-    pub map: Arc<Mutex<FxHashMap<HashKey, RuntimeValue>>>,
+    pub map: Arc<FxHashMap<HashKey, ValueSlot>>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeHashSet {
-    pub set: Arc<Mutex<FxHashSet<HashKey>>>,
+    pub set: Arc<FxHashSet<HashKey>>,
 }

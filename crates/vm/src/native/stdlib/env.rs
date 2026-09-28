@@ -8,6 +8,7 @@ use crate::{
     value::{GcVec, RuntimeValue},
 };
 use dumpster::sync::Gc;
+use std::sync::Arc;
 use ustr::Ustr;
 
 pub struct EnvGet;
@@ -103,6 +104,6 @@ impl NativeFunction for EnvVars {
             .map(|(k, v)| RuntimeValue::Str(Ustr::from(&format!("{k}={v}"))))
             .collect();
 
-        Ok(RuntimeValue::List(Gc::new(GcVec(vars))))
+        Ok(RuntimeValue::List(Arc::new(GcVec::new(vars))))
     }
 }

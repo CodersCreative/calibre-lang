@@ -4,12 +4,11 @@ use crate::{
     error::RuntimeError,
     evaluate::calling::CallSite,
     native::NativeFunction,
-    value::{GcMap, GcVec, RuntimeValue, hashable::HashKey, spawn::WaitGroupInner},
+    value::{GcMap, RuntimeValue, hashable::HashKey, spawn::WaitGroupInner},
     variables::VariableStore,
 };
 use astro_float::Consts;
 use calibre_lir::ast::BlockId;
-use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     fmt::Debug,
@@ -23,6 +22,8 @@ use std::{fmt::Display, sync::OnceLock};
 use tracing::instrument;
 use ustr::{Ustr, UstrMap, UstrSet};
 use wasm_sync::Mutex;
+
+pub(crate) use vm_lookup::VarName;
 
 static NULL_RUNTIME_VALUE: RuntimeValue = RuntimeValue::Null;
 static EMPTY_FRAME: OnceLock<VMFrame> = OnceLock::new();
@@ -39,13 +40,33 @@ pub mod value;
 pub mod variables;
 mod vm_lookup;
 
-pub(crate) use vm_lookup::VarName;
+#[derive(Debug, Clone)]
+pub enum RootBinding {
+    FrameReg { frame: usize, reg: Reg },
+    Ref(Ustr),
+    VarRef(usize),
+    RegRef { frame: usize, reg: Reg },
+}
+
+#[derive(Debug, Clone)]
+pub enum PathSegment {
+    Field(Ustr),
+    Index(usize),
+    MapKey(HashKey),
+    Payload,
+}
+
+#[derive(Debug, Clone)]
+pub struct MutationHandle {
+    pub root: RootBinding,
+    pub path: Vec<PathSegment>,
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct VMFrame {
     pub reg_start: usize,
     pub reg_count: usize,
-    pub member_sources: FxHashMap<Reg, (Reg, Ustr)>,
+    pub mutation_handles: FxHashMap<Reg, MutationHandle>,
     pub func_ptr: usize,
     pub func_name: Option<Ustr>,
 }
@@ -148,11 +169,6 @@ impl From<VMRegistry> for VM {
 }
 
 impl VM {
-    #[inline]
-    pub(crate) fn list_identity_eq(a: &Gc<GcVec>, b: &Gc<GcVec>) -> bool {
-        std::ptr::eq(a.as_ref(), b.as_ref())
-    }
-
     fn from_shared_parts(
         registry: Arc<VMRegistry>,
         mappings: Arc<Vec<Ustr>>,
@@ -251,9 +267,6 @@ impl VM {
                     let resolved = self
                         .resolve_value_ref(value)
                         .unwrap_or_else(|_| RuntimeValue::Null);
-                    let resolved = self.resolve_saveable_runtime_value_ref(
-                        &self.convert_runtime_var_into_saveable(resolved),
-                    );
                     (*key, resolved)
                 })
                 .collect();
@@ -312,7 +325,7 @@ impl VM {
         if let Some(mut frame) = self.frame_pool.pop() {
             frame.reg_start = start;
             frame.reg_count = reg_count;
-            frame.member_sources.clear();
+            frame.mutation_handles.clear();
             frame.func_ptr = func_ptr;
             frame.func_name = func_name;
             self.frames.push(frame);
@@ -320,7 +333,7 @@ impl VM {
             self.frames.push(VMFrame {
                 reg_start: start,
                 reg_count,
-                member_sources: FxHashMap::default(),
+                mutation_handles: FxHashMap::default(),
                 func_ptr,
                 func_name,
             });
@@ -386,19 +399,15 @@ impl VM {
     }
 
     #[inline(always)]
-    pub(crate) fn get_reg_value_in_frame_mut(
-        &mut self,
-        frame_idx: usize,
-        reg: Reg,
-    ) -> Option<&mut RuntimeValue> {
-        if let Some(frame) = self.frames.get(frame_idx) {
-            let idx = reg as usize;
-            if idx < frame.reg_count {
-                return self.reg_arena.get_mut(frame.reg_start + idx);
-            }
+    pub(crate) fn take_reg_value_in_frame(&mut self, frame_idx: usize, reg: Reg) -> RuntimeValue {
+        if let Some(frame) = self.frames.get(frame_idx)
+            && (reg as usize) < frame.reg_count
+        {
+            let pos = frame.reg_start + reg as usize;
+            return std::mem::replace(&mut self.reg_arena[pos], RuntimeValue::Null);
         }
 
-        None
+        RuntimeValue::Null
     }
 
     #[inline(always)]
@@ -412,7 +421,7 @@ impl VM {
         }
 
         let old = self.replace_reg_value(reg, value);
-        self.current_frame_mut().member_sources.remove(&reg);
+        self.current_frame_mut().mutation_handles.remove(&reg);
         old
     }
 
@@ -428,12 +437,37 @@ impl VM {
                 let pos = frame.reg_start + idx;
 
                 let old = std::mem::replace(&mut self.reg_arena[pos], value);
-                frame.member_sources.remove(&reg);
+                frame.mutation_handles.remove(&reg);
                 return old;
             }
         }
 
         RuntimeValue::Null
+    }
+
+    pub fn update_ref_value(&mut self, target: RuntimeValue, value: RuntimeValue) {
+        match target {
+            RuntimeValue::Ref(name) => {
+                self.variables.insert(name, value);
+            }
+            RuntimeValue::VarRef(id) => {
+                let _ = self.variables.set_by_id(id, value);
+            }
+            RuntimeValue::RegRef { frame, reg } => {
+                self.set_reg_value_in_frame(frame, reg, value);
+
+                if let Some(handle) = self
+                    .frames
+                    .get(frame)
+                    .and_then(|vm_frame| vm_frame.mutation_handles.get(&reg))
+                    .cloned()
+                {
+                    let updated = self.get_reg_value_in_frame(frame, reg).clone();
+                    let _ = self.replace_mutation_handle(&handle, updated);
+                }
+            }
+            _ => {}
+        }
     }
 
     #[inline(always)]
@@ -643,10 +677,8 @@ impl VM {
                 }
             }
             RuntimeValue::HashMap(map) => {
-                if let Ok(guard) = map.map.try_lock() {
-                    for value in guard.values() {
-                        self.drop_runtime_value_inner_ref(value, seen, seen_regs);
-                    }
+                for value in map.map.values() {
+                    self.drop_runtime_value_inner_ref(value, seen, seen_regs);
                 }
             }
             RuntimeValue::HashSet(_) => {}
