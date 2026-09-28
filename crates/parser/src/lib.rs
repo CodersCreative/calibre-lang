@@ -10,11 +10,11 @@ use std::{
     fmt::Display,
     ops::Range,
     path::PathBuf,
-    sync::{LazyLock, RwLock},
 };
 use thiserror::Error;
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap};
+use std::sync::atomic::AtomicU64;
 
 pub mod ast;
 pub mod formatter;
@@ -22,7 +22,7 @@ pub mod lexer;
 pub mod native;
 pub mod parse;
 
-pub static COUNTER: LazyLock<RwLock<u64>> = LazyLock::new(|| RwLock::new(0));
+pub static COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Default, Clone, Debug)]
 pub struct AlphaRenameState {

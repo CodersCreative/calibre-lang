@@ -2,13 +2,10 @@ use calibre_mir::{environment::MiddleEnvironment, scoping::ScopeId};
 use calibre_parser::ast::types::ParserDataType;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
-use std::sync::atomic::Ordering;
 use tracing::{debug, instrument};
+use std::fmt::Display;
 use ustr::{Ustr, UstrMap, UstrSet};
-
 use crate::{
-    COUNTER,
     ast::{BlockId, LirBlock, LirNode, LirTerminator},
 };
 
@@ -108,6 +105,7 @@ pub struct LirEnvironment<'a> {
     pub referenced_identifiers: UstrSet,
     pub loop_stack: Vec<(BlockId, BlockId, Option<Ustr>)>,
     pub allow_global_hoist: bool,
+    pub counter : usize,
 }
 
 impl<'a> LirEnvironment<'a> {
@@ -155,11 +153,13 @@ impl<'a> LirEnvironment<'a> {
             referenced_identifiers: UstrSet::default(),
             loop_stack: vec![],
             allow_global_hoist,
+            counter : 0,
         }
     }
 
     pub fn get_temp(&mut self) -> Ustr {
-        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let id = self.counter;
+        self.counter += 1;
         Ustr::from(&format!("tmp_{}", id))
     }
 

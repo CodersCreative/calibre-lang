@@ -7,9 +7,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    fmt::Display,
-    ops::{Deref, DerefMut},
-    str::FromStr,
+    fmt::Display, ops::{Deref, DerefMut}, str::FromStr, sync::atomic::Ordering,
 };
 use tracing::instrument;
 use ustr::Ustr;
@@ -407,11 +405,7 @@ impl ParserText {
     pub fn temp_name(span: Span) -> Self {
         Self::new(
             span,
-            format!("[{}-{}]", span, {
-                let mut counter = COUNTER.write().unwrap();
-                *counter += 1;
-                *counter
-            }),
+            format!("[{}-{}]", span, COUNTER.fetch_add(1, Ordering::Relaxed)),
         )
     }
 
@@ -424,11 +418,7 @@ impl ParserText {
 
         Self::new(
             span,
-            format!("[{}-{}]{suffix}", span, {
-                let mut counter = COUNTER.write().unwrap();
-                *counter += 1;
-                *counter
-            }),
+            format!("[{}-{}]{suffix}", span, COUNTER.fetch_add(1, Ordering::Relaxed)),
         )
     }
 

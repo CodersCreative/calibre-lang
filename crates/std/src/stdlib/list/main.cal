@@ -51,13 +51,13 @@ impl<T> list:<T> {
 
 	const split_at := fn (self : list:<T>, idx : int) -> <list:<T>, list:<T>> => {
 		let cut := if idx < 0 => emit 0 else => emit if idx > len(self) => emit len(self) else => emit idx;
-		return tuple(self.slice(0, cut), self.slice(cut, len(self)));
+		return tuple(try self[0..cut] => list:<T>[], try self[cut..len(self)] => list:<T>[]);
 	};
 
 	const take := fn (self : list:<T>, n : int) -> list:<T> => {
 		let end := if n < 0 => emit 0 else => emit n;
 		
-		return self.slice(0, end);
+		return try self[0..end] => list:<T>[];
 	};
 
 	const skip := fn (self : list:<T>, n : int) -> list:<T> => {
@@ -109,7 +109,7 @@ impl<T> list:<T> {
 
 	const concat := fn (self other : list:<T>) -> list:<T> => {
 		for i in 0..len(other) => self <<= try!! other[i];
-		return out;
+		return self;
 	};
 
 	const sort := fn (self : list:<T>, compare : fn (T, T) -> int) -> list:<T> => return sort_by(self, compare);
