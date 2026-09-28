@@ -27,35 +27,7 @@ pub(crate) trait Propagation {
     ) -> Result<Option<RuntimeValue>, RuntimeError>;
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct PropagatedValue {
-    pub value: RuntimeValue,
-    pub handle: Option<Arc<MutationHandle>>,
-}
-
 impl VM {
-    pub(crate) fn get_propagated_value(&self, reg: Reg) -> PropagatedValue {
-        PropagatedValue {
-            value: self.get_reg_value(reg).clone(),
-            handle: self.get_mutation_handle(reg),
-        }
-    }
-
-    pub(crate) fn set_propagated_value(
-        &mut self,
-        reg: Reg,
-        propagated: PropagatedValue,
-    ) -> RuntimeValue {
-        let old = self.set_reg_value(reg, propagated.value);
-
-        if let Some(handle) = propagated.handle {
-            self.current_frame_mut()
-                .set_shared_mutation_handle(reg, handle);
-        }
-
-        old
-    }
-
     pub(crate) fn propagate_member_source_args_into(
         &mut self,
         args: &[Reg],
@@ -171,10 +143,12 @@ impl VM {
         }
 
         let mut mutation = Some(mutation);
+
         let mut apply = |value: &mut RuntimeValue| {
             let mutation = mutation.take()?;
             mutation(value)
         };
+
         let result = root.update_path(&handle.path, &mut apply)?;
         let _ = self.write_back(target, root);
         Some(result)

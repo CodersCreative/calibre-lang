@@ -83,153 +83,114 @@ impl SSABuilder {
     }
 
     pub fn build(&mut self, blocks: &[LirBlock], params: &[(Ustr, ParserDataType)]) {
+        let mut scratch_in = UstrMap::default();
+        let mut scratch_out = UstrMap::default();
         let mut changed = true;
+
         while changed {
             changed = false;
             for idx in 0..blocks.len() {
-                let mut phi_for = self.infos[idx].phi_for.clone();
-                let mut phis = self.infos[idx].phis.clone();
-                let incoming = self.merge_block_inputs(idx, params, &mut phi_for, &mut phis);
+                let mut current_info = std::mem::take(&mut self.infos[idx]);
+                let preds = std::mem::take(&mut self.preds[idx]);
 
-                if incoming != self.infos[idx].in_map {
-                    self.infos[idx].in_map = incoming.clone();
-                    changed = true;
-                }
+                scratch_in.clear();
 
-                let out = self.compute_block_liveness(idx, blocks, incoming);
-                if out != self.infos[idx].out_map {
-                    self.infos[idx].out_map = out;
-                    changed = true;
-                }
-                self.infos[idx].phi_for = phi_for;
-                self.infos[idx].phis = phis;
-            }
-        }
-    }
-
-    fn merge_block_inputs(
-        &mut self,
-        idx: usize,
-        params: &[(Ustr, ParserDataType)],
-        phi_for: &mut UstrMap<Reg>,
-        phis: &mut Vec<PhiNode>,
-    ) -> UstrMap<Reg> {
-        let mut incoming: UstrMap<Reg> = UstrMap::default();
-        let preds = self.preds.get(idx).cloned().unwrap_or_default();
-
-        if preds.len() == 1 && preds[0].0 == u32::MAX {
-            for (name, reg) in params
-                .iter()
-                .map(|(n, _)| n)
-                .zip(self.param_regs.iter().copied())
-            {
-                incoming.insert(*name, reg);
-            }
-            return incoming;
-        }
-
-        for var in self.locals.clone() {
-            let sources = self.compute_variable_sources(&var, &preds);
-            if sources.is_empty() {
-                continue;
-            }
-
-            let reg = self.compute_phi_register(var, &sources, phi_for);
-            self.update_phi_nodes(&var, reg, &sources, phi_for, phis);
-            incoming.insert(var, reg);
-        }
-
-        incoming
-    }
-
-    fn compute_variable_sources(&self, var: &Ustr, preds: &[BlockId]) -> Vec<(BlockId, Reg)> {
-        let mut sources: Vec<(BlockId, Reg)> = Vec::new();
-        for pred in preds {
-            if pred.0 == u32::MAX {
-                continue;
-            }
-            let pred_idx = self.block_map[pred];
-            let pred_info = &self.infos[pred_idx];
-            let reg = pred_info.out_map.get(var).copied().unwrap_or(self.null_reg);
-            sources.push((*pred, reg));
-        }
-        sources
-    }
-
-    fn compute_phi_register(
-        &mut self,
-        var: Ustr,
-        sources: &[(BlockId, Reg)],
-        phi_for: &mut UstrMap<Reg>,
-    ) -> Reg {
-        let reg_opt = sources
-            .iter()
-            .map(|(_, reg)| *reg)
-            .reduce(|acc, reg| if acc == reg { acc } else { Reg::MAX });
-
-        match reg_opt {
-            Some(r) if r != Reg::MAX => r,
-            _ => {
-                if let Some(existing) = phi_for.get(&var).copied() {
-                    existing
-                } else {
-                    let new_reg = self.alloc_reg();
-                    phi_for.insert(var, new_reg);
-                    new_reg
-                }
-            }
-        }
-    }
-
-    fn update_phi_nodes(
-        &self,
-        var: &Ustr,
-        _reg: Reg,
-        sources: &[(BlockId, Reg)],
-        phi_for: &UstrMap<Reg>,
-        phis: &mut Vec<PhiNode>,
-    ) {
-        if let Some(phi_reg) = phi_for.get(var).copied() {
-            let mut sources = sources.to_vec();
-            sources.sort_unstable_by_key(|(block, _)| block.0);
-
-            let phi = PhiNode {
-                dest: phi_reg,
-                sources,
-                name: Some(*var),
-            };
-
-            if let Some(i) = phis.iter().position(|p| p.dest == phi_reg) {
-                phis[i] = phi;
-            } else {
-                phis.push(phi);
-            }
-        }
-    }
-
-    fn compute_block_liveness(
-        &mut self,
-        idx: usize,
-        blocks: &[LirBlock],
-        mut incoming: UstrMap<Reg>,
-    ) -> UstrMap<Reg> {
-        let instructions = blocks[idx].instructions.clone();
-        for (instr_idx, instr) in instructions.iter().enumerate() {
-            if let Some(name) = instr.node_type.local_name() {
-                let _reg = match self.assign_regs[idx].get(instr_idx).and_then(|r| *r) {
-                    Some(reg) => reg,
-                    None => {
-                        let reg = self.alloc_reg();
-                        if let Some(slot) = self.assign_regs[idx].get_mut(instr_idx) {
-                            *slot = Some(reg);
-                        }
-                        reg
+                if preds.len() == 1 && preds[0].0 == u32::MAX {
+                    for ((name, _), &reg) in params.iter().zip(self.param_regs.iter()) {
+                        scratch_in.insert(*name, reg);
                     }
-                };
-                incoming.insert(*name, _reg);
+                } else {
+                    let locals = std::mem::take(&mut self.locals);
+                    for &var in &locals {
+                        let mut sources = Vec::with_capacity(preds.len());
+                        let mut all_same = true;
+                        let mut first_reg = None;
+
+                        for pred in &preds {
+                            if pred.0 == u32::MAX {
+                                continue;
+                            }
+                            let pred_idx = self.block_map[pred];
+                            let reg = self.infos[pred_idx]
+                                .out_map
+                                .get(&var)
+                                .copied()
+                                .unwrap_or(self.null_reg);
+
+                            sources.push((*pred, reg));
+
+                            if let Some(first) = first_reg {
+                                if first != reg {
+                                    all_same = false;
+                                }
+                            } else {
+                                first_reg = Some(reg);
+                            }
+                        }
+
+                        if sources.is_empty() {
+                            continue;
+                        }
+
+                        let reg = if all_same {
+                            first_reg.unwrap()
+                        } else {
+                            *current_info
+                                .phi_for
+                                .entry(var)
+                                .or_insert_with(|| self.alloc_reg())
+                        };
+
+                        if let Some(&phi_reg) = current_info.phi_for.get(&var) {
+                            sources.sort_unstable_by_key(|(block, _)| block.0);
+
+                            if let Some(p) =
+                                current_info.phis.iter_mut().find(|p| p.dest == phi_reg)
+                            {
+                                p.sources = sources;
+                            } else {
+                                current_info.phis.push(PhiNode {
+                                    dest: phi_reg,
+                                    sources,
+                                    name: Some(var),
+                                });
+                            }
+                        }
+
+                        scratch_in.insert(var, reg);
+                    }
+                    let _ = std::mem::replace(&mut self.locals, locals);
+                }
+
+                scratch_out.clone_from(&scratch_in);
+
+                for (instr_idx, instr) in blocks[idx].instructions.iter().enumerate() {
+                    if let Some(name) = instr.node_type.local_name() {
+                        let reg = if let Some(r) = self.assign_regs[idx][instr_idx] {
+                            r
+                        } else {
+                            let new_reg = self.alloc_reg();
+                            self.assign_regs[idx][instr_idx] = Some(new_reg);
+                            new_reg
+                        };
+                        scratch_out.insert(*name, reg);
+                    }
+                }
+
+                if scratch_in != current_info.in_map {
+                    current_info.in_map.clone_from(&scratch_in);
+                    changed = true;
+                }
+
+                if scratch_out != current_info.out_map {
+                    current_info.out_map.clone_from(&scratch_out);
+                    changed = true;
+                }
+
+                self.infos[idx] = current_info;
+                self.preds[idx] = preds;
             }
         }
-        incoming
     }
 
     fn alloc_reg(&mut self) -> Reg {

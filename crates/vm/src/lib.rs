@@ -74,6 +74,7 @@ pub struct VMFrame {
 
 impl VMFrame {
     #[inline]
+    #[instrument(skip_all)]
     pub(crate) fn get_mutation_handle(&self, reg: Reg) -> Option<Arc<MutationHandle>> {
         self.mutation_handles
             .get(reg as usize)

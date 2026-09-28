@@ -191,17 +191,18 @@ impl FunctionLowering {
     }
 
     fn new(func: LirFunction, is_global: bool) -> Self {
-        let entry = func.blocks.first().map(|b| b.id).unwrap_or(BlockId(0));
-        let mut block_map = FxHashMap::default();
-        for (idx, block) in func.blocks.iter().enumerate() {
-            block_map.insert(block.id, idx);
-        }
+        let entry = func.blocks.first().map_or(BlockId(0), |b| b.id);
+
+        let block_map: FxHashMap<_, _> = func
+            .blocks
+            .iter()
+            .enumerate()
+            .map(|(idx, block)| (block.id, idx))
+            .collect();
 
         let mut locals = UstrSet::default();
         if !is_global {
-            for (name, _) in &func.params {
-                locals.insert(*name);
-            }
+            locals.extend(func.params.iter().map(|(name, _)| *name));
 
             for block in &func.blocks {
                 for instr in &block.instructions {
@@ -214,46 +215,43 @@ impl FunctionLowering {
 
         let captures: UstrSet = func.captures.iter().map(|(n, _)| *n).collect();
 
-        let mut reg_count: Reg = 0;
-        let mut param_regs = Vec::new();
-        for _ in &func.params {
-            let r = reg_count;
-            reg_count += 1;
-            param_regs.push(r);
-        }
+        let param_regs: Vec<Reg> = (0..func.params.len() as Reg).collect();
+        let mut reg_count = param_regs.len() as Reg;
+
         let null_reg = reg_count;
         reg_count += 1;
         let ret_reg = reg_count;
         reg_count += 1;
 
-        let mut assign_regs: Vec<Vec<Option<Reg>>> = Vec::new();
+        let mut assign_regs = Vec::with_capacity(func.blocks.len());
         for block in &func.blocks {
-            let mut regs = vec![None; block.instructions.len()];
-            for (idx, instr) in block.instructions.iter().enumerate() {
-                if let Some(name) = instr.node_type.local_name()
-                    && locals.contains(name)
-                {
-                    let r = reg_count;
-                    reg_count += 1;
-                    regs[idx] = Some(r);
-                }
+            let mut regs = Vec::with_capacity(block.instructions.len());
+            for instr in &block.instructions {
+                let reg = instr
+                    .node_type
+                    .local_name()
+                    .filter(|name| locals.contains(name))
+                    .map(|_| {
+                        let r = reg_count;
+                        reg_count += 1;
+                        r
+                    });
+                regs.push(reg);
             }
             assign_regs.push(regs);
         }
 
-        let referenced_variables = func
+        let referenced_variables: UstrSet = func
             .blocks
             .iter()
-            .flat_map(|block| block.instructions.iter())
-            .flat_map(|node| match &node.node_type {
-                LirNodeType::Declare(decl) if decl.is_referenced => {
-                    Some(decl.dest).into_iter().collect::<Vec<_>>()
-                }
+            .flat_map(|block| &block.instructions)
+            .filter_map(|node| match &node.node_type {
+                LirNodeType::Declare(decl) if decl.is_referenced => Some(decl.dest),
                 LirNodeType::Assign(assign) => match assign.dest {
-                    LirLValue::Var(name) => Some(name).into_iter().collect::<Vec<_>>(),
-                    _ => Vec::new(),
+                    LirLValue::Var(name) => Some(name),
+                    _ => None,
                 },
-                _ => Vec::new(),
+                _ => None,
             })
             .collect();
 
@@ -304,6 +302,7 @@ impl FunctionLowering {
                 local_literals: Vec::new(),
                 local_strings: Vec::new(),
                 aggregate_layouts: Vec::new(),
+                edge_copies: Vec::new(),
                 phis: info.phis.clone(),
             };
 
@@ -340,38 +339,29 @@ impl FunctionLowering {
                 );
             }
 
-            let ret_from_body =
-                block
-                    .instructions
-                    .iter()
-                    .enumerate()
-                    .rev()
-                    .find_map(|(i, instr)| {
-                        if instr.node_type.is_return_candidate() {
-                            Some(i)
-                        } else {
-                            None
-                        }
-                    });
-            let ret_from_body_non_null = ret_from_body.and_then(|i| {
-                let node = &block.instructions[i].node_type;
-                if node.is_null() { None } else { Some(i) }
-            });
-            let ret_idx = match block.terminator {
-                Some(LirTerminator::Jump { .. }) => ret_from_body,
-                Some(LirTerminator::Return { ref value, .. }) => match value {
-                    None => ret_from_body_non_null,
-                    Some(LirNodeType::Drop(_)) => ret_from_body_non_null,
-                    _ => None,
-                },
-                None => ret_from_body,
+            let ret_from_body = block
+                .instructions
+                .iter()
+                .rposition(|instr| instr.node_type.is_return_candidate());
+
+            let ret_from_body_non_null =
+                ret_from_body.filter(|&i| !block.instructions[i].node_type.is_null());
+
+            let ret_idx = match &block.terminator {
+                Some(LirTerminator::Jump { .. }) | None => ret_from_body,
+                Some(LirTerminator::Return {
+                    value: None | Some(LirNodeType::Drop(_)),
+                    ..
+                }) => ret_from_body_non_null,
                 _ => None,
             };
 
             for (instr_idx, instr) in block.instructions.iter().enumerate() {
                 let assigned = self.ssa_builder.assign_regs()[idx]
                     .get(instr_idx)
-                    .and_then(|r| *r);
+                    .copied()
+                    .flatten();
+
                 let set_ret = ret_idx == Some(instr_idx);
                 ctx.lower_instr(instr.clone(), assigned, set_ret);
             }
@@ -382,5 +372,76 @@ impl FunctionLowering {
 
             self.blocks.push(out);
         }
+
+        self.lower_edge_copy_plans();
+    }
+
+    fn lower_edge_copy_plans(&mut self) {
+        let mut edge_moves: FxHashMap<(usize, BlockId), Vec<VMCopy>> = FxHashMap::default();
+
+        for destination in &self.blocks {
+            for phi in &destination.phis {
+                for (prev, source) in &phi.sources {
+                    if let Some(&idx) = self.block_map.get(prev) {
+                        edge_moves
+                            .entry((idx, destination.id))
+                            .or_default()
+                            .push(VMCopy {
+                                dst: phi.dest,
+                                src: *source,
+                            });
+                    }
+                }
+            }
+        }
+
+        for ((predecessor_idx, target), copies) in edge_moves {
+            let normalized = self.normalize_parallel_copies(copies);
+            self.blocks[predecessor_idx].edge_copies.push(EdgeCopy {
+                target,
+                copies: normalized.into_boxed_slice(),
+            });
+        }
+
+        for block in &mut self.blocks {
+            block.edge_copies.sort_unstable_by_key(|plan| plan.target.0);
+            block.phis.clear();
+        }
+    }
+
+    fn normalize_parallel_copies(&mut self, copies: Vec<VMCopy>) -> Vec<VMCopy> {
+        let mut pending: Vec<VMCopy> = copies
+            .into_iter()
+            .filter(|copy| copy.dst != copy.src)
+            .collect();
+
+        let mut normalized = Vec::with_capacity(pending.len());
+
+        while !pending.is_empty() {
+            if let Some(index) = pending
+                .iter()
+                .position(|copy| !pending.iter().any(|other| other.src == copy.dst))
+            {
+                normalized.push(pending.swap_remove(index));
+                continue;
+            }
+
+            let dst = pending[0].dst;
+            let temp = self.reg_count;
+            self.reg_count = self.reg_count.saturating_add(1);
+
+            normalized.push(VMCopy {
+                dst: temp,
+                src: dst,
+            });
+
+            for copy in &mut pending {
+                if copy.src == dst {
+                    copy.src = temp;
+                }
+            }
+        }
+
+        normalized
     }
 }

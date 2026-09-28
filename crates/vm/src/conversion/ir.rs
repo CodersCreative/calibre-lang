@@ -1,6 +1,7 @@
 use crate::{
     conversion::instructions::{
         VMInstruction,
+        registers::VMCopy,
         variables::{VMDropVar, VMLoadVar, VMLoadVarRef, VMMoveVar, VMStoreVar},
     },
     value::{BIG_PRECISION, BIG_ROUNDING, RuntimeValue, hashable::HashKey},
@@ -226,7 +227,26 @@ pub struct VMBlock {
     pub local_literals: Vec<VMLiteral>,
     pub local_strings: Vec<Ustr>,
     pub aggregate_layouts: Vec<AggregateLayout>,
+    #[serde(default)]
+    pub edge_copies: Vec<EdgeCopy>,
+    #[serde(skip)]
     pub phis: Vec<PhiNode>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EdgeCopy {
+    pub target: BlockId,
+    pub copies: Box<[VMCopy]>,
+}
+
+impl EdgeCopy {
+    pub fn get<'a>(block: &'a VMBlock, target: &BlockId) -> Option<&'a Self> {
+        block
+            .edge_copies
+            .binary_search_by_key(&target.0, |plan| plan.target.0)
+            .ok()
+            .map(|index| &block.edge_copies[index])
+    }
 }
 
 impl Display for VMBlock {
@@ -259,25 +279,6 @@ pub struct PhiNode {
     pub dest: Reg,
     pub sources: Vec<(BlockId, Reg)>,
     pub name: Option<Ustr>,
-}
-
-impl PhiNode {
-    #[inline]
-    pub fn source_for(&self, prev: BlockId) -> Reg {
-        let source = if self.sources.len() <= 4 {
-            self.sources
-                .iter()
-                .find(|(block, _)| *block == prev)
-                .map(|(_, reg)| *reg)
-        } else {
-            self.sources
-                .binary_search_by_key(&prev.0, |(block, _)| block.0)
-                .ok()
-                .map(|index| self.sources[index].1)
-        };
-
-        source.unwrap_or_else(|| self.sources.first().map(|(_, reg)| *reg).unwrap_or(0))
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

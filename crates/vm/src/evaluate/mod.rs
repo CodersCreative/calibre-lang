@@ -1,8 +1,8 @@
 use crate::{
     VM,
-    conversion::{VMBlock, VMFunction, VMGlobal},
+    conversion::{EdgeCopy, VMBlock, VMFunction, VMGlobal},
     error::RuntimeError,
-    evaluate::{instruction::VMEvaluation, write_back::PropagatedValue},
+    evaluate::instruction::VMEvaluation,
     value::{RuntimeValue, TerminateValue},
 };
 use calibre_lir::ast::BlockId;
@@ -578,27 +578,14 @@ impl VM {
         Ok(RuntimeValue::Null)
     }
 
-    #[instrument(skip_all)]
     #[inline]
-    fn apply_phis(&mut self, block: &VMBlock, prev: &BlockId) {
-        if block.phis.is_empty() {
+    fn apply_edge_copies(&mut self, block: &VMBlock, target: &BlockId) {
+        let Some(plan) = EdgeCopy::get(block, target) else {
             return;
-        }
+        };
 
-        for phi in &block.phis {
-            let reg = phi.source_for(*prev);
-
-            if let Some(handle) = self.get_mutation_handle(reg) {
-                self.set_propagated_value(
-                    phi.dest,
-                    PropagatedValue {
-                        value: self.get_reg_value(reg).clone(),
-                        handle: Some(handle),
-                    },
-                );
-            } else {
-                self.set_reg_value(phi.dest, self.get_reg_value(reg).clone());
-            }
+        for copy in plan.copies.clone() {
+            copy.run_inner(self);
         }
     }
 
@@ -619,12 +606,6 @@ impl VM {
         start_ip: usize,
         mut budget: Option<usize>,
     ) -> Result<TerminateValue, RuntimeError> {
-        if let Some(prev) = &prev
-            && start_ip == 0
-        {
-            self.apply_phis(block, prev);
-        }
-
         for (ip, instruction) in block.instructions.iter().enumerate().skip(start_ip) {
             if (ip & 0x3f) == 0 {
                 self.maybe_collect_garbage();
@@ -645,6 +626,10 @@ impl VM {
 
             match step {
                 TerminateValue::None => {}
+                TerminateValue::Jump(target) => {
+                    self.apply_edge_copies(block, &target);
+                    return Ok(TerminateValue::Jump(target));
+                }
                 x => return Ok(x),
             }
 

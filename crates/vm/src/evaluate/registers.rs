@@ -44,13 +44,31 @@ impl VMEvaluation for VMCopy {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        if self.dst == self.src {
-            return Ok(TerminateValue::None);
+        self.run_inner(vm);
+        Ok(TerminateValue::None)
+    }
+}
+
+impl VMCopy {
+    pub fn run_inner(&self, vm: &mut VM) {
+        if self.src == self.dst {
+            return;
         }
 
-        let value = vm.get_propagated_value(self.src);
-        vm.set_propagated_value(self.dst, value);
+        let value = vm.get_reg_value(self.src).clone();
 
-        Ok(TerminateValue::None)
+        let handle = vm
+            .current_frame()
+            .mutation_handles
+            .get(self.src as usize)
+            .and_then(Option::as_ref)
+            .cloned();
+
+        vm.set_reg_value(self.dst, value);
+
+        if let Some(handle) = handle {
+            vm.current_frame_mut()
+                .set_shared_mutation_handle(self.dst, handle);
+        }
     }
 }
