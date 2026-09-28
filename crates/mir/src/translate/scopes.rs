@@ -259,6 +259,7 @@ impl MirLowering for AstScopeDef {
                 is_temp: self.is_temp,
                 create_new_scope: self.create_new_scope.unwrap_or(create_new_scope),
                 scope_id: new_scope,
+                function_body: false,
             }),
             span,
         })

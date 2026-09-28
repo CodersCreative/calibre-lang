@@ -84,6 +84,7 @@ impl AlphaRenamable for MiddleNodeType {
                 create_new_scope: _,
                 is_temp: _,
                 scope_id: _,
+                function_body: _,
             }) => {
                 for node in body {
                     node.rename(state);

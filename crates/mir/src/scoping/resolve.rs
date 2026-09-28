@@ -66,6 +66,7 @@ impl MiddleEnvironment {
                                 body: x.nodes().into_iter().chain(y.nodes()).collect(),
                                 create_new_scope: false,
                                 is_temp: false,
+                                function_body: false,
                                 scope_id,
                             }),
                             span,
@@ -243,6 +244,7 @@ impl MiddleEnvironment {
                         },
                         create_new_scope: true,
                         is_temp: false,
+                        function_body: false,
                         scope_id: scope,
                     }),
                     ..node
@@ -253,6 +255,7 @@ impl MiddleEnvironment {
                     body: Box::new([node, build_node]),
                     create_new_scope: false,
                     is_temp: false,
+                    function_body: false,
                     scope_id: scope,
                 }),
                 self.context.current_span(),

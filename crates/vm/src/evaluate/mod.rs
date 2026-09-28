@@ -539,7 +539,7 @@ impl VM {
     pub fn run_global(&mut self, global: &VMGlobal) -> Result<RuntimeValue, RuntimeError> {
         debug!("running global");
 
-        let entry = global
+        let mut block_idx = global
             .block_map
             .get(&global.entry)
             .copied()
@@ -547,7 +547,7 @@ impl VM {
 
         let mut block = global
             .blocks
-            .get(entry)
+            .get(block_idx)
             .ok_or_else(|| RuntimeError::InvalidBytecode("global has no blocks".to_string()))?;
 
         let mut prev_block: Option<BlockId> = None;
@@ -556,15 +556,10 @@ impl VM {
             match self.run_block(block, prev_block)? {
                 TerminateValue::Jump(target) => {
                     prev_block = Some(block.id);
-                    block = global
-                        .blocks
-                        .get(*global.block_map.get(&target).unwrap_or(&0))
-                        .ok_or_else(|| {
-                            RuntimeError::InvalidBytecode(format!(
-                                "invalid global block {}",
-                                target.0
-                            ))
-                        })?;
+                    block_idx = *global.block_map.get(&target).unwrap_or(&0);
+                    block = global.blocks.get(block_idx).ok_or_else(|| {
+                        RuntimeError::InvalidBytecode(format!("invalid global block {}", target.0))
+                    })?;
                 }
                 TerminateValue::Return(x) => match x {
                     RuntimeValue::Null => break,
@@ -584,7 +579,7 @@ impl VM {
             return;
         };
 
-        for copy in plan.copies.clone() {
+        for copy in &plan.copies {
             copy.run_inner(self);
         }
     }

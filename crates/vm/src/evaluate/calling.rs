@@ -290,10 +290,12 @@ impl VM {
         };
 
         let mut block_id = state.block.unwrap_or(function.entry);
+        let mut block_idx = *function.block_map.get(&block_id).unwrap_or(&0);
         let mut block = function
             .blocks
-            .get(*function.block_map.get(&block_id).unwrap_or(&0))
+            .get(block_idx)
             .ok_or_else(|| RuntimeError::InvalidBytecode("function has no blocks".to_string()))?;
+
         let mut prev_block: Option<BlockId> = state.prev_block;
         let mut result = RuntimeValue::Null;
         let mut returned = false;
@@ -303,15 +305,15 @@ impl VM {
                 TerminateValue::Jump(target) => {
                     prev_block = Some(block.id);
                     block_id = target;
-                    block = function
-                        .blocks
-                        .get(*function.block_map.get(&block_id).unwrap_or(&0))
-                        .ok_or_else(|| {
-                            RuntimeError::InvalidBytecode(format!(
-                                "invalid function block {}",
-                                target.0
-                            ))
-                        })?;
+                    block_idx = *function.block_map.get(&block_id).unwrap_or(&0);
+
+                    block = function.blocks.get(block_idx).ok_or_else(|| {
+                        RuntimeError::InvalidBytecode(format!(
+                            "invalid function block {}",
+                            target.0
+                        ))
+                    })?;
+
                     state.ip = 0;
                     state.block = Some(block_id);
                     state.prev_block = prev_block;

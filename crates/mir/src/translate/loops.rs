@@ -131,6 +131,7 @@ impl MiddleEnvironment {
                 create_new_scope: true,
                 is_temp: true,
                 scope_id: scope,
+                function_body: false,
             }),
             span,
         })
@@ -253,6 +254,7 @@ fn prepare_for_loop_state(
             create_new_scope: false,
             is_temp: true,
             scope_id: scope,
+            function_body: false,
         }),
         span,
     }))
@@ -713,6 +715,7 @@ impl MirLowering for AstLoop {
                         create_new_scope: false,
                         is_temp: true,
                         scope_id: scope,
+                        function_body: false,
                     }),
                     span,
                 ))

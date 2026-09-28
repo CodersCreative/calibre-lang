@@ -460,9 +460,10 @@ pub struct MirVarDecl {
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirScopeDecl {
     pub body: Box<[MiddleNode]>,
+    pub scope_id: ScopeId,
     pub create_new_scope: bool,
     pub is_temp: bool,
-    pub scope_id: ScopeId,
+    pub function_body: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]

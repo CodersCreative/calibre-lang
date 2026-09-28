@@ -191,6 +191,7 @@ impl MirLowering for AstBreak {
                 MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                     body: lst.into_boxed_slice(),
                     create_new_scope: false,
+                    function_body: false,
                     is_temp: true,
                     scope_id: scope,
                 })
@@ -647,6 +648,7 @@ impl MirLowering for AstContinue {
                     body: lst.into_boxed_slice(),
                     create_new_scope: false,
                     is_temp: true,
+                    function_body: false,
                     scope_id: scope,
                 })
             },
@@ -714,6 +716,7 @@ impl MirLowering for AstReturn {
                                 body: lst.into_boxed_slice(),
                                 create_new_scope: false,
                                 is_temp: true,
+                                function_body: false,
                                 scope_id: scope,
                             }),
                             span,

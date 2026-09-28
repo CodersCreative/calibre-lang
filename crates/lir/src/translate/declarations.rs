@@ -53,50 +53,10 @@ impl LirLowering for MirVarDecl {
 impl LirLowering for MirScopeDecl {
     #[inline(always)]
     fn lower<'a>(mut self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        if !self.is_temp {
-            if !env.allow_global_hoist {
-                env.lower_scope_items(self.body);
-                return LirNodeType::null();
-            }
-
-            for stmt in self.body {
-                let is_non_fn_var_decl = matches!(
-                    &stmt.node_type,
-                    MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. }) if !value.is_function()
-                );
-
-                if is_non_fn_var_decl {
-                    if let MiddleNodeType::VariableDeclaration(MirVarDecl {
-                        identifier,
-                        data_type,
-                        ..
-                    }) = &stmt.node_type
-                    {
-                        let global_type = data_type.clone();
-                        let identifier = *identifier;
-
-                        let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
-
-                        let _ = sub_lowerer.lower_node(stmt);
-
-                        env.registry.append(sub_lowerer.registry);
-
-                        env.registry.globals.insert(
-                            identifier,
-                            LirGlobal {
-                                name: identifier,
-                                data_type: global_type,
-                                blocks: sub_lowerer.blocks.into_boxed_slice(),
-                            },
-                        );
-                    }
-                } else {
-                    env.lower_and_add_node(stmt);
-                }
-            }
-
-            LirNodeType::null()
-        } else {
+        if self.function_body || (!env.allow_global_hoist && !self.is_temp) {
+            env.lower_scope_items(self.body);
+            return LirNodeType::null();
+        } else if self.is_temp {
             let body = std::mem::take(&mut self.body);
             let mut body = body.into_vec();
             let last = body.pop();
@@ -107,8 +67,46 @@ impl LirLowering for MirScopeDecl {
                 return LirNodeType::null();
             };
 
-            env.lower_node(last.clone())
+            return env.lower_node(last.clone());
         }
+
+        for stmt in self.body {
+            let is_non_fn_var_decl = matches!(
+                &stmt.node_type,
+                MiddleNodeType::VariableDeclaration(MirVarDecl { value, .. }) if !value.is_function()
+            );
+
+            if is_non_fn_var_decl {
+                if let MiddleNodeType::VariableDeclaration(MirVarDecl {
+                    identifier,
+                    data_type,
+                    ..
+                }) = &stmt.node_type
+                {
+                    let global_type = data_type.clone();
+                    let identifier = *identifier;
+
+                    let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
+
+                    let _ = sub_lowerer.lower_node(stmt);
+
+                    env.registry.append(sub_lowerer.registry);
+
+                    env.registry.globals.insert(
+                        identifier,
+                        LirGlobal {
+                            name: identifier,
+                            data_type: global_type,
+                            blocks: sub_lowerer.blocks.into_boxed_slice(),
+                        },
+                    );
+                }
+            } else {
+                env.lower_and_add_node(stmt);
+            }
+        }
+
+        LirNodeType::null()
     }
 }
 

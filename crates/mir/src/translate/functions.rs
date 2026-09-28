@@ -737,6 +737,7 @@ impl MirLowering for AstFunction {
             create_new_scope,
             is_temp: _,
             scope_id,
+            function_body: _,
         }) = body.node_type
         {
             let mut scope_body = scope_body.into_vec();
@@ -820,6 +821,7 @@ impl MirLowering for AstFunction {
                     body: scope_body.into_boxed_slice(),
                     create_new_scope,
                     is_temp: true,
+                    function_body: true,
                     scope_id,
                 }),
             }
@@ -830,6 +832,7 @@ impl MirLowering for AstFunction {
                     body: Box::new([body]),
                     create_new_scope: true,
                     is_temp: true,
+                    function_body: true,
                     scope_id: scope,
                 }),
             }
