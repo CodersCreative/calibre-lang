@@ -55,7 +55,7 @@ const main := fn => {
 		2,
 		3,
 		4
-	].into_iter().filter(fn (x : int) -> bool => return x % 2 = 0).collect();
+	].into_iter().filter(fn (x : int) -> bool => return (x % 2) = 0).collect();
 	print(filtered);
 	
 	print("\nFold: ");
@@ -123,7 +123,7 @@ const main := fn => {
 		3,
 		4,
 		5
-	].into_iter().partition(fn (x : int) -> bool => return x % 2 = 0);
+	].into_iter().partition(fn (x : int) -> bool => return (x % 2) = 0);
 	print(evens.next());
 	print(odds.next());
 };

@@ -1,19 +1,24 @@
 import (Path, Dir, FileType) from std::fs;
 
-const get_tree_output := fn (path : Path, depth : int = 2) -> str => {
+@pure(memo(path));
+const get_tree_output := fn (path : Path, depth : int = 100) -> str => {
 	if depth <= 0 => return "";
-	let mut out := "\t";
 	let objects : str!list:<DirEntry> = path.read_dir();
 	let objects : list:<DirEntry> = try objects => panic();
+	if objects.is_empty() => return "";
+
+	let mut out := "\t";
 	
-	for i in 0..len(objects) => {
-		let object := try!! objects[i];
+	for object in objects => {
 		out &= object.file_name() & "\n";
 		let typ : str!FileType = object.file_type();
 		let typ : FileType = try typ => panic();
 		if typ.is_dir() => {
-			out &= get_tree_output(object.path(), depth - 1);
-			out &= "\n";
+			let dir_out := get_tree_output(object.path(), depth - 1);
+			if !dir_out.is_empty() => {
+				out &= dir_out; 
+				out &= "\n";
+			}
 		};
 	};
 	
@@ -21,7 +26,6 @@ const get_tree_output := fn (path : Path, depth : int = 2) -> str => {
 };
 
 @current_context const main := fn => {
-	i;
 	let path : Path = Path.new(current_context.path.replace("examples/tree.cal", "."));
 	print(get_tree_output(path));
 };

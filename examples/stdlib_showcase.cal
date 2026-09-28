@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Iterators list
+// TODO Fix - FAILING - Iterators map
 import * from std::thread;
 import * from std::option;
 import * from std::crypto;
@@ -73,7 +73,7 @@ const main := fn => {
 	print("int => fact/perm/comb => " & int.factorial(6) & ", " & int.permutations(8, 3) & ", " & int.combinations(8, 3));
 	print("int => is_prime(97) => " & int.is_prime(97));
 	
-	print("uint => min/max/pow => " & uint.min(4u, 9u) & ", " & uint.max(4u, 9u) & ", " & uint.pow(2u, 10u));
+	print("uint => min/max/pow => " & uint.min(4u, 9u) & ", " & uint.max(4u, 9u) & ", " & 2u ** 10u);
 	print("uint => gcd/lcm => " & uint.gcd(84u, 18u) & ", " & uint.lcm(12u, 18u));
 	print("uint => fact/perm/comb => " & uint.factorial(6u) & ", " & uint.permutations(8u, 3u) & ", " & uint.combinations(8u, 3u));
 	print("uint => is_prime(97u) => " & uint.is_prime(97u));

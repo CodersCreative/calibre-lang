@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Expected list or string for index access, found: Null
+// TODO Fix - FAILING - Iterators map
 const count_up := fn (start end : int) -> gen:<int> => {
 	let mut i := start;
 	
@@ -20,21 +20,27 @@ const evens_from := fn (start : int) -> gen:<int> => {
 };
 
 const main := fn => {
+	print("count up : ");
 	let mut g := count_up(0, 10);
 	for let .Some : value <- g.next() => print(value);
 	
+	print("evens : ");
 	let evens := fn(x for x in 0..20 if (x % 2) = 0);
 	print([evens.collect()]);
 	
+	print("odds : ");
 	let odds := fn(x for x in 0..20 if (x % 2) != 0) -> gen:<int>;
 	print("odds " & odds.collect());
 	
+	print("evens from : ");
 	let mut infinite := evens_from(10);
 	
 	for i in 0..10 => {
 		print(infinite.next());
 	};
 
+
+	print("mapped : ");
 	let mapped := fn(x + 1 for x in 0..5).map(fn (x : int) -> int => return x * 10).collect();
 	print([mapped]);
 };

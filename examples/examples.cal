@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Unable to find WaitGroup?
+// TODO Fix - FAILING - Capturing mutable variables
 import (Channel, WaitGroup) from std::async;
 
 const test_str := fn (splits inputs : list:<str>, extra : bool, extra2 : int) => {
@@ -105,9 +105,9 @@ const a_two_fn := fn => {
 	print(a + f());
 };
 
-const bmi := fn (mass height : float) -> float => mass / height ** 2;
+const bmi := fn (mass height : float) -> float => mass / (height ** 2);
 
-const is_a_triangle := fn (a b c : float) -> bool => a + b > c && b + c > a && c + a > b;
+const is_a_triangle := fn (a b c : float) -> bool => ((a + b) > c) && ((b + c) > a) && ((c + a) > b);
 
 const heron := fn (a b c : float) -> float => {
 	let p := (a + b + c) / 2;
@@ -118,4 +118,4 @@ const area_of_triangle := fn (a b c : float) -> float? => if is_a_triangle(a, b,
 
 const factorial := fn (x : int) -> int => if x <= 1 => 1 else => x * factorial(x - 1);
 
-const lock := fn (c d e : int) -> bool => if c * d > e => true else => false;
+const lock := fn (c d e : int) -> bool => if (c * d) > e => true else => false;

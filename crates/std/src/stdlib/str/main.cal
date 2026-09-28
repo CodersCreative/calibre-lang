@@ -66,7 +66,7 @@ impl str {
 		let mut idx := 1;
 		
 		for _ in rest => {
-			if idx > 0 && idx < len(rest) => out &= try!! rest[idx];
+			if (idx > 0) && (idx < len(rest)) => out &= try!! rest[idx];
 			idx += 1;
 		};
 		

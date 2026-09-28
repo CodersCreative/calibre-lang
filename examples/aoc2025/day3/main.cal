@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Type Inference
+// TODO Fix - FAILING - NewLine parsing
 import File from std::fs;
 import Channel from std::async;
 

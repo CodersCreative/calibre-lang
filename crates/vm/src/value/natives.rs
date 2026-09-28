@@ -279,6 +279,7 @@ impl RuntimeValue {
                     Arc::new(stdlib::list::ListBinarySearchBy),
                 ),
                 ("list.raw_remove", Arc::new(stdlib::list::ListRawRemove)),
+                ("list.raw_insert", Arc::new(stdlib::list::ListRawInsert)),
                 #[cfg(feature = "native")]
                 ("net.tcp_connect", Arc::new(stdlib::net::TcpConnect)),
                 #[cfg(feature = "native")]

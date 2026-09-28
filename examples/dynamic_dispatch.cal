@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Attempted to use int expected str (probably to do with str concat)
 trait Animal {
 	const name : fn (&Self) -> str;
 
@@ -19,7 +18,7 @@ type GenericAnimal := struct {
 };
 
 impl GenericAnimal {
-	const new := fn (Name Sound : str, Size Intelligence : int) -> Self => return Parrot {Name, Sound, Size, Intelligence};
+	const new := fn (Name Sound : str, Size Intelligence : int) -> Self => return GenericAnimal {Name, Sound, Size, Intelligence};
 };
 
 impl Animal for GenericAnimal {

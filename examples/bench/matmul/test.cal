@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Invalid binary operation: 0f * null
 const matmul := fn (a b : list:<list:<float>>) -> list:<list:<float>> => {
 	let n := len(a);
 	let m := len(try!! b[0]);
