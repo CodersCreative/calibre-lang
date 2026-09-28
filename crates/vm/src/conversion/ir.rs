@@ -261,6 +261,25 @@ pub struct PhiNode {
     pub name: Option<Ustr>,
 }
 
+impl PhiNode {
+    #[inline]
+    pub fn source_for(&self, prev: BlockId) -> Reg {
+        let source = if self.sources.len() <= 4 {
+            self.sources
+                .iter()
+                .find(|(block, _)| *block == prev)
+                .map(|(_, reg)| *reg)
+        } else {
+            self.sources
+                .binary_search_by_key(&prev.0, |(block, _)| block.0)
+                .ok()
+                .map(|index| self.sources[index].1)
+        };
+
+        source.unwrap_or_else(|| self.sources.first().map(|(_, reg)| *reg).unwrap_or(0))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregateLayout {
     pub name: Option<Ustr>,

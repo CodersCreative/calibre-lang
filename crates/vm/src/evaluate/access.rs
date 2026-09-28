@@ -19,6 +19,31 @@ use dumpster::sync::Gc;
 use tracing::instrument;
 use ustr::Ustr;
 
+#[inline]
+fn resolve_element_index(len: usize, index: &RuntimeValue) -> Result<Option<usize>, RuntimeError> {
+    match index {
+        RuntimeValue::Int(index) => Ok(resolve_index(len, *index).ok()),
+        RuntimeValue::UInt(index) => {
+            let index = *index as usize;
+            Ok((index < len).then_some(index))
+        }
+        other => Err(RuntimeError::ExpectedIntIndexFound {
+            found: Box::new(other.clone()),
+        }),
+    }
+}
+
+#[inline]
+fn resolve_numeric_index(index: &RuntimeValue) -> Result<i64, RuntimeError> {
+    match index {
+        RuntimeValue::Int(index) => Ok(*index),
+        RuntimeValue::UInt(index) => Ok(*index as i64),
+        _ => Err(RuntimeError::ExpectedIntIndexFound {
+            found: Box::new(RuntimeValue::Null),
+        }),
+    }
+}
+
 impl VMEvaluation for VMLoadMember {
     #[instrument(skip_all)]
     fn run(
@@ -586,25 +611,11 @@ impl VMEvaluation for VMIndex {
 
         let index_val = vm.resolve_value_ref(vm.get_reg_value(self.index))?;
 
-        let resolve_single_index =
-            |len: usize, idx: &RuntimeValue| -> Result<Option<usize>, RuntimeError> {
-                match idx {
-                    RuntimeValue::Int(i) => Ok(resolve_index(len, *i).ok()),
-                    RuntimeValue::UInt(u) => {
-                        let idx_usize = *u as usize;
-                        Ok((idx_usize < len).then_some(idx_usize))
-                    }
-                    other => Err(RuntimeError::ExpectedIntIndexFound {
-                        found: Box::new(other.clone()),
-                    }),
-                }
-            };
-
         let indexed_segment = match &target_val {
             RuntimeValue::List(list) => match &index_val {
                 RuntimeValue::Range(..) => None,
                 other => {
-                    resolve_single_index(list.as_ref().0.len(), other)?.map(PathSegment::Index)
+                    resolve_element_index(list.as_ref().0.len(), other)?.map(PathSegment::Index)
                 }
             },
             RuntimeValue::HashMap(_) => {
@@ -628,7 +639,7 @@ impl VMEvaluation for VMIndex {
                             .unwrap_or_else(|| RuntimeValue::Option(None))
                     }
                     other => {
-                        let resolved = resolve_single_index(items.len(), other)?;
+                        let resolved = resolve_element_index(items.len(), other)?;
                         match resolved {
                             Some(i) => RuntimeValue::Option(Some(Gc::new(RuntimeValue::from(
                                 items[i].clone(),
@@ -666,7 +677,7 @@ impl VMEvaluation for VMIndex {
                             .unwrap_or_else(|| RuntimeValue::Option(None))
                     }
                     other => {
-                        let resolved = resolve_single_index(len, other)?;
+                        let resolved = resolve_element_index(len, other)?;
                         match resolved {
                             Some(i) => {
                                 let num = start + i as i64;
@@ -759,20 +770,10 @@ impl VMEvaluation for VMSetIndex {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let mut index_val = vm.get_reg_value(self.index).clone();
-
-        if index_val.is_ref_like() {
-            index_val = vm.resolve_value_ref(&index_val)?;
-        }
+        let index_val = vm.resolve_value_ref(vm.get_reg_value(self.index))?;
 
         let value = vm.get_reg_value(self.value).clone();
-        let numeric_index = || match index_val.clone() {
-            RuntimeValue::Int(index) => Ok(index),
-            RuntimeValue::UInt(index) => Ok(index as i64),
-            _ => Err(RuntimeError::ExpectedIntIndexFound {
-                found: Box::new(RuntimeValue::Null),
-            }),
-        };
+        let numeric_index = || resolve_numeric_index(&index_val);
 
         let hash_index = || HashKey::try_from(index_val.clone());
 

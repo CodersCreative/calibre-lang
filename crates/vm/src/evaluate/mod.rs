@@ -580,26 +580,25 @@ impl VM {
 
     #[instrument(skip_all)]
     #[inline]
-    fn apply_phis(&mut self, block: &VMBlock, prev: &BlockId) -> Result<(), RuntimeError> {
+    fn apply_phis(&mut self, block: &VMBlock, prev: &BlockId) {
         if block.phis.is_empty() {
-            return Ok(());
+            return;
         }
 
         for phi in &block.phis {
-            let mut selected = None;
-            for (pred, reg) in &phi.sources {
-                if pred == prev {
-                    selected = Some(*reg);
-                    break;
-                }
+            let reg = phi.source_for(*prev);
+            if let Some(handle) = self.get_mutation_handle(reg) {
+                self.set_propagated_value(
+                    phi.dest,
+                    crate::evaluate::write_back::PropagatedValue {
+                        value: self.get_reg_value(reg).clone(),
+                        handle: Some(handle),
+                    },
+                );
+            } else {
+                self.set_reg_value(phi.dest, self.get_reg_value(reg).clone());
             }
-
-            let reg = selected.unwrap_or_else(|| phi.sources.first().map(|x| x.1).unwrap_or(0));
-            let value = self.get_propagated_value(reg);
-            self.set_propagated_value(phi.dest, value);
         }
-
-        Ok(())
     }
 
     #[inline]
@@ -622,7 +621,7 @@ impl VM {
         if let Some(prev) = &prev
             && start_ip == 0
         {
-            self.apply_phis(block, prev)?;
+            self.apply_phis(block, prev);
         }
 
         for (ip, instruction) in block.instructions.iter().enumerate().skip(start_ip) {

@@ -190,11 +190,15 @@ impl SSABuilder {
         phis: &mut Vec<PhiNode>,
     ) {
         if let Some(phi_reg) = phi_for.get(var).copied() {
+            let mut sources = sources.to_vec();
+            sources.sort_unstable_by_key(|(block, _)| block.0);
+
             let phi = PhiNode {
                 dest: phi_reg,
-                sources: sources.to_vec(),
+                sources,
                 name: Some(*var),
             };
+
             if let Some(i) = phis.iter().position(|p| p.dest == phi_reg) {
                 phis[i] = phi;
             } else {
