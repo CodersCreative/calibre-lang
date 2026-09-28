@@ -97,7 +97,7 @@ impl LirLowering for MirScopeDecl {
                         LirGlobal {
                             name: identifier,
                             data_type: global_type,
-                            blocks: sub_lowerer.blocks.into_boxed_slice(),
+                            blocks: sub_lowerer.blocks.into_iter().map(Some).collect(),
                         },
                     );
                 }
@@ -198,7 +198,7 @@ impl LirLowering for MirFunction {
                     .into_boxed_slice(),
                 captures: captures_for_func.into_boxed_slice(),
                 return_type: self.return_type,
-                blocks: sub_lowerer.blocks.into_boxed_slice(),
+                blocks: sub_lowerer.blocks.into_iter().map(Some).collect(),
                 pure: self.pure,
                 referenced_params,
                 memo_params,

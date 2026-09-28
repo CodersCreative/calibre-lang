@@ -1,13 +1,11 @@
+use crate::ast::{BlockId, LirBlock, LirNode, LirTerminator};
 use calibre_mir::{environment::MiddleEnvironment, scoping::ScopeId};
 use calibre_parser::ast::types::ParserDataType;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, instrument};
 use std::fmt::Display;
+use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap, UstrSet};
-use crate::{
-    ast::{BlockId, LirBlock, LirNode, LirTerminator},
-};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LirRegistry {
@@ -48,14 +46,14 @@ impl Display for LirRegistry {
 pub struct LirGlobal {
     pub name: Ustr,
     pub data_type: ParserDataType,
-    pub blocks: Box<[LirBlock]>,
+    pub blocks: Box<[Option<LirBlock>]>,
 }
 
 impl Display for LirGlobal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut txt = format!("const {} : {} =", self.name, self.data_type);
 
-        for block in &self.blocks {
+        for block in self.blocks.iter().flatten() {
             txt.push_str(&format!("\n{}", block).replace("\n", "\n\t"));
         }
 
@@ -69,7 +67,7 @@ pub struct LirFunction {
     pub params: Box<[(Ustr, ParserDataType)]>,
     pub captures: Box<[(Ustr, ParserDataType)]>,
     pub return_type: ParserDataType,
-    pub blocks: Box<[LirBlock]>,
+    pub blocks: Box<[Option<LirBlock>]>,
     pub pure: bool,
     // Highkey probably overkill having this be a usize but it guarantees nothing goes wrong unless some idiot has over 32 args...
     pub referenced_params: usize,
@@ -87,7 +85,7 @@ impl Display for LirFunction {
         txt = txt.trim_end().trim_end_matches(",").to_string();
         txt.push_str(&format!(") -> {}:", self.return_type));
 
-        for block in &self.blocks {
+        for block in self.blocks.iter().flatten() {
             txt.push_str(&format!("\n{}", block).replace("\n", "\n\t"));
         }
 
@@ -105,7 +103,7 @@ pub struct LirEnvironment<'a> {
     pub referenced_identifiers: UstrSet,
     pub loop_stack: Vec<(BlockId, BlockId, Option<Ustr>)>,
     pub allow_global_hoist: bool,
-    pub counter : usize,
+    pub counter: usize,
 }
 
 impl<'a> LirEnvironment<'a> {
@@ -153,7 +151,7 @@ impl<'a> LirEnvironment<'a> {
             referenced_identifiers: UstrSet::default(),
             loop_stack: vec![],
             allow_global_hoist,
-            counter : 0,
+            counter: 0,
         }
     }
 

@@ -548,7 +548,13 @@ impl VM {
         let mut block = global
             .blocks
             .get(block_idx)
-            .ok_or_else(|| RuntimeError::InvalidBytecode("global has no blocks".to_string()))?;
+            .and_then(Option::as_ref)
+            .ok_or_else(|| {
+                RuntimeError::InvalidBytecode(format!(
+                    "block {} is missing or out of bounds",
+                    block_idx
+                ))
+            })?;
 
         let mut prev_block: Option<BlockId> = None;
 
@@ -557,9 +563,16 @@ impl VM {
                 TerminateValue::Jump(target) => {
                     prev_block = Some(block.id);
                     block_idx = *global.block_map.get(&target).unwrap_or(&0);
-                    block = global.blocks.get(block_idx).ok_or_else(|| {
-                        RuntimeError::InvalidBytecode(format!("invalid global block {}", target.0))
-                    })?;
+                    block = global
+                        .blocks
+                        .get(block_idx)
+                        .and_then(Option::as_ref)
+                        .ok_or_else(|| {
+                            RuntimeError::InvalidBytecode(format!(
+                                "invalid global block {}",
+                                target.0
+                            ))
+                        })?;
                 }
                 TerminateValue::Return(x) => match x {
                     RuntimeValue::Null => break,

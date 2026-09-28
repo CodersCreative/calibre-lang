@@ -204,7 +204,7 @@ impl LirFunction {
         referenced_types: &mut UstrSet,
         worklist: &mut WorkList,
     ) {
-        for block in &self.blocks {
+        for block in self.blocks.iter().flatten() {
             for instruction in &block.instructions {
                 instruction.node_type.collect_references(
                     registry,
@@ -237,7 +237,7 @@ impl LirGlobal {
         referenced_types: &mut UstrSet,
         worklist: &mut WorkList,
     ) {
-        for block in &self.blocks {
+        for block in self.blocks.iter().flatten() {
             for instruction in &block.instructions {
                 instruction.node_type.collect_references(
                     registry,

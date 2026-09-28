@@ -7,7 +7,10 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    fmt::Display, ops::{Deref, DerefMut}, str::FromStr, sync::atomic::Ordering,
+    fmt::Display,
+    ops::{Deref, DerefMut},
+    str::FromStr,
+    sync::atomic::Ordering,
 };
 use tracing::instrument;
 use ustr::Ustr;
@@ -418,7 +421,11 @@ impl ParserText {
 
         Self::new(
             span,
-            format!("[{}-{}]{suffix}", span, COUNTER.fetch_add(1, Ordering::Relaxed)),
+            format!(
+                "[{}-{}]{suffix}",
+                span,
+                COUNTER.fetch_add(1, Ordering::Relaxed)
+            ),
         )
     }
 

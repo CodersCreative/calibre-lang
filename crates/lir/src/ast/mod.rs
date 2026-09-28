@@ -443,7 +443,7 @@ impl Display for LirNodeType {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct BlockId(pub u32);
 
 #[repr(u8)]

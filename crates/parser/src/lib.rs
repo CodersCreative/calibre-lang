@@ -6,15 +6,11 @@ use crate::{
 use chumsky::span::SimpleSpan;
 use logos::Logos;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::Display,
-    ops::Range,
-    path::PathBuf,
-};
+use std::sync::atomic::AtomicU64;
+use std::{fmt::Display, ops::Range, path::PathBuf};
 use thiserror::Error;
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap};
-use std::sync::atomic::AtomicU64;
 
 pub mod ast;
 pub mod formatter;

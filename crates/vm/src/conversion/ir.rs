@@ -77,7 +77,7 @@ impl From<LirRegistry> for VMRegistry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VMGlobal {
     pub name: String,
-    pub blocks: Box<[VMBlock]>,
+    pub blocks: Box<[Option<VMBlock>]>,
     pub reg_count: Reg,
     pub entry: BlockId,
     #[serde(with = "crate::serialization::serde_fxhashmap")]
@@ -89,7 +89,9 @@ impl Display for VMGlobal {
         let mut txt = format!("CONST {}", self.name);
 
         for block in &self.blocks {
-            txt.push_str(&format!("\n{}", block).replace("\n", "\n\t"));
+            if let Some(block) = &block {
+                txt.push_str(&format!("\n{}", block).replace("\n", "\n\t"));
+            }
         }
 
         write!(f, "{}", txt)
@@ -98,7 +100,7 @@ impl Display for VMGlobal {
 
 impl From<LirGlobal> for VMGlobal {
     fn from(value: LirGlobal) -> Self {
-        let func = VMFunction::from_global(value.name, value.blocks.into_vec());
+        let func = VMFunction::from_global(value.name, value.blocks);
         Self {
             name: value.name.to_string(),
             blocks: func.blocks,
@@ -117,7 +119,7 @@ pub struct VMFunction {
     pub param_names: UstrSet,
     pub captures: Box<[Ustr]>,
     pub returns_value: bool,
-    pub blocks: Box<[VMBlock]>,
+    pub blocks: Box<[Option<VMBlock>]>,
     pub renamed: UstrMap<Ustr>,
     pub reg_count: Reg,
     pub param_regs: Vec<Reg>,
@@ -139,7 +141,7 @@ impl VMFunction {
             *param = new_name;
         }
 
-        for block in self.blocks.iter_mut() {
+        for block in self.blocks.iter_mut().flatten() {
             for instruction in block.instructions.iter() {
                 match instruction {
                     VMInstruction::StoreVar(VMStoreVar { name, .. })
@@ -204,9 +206,13 @@ impl Display for VMFunction {
         }
         txt = txt.trim_end().trim_end_matches(",").to_string();
         txt.push(')');
+
         for block in &self.blocks {
-            txt.push_str(&format!("\n{}", block).replace("\n", "\n\t"));
+            if let Some(block) = &block {
+                txt.push_str(&format!("\n{}", block).replace("\n", "\n\t"));
+            }
         }
+
         txt.push_str(&format!(
             "\nEND{}",
             if self.returns_value {

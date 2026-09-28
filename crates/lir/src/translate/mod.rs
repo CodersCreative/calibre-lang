@@ -185,7 +185,10 @@ impl<'a> LirEnvironment<'a> {
         this.lower_and_add_node(node);
         if !this.blocks.is_empty() {
             debug!("creating global for root");
-            let blocks = std::mem::take(&mut this.blocks).into_boxed_slice();
+            let blocks = std::mem::take(&mut this.blocks)
+                .into_iter()
+                .map(Some)
+                .collect();
             this.registry.globals.insert(
                 root_name,
                 LirGlobal {

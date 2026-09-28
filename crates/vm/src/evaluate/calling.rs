@@ -294,6 +294,7 @@ impl VM {
         let mut block = function
             .blocks
             .get(block_idx)
+            .and_then(Option::as_ref)
             .ok_or_else(|| RuntimeError::InvalidBytecode("function has no blocks".to_string()))?;
 
         let mut prev_block: Option<BlockId> = state.prev_block;
@@ -307,12 +308,16 @@ impl VM {
                     block_id = target;
                     block_idx = *function.block_map.get(&block_id).unwrap_or(&0);
 
-                    block = function.blocks.get(block_idx).ok_or_else(|| {
-                        RuntimeError::InvalidBytecode(format!(
-                            "invalid function block {}",
-                            target.0
-                        ))
-                    })?;
+                    block = function
+                        .blocks
+                        .get(block_idx)
+                        .and_then(Option::as_ref)
+                        .ok_or_else(|| {
+                            RuntimeError::InvalidBytecode(format!(
+                                "invalid function block {}",
+                                target.0
+                            ))
+                        })?;
 
                     state.ip = 0;
                     state.block = Some(block_id);

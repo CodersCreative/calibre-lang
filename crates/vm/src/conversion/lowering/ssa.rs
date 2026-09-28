@@ -46,19 +46,19 @@ impl SSABuilder {
             assign_regs,
         }
     }
-
-    pub fn build_cfg(&mut self, blocks: &[LirBlock], entry: BlockId) {
+    pub fn build_cfg(&mut self, blocks: &[Option<LirBlock>], entry: BlockId) {
         let block_len = blocks.len();
         self.preds = vec![Vec::new(); block_len];
         self.infos = vec![SSABlockInfo::default(); block_len];
 
-        for block in blocks {
+        for block in blocks.iter().flatten() {
             let idx = self.block_map[&block.id];
+
             if let Some(term) = block.terminator.as_ref() {
                 match term {
                     LirTerminator::Jump { target, .. } => {
-                        if let Some(target_idx) = self.block_map.get(target) {
-                            self.preds[*target_idx].push(block.id);
+                        if let Some(&target_idx) = self.block_map.get(target) {
+                            self.preds[target_idx].push(block.id);
                         }
                     }
                     LirTerminator::Branch {
@@ -66,29 +66,30 @@ impl SSABuilder {
                         else_block,
                         ..
                     } => {
-                        if let Some(target_idx) = self.block_map.get(then_block) {
-                            self.preds[*target_idx].push(block.id);
-                        }
-                        if let Some(target_idx) = self.block_map.get(else_block) {
-                            self.preds[*target_idx].push(block.id);
+                        for target in [then_block, else_block] {
+                            if let Some(&target_idx) = self.block_map.get(target) {
+                                self.preds[target_idx].push(block.id);
+                            }
                         }
                     }
                     LirTerminator::Return { .. } => {}
                 }
             }
+
             if block.id == entry {
                 self.preds[idx].push(BlockId(u32::MAX));
             }
         }
     }
 
-    pub fn build(&mut self, blocks: &[LirBlock], params: &[(Ustr, ParserDataType)]) {
+    pub fn build(&mut self, blocks: &[Option<LirBlock>], params: &[(Ustr, ParserDataType)]) {
         let mut scratch_in = UstrMap::default();
         let mut scratch_out = UstrMap::default();
         let mut changed = true;
 
         while changed {
             changed = false;
+
             for idx in 0..blocks.len() {
                 let mut current_info = std::mem::take(&mut self.infos[idx]);
                 let preds = std::mem::take(&mut self.preds[idx]);
@@ -101,6 +102,7 @@ impl SSABuilder {
                     }
                 } else {
                     let locals = std::mem::take(&mut self.locals);
+
                     for &var in &locals {
                         let mut sources = Vec::with_capacity(preds.len());
                         let mut all_same = true;
@@ -110,6 +112,7 @@ impl SSABuilder {
                             if pred.0 == u32::MAX {
                                 continue;
                             }
+
                             let pred_idx = self.block_map[pred];
                             let reg = self.infos[pred_idx]
                                 .out_map
@@ -159,21 +162,24 @@ impl SSABuilder {
 
                         scratch_in.insert(var, reg);
                     }
-                    let _ = std::mem::replace(&mut self.locals, locals);
+
+                    self.locals = locals;
                 }
 
                 scratch_out.clone_from(&scratch_in);
 
-                for (instr_idx, instr) in blocks[idx].instructions.iter().enumerate() {
-                    if let Some(name) = instr.node_type.local_name() {
-                        let reg = if let Some(r) = self.assign_regs[idx][instr_idx] {
-                            r
-                        } else {
-                            let new_reg = self.alloc_reg();
-                            self.assign_regs[idx][instr_idx] = Some(new_reg);
-                            new_reg
-                        };
-                        scratch_out.insert(*name, reg);
+                if let Some(block) = &blocks[idx] {
+                    for (instr_idx, instr) in block.instructions.iter().enumerate() {
+                        if let Some(name) = instr.node_type.local_name() {
+                            let reg = if let Some(r) = self.assign_regs[idx][instr_idx] {
+                                r
+                            } else {
+                                let new_reg = self.alloc_reg();
+                                self.assign_regs[idx][instr_idx] = Some(new_reg);
+                                new_reg
+                            };
+                            scratch_out.insert(*name, reg);
+                        }
                     }
                 }
 
