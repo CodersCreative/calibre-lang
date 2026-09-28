@@ -2,12 +2,15 @@ use crate::{
     VM,
     error::RuntimeError,
     value::{
-        Host, RuntimeValue,
+        GcVec, Host, RuntimeValue,
         hashable::{HashKey, RuntimeHashMap, RuntimeHashSet},
         spawn::{ChannelInner, MutexInner, WaitGroupInner},
     },
 };
-use calibre_parser::ast::types::ParserInnerType;
+use calibre_parser::{
+    Span,
+    ast::types::{ParserDataType, ParserInnerType},
+};
 use std::ops::Range;
 use std::sync::Arc;
 use ustr::Ustr;
@@ -158,6 +161,19 @@ pub fn resolve_mutex(env: &VM, value: RuntimeValue) -> Result<Arc<MutexInner>, R
 }
 
 // Collections
+
+#[inline]
+pub fn resolve_list(env: &mut VM, value: RuntimeValue) -> Result<Arc<GcVec>, RuntimeError> {
+    let resolved = env.resolve_value(value)?;
+    if let RuntimeValue::List(lst) = resolved {
+        Ok(lst)
+    } else {
+        Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(resolved),
+            target_type: ParserInnerType::List(Box::new(ParserDataType::auto(Span::default()))),
+        })
+    }
+}
 
 pub fn resolve_hash_key(env: &VM, value: RuntimeValue) -> Result<HashKey, RuntimeError> {
     let resolved = env.resolve_value(value)?;
