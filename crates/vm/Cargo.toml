@@ -18,6 +18,7 @@ calibre-parser = { workspace = true }
 fastrand = { workspace = true }
 thiserror = { workspace = true }
 rustc-hash = { workspace = true }
+smallvec = "1.15"
 serde = { workspace = true }
 indextree = { workspace = true }
 wasm_thread = { workspace = true }

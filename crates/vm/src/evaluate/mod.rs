@@ -2,7 +2,7 @@ use crate::{
     VM,
     conversion::{VMBlock, VMFunction, VMGlobal},
     error::RuntimeError,
-    evaluate::instruction::VMEvaluation,
+    evaluate::{instruction::VMEvaluation, write_back::PropagatedValue},
     value::{RuntimeValue, TerminateValue},
 };
 use calibre_lir::ast::BlockId;
@@ -587,10 +587,11 @@ impl VM {
 
         for phi in &block.phis {
             let reg = phi.source_for(*prev);
+
             if let Some(handle) = self.get_mutation_handle(reg) {
                 self.set_propagated_value(
                     phi.dest,
-                    crate::evaluate::write_back::PropagatedValue {
+                    PropagatedValue {
                         value: self.get_reg_value(reg).clone(),
                         handle: Some(handle),
                     },

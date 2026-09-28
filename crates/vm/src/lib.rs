@@ -10,6 +10,7 @@ use crate::{
 use astro_float::Consts;
 use calibre_lir::ast::BlockId;
 use rustc_hash::{FxHashMap, FxHashSet};
+use smallvec::SmallVec;
 use std::{
     fmt::Debug,
     path::Path,
@@ -59,28 +60,29 @@ pub enum PathSegment {
 #[derive(Debug, Clone)]
 pub struct MutationHandle {
     pub root: RootBinding,
-    pub path: Vec<PathSegment>,
+    pub path: SmallVec<[PathSegment; 4]>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct VMFrame {
     pub reg_start: usize,
     pub reg_count: usize,
-    pub mutation_handles: Vec<Option<MutationHandle>>,
+    pub mutation_handles: Vec<Option<Arc<MutationHandle>>>,
     pub func_ptr: usize,
     pub func_name: Option<Ustr>,
 }
 
 impl VMFrame {
     #[inline]
-    pub(crate) fn get_mutation_handle(&self, reg: Reg) -> Option<&MutationHandle> {
+    pub(crate) fn get_mutation_handle(&self, reg: Reg) -> Option<Arc<MutationHandle>> {
         self.mutation_handles
             .get(reg as usize)
             .and_then(Option::as_ref)
+            .cloned()
     }
 
     #[inline]
-    pub(crate) fn set_mutation_handle(&mut self, reg: Reg, handle: MutationHandle) {
+    pub(crate) fn set_shared_mutation_handle(&mut self, reg: Reg, handle: Arc<MutationHandle>) {
         let index = reg as usize;
         if index >= self.mutation_handles.len() {
             self.mutation_handles.resize(index + 1, None);
@@ -491,7 +493,6 @@ impl VM {
                     .frames
                     .get(frame)
                     .and_then(|vm_frame| vm_frame.get_mutation_handle(reg))
-                    .cloned()
                 {
                     let updated = self.get_reg_value_in_frame(frame, reg).clone();
                     let _ = self.replace_mutation_handle(&handle, updated);

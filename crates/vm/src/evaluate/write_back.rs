@@ -3,6 +3,8 @@ use crate::{
     MutationHandle, PathSegment, RootBinding, conversion::Reg, error::RuntimeError,
     value::RuntimeValue,
 };
+use smallvec::SmallVec;
+use std::sync::Arc;
 use tracing::{instrument, trace};
 
 pub(crate) trait WriteBack {
@@ -28,7 +30,7 @@ pub(crate) trait Propagation {
 #[derive(Debug, Clone)]
 pub(crate) struct PropagatedValue {
     pub value: RuntimeValue,
-    pub handle: Option<MutationHandle>,
+    pub handle: Option<Arc<MutationHandle>>,
 }
 
 impl VM {
@@ -47,7 +49,8 @@ impl VM {
         let old = self.set_reg_value(reg, propagated.value);
 
         if let Some(handle) = propagated.handle {
-            self.current_frame_mut().set_mutation_handle(reg, handle);
+            self.current_frame_mut()
+                .set_shared_mutation_handle(reg, handle);
         }
 
         old
@@ -71,10 +74,10 @@ impl VM {
             let handle = self
                 .frames
                 .get(caller_frame)
-                .and_then(|frame| frame.get_mutation_handle(arg))
-                .cloned();
+                .and_then(|frame| frame.get_mutation_handle(arg));
             if let Some(handle) = handle {
-                self.current_frame_mut().set_mutation_handle(param, handle);
+                self.current_frame_mut()
+                    .set_shared_mutation_handle(param, handle);
             }
         }
     }
@@ -94,17 +97,22 @@ impl VM {
         }
     }
 
-    pub(crate) fn new_mutation_handle(&self, source: Reg, segment: PathSegment) -> MutationHandle {
+    pub(crate) fn new_mutation_handle(
+        &self,
+        source: Reg,
+        segment: PathSegment,
+    ) -> Arc<MutationHandle> {
         let mut handle = self
             .current_frame()
             .get_mutation_handle(source)
-            .cloned()
-            .unwrap_or_else(|| MutationHandle {
-                root: self.get_root_binding(source),
-                path: Vec::new(),
+            .unwrap_or_else(|| {
+                Arc::new(MutationHandle {
+                    root: self.get_root_binding(source),
+                    path: SmallVec::new(),
+                })
             });
 
-        handle.path.push(segment);
+        Arc::make_mut(&mut handle).path.push(segment);
         handle
     }
 
@@ -112,25 +120,28 @@ impl VM {
         &self,
         source: Reg,
         segments: &[PathSegment],
-    ) -> MutationHandle {
+    ) -> Arc<MutationHandle> {
         let mut handle = self
             .current_frame()
             .get_mutation_handle(source)
-            .cloned()
-            .unwrap_or_else(|| MutationHandle {
-                root: self.get_root_binding(source),
-                path: Vec::new(),
+            .unwrap_or_else(|| {
+                Arc::new(MutationHandle {
+                    root: self.get_root_binding(source),
+                    path: SmallVec::new(),
+                })
             });
 
-        handle.path.extend_from_slice(segments);
+        Arc::make_mut(&mut handle)
+            .path
+            .extend(segments.iter().cloned());
         handle
     }
 
-    pub(crate) fn get_mutation_handle(&self, reg: Reg) -> Option<MutationHandle> {
-        self.current_frame().get_mutation_handle(reg).cloned()
+    pub(crate) fn get_mutation_handle(&self, reg: Reg) -> Option<Arc<MutationHandle>> {
+        self.current_frame().get_mutation_handle(reg)
     }
 
-    pub(crate) fn unwrap_mutation_handle(&self, source: Reg) -> MutationHandle {
+    pub(crate) fn unwrap_mutation_handle(&self, source: Reg) -> Arc<MutationHandle> {
         self.get_mutation_handle(source)
             .unwrap_or_else(|| self.new_mutation_handle(source, PathSegment::Payload))
     }
@@ -187,11 +198,12 @@ impl VM {
 impl Propagation for VM {
     #[instrument(skip_all)]
     fn propagate_member_source_alias(&mut self, src: Reg, dst: Reg) {
-        let source = self.current_frame().get_mutation_handle(src).cloned();
+        let source = self.current_frame().get_mutation_handle(src);
 
         match source {
             Some(source) => {
-                self.current_frame_mut().set_mutation_handle(dst, source);
+                self.current_frame_mut()
+                    .set_shared_mutation_handle(dst, source);
             }
             None => {
                 self.current_frame_mut().remove_mutation_handle(dst);
@@ -219,10 +231,7 @@ impl Propagation for VM {
                 }
 
                 Some((
-                    self.frames
-                        .get(caller_frame)?
-                        .get_mutation_handle(*reg)
-                        .cloned()?,
+                    self.frames.get(caller_frame)?.get_mutation_handle(*reg)?,
                     *frame,
                     *reg,
                 ))
@@ -246,7 +255,6 @@ impl Propagation for VM {
             .frames
             .get(frame_idx)
             .and_then(|frame| frame.get_mutation_handle(reg))
-            .cloned()
         else {
             return Ok(None);
         };
