@@ -1,5 +1,5 @@
 impl str {
-	const len := fn (self : str) -> int => return len(self);
+	const len := fn (self : str) -> uint => return len(self);
 
 	const trim := fn (self : str) -> str => return trim(self);
 
@@ -17,7 +17,7 @@ impl str {
 
 	const into_iter := fn (self : str) -> StrIter => return iter_str(self);
 
-	const is_empty := fn (self : str) -> bool => return len(self) = 0;
+	const is_empty := fn (self : str) -> bool => return len(self) = 0u;
 
 	const to_chars := fn (self : str) -> list:<char> => return self.iter().collect();
 
@@ -45,7 +45,7 @@ impl str {
 
 	const replace := fn (self needle to : str) -> str => {
 		let parts := self.split(needle);
-		if len(parts) = 0 => return self;
+		if len(parts) = 0u => return self;
 		let mut out := "";
 		let mut idx := 0;
 		
@@ -61,7 +61,7 @@ impl str {
 	const strip_prefix := fn (self prefix : str) -> str? => {
 		if !self.starts_with(prefix) => return none;
 		let rest := self.split(prefix);
-		if len(rest) <= 1 => some("");
+		if len(rest) <= 1u => some("");
 		let mut out := "";
 		let mut idx := 1;
 		
@@ -105,7 +105,7 @@ impl str {
 	const trim_start := fn (self : str) -> str => {
 		let chars := self.to_chars();
 		let mut start := 0;
-		for start < len(chars) && (try!! chars[start]).is_whitespace() => start += 1;
+		for (start < len(chars)) && (try!! chars[start]).is_whitespace() => start += 1;
 		let mut out := "";
 		for i in start..len(chars) => out &= try!! chars[i];
 		return out;
@@ -114,7 +114,7 @@ impl str {
 	const trim_end := fn (self : str) -> str => {
 		let chars := self.to_chars();
 		let mut end := len(chars);
-		for end > 0 && (try!! chars[end - 1]).is_whitespace() => end -= 1;
+		for (end > 0) && (try!! chars[end - 1]).is_whitespace() => end -= 1;
 		let mut out := "";
 		for i in 0..end => out &= try!! chars[i];
 		return out;
@@ -133,10 +133,10 @@ impl char {
 	const uppercase := fn (self : char) -> char => return char_uppercase(self);
 
 	const is_whitespace := fn (self : char) -> bool => {
-		return self = ' ' || self = '\n' || self = '\r' || self = '\t';
+		return (self = ' ') || (self = '\n') || (self = '\r') || (self = '\t');
 	};
 
-	const is_digit := fn (self : char) -> bool => return self >= '0' && self <= '9';
+	const is_digit := fn (self : char) -> bool => return (self >= '0') && (self <= '9');
 
 	const is_alphabetic := fn (self : char) -> bool => return self.lowercase() != self.uppercase();
 

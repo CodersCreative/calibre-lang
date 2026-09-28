@@ -58,6 +58,9 @@ pub enum TagInfo {
     IgnoreInvalidReturn,
     IgnoreInvalidLet,
     IgnoreInvalidTypeCheck,
+    IgnoreInvalidBinary,
+    IgnoreInvalidComparison,
+    IgnoreInvalidBoolean,
     Suite(Ustr),
     Todo(Option<Ustr>),
     Deprecated(Option<Ustr>),
@@ -517,6 +520,72 @@ impl MiddleEnvironment {
             Ustr::from("ignore_invalid_type_check"),
             TagHandler {
                 handler: ignore_invalid_type_check,
+            },
+        );
+
+        let ignore_invalid_binary_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: ScopeId,
+             node: AstNode,
+             _tag: ParserText,
+             _args: Vec<AstNode>| {
+                env.tagging.tag_info.push(TagInfo::IgnoreInvalidBinary);
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
+                let _ = env.tagging.tag_info.pop();
+
+                middle
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            Ustr::from("ignore_invalid_binary"),
+            TagHandler {
+                handler: ignore_invalid_binary_handler,
+            },
+        );
+
+        let ignore_invalid_comparison_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: ScopeId,
+             node: AstNode,
+             _tag: ParserText,
+             _args: Vec<AstNode>| {
+                env.tagging.tag_info.push(TagInfo::IgnoreInvalidComparison);
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
+                let _ = env.tagging.tag_info.pop();
+
+                middle
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            Ustr::from("ignore_invalid_comparison"),
+            TagHandler {
+                handler: ignore_invalid_comparison_handler,
+            },
+        );
+
+        let ignore_invalid_boolean_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: ScopeId,
+             node: AstNode,
+             _tag: ParserText,
+             _args: Vec<AstNode>| {
+                env.tagging.tag_info.push(TagInfo::IgnoreInvalidBoolean);
+                let span = node.span;
+                let middle = node.lower(env, scope, span);
+                let _ = env.tagging.tag_info.pop();
+
+                middle
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            Ustr::from("ignore_invalid_boolean"),
+            TagHandler {
+                handler: ignore_invalid_boolean_handler,
             },
         );
 

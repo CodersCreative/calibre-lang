@@ -7,7 +7,7 @@ const main := fn => {
 	
 	for step in steps => {
 		let mut line := "";
-		for i in 0..len(cells) => line &= "█" if cells[i] = 1 else " ";
+		for cell in cells => line &= "█" if cell = 1 else " ";
 		print(line);
 		let mut next_cells := list:<int>[];
 		

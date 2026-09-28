@@ -1,6 +1,11 @@
 use calibre_parser::{
     ParserError, Span,
-    ast::{nodes::AstNodeType, types::ParserDataType},
+    ast::{
+        binary::BinaryOperator,
+        comparison::{BooleanOperator, ComparisonOperator},
+        nodes::AstNodeType,
+        types::ParserDataType,
+    },
 };
 use std::path::PathBuf;
 use thiserror::Error;
@@ -58,6 +63,24 @@ pub enum MiddleErr {
     InvalidReturnType {
         expected: Box<ParserDataType>,
         found: Box<ParserDataType>,
+    },
+    #[error("Invalid binary operation: {operator} between types : {left} and {right}")]
+    InvalidBinaryOperation {
+        operator: BinaryOperator,
+        left: Box<ParserDataType>,
+        right: Box<ParserDataType>,
+    },
+    #[error("Invalid boolean operation: {operator} between types : {left} and {right}")]
+    InvalidBooleanOperation {
+        operator: BooleanOperator,
+        left: Box<ParserDataType>,
+        right: Box<ParserDataType>,
+    },
+    #[error("Invalid comparison operation: {operator} between types : {left} and {right}")]
+    InvalidComparisonOperation {
+        operator: ComparisonOperator,
+        left: Box<ParserDataType>,
+        right: Box<ParserDataType>,
     },
     #[error("Cannot perform enum style pattern matching on type : {0}")]
     CantMatch(Box<ParserDataType>),
@@ -198,14 +221,17 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::ReturnOutOfFunction => "M015",
             Self::InvalidType { .. } => "M016",
             Self::InvalidReturnType { .. } => "M017",
-            Self::CantMatch(_) => "M018",
-            Self::ParserErrors { .. } => "M019",
-            Self::InFile { .. } => "M020",
-            Self::Multiple(_) => "M021",
-            Self::MacroArg(_) => "M022",
-            Self::InvalidMember => "M023",
-            Self::UnexpectedMacroArgType(_) => "M024",
-            Self::PureFunctionNoReturnType => "M025",
+            Self::InvalidBinaryOperation { .. } => "M018",
+            Self::InvalidBooleanOperation { .. } => "M019",
+            Self::InvalidComparisonOperation { .. } => "M020",
+            Self::CantMatch(_) => "M021",
+            Self::ParserErrors { .. } => "M022",
+            Self::InFile { .. } => "M023",
+            Self::Multiple(_) => "M024",
+            Self::MacroArg(_) => "M025",
+            Self::InvalidMember => "M026",
+            Self::UnexpectedMacroArgType(_) => "M027",
+            Self::PureFunctionNoReturnType => "M028",
             // Type inference failures (codes M030-M049)
             Self::CannotInferVariableType(_) => "M030",
             Self::CannotInferReturnType(_) => "M031",
@@ -308,6 +334,27 @@ impl calibre_parser::CalibreError for MiddleErr {
             }
             Self::InvalidReturnType { expected, found } => Some(format!(
                 "function return type is `{expected}` but found `{found}`"
+            )),
+            Self::InvalidBinaryOperation {
+                operator,
+                left,
+                right,
+            } => Some(format!(
+                "binary operation `{operator}` is not valid between types `{left}` and `{right}` - use @ignore_invalid_binary to bypass this check"
+            )),
+            Self::InvalidBooleanOperation {
+                operator,
+                left,
+                right,
+            } => Some(format!(
+                "boolean operation `{operator}` is not valid between types `{left}` and `{right}` - use @ignore_invalid_boolean to bypass this check"
+            )),
+            Self::InvalidComparisonOperation {
+                operator,
+                left,
+                right,
+            } => Some(format!(
+                "comparison operation `{operator}` is not valid between types `{left}` and `{right}` - use @ignore_invalid_comparison to bypass this check"
             )),
             Self::CantMatch(ty) => Some(format!(
                 "cannot perform enum pattern matching on type `{ty}`"

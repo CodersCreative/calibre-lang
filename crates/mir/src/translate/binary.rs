@@ -4,6 +4,7 @@ use crate::{
     errors::MiddleErr,
     scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
+    tags::TagInfo,
     translate::MirLowering,
 };
 use calibre_parser::{
@@ -25,7 +26,88 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
+use std::sync::LazyLock;
 use tracing::instrument;
+
+pub static VALID_BINARY_GENERAL: LazyLock<[(ParserInnerType, ParserInnerType); 17]> =
+    LazyLock::new(|| {
+        [
+            (ParserInnerType::Int, ParserInnerType::Int),
+            (ParserInnerType::Int, ParserInnerType::Float),
+            (ParserInnerType::Int, ParserInnerType::UInt),
+            (ParserInnerType::Int, ParserInnerType::Byte),
+            (ParserInnerType::Float, ParserInnerType::Float),
+            (ParserInnerType::Float, ParserInnerType::Int),
+            (ParserInnerType::Float, ParserInnerType::UInt),
+            (ParserInnerType::Float, ParserInnerType::Byte),
+            (ParserInnerType::UInt, ParserInnerType::UInt),
+            (ParserInnerType::UInt, ParserInnerType::Int),
+            (ParserInnerType::UInt, ParserInnerType::Float),
+            (ParserInnerType::UInt, ParserInnerType::Byte),
+            (ParserInnerType::Byte, ParserInnerType::Byte),
+            (ParserInnerType::Byte, ParserInnerType::Int),
+            (ParserInnerType::Byte, ParserInnerType::Float),
+            (ParserInnerType::Byte, ParserInnerType::UInt),
+            (ParserInnerType::Big, ParserInnerType::Big),
+        ]
+    });
+
+pub static VALID_BINARY: LazyLock<[(ParserInnerType, BinaryOperator, ParserInnerType); 9]> =
+    LazyLock::new(|| {
+        [
+            (
+                ParserInnerType::Int,
+                BinaryOperator::Pow,
+                ParserInnerType::Float,
+            ),
+            (
+                ParserInnerType::UInt,
+                BinaryOperator::Pow,
+                ParserInnerType::Float,
+            ),
+            (
+                ParserInnerType::Byte,
+                BinaryOperator::Pow,
+                ParserInnerType::Float,
+            ),
+            (
+                ParserInnerType::Str,
+                BinaryOperator::BitAnd,
+                ParserInnerType::Dynamic,
+            ),
+            (
+                ParserInnerType::Dynamic,
+                BinaryOperator::BitAnd,
+                ParserInnerType::Str,
+            ),
+            (
+                ParserInnerType::Char,
+                BinaryOperator::BitAnd,
+                ParserInnerType::Dynamic,
+            ),
+            (
+                ParserInnerType::Dynamic,
+                BinaryOperator::BitAnd,
+                ParserInnerType::Char,
+            ),
+            (
+                ParserInnerType::List(Box::new(ParserDataType::new(
+                    Span::default(),
+                    ParserInnerType::Dynamic,
+                ))),
+                BinaryOperator::Shl,
+                ParserInnerType::Dynamic,
+            ),
+            (
+                ParserInnerType::Dynamic,
+                BinaryOperator::Shr,
+                ParserInnerType::List(Box::new(ParserDataType::new(
+                    Span::default(),
+                    ParserInnerType::Dynamic,
+                ))),
+            ),
+        ]
+    });
 
 impl MirLowering for AstBinary {
     #[instrument(skip_all)]
@@ -43,6 +125,49 @@ impl MirLowering for AstBinary {
             Operator::Binary(self.operator),
         )? {
             return Ok(x);
+        }
+
+        if !env.tagging.tag_info.contains(&TagInfo::IgnoreInvalidBinary) {
+            let left_type = self
+                .left
+                .type_of(env, scope, span)
+                .unwrap_or(ParserDataType::new(
+                    Span::default(),
+                    ParserInnerType::Dynamic,
+                ));
+            let right_type = self
+                .right
+                .type_of(env, scope, span)
+                .unwrap_or(ParserDataType::new(
+                    Span::default(),
+                    ParserInnerType::Dynamic,
+                ));
+
+            if !(VALID_BINARY_GENERAL
+                .iter()
+                .find(|x| {
+                    x.0.loose_eq(&left_type.data_type) && x.1.loose_eq(&right_type.data_type)
+                        || x.0.loose_eq(&right_type.data_type) && x.1.loose_eq(&left_type.data_type)
+                })
+                .is_some()
+                || VALID_BINARY
+                    .iter()
+                    .find(|x| {
+                        x.0.loose_eq(&left_type.data_type)
+                            && x.1 == self.operator
+                            && x.2.loose_eq(&right_type.data_type)
+                    })
+                    .is_some())
+            {
+                return Err(env.context.err_at_span(
+                    span,
+                    MiddleErr::InvalidBinaryOperation {
+                        operator: self.operator,
+                        left: Box::new(left_type),
+                        right: Box::new(right_type),
+                    },
+                ));
+            }
         }
 
         Ok(MiddleNode {
@@ -113,6 +238,44 @@ impl MirLowering for AstBoolean {
             return Ok(x);
         }
 
+        if !env
+            .tagging
+            .tag_info
+            .contains(&TagInfo::IgnoreInvalidBoolean)
+        {
+            let left_type = self.left.type_of(env, scope, span);
+            let right_type = self.right.type_of(env, scope, span);
+
+            let data_type = env
+                .compare_types(
+                    left_type.clone(),
+                    right_type.clone(),
+                    Some(&TagInfo::IgnoreInvalidBoolean),
+                    span,
+                )
+                .map_err(|_| {
+                    env.context.err_at_span(
+                        span,
+                        MiddleErr::InvalidBooleanOperation {
+                            operator: self.operator,
+                            left: Box::new(left_type.clone().unwrap_or_default()),
+                            right: Box::new(right_type.clone().unwrap_or_default()),
+                        },
+                    )
+                })?;
+
+            if !data_type.data_type.loose_eq(&ParserInnerType::Bool) {
+                return Err(env.context.err_at_span(
+                    span,
+                    MiddleErr::InvalidBooleanOperation {
+                        operator: self.operator,
+                        left: Box::new(left_type.unwrap_or_default()),
+                        right: Box::new(right_type.unwrap_or_default()),
+                    },
+                ));
+            }
+        }
+
         Ok(MiddleNode {
             node_type: MiddleNodeType::BooleanExpression(MirBoolean {
                 left: Box::new(self.left.lower_or_empty(env, scope, span)),
@@ -155,6 +318,33 @@ impl MirLowering for AstComparison {
             Operator::Comparison(self.operator),
         )? {
             return Ok(x);
+        }
+
+        if !env
+            .tagging
+            .tag_info
+            .contains(&TagInfo::IgnoreInvalidComparison)
+        {
+            let left_type = self.left.type_of(env, scope, span);
+            let right_type = self.right.type_of(env, scope, span);
+
+            let _ = env
+                .compare_types_ref(
+                    left_type.as_ref(),
+                    right_type.as_ref(),
+                    Some(&TagInfo::IgnoreInvalidComparison),
+                    span,
+                )
+                .map_err(|_| {
+                    env.context.err_at_span(
+                        span,
+                        MiddleErr::InvalidComparisonOperation {
+                            operator: self.operator,
+                            left: Box::new(left_type.unwrap_or_default()),
+                            right: Box::new(right_type.unwrap_or_default()),
+                        },
+                    )
+                });
         }
 
         Ok(MiddleNode {

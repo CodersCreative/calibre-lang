@@ -15,17 +15,17 @@ impl int {
 	const clamp := fn (x lo hi : int) -> int => if x < lo => return lo else => if x > hi => return hi else => return x;
 
 	const floor_div := fn (a b : int) -> int => {
-		if b = 0 || a = 0 => return 0;
+		if (b = 0) || (a = 0) => return 0;
 		let q := a / b;
 		let r := a % b;
-		if r != 0 && ((r > 0) != (b > 0)) => return q - 1 else => return q;
+		if (r != 0) && ((r > 0) != (b > 0)) => return q - 1 else => return q;
 	};
 
 	const ceil_div := fn (a b : int) -> int => {
-		if b = 0 || a = 0 => return 0;
+		if (b = 0) || (a = 0) => return 0;
 		let q := a / b;
 		let r := a % b;
-		if r != 0 && ((r > 0) = (b > 0)) => return q + 1 else => return q;
+		if (r != 0) && ((r > 0) = (b > 0)) => return q + 1 else => return q;
 	};
 
 	const gcd := fn (a b : int) -> int => {
@@ -42,7 +42,7 @@ impl int {
 	};
 
 	const lcm := fn (a b : int) -> int => {
-		if a = 0 || b = 0 => return 0 else => return int.abs((a / int.gcd(a, b)) * b);
+		if (a = 0) || (b = 0) => return 0 else => return int.abs((a / int.gcd(a, b)) * b);
 	};
 
 	const factorial := fn (n : int) -> int => {
@@ -59,21 +59,21 @@ impl int {
 	};
 
 	const permutations := fn (n r : int) -> int => {
-		if n < 0 || r < 0 || r > n => return 0 else => return int.factorial(n) / int.factorial(n - r);
+		if (n < 0) || (r < 0) || (r > n) => return 0 else => return int.factorial(n) / int.factorial(n - r);
 	};
 
 	const combinations := fn (n r : int) -> int => {
-		if n < 0 || r < 0 || r > n => return 0 else => return int.factorial(n) / (int.factorial(r) * int.factorial(n - r));
+		if (n < 0) || (r < 0) || (r > n) => return 0 else => return int.factorial(n) / (int.factorial(r) * int.factorial(n - r));
 	};
 
 	const is_prime := fn (n : int) -> bool => {
 		if n < 2 => return false;
 		if n = 2 => return true;
-		if n % 2 = 0 => return false;
+		if (n % 2) = 0 => return false;
 		let mut d := 3;
 		
-		for d * d <= n => {
-			if n % d = 0 => return false;
+		for (d * d) <= n => {
+			if (n % d) = 0 => return false;
 			d += 2;
 		};
 		
@@ -97,7 +97,7 @@ impl uint {
 	const ceil_div := fn (a b : uint) -> uint => {
 		if b = 0u => return 0u;
 		let q := a / b;
-		if a % b = 0u => return q else => return q + 1u;
+		if (a % b) = 0u => return q else => return q + 1u;
 	};
 
 	const gcd := fn (a b : uint) -> uint => {
@@ -114,7 +114,7 @@ impl uint {
 	};
 
 	const lcm := fn (a b : uint) -> uint => {
-		if a = 0u || b = 0u => return 0u else => return (a / uint.gcd(a, b)) * b;
+		if (a = 0u) || (b = 0u) => return 0u else => return (a / uint.gcd(a, b)) * b;
 	};
 
 	const factorial := fn (n : uint) -> uint => {
@@ -140,11 +140,11 @@ impl uint {
 	const is_prime := fn (n : uint) -> bool => {
 		if n < 2u => return false;
 		if n = 2u => return true;
-		if n % 2u = 0u => return false;
+		if (n % 2u) = 0u => return false;
 		let mut d := 3u;
 		
-		for d * d <= n => {
-			if n % d = 0u => return false;
+		for (d * d) <= n => {
+			if (n % d) = 0u => return false;
 			d += 2u;
 		};
 		
@@ -169,12 +169,12 @@ impl float {
 
 	const floor := fn (x : float) -> int => {
 		let t := float.trunc(x);
-		if x < 0f && (try t as float => 0f) != x => return t - 1 else => return t;
+		if (x < 0f) && ((try t as float => 0f) != x) => return t - 1 else => return t;
 	};
 
 	const ceil := fn (x : float) -> int => {
 		let t := float.trunc(x);
-		if x > 0f && (try t as float => 0f) != x => return t + 1 else => return t;
+		if (x > 0f) && ((try t as float => 0f) != x) => return t + 1 else => return t;
 	};
 
 	const floor_div := fn (a b : float) -> int => if b = 0f => return 0 else => return float.floor(a / b);

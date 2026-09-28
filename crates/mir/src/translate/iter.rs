@@ -385,24 +385,32 @@ impl MirLowering for AstIter {
         scope: ScopeId,
         span: Span,
     ) -> Option<ParserDataType> {
-        let list_type = ParserDataType {
-            data_type: ParserInnerType::List(Box::new(
-                env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
-                    .ok()?,
-            )),
+        let data_type = ParserDataType {
             span,
+            data_type: ParserInnerType::List(Box::new(if self.data_type.is_auto() {
+                self.map
+                    .type_of(env, scope, span)
+                    .ok_or_else(|| {
+                        env.context
+                            .err_at_current(MiddleErr::CannotInferLoopIteratorType)
+                    })
+                    .ok()?
+            } else {
+                env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
+                    .ok()?
+            })),
         };
 
         if self.spawned {
             Some(ParserDataType {
                 data_type: ParserInnerType::StructWithGenerics {
                     identifier: String::from("Mutex"),
-                    generic_types: vec![list_type],
+                    generic_types: vec![data_type],
                 },
                 span,
             })
         } else {
-            Some(list_type)
+            Some(data_type)
         }
     }
 }

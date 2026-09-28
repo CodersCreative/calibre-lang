@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Wrong Output
 const calculate_pi := fn (n_terms : float) -> float => {
 	const terms : float = n_terms * 2f + 1f;
 	let mut pi : float = 0f;

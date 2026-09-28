@@ -94,7 +94,7 @@ impl ParserDataType {
                     vec![ParserInnerType::Int],
                     ParserInnerType::Null,
                 ),
-                ("len", vec![ParserInnerType::Dynamic], ParserInnerType::Int),
+                ("len", vec![ParserInnerType::Dynamic], ParserInnerType::UInt),
                 ("wait", vec![ParserInnerType::Int], ParserInnerType::Null),
                 (
                     "panic",
