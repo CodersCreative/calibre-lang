@@ -606,43 +606,56 @@ impl VM {
         start_ip: usize,
         mut budget: Option<usize>,
     ) -> Result<TerminateValue, RuntimeError> {
-        for (ip, instruction) in block.instructions.iter().enumerate().skip(start_ip) {
-            if (ip & 0x3f) == 0 {
-                self.maybe_collect_garbage();
+        loop {
+            let mut recurse = false;
+
+            for (ip, instruction) in block.instructions.iter().enumerate().skip(start_ip) {
+                if (ip & 0x3f) == 0 {
+                    self.maybe_collect_garbage();
+                }
+
+                let step = match instruction.run(self, block, ip as u32, prev) {
+                    Ok(step) => step,
+                    Err(e) => {
+                        let span = block.instruction_spans.get(ip).cloned().unwrap_or_default();
+                        let path = self
+                            .source_file_override
+                            .as_ref()
+                            .map(|s| PathBuf::from(s.as_str()))
+                            .unwrap_or_else(|| std::path::PathBuf::from("<unknown>"));
+                        return Err(RuntimeError::at(path, span, e));
+                    }
+                };
+
+                match step {
+                    TerminateValue::None => {}
+                    TerminateValue::Jump(target) => {
+                        if target == block.id {
+                            recurse = true;
+                            break;
+                        }
+
+                        self.apply_edge_copies(block, &target);
+                        return Ok(TerminateValue::Jump(target));
+                    }
+                    x => return Ok(x),
+                }
+
+                if let Some(fuel) = &mut budget {
+                    *fuel = (*fuel).saturating_sub(1);
+                    if *fuel == 0 {
+                        return Ok(TerminateValue::Yield {
+                            block: block.id,
+                            ip: ip + 1,
+                            prev_block: prev,
+                            yielded: None,
+                        });
+                    }
+                }
             }
 
-            let step = match instruction.run(self, block, ip as u32, prev) {
-                Ok(step) => step,
-                Err(e) => {
-                    let span = block.instruction_spans.get(ip).cloned().unwrap_or_default();
-                    let path = self
-                        .source_file_override
-                        .as_ref()
-                        .map(|s| PathBuf::from(s.as_str()))
-                        .unwrap_or_else(|| std::path::PathBuf::from("<unknown>"));
-                    return Err(RuntimeError::at(path, span, e));
-                }
-            };
-
-            match step {
-                TerminateValue::None => {}
-                TerminateValue::Jump(target) => {
-                    self.apply_edge_copies(block, &target);
-                    return Ok(TerminateValue::Jump(target));
-                }
-                x => return Ok(x),
-            }
-
-            if let Some(fuel) = &mut budget {
-                *fuel = (*fuel).saturating_sub(1);
-                if *fuel == 0 {
-                    return Ok(TerminateValue::Yield {
-                        block: block.id,
-                        ip: ip + 1,
-                        prev_block: prev,
-                        yielded: None,
-                    });
-                }
+            if !recurse {
+                break;
             }
         }
 
