@@ -98,7 +98,7 @@ impl VMEvaluation for VMLoadLiteral {
 
                 vm.set_reg_value(self.dst, RuntimeValue::ExternFunction(Arc::new(func)));
             }
-            #[cfg(feature = "wasm")]
+            #[cfg(all(feature = "wasm", not(feature = "native")))]
             VMLiteral::ExternFunction { .. } => {}
             other => {
                 vm.set_reg_value(self.dst, RuntimeValue::from(other));

@@ -1,12 +1,8 @@
 use super::super::VM;
 use crate::{
-    MutationHandle, PathSegment, RootBinding,
-    conversion::Reg,
-    error::RuntimeError,
-    value::{RuntimeValue, ValueSlot},
+    MutationHandle, PathSegment, RootBinding, conversion::Reg, error::RuntimeError,
+    value::RuntimeValue,
 };
-use dumpster::sync::Gc;
-use std::sync::Arc;
 use tracing::{instrument, trace};
 
 pub(crate) trait WriteBack {
@@ -51,9 +47,7 @@ impl VM {
         let old = self.set_reg_value(reg, propagated.value);
 
         if let Some(handle) = propagated.handle {
-            self.current_frame_mut()
-                .mutation_handles
-                .insert(reg, handle);
+            self.current_frame_mut().set_mutation_handle(reg, handle);
         }
 
         old
@@ -77,12 +71,10 @@ impl VM {
             let handle = self
                 .frames
                 .get(caller_frame)
-                .and_then(|frame| frame.mutation_handles.get(&arg))
+                .and_then(|frame| frame.get_mutation_handle(arg))
                 .cloned();
             if let Some(handle) = handle {
-                self.current_frame_mut()
-                    .mutation_handles
-                    .insert(param, handle);
+                self.current_frame_mut().set_mutation_handle(param, handle);
             }
         }
     }
@@ -105,8 +97,7 @@ impl VM {
     pub(crate) fn new_mutation_handle(&self, source: Reg, segment: PathSegment) -> MutationHandle {
         let mut handle = self
             .current_frame()
-            .mutation_handles
-            .get(&source)
+            .get_mutation_handle(source)
             .cloned()
             .unwrap_or_else(|| MutationHandle {
                 root: self.get_root_binding(source),
@@ -124,8 +115,7 @@ impl VM {
     ) -> MutationHandle {
         let mut handle = self
             .current_frame()
-            .mutation_handles
-            .get(&source)
+            .get_mutation_handle(source)
             .cloned()
             .unwrap_or_else(|| MutationHandle {
                 root: self.get_root_binding(source),
@@ -137,7 +127,7 @@ impl VM {
     }
 
     pub(crate) fn get_mutation_handle(&self, reg: Reg) -> Option<MutationHandle> {
-        self.current_frame().mutation_handles.get(&reg).cloned()
+        self.current_frame().get_mutation_handle(reg).cloned()
     }
 
     pub(crate) fn unwrap_mutation_handle(&self, source: Reg) -> MutationHandle {
@@ -158,123 +148,25 @@ impl VM {
         }
     }
 
-    fn replace_path(
-        value: &mut RuntimeValue,
-        path: &[PathSegment],
-        replacement: RuntimeValue,
-    ) -> Option<RuntimeValue> {
-        let Some((segment, rest)) = path.split_first() else {
-            return Some(std::mem::replace(value, replacement));
-        };
+    pub(crate) fn mutate_handle<F, R>(&mut self, handle: &MutationHandle, mutation: F) -> Option<R>
+    where
+        F: FnOnce(&mut RuntimeValue) -> Option<R>,
+    {
+        let target = self.get_root(&handle.root);
+        let mut root = self.resolve_value_ref(&target).ok()?;
 
-        match segment {
-            PathSegment::Field(field) => match value {
-                RuntimeValue::Aggregate(_, map) => {
-                    let entries = &mut Arc::make_mut(map);
-                    let slot = entries
-                        .iter_mut()
-                        .find(|(name, _)| name == field)
-                        .map(|(_, slot)| slot)?;
-                    Self::replace_slot(slot, rest, replacement)
-                }
-                _ => None,
-            },
-            PathSegment::Index(index) => match value {
-                RuntimeValue::List(list) => {
-                    let values = Arc::make_mut(list);
-                    Self::replace_slot(values.get_mut(*index)?, rest, replacement)
-                }
-                RuntimeValue::Aggregate(_, map) => {
-                    let entries = &mut Arc::make_mut(map);
-                    Self::replace_slot(&mut entries.get_mut(*index)?.1, rest, replacement)
-                }
-                _ => None,
-            },
-            PathSegment::MapKey(key) => match value {
-                RuntimeValue::HashMap(map) => {
-                    let slot = Arc::make_mut(&mut map.map).get_mut(key)?;
-                    Self::replace_slot(slot, rest, replacement)
-                }
-                _ => None,
-            },
-            PathSegment::Payload => match value {
-                RuntimeValue::Option(Some(inner)) => Self::replace_gc(inner, rest, replacement),
-                RuntimeValue::Result(Ok(inner)) | RuntimeValue::Result(Err(inner)) => {
-                    Self::replace_gc(inner, rest, replacement)
-                }
-                RuntimeValue::Enum(_, _, Some(inner)) => Self::replace_gc(inner, rest, replacement),
-                RuntimeValue::DynObject { value: inner, .. } => {
-                    Self::replace_gc(inner, rest, replacement)
-                }
-                _ => None,
-            },
+        if !root.path_exists(&handle.path) {
+            return None;
         }
-    }
 
-    fn read_path(value: &RuntimeValue, path: &[PathSegment]) -> Option<RuntimeValue> {
-        let Some((segment, rest)) = path.split_first() else {
-            return Some(value.clone());
+        let mut mutation = Some(mutation);
+        let mut apply = |value: &mut RuntimeValue| {
+            let mutation = mutation.take()?;
+            mutation(value)
         };
-        match segment {
-            PathSegment::Field(field) => match value {
-                RuntimeValue::Aggregate(_, map) => map
-                    .as_ref()
-                    .0
-                    .0
-                    .iter()
-                    .find(|(name, _)| name == field)
-                    .and_then(|(_, slot)| Self::read_path(slot.as_ref(), rest)),
-                _ => None,
-            },
-            PathSegment::Index(index) => match value {
-                RuntimeValue::List(list) => list
-                    .as_ref()
-                    .0
-                    .get(*index)
-                    .and_then(|slot| Self::read_path(slot.as_ref(), rest)),
-                RuntimeValue::Aggregate(_, map) => map
-                    .as_ref()
-                    .0
-                    .0
-                    .get(*index)
-                    .and_then(|(_, slot)| Self::read_path(slot.as_ref(), rest)),
-                _ => None,
-            },
-            PathSegment::MapKey(key) => match value {
-                RuntimeValue::HashMap(map) => map
-                    .map
-                    .get(key)
-                    .and_then(|slot| Self::read_path(slot.as_ref(), rest)),
-                _ => None,
-            },
-            PathSegment::Payload => match value {
-                RuntimeValue::Option(Some(inner)) => Self::read_path(inner.as_ref(), rest),
-                RuntimeValue::Result(Ok(inner)) | RuntimeValue::Result(Err(inner)) => {
-                    Self::read_path(inner.as_ref(), rest)
-                }
-                RuntimeValue::Enum(_, _, Some(inner)) => Self::read_path(inner.as_ref(), rest),
-                RuntimeValue::DynObject { value: inner, .. } => {
-                    Self::read_path(inner.as_ref(), rest)
-                }
-                _ => None,
-            },
-        }
-    }
-
-    fn replace_gc(
-        inner: &mut Gc<RuntimeValue>,
-        path: &[PathSegment],
-        replacement: RuntimeValue,
-    ) -> Option<RuntimeValue> {
-        Self::replace_path(Gc::make_mut(inner), path, replacement)
-    }
-
-    fn replace_slot(
-        slot: &mut ValueSlot,
-        path: &[PathSegment],
-        replacement: RuntimeValue,
-    ) -> Option<RuntimeValue> {
-        Self::replace_path(slot.make_mut(), path, replacement)
+        let result = root.update_path(&handle.path, &mut apply)?;
+        let _ = self.write_back(target, root);
+        Some(result)
     }
 
     pub(crate) fn replace_mutation_handle(
@@ -282,34 +174,27 @@ impl VM {
         handle: &MutationHandle,
         replacement: RuntimeValue,
     ) -> Option<RuntimeValue> {
-        let target = self.get_root(&handle.root);
-        let mut root = self.resolve_value_ref(&target).ok()?;
-
-        let old = Self::replace_path(&mut root, &handle.path, replacement)?;
-        let _ = self.write_back(target, root);
-        Some(old)
+        self.mutate_handle(handle, |value| Some(std::mem::replace(value, replacement)))
     }
 
     pub(crate) fn read_mutation_handle(&self, handle: &MutationHandle) -> Option<RuntimeValue> {
         let target = self.get_root(&handle.root);
         let root = self.resolve_value_ref(&target).ok()?;
-        Self::read_path(&root, &handle.path)
+        root.read_path(&handle.path)
     }
 }
 
 impl Propagation for VM {
     #[instrument(skip_all)]
     fn propagate_member_source_alias(&mut self, src: Reg, dst: Reg) {
-        let source = self.current_frame().mutation_handles.get(&src).cloned();
+        let source = self.current_frame().get_mutation_handle(src).cloned();
 
         match source {
             Some(source) => {
-                self.current_frame_mut()
-                    .mutation_handles
-                    .insert(dst, source);
+                self.current_frame_mut().set_mutation_handle(dst, source);
             }
             None => {
-                self.current_frame_mut().mutation_handles.remove(&dst);
+                self.current_frame_mut().remove_mutation_handle(dst);
             }
         }
     }
@@ -336,8 +221,7 @@ impl Propagation for VM {
                 Some((
                     self.frames
                         .get(caller_frame)?
-                        .mutation_handles
-                        .get(reg)
+                        .get_mutation_handle(*reg)
                         .cloned()?,
                     *frame,
                     *reg,
@@ -361,7 +245,7 @@ impl Propagation for VM {
         let Some(handle) = self
             .frames
             .get(frame_idx)
-            .and_then(|frame| frame.mutation_handles.get(&reg))
+            .and_then(|frame| frame.get_mutation_handle(reg))
             .cloned()
         else {
             return Ok(None);

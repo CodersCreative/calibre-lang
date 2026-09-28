@@ -61,9 +61,7 @@ impl VMEvaluation for VMLoadMember {
 
                     let handle = vm.new_mutation_handle(source_reg, PathSegment::Field(*name));
 
-                    vm.current_frame_mut()
-                        .mutation_handles
-                        .insert(self.dst, handle);
+                    vm.current_frame_mut().set_mutation_handle(self.dst, handle);
 
                     return Ok(TerminateValue::None);
                 } else {
@@ -281,8 +279,7 @@ impl VMEvaluation for VMLoadMember {
             }
         });
         vm.current_frame_mut()
-            .mutation_handles
-            .insert(self.dst, final_source);
+            .set_mutation_handle(self.dst, final_source);
 
         Ok(TerminateValue::None)
     }
@@ -466,7 +463,7 @@ impl VMEvaluation for VMSetMember {
                             let member_source = vm
                                 .frames
                                 .get(frame)
-                                .and_then(|vm_frame| vm_frame.mutation_handles.get(&reg))
+                                .and_then(|vm_frame| vm_frame.get_mutation_handle(reg))
                                 .cloned();
 
                             let _ = vm.set_reg_value_in_frame(
@@ -478,7 +475,7 @@ impl VMEvaluation for VMSetMember {
                             if let Some(source) = member_source
                                 && let Some(vm_frame) = vm.frames.get_mut(frame)
                             {
-                                vm_frame.mutation_handles.insert(reg, source);
+                                vm_frame.set_mutation_handle(reg, source);
                             }
 
                             let old = vm.propagate_member_source_reg(reg, frame)?;
@@ -491,7 +488,7 @@ impl VMEvaluation for VMSetMember {
                             if let Some(handle) = vm
                                 .frames
                                 .get(frame)
-                                .and_then(|frame| frame.mutation_handles.get(&reg))
+                                .and_then(|frame| frame.get_mutation_handle(reg))
                                 .cloned()
                             {
                                 let field = vm.get_reg_value_in_frame(frame, reg).clone();
@@ -518,18 +515,14 @@ impl VMEvaluation for VMSetMember {
                 }
                 RuntimeValue::Aggregate(name, map) => {
                     let updated = update_aggregate(&name, map)?;
-                    let member_source = vm
-                        .current_frame()
-                        .mutation_handles
-                        .get(&self.target)
-                        .cloned();
+                    let member_source =
+                        vm.current_frame().get_mutation_handle(self.target).cloned();
 
                     let _ = vm.set_reg_value(self.target, RuntimeValue::Aggregate(name, updated));
 
                     if let Some(source) = member_source {
                         vm.current_frame_mut()
-                            .mutation_handles
-                            .insert(self.target, source);
+                            .set_mutation_handle(self.target, source);
                     }
 
                     let old = vm.propagate_member_source_reg(
@@ -747,10 +740,8 @@ impl VMEvaluation for VMIndex {
         if let Some(segment) = indexed_segment {
             let handle = vm.new_mutation_handle(self.value, segment);
 
-            vm.current_frame_mut()
-                .mutation_handles
-                .insert(self.dst, handle);
-        } else if !vm.current_frame().mutation_handles.contains_key(&self.dst) {
+            vm.current_frame_mut().set_mutation_handle(self.dst, handle);
+        } else if vm.current_frame().get_mutation_handle(self.dst).is_none() {
             vm.propagate_member_source_alias(self.value, self.dst);
         }
 
@@ -938,7 +929,7 @@ impl VMEvaluation for VMSetIndex {
                             let member_source = vm
                                 .frames
                                 .get(frame)
-                                .and_then(|vm_frame| vm_frame.mutation_handles.get(&reg))
+                                .and_then(|vm_frame| vm_frame.get_mutation_handle(reg))
                                 .cloned();
 
                             vm.set_reg_value_in_frame(frame, reg, RuntimeValue::List(list.clone()));
@@ -946,7 +937,7 @@ impl VMEvaluation for VMSetIndex {
                             if let Some(source) = member_source
                                 && let Some(vm_frame) = vm.frames.get_mut(frame)
                             {
-                                vm_frame.mutation_handles.insert(reg, source);
+                                vm_frame.set_mutation_handle(reg, source);
                             }
 
                             vm.propagate_member_source_reg(reg, frame)?;
@@ -967,7 +958,7 @@ impl VMEvaluation for VMSetIndex {
                             if let Some(handle) = vm
                                 .frames
                                 .get(frame)
-                                .and_then(|vm_frame| vm_frame.mutation_handles.get(&reg))
+                                .and_then(|vm_frame| vm_frame.get_mutation_handle(reg))
                                 .cloned()
                             {
                                 let updated = vm.get_reg_value_in_frame(frame, reg).clone();
@@ -997,17 +988,13 @@ impl VMEvaluation for VMSetIndex {
                     let old = std::mem::replace(&mut vec[idx], value.into());
                     let _ = vm.set_reg_value(self.dst, RuntimeValue::from(old));
 
-                    let member_source = vm
-                        .current_frame()
-                        .mutation_handles
-                        .get(&self.target)
-                        .cloned();
+                    let member_source =
+                        vm.current_frame().get_mutation_handle(self.target).cloned();
                     vm.set_reg_value(self.target, RuntimeValue::List(list));
 
                     if let Some(source) = member_source {
                         vm.current_frame_mut()
-                            .mutation_handles
-                            .insert(self.target, source);
+                            .set_mutation_handle(self.target, source);
                     }
 
                     vm.propagate_member_source_reg(self.target, vm.frames.len().saturating_sub(1))?;

@@ -66,9 +66,40 @@ pub struct MutationHandle {
 pub struct VMFrame {
     pub reg_start: usize,
     pub reg_count: usize,
-    pub mutation_handles: FxHashMap<Reg, MutationHandle>,
+    pub mutation_handles: Vec<Option<MutationHandle>>,
     pub func_ptr: usize,
     pub func_name: Option<Ustr>,
+}
+
+impl VMFrame {
+    #[inline]
+    pub(crate) fn get_mutation_handle(&self, reg: Reg) -> Option<&MutationHandle> {
+        self.mutation_handles
+            .get(reg as usize)
+            .and_then(Option::as_ref)
+    }
+
+    #[inline]
+    pub(crate) fn set_mutation_handle(&mut self, reg: Reg, handle: MutationHandle) {
+        let index = reg as usize;
+        if index >= self.mutation_handles.len() {
+            self.mutation_handles.resize(index + 1, None);
+        }
+        self.mutation_handles[index] = Some(handle);
+    }
+
+    #[inline]
+    pub(crate) fn remove_mutation_handle(&mut self, reg: Reg) {
+        if let Some(slot) = self.mutation_handles.get_mut(reg as usize) {
+            *slot = None;
+        }
+    }
+
+    #[inline]
+    pub(crate) fn clear_mutation_handles(&mut self, reg_count: usize) {
+        self.mutation_handles.clear();
+        self.mutation_handles.resize(reg_count, None);
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -325,7 +356,7 @@ impl VM {
         if let Some(mut frame) = self.frame_pool.pop() {
             frame.reg_start = start;
             frame.reg_count = reg_count;
-            frame.mutation_handles.clear();
+            frame.clear_mutation_handles(reg_count);
             frame.func_ptr = func_ptr;
             frame.func_name = func_name;
             self.frames.push(frame);
@@ -333,7 +364,7 @@ impl VM {
             self.frames.push(VMFrame {
                 reg_start: start,
                 reg_count,
-                mutation_handles: FxHashMap::default(),
+                mutation_handles: vec![None; reg_count],
                 func_ptr,
                 func_name,
             });
@@ -421,7 +452,7 @@ impl VM {
         }
 
         let old = self.replace_reg_value(reg, value);
-        self.current_frame_mut().mutation_handles.remove(&reg);
+        self.current_frame_mut().remove_mutation_handle(reg);
         old
     }
 
@@ -437,7 +468,7 @@ impl VM {
                 let pos = frame.reg_start + idx;
 
                 let old = std::mem::replace(&mut self.reg_arena[pos], value);
-                frame.mutation_handles.remove(&reg);
+                frame.remove_mutation_handle(reg);
                 return old;
             }
         }
@@ -459,7 +490,7 @@ impl VM {
                 if let Some(handle) = self
                     .frames
                     .get(frame)
-                    .and_then(|vm_frame| vm_frame.mutation_handles.get(&reg))
+                    .and_then(|vm_frame| vm_frame.get_mutation_handle(reg))
                     .cloned()
                 {
                     let updated = self.get_reg_value_in_frame(frame, reg).clone();
@@ -540,6 +571,15 @@ impl VM {
         &self,
         value: &RuntimeValue,
     ) -> Result<RuntimeValue, RuntimeError> {
+        if !value.is_ref_like() {
+            return Ok(value.clone());
+        }
+
+        self.resolve_reference_chain(value)
+    }
+
+    #[instrument(skip_all)]
+    fn resolve_reference_chain(&self, value: &RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
         let mut owned: Option<RuntimeValue> = None;
         let mut seen_refs = UstrSet::default();
         let mut seen_var_refs: FxHashSet<usize> = FxHashSet::default();

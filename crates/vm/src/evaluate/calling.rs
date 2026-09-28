@@ -390,7 +390,7 @@ impl VM {
 
         if let Some((frame_idx, reg)) = receiver_reg
             && frame_idx == self.frames.len().saturating_sub(1)
-            && let Some(handle) = self.current_frame().mutation_handles.get(&reg).cloned()
+            && let Some(handle) = self.current_frame().get_mutation_handle(reg).cloned()
         {
             let updated_field = self.get_reg_value(reg).clone();
             let _ = self.replace_mutation_handle(&handle, updated_field);
@@ -451,7 +451,7 @@ impl VM {
 
         let func = if func.is_callable() {
             func
-        } else if let Some(handle) = self.current_frame().mutation_handles.get(&callee).cloned() {
+        } else if let Some(handle) = self.current_frame().get_mutation_handle(callee).cloned() {
             let Some(PathSegment::Field(member_name)) = handle.path.last() else {
                 return Err(RuntimeError::FunctionNotFound(
                     "<mutation-handle>".to_string(),

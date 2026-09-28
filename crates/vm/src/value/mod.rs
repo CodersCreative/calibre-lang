@@ -33,6 +33,7 @@ pub mod embedded;
 pub mod hashable;
 pub mod natives;
 pub mod spawn;
+pub mod write_back;
 
 #[cfg(feature = "native")]
 pub mod ffi;
