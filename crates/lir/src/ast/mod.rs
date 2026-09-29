@@ -473,7 +473,7 @@ pub enum LirTerminator {
         span: Span,
         condition: LirNodeType,
         then_block: BlockId,
-        else_block: BlockId,
+        else_block: Option<BlockId>,
     },
     Return {
         span: Span,
@@ -488,13 +488,18 @@ impl Display for LirTerminator {
             Self::Branch {
                 condition,
                 then_block,
-                else_block,
+                else_block: Some(else_block),
                 ..
             } => write!(
                 f,
                 "jmp blk {} if {} else jmp blk {}",
                 then_block.0, condition, else_block.0
             ),
+            Self::Branch {
+                condition,
+                then_block,
+                ..
+            } => write!(f, "jmp blk {} if {}", then_block.0, condition,),
             Self::Return { value, .. } => write!(
                 f,
                 "return{}",

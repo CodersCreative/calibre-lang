@@ -66,7 +66,11 @@ impl SSABuilder {
                         else_block,
                         ..
                     } => {
-                        for target in [then_block, else_block] {
+                        for target in if let Some(else_block) = else_block {
+                            vec![then_block, else_block]
+                        } else {
+                            vec![then_block]
+                        } {
                             if let Some(&target_idx) = self.block_map.get(target) {
                                 self.preds[target_idx].push(block.id);
                             }

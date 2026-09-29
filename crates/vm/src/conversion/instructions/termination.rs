@@ -18,16 +18,11 @@ impl Display for VMJump {
 pub struct VMBranch {
     pub cond: Reg,
     pub then_block: BlockId,
-    pub else_block: BlockId,
 }
 
 impl Display for VMBranch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "BRANCH JMP BLK {} if %r{} else JMP BLK {}",
-            self.then_block.0, self.cond, self.else_block.0
-        )
+        write!(f, "BRANCH JMP BLK {} IF %r{}", self.then_block.0, self.cond,)
     }
 }
 

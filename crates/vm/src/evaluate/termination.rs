@@ -45,7 +45,7 @@ impl VMEvaluation for VMBranch {
         if is_true {
             Ok(TerminateValue::Jump(self.then_block))
         } else {
-            Ok(TerminateValue::Jump(self.else_block))
+            Ok(TerminateValue::None)
         }
     }
 }

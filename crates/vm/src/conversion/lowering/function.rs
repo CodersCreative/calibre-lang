@@ -1,13 +1,8 @@
 use super::ssa::SSABuilder;
 use super::*;
-use crate::conversion::instructions::{
-    VMInstruction,
-    literals::VMLoadLiteral,
-    registers::VMCopy,
-    termination::{VMBranch, VMJump},
-};
+use crate::conversion::instructions::{VMInstruction, literals::VMLoadLiteral, registers::VMCopy};
 use calibre_lir::ast::{LirDeclare, LirLValue};
-use rustc_hash::FxHashSet;
+use calibre_parser::Span;
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap, UstrSet};
 
@@ -33,7 +28,8 @@ impl VMFunction {
         lower.emit_blocks();
         debug!("global lowering completed");
 
-        lower.blocks = FunctionLowering::optimize_blocks(lower.blocks, lower.entry);
+        lower.blocks =
+            FunctionLowering::optimize_blocks(lower.blocks, lower.entry, &lower.block_map);
 
         VMFunction {
             name: lower.func.name,
@@ -62,7 +58,7 @@ impl From<LirFunction> for VMFunction {
     }
 }
 
-struct FunctionLowering {
+pub(crate) struct FunctionLowering {
     func: LirFunction,
     blocks: Box<[Option<VMBlock>]>,
     block_map: FxHashMap<BlockId, usize>,
@@ -91,7 +87,8 @@ impl FunctionLowering {
 
         let param_names: UstrSet = lower.func.params.iter().map(|(n, _)| *n).collect();
 
-        lower.blocks = FunctionLowering::optimize_blocks(lower.blocks, lower.entry);
+        lower.blocks =
+            FunctionLowering::optimize_blocks(lower.blocks, lower.entry, &lower.block_map);
 
         VMFunction {
             name: lower.func.name,
@@ -124,163 +121,6 @@ impl FunctionLowering {
             memo_params: lower.func.memo_params,
             referenced_params: lower.func.referenced_params,
         }
-    }
-
-    #[instrument(skip_all)]
-    fn optimize_blocks(
-        mut blocks: Box<[Option<VMBlock>]>,
-        entry: BlockId,
-    ) -> Box<[Option<VMBlock>]> {
-        let mut block_subst = FxHashMap::default();
-
-        let mut changed = true;
-        let mut iterations = 0;
-
-        while changed && iterations < 512 {
-            changed = false;
-            iterations += 1;
-
-            let mut referenced = std::iter::once(entry).collect::<FxHashSet<_>>();
-
-            for block in blocks.iter().flatten() {
-                match block.instructions.len() {
-                    0 => {
-                        block_subst.insert(block.id, None);
-                    }
-                    1 => {
-                        if let Some(VMInstruction::Jump(x)) = block.instructions.first() {
-                            block_subst.insert(block.id, Some(x.target));
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            for block in blocks.iter_mut().flatten() {
-                let mut instr_idx = 0;
-
-                while instr_idx < block.instructions.len() {
-                    let mut remove_current = false;
-                    let mut remove_next = false;
-
-                    // Remove self-copies: %rX = %rX
-                    if let VMInstruction::Copy(VMCopy { dst, src }) = block.instructions[instr_idx]
-                        && dst == src
-                    {
-                        remove_current = true;
-                    }
-
-                    if !remove_current {
-                        match &mut block.instructions[instr_idx] {
-                            VMInstruction::Jump(VMJump { target }) => {
-                                match block_subst.get(target) {
-                                    Some(Some(new_target)) if new_target != target => {
-                                        *target = *new_target;
-                                        changed = true;
-                                    }
-                                    Some(None) => {
-                                        // Target is an empty block, eliminate the jump
-                                        remove_current = true;
-                                    }
-                                    _ => {}
-                                }
-
-                                if !remove_current {
-                                    referenced.insert(*target);
-                                }
-                            }
-                            VMInstruction::Branch(VMBranch {
-                                then_block,
-                                else_block,
-                                ..
-                            }) => {
-                                if let Some(Some(new_then)) = block_subst.get(then_block)
-                                    && then_block != new_then
-                                {
-                                    *then_block = *new_then;
-                                    changed = true;
-                                }
-
-                                if let Some(Some(new_else)) = block_subst.get(else_block)
-                                    && else_block != new_else
-                                {
-                                    *else_block = *new_else;
-                                    changed = true;
-                                }
-
-                                referenced.insert(*then_block);
-                                referenced.insert(*else_block);
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    if !remove_current && instr_idx + 1 < block.instructions.len() {
-                        match (
-                            &block.instructions[instr_idx],
-                            &block.instructions[instr_idx + 1],
-                        ) {
-                            // Remove LoadLiteral followed by copy: %r1 = Literal; %r2 = %r1 -> %r2 = Literal
-                            (
-                                VMInstruction::LoadLiteral(VMLoadLiteral { dst: dst1, literal }),
-                                VMInstruction::Copy(VMCopy {
-                                    dst: dst2,
-                                    src: src1,
-                                }),
-                            ) if dst1 == src1 && dst1 != dst2 => {
-                                block.instructions[instr_idx] =
-                                    VMInstruction::LoadLiteral(VMLoadLiteral {
-                                        dst: *dst2,
-                                        literal: *literal,
-                                    });
-                                remove_next = true;
-                            }
-                            // Remove copy followed by copy: %r2 = %r1; %r3 = %r2; -> %r3 = %r1;
-                            (
-                                VMInstruction::Copy(VMCopy {
-                                    dst: dst1,
-                                    src: src1,
-                                }),
-                                VMInstruction::Copy(VMCopy {
-                                    dst: dst2,
-                                    src: src2,
-                                }),
-                            ) if dst1 == src2 && dst1 != dst2 => {
-                                block.instructions[instr_idx] = VMInstruction::Copy(VMCopy {
-                                    dst: *dst2,
-                                    src: *src1,
-                                });
-                                remove_next = true;
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    if remove_current {
-                        block.instructions.remove(instr_idx);
-                        block.instruction_spans.remove(instr_idx);
-                        changed = true;
-                    } else if remove_next {
-                        block.instructions.remove(instr_idx + 1);
-                        block.instruction_spans.remove(instr_idx + 1);
-                        changed = true;
-                    } else {
-                        instr_idx += 1;
-                    }
-                }
-            }
-
-            for block_opt in blocks.iter_mut() {
-                if let Some(block) = block_opt
-                    && !referenced.contains(&block.id)
-                {
-                    *block_opt = None;
-                    changed = true;
-                }
-            }
-        }
-
-        blocks
     }
 
     fn new(func: LirFunction, is_global: bool) -> Self {

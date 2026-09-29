@@ -11,6 +11,7 @@ use ustr::{Ustr, UstrMap, UstrSet};
 
 mod block;
 mod function;
+mod optimizer;
 mod ssa;
 
 struct BlockLoweringCtx<'a> {

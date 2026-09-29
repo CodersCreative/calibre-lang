@@ -54,7 +54,7 @@ impl LirLowering for MirReturn {
                     span,
                     condition: cond,
                     then_block: then_id,
-                    else_block: else_id,
+                    else_block: Some(else_id),
                 });
 
                 env.switch_to(then_id);
@@ -83,7 +83,6 @@ impl LirLowering for MirConditional {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
         let then_id = env.create_block();
         let else_id = env.create_block();
-        let merge_id = env.create_block();
 
         let temp = env.get_temp();
         env.declare_temp_null(span, temp);
@@ -93,14 +92,14 @@ impl LirLowering for MirConditional {
             span,
             condition: cond,
             then_block: then_id,
-            else_block: else_id,
+            else_block: Some(else_id),
         });
 
         env.switch_to(then_id);
         let then_val = env.lower_node(*self.then);
-        if env.current_block_open() {
+        let then_open = env.current_block_open();
+        if then_open {
             env.assign_temp_if_non_null(span, temp, then_val);
-            env.jump_if_open(span, merge_id);
         }
 
         env.switch_to(else_id);
@@ -109,14 +108,32 @@ impl LirLowering for MirConditional {
         } else {
             LirNodeType::null()
         };
-
-        if env.current_block_open() {
+        let else_open = env.current_block_open();
+        if else_open {
             env.assign_temp_if_non_null(span, temp, else_val);
-            env.jump_if_open(span, merge_id);
         }
 
-        env.switch_to(merge_id);
-        LirNodeType::Load(LirLoad { value: temp })
+        if then_open && else_open {
+            let merge_id = env.create_block();
+            env.switch_to(then_id);
+            env.jump_if_open(span, merge_id);
+
+            env.switch_to(else_id);
+            env.jump_if_open(span, merge_id);
+
+            env.switch_to(merge_id);
+            LirNodeType::Load(LirLoad { value: temp })
+        } else if then_open {
+            env.switch_to(then_id);
+            LirNodeType::Load(LirLoad { value: temp })
+        } else if else_open {
+            env.switch_to(else_id);
+            LirNodeType::Load(LirLoad { value: temp })
+        } else {
+            let continue_id = env.create_block();
+            env.switch_to(continue_id);
+            LirNodeType::Load(LirLoad { value: temp })
+        }
     }
 }
 

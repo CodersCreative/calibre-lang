@@ -247,14 +247,18 @@ impl<'a> BlockLoweringCtx<'a> {
                 } else {
                     cond
                 };
+
                 self.emit(
                     VMInstruction::Branch(VMBranch {
                         cond: cond_reg,
                         then_block,
-                        else_block,
                     }),
                     span,
                 );
+
+                if let Some(else_block) = else_block {
+                    self.emit(VMInstruction::Jump(VMJump { target: else_block }), span);
+                }
             }
             LirTerminator::Return { span, value } => {
                 let value = match value {
