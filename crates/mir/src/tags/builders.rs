@@ -43,6 +43,7 @@ impl MiddleEnvironment {
                 (
                     *field,
                     (
+                        Vec::new(),
                         ParserDataType::new(span, ParserInnerType::Option(Box::new(ty.clone()))),
                         node.clone().map(|x| {
                             AstNode::call(

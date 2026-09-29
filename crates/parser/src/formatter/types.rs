@@ -1,11 +1,10 @@
-use ustr::Ustr;
-
 use crate::{
     ast::{
         ObjectType,
         idents::PotentialDollarIdentifier,
         nodes::{
             AstNode,
+            misc::StandaloneTag,
             types::{
                 AstImpl, AstImplTrait, AstTrait, AstType, Overload, TraitMemberKind, TypeDefType,
             },
@@ -14,6 +13,7 @@ use crate::{
     },
     formatter::{AstFormatting, Formatter, handle_comment},
 };
+use ustr::Ustr;
 
 impl AstFormatting for AstImpl {
     type PreFormat = ();
@@ -244,6 +244,7 @@ impl TypeDefPreFormat {
 
                 #[allow(clippy::type_complexity)]
                 let entries: Vec<(
+                    Vec<StandaloneTag>,
                     PotentialDollarIdentifier,
                     Option<ParserDataType>,
                     Option<String>,
@@ -251,15 +252,21 @@ impl TypeDefPreFormat {
                 )> = variants
                     .iter()
                     .map(|arm| {
-                        let leading = formatter.get_potential_comment(arm.0.span());
-                        let trailing = formatter.get_trailing_comment(arm.0.span());
-                        (arm.0.clone(), arm.1.clone(), leading, trailing)
+                        let leading = formatter.get_potential_comment(arm.1.span());
+                        let trailing = formatter.get_trailing_comment(arm.1.span());
+                        (
+                            arm.0.clone(),
+                            arm.1.clone(),
+                            arm.2.clone(),
+                            leading,
+                            trailing,
+                        )
                     })
                     .collect();
 
                 let has_comments = entries
                     .iter()
-                    .any(|(_, _, leading, trailing)| leading.is_some() || trailing.is_some());
+                    .any(|(_, _, _, leading, trailing)| leading.is_some() || trailing.is_some());
 
                 let (single, multi) = if has_comments {
                     Self::format_enum_with_comments(
@@ -299,6 +306,7 @@ impl TypeDefPreFormat {
     #[allow(clippy::type_complexity)]
     fn format_enum_with_comments(
         entries: &[(
+            Vec<StandaloneTag>,
             PotentialDollarIdentifier,
             Option<ParserDataType>,
             Option<String>,
@@ -310,7 +318,7 @@ impl TypeDefPreFormat {
     ) -> (String, String) {
         let single = entries
             .iter()
-            .map(|(name, data, _, _)| {
+            .map(|(_, name, data, _, _)| {
                 if let Some(x) = data {
                     format!("{} : {}, ", name, x)
                 } else {
@@ -322,7 +330,7 @@ impl TypeDefPreFormat {
 
         let multi = entries
             .iter()
-            .map(|(name, data, leading, trailing)| {
+            .map(|(_, name, data, leading, trailing)| {
                 let base = if let Some(x) = data {
                     format!("{} : {}", name, x)
                 } else {
@@ -348,6 +356,7 @@ impl TypeDefPreFormat {
     #[allow(clippy::type_complexity)]
     fn format_enum_grouped(
         entries: &[(
+            Vec<StandaloneTag>,
             PotentialDollarIdentifier,
             Option<ParserDataType>,
             Option<String>,
@@ -357,33 +366,32 @@ impl TypeDefPreFormat {
         default_variant: usize,
         formatter: &mut Formatter,
     ) -> (String, String) {
-        let groups: Vec<(Vec<String>, Option<String>)> =
-            entries
-                .iter()
-                .enumerate()
-                .fold(Vec::new(), |mut groups, (i, (name, data, _, _))| {
-                    let data_txt: Option<String> = data.as_ref().map(|x| x.to_string());
-                    let _default_idx = groups
-                        .iter()
-                        .position(|(_, dt)| dt == &data_txt)
-                        .unwrap_or(groups.len());
+        let groups: Vec<(Vec<String>, Option<String>)> = entries.iter().enumerate().fold(
+            Vec::new(),
+            |mut groups, (i, (_, name, data, _, _))| {
+                let data_txt: Option<String> = data.as_ref().map(|x| x.to_string());
+                let _default_idx = groups
+                    .iter()
+                    .position(|(_, dt)| dt == &data_txt)
+                    .unwrap_or(groups.len());
 
-                    if let Some((names, last_data)) = groups.last_mut()
-                        && *last_data == data_txt
-                        && i != default_variant
-                    {
-                        names.push(name.to_string());
-                    } else {
-                        groups.push((vec![name.to_string()], data_txt));
-                    }
-                    groups
-                });
+                if let Some((names, last_data)) = groups.last_mut()
+                    && *last_data == data_txt
+                    && i != default_variant
+                {
+                    names.push(name.to_string());
+                } else {
+                    groups.push((vec![name.to_string()], data_txt));
+                }
+                groups
+            },
+        );
 
-        let default_idx = if let Some(_idx) = entries.iter().position(|(_, _, _, _)| true) {
+        let default_idx = if let Some(_idx) = entries.iter().position(|(_, _, _, _, _)| true) {
             groups
                 .iter()
                 .position(|(names, _)| {
-                    entries.iter().position(|(name, _, _, _)| {
+                    entries.iter().position(|(_, name, _, _, _)| {
                         name.to_string() == names.first().map(|s| s.as_str()).unwrap_or("")
                     }) == Some(default_variant)
                 })
@@ -448,8 +456,9 @@ impl TypeDefPreFormat {
         (single, multi)
     }
 
+    #[allow(clippy::type_complexity)]
     fn format_struct_map_vec(
-        map: &[(Ustr, (ParserDataType, Option<AstNode>))],
+        map: &[(Ustr, (Vec<StandaloneTag>, ParserDataType, Option<AstNode>))],
         formatter: &mut Formatter,
     ) -> (String, String, bool) {
         #[allow(clippy::type_complexity)]
@@ -462,15 +471,34 @@ impl TypeDefPreFormat {
             bool,
         )> = map
             .iter()
-            .map(|(key, (value, default_value))| {
+            .map(|(key, (tags, value, default_value))| {
                 let leading = formatter.get_potential_comment(&value.span);
                 let trailing = formatter.get_trailing_comment(&value.span);
                 let type_txt = value.to_string();
-                let field_txt = if let Some(default) = default_value {
-                    format!("{} : {} = {}", key, type_txt, default.format(formatter))
+
+                let field_txt = if tags.is_empty() {
+                    String::new()
                 } else {
-                    format!("{} : {}", key, type_txt)
+                    format!(
+                        "{}\n",
+                        tags.iter()
+                            .map(|x| x.format(formatter))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    )
                 };
+                let field_txt = if let Some(default) = default_value {
+                    format!(
+                        "{}{} : {} = {}",
+                        field_txt,
+                        key,
+                        type_txt,
+                        default.format(formatter)
+                    )
+                } else {
+                    format!("{}{} : {}", field_txt, key, type_txt)
+                };
+
                 (
                     key.to_string(),
                     type_txt,
@@ -537,13 +565,24 @@ impl TypeDefPreFormat {
     }
 
     fn format_struct_tuple_vec(
-        items: &[(ParserDataType, Option<AstNode>)],
+        items: &[(Vec<StandaloneTag>, ParserDataType, Option<AstNode>)],
         formatter: &mut Formatter,
     ) -> (String, String, bool) {
         let fields_str = items
             .iter()
-            .map(|(data_type, default_value)| {
-                let mut txt = data_type.to_string();
+            .map(|(tags, data_type, default_value)| {
+                let mut txt = if tags.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "{} ",
+                        tags.iter()
+                            .map(|x| x.format(formatter))
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    )
+                };
+                txt.push_str(&data_type.to_string());
                 if let Some(default) = default_value {
                     txt.push_str(&format!(" = {}", default.format(formatter)));
                 }

@@ -1,6 +1,6 @@
 use crate::ast::ObjectType;
 use crate::ast::idents::ParserText;
-use crate::ast::nodes::misc::AstTag;
+use crate::ast::nodes::misc::StandaloneTag;
 use crate::ast::nodes::types::{
     AstImpl, AstImplTrait, AstTrait, AstType, Overload, TraitMember, TraitMemberKind, TypeDefType,
 };
@@ -24,11 +24,17 @@ impl<'a> AstParser<'a> for TypeDefType {
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let struct_named_fields = select! { Token::LeftBracket => () }
             .ignore_then(
-                data.dollar_ident
-                    .clone()
+                StandaloneTag::parser(data.clone())
+                    .padded_by(potential_new_line())
                     .repeated()
-                    .at_least(1)
                     .collect::<Vec<_>>()
+                    .then(
+                        data.dollar_ident
+                            .clone()
+                            .repeated()
+                            .at_least(1)
+                            .collect::<Vec<_>>(),
+                    )
                     .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
                     .then(data.data_type.clone())
                     .then(
@@ -44,11 +50,11 @@ impl<'a> AstParser<'a> for TypeDefType {
             .then_ignore(select! { Token::RightBracket => () })
             .map(|groups| {
                 let mut fields = Vec::new();
-                for ((names, ty), default_value) in groups {
+                for (((tags, names), ty), default_value) in groups {
                     for name in names {
                         fields.push((
                             Ustr::from(&name.text().clone()),
-                            (ty.clone(), default_value.clone()),
+                            (tags.clone(), ty.clone(), default_value.clone()),
                         ));
                     }
                 }
@@ -59,8 +65,11 @@ impl<'a> AstParser<'a> for TypeDefType {
 
         let struct_tuple_fields = select! { Token::LeftParen => () }
             .ignore_then(
-                data.data_type
-                    .clone()
+                StandaloneTag::parser(data.clone())
+                    .padded_by(potential_new_line())
+                    .repeated()
+                    .collect::<Vec<_>>()
+                    .then(data.data_type.clone())
                     .separated_by(select! { Token::Comma => () })
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -69,13 +78,16 @@ impl<'a> AstParser<'a> for TypeDefType {
             )
             .then_ignore(select! { Token::RightParen => () })
             .map(|types| TypeDefType::Struct {
-                fields: ObjectType::Tuple(types.into_iter().map(|t| (t, None)).collect()),
+                fields: ObjectType::Tuple(
+                    types.into_iter().map(|(tags, t)| (tags, t, None)).collect(),
+                ),
             });
 
         let enum_parser = select! { Token::Enum => () }
             .ignore_then(select! { Token::LeftBracket => () })
             .ignore_then(
-                AstTag::parser(data.clone())
+                StandaloneTag::parser(data.clone())
+                    .padded_by(potential_new_line())
                     .repeated()
                     .collect::<Vec<_>>()
                     .or_not()
@@ -119,14 +131,14 @@ impl<'a> AstParser<'a> for TypeDefType {
 
                 for (idx, group) in groups.iter().enumerate() {
                     for (name, data_type, default_val, tags) in group {
-                        variants.push((name.clone(), data_type.clone()));
-
                         for tag in tags {
                             if *tag.tag == "default" {
                                 default_variant = Some(idx);
                                 default_value = default_val.clone().map(Box::new);
                             }
                         }
+
+                        variants.push((tags.clone(), name.clone(), data_type.clone()));
                     }
                 }
 

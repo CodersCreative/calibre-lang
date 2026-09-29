@@ -8,6 +8,7 @@ use crate::{
         nodes::{
             AstNode, AstNodeType,
             functions::{AstFunction, FunctionHeader},
+            misc::StandaloneTag,
         },
         types::{GenericTypes, ParserDataType},
     },
@@ -18,12 +19,16 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TypeDefType {
     Enum {
-        variants: Vec<(PotentialDollarIdentifier, Option<ParserDataType>)>,
+        variants: Vec<(
+            Vec<StandaloneTag>,
+            PotentialDollarIdentifier,
+            Option<ParserDataType>,
+        )>,
         default_variant: Option<usize>,
         default_value: Option<Box<AstNode>>,
     },
     Struct {
-        fields: ObjectType<(ParserDataType, Option<AstNode>)>,
+        fields: ObjectType<(Vec<StandaloneTag>, ParserDataType, Option<AstNode>)>,
     },
     NewType(Box<ParserDataType>),
 }
@@ -35,27 +40,35 @@ impl TypeDefType {
                 fields: match fields {
                     ObjectType::Map(xs) => ObjectType::Map(
                         xs.iter()
-                            .map(|(k, (v, _default))| (*k, (v.substitute(subst), None)))
+                            .map(|(k, (tags, v, _))| {
+                                (*k, (tags.clone(), v.substitute(subst), None))
+                            })
                             .collect(),
                     ),
                     ObjectType::Tuple(xs) => ObjectType::Tuple(
                         xs.iter()
-                            .map(|(v, _default)| (v.substitute(subst), None))
+                            .map(|(tags, v, _)| (tags.clone(), v.substitute(subst), None))
                             .collect(),
                     ),
                 },
             },
             TypeDefType::Enum {
                 variants,
-                default_variant,
                 default_value,
+                default_variant,
             } => TypeDefType::Enum {
                 variants: variants
                     .iter()
-                    .map(|(k, v)| (k.clone(), v.as_ref().map(|p| p.substitute(subst))))
+                    .map(|(tags, k, v)| {
+                        (
+                            tags.clone(),
+                            k.clone(),
+                            v.as_ref().map(|p| p.substitute(subst)),
+                        )
+                    })
                     .collect(),
-                default_variant: *default_variant,
                 default_value: default_value.clone(),
+                default_variant: *default_variant,
             },
             TypeDefType::NewType(inner) => TypeDefType::NewType(Box::new(inner.substitute(subst))),
         }
@@ -67,7 +80,7 @@ impl IdentifiersUsed for TypeDefType {
         let mut names = Vec::new();
         match self {
             TypeDefType::Enum { variants, .. } => {
-                for (_, potential_type) in variants {
+                for (_, _, potential_type) in variants {
                     if let Some(potential) = potential_type {
                         names.extend(potential.identifiers_used());
                     }
@@ -75,7 +88,7 @@ impl IdentifiersUsed for TypeDefType {
             }
             TypeDefType::Struct { fields } => {
                 if let ObjectType::Map(field_map) = fields {
-                    for (_, (potential_type, default_value)) in field_map {
+                    for (_, (_, potential_type, default_value)) in field_map {
                         names.extend(potential_type.identifiers_used());
                         if let Some(default) = default_value {
                             names.extend(default.identifiers_used());

@@ -393,7 +393,7 @@ impl MiddleTypeDefType {
                 variants: {
                     let mut lst = Vec::new();
 
-                    for (k, v) in variants {
+                    for (_, k, v) in variants {
                         lst.push((
                             env.resolve(scope, &k, ResolutionOptions::default().with_dollar())
                                 .unwrap_or_else(|_| Ustr::from(&k.to_string())),
@@ -413,7 +413,7 @@ impl MiddleTypeDefType {
 
                 match fields {
                     ObjectType::Map(field_map) => {
-                        for (k, (t, v)) in field_map {
+                        for (k, (_, t, v)) in field_map {
                             let resolved_type = env
                                 .resolve_data_type(scope, &t, ResolutionOptions::typing())
                                 .unwrap_or(t);
@@ -421,7 +421,7 @@ impl MiddleTypeDefType {
                         }
                     }
                     ObjectType::Tuple(types) => {
-                        for (t, v) in types {
+                        for (_, t, v) in types {
                             let resolved_type = env
                                 .resolve_data_type(scope, &t, ResolutionOptions::typing())
                                 .unwrap_or(t);

@@ -1,5 +1,5 @@
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
-use crate::ast::nodes::misc::{AstImport, AstParen, AstTag, AstTest};
+use crate::ast::nodes::misc::{AstImport, AstParen, AstTag, AstTest, StandaloneTag};
 use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
 use crate::{
     lexer::Token,
@@ -88,6 +88,35 @@ impl<'a> AstParser<'a> for AstImport {
                 module,
                 alias,
                 values,
+            })
+    }
+}
+
+impl<'a> AstParser<'a> for StandaloneTag {
+    type Data = StatementData<'a>;
+
+    #[inline(always)]
+    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+        select! { Token::At => () }
+            .ignore_then(ParserText::parser(()))
+            .then(
+                select! { Token::LeftParen => () }
+                    .ignore_then(
+                        data.node
+                            .clone()
+                            .separated_by(select! { Token::Comma => () })
+                            .allow_trailing()
+                            .collect::<Vec<_>>()
+                            .or_not()
+                            .map(|x| x.unwrap_or_default()),
+                    )
+                    .then_ignore(select! { Token::RightParen => () })
+                    .or_not()
+                    .map(|x| x.unwrap_or_default()),
+            )
+            .map(|(tag, args)| StandaloneTag {
+                tag,
+                arguments: args,
             })
     }
 }

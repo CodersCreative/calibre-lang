@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         idents::PotentialDollarIdentifier,
-        nodes::misc::{AstImport, AstParen, AstTag, AstTest},
+        nodes::misc::{AstImport, AstParen, AstTag, AstTest, StandaloneTag},
     },
     formatter::{AstFormatting, Formatter},
 };
@@ -87,6 +87,27 @@ impl AstFormatting for AstImport {
             formatter.fmt_txt_with_tab(&value_lines.join(",\n"), 1, true),
             get_module(&self.module)
         )
+    }
+}
+
+impl AstFormatting for StandaloneTag {
+    type PreFormat = ();
+
+    fn narrow_format(&self, formatter: &mut Formatter) -> String {
+        let args = if self.arguments.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "({})",
+                self.arguments
+                    .iter()
+                    .map(|arg| arg.format(formatter))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+
+        format!("@{}{}", self.tag, args)
     }
 }
 

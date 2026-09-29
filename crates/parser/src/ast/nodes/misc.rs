@@ -23,6 +23,12 @@ pub struct AstImport {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct StandaloneTag {
+    pub tag: ParserText,
+    pub arguments: Vec<AstNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstTag {
     pub node: Box<AstNode>,
     pub tag: ParserText,
