@@ -153,6 +153,11 @@ pub struct LirRefLoad {
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
+pub struct LirDiscriminant {
+    pub value: Box<LirNodeType>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirIndex {
     pub base: Box<LirNodeType>,
     pub index: Box<LirNodeType>,
@@ -220,6 +225,7 @@ pub struct LirEmit {
 pub enum LirNodeType {
     Noop,
 
+    Discriminant(LirDiscriminant),
     Call(LirCall),
     Deref(LirDeref),
     Ref(LirRef),
@@ -436,6 +442,7 @@ impl Display for LirNodeType {
                         None => String::new(),
                     }
                 ),
+                Self::Discriminant(LirDiscriminant { value }) => format!("discriminant {}", value),
                 Self::Index(LirIndex { base, index }) => format!("{}[{}]", base, index),
                 Self::Member(LirMember { base, field }) => format!("{}.{}", base, field),
             }

@@ -264,7 +264,10 @@ impl Registry {
     fn load(path: &PathBuf) -> Self {
         let file = std::fs::File::open(path);
         if let Ok(mut f) = file
-            && let Ok(reg) = bincode::deserialize_from::<_, Registry>(&mut f)
+            && let Ok(reg) = bincode_next::serde::decode_from_std_read::<Registry, _, _>(
+                &mut f,
+                bincode_next::config::standard(),
+            )
         {
             return reg;
         }
@@ -273,7 +276,7 @@ impl Registry {
 
     fn save(&self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let mut f = std::fs::File::create(path)?;
-        bincode::serialize_into(&mut f, self)?;
+        bincode_next::serde::encode_into_std_write(self, &mut f, bincode_next::config::standard())?;
         Ok(())
     }
 

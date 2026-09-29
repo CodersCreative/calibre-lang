@@ -7,12 +7,22 @@ CallExpression
 */
 
 use crate::{
-    ast::{LirCall, LirIndex, LirLValue, LirLoad, LirMember, LirMove, LirNodeType},
+    ast::{
+        LirCall, LirDiscriminant, LirIndex, LirLValue, LirLoad, LirMember, LirMove, LirNodeType,
+    },
     environment::LirEnvironment,
     translate::LirLowering,
 };
-use calibre_mir::ast::{MirCall, MirField, MirIndex};
+use calibre_mir::ast::{MirCall, MirDiscriminant, MirField, MirIndex};
 use calibre_parser::{Span, ast::types::ParserInnerType};
+
+impl LirLowering for MirDiscriminant {
+    fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
+        LirNodeType::Discriminant(LirDiscriminant {
+            value: Box::new(env.lower_node(*self.value)),
+        })
+    }
+}
 
 impl LirLowering for MirField {
     #[inline(always)]

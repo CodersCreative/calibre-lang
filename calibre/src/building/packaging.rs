@@ -68,12 +68,18 @@ impl CalibrePackaging for CalibreEngine {
         if readable {
             serde_json::to_writer_pretty(&mut writer, &package)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-                .map_err(CalibreError::Io)
+                .map_err(CalibreError::Io)?;
         } else {
-            bincode::serialize_into(&mut writer, &package)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-                .map_err(CalibreError::Io)
+            bincode_next::serde::encode_into_std_write(
+                &package,
+                &mut writer,
+                bincode_next::config::standard(),
+            )
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+            .map_err(CalibreError::Io)?;
         }
+
+        Ok(())
     }
 
     fn try_load_packaged_program(
@@ -99,7 +105,10 @@ impl CalibrePackaging for CalibreEngine {
             }
         }
 
-        match bincode::deserialize_from::<_, PackagedProgramBlob>(&mut reader) {
+        match bincode_next::serde::decode_from_reader::<PackagedProgramBlob, _, _>(
+            &mut reader,
+            bincode_next::config::standard(),
+        ) {
             Ok(cache) => Ok(Some(cache)),
             Err(_) => {
                 let _ = fs::remove_file(path_ref);

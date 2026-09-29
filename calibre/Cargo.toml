@@ -64,9 +64,9 @@ tracing-appender = { workspace = true, optional = true }
 smol = { workspace = true, optional = true }
 derive_builder = { workspace = true }
 
-bincode = "1"
+bincode-next = { version = "3", features = ["serde"] }
 serde_json = "1"
-blake3 = "1.6.1"
+blake3 = "1.6"
 ustr = { workspace = true }
 include_dir = "0.7"
 toml_edit = "0.25"

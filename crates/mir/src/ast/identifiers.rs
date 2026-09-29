@@ -1,8 +1,8 @@
 use crate::ast::{
     MiddleNode, MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean,
-    MirBreak, MirCall, MirComparison, MirConditional, MirDeref, MirDrop, MirEmit, MirEnum,
-    MirField, MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg,
-    MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
+    MirBreak, MirCall, MirComparison, MirConditional, MirDeref, MirDiscriminant, MirDrop, MirEmit,
+    MirEnum, MirField, MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove,
+    MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
 };
 use calibre_parser::UstrIdentifiersUsed;
 use ustr::{Ustr, UstrSet};
@@ -46,6 +46,7 @@ impl UstrIdentifiersUsed for MiddleNode {
                 value,
                 data_type: _,
             })
+            | MiddleNodeType::Discriminant(MirDiscriminant { value })
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::AsExpression(MirAs {
                 value,
@@ -195,6 +196,7 @@ impl MiddleNode {
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::Spawn(MirSpawn { value })
+            | MiddleNodeType::Discriminant(MirDiscriminant { value })
             | MiddleNodeType::AsExpression(MirAs {
                 value,
                 data_type: _,
@@ -353,6 +355,7 @@ impl MiddleNode {
             | MiddleNodeType::DerefStatement(MirDeref { value })
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::Spawn(MirSpawn { value })
+            | MiddleNodeType::Discriminant(MirDiscriminant { value })
             | MiddleNodeType::AsExpression(MirAs {
                 value,
                 data_type: _,

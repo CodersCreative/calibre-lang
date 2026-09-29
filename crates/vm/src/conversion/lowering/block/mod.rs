@@ -215,6 +215,7 @@ impl<'a> BlockLoweringCtx<'a> {
             LirNodeType::RefLoad(x) => x.lower(self, span),
             LirNodeType::Index(x) => x.lower(self, span),
             LirNodeType::Member(x) => x.lower(self, span),
+            LirNodeType::Discriminant(x) => x.lower(self, span),
 
             LirNodeType::ExternFunction(x) => x.lower(self, span),
             LirNodeType::Assign(x) => x.lower(self, span),

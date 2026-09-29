@@ -253,6 +253,7 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::Return(x) => x.lower(self, span),
             MiddleNodeType::Break(x) => x.lower(self, span),
             MiddleNodeType::Continue(x) => x.lower(self, span),
+            MiddleNodeType::Discriminant(x) => x.lower(self, span),
             MiddleNodeType::FieldAccess(x) => x.lower(self, span),
             MiddleNodeType::IndexAccess(x) => x.lower(self, span),
             MiddleNodeType::DerefStatement(x) => x.lower(self, span),

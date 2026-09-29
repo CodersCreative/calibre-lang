@@ -2,7 +2,7 @@ use crate::{
     MutationHandle, PathSegment, VM,
     conversion::{
         VMBlock,
-        instructions::access::{VMIndex, VMLoadMember, VMSetIndex, VMSetMember},
+        instructions::access::{VMDiscriminant, VMIndex, VMLoadMember, VMSetIndex, VMSetMember},
     },
     error::RuntimeError,
     evaluate::{
@@ -17,6 +17,26 @@ use dumpster::sync::Gc;
 use std::sync::Arc;
 use tracing::instrument;
 use ustr::Ustr;
+
+impl VMEvaluation for VMDiscriminant {
+    fn run(
+        &self,
+        vm: &mut VM,
+        _block: &VMBlock,
+        _ip: u32,
+        _prev_block: Option<BlockId>,
+    ) -> Result<TerminateValue, RuntimeError> {
+        let value = match vm.get_reg_value(self.value) {
+            RuntimeValue::Enum(_, index, _) => *index as i64,
+            RuntimeValue::Option(Some(_)) | RuntimeValue::Result(Ok(_)) => 0,
+            RuntimeValue::Option(None) | RuntimeValue::Result(Err(_)) => 1,
+            _ => 0,
+        };
+
+        vm.set_reg_value(self.dst, RuntimeValue::Int(value));
+        Ok(TerminateValue::None)
+    }
+}
 
 #[inline]
 fn resolve_element_index(len: usize, index: &RuntimeValue) -> Result<Option<usize>, RuntimeError> {

@@ -413,6 +413,11 @@ pub struct MirEmit {
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
+pub struct MirDiscriminant {
+    pub value: Box<MiddleNode>,
+}
+
+#[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirField {
     pub base: Box<MiddleNode>,
     pub field: Ustr,
@@ -526,6 +531,7 @@ pub enum MiddleNodeType {
     AsExpression(MirAs),
     IsExpression(MirIs),
 
+    Discriminant(MirDiscriminant),
     FieldAccess(MirField),
     IndexAccess(MirIndex),
     CallExpression(MirCall),
@@ -761,6 +767,15 @@ impl From<MiddleNodeType> for AstNodeType {
                 base: Box::new((*value.base).into()),
                 index: Box::new((*value.index).into()),
             }),
+            MiddleNodeType::Discriminant(MirDiscriminant { value }) => {
+                AstNodeType::CallExpression(AstCall {
+                    string_fn: None,
+                    caller: Box::new(AstNode::identifier(Span::default(), "discriminant")),
+                    generic_types: Vec::new(),
+                    args: vec![CallArg::Value((*value).into())],
+                    reverse_args: Vec::new(),
+                })
+            }
             MiddleNodeType::CallExpression(value) => AstNodeType::CallExpression(AstCall {
                 string_fn: None,
                 generic_types: Vec::new(),

@@ -62,6 +62,7 @@ impl VMEvaluation for VMInstruction {
             VMInstruction::SetMember(x) => x.run(vm, block, ip, prev_block),
             VMInstruction::Index(x) => x.run(vm, block, ip, prev_block),
             VMInstruction::SetIndex(x) => x.run(vm, block, ip, prev_block),
+            VMInstruction::Discriminant(x) => x.run(vm, block, ip, prev_block),
 
             // Memory
             VMInstruction::Ref(x) => x.run(vm, block, ip, prev_block),

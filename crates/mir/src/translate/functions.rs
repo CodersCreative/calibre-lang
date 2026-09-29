@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirConditional, MirExtern, MirFunction,
-        MirReturn, MirScopeDecl, MirVarDecl,
+        MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirConditional, MirDiscriminant,
+        MirExtern, MirFunction, MirReturn, MirScopeDecl, MirVarDecl,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -965,6 +965,17 @@ impl MirLowering for AstCall {
             }
             AstNodeType::Identifier(caller_ident) => {
                 match caller_ident.value.get_ident().text().as_str() {
+                    "discriminant" if self.args.len() == 1 => {
+                        return Ok(MiddleNode::new(
+                            MiddleNodeType::Discriminant(MirDiscriminant {
+                                value: Box::new(
+                                    AstNode::from(self.args.pop().unwrap())
+                                        .lower(env, scope, span)?,
+                                ),
+                            }),
+                            span,
+                        ));
+                    }
                     "tuple" => {
                         return Ok(env.aggregate_from_call_nodes(
                             scope,
@@ -1125,6 +1136,12 @@ impl MirLowering for AstCall {
                 }
                 "curry" if self.args.len() == 1 && self.reverse_args.is_empty() => {
                     return env.resolve_curried_type(scope, self.args[0].get_node());
+                }
+                "discriminant" => {
+                    return Some(ParserDataType {
+                        data_type: ParserInnerType::Int,
+                        span,
+                    });
                 }
                 _ => {}
             }

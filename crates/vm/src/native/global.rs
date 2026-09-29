@@ -365,23 +365,3 @@ impl NativeFunction for IsWhitespace {
         }
     }
 }
-
-pub struct DiscriminantFn;
-
-impl NativeFunction for DiscriminantFn {
-    fn name(&self) -> String {
-        String::from("discriminant")
-    }
-    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
-
-        Ok(RuntimeValue::Int(
-            match env.resolve_value(pop_or_null(&mut args))? {
-                RuntimeValue::Enum(_, index, _) => index as i64,
-                RuntimeValue::Option(Some(_)) | RuntimeValue::Result(Ok(_)) => 0,
-                RuntimeValue::Option(None) | RuntimeValue::Result(Err(_)) => 1,
-                _ => 0,
-            },
-        ))
-    }
-}

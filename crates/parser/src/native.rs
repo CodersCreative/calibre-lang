@@ -455,11 +455,6 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::Null)),
                     },
                 ),
-                (
-                    "discriminant",
-                    vec![ParserInnerType::Dynamic],
-                    ParserInnerType::Int,
-                ),
                 ("async.channel_new", vec![], ParserInnerType::Host),
                 (
                     "async.channel_send",

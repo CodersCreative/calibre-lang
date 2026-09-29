@@ -80,7 +80,10 @@ impl PackagedProgramBlob {
             let mut reader = std::io::BufReader::new(file);
 
             included.push(
-                match bincode::deserialize_from::<_, PackagedProgramBlob>(&mut reader) {
+                match bincode_next::serde::decode_from_reader::<PackagedProgramBlob, _, _>(
+                    &mut reader,
+                    bincode_next::config::standard(),
+                ) {
                     Ok(content) => content,
                     Err(_) => {
                         match serde_json::from_reader::<_, PackagedProgramBlob>(&mut reader) {

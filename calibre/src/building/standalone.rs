@@ -14,7 +14,7 @@ use ustr::Ustr;
 #[cfg(feature = "cli")]
 use std::fs::{self, File};
 
-const CACHE_FORMAT_VERSION: &str = "v9";
+const CACHE_FORMAT_VERSION: &str = "v10";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedProgramBlob {
@@ -219,7 +219,9 @@ impl CalibreStandalone for CalibreEngine {
             let mut hasher = blake3::Hasher::new();
 
             for manifest in &self.included {
-                let serialized = bincode::serialize(manifest).unwrap_or_default();
+                let serialized =
+                    bincode_next::serde::encode_to_vec(manifest, bincode_next::config::standard())
+                        .unwrap_or_default();
                 hasher.update(&serialized);
             }
 
@@ -299,7 +301,10 @@ impl CalibreStandalone for CalibreEngine {
             }
         }
 
-        match bincode::deserialize_from::<_, CachedProgramBlob>(&mut reader) {
+        match bincode_next::serde::decode_from_reader::<CachedProgramBlob, _, _>(
+            &mut reader,
+            bincode_next::config::standard(),
+        ) {
             Ok(cache) => Ok(Some(cache)),
             Err(_) => {
                 let _ = fs::remove_file(&path);
@@ -350,9 +355,13 @@ impl CalibreStandalone for CalibreEngine {
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
                 .map_err(CalibreError::Io)?;
         } else {
-            bincode::serialize_into(&mut writer, &cache)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-                .map_err(CalibreError::Io)?;
+            bincode_next::serde::encode_into_std_write(
+                &cache,
+                &mut writer,
+                bincode_next::config::standard(),
+            )
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+            .map_err(CalibreError::Io)?;
         }
         Ok(())
     }

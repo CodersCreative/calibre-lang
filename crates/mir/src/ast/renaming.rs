@@ -38,6 +38,7 @@ impl AlphaRenamable for MiddleNodeType {
                     v.rename(state);
                 }
             }
+            MiddleNodeType::Discriminant(value) => value.value.rename(state),
             MiddleNodeType::Emit(value) => value.value.rename(state),
             MiddleNodeType::Spawn(value) => value.value.rename(state),
             MiddleNodeType::RefStatement(MirRef {

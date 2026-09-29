@@ -1,7 +1,7 @@
 use crate::conversion::{
     Reg,
     instructions::{
-        access::{VMIndex, VMLoadMember, VMSetIndex, VMSetMember},
+        access::{VMDiscriminant, VMIndex, VMLoadMember, VMSetIndex, VMSetMember},
         binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
         functions::{VMCall, VMCallSelf, VMSpawn},
         literals::{VMAggregate, VMEnum, VMList, VMRange},
@@ -60,6 +60,7 @@ pub enum VMInstruction {
     Spawn(VMSpawn),
 
     // Access
+    Discriminant(VMDiscriminant),
     LoadMember(VMLoadMember),
     SetMember(VMSetMember),
     Index(VMIndex),
@@ -100,6 +101,7 @@ impl VMInstruction {
         | VMInstruction::SetMember(VMSetMember { dst, .. })
         | VMInstruction::Index(VMIndex { dst, .. })
         | VMInstruction::SetIndex(VMSetIndex { dst, .. })
+        | VMInstruction::Discriminant(VMDiscriminant { dst, .. })
         // Memory
         | VMInstruction::Ref(VMRef { dst, .. })
         | VMInstruction::Deref(VMDeref { dst, .. })
@@ -141,6 +143,7 @@ impl VMInstruction {
         | VMInstruction::SetMember(VMSetMember { dst, .. })
         | VMInstruction::Index(VMIndex { dst, .. })
         | VMInstruction::SetIndex(VMSetIndex { dst, .. })
+        | VMInstruction::Discriminant(VMDiscriminant { dst, .. })
         // Memory
         | VMInstruction::Ref(VMRef { dst, .. })
         | VMInstruction::Deref(VMDeref { dst, .. })
@@ -184,6 +187,7 @@ impl VMInstruction {
             VMInstruction::Copy(VMCopy { src, .. })
             | VMInstruction::Ref(VMRef { value: src, .. })
             | VMInstruction::Deref(VMDeref { value: src, .. })
+            | VMInstruction::Discriminant(VMDiscriminant { value: src, .. })
             | VMInstruction::LoadRegRef(VMLoadRegRef { src, .. })
             | VMInstruction::Spawn(VMSpawn { callee: src, .. })
             | VMInstruction::Is(VMIs { src, .. })
@@ -296,6 +300,7 @@ impl Display for VMInstruction {
             VMInstruction::SetMember(x) => x.fmt(f),
             VMInstruction::Index(x) => x.fmt(f),
             VMInstruction::SetIndex(x) => x.fmt(f),
+            VMInstruction::Discriminant(x) => x.fmt(f),
 
             // Memory
             VMInstruction::Ref(x) => x.fmt(f),

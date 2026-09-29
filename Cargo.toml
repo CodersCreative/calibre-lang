@@ -32,21 +32,21 @@ calibre-fmt = { path = "./fmt" }
 
 # Other common packages
 fastrand = "2"
-clap = { version = "4.5.40", features = ["derive"] }
-rustc-hash = "2.1.1"
+clap = { version = "4", features = ["derive"] }
+rustc-hash = "2"
 serde = {version = "1", features = ["derive"]}
 thiserror = "2"
-rustyline = "17"
+rustyline = "18"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 tracing-flame = "0.2"
 tracing-appender = "0.2"
-smol = "2.0.2"
-derive_builder = "0.20.2"
-indextree = {version = "4.9.0", features = ["serde"]}
-wasm_thread = "0.3.3"
-wasm_sync = "0.1.2"
-ustr = {version = "1.1.0", features = ["serde"]}
+smol = "2"
+derive_builder = "0.20"
+indextree = {version = "4", features = ["serde"]}
+wasm_thread = "0.3"
+wasm_sync = "0.1"
+ustr = {version = "1", features = ["serde"]}
 mimalloc = "0.1"
 
 [workspace.lints.clippy]

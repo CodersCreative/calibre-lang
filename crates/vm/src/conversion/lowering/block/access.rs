@@ -12,7 +12,7 @@ use crate::conversion::{
     Reg,
     instructions::{
         VMInstruction,
-        access::{VMIndex, VMLoadMember},
+        access::{VMDiscriminant, VMIndex, VMLoadMember},
         functions::{VMCall, VMCallSelf},
         memory::{VMDeref, VMRef},
         registers::VMCopy,
@@ -21,9 +21,22 @@ use crate::conversion::{
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
 use calibre_lir::ast::{
-    LirCall, LirDeref, LirIndex, LirLoad, LirMember, LirMove, LirNodeType, LirRef, LirRefLoad,
+    LirCall, LirDeref, LirDiscriminant, LirIndex, LirLoad, LirMember, LirMove, LirNodeType, LirRef,
+    LirRefLoad,
 };
 use calibre_parser::Span;
+
+impl VMLowering for LirDiscriminant {
+    fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
+        let value = env.lower_node(*self.value, span);
+        let dst = env.alloc_reg();
+        env.emit(
+            VMInstruction::Discriminant(VMDiscriminant { dst, value }),
+            span,
+        );
+        dst
+    }
+}
 
 impl VMLowering for LirCall {
     #[inline(always)]
