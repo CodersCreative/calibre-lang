@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::{
     environment::MiddleEnvironment,
     scoping::{FullyQualifiedPath, MiddleScope, ScopeId, Scoping},
@@ -14,6 +12,7 @@ use calibre_parser::ast::{
 use indextree::Arena;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tracing::instrument;
 use ustr::{Ustr, UstrMap, UstrSet};
 
@@ -91,7 +90,7 @@ impl From<&Symbols> for ManifestSymbols {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ManifestScope {
     pub namespace: Ustr,
-    pub fully_qualified_path: Rc<FullyQualifiedPath>,
+    pub fully_qualified_path: Arc<FullyQualifiedPath>,
     pub mappings: UstrMap<Ustr>,
     pub type_mappings: UstrMap<ParserInnerType>,
     pub children: UstrMap<ScopeId>,

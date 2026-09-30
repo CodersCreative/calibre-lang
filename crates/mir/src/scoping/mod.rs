@@ -5,7 +5,7 @@ use calibre_parser::{
 };
 use indextree::{Arena, Node, NodeId};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, path::PathBuf, rc::Rc};
+use std::{fmt::Display, path::PathBuf, sync::Arc};
 use ustr::{Ustr, UstrMap, UstrSet};
 
 pub mod resolve;
@@ -157,7 +157,7 @@ impl Scoping {
 
         self.add_scope(
             MiddleScope {
-                fully_qualified_path: Rc::new(FullyQualifiedPath::get(self, parent, namespace)),
+                fully_qualified_path: Arc::new(FullyQualifiedPath::get(self, parent, namespace)),
                 macros: UstrMap::default(),
                 macro_args: UstrMap::default(),
                 namespace: namespace.cloned().unwrap_or_default(),
@@ -362,7 +362,7 @@ pub struct ScopeMacro {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct FullyQualifiedPath {
     name: Option<Ustr>,
-    parent: Option<Rc<FullyQualifiedPath>>,
+    parent: Option<Arc<FullyQualifiedPath>>,
 }
 
 impl FullyQualifiedPath {
@@ -411,7 +411,7 @@ impl Display for FullyQualifiedPath {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleScope {
     pub namespace: Ustr,
-    pub fully_qualified_path: Rc<FullyQualifiedPath>,
+    pub fully_qualified_path: Arc<FullyQualifiedPath>,
     pub mappings: UstrMap<Ustr>,
     pub type_mappings: UstrMap<ParserInnerType>,
     pub macros: UstrMap<ScopeMacro>,
