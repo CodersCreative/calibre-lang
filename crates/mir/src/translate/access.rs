@@ -3,7 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::resolve::{ResolutionOptions, StrOrAstNode},
+    symbols::resolve::{KeyOrAstNode, ResolutionOptions},
     translate::MirLowering,
     typing::MiddleTypeDefType,
 };
@@ -313,8 +313,8 @@ impl MirLowering for AstIdentifier {
         Ok(MiddleNode::identifier(
             span,
             match env.resolve_potential_node(scope, &self.value, ResolutionOptions::idents())? {
-                StrOrAstNode::Str(x) => x,
-                StrOrAstNode::Node(x) => return x.lower(env, scope, span),
+                KeyOrAstNode::Str(x) => x,
+                KeyOrAstNode::Node(x) => return x.lower(env, scope, span),
             },
         ))
     }
@@ -329,12 +329,12 @@ impl MirLowering for AstIdentifier {
             .resolve_potential_node(scope, &self.value, ResolutionOptions::idents())
             .ok()?
         {
-            StrOrAstNode::Str(iden) => env
+            KeyOrAstNode::Str(iden) => env
                 .symbols
                 .variables
                 .get(&iden)
                 .map(|x| x.data_type.clone()),
-            StrOrAstNode::Node(x) => x.type_of(env, scope, span),
+            KeyOrAstNode::Node(x) => x.type_of(env, scope, span),
         }
     }
 }

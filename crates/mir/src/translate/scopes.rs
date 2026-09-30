@@ -49,6 +49,9 @@ impl MirLowering for AstScopeDef {
         let mut create_new_scope = self.create_new_scope.unwrap_or(true);
         let mut macro_args_to_insert: Vec<(Ustr, AstNode)> = Vec::new();
 
+        let in_temp_scope = env.context.in_temp_scope;
+        env.context.in_temp_scope = self.is_temp;
+
         if let Some(named) = self.named {
             if self.define {
                 let name = env.resolve(
@@ -68,6 +71,8 @@ impl MirLowering for AstScopeDef {
                     .scope_mut_or_err(scope)?
                     .macros
                     .insert(name, scope_macro);
+
+                env.context.in_temp_scope = in_temp_scope;
 
                 return Ok(MiddleNode {
                     node_type: MiddleNodeType::EmptyLine,
@@ -107,6 +112,8 @@ impl MirLowering for AstScopeDef {
                     }),
                 ));
 
+                env.context.in_temp_scope = in_temp_scope;
+
                 return AstLoop {
                     loop_type: Box::new(LoopType::Loop),
                     body: Box::new(AstNode::new_temp_scope_with_create(
@@ -115,7 +122,10 @@ impl MirLowering for AstScopeDef {
                     )),
                     until: None,
                     label: Some(named.name),
-                    else_body: Some(Box::new(AstNode::new(span, AstNodeType::Null))),
+                    else_body: Some(Box::new(AstNode::new_temp_scope(vec![AstNode::new(
+                        span,
+                        AstNodeType::Null,
+                    )]))),
                 }
                 .lower(env, scope, span);
             }
@@ -247,6 +257,8 @@ impl MirLowering for AstScopeDef {
                     .insert(scope_macro.0, scope_macro.1);
             }
         }
+
+        env.context.in_temp_scope = in_temp_scope;
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {

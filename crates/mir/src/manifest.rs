@@ -1,7 +1,7 @@
 use crate::{
     environment::MiddleEnvironment,
     scoping::{FullyQualifiedPath, MiddleScope, ScopeId, Scoping},
-    symbols::{MiddleOverload, MiddleVariable, Symbols},
+    symbols::{MiddleOverload, MiddleVariable, Symbols, VariableKey},
     tags::{Tagging, context::PackageMetadata},
     typing::Typing,
 };
@@ -68,7 +68,7 @@ impl From<&Tagging> for ManifestTagging {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ManifestSymbols {
-    pub variables: UstrMap<MiddleVariable>,
+    pub variables: FxHashMap<VariableKey, MiddleVariable>,
     pub native_mappings: UstrMap<Ustr>,
     pub overloads: Vec<MiddleOverload>,
     pub generic_fn_templates: UstrMap<(Vec<Ustr>, FunctionHeader, AstNode)>,

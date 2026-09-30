@@ -244,8 +244,6 @@ impl MirLowering for AstDeclaration {
             ResolutionOptions::default().with_dollar(),
         )?;
 
-        let new_name = Ustr::from(&ParserText::temp_name_with_suffix(identifier.trim(), span).text);
-
         if let AstNodeType::CallExpression(AstCall {
             caller,
             generic_types,
@@ -291,19 +289,21 @@ impl MirLowering for AstDeclaration {
 
         if let AstNodeType::FunctionDeclaration(func) = &self.value.node_type {
             is_function = true;
-            env.handle_function_template(scope, func, new_name);
+            env.handle_function_template(scope, func, identifier);
 
             for tag in &env.tagging.tag_info {
                 match tag {
                     TagInfo::Init(priority) => {
-                        env.tagging.init_functions.push((*priority, new_name))
+                        env.tagging.init_functions.push((*priority, identifier))
                     }
-                    TagInfo::Fin(priority) => env.tagging.fin_functions.push((*priority, new_name)),
+                    TagInfo::Fin(priority) => {
+                        env.tagging.fin_functions.push((*priority, identifier))
+                    }
                     _ => {}
                 }
             }
 
-            env.process_parameter_defaults(scope, &func.header, new_name, identifier);
+            env.process_parameter_defaults(scope, &func.header, identifier, identifier);
         }
 
         let node_ty = self.value.type_of(env, scope, span);
@@ -318,25 +318,13 @@ impl MirLowering for AstDeclaration {
             env.compare_types(data_type, node_ty, Some(&TagInfo::IgnoreInvalidLet), span)?;
 
         if is_function {
-            env.register_variable(
-                scope,
-                identifier,
-                new_name,
-                data_type.clone(),
-                self.var_type,
-            )?;
+            env.register_variable(scope, identifier, data_type.clone(), self.var_type)?;
         }
 
         let mut value = self.value.lower_or_empty(env, scope, span);
 
         if !is_function {
-            env.register_variable(
-                scope,
-                identifier,
-                new_name,
-                data_type.clone(),
-                self.var_type,
-            )?;
+            env.register_variable(scope, identifier, data_type.clone(), self.var_type)?;
         }
 
         if matches!(data_type.data_type, ParserInnerType::DynamicTraits(_)) {
@@ -353,7 +341,7 @@ impl MirLowering for AstDeclaration {
         Ok(MiddleNode::new(
             MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: self.var_type,
-                identifier: new_name,
+                identifier,
                 value: Box::new(value),
                 data_type,
             }),

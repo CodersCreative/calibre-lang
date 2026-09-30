@@ -1,5 +1,8 @@
 use crate::{
-    ast::MiddleNode, environment::MiddleEnvironment, scoping::ScopeId, translate::MirLowering,
+    ast::{MiddleNode, types::MirDataType},
+    environment::MiddleEnvironment,
+    scoping::{FullyQualifiedPath, ScopeId},
+    translate::MirLowering,
 };
 use calibre_parser::{
     Location,
@@ -11,7 +14,7 @@ use calibre_parser::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, rc::Rc};
+use std::{fmt::Debug, rc::Rc, sync::Arc};
 use ustr::{Ustr, UstrMap};
 
 pub mod node;
@@ -20,8 +23,8 @@ pub mod resolve;
 
 #[derive(Debug, Clone, Default)]
 pub struct Symbols {
-    pub variables: UstrMap<MiddleVariable>,
-    pub native_mappings: UstrMap<Ustr>,
+    pub variables: FxHashMap<VariableKey, MiddleVariable>,
+    pub native_mappings: UstrMap<VariableKey>,
     pub overloads: Vec<MiddleOverload>,
     pub generic_fn_templates: UstrMap<(Vec<Ustr>, FunctionHeader, AstNode)>,
     pub specialization_decls_by_scope: FxHashMap<ScopeId, Vec<MiddleNode>>,
@@ -66,18 +69,51 @@ impl FunctionParamDefault {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct VariableKey {
+    pub fully_qualified_path: Arc<FullyQualifiedPath>,
+    pub shadow_counter: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TypeKey {
+    pub fully_qualified_path: Arc<FullyQualifiedPath>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MiddleVariable {
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
     pub var_type: VarType,
     pub location: Option<Location>,
+    pub key: VariableKey,
+}
+
+impl MiddleVariable {
+    pub fn get_key(&self) -> VariableKey {
+        VariableKey {
+            fully_qualified_path: Arc::new(FullyQualifiedPath {
+                name: Some(self.name),
+                parent: Some(self.fully_qualified_path.clone()),
+            }),
+            shadow_counter: self.shadow_counter,
+        }
+    }
+
+    pub fn fully_qualified_name(&self) -> String {
+        format!("{}::{}", self.fully_qualified_path, self.name)
+    }
+
+    pub fn matches_fqp_prefix(&self, prefix: &FullyQualifiedPath) -> bool {
+        self.fully_qualified_path.as_ref() == prefix
+            || self.fully_qualified_path.is_child_of(prefix)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MiddleOverload {
     pub operator: Operator,
-    pub parameters: Vec<ParserDataType>,
-    pub return_type: ParserDataType,
+    pub parameters: Vec<MirDataType>,
+    pub return_type: MirDataType,
     pub func: AstNode,
     pub generic_params: Vec<Ustr>,
 }

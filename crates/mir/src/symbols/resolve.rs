@@ -1,7 +1,9 @@
 use crate::{
+    ast::types::MirDataType,
     environment::MiddleEnvironment,
     errors::MiddleErr::{self},
     scoping::ScopeId,
+    symbols::{TypeKey, VariableKey},
     typing::{MiddleTrait, MiddleTypeDefType},
 };
 use calibre_parser::{
@@ -12,15 +14,44 @@ use calibre_parser::{
         types::{ParserDataType, ParserInnerType},
     },
 };
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::{fmt::Display, str::FromStr, write};
 use tracing::{instrument, trace, warn};
-use ustr::{Ustr, UstrMap};
+use ustr::Ustr;
 
 #[derive(PartialEq)]
-pub enum StrOrAstNode {
-    Str(Ustr),
+pub enum KeyOrAstNode {
+    Key(Key),
     Node(Box<AstNode>),
+}
+
+#[derive(PartialEq)]
+pub enum Key {
+    TypeKey(TypeKey),
+    VariableKey(VariableKey),
+}
+
+impl Key {
+    pub fn unwrap_typing(self) -> TypeKey {
+        match self {
+            Self::TypeKey(x) => x,
+            Self::VariableKey(x) => panic!("Called unwrap_typing on variable_key : {}", x),
+        }
+    }
+
+    pub fn unwrap_variable(self) -> VariableKey {
+        match self {
+            Self::VariableKey(x) => x,
+            Self::TypeKey(x) => panic!("Called unwrap_variable on type_key : {}", x),
+        }
+    }
+
+    pub fn unwrap_dollar(self) -> Ustr {
+        match self {
+            Self::TypeKey(x) => x.fully_qualified_path.name.unwrap(),
+            Self::VariableKey(x) => x.fully_qualified_path.name.unwrap(),
+        }
+    }
 }
 
 pub enum IdentifierType<'a> {
@@ -150,9 +181,9 @@ impl ResolutionOptions {
 impl MiddleEnvironment {
     pub fn resolve_member_fn_type(
         &self,
-        ty: &ParserDataType,
+        ty: &MirDataType,
         member: &impl ToString,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.resolve_member_fn_name(ty, member)
             .and_then(|name| self.symbols.variables.get(&name))
             .map(|var| var.data_type.clone())
@@ -164,12 +195,12 @@ impl MiddleEnvironment {
         base: &ParserDataType,
         member: &Ustr,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         fn trait_member_type(
-            defs: &UstrMap<MiddleTrait>,
+            defs: &FxHashMap<TypeKey, MiddleTrait>,
             trait_name: &Ustr,
             member: &Ustr,
-        ) -> Option<ParserDataType> {
+        ) -> Option<MirDataType> {
             let root = defs
                 .iter()
                 .find(|(name, _)| ParserText::temp_name_suffix_matches(name, &trait_name))
@@ -184,9 +215,11 @@ impl MiddleEnvironment {
                 let Some(def) = defs.get(&current) else {
                     continue;
                 };
+
                 if let Some(m) = def.members.get(member) {
                     return Some(m.data_type.clone());
                 }
+
                 for implied in &def.implied_traits {
                     if let Some((resolved, _)) = defs
                         .iter()
@@ -207,35 +240,26 @@ impl MiddleEnvironment {
             .ok()?
             .unwrap_all_refs();
 
-        let out = match &resolved.data_type {
-            ParserInnerType::Struct(struct_name) => self
+        let out = match &resolved {
+            MirDataType::StructWithGenerics { identifier, .. } => self
                 .typing
-                .find_object_for_struct_name(&Ustr::from(struct_name))
+                .find_object_for_struct_name(identifier)
                 .and_then(|obj| match &obj.object_type {
                     MiddleTypeDefType::Struct(fields) => {
                         fields.get(member).map(|(ty, _)| ty.clone())
                     }
                     _ => None,
                 }),
-            ParserInnerType::StructWithGenerics { identifier, .. } => self
-                .typing
-                .find_object_for_struct_name(&Ustr::from(identifier))
-                .and_then(|obj| match &obj.object_type {
-                    MiddleTypeDefType::Struct(fields) => {
-                        fields.get(member).map(|(ty, _)| ty.clone())
-                    }
-                    _ => None,
-                }),
-            ParserInnerType::Tuple(values) => member
+            MirDataType::Tuple(values) => member
                 .parse::<usize>()
                 .ok()
                 .and_then(|idx| values.get(idx).cloned()),
-            ParserInnerType::Option(inner) | ParserInnerType::Ptr(inner)
+            MirDataType::Option(inner) | MirDataType::Ptr(inner)
                 if member == "next" || member == "0" =>
             {
                 Some((**inner).clone())
             }
-            ParserInnerType::Result { ok, err } => {
+            MirDataType::Result { ok, err } => {
                 if member == "ok" || member == "0" {
                     Some((**ok).clone())
                 } else if member == "err" || member == "1" {
@@ -244,13 +268,13 @@ impl MiddleEnvironment {
                     if ok.data_type == err.data_type {
                         Some((**ok).clone())
                     } else {
-                        Some(ParserDataType::new(span, ParserInnerType::Dynamic))
+                        Some(MirDataType::Dynamic)
                     }
                 } else {
                     None
                 }
             }
-            ParserInnerType::DynamicTraits(traits) => {
+            MirDataType::DynamicTraits(traits) => {
                 for tr in traits {
                     if let Some(found) =
                         trait_member_type(&self.typing.trait_defs, &Ustr::from(tr), member)
@@ -287,14 +311,14 @@ impl MiddleEnvironment {
 
     pub fn resolve_member_fn_name(
         &self,
-        ty: &ParserDataType,
+        ty: &MirDataType,
         member: &impl ToString,
-    ) -> Option<Ustr> {
+    ) -> Option<VariableKey> {
         let symbol_name = self.typing.find_impl_member(ty, member)?.symbol_name;
 
         self.symbols.variables.get(&symbol_name).and_then(|var| {
             if var.data_type.clone().unwrap_all_refs().is_callable() {
-                Some(Ustr::from(&symbol_name))
+                Some(symbol_name)
             } else {
                 None
             }
@@ -307,56 +331,24 @@ impl MiddleEnvironment {
         scope: ScopeId,
         ident: impl Into<IdentifierType<'a>>,
         options: ResolutionOptions,
-    ) -> Result<Ustr, MiddleErr> {
-        let mut current = match self.resolve_inner(scope, ident, options)? {
-            StrOrAstNode::Node(x) => {
+    ) -> Result<Key, MiddleErr> {
+        Ok(match self.resolve_potential_node(scope, ident, options)? {
+            KeyOrAstNode::Node(x) => {
                 return Err(self
                     .context
                     .err_at_current(MiddleErr::UnexpectedMacroArgType(x.to_string())));
             }
-            StrOrAstNode::Str(x) => x,
-        };
-
-        for _ in 0..64 {
-            match self.resolve_inner(scope, current, options) {
-                Ok(StrOrAstNode::Str(x)) if current != x => current = x,
-                _ => break,
-            }
-        }
-
-        Ok(current)
+            KeyOrAstNode::Key(x) => x,
+        })
     }
 
     #[instrument(skip_all)]
-    pub fn resolve_potential_node<'a>(
+    fn resolve_potential_node<'a>(
         &'a self,
         scope: ScopeId,
         ident: impl Into<IdentifierType<'a>>,
         options: ResolutionOptions,
-    ) -> Result<StrOrAstNode, MiddleErr> {
-        let mut current = match self.resolve_inner(scope, ident, options)? {
-            StrOrAstNode::Node(x) => return Ok(StrOrAstNode::Node(x)),
-            StrOrAstNode::Str(x) => x,
-        };
-
-        for _ in 0..64 {
-            match self.resolve_inner(scope, current, options) {
-                Ok(StrOrAstNode::Str(x)) if current != x => current = x,
-                Ok(StrOrAstNode::Node(x)) => return Ok(StrOrAstNode::Node(x)),
-                _ => break,
-            }
-        }
-
-        Ok(StrOrAstNode::Str(current))
-    }
-
-    #[instrument(skip_all)]
-    fn resolve_inner<'a>(
-        &'a self,
-        scope: ScopeId,
-        ident: impl Into<IdentifierType<'a>>,
-        options: ResolutionOptions,
-    ) -> Result<StrOrAstNode, MiddleErr> {
+    ) -> Result<KeyOrAstNode, MiddleErr> {
         let ident = ident.into();
         trace!(ident = %ident, "Resolving identifier");
 
@@ -391,7 +383,7 @@ impl MiddleEnvironment {
                         PotentialDollarIdentifier::DollarIdentifier(x) => Ustr::from(&x.text),
                     },
                     _ => {
-                        return Ok(StrOrAstNode::Node(Box::new(resolved.clone())));
+                        return Ok(KeyOrAstNode::Node(Box::new(resolved.clone())));
                     }
                 }
             }
@@ -408,7 +400,7 @@ impl MiddleEnvironment {
             match ParserInnerType::from_str(&ident) {
                 Ok(ParserInnerType::Struct(_) | ParserInnerType::StructWithGenerics { .. })
                 | Err(_) => {}
-                _ => return Ok(StrOrAstNode::Str(ident)),
+                _ => return Ok(KeyOrAstNode::Str(ident)),
             }
         }
 
@@ -420,13 +412,13 @@ impl MiddleEnvironment {
                     || self.typing.trait_defs.contains_key(&ident)
                     || self.typing.impls.contains_key(&ident)
                 {
-                    return Ok(StrOrAstNode::Str(ident));
+                    return Ok(KeyOrAstNode::Str(ident));
                 }
 
                 let ty = ParserDataType::from(ParserInnerType::from_str(&ident).unwrap());
 
                 if ty.clone().is_native() {
-                    return Ok(StrOrAstNode::Str(ident));
+                    return Ok(KeyOrAstNode::Str(ident));
                 }
 
                 let scope_ref = self.scoping.scope_or_err(current_scope)?;
@@ -436,29 +428,76 @@ impl MiddleEnvironment {
                     .get(&Ustr::from(&ty.impl_name()))
                     .cloned()
                 {
-                    return Ok(StrOrAstNode::Str(Ustr::from(
+                    return Ok(KeyOrAstNode::Str(Ustr::from(
                         &ParserDataType::from(x).impl_name(),
                     )));
                 }
 
                 if options.name_resolution {
-                    if self.symbols.variables.contains_key(&ident) {
-                        return Ok(StrOrAstNode::Str(ident));
+                    // Try to find variable in current scope using composite key
+                    let scope_fqp = &scope_ref.fully_qualified_path;
+                    let mut found_var = None;
+                    let mut highest_counter = None;
+
+                    for (key, var) in self.symbols.variables.iter() {
+                        if var.name == ident && key.fully_qualified_path.as_ref() == scope_fqp {
+                            match (highest_counter, key.shadow_counter) {
+                                (None, Some(counter)) => {
+                                    highest_counter = Some(counter);
+                                    found_var = Some(var);
+                                }
+                                (Some(highest), Some(counter)) if counter > highest => {
+                                    highest_counter = Some(counter);
+                                    found_var = Some(var);
+                                }
+                                (None, None) => {
+                                    found_var = Some(var);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+
+                    if let Some(var) = found_var {
+                        return Ok(KeyOrAstNode::Str(var.name));
                     }
 
                     if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
-                        return Ok(StrOrAstNode::Str(x));
+                        return Ok(KeyOrAstNode::Str(x));
                     }
                 }
             } else if options.name_resolution {
-                if self.symbols.variables.contains_key(&ident) {
-                    return Ok(StrOrAstNode::Str(ident));
+                // Try to find variable in current scope using composite key
+                let scope_ref = self.scoping.scope_or_err(current_scope)?;
+                let scope_fqp = &scope_ref.fully_qualified_path;
+                let mut found_var = None;
+                let mut highest_counter = None;
+
+                for (key, var) in self.symbols.variables.iter() {
+                    if var.name == ident && key.fully_qualified_path.as_ref() == scope_fqp {
+                        match (highest_counter, key.shadow_counter) {
+                            (None, Some(counter)) => {
+                                highest_counter = Some(counter);
+                                found_var = Some(var);
+                            }
+                            (Some(highest), Some(counter)) if counter > highest => {
+                                highest_counter = Some(counter);
+                                found_var = Some(var);
+                            }
+                            (None, None) => {
+                                found_var = Some(var);
+                            }
+                            _ => {}
+                        }
+                    }
                 }
 
-                let scope_ref = self.scoping.scope_or_err(current_scope)?;
+                if let Some(var) = found_var {
+                    return Ok(KeyOrAstNode::Str(var.name));
+                }
 
                 if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
-                    return Ok(StrOrAstNode::Str(x));
+                    return Ok(KeyOrAstNode::Str(x));
                 }
             } else {
                 break;
@@ -467,31 +506,31 @@ impl MiddleEnvironment {
 
         if options.type_resolution {
             for key in self.typing.trait_defs.keys() {
-                if ParserText::temp_name_suffix_matches(key, &ident) {
-                    return Ok(StrOrAstNode::Str(*key));
+                if key == &ident {
+                    return Ok(KeyOrAstNode::Str(*key));
                 }
             }
 
             for key in self.typing.objects.keys() {
-                if ParserText::temp_name_suffix_matches(key, &ident) {
-                    return Ok(StrOrAstNode::Str(*key));
+                if key == &ident {
+                    return Ok(KeyOrAstNode::Str(*key));
                 }
             }
 
             for key in self.typing.impls.keys() {
-                if ParserText::temp_name_suffix_matches(key, &ident) {
-                    return Ok(StrOrAstNode::Str(*key));
+                if key == &ident {
+                    return Ok(KeyOrAstNode::Str(*key));
                 }
             }
 
             if self.scoping.all_time_generics.contains(&ident) {
-                return Ok(StrOrAstNode::Str(ident));
+                return Ok(KeyOrAstNode::Str(ident));
             }
 
             if options.name_resolution {
-                for key in self.symbols.variables.keys() {
-                    if ParserText::temp_name_suffix_matches(key, &ident) {
-                        return Ok(StrOrAstNode::Str(*key));
+                for (key, var) in self.symbols.variables.iter() {
+                    if var.name == ident {
+                        return Ok(KeyOrAstNode::Str(var.name));
                     }
                 }
             }
@@ -499,7 +538,7 @@ impl MiddleEnvironment {
             match ParserInnerType::from_str(&ident) {
                 Ok(ParserInnerType::Struct(_) | ParserInnerType::StructWithGenerics { .. })
                 | Err(_) => {}
-                _ => return Ok(StrOrAstNode::Str(ident)),
+                _ => return Ok(KeyOrAstNode::Str(ident)),
             }
 
             return Err(self
@@ -508,12 +547,12 @@ impl MiddleEnvironment {
         }
 
         if !options.name_resolution {
-            return Ok(StrOrAstNode::Str(ident));
+            return Ok(KeyOrAstNode::Str(ident));
         }
 
-        for key in self.symbols.variables.keys() {
-            if ParserText::temp_name_suffix_matches(key, &ident) {
-                return Ok(StrOrAstNode::Str(*key));
+        for (key, var) in self.symbols.variables.iter() {
+            if var.name == ident {
+                return Ok(KeyOrAstNode::Str(var.name));
             }
         }
 
@@ -639,55 +678,47 @@ impl MiddleEnvironment {
         scope: ScopeId,
         data_type: impl Into<&'a ParserInnerType>,
         options: ResolutionOptions,
-    ) -> Result<ParserDataType, MiddleErr> {
+    ) -> Result<MirDataType, MiddleErr> {
         let data_type = data_type.into();
         trace!(data_type = %data_type, "Resolving type");
 
         Ok(match data_type {
-            ParserInnerType::Struct(identifier) => ParserDataType {
-                data_type: ParserInnerType::Struct(
-                    self.resolve(scope, identifier, options)?.to_string(),
-                ),
-                span: self.context.current_span(),
+            ParserInnerType::Struct(identifier) => MirDataType::Struct {
+                identifier: match self.resolve(scope, identifier, options)? {
+                    Key::TypeKey(x) => x,
+                    _ => return Err(MiddleErr::Object(identifier.to_string())),
+                },
+                generic_types: Vec::new(),
             },
             ParserInnerType::StructWithGenerics {
                 identifier,
                 generic_types,
             } => {
-                let id = self.resolve(scope, identifier, options)?;
-
-                let mut resolved_gens: Vec<ParserDataType> = Vec::new();
+                let mut resolved_gens: Vec<MirDataType> = Vec::new();
                 for g in generic_types {
                     resolved_gens.push(self.resolve_data_type(scope, g, options)?);
                 }
 
-                if id == "ptr" && resolved_gens.len() == 1 {
-                    return Ok(ParserDataType {
-                        data_type: ParserInnerType::Ptr(Box::new(resolved_gens.remove(0))),
-                        span: self.context.current_span(),
-                    });
+                if identifier == "ptr" && resolved_gens.len() == 1 {
+                    return Ok(MirDataType::Ptr(Box::new(resolved_gens.remove(0))));
                 }
 
-                if id == "list" && resolved_gens.len() == 1 {
-                    return Ok(ParserDataType {
-                        data_type: ParserInnerType::List(Box::new(resolved_gens.remove(0))),
-                        span: self.context.current_span(),
-                    });
+                if identifier == "list" && resolved_gens.len() == 1 {
+                    return Ok(MirDataType::List(Box::new(resolved_gens.remove(0))));
                 }
 
-                if id == "gen" && resolved_gens.len() == 1 {
-                    return Ok(ParserDataType {
-                        data_type: ParserInnerType::Gen(Box::new(resolved_gens.remove(0))),
-                        span: self.context.current_span(),
-                    });
+                if identifier == "gen" && resolved_gens.len() == 1 {
+                    return Ok(MirDataType::Gen(Box::new(resolved_gens.remove(0))));
                 }
 
-                ParserDataType {
-                    data_type: ParserInnerType::StructWithGenerics {
-                        identifier: id.to_string(),
-                        generic_types: resolved_gens,
-                    },
-                    span: self.context.current_span(),
+                let identifier = match self.resolve(scope, identifier, options)? {
+                    Key::TypeKey(x) => x,
+                    _ => return Err(MiddleErr::Object(identifier.to_string())),
+                };
+
+                MirDataType::Struct {
+                    identifier,
+                    generic_types: resolved_gens,
                 }
             }
             ParserInnerType::Tuple(x) => {
@@ -697,81 +728,57 @@ impl MiddleEnvironment {
                     lst.push(self.resolve_data_type(scope, x, options)?);
                 }
 
-                ParserDataType {
-                    data_type: ParserInnerType::Tuple(lst),
-                    span: self.context.current_span(),
-                }
+                MirDataType::Tuple(lst)
             }
             ParserInnerType::Function {
                 return_type,
                 parameters,
-            } => ParserDataType {
-                data_type: ParserInnerType::Function {
-                    return_type: Box::new(self.resolve_data_type(
-                        scope,
-                        return_type.as_ref(),
-                        options,
-                    )?),
-                    parameters: {
-                        let mut params = Vec::new();
+            } => MirDataType::Function {
+                return_type: Box::new(self.resolve_data_type(
+                    scope,
+                    return_type.as_ref(),
+                    options,
+                )?),
+                parameters: {
+                    let mut params = Vec::new();
 
-                        for param in parameters {
-                            params.push(self.resolve_data_type(scope, param, options)?);
-                        }
+                    for param in parameters {
+                        params.push(self.resolve_data_type(scope, param, options)?);
+                    }
 
-                        params
-                    },
+                    params
                 },
-                span: self.context.current_span(),
             },
-            ParserInnerType::Ref(d_type, mutability) => ParserDataType {
-                data_type: ParserInnerType::Ref(
-                    Box::new(self.resolve_data_type(scope, d_type.as_ref(), options)?),
-                    *mutability,
-                ),
-                span: self.context.current_span(),
-            },
-            ParserInnerType::List(x) => ParserDataType {
-                data_type: ParserInnerType::List(Box::new(self.resolve_data_type(
-                    scope,
-                    x.as_ref(),
-                    options,
-                )?)),
-                span: self.context.current_span(),
-            },
-            ParserInnerType::Ptr(x) => ParserDataType {
-                data_type: ParserInnerType::Ptr(Box::new(self.resolve_data_type(
-                    scope,
-                    x.as_ref(),
-                    options,
-                )?)),
-                span: self.context.current_span(),
-            },
-            ParserInnerType::Option(x) => ParserDataType {
-                data_type: ParserInnerType::Option(Box::new(self.resolve_data_type(
-                    scope,
-                    x.as_ref(),
-                    options,
-                )?)),
-                span: self.context.current_span(),
-            },
-            ParserInnerType::Gen(x) => ParserDataType {
-                data_type: ParserInnerType::Gen(Box::new(self.resolve_data_type(
-                    scope,
-                    x.as_ref(),
-                    options,
-                )?)),
-                span: self.context.current_span(),
-            },
-            ParserInnerType::Result { ok, err } => ParserDataType {
-                data_type: ParserInnerType::Result {
-                    err: Box::new(self.resolve_data_type(scope, err.as_ref(), options)?),
-                    ok: Box::new(self.resolve_data_type(scope, ok.as_ref(), options)?),
-                },
-                span: self.context.current_span(),
+            ParserInnerType::Ref(d_type, mutability) => MirDataType::Ref(
+                Box::new(self.resolve_data_type(scope, d_type.as_ref(), options)?),
+                *mutability,
+            ),
+            ParserInnerType::List(x) => MirDataType::List(Box::new(self.resolve_data_type(
+                scope,
+                x.as_ref(),
+                options,
+            )?)),
+            ParserInnerType::Ptr(x) => MirDataType::Ptr(Box::new(self.resolve_data_type(
+                scope,
+                x.as_ref(),
+                options,
+            )?)),
+            ParserInnerType::Option(x) => MirDataType::Option(Box::new(self.resolve_data_type(
+                scope,
+                x.as_ref(),
+                options,
+            )?)),
+            ParserInnerType::Gen(x) => MirDataType::Gen(Box::new(self.resolve_data_type(
+                scope,
+                x.as_ref(),
+                options,
+            )?)),
+            ParserInnerType::Result { ok, err } => MirDataType::Result {
+                err: Box::new(self.resolve_data_type(scope, err.as_ref(), options)?),
+                ok: Box::new(self.resolve_data_type(scope, ok.as_ref(), options)?),
             },
             ParserInnerType::Scope(x) => {
-                let mut lst = Vec::new();
+                /*let mut lst = Vec::new();
 
                 for x in x {
                     lst.push(
@@ -792,7 +799,8 @@ impl MiddleEnvironment {
                 ParserDataType {
                     data_type: ParserInnerType::Scope(lst),
                     span: self.context.current_span(),
-                }
+                }*/
+                todo!()
             }
             ParserInnerType::DollarIdentifier(x) => {
                 if let Some(node) = self.scoping.resolve_macro_arg(scope, &Ustr::from(x)) {
@@ -806,23 +814,16 @@ impl MiddleEnvironment {
                     return Err(self.context.err_at_current(MiddleErr::MacroArg(x.clone())));
                 }
             }
-            ParserInnerType::DynamicTraits(traits) => ParserDataType {
-                data_type: ParserInnerType::DynamicTraits(
-                    traits
-                        .iter()
-                        .map(|t| {
-                            self.resolve(scope, t, ResolutionOptions::typing())
-                                .map(|x| x.to_string())
-                                .unwrap_or(t.to_string())
-                        })
-                        .collect(),
-                ),
-                span: self.context.current_span(),
-            },
-            x => ParserDataType {
-                data_type: x.clone(),
-                span: self.context.current_span(),
-            },
+            ParserInnerType::DynamicTraits(traits) => MirDataType::DynamicTraits(
+                traits
+                    .iter()
+                    .map(|t| {
+                        self.resolve(scope, t, ResolutionOptions::typing())
+                            .map(|x| x.unwrap_typing())
+                    })
+                    .collect::<Result<Vec<_>, MiddleErr>>()?,
+            ),
+            x => x.into(),
         }
         .verify())
     }

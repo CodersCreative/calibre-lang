@@ -2,12 +2,12 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{FullyQualifiedPath, MiddleScope, ScopeId, Scoping},
+    symbols::resolve::ResolutionOptions,
     translate::MirLowering,
 };
 use calibre_parser::{
     Parser,
     ast::{
-        idents::ParserText,
         nodes::{AstNodeType, VarType, scopes::AstScopeDef},
         types::ParserDataType,
     },
@@ -145,12 +145,18 @@ impl MiddleEnvironment {
         vars.append(&mut funcs);
 
         for (name, var) in vars {
-            let name = Ustr::from(name);
-            let new_name = Ustr::from(&ParserText::temp_name_with_suffix(name, var.span).text);
+            let original_name = Ustr::from(name);
 
-            let _ = self.register_variable(scope, name, new_name, var.clone(), VarType::Constant);
+            let data_type = self.resolve_data_type(scope, var, ResolutionOptions::typing())?;
+            let name = self.register_variable_with_temp_scope(
+                scope,
+                original_name,
+                data_type,
+                VarType::Constant,
+                false,
+            )?;
 
-            self.symbols.native_mappings.insert(name, new_name);
+            self.symbols.native_mappings.insert(original_name, name);
         }
     }
 
@@ -255,7 +261,7 @@ impl MiddleEnvironment {
             .collect();
 
         for (original_name, var) in funcs {
-            let short_name = Ustr::from(
+            let name = Ustr::from(
                 original_name
                     .rsplit_once(".")
                     .map(|x| x.1)
@@ -263,9 +269,14 @@ impl MiddleEnvironment {
                     .trim(),
             );
 
-            let name = Ustr::from(&ParserText::temp_name_with_suffix(short_name, var.span).text);
-
-            let _ = self.register_variable(scope, short_name, name, var.clone(), VarType::Constant);
+            let data_type = self.resolve_data_type(scope, var, ResolutionOptions::typing())?;
+            let name = self.register_variable_with_temp_scope(
+                scope,
+                name,
+                data_type,
+                VarType::Constant,
+                false,
+            )?;
 
             self.symbols
                 .native_mappings

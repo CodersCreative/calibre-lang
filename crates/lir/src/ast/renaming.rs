@@ -4,17 +4,17 @@ use crate::ast::{
     LirList, LirLoad, LirMember, LirMove, LirNode, LirNodeType, LirRange, LirRef, LirRefLoad,
     LirSpawn,
 };
-use calibre_parser::{AlphaRenamable, AlphaRenameState};
+use calibre_parser::{AlphaRenamable, UstrAlphaRenameState};
 use ustr::Ustr;
 
 impl AlphaRenamable for LirNode {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+    fn rename(&mut self, state: &mut UstrAlphaRenameState) {
         self.node_type.rename(state);
     }
 }
 
 impl AlphaRenamable for LirLValue {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+    fn rename(&mut self, state: &mut UstrAlphaRenameState) {
         match self {
             Self::Var(x) => {
                 *x = state.mapped_name_or_original(*x);
@@ -25,7 +25,7 @@ impl AlphaRenamable for LirLValue {
 }
 
 impl AlphaRenamable for LirNodeType {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+    fn rename(&mut self, state: &mut UstrAlphaRenameState) {
         match self {
             Self::Literal(_) | Self::Noop | Self::ExternFunction(_) => {}
             Self::As(LirAs {

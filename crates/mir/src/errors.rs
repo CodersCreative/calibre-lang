@@ -38,6 +38,8 @@ pub enum MiddleErr {
     Scope(String),
     #[error("Unable to find variable : {0:?}")]
     Variable(String),
+    #[error("Variable shadowing is not allowed at global scope: {0}")]
+    VariableShadowing(String),
     #[error("Unable to find macro arg : ${0}")]
     MacroArg(String),
     #[error("Unexpected macro arg type from : ${0}")]
@@ -232,6 +234,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::InvalidMember => "M026",
             Self::UnexpectedMacroArgType(_) => "M027",
             Self::PureFunctionNoReturnType => "M028",
+            Self::VariableShadowing(_) => "M029",
             // Type inference failures (codes M030-M049)
             Self::CannotInferVariableType(_) => "M030",
             Self::CannotInferReturnType(_) => "M031",
@@ -321,6 +324,9 @@ impl calibre_parser::CalibreError for MiddleErr {
             )),
             Self::MacroArg(x) => Some(format!(
                 "macro arg `{x}` not found - check spelling or imports"
+            )),
+            Self::VariableShadowing(_) => Some(String::from(
+                "variables outside of a block must be unique in a particular module",
             )),
             Self::UnexpectedMacroArgType(x) => {
                 Some(format!("macro arg `{x}` needs to be an identifier"))

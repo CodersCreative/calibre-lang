@@ -1,10 +1,11 @@
+use crate::ast::types::MirDataType;
 use crate::ast::{MiddleNode, MiddleNodeType, MirScopeDecl};
 use crate::context::MiddleContext;
 use crate::errors::MiddleErr;
 use crate::manifest::Manifest;
-use crate::scoping::{ScopeId, Scoping};
+use crate::scoping::{FullyQualifiedPath, ScopeId, Scoping};
 use crate::symbols::resolve::ResolutionOptions;
-use crate::symbols::{MiddleOverload, MiddleVariable, Symbols};
+use crate::symbols::{MiddleOverload, MiddleVariable, Symbols, VariableKey};
 use crate::tags::Tagging;
 use crate::tags::context::PackageMetadata;
 use crate::testing::Testing;
@@ -15,7 +16,7 @@ use crate::typing::{
 use calibre_parser::ast::ObjectMap;
 use calibre_parser::ast::nodes::scopes::AstScopeDef;
 use calibre_parser::ast::nodes::types::Overload;
-use calibre_parser::{AlphaRenamable, AlphaRenameState};
+use calibre_parser::{AlphaRenamable, UstrAlphaRenameState};
 use calibre_parser::{
     Span,
     ast::{
@@ -108,37 +109,79 @@ impl MiddleEnvironment {
             generic_params,
         }))
     }
-
-    #[instrument(skip_all, fields(original_name = %original_name.to_string(), new_name = %new_name))]
+    #[instrument(skip_all, fields(name = %name.to_string()))]
     pub fn register_variable(
         &mut self,
         scope: ScopeId,
-        original_name: Ustr,
-        new_name: Ustr,
-        data_type: ParserDataType,
+        name: Ustr,
+        data_type: MirDataType,
         var_type: VarType,
-    ) -> Result<(), MiddleErr> {
+    ) -> Result<VariableKey, MiddleErr> {
+        self.register_variable_with_temp_scope(
+            scope,
+            name,
+            data_type,
+            var_type,
+            self.context.in_temp_scope,
+        )
+    }
+
+    #[instrument(skip_all, fields(name = %name.to_string()))]
+    pub fn register_variable_with_temp_scope(
+        &mut self,
+        scope: ScopeId,
+        name: Ustr,
+        data_type: MirDataType,
+        var_type: VarType,
+        in_temp_scope: bool,
+    ) -> Result<VariableKey, MiddleErr> {
         debug!(var_type = ?var_type, data_type = %data_type, "registering variable");
+
+        let scope_ref = self.scoping.scope_or_err(scope)?;
+        let fully_qualified_path =
+            FullyQualifiedPath::combine(scope_ref.fully_qualified_path.clone(), name);
+
+        if !in_temp_scope {
+            let key = VariableKey {
+                fully_qualified_path: fully_qualified_path.clone(),
+                shadow_counter: None,
+            };
+
+            if self.symbols.variables.contains_key(&key) {
+                return Err(self
+                    .context
+                    .err_at_current(MiddleErr::VariableShadowing(name.to_string())));
+            }
+        }
+
+        let shadow_counter = if in_temp_scope {
+            Some(
+                self.symbols
+                    .variables
+                    .keys()
+                    .filter(|x| x.fully_qualified_path == fully_qualified_path)
+                    .count() as u32,
+            )
+        } else {
+            None
+        };
+
+        let key = VariableKey {
+            fully_qualified_path: fully_qualified_path.clone(),
+            shadow_counter,
+        };
+
         self.symbols.variables.insert(
-            new_name,
+            key.clone(),
             MiddleVariable {
                 data_type,
                 var_type,
                 location: self.context.current_location.clone(),
+                key: key.clone(),
             },
         );
 
-        if original_name != new_name {
-            debug!("adding name mapping");
-            self.scoping
-                .scope_mut_or_err(scope)?
-                .mappings
-                .insert(original_name, new_name);
-        } else {
-            debug!(name = ?original_name, "name already present");
-        }
-
-        Ok(())
+        Ok(key)
     }
 
     #[instrument(skip_all, fields(path = ?path, no_std = no_std))]
@@ -257,7 +300,7 @@ impl MiddleEnvironment {
     // TODO Reduce cloning
     #[instrument(skip_all)]
     pub fn import_manifest(&mut self, mut manifest: Manifest) -> Result<(), MiddleErr> {
-        let mut rename_state = AlphaRenameState::default();
+        let mut rename_state = UstrAlphaRenameState::default();
         rename_state.from_native_mappings(
             &self.symbols.native_mappings,
             &manifest.symbols.native_mappings,

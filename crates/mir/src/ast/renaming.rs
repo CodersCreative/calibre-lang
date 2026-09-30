@@ -7,17 +7,17 @@ use crate::{
         MirReturn, MirScopeDecl, MirVarDecl,
     },
 };
-use calibre_parser::{AlphaRenamable, AlphaRenameState};
+use calibre_parser::{AlphaRenamable, UstrAlphaRenameState};
 use ustr::Ustr;
 
 impl AlphaRenamable for MiddleNode {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+    fn rename(&mut self, state: &mut UstrAlphaRenameState) {
         self.node_type.rename(state);
     }
 }
 
 impl AlphaRenamable for MiddleNodeType {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+    fn rename(&mut self, state: &mut UstrAlphaRenameState) {
         match self {
             MiddleNodeType::Break(MirBreak {
                 label: _,

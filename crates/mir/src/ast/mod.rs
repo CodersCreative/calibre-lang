@@ -32,10 +32,11 @@ use std::fmt::Display;
 use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
-use crate::{errors::MiddleErr, scoping::ScopeId};
+use crate::{ast::types::MirDataType, errors::MiddleErr, scoping::ScopeId};
 
 pub mod identifiers;
 pub mod renaming;
+pub mod types;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleNode {
@@ -318,7 +319,7 @@ pub struct MirString {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirList {
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
     pub values: Box<[MiddleNode]>,
 }
 
@@ -371,14 +372,14 @@ pub struct MirNeg {
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirAs {
     pub value: Box<MiddleNode>,
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
     pub failure_mode: AsFailureMode,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirIs {
     pub value: Box<MiddleNode>,
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -459,7 +460,7 @@ pub struct MirVarDecl {
     pub var_type: VarType,
     pub identifier: Ustr,
     pub value: Box<MiddleNode>,
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -474,9 +475,9 @@ pub struct MirScopeDecl {
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirFunction {
     #[allow(clippy::complexity)]
-    pub parameters: Box<[(Ustr, ParserDataType, Option<Box<MiddleNode>>)]>,
+    pub parameters: Box<[(Ustr, MirDataType, Option<Box<MiddleNode>>)]>,
     pub body: Box<MiddleNode>,
-    pub return_type: ParserDataType,
+    pub return_type: MirDataType,
     pub scope_id: ScopeId,
     pub default_args_id: Option<usize>,
     pub memo_params: Box<[Ustr]>,
@@ -489,8 +490,8 @@ pub struct MirExtern {
     pub abi: Ustr,
     pub library: Ustr,
     pub symbol: Ustr,
-    pub parameters: Box<[ParserDataType]>,
-    pub return_type: ParserDataType,
+    pub parameters: Box<[MirDataType]>,
+    pub return_type: MirDataType,
     pub memo_params: Box<[Ustr]>,
     pub memo: bool,
     pub pure: bool,
@@ -631,7 +632,7 @@ impl From<MiddleNodeType> for AstNodeType {
                     var_type: value.var_type,
                     identifier: value.identifier.into(),
                     value: Box::new((*value.value).into()),
-                    data_type: value.data_type,
+                    data_type: value.data_type.into(),
                 })
             }
             MiddleNodeType::EnumExpression(value) => AstNodeType::EnumExpression(AstEnum {
@@ -664,13 +665,13 @@ impl From<MiddleNodeType> for AstNodeType {
                             for param in value.parameters {
                                 lst.push((
                                     param.0.into(),
-                                    Some(param.1),
+                                    Some(param.1.into()),
                                     param.2.map(|x| Box::new((*x).into())),
                                 ));
                             }
                             lst
                         },
-                        return_type: value.return_type,
+                        return_type: value.return_type.into(),
                         param_destructures: Vec::new(),
                     },
                     body: Box::new((*value.body).into()),
@@ -680,8 +681,12 @@ impl From<MiddleNodeType> for AstNodeType {
                 AstNodeType::ExternFunctionDeclaration(AstExtern {
                     abi: value.abi.to_string(),
                     identifier: ParserText::from(value.symbol).into(),
-                    parameters: value.parameters.to_vec(),
-                    return_type: value.return_type,
+                    parameters: value
+                        .parameters
+                        .into_iter()
+                        .map(ParserDataType::from)
+                        .collect(),
+                    return_type: value.return_type.into(),
                     library: value.library.to_string(),
                     symbol: None,
                 })
@@ -697,12 +702,12 @@ impl From<MiddleNodeType> for AstNodeType {
             }),
             MiddleNodeType::AsExpression(value) => AstNodeType::AsExpression(AstAs {
                 value: Box::new((*value.value).into()),
-                data_type: value.data_type,
+                data_type: value.data_type.into(),
                 failure_mode: value.failure_mode,
             }),
             MiddleNodeType::IsExpression(value) => AstNodeType::IsExpression(AstIs {
                 value: Box::new((*value.value).into()),
-                data_type: value.data_type,
+                data_type: value.data_type.into(),
             }),
             MiddleNodeType::Conditional(value) => AstNodeType::IfStatement(AstIf {
                 comparison: Box::new(IfComparisonType::If((*value.comparison).into())),
@@ -733,7 +738,7 @@ impl From<MiddleNodeType> for AstNodeType {
                 value: ParserText::from(value.value),
             }),
             MiddleNodeType::ListLiteral(value) => AstNodeType::ListLiteral(AstList {
-                data_type: value.data_type,
+                data_type: value.data_type.into(),
                 values: {
                     let mut lst = Vec::new();
 

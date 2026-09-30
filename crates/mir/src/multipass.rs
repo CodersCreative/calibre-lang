@@ -52,15 +52,12 @@ impl MiddleEnvironment {
                     let (var_type, identifier) = binding;
                     if *var_type != VarType::Mutable {
                         let original = Ustr::from(&identifier.to_string());
-                        let renamed = Ustr::from(
-                            &ParserText::temp_name_with_suffix(identifier, node.span).text,
-                        );
-                        self.register_variable(
+                        self.register_variable_with_temp_scope(
                             scope,
                             original,
-                            renamed,
                             data_type.clone(),
                             *var_type,
+                            false,
                         )?;
                     }
                 }
@@ -103,12 +100,13 @@ impl MiddleEnvironment {
                     self.resolve_data_type(scope, &*data_type, ResolutionOptions::typing())?
                 };
 
-                self.register_variable(
+                self.register_variable_with_temp_scope(
                     scope,
                     Ustr::from(ident),
                     Ustr::from(&new_name.text),
                     data_type.clone(),
                     VarType::Constant,
+                    false,
                 )?;
 
                 *ident = new_name;
@@ -152,12 +150,13 @@ impl MiddleEnvironment {
                     return_type.clone(),
                 );
 
-                self.register_variable(
+                self.register_variable_with_temp_scope(
                     scope,
                     Ustr::from(ident),
                     Ustr::from(&new_name.text),
                     data_type.clone(),
                     VarType::Mutable,
+                    false,
                 )?;
 
                 *ident = new_name;

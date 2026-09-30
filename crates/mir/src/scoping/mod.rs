@@ -359,10 +359,10 @@ pub struct ScopeMacro {
     pub create_new_scope: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct FullyQualifiedPath {
-    name: Option<Ustr>,
-    parent: Option<Arc<FullyQualifiedPath>>,
+    pub name: Option<Ustr>,
+    pub parent: Option<Arc<FullyQualifiedPath>>,
 }
 
 impl FullyQualifiedPath {
@@ -391,6 +391,31 @@ impl FullyQualifiedPath {
                 parent: None,
             },
         }
+    }
+
+    pub fn combine(parent: Arc<FullyQualifiedPath>, next: Ustr) -> Arc<FullyQualifiedPath> {
+        Arc::new(FullyQualifiedPath {
+            name: Some(next),
+            parent: Some(parent),
+        })
+    }
+
+    pub fn is_child_of(&self, parent: &FullyQualifiedPath) -> bool {
+        if self.parent.is_none() {
+            return false;
+        }
+
+        let current = self;
+        let mut current_parent = current.parent.as_deref();
+
+        while let Some(ref p) = current_parent {
+            if *p == parent {
+                return true;
+            }
+            current_parent = p.parent.as_deref();
+        }
+
+        false
     }
 }
 

@@ -10,6 +10,7 @@ pub struct MiddleContext {
     pub package_metadata: Option<PackageMetadata>,
     pub type_check: bool,
     pub in_stdlib: Option<Ustr>,
+    pub in_temp_scope: bool,
     pub counter: usize,
 }
 

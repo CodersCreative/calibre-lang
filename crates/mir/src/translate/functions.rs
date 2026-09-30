@@ -496,8 +496,6 @@ impl MirLowering for AstExtern {
             ResolutionOptions::default().with_dollar(),
         )?;
 
-        let new_name = Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
-
         let params = self
             .parameters
             .iter()
@@ -529,12 +527,12 @@ impl MirLowering for AstExtern {
             }
         }
 
-        env.register_variable(scope, ident, new_name, fn_type.clone(), VarType::Constant)?;
+        env.register_variable(scope, ident, fn_type.clone(), VarType::Constant)?;
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: VarType::Constant,
-                identifier: new_name,
+                identifier: ident,
                 value: Box::new(MiddleNode::new(
                     MiddleNodeType::ExternFunction(MirExtern {
                         abi: Ustr::from(&self.abi),
@@ -621,9 +619,6 @@ impl MirLowering for AstFunction {
                 ResolutionOptions::default().with_dollar(),
             )?;
 
-            let new_name =
-                Ustr::from(&ParserText::temp_name_with_suffix(og_name.trim(), span).text);
-
             let data_type = if let Some(x) = param.1 {
                 env.resolve_data_type(new_scope, &x, ResolutionOptions::typing())?
             } else if let Some(node) = &param.2 {
@@ -643,16 +638,16 @@ impl MirLowering for AstFunction {
                     )));
             };
 
-            env.register_variable(
+            env.register_variable_with_temp_scope(
                 new_scope,
                 og_name,
-                new_name,
                 data_type.clone(),
                 VarType::Mutable,
+                true,
             )?;
 
             params.push((
-                new_name,
+                og_name,
                 data_type,
                 param
                     .2
@@ -661,20 +656,18 @@ impl MirLowering for AstFunction {
         }
 
         if needs_caller_context {
-            let caller_context_name =
-                Ustr::from(&ParserText::temp_name_with_suffix("caller_context", span).text);
             let caller_context_type =
                 ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
 
-            env.register_variable(
+            env.register_variable_with_temp_scope(
                 new_scope,
                 Ustr::from("caller_context"),
-                caller_context_name,
                 caller_context_type.clone(),
                 VarType::Mutable,
+                true,
             )?;
 
-            params.push((caller_context_name, caller_context_type, None));
+            params.push((Ustr::from("caller_context"), caller_context_type, None));
         }
 
         let return_type = env.resolve_data_type(

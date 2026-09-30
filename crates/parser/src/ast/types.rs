@@ -1,5 +1,5 @@
 use crate::{
-    AlphaRenamable, AlphaRenameState, IdentifiersUsed, ParserError, Span,
+    AlphaRenamable, IdentifiersUsed, ParserError, Span, UstrAlphaRenameState,
     ast::{
         RefMutability,
         ffi::ParserFfiInnerType,
@@ -23,7 +23,7 @@ pub struct ParserDataType {
 }
 
 impl AlphaRenamable for ParserDataType {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+    fn rename(&mut self, state: &mut UstrAlphaRenameState) {
         self.data_type.rename(state);
     }
 }
@@ -230,7 +230,7 @@ pub enum ParserInnerType {
 }
 
 impl AlphaRenamable for ParserInnerType {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+    fn rename(&mut self, state: &mut UstrAlphaRenameState) {
         match self {
             ParserInnerType::Auto(_)
             | ParserInnerType::Big
