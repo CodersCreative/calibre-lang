@@ -154,7 +154,6 @@ pub enum MirDataType {
         identifier: TypeKey,
         generic_types: Vec<MirDataType>,
     },
-    FfiType(ParserFfiInnerType),
     NativeFunction {
         return_type: Box<MirDataType>,
         parameters: Vec<MirDataType>,
@@ -212,7 +211,6 @@ impl From<MirDataType> for ParserInnerType {
                     .map(|x| x.fully_qualified_path.name.unwrap_or_default().to_string())
                     .collect(),
             ),
-            MirDataType::FfiType(x) => ParserInnerType::FfiType(x),
             MirDataType::Function {
                 return_type,
                 parameters,
@@ -276,7 +274,6 @@ impl AlphaRenamable for MirDataType {
             | MirDataType::Byte
             | MirDataType::Bool
             | MirDataType::Char
-            | MirDataType::FfiType(_)
             | MirDataType::Float
             | MirDataType::Host
             | MirDataType::Int
@@ -636,34 +633,41 @@ impl MirDataType {
         }
     }
 
-    pub fn resolve_ffi(self) -> Self {
-        match self {
-            Self::FfiType(ffi) => ffi.into(),
-            Self::Result { ok, err } => Self::Result {
-                ok: Box::new(ok.resolve_ffi()),
-                err: Box::new(err.resolve_ffi()),
-            },
-            Self::Ref(x, m) => Self::Ref(Box::new(x.resolve_ffi()), m),
-            Self::Ptr(x) => Self::Ptr(Box::new(x.resolve_ffi())),
-            Self::Option(x) => Self::Option(Box::new(x.resolve_ffi())),
-            Self::List(x) => Self::List(Box::new(x.resolve_ffi())),
-            Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.resolve_ffi()).collect()),
-            Self::Function {
-                return_type,
-                parameters,
-            } => Self::Function {
-                return_type: Box::new(return_type.resolve_ffi()),
-                parameters: parameters.into_iter().map(|x| x.resolve_ffi()).collect(),
-            },
-            Self::Struct {
-                identifier,
-                generic_types,
-            } => Self::Struct {
-                identifier,
-                generic_types: generic_types.into_iter().map(|x| x.resolve_ffi()).collect(),
-            },
-            Self::DynamicTraits(x) => Self::DynamicTraits(x),
-            x => x,
+    pub fn matches(&self, other: &Self, generic_params: &[&str]) -> bool {
+        match (self, other) {
+            (
+                MirDataType::Struct {
+                    identifier: a,
+                    generic_types: ag,
+                },
+                MirDataType::Struct {
+                    identifier: b,
+                    generic_types: bg,
+                },
+            ) => {
+                if a != b || ag.len() != bg.len() {
+                    return false;
+                }
+                ag.iter()
+                    .zip(bg.iter())
+                    .all(|(x, y)| x.matches(&y, generic_params))
+            }
+            (MirDataType::List(a), MirDataType::List(b)) => a.matches(&b, generic_params),
+            (MirDataType::Option(a), MirDataType::Option(b)) => a.matches(&b, generic_params),
+            (MirDataType::Result { ok: ao, err: ae }, MirDataType::Result { ok: bo, err: be }) => {
+                ao.matches(&bo, generic_params) && ae.matches(&be, generic_params)
+            }
+            (MirDataType::Ptr(a), MirDataType::Ptr(b)) => a.matches(&b, generic_params),
+            (MirDataType::Ref(a, _), MirDataType::Ref(b, _)) => a.matches(&b, generic_params),
+            (MirDataType::Tuple(a), MirDataType::Tuple(b)) => {
+                if a.len() != b.len() {
+                    return false;
+                }
+                a.iter()
+                    .zip(b.iter())
+                    .all(|(x, y)| x.matches(&y, generic_params))
+            }
+            (x, y) => x == y,
         }
     }
 

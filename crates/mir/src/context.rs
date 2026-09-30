@@ -59,4 +59,8 @@ impl MiddleContext {
             MiddleErr::At(span, Box::new(err))
         }
     }
+
+    pub fn get_temp(&mut self) -> String {
+        format!("mir_tmp_{}", self.increment_counter())
+    }
 }

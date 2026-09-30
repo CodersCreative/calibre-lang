@@ -9,7 +9,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        idents::{ParserText, PotentialDollarIdentifier},
+        idents::PotentialDollarIdentifier,
         nodes::{
             AstNode, AstNodeType, VarType,
             access::{AstField, AstIndex, AstScope},
@@ -169,7 +169,7 @@ impl MirLowering for AstAssignDestructure {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         let tmp_ident: PotentialDollarIdentifier =
-            ParserText::temp_name_with_suffix("destructure_tmp", span).into();
+            PotentialDollarIdentifier::new(span, env.context.get_temp());
 
         let tmp_decl = AstNode::new(
             span,

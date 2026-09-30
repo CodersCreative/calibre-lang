@@ -1,12 +1,12 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirConditional, MirDiscriminant,
-        MirExtern, MirFunction, MirReturn, MirScopeDecl, MirVarDecl,
+        MirExtern, MirFunction, MirReturn, MirScopeDecl, MirVarDecl, types::MirDataType,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::{FunctionParamDefault, resolve::ResolutionOptions},
+    symbols::{FunctionParamDefault, TypeKey, resolve::ResolutionOptions},
     tags::TagInfo,
     translate::MirLowering,
 };
@@ -202,8 +202,8 @@ impl MiddleEnvironment {
             matches!(
                 env.resolve_type_from_node(scope, node)
                     .as_ref()
-                    .map(|x| x.data_type.unwrap_all_refs()),
-                Some(ParserInnerType::Option(_))
+                    .map(|x| x.unwrap_all_refs()),
+                Some(MirDataType::Option(_))
             )
         };
 
@@ -272,7 +272,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         span: Span,
-        identifier: Option<Ustr>,
+        identifier: Option<TypeKey>,
         args: Vec<CallArg>,
         reverse_args: Vec<AstNode>,
     ) -> MiddleNode {
@@ -295,11 +295,12 @@ impl MiddleEnvironment {
     }
 
     pub(crate) fn wrap_generator_body(
+        &mut self,
         body: AstNode,
         elem_type: ParserDataType,
         span: Span,
     ) -> AstNode {
-        let next_name = ParserText::temp_name_with_suffix("gen_next", span);
+        let next_name = self.context.get_temp();
         let rewritten = Self::rewrite_generator_returns(body);
 
         let next_body = match rewritten.node_type {
@@ -320,10 +321,7 @@ impl MiddleEnvironment {
             span,
             AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Immutable,
-                identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
-                    span,
-                    next_name.clone(),
-                )),
+                identifier: PotentialDollarIdentifier::new(span, next_name.clone()),
                 data_type: ParserDataType::function(
                     span,
                     vec![],
@@ -431,7 +429,7 @@ impl MirLowering for FunctionHeader {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         let generic_params: Vec<Ustr> = self
             .generics
             .0
@@ -442,6 +440,7 @@ impl MirLowering for FunctionHeader {
                     &g.identifier,
                     ResolutionOptions::default().with_dollar(),
                 )
+                .map(|x| x.unwrap_dollar())
             })
             .collect::<Result<Vec<Ustr>, MiddleErr>>()
             .ok()?;
@@ -454,30 +453,27 @@ impl MirLowering for FunctionHeader {
             .resolve_data_type(scope, &self.return_type, ResolutionOptions::typing())
             .ok()?;
 
-        Some(ParserDataType {
-            data_type: ParserInnerType::Function {
-                return_type: Box::new(return_type),
-                parameters: {
-                    let mut params = Vec::with_capacity(self.parameters.len());
+        Some(MirDataType::Function {
+            return_type: Box::new(return_type),
+            parameters: {
+                let mut params = Vec::with_capacity(self.parameters.len());
 
-                    for param in &self.parameters {
-                        let data_type = if let Some(x) = &param.1 {
-                            env.resolve_data_type(scope, x, ResolutionOptions::typing())
-                                .ok()?
-                        } else if let Some(node) = &param.2 {
-                            node.type_of(env, scope, span)?
-                        } else {
-                            return None;
-                        };
-                        params.push(data_type);
-                    }
+                for param in &self.parameters {
+                    let data_type = if let Some(x) = &param.1 {
+                        env.resolve_data_type(scope, x, ResolutionOptions::typing())
+                            .ok()?
+                    } else if let Some(node) = &param.2 {
+                        node.type_of(env, scope, span)?
+                    } else {
+                        return None;
+                    };
+                    params.push(data_type);
+                }
 
-                    env.scoping.pop_generic_params();
+                env.scoping.pop_generic_params();
 
-                    params
-                },
+                params
             },
-            span,
         })
     }
 }
@@ -490,22 +486,22 @@ impl MirLowering for AstExtern {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let ident = env.resolve(
-            scope,
-            &self.identifier,
-            ResolutionOptions::default().with_dollar(),
-        )?;
+        let ident = env
+            .resolve(
+                scope,
+                &self.identifier,
+                ResolutionOptions::default().with_dollar(),
+            )?
+            .unwrap_dollar();
 
         let params = self
             .parameters
             .iter()
             .map(|ty| {
                 let ty = ty.clone().resolve_ffi();
-
                 env.resolve_data_type(scope, &ty, ResolutionOptions::typing())
-                    .unwrap_or(ty)
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, MiddleErr>>()?;
 
         let return_type = env.resolve_data_type(
             scope,
@@ -513,7 +509,7 @@ impl MirLowering for AstExtern {
             ResolutionOptions::typing(),
         )?;
 
-        let fn_type = ParserDataType::function(span, params.clone(), return_type.clone());
+        let fn_type = MirDataType::function(params.clone(), return_type.clone());
 
         let mut pure = false;
         let mut memo = false;
@@ -557,8 +553,8 @@ impl MirLowering for AstExtern {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType {
+    ) -> Option<MirDataType> {
+        Some(MirDataType {
             span,
             data_type: ParserInnerType::NativeFunction {
                 return_type: Box::new(

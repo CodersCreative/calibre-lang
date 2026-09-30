@@ -3,7 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::{FunctionParamDefault, resolve::ResolutionOptions},
+    symbols::{FunctionParamDefault, VariableKey, resolve::ResolutionOptions},
     tags::TagInfo,
     translate::MirLowering,
 };
@@ -11,7 +11,7 @@ use calibre_parser::{
     Span,
     ast::{
         binary::BinaryOperator,
-        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, DestructurePattern, VarType,
             access::{AstField, AstIdentifier, AstIndex},
@@ -22,7 +22,7 @@ use calibre_parser::{
             memory::AstRef,
             scopes::AstScopeDef,
         },
-        types::{ParserDataType, ParserInnerType},
+        types::ParserDataType,
     },
 };
 use tracing::instrument;
@@ -71,8 +71,8 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         header: &FunctionHeader,
-        new_name: Ustr,
-        identifier: Ustr,
+        new_name: VariableKey,
+        identifier: VariableKey,
     ) {
         let defaults = FunctionParamDefault::get(self, scope, header);
 
@@ -239,11 +239,13 @@ impl MirLowering for AstDeclaration {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = env.resolve(
-            scope,
-            &self.identifier,
-            ResolutionOptions::default().with_dollar(),
-        )?;
+        let identifier = env
+            .resolve(
+                scope,
+                &self.identifier,
+                ResolutionOptions::default().with_dollar(),
+            )?
+            .unwrap_dollar();
 
         if let AstNodeType::CallExpression(AstCall {
             caller,
@@ -363,8 +365,7 @@ impl MirLowering for AstDeclareDestructure {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let tmp_ident: PotentialDollarIdentifier =
-            ParserText::temp_name_with_suffix("destructure_tmp", span).into();
+        let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
 
         let tmp_decl = AstNode::new(
             span,

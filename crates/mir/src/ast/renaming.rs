@@ -6,7 +6,6 @@ use crate::{
         MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
         MirReturn, MirScopeDecl, MirVarDecl,
     },
-    scoping::FullyQualifiedPath,
 };
 use calibre_parser::{AlphaRenamable, UstrAlphaRenameState};
 use std::sync::Arc;

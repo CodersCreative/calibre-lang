@@ -37,8 +37,10 @@ impl GuardProcessor {
         guards: &[AstNode],
         bindings: &[BindingDeclaration],
     ) -> AstNode {
-        let bindings: Vec<(Ustr, AstNode)> =
-            bindings.iter().map(|b| (b.name, b.value.clone())).collect();
+        let bindings: Vec<(Ustr, AstNode)> = bindings
+            .iter()
+            .map(|b| (b.name.clone(), b.value.clone()))
+            .collect();
 
         Self::rewrite_guards(env, guards, &bindings)
     }

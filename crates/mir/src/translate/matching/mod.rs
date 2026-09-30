@@ -10,15 +10,20 @@ pub use guards::GuardProcessor;
 pub use translator::PatternTranslatorDispatcher;
 
 use crate::{
-    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
-    symbols::resolve::ResolutionOptions, translate::MirLowering, typing::MiddleTypeDefType,
+    ast::{MiddleNode, types::MirDataType},
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    scoping::ScopeId,
+    symbols::{TypeKey, resolve::ResolutionOptions},
+    translate::MirLowering,
+    typing::MiddleTypeDefType,
 };
 
 use calibre_parser::{
     Span,
     ast::{
         comparison::{BooleanOperator, ComparisonOperator},
-        idents::ParserText,
+        idents::PotentialDollarIdentifier,
         nodes::{
             AstNode, AstNodeType, VarType,
             access::AstIndex,
@@ -29,7 +34,7 @@ use calibre_parser::{
             matching::{AstFnMatch, AstMatch, MatchArmType},
             scopes::AstScopeDef,
         },
-        types::{ParserDataType, ParserInnerType},
+        types::ParserDataType,
     },
 };
 use ustr::Ustr;
@@ -53,17 +58,16 @@ impl MiddleEnvironment {
         }
     }
 
-    fn enum_key_from_data_type(data_type: &ParserDataType) -> Option<Ustr> {
-        match data_type.clone().unwrap_all_refs().data_type {
-            ParserInnerType::Struct(name) => Some(Ustr::from(&name)),
-            ParserInnerType::StructWithGenerics { identifier, .. } => Some(Ustr::from(&identifier)),
+    fn enum_key_from_data_type(data_type: &MirDataType) -> Option<TypeKey> {
+        match data_type.clone().unwrap_all_refs() {
+            MirDataType::Struct { identifier, .. } => Some(identifier.clone()),
             _ => None,
         }
     }
 
     fn enum_variant_index_from_data_type(
         &self,
-        data_type: &ParserDataType,
+        data_type: &MirDataType,
         variant_name: &Ustr,
     ) -> Option<i64> {
         if let Some(key) = Self::enum_key_from_data_type(data_type)
@@ -133,16 +137,15 @@ impl MirLowering for AstMatch {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         let (decl, value) = if let Some(value) = self.value {
-            let tmp_name = ParserText::temp_name_with_suffix("match_tmp", span);
-            let resolved = value.type_of(env, scope, span);
+            let tmp_name = env.context.get_temp();
 
             (
                 Some(AstNode::new(
                     span,
                     AstNodeType::VariableDeclaration(AstDeclaration {
                         var_type: VarType::Mutable,
-                        identifier: tmp_name.clone().into(),
-                        data_type: resolved.unwrap_or_else(|| ParserDataType::auto(span)),
+                        identifier: PotentialDollarIdentifier::new(span, &tmp_name),
+                        data_type: ParserDataType::auto(span),
                         value,
                     }),
                 )),
@@ -234,7 +237,7 @@ impl MirLowering for AstMatch {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         if let Some((_arm_type, _guards, arm_body)) = self.body.values.first() {
             arm_body.type_of(env, scope, span)
         } else {
@@ -286,7 +289,7 @@ impl MirLowering for AstFnMatch {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.header.type_of(env, scope, span)
     }
 }

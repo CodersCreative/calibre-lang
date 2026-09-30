@@ -39,7 +39,9 @@ impl PatternTranslator for StringPatternTranslator {
             .into_iter()
             .map(|(var_type, name)| {
                 Ok(BindingDeclaration {
-                    name: env.resolve(scope, &name, ResolutionOptions::default().with_dollar())?,
+                    name: env
+                        .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar(),
                     value: value.clone(),
                     var_type,
                     data_type: None,
@@ -94,11 +96,9 @@ impl PatternTranslator for StringPatternTranslator {
                 }
                 MatchStringPatternPart::Binding { var_type, name } => {
                     bindings.push(BindingDeclaration {
-                        name: env.resolve(
-                            scope,
-                            &name,
-                            ResolutionOptions::default().with_dollar(),
-                        )?,
+                        name: env
+                            .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                            .unwrap_dollar(),
                         value: current.clone(),
                         var_type,
                         data_type: Some(ParserDataType::new(

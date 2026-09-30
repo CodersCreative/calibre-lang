@@ -38,7 +38,9 @@ impl MirLowering for AstStruct {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = env.resolve(scope, &self.identifier, ResolutionOptions::typing())?;
+        let identifier = env
+            .resolve(scope, &self.identifier, ResolutionOptions::typing())?
+            .unwrap_typing();
         let obj = env.typing.objects.get(&identifier).cloned();
 
         // TODO Handle generators a bit better, I'm just lazy rn
@@ -145,7 +147,9 @@ impl MirLowering for AstEnum {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = env.resolve(scope, &self.identifier, ResolutionOptions::typing())?;
+        let identifier = env
+            .resolve(scope, &self.identifier, ResolutionOptions::typing())?
+            .unwrap_typing();
 
         let raw_variant = self.value.to_string();
         let obj = env.typing.objects.get(&identifier);

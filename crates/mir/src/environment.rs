@@ -5,7 +5,7 @@ use crate::errors::MiddleErr;
 use crate::manifest::Manifest;
 use crate::scoping::{FullyQualifiedPath, ScopeId, Scoping};
 use crate::symbols::resolve::ResolutionOptions;
-use crate::symbols::{MiddleOverload, MiddleVariable, Symbols, VariableKey};
+use crate::symbols::{MiddleOverload, MiddleVariable, Symbols, TypeKey, VariableKey};
 use crate::tags::Tagging;
 use crate::tags::context::PackageMetadata;
 use crate::testing::Testing;
@@ -22,7 +22,6 @@ use calibre_parser::{
     ast::{
         Operator,
         nodes::{AstNode, AstNodeType, VarType},
-        types::{ParserDataType, ParserInnerType},
     },
 };
 use indextree::{Arena, NodeId};
@@ -59,7 +58,7 @@ impl MiddleEnvironment {
         scope: ScopeId,
         overload: Overload,
         generic_params: Vec<Ustr>,
-        target_name: Option<Ustr>,
+        target_name: Option<TypeKey>,
     ) -> Result<Option<MiddleOverload>, MiddleErr> {
         debug!("processing overload");
         overload.verify().map_err(MiddleErr::Overload)?;
@@ -86,8 +85,8 @@ impl MiddleEnvironment {
             };
 
             if let Some(ref target) = target_name
-                && let ParserInnerType::Struct(x) = ty.data_type.clone().unwrap_all_refs()
-                && x == target
+                && let MirDataType::Struct { identifier, .. } = ty.unwrap_all_refs()
+                && identifier == target
             {
                 contains_target = true;
             }

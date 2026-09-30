@@ -8,7 +8,7 @@ use crate::{
 };
 use calibre_parser::{
     Span,
-    ast::{Operator, nodes::AstNode, types::ParserDataType},
+    ast::{Operator, nodes::AstNode},
 };
 use tracing::instrument;
 
@@ -92,7 +92,7 @@ impl MiddleEnvironment {
         scope: ScopeId,
         span: Span,
         value: AstNode,
-        target: ParserDataType,
+        target: &MirDataType,
     ) -> Result<Option<MiddleNode>, MiddleErr> {
         let Some(left_ty) = self.resolve_type_from_node(scope, &value) else {
             return Ok(None);
@@ -112,7 +112,7 @@ impl MiddleEnvironment {
                         .collect::<Vec<_>>(),
                 ) && let Some(t) = x.return_type.unwrap_one_result()
                     && t.matches(
-                        &target,
+                        target,
                         &x.generic_params
                             .iter()
                             .map(|x| x.as_str())
@@ -144,7 +144,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         value: AstNode,
-        target: ParserDataType,
+        target: &MirDataType,
     ) -> Result<bool, MiddleErr> {
         let Some(left_ty) = self.resolve_type_from_node(scope, &value) else {
             return Ok(false);
@@ -164,7 +164,7 @@ impl MiddleEnvironment {
                         .collect::<Vec<_>>(),
                 ) && let Some(t) = x.return_type.unwrap_one_result()
                     && t.matches(
-                        &target,
+                        target,
                         &x.generic_params
                             .iter()
                             .map(|x| x.as_str())

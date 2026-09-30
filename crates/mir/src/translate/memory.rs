@@ -9,7 +9,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, VarType,
             access::{AstField, AstIdentifier, AstIndex, AstScope},
@@ -102,8 +102,7 @@ impl MirLowering for AstMove {
                 span,
             }),
             AstNodeType::FieldAccess(AstField { base, field }) => {
-                let tmp_ident: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_suffix("move", span).into();
+                let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
 
                 let tmp_decl = AstNode::new(
                     span,
@@ -138,8 +137,7 @@ impl MirLowering for AstMove {
                 AstNode::new_temp_scope(vec![tmp_decl, member]).lower(env, scope, span)
             }
             AstNodeType::ScopeAccess(AstScope { base, field }) => {
-                let tmp_ident: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_suffix("move", span).into();
+                let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
 
                 let tmp_decl = AstNode::new(
                     span,
@@ -173,8 +171,7 @@ impl MirLowering for AstMove {
                 AstNode::new_temp_scope(vec![tmp_decl, member]).lower(env, scope, span)
             }
             AstNodeType::IndexAccess(AstIndex { base, index }) => {
-                let tmp_ident: PotentialDollarIdentifier =
-                    ParserText::temp_name_with_suffix("move", span).into();
+                let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
 
                 let tmp_decl = AstNode::new(
                     span,

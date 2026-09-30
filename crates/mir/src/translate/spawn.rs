@@ -11,7 +11,7 @@ use calibre_parser::{
     ast::{
         RefMutability,
         comparison::{BooleanOperator, ComparisonOperator},
-        idents::{ParserText, PotentialDollarIdentifier},
+        idents::PotentialDollarIdentifier,
         nodes::{
             AstNode, AstNodeType, VarType,
             access::AstField,
@@ -40,8 +40,7 @@ impl MirLowering for AstSelect {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let done_ident: PotentialDollarIdentifier =
-            ParserText::temp_name_with_suffix("select_done", span).into();
+        let done_ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
 
         let done_decl = AstNode::new(
             span,
@@ -99,9 +98,8 @@ impl MirLowering for AstSelect {
                     SelectArmKind::Recv => {
                         let Some(left) = left.clone() else { continue };
                         let Some(right) = right.clone() else { continue };
-                        let tmp_ident = PotentialDollarIdentifier::Identifier(
-                            ParserText::temp_name_with_suffix("select", span),
-                        );
+                        let tmp_ident =
+                            PotentialDollarIdentifier::new(span, env.context.get_temp());
 
                         let try_get_call =
                             AstNode::call(span, AstNode::member(span, right, "try_get"), vec![]);
@@ -360,8 +358,7 @@ impl MirLowering for AstSpawn {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         if self.auto_wait {
-            let ident: PotentialDollarIdentifier =
-                ParserText::temp_name_with_suffix("spawn_wait_wg", span).into();
+            let ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
 
             AstNode::new_temp_scope_with_create(
                 vec![
@@ -424,10 +421,7 @@ impl MirLowering for AstSpawn {
                     label,
                     else_body,
                 }) => {
-                    let ident: PotentialDollarIdentifier =
-                        ParserText::temp_name_with_suffix("spawn_wg", span)
-                            .clone()
-                            .into();
+                    let ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
 
                     let decl = AstNode::new(
                         span,
@@ -496,8 +490,7 @@ impl MirLowering for AstSpawn {
                 span,
             ))
         } else {
-            let ident: PotentialDollarIdentifier =
-                ParserText::temp_name_with_suffix("spawn_wg", span).into();
+            let ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
 
             let mut body = vec![AstNode::new(
                 span,

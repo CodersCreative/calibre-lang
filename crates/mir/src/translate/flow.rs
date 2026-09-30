@@ -82,15 +82,16 @@ impl MirLowering for AstEmit {
         &self,
         _env: &mut MiddleEnvironment,
         _scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
+        _span: Span,
+    ) -> Option<MirDataType> {
         match self {
             AstEmit::Scope(_) => None,
-            _ => Some(ParserDataType::new(span, ParserInnerType::Bool)),
+            _ => Some(MirDataType::Bool),
         }
     }
 }
 
+// Make this transform an AstNode which gets lowered to a MiddleNode once fully built
 impl MirLowering for AstBreak {
     #[instrument(skip_all)]
     fn lower(
@@ -573,6 +574,7 @@ impl MirLowering for AstContinue {
 
                 let label_text = self.label.as_ref().and_then(|l| {
                     env.resolve(scope, l, ResolutionOptions::default().with_dollar())
+                        .map(|x| x.unwrap_dollar())
                         .ok()
                 });
 
@@ -734,12 +736,11 @@ impl MirLowering for AstPipe {
                 return true;
             }
 
-            let from_type = point
+            point
                 .get_node()
                 .type_of(env, scope, span)
-                .map(|x| x.unwrap_all_refs());
-
-            from_type.map(|x| x.is_callable()).unwrap_or_default()
+                .map(|x| x.unwrap_all_refs().is_callable())
+                .unwrap_or_default()
         };
 
         let get_mapping =
@@ -795,11 +796,13 @@ impl MirLowering for AstPipe {
                     let keep_scope = point.is_named();
                     let var_dec = match &point {
                         PipeSegment::Named { identifier, .. } => {
-                            let ident = env.resolve(
-                                scope,
-                                identifier,
-                                ResolutionOptions::default().with_dollar(),
-                            )?;
+                            let ident = env
+                                .resolve(
+                                    scope,
+                                    identifier,
+                                    ResolutionOptions::default().with_dollar(),
+                                )?
+                                .unwrap_dollar();
 
                             prior_mappings.insert(ident, get_mapping(env, &ident)?);
 
@@ -896,7 +899,7 @@ impl MirLowering for AstPipe {
                 if next_callable {
                     current = next_ty
                         .and_then(|x| x.apply_callable())
-                        .unwrap_or(ParserDataType::auto(span));
+                        .unwrap_or(MirDataType::Null);
                     idx += 2;
                     continue;
                 }
@@ -905,9 +908,9 @@ impl MirLowering for AstPipe {
             current = if point_callable {
                 point_ty
                     .and_then(|x| x.apply_callable())
-                    .unwrap_or(ParserDataType::auto(span))
+                    .unwrap_or(MirDataType::Null)
             } else {
-                point_ty.unwrap_or(ParserDataType::new(span, ParserInnerType::Auto(None)))
+                point_ty.unwrap_or(MirDataType::Null)
             };
             idx += 1;
         }

@@ -175,18 +175,18 @@ struct LoopTempNames {
 }
 
 impl LoopTempNames {
-    fn new(span: Span, needs_else: bool) -> Self {
+    fn new(env: &mut MiddleEnvironment, span: Span, needs_else: bool) -> Self {
         let (result, broke) = if needs_else {
-            let result = Ustr::from(&ParserText::temp_name_with_suffix("loop_result", span).text);
-            let broke = Ustr::from(&ParserText::temp_name_with_suffix("loop_broke", span).text);
+            let result = Ustr::from(&env.context.get_temp());
+            let broke = Ustr::from(&env.context.get_temp());
             (Some(result), Some(broke))
         } else {
             (None, None)
         };
 
-        let iter = ParserText::temp_name_with_suffix("loop_iterable", span).into();
-        let idx = ParserText::temp_name_with_suffix("loop_index", span).into();
-        let next = ParserText::temp_name_with_suffix("loop_next", span).into();
+        let iter = PotentialDollarIdentifier::new(span, env.context.get_temp());
+        let idx = PotentialDollarIdentifier::new(span, env.context.get_temp());
+        let next = PotentialDollarIdentifier::new(span, env.context.get_temp());
 
         Self {
             result,
@@ -361,9 +361,10 @@ impl MirLowering for AstLoop {
         }
 
         let scope = env.scoping.new_scope_from_parent_shallow(scope);
-        let label_text = self.label.as_ref().map(|l| {
+        let label_text = self.label.as_ref().and_then(|l| {
             env.resolve(scope, l, ResolutionOptions::default().with_dollar())
-                .unwrap_or_else(|_| Ustr::from(&l.to_string()))
+                .ok()
+                .map(|x| x.unwrap_dollar())
         });
 
         if let Some(until) = self.until {
@@ -384,7 +385,7 @@ impl MirLowering for AstLoop {
             *self.body = env.wrap_loop_body(*self.body, until_node, false);
         }
 
-        let temp_names = LoopTempNames::new(span, self.else_body.is_some());
+        let temp_names = LoopTempNames::new(env, span, self.else_body.is_some());
 
         if let (Some(result), Some(broke)) = (temp_names.result, temp_names.broke)
             && let Ok(scope_data) = env.scoping.scope_mut_or_err(scope)
@@ -542,16 +543,16 @@ impl MirLowering for AstLoop {
 
                 let is_count_loop = explicit_range.is_some()
                     || matches!(
-                        range_dt.as_ref().map(|x| x.data_type.unwrap_all_refs()),
-                        Some(ParserInnerType::Int) | Some(ParserInnerType::UInt)
+                        range_dt.as_ref().map(|x| x.unwrap_all_refs()),
+                        Some(MirDataType::Int) | Some(MirDataType::UInt)
                     );
 
                 let is_indexable_loop = is_count_loop
                     || matches!(
-                        range_dt.as_ref().map(|x| x.data_type.unwrap_all_refs()),
-                        Some(ParserInnerType::List(_))
-                            | Some(ParserInnerType::Str)
-                            | Some(ParserInnerType::Range)
+                        range_dt.as_ref().map(|x| x.unwrap_all_refs()),
+                        Some(MirDataType::List(_))
+                            | Some(MirDataType::Str)
+                            | Some(MirDataType::Range)
                     );
 
                 let (iter_value, idx_initial) = if let Some((from, to, inclusive)) = explicit_range

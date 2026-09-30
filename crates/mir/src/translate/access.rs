@@ -1,9 +1,12 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirField, MirIndex},
+    ast::{MiddleNode, MiddleNodeType, MirField, MirIndex, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::resolve::{KeyOrAstNode, ResolutionOptions},
+    symbols::{
+        VariableKey,
+        resolve::{KeyOrAstNode, ResolutionOptions},
+    },
     translate::MirLowering,
     typing::MiddleTypeDefType,
 };
@@ -41,20 +44,6 @@ impl MiddleEnvironment {
             })
             .collect()
     }
-
-    pub fn resolve_impl_member(
-        &mut self,
-        scope: ScopeId,
-        data_type: &ParserDataType,
-        member: &impl ToString,
-    ) -> Option<Ustr> {
-        let resolved = self
-            .resolve_data_type(scope, data_type, ResolutionOptions::typing())
-            .ok()?;
-        self.typing
-            .find_impl_member(&resolved, member)
-            .map(|x| x.symbol_name)
-    }
 }
 
 impl MirLowering for AstField {
@@ -65,21 +54,19 @@ impl MirLowering for AstField {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let field_name = env.resolve(
-            scope,
-            &self.field,
-            ResolutionOptions::default().with_dollar(),
-        )?;
+        let field_name = env
+            .resolve(
+                scope,
+                &self.field,
+                ResolutionOptions::default().with_dollar(),
+            )?
+            .unwrap_dollar();
 
         if let AstNodeType::Identifier(ident) = &self.base.node_type
             && let Ok(ty) = env.resolve_to_data_type(scope, &ident.value)
         {
             if let Some(member) = env.typing.find_impl_member(&ty, &field_name) {
                 return Ok(MiddleNode::identifier(span, member.symbol_name));
-            }
-
-            if let Some(member) = env.resolve_impl_member(scope, &ty, &field_name) {
-                return Ok(MiddleNode::identifier(span, member));
             }
 
             if let Some(MiddleTypeDefType::Enum { .. }) = env
@@ -122,7 +109,7 @@ impl MirLowering for AstField {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         let ty = self.base.type_of(env, scope, span).or_else(|| {
             if let AstNodeType::Identifier(id) = &self.base.node_type {
                 env.resolve_to_data_type(scope, &id.value).ok()
@@ -137,6 +124,7 @@ impl MirLowering for AstField {
                 &self.field,
                 ResolutionOptions::default().with_dollar(),
             )
+            .map(|x| x.unwrap_dollar())
             .unwrap_or_else(|_| Ustr::from(self.field.text()));
 
         if let Some(member_type) = env.resolve_member_fn_type(&ty, &member) {
@@ -169,11 +157,13 @@ impl MirLowering for AstScope {
                 .get_scope_list(scope, &module_path)
                 .or_else(|_| env.import_scope_list(scope, &module_path).map(|x| x.0))
         {
-            let resolved = env.resolve(
-                new_scope,
-                &self.field,
-                ResolutionOptions::default().with_dollar(),
-            )?;
+            let resolved = env
+                .resolve(
+                    new_scope,
+                    &self.field,
+                    ResolutionOptions::default().with_dollar(),
+                )?
+                .unwrap_dollar();
 
             return AstNode::identifier(span, resolved).lower(env, new_scope, span);
         }
@@ -189,31 +179,23 @@ impl MirLowering for AstScope {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         _span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         let mut module_path = Vec::new();
-        if self.base.scope_access_path(&mut module_path) {
-            let member = env
-                .resolve(
-                    scope,
-                    &self.field,
-                    ResolutionOptions::default().with_dollar(),
-                )
-                .unwrap_or_else(|_| Ustr::from(self.field.text()));
-
-            if let Ok(member_scope) = env
+        if self.base.scope_access_path(&mut module_path)
+            && let Ok(member_scope) = env
                 .get_scope_list(scope, &module_path.clone())
                 .or_else(|_| env.import_scope_list(scope, &module_path).map(|x| x.0))
-            {
-                let resolved = env
-                    .resolve(member_scope, &self.field, ResolutionOptions::idents())
-                    .unwrap_or(member);
+        {
+            let resolved = env
+                .resolve(member_scope, &self.field, ResolutionOptions::idents())
+                .map(|x| x.unwrap_variable())
+                .ok()?;
 
-                return env
-                    .symbols
-                    .variables
-                    .get(&resolved)
-                    .map(|x| x.data_type.clone());
-            }
+            return env
+                .symbols
+                .variables
+                .get(&resolved)
+                .map(|x| x.data_type.clone());
         }
 
         None
@@ -252,35 +234,32 @@ impl MirLowering for AstIndex {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
-        let base_type = self
-            .base
-            .type_of(env, scope, span)
-            .map(|x| match x.data_type {
-                ParserInnerType::Option(x) => x.data_type,
-                x => x,
-            });
+    ) -> Option<MirDataType> {
+        let base_type = self.base.type_of(env, scope, span).map(|x| match x {
+            MirDataType::Option(x) => *x,
+            x => x,
+        });
 
-        let index_type = self.index.type_of(env, scope, span).map(|x| x.data_type);
+        let index_type = self.index.type_of(env, scope, span);
 
         let ref_mutability = base_type.as_ref().and_then(|x| match x {
-            ParserInnerType::Ref(_, x) => Some(*x),
+            MirDataType::Ref(_, x) => Some(*x),
             _ => None,
         });
 
         let data_type = match (base_type, index_type) {
-            (Some(base_type), Some(ParserInnerType::Range)) => {
+            (Some(base_type), Some(MirDataType::Range)) => {
                 Some(match base_type.unwrap_all_refs() {
-                    ParserInnerType::List(_) => ParserDataType::new(span, base_type),
-                    ParserInnerType::Str => ParserDataType::new(span, ParserInnerType::Str),
-                    ParserInnerType::Range => ParserDataType::new(span, ParserInnerType::Range),
+                    MirDataType::List(_) => base_type,
+                    MirDataType::Str => MirDataType::Str,
+                    MirDataType::Range => MirDataType::Range,
                     _ => return None,
                 })
             }
             (Some(base_type), _) => Some(match base_type.unwrap_all_refs() {
-                ParserInnerType::List(inner) => *inner.clone(),
-                ParserInnerType::Str => ParserDataType::new(span, ParserInnerType::Char),
-                ParserInnerType::Range => ParserDataType::new(span, ParserInnerType::Int),
+                MirDataType::List(inner) => *inner.clone(),
+                MirDataType::Str => MirDataType::Char,
+                MirDataType::Range => MirDataType::Int,
                 _ => return None,
             }),
             _ => None,
@@ -288,15 +267,12 @@ impl MirLowering for AstIndex {
 
         data_type.map(|data_type| {
             if let Some(ref_mutability) = ref_mutability {
-                ParserDataType::new(
-                    span,
-                    ParserInnerType::Option(Box::new(ParserDataType::new(
-                        span,
-                        ParserInnerType::Ref(Box::new(data_type), ref_mutability),
-                    ))),
-                )
+                MirDataType::Option(Box::new(MirDataType::Ref(
+                    Box::new(data_type),
+                    ref_mutability,
+                )))
             } else {
-                ParserDataType::new(span, ParserInnerType::Option(Box::new(data_type)))
+                MirDataType::Option(Box::new(data_type))
             }
         })
     }
@@ -313,7 +289,7 @@ impl MirLowering for AstIdentifier {
         Ok(MiddleNode::identifier(
             span,
             match env.resolve_potential_node(scope, &self.value, ResolutionOptions::idents())? {
-                KeyOrAstNode::Str(x) => x,
+                KeyOrAstNode::Key(x) => x.unwrap_variable(),
                 KeyOrAstNode::Node(x) => return x.lower(env, scope, span),
             },
         ))
@@ -324,15 +300,15 @@ impl MirLowering for AstIdentifier {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         match env
             .resolve_potential_node(scope, &self.value, ResolutionOptions::idents())
             .ok()?
         {
-            KeyOrAstNode::Str(iden) => env
+            KeyOrAstNode::Key(iden) => env
                 .symbols
                 .variables
-                .get(&iden)
+                .get(&iden.unwrap_variable())
                 .map(|x| x.data_type.clone()),
             KeyOrAstNode::Node(x) => x.type_of(env, scope, span),
         }

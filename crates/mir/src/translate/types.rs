@@ -70,11 +70,13 @@ impl MirLowering for AstType {
                 _ => Vec::new(),
             };
 
-            let identifier = env.resolve(
-                scope,
-                &self.identifier,
-                ResolutionOptions::default().with_dollar(),
-            )?;
+            let identifier = env
+                .resolve(
+                    scope,
+                    &self.identifier,
+                    ResolutionOptions::default().with_dollar(),
+                )?
+                .unwrap_dollar();
 
             let inner =
                 env.resolve_data_type(scope, inner.as_ref(), ResolutionOptions::typing())?;
@@ -88,7 +90,7 @@ impl MirLowering for AstType {
             {
                 let scope_ref = env.scoping.scope_mut_or_err(scope)?;
 
-                scope_ref.type_mappings.insert(identifier, inner.data_type);
+                scope_ref.type_mappings.insert(identifier, inner);
             }
 
             if let Some(x) = env.context.in_stdlib

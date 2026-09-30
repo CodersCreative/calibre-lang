@@ -62,11 +62,9 @@ impl PatternTranslatorDispatcher {
                     .into_iter()
                     .map(|(var_type, name)| {
                         Ok(BindingDeclaration {
-                            name: env.resolve(
-                                scope,
-                                &name,
-                                ResolutionOptions::default().with_dollar(),
-                            )?,
+                            name: env
+                                .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                                .unwrap_dollar(),
                             value: value.clone(),
                             var_type,
                             data_type: None,
@@ -92,11 +90,9 @@ impl PatternTranslatorDispatcher {
                     .into_iter()
                     .map(|(var_type, name)| {
                         Ok(BindingDeclaration {
-                            name: env.resolve(
-                                scope,
-                                &name,
-                                ResolutionOptions::default().with_dollar(),
-                            )?,
+                            name: env
+                                .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                                .unwrap_dollar(),
                             value: value.clone(),
                             var_type,
                             data_type: None,
@@ -116,11 +112,9 @@ impl PatternTranslatorDispatcher {
                     .into_iter()
                     .map(|(var_type, name)| {
                         Ok(BindingDeclaration {
-                            name: env.resolve(
-                                scope,
-                                &name,
-                                ResolutionOptions::default().with_dollar(),
-                            )?,
+                            name: env
+                                .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                                .unwrap_dollar(),
                             value: value.clone(),
                             var_type,
                             data_type: None,
@@ -129,7 +123,9 @@ impl PatternTranslatorDispatcher {
                     .collect::<Result<_, MiddleErr>>()?;
 
                 bindings.push(BindingDeclaration {
-                    name: env.resolve(scope, name, ResolutionOptions::default().with_dollar())?,
+                    name: env
+                        .resolve(scope, name, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar(),
                     value: value.clone(),
                     var_type: *var_type,
                     data_type: None,

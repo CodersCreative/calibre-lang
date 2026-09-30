@@ -31,7 +31,7 @@ use derive_builder::Builder;
 use rustc_hash::FxHashMap;
 use std::fmt::Display;
 use tracing::instrument;
-use ustr::{Ustr, UstrMap};
+use ustr::Ustr;
 
 use crate::{
     ast::types::MirDataType,
@@ -70,7 +70,7 @@ impl MiddleNode {
 
     pub fn member_field(&self) -> Result<Ustr, MiddleErr> {
         Ok(match &self.node_type {
-            MiddleNodeType::Identifier(name) => name.identifier,
+            MiddleNodeType::Identifier(name) => *name.identifier.name(),
             MiddleNodeType::IntLiteral(MirInt {
                 value: ParsedIntLiteral { value, int_type },
             }) => match int_type {

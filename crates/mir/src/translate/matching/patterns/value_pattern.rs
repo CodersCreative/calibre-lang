@@ -43,11 +43,9 @@ impl PatternTranslator for ValuePatternTranslator {
                 .into_iter()
                 .map(|(var_type, name)| {
                     Ok(BindingDeclaration {
-                        name: env.resolve(
-                            scope,
-                            &name,
-                            ResolutionOptions::default().with_dollar(),
-                        )?,
+                        name: env
+                            .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                            .unwrap_dollar(),
                         value: value.clone(),
                         var_type,
                         data_type: None,

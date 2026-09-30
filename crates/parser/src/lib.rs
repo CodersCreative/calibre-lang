@@ -7,8 +7,8 @@ use chumsky::span::SimpleSpan;
 use logos::Logos;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::hash::Hash;
 use std::{fmt::Display, ops::Range, path::PathBuf};
-use std::{hash::Hash, sync::atomic::AtomicU64};
 use thiserror::Error;
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap};
@@ -18,8 +18,6 @@ pub mod formatter;
 pub mod lexer;
 pub mod native;
 pub mod parse;
-
-pub static COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Default, Clone, Debug)]
 pub struct UstrAlphaRenameState {

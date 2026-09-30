@@ -1,5 +1,5 @@
 use crate::{
-    COUNTER, ParserError, Span,
+    ParserError, Span,
     ast::{
         nodes::{AstNode, AstNodeType, access::AstIdentifier},
         types::ParserDataType,
@@ -10,9 +10,7 @@ use std::{
     fmt::Display,
     ops::{Deref, DerefMut},
     str::FromStr,
-    sync::atomic::Ordering,
 };
-use tracing::instrument;
 use ustr::Ustr;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -402,63 +400,6 @@ impl ParserText {
 
     pub fn format_char_literal(input: char) -> String {
         format!("'{}'", Self::escape_literal(&input.to_string(), '\''))
-    }
-
-    #[instrument(skip_all)]
-    pub fn temp_name(span: Span) -> Self {
-        Self::new(
-            span,
-            format!("[{}-{}]", span, COUNTER.fetch_add(1, Ordering::Relaxed)),
-        )
-    }
-
-    #[instrument(skip_all)]
-    pub fn temp_name_with_suffix(suffix: impl ToString, span: Span) -> Self {
-        let suffix = suffix.to_string();
-        if Self::is_temp_name(&suffix) {
-            return Self::new(span, suffix);
-        }
-
-        Self::new(
-            span,
-            format!(
-                "[{}-{}]{suffix}",
-                span,
-                COUNTER.fetch_add(1, Ordering::Relaxed)
-            ),
-        )
-    }
-
-    pub fn is_temp_name(ident: &impl ToString) -> bool {
-        ident.to_string().contains("[")
-    }
-
-    pub fn get_temp_name_suffix(ident: &impl ToString) -> Option<String> {
-        let ident = ident.to_string();
-        if !Self::is_temp_name(&ident) {
-            return Some(ident);
-        }
-
-        Some(ident.split_once(']')?.1.to_string())
-    }
-
-    pub fn temp_name_suffix_matches(left: &impl ToString, right: &impl ToString) -> bool {
-        let (left, right) = (left.to_string(), right.to_string());
-        if left == right {
-            return true;
-        }
-
-        let (left, right) = (
-            Self::get_temp_name_suffix(&left).unwrap_or(left),
-            Self::get_temp_name_suffix(&right).unwrap_or(right),
-        );
-        if left == right {
-            return true;
-        }
-
-        left.split_once(":<")
-            .and_then(|x| Some(x.0 == right.split_once(":<")?.0))
-            .unwrap_or_default()
     }
 }
 

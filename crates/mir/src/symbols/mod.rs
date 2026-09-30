@@ -8,6 +8,7 @@ use calibre_parser::{
     Location,
     ast::{
         Operator,
+        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{AstNode, VarType, functions::FunctionHeader},
         types::{ParserDataType, ParserInnerType},
     },
@@ -87,6 +88,18 @@ impl Display for VariableKey {
     }
 }
 
+impl From<VariableKey> for PotentialDollarIdentifier {
+    fn from(value: VariableKey) -> Self {
+        Self::Identifier(ParserText::from(value.name().to_string()))
+    }
+}
+
+impl From<VariableKey> for PotentialGenericTypeIdentifier {
+    fn from(value: VariableKey) -> Self {
+        Self::Identifier(PotentialDollarIdentifier::from(value))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TypeKey {
     pub fully_qualified_path: Arc<FullyQualifiedPath>,
@@ -101,6 +114,18 @@ impl TypeKey {
 impl Display for TypeKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.fully_qualified_path)
+    }
+}
+
+impl From<TypeKey> for PotentialDollarIdentifier {
+    fn from(value: TypeKey) -> Self {
+        Self::Identifier(ParserText::from(value.name().to_string()))
+    }
+}
+
+impl From<TypeKey> for PotentialGenericTypeIdentifier {
+    fn from(value: TypeKey) -> Self {
+        Self::Identifier(PotentialDollarIdentifier::from(value))
     }
 }
 

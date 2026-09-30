@@ -17,7 +17,6 @@ use calibre_parser::{
             loops::{AstLoop, LoopType},
             scopes::{AstScopeAlias, AstScopeDef},
         },
-        types::ParserDataType,
     },
 };
 use tracing::instrument;
@@ -53,13 +52,15 @@ impl MirLowering for AstScopeDef {
         env.context.in_temp_scope = self.is_temp;
 
         if let Some(named) = self.named {
-            if self.define {
-                let name = env.resolve(
+            let name = env
+                .resolve(
                     scope,
                     &named.name,
                     ResolutionOptions::default().with_dollar(),
-                )?;
+                )?
+                .unwrap_dollar();
 
+            if self.define {
                 let scope_macro = ScopeMacro {
                     name,
                     args: named.args.clone(),
@@ -79,12 +80,6 @@ impl MirLowering for AstScopeDef {
                     span,
                 });
             }
-
-            let name = env.resolve(
-                scope,
-                &named.name,
-                ResolutionOptions::default().with_dollar(),
-            )?;
 
             if env.scoping.resolve_macro(scope, &name).is_none() {
                 if !named.args.is_empty() {
@@ -145,15 +140,19 @@ impl MirLowering for AstScopeDef {
             };
 
             for arg in named.args {
-                let arg_text =
-                    env.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?;
+                let arg_text = env
+                    .resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?
+                    .unwrap_dollar();
+
                 added.push(arg_text);
                 macro_args_to_insert.push((arg_text, arg.1));
             }
 
             for arg in scope_macro_args {
-                let arg_text =
-                    env.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?;
+                let arg_text = env
+                    .resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?
+                    .unwrap_dollar();
+
                 if !added.contains(&arg_text) {
                     added.push(arg_text);
                     macro_args_to_insert.push((arg_text, arg.1));
@@ -186,11 +185,13 @@ impl MirLowering for AstScopeDef {
                 }) = &stmt.node_type
                     && matches!(value.node_type, AstNodeType::FunctionDeclaration { .. })
                 {
-                    let ident = env.resolve(
-                        new_scope,
-                        identifier,
-                        ResolutionOptions::default().with_dollar(),
-                    )?;
+                    let ident = env
+                        .resolve(
+                            new_scope,
+                            identifier,
+                            ResolutionOptions::default().with_dollar(),
+                        )?
+                        .unwrap_dollar();
 
                     let new_name =
                         Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);

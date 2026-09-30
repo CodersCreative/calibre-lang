@@ -83,10 +83,7 @@ impl MirLowering for AstTest {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let func_identifier = format!(
-            "test::{}",
-            ParserText::temp_name_with_suffix(self.identifier.text.trim(), span).text
-        );
+        let func_identifier = format!("test::{}", self.identifier.text.trim());
 
         let file_path = env.scoping.scope_or_err(scope).map(|s| s.path.clone()).ok();
 

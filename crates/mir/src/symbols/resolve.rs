@@ -198,18 +198,18 @@ impl MiddleEnvironment {
     ) -> Option<MirDataType> {
         fn trait_member_type(
             defs: &FxHashMap<TypeKey, MiddleTrait>,
-            trait_name: &Ustr,
+            trait_name: &TypeKey,
             member: &Ustr,
         ) -> Option<MirDataType> {
             let root = defs
                 .iter()
-                .find(|(name, _)| ParserText::temp_name_suffix_matches(name, &trait_name))
-                .map(|(name, _)| *name)?;
+                .find(|(name, _)| name == &trait_name)
+                .map(|(name, _)| name.clone())?;
             let mut stack = vec![root];
             let mut visited = FxHashSet::default();
 
             while let Some(current) = stack.pop() {
-                if !visited.insert(current) {
+                if !visited.insert(current.clone()) {
                     continue;
                 }
                 let Some(def) = defs.get(&current) else {
@@ -225,9 +225,9 @@ impl MiddleEnvironment {
                         .iter()
                         .find(|(name, _)| ParserText::temp_name_suffix_matches(name, implied))
                     {
-                        stack.push(*resolved);
+                        stack.push(resolved.clone());
                     } else {
-                        stack.push(*implied);
+                        stack.push(implied.clone());
                     }
                 }
             }
@@ -265,7 +265,7 @@ impl MiddleEnvironment {
                 } else if member == "err" || member == "1" {
                     Some((**err).clone())
                 } else if member == "next" {
-                    if ok.data_type == err.data_type {
+                    if ok.loose_eq(err) {
                         Some((**ok).clone())
                     } else {
                         Some(MirDataType::Dynamic)
@@ -314,7 +314,11 @@ impl MiddleEnvironment {
         ty: &MirDataType,
         member: &impl ToString,
     ) -> Option<VariableKey> {
-        let symbol_name = self.typing.find_impl_member(ty, member)?.symbol_name;
+        let symbol_name = self
+            .typing
+            .find_impl_member(ty, member)?
+            .symbol_name
+            .clone();
 
         self.symbols.variables.get(&symbol_name).and_then(|var| {
             if var.data_type.clone().unwrap_all_refs().is_callable() {
