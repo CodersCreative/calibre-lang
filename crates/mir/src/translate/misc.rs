@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -38,7 +38,7 @@ impl MirLowering for AstParen {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.value.type_of(env, scope, span)
     }
 }
@@ -70,7 +70,7 @@ impl MirLowering for AstTag {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.node.type_of(env, scope, span)
     }
 }
@@ -149,7 +149,8 @@ impl MirLowering for AstImport {
                 .ok()
         } else {
             None
-        };
+        }
+        .map(|x| x.unwrap_dollar());
 
         let (new_scope, build_node) = if let Some(alias) = alias {
             if ["super", "root"].contains(&alias.as_str()) {

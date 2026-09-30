@@ -1,8 +1,9 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirSpawn},
+    ast::{MiddleNode, MiddleNodeType, MirSpawn, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
+    symbols::resolve::ResolutionOptions,
     translate::MirLowering,
 };
 use calibre_parser::{
@@ -559,17 +560,20 @@ impl MirLowering for AstSpawn {
 
     fn type_of(
         &self,
-        _env: &mut MiddleEnvironment,
-        _scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType::new(
-            span,
-            if self.auto_wait {
-                ParserInnerType::Null
-            } else {
-                ParserInnerType::Struct(String::from("WaitGroup"))
-            },
-        ))
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        _span: Span,
+    ) -> Option<MirDataType> {
+        Some(if self.auto_wait {
+            MirDataType::Null
+        } else {
+            MirDataType::Struct {
+                identifier: env
+                    .resolve(scope, &"WaitGroup", ResolutionOptions::typing())
+                    .ok()?
+                    .unwrap_typing(),
+                generic_types: Vec::new(),
+            }
+        })
     }
 }

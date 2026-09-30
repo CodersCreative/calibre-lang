@@ -1,5 +1,9 @@
 use crate::{
-    ast::MiddleNode, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+    ast::{MiddleNode, types::MirDataType},
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    scoping::ScopeId,
+    symbols::resolve::ResolutionOptions,
     translate::MirLowering,
 };
 use calibre_parser::{
@@ -15,7 +19,6 @@ use calibre_parser::{
             generator::AstGenerator,
             loops::AstLoop,
         },
-        types::{ParserDataType, ParserInnerType},
     },
 };
 use tracing::instrument;
@@ -81,7 +84,7 @@ impl MirLowering for AstGenerator {
                 span,
                 AstNodeType::FunctionDeclaration(AstFunction {
                     header: FunctionHeader {
-                        return_type,
+                        return_type: return_type.into(),
                         ..Default::default()
                     },
                     body: Box::new(AstNode::new_temp_scope(vec![loop_node])),
@@ -97,15 +100,14 @@ impl MirLowering for AstGenerator {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         let elem = match &self.data_type {
-            Some(dt) => dt.clone(),
+            Some(dt) => env
+                .resolve_data_type(scope, dt, ResolutionOptions::typing())
+                .ok()?,
             _ => self.map.type_of(env, scope, span)?,
         };
 
-        Some(ParserDataType::new(
-            span,
-            ParserInnerType::Gen(Box::new(elem)),
-        ))
+        Some(MirDataType::Gen(Box::new(elem)))
     }
 }

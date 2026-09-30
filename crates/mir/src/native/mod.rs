@@ -147,14 +147,23 @@ impl MiddleEnvironment {
         for (name, var) in vars {
             let original_name = Ustr::from(name);
 
-            let data_type = self.resolve_data_type(scope, var, ResolutionOptions::typing())?;
-            let name = self.register_variable_with_temp_scope(
-                scope,
-                original_name,
-                data_type,
-                VarType::Constant,
-                false,
-            )?;
+            let name = match self
+                .resolve_data_type(scope, var, ResolutionOptions::typing())
+                .and_then(|data_type| {
+                    self.register_variable_with_temp_scope(
+                        scope,
+                        original_name,
+                        data_type,
+                        VarType::Constant,
+                        false,
+                    )
+                }) {
+                Ok(x) => x,
+                Err(e) => {
+                    self.context.errors.push(e);
+                    continue;
+                }
+            };
 
             self.symbols.native_mappings.insert(original_name, name);
         }
@@ -269,14 +278,23 @@ impl MiddleEnvironment {
                     .trim(),
             );
 
-            let data_type = self.resolve_data_type(scope, var, ResolutionOptions::typing())?;
-            let name = self.register_variable_with_temp_scope(
-                scope,
-                name,
-                data_type,
-                VarType::Constant,
-                false,
-            )?;
+            let name = match self
+                .resolve_data_type(scope, var, ResolutionOptions::typing())
+                .and_then(|data_type| {
+                    self.register_variable_with_temp_scope(
+                        scope,
+                        name,
+                        data_type,
+                        VarType::Constant,
+                        false,
+                    )
+                }) {
+                Ok(x) => x,
+                Err(e) => {
+                    self.context.errors.push(e);
+                    continue;
+                }
+            };
 
             self.symbols
                 .native_mappings

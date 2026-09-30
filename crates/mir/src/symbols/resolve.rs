@@ -343,7 +343,7 @@ impl MiddleEnvironment {
     }
 
     #[instrument(skip_all)]
-    fn resolve_potential_node<'a>(
+    pub fn resolve_potential_node<'a>(
         &'a self,
         scope: ScopeId,
         ident: impl Into<IdentifierType<'a>>,
@@ -566,7 +566,7 @@ impl MiddleEnvironment {
         &'a mut self,
         scope: ScopeId,
         ident: impl Into<IdentifierType<'a>>,
-    ) -> Result<ParserDataType, MiddleErr> {
+    ) -> Result<MirDataType, MiddleErr> {
         let ident = ident.into();
         trace!(ident = %ident, "Resolving identifier");
 

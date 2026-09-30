@@ -1,6 +1,5 @@
 use crate::environment::MiddleEnvironment;
 use crate::scoping::ScopeId;
-use crate::symbols::resolve::ResolutionOptions;
 use crate::translate::MirLowering;
 use crate::{ast::MiddleNode, errors::MiddleErr, typing::MiddleTypeDefType};
 use calibre_parser::ast::idents::{
@@ -86,15 +85,12 @@ impl MiddleEnvironment {
             MiddleTypeDefType::Struct(ObjectMap(fields)) => {
                 let fields = fields
                     .iter()
-                    .map(|(field_name, (field_type, default_value))| {
+                    .map(|(field_name, (resolved, default_value))| {
                         if let Some(default) = default_value {
                             (*field_name, *default.clone())
-                        } else if let Some(default) = field_type.default_node() {
+                        } else if let Some(default) = resolved.default_node(span) {
                             (*field_name, default)
                         } else {
-                            let resolved = self
-                                .resolve_data_type(scope, field_type, ResolutionOptions::typing())
-                                .unwrap_or(field_type.clone());
                             let type_name = resolved.impl_name();
                             (
                                 *field_name,

@@ -527,12 +527,12 @@ impl MirLowering for AstExtern {
             }
         }
 
-        env.register_variable(scope, ident, fn_type.clone(), VarType::Constant)?;
+        let var_key = env.register_variable(scope, ident, fn_type.clone(), VarType::Constant)?;
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: VarType::Constant,
-                identifier: ident,
+                identifier: var_key,
                 value: Box::new(MiddleNode::new(
                     MiddleNodeType::ExternFunction(MirExtern {
                         abi: Ustr::from(&self.abi),
@@ -638,7 +638,7 @@ impl MirLowering for AstFunction {
                     )));
             };
 
-            env.register_variable_with_temp_scope(
+            let param_key = env.register_variable_with_temp_scope(
                 new_scope,
                 og_name,
                 data_type.clone(),
@@ -647,7 +647,7 @@ impl MirLowering for AstFunction {
             )?;
 
             params.push((
-                og_name,
+                param_key,
                 data_type,
                 param
                     .2
@@ -659,7 +659,7 @@ impl MirLowering for AstFunction {
             let caller_context_type =
                 ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
 
-            env.register_variable_with_temp_scope(
+            let caller_key = env.register_variable_with_temp_scope(
                 new_scope,
                 Ustr::from("caller_context"),
                 caller_context_type.clone(),
@@ -667,7 +667,7 @@ impl MirLowering for AstFunction {
                 true,
             )?;
 
-            params.push((Ustr::from("caller_context"), caller_context_type, None));
+            params.push((caller_key, caller_context_type, None));
         }
 
         let return_type = env.resolve_data_type(

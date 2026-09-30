@@ -1,5 +1,5 @@
 use calibre_parser::{
-    IdentifiersUsed, Span,
+    AlphaRenamable, Span,
     ast::{
         RefMutability,
         ffi::ParserFfiInnerType,
@@ -8,14 +8,17 @@ use calibre_parser::{
             AstNode, AstNodeType,
             functions::CallArg,
             lists::AstList,
-            literals::{AstChar, AstFloat, AstRange, AstString, AstTuple},
+            literals::{AstChar, AstRange, AstString, AstTuple},
         },
         types::{ParserDataType, ParserInnerType},
     },
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, hash::Hash, ops::Deref, str::FromStr};
+use std::{fmt::Display, sync::Arc};
+use ustr::Ustr;
+
+use crate::{MirTypeKeysUsed, scoping::FullyQualifiedPath};
 
 use crate::symbols::TypeKey;
 
@@ -26,21 +29,11 @@ impl MirDataType {
         let base_key = base.to_string();
 
         names.push(base_key.clone());
-        if let Some(x) = ParserText::get_temp_name_suffix(&base_key) {
-            names.push(x);
-        }
 
-        match &base {
-            MirDataType::Struct(name) => {
-                names.push(name.clone());
-                if let Some(x) = ParserText::get_temp_name_suffix(name) {
-                    names.push(x);
-                }
-            }
-            MirDataType::StructWithGenerics { identifier, .. } => {
-                names.push(identifier.clone());
-                if let Some(x) = ParserText::get_temp_name_suffix(identifier) {
-                    names.push(x);
+        match self {
+            MirDataType::Struct { identifier, .. } => {
+                if let Some(name) = identifier.fully_qualified_path.name.as_ref() {
+                    names.push(name.to_string());
                 }
             }
             _ => {}
@@ -56,16 +49,26 @@ impl MirDataType {
             .join(", ")
     }
 
-    pub fn impl_name(&self) -> String {
-        self.impl_name()
-    }
-
     pub fn substitute(&self, subst: &FxHashMap<String, MirDataType>) -> MirDataType {
-        match &self.data_type {
-            MirDataType::Struct(s) if subst.contains_key(s) => subst
-                .get(s)
-                .map(|dt| dt.data_type.clone())
-                .unwrap_or_else(|| self.data_type.clone()),
+        match self {
+            MirDataType::Struct {
+                identifier,
+                generic_types,
+            } => {
+                if let Some(name) = identifier.fully_qualified_path.name.as_ref() {
+                    let name_str = name.to_string();
+                    if subst.contains_key(&name_str) {
+                        return subst
+                            .get(&name_str)
+                            .cloned()
+                            .unwrap_or_else(|| self.clone());
+                    }
+                }
+                MirDataType::Struct {
+                    identifier: identifier.clone(),
+                    generic_types: generic_types.iter().map(|g| g.substitute(subst)).collect(),
+                }
+            }
             MirDataType::Tuple(xs) => {
                 MirDataType::Tuple(xs.iter().map(|x| x.substitute(subst)).collect())
             }
@@ -84,26 +87,16 @@ impl MirDataType {
                 parameters: parameters.iter().map(|p| p.substitute(subst)).collect(),
             },
             MirDataType::Ref(x, m) => MirDataType::Ref(Box::new(x.substitute(subst)), *m),
-            MirDataType::StructWithGenerics {
-                identifier,
-                generic_types,
-            } => MirDataType::StructWithGenerics {
-                identifier: identifier.clone(),
-                generic_types: generic_types.iter().map(|g| g.substitute(subst)).collect(),
-            },
-            _ => self.data_type.clone(),
+            _ => self.clone(),
         }
     }
 }
 
-impl IdentifiersUsed for MirDataType {
-    fn identifiers_used(&self) -> Vec<&String> {
+impl MirTypeKeysUsed for MirDataType {
+    fn identifiers_used(&self) -> Vec<&TypeKey> {
         let mut types = Vec::new();
-        match &self.data_type {
-            MirDataType::Struct(name) => {
-                types.push(name);
-            }
-            MirDataType::StructWithGenerics { identifier, .. } => {
+        match self {
+            MirDataType::Struct { identifier, .. } => {
                 types.push(identifier);
             }
             MirDataType::Function {
@@ -169,6 +162,27 @@ pub enum MirDataType {
     Ptr(Box<MirDataType>),
 }
 
+impl From<ParserFfiInnerType> for MirDataType {
+    fn from(val: ParserFfiInnerType) -> MirDataType {
+        match val {
+            ParserFfiInnerType::F32 | ParserFfiInnerType::F64 | ParserFfiInnerType::LongDouble => {
+                MirDataType::Float
+            }
+            ParserFfiInnerType::SChar | ParserFfiInnerType::UChar => MirDataType::Char,
+            ParserFfiInnerType::U16
+            | ParserFfiInnerType::U8
+            | ParserFfiInnerType::U32
+            | ParserFfiInnerType::U64
+            | ParserFfiInnerType::USize
+            | ParserFfiInnerType::UInt
+            | ParserFfiInnerType::UShort
+            | ParserFfiInnerType::ULong
+            | ParserFfiInnerType::ULongLong => MirDataType::UInt,
+            _ => MirDataType::Int,
+        }
+    }
+}
+
 impl From<MirDataType> for ParserDataType {
     fn from(value: MirDataType) -> Self {
         ParserDataType {
@@ -203,24 +217,26 @@ impl From<MirDataType> for ParserInnerType {
                 return_type,
                 parameters,
             } => ParserInnerType::Function {
-                return_type: Box::new(return_type.into()),
+                return_type: Box::new((*return_type).into()),
                 parameters: parameters.into_iter().map(ParserDataType::from).collect(),
             },
             MirDataType::NativeFunction {
                 return_type,
                 parameters,
             } => ParserInnerType::NativeFunction {
-                return_type: Box::new(return_type.into()),
+                return_type: Box::new((*return_type).into()),
                 parameters: parameters.into_iter().map(ParserDataType::from).collect(),
             },
-            MirDataType::Gen(x) => ParserInnerType::Gen(Box::new(x.into())),
-            MirDataType::List(x) => ParserInnerType::List(Box::new(x.into())),
-            MirDataType::Option(x) => ParserInnerType::Option(Box::new(x.into())),
-            MirDataType::Ptr(x) => ParserInnerType::Ptr(Box::new(x.into())),
-            MirDataType::Ref(x, mutability) => ParserInnerType::Ref(Box::new(x.into()), mutability),
+            MirDataType::Gen(x) => ParserInnerType::Gen(Box::new((*x).into())),
+            MirDataType::List(x) => ParserInnerType::List(Box::new((*x).into())),
+            MirDataType::Option(x) => ParserInnerType::Option(Box::new((*x).into())),
+            MirDataType::Ptr(x) => ParserInnerType::Ptr(Box::new((*x).into())),
+            MirDataType::Ref(x, mutability) => {
+                ParserInnerType::Ref(Box::new((*x).into()), mutability)
+            }
             MirDataType::Result { ok, err } => ParserInnerType::Result {
-                ok: Box::new(ok.into()),
-                err: Box::new(err.into()),
+                ok: Box::new((*ok).into()),
+                err: Box::new((*err).into()),
             },
             MirDataType::Tuple(values) => {
                 ParserInnerType::Tuple(values.into_iter().map(ParserDataType::from).collect())
@@ -254,14 +270,12 @@ impl From<MirDataType> for ParserInnerType {
 }
 
 impl AlphaRenamable for MirDataType {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+    fn rename(&mut self, state: &mut calibre_parser::UstrAlphaRenameState) {
         match self {
-            MirDataType::Auto(_)
-            | MirDataType::Big
+            MirDataType::Big
             | MirDataType::Byte
             | MirDataType::Bool
             | MirDataType::Char
-            | MirDataType::DollarIdentifier(_)
             | MirDataType::FfiType(_)
             | MirDataType::Float
             | MirDataType::Host
@@ -271,21 +285,28 @@ impl AlphaRenamable for MirDataType {
             | MirDataType::UInt
             | MirDataType::Str
             | MirDataType::Dynamic => {}
-            MirDataType::Struct(x) => {
-                *x = state.mapped_str_or_original(x);
-            }
-            MirDataType::StructWithGenerics {
+            MirDataType::Struct {
                 identifier,
                 generic_types,
             } => {
-                *identifier = state.mapped_str_or_original(identifier);
+                if let Some(name) = identifier.fully_qualified_path.name {
+                    let mapped = state.mapped_name_or_original(name);
+                    let mut new_path = (*identifier.fully_qualified_path).clone();
+                    new_path.name = Some(mapped);
+                    identifier.fully_qualified_path = Arc::new(new_path);
+                }
                 for g in generic_types {
                     g.rename(state);
                 }
             }
             MirDataType::DynamicTraits(x) => {
                 for item in x {
-                    *item = state.mapped_str_or_original(item);
+                    if let Some(name) = item.fully_qualified_path.name {
+                        let mapped = state.mapped_name_or_original(name);
+                        let mut new_path = (*item.fully_qualified_path).clone();
+                        new_path.name = Some(mapped);
+                        item.fully_qualified_path = Arc::new(new_path);
+                    }
                 }
             }
             MirDataType::List(x) => x.rename(state),
@@ -320,17 +341,11 @@ impl AlphaRenamable for MirDataType {
             }
             MirDataType::Gen(x) => x.rename(state),
             MirDataType::Ref(x, _) => x.rename(state),
-            // TODO Implement
-            MirDataType::Scope(_) => {}
         }
     }
 }
 
 impl MirDataType {
-    pub fn null(span: Span) -> Self {
-        MirDataType::Null
-    }
-
     pub fn object(identifier: TypeKey) -> Self {
         MirDataType::Struct {
             identifier,
@@ -338,55 +353,29 @@ impl MirDataType {
         }
     }
 
-    pub fn loose_eq(&self, other: &Self) -> bool {
-        self.data_type.loose_eq(&other.data_type) || self.key().loose_eq(&other.key())
-    }
-
-    pub fn function(
-        span: Span,
-        parameters: Vec<MirDataType>,
-        return_type: MirDataType,
-    ) -> MirDataType {
+    pub fn function(parameters: Vec<MirDataType>, return_type: MirDataType) -> MirDataType {
         MirDataType::Function {
             return_type: Box::new(return_type),
             parameters,
         }
     }
 
-    pub fn unwrap_all_refs(self) -> Self {
-        Self {
-            data_type: self.data_type.unwrap_all_refs().clone(),
-            span: self.span,
-        }
-    }
-
-    pub fn contains_auto(&self) -> bool {
-        self.data_type.contains_auto()
-    }
-
-    pub fn unwrap_one_result(&self) -> Option<&Self> {
-        self.data_type.unwrap_one_result()
-    }
-
-    pub fn get_gen(self) -> Option<MirDataType> {
-        match self.unwrap_all_refs().data_type {
-            MirDataType::Gen(x) => Some(*x),
+    pub fn get_gen(&self) -> Option<MirDataType> {
+        match self.unwrap_all_refs() {
+            MirDataType::Gen(x) => Some(*x.clone()),
             _ => None,
         }
     }
 
     pub fn is_int(self) -> bool {
         matches!(
-            self.unwrap_all_refs().resolve_ffi().data_type,
+            self.unwrap_all_refs(),
             MirDataType::Int | MirDataType::UInt | MirDataType::Byte
         )
     }
 
     pub fn is_native(self) -> bool {
-        !matches!(
-            self.unwrap_all_refs().resolve_ffi().data_type,
-            MirDataType::Struct(_) | MirDataType::StructWithGenerics { .. }
-        )
+        !matches!(self.unwrap_all_refs(), MirDataType::Struct { .. })
     }
 
     pub fn default_node(&self, span: Span) -> Option<AstNode> {
@@ -397,27 +386,19 @@ impl MirDataType {
             MirDataType::Str => Some(AstNode::new(
                 span,
                 AstNodeType::StringLiteral(AstString {
-                    value: ParserText::new(self.span, ""),
+                    value: ParserText::new(span, ""),
                 }),
             )),
             MirDataType::Char => Some(AstNode::new(
                 span,
                 AstNodeType::CharLiteral(AstChar { value: '\0' }),
             )),
-            MirDataType::Float => Some(AstNode::new(
-                span,
-                AstNodeType::FloatLiteral(AstFloat {
-                    value: 0.0,
-                    format: None,
-                }),
-            )),
-            MirDataType::Auto(_) => Some(AstNode::new(span, AstNodeType::Null)),
             MirDataType::Dynamic => Some(AstNode::new(span, AstNodeType::Null)),
             MirDataType::Null => Some(AstNode::new(span, AstNodeType::Null)),
             MirDataType::List(t) => Some(AstNode::new(
                 span,
                 AstNodeType::ListLiteral(AstList {
-                    data_type: *t.clone(),
+                    data_type: (*t.clone()).into(),
                     values: Vec::new(),
                 }),
             )),
@@ -436,7 +417,7 @@ impl MirDataType {
                     values: values.iter().filter_map(|x| x.default_node(span)).collect(),
                 }),
             )),
-            MirDataType::Option(_) => Some(AstNode::none(self.span)),
+            MirDataType::Option(_) => Some(AstNode::none(span)),
             MirDataType::Result { ok, .. } => Some(AstNode::call(
                 span,
                 AstNode::identifier(span, "ok"),
@@ -445,26 +426,12 @@ impl MirDataType {
             _ => None,
         }
     }
-
-    pub fn verify(self) -> Self {
-        Self {
-            data_type: self.data_type.verify(),
-            span: self.span,
-        }
-    }
-
-    pub fn resolve_ffi(self) -> Self {
-        Self {
-            data_type: self.data_type.resolve_ffi(),
-            span: self.span,
-        }
-    }
 }
 
 impl MirDataType {
     pub fn unwrap_all_refs(&self) -> &Self {
         match self {
-            Self::Ref(x, _) => x.data_type.unwrap_all_refs(),
+            Self::Ref(x, _) => x.unwrap_all_refs(),
             _ => self,
         }
     }
@@ -484,30 +451,65 @@ impl MirDataType {
     }
 
     pub fn key(&self) -> MirDataType {
-        match self.unwrap_all_refs().clone() {
-            MirDataType::StructWithGenerics {
-                identifier,
-                generic_types: _,
-            } => MirDataType::Struct(identifier),
-            MirDataType::List(_) => MirDataType::Struct(String::from("list")),
-            MirDataType::Ptr(_) => MirDataType::Struct(String::from("ptr")),
-            MirDataType::Gen(_) => MirDataType::Struct(String::from("gen")),
-            MirDataType::Option(_) => MirDataType::Struct(String::from("option")),
-            MirDataType::Result { .. } => MirDataType::Struct(String::from("result")),
-            x => x,
+        match self.unwrap_all_refs() {
+            MirDataType::Struct { identifier, .. } => MirDataType::Struct {
+                identifier: identifier.clone(),
+                generic_types: Vec::new(),
+            },
+            MirDataType::List(_) => MirDataType::Struct {
+                identifier: TypeKey {
+                    fully_qualified_path: Arc::new(FullyQualifiedPath {
+                        name: Some(Ustr::from("list")),
+                        parent: None,
+                    }),
+                },
+                generic_types: Vec::new(),
+            },
+            MirDataType::Ptr(_) => MirDataType::Struct {
+                identifier: TypeKey {
+                    fully_qualified_path: Arc::new(FullyQualifiedPath {
+                        name: Some(Ustr::from("ptr")),
+                        parent: None,
+                    }),
+                },
+                generic_types: Vec::new(),
+            },
+            MirDataType::Gen(_) => MirDataType::Struct {
+                identifier: TypeKey {
+                    fully_qualified_path: Arc::new(FullyQualifiedPath {
+                        name: Some(Ustr::from("gen")),
+                        parent: None,
+                    }),
+                },
+                generic_types: Vec::new(),
+            },
+            MirDataType::Option(_) => MirDataType::Struct {
+                identifier: TypeKey {
+                    fully_qualified_path: Arc::new(FullyQualifiedPath {
+                        name: Some(Ustr::from("option")),
+                        parent: None,
+                    }),
+                },
+                generic_types: Vec::new(),
+            },
+            MirDataType::Result { .. } => MirDataType::Struct {
+                identifier: TypeKey {
+                    fully_qualified_path: Arc::new(FullyQualifiedPath {
+                        name: Some(Ustr::from("result")),
+                        parent: None,
+                    }),
+                },
+                generic_types: Vec::new(),
+            },
+            x => x.clone(),
         }
     }
 
     pub fn impl_name(&self) -> String {
         match self.key() {
-            MirDataType::StructWithGenerics { identifier, .. }
-            | MirDataType::Struct(identifier) => identifier,
+            MirDataType::Struct { identifier, .. } => identifier.to_string(),
             other => other.to_string(),
         }
-    }
-
-    pub fn is_auto(&self) -> bool {
-        matches!(self, Self::Auto(_))
     }
 
     pub fn is_dyn(&self) -> bool {
@@ -555,13 +557,11 @@ impl MirDataType {
     }
 
     pub fn loose_eq(&self, other: &Self) -> bool {
-        other.is_auto()
-            || other.is_tuple()
+        other.is_tuple()
             || other.is_host()
             || other.is_dyn()
             || other.is_dyn_list()
             || other.is_dyn_trait()
-            || self.is_auto()
             || self.is_tuple()
             || self.is_host()
             || self.is_dyn()
@@ -569,14 +569,11 @@ impl MirDataType {
             || self.is_dyn_trait()
             || other == self
             || self.impl_name() == other.impl_name()
-            || self.clone().resolve_ffi() == other.clone().resolve_ffi()
     }
 
     #[inline]
     pub fn is_gen(&self) -> bool {
-        let short =
-            ParserText::get_temp_name_suffix(&self.impl_name()).unwrap_or_else(|| self.impl_name());
-        short == "gen" || short.starts_with("gen:<")
+        self.impl_name() == "gen" || self.impl_name().starts_with("gen:<")
     }
 
     pub fn verify(self) -> Self {
@@ -593,7 +590,7 @@ impl MirDataType {
             Self::DynamicTraits(traits) => {
                 let mut normalized = traits
                     .into_iter()
-                    .map(|s| s.trim().to_string())
+                    .map(|s| s.to_string())
                     .filter(|s| !s.is_empty())
                     .collect::<Vec<_>>();
                 normalized.sort();
@@ -601,7 +598,17 @@ impl MirDataType {
                 if normalized.is_empty() {
                     Self::Dynamic
                 } else {
-                    Self::DynamicTraits(normalized)
+                    Self::DynamicTraits(
+                        normalized
+                            .into_iter()
+                            .map(|s| TypeKey {
+                                fully_qualified_path: Arc::new(FullyQualifiedPath {
+                                    name: Some(Ustr::from(&s)),
+                                    parent: None,
+                                }),
+                            })
+                            .collect(),
+                    )
                 }
             }
             ty => ty,
@@ -610,7 +617,6 @@ impl MirDataType {
 
     pub fn contains_auto(&self) -> bool {
         match self {
-            MirDataType::Auto(_) => true,
             MirDataType::Tuple(xs) => xs.iter().any(|x| x.contains_auto()),
             MirDataType::List(x) => x.contains_auto(),
             MirDataType::Ptr(x) => x.contains_auto(),
@@ -622,10 +628,9 @@ impl MirDataType {
                 ..
             } => return_type.contains_auto() || parameters.iter().any(|x| x.contains_auto()),
             MirDataType::Ref(x, _) => x.contains_auto(),
-            MirDataType::StructWithGenerics { generic_types, .. } => {
+            MirDataType::Struct { generic_types, .. } => {
                 generic_types.iter().any(|x| x.contains_auto())
             }
-            MirDataType::Scope(x) => x.iter().any(|x| x.contains_auto()),
             MirDataType::DynamicTraits(_) => false,
             _ => false,
         }
@@ -650,14 +655,13 @@ impl MirDataType {
                 return_type: Box::new(return_type.resolve_ffi()),
                 parameters: parameters.into_iter().map(|x| x.resolve_ffi()).collect(),
             },
-            Self::StructWithGenerics {
+            Self::Struct {
                 identifier,
                 generic_types,
-            } => Self::StructWithGenerics {
+            } => Self::Struct {
                 identifier,
                 generic_types: generic_types.into_iter().map(|x| x.resolve_ffi()).collect(),
             },
-            Self::Scope(x) => Self::Scope(x.into_iter().map(|x| x.resolve_ffi()).collect()),
             Self::DynamicTraits(x) => Self::DynamicTraits(x),
             x => x,
         }
@@ -671,67 +675,10 @@ impl MirDataType {
             _ => None,
         }
     }
-
-    pub fn matches(&self, other: &Self, generic_params: &[&str]) -> bool {
-        match (self, other) {
-            (MirDataType::Struct(a), _) if generic_params.contains(&a.as_str()) => true,
-            (MirDataType::Struct(a), MirDataType::Struct(b)) if a == b => true,
-            (MirDataType::StructWithGenerics { identifier: a, .. }, MirDataType::Struct(b))
-                if b == a =>
-            {
-                true
-            }
-            (MirDataType::Struct(a), MirDataType::StructWithGenerics { identifier: b, .. }) => {
-                a == b
-            }
-            (
-                MirDataType::StructWithGenerics {
-                    identifier: a,
-                    generic_types: ag,
-                },
-                MirDataType::StructWithGenerics {
-                    identifier: b,
-                    generic_types: bg,
-                },
-            ) => {
-                if a != b || ag.len() != bg.len() {
-                    return false;
-                }
-                ag.iter()
-                    .zip(bg.iter())
-                    .all(|(x, y)| x.data_type.matches(&y.data_type, generic_params))
-            }
-            (MirDataType::List(a), MirDataType::List(b)) => {
-                a.data_type.matches(&b.data_type, generic_params)
-            }
-            (MirDataType::Option(a), MirDataType::Option(b)) => {
-                a.data_type.matches(&b.data_type, generic_params)
-            }
-            (MirDataType::Result { ok: ao, err: ae }, MirDataType::Result { ok: bo, err: be }) => {
-                ao.data_type.matches(&bo.data_type, generic_params)
-                    && ae.data_type.matches(&be.data_type, generic_params)
-            }
-            (MirDataType::Ptr(a), MirDataType::Ptr(b)) => {
-                a.data_type.matches(&b.data_type, generic_params)
-            }
-            (MirDataType::Ref(a, _), MirDataType::Ref(b, _)) => {
-                a.data_type.matches(&b.data_type, generic_params)
-            }
-            (MirDataType::Tuple(a), MirDataType::Tuple(b)) => {
-                if a.len() != b.len() {
-                    return false;
-                }
-                a.iter()
-                    .zip(b.iter())
-                    .all(|(x, y)| x.data_type.matches(&y.data_type, generic_params))
-            }
-            (x, y) => x == y,
-        }
-    }
 }
 
 impl Display for MirDataType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.data_type)
+        write!(f, "{}", ParserInnerType::from(self.clone()))
     }
 }

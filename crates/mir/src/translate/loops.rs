@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirLoop, MirScopeDecl},
+    ast::{MiddleNode, MiddleNodeType, MirLoop, MirScopeDecl, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{LoopContext, ScopeId},
@@ -728,7 +728,7 @@ impl MirLowering for AstLoop {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.else_body
             .as_ref()
             .and_then(|x| x.type_of(env, scope, span))

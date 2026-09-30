@@ -10,6 +10,8 @@ use calibre_parser::{
 use std::path::PathBuf;
 use thiserror::Error;
 
+use crate::ast::types::MirDataType;
+
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum MiddleErr {
     #[error("{0}")]
@@ -56,33 +58,33 @@ pub enum MiddleErr {
     ReturnOutOfFunction,
     #[error("Attempted to use a value of type : {found}. Expected : {expected}")]
     InvalidType {
-        expected: Box<ParserDataType>,
-        found: Box<ParserDataType>,
+        expected: Box<MirDataType>,
+        found: Box<MirDataType>,
     },
     #[error(
         "Attempted to return a value of type : {found} from a function with return type : {expected}"
     )]
     InvalidReturnType {
-        expected: Box<ParserDataType>,
-        found: Box<ParserDataType>,
+        expected: Box<MirDataType>,
+        found: Box<MirDataType>,
     },
     #[error("Invalid binary operation: {operator} between types : {left} and {right}")]
     InvalidBinaryOperation {
         operator: BinaryOperator,
-        left: Box<ParserDataType>,
-        right: Box<ParserDataType>,
+        left: Box<MirDataType>,
+        right: Box<MirDataType>,
     },
     #[error("Invalid boolean operation: {operator} between types : {left} and {right}")]
     InvalidBooleanOperation {
         operator: BooleanOperator,
-        left: Box<ParserDataType>,
-        right: Box<ParserDataType>,
+        left: Box<MirDataType>,
+        right: Box<MirDataType>,
     },
     #[error("Invalid comparison operation: {operator} between types : {left} and {right}")]
     InvalidComparisonOperation {
         operator: ComparisonOperator,
-        left: Box<ParserDataType>,
-        right: Box<ParserDataType>,
+        left: Box<MirDataType>,
+        right: Box<MirDataType>,
     },
     #[error("Cannot perform enum style pattern matching on type : {0}")]
     CantMatch(Box<ParserDataType>),

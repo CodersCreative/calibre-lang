@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAssignment, MirBreak, MirContinue, MirEmit, MirInt,
-        MirReturn, MirScopeDecl,
+        MirReturn, MirScopeDecl, types::MirDataType,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -527,64 +527,32 @@ impl MirLowering for AstTry {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         match self.try_type {
             TryType::Normal => match self.value.type_of(env, scope, span) {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Result { ok: x, err: _ },
-                    ..
-                })
-                | Some(ParserDataType {
-                    data_type: ParserInnerType::Option(x),
-                    ..
-                }) => Some(*x),
+                Some(MirDataType::Result { ok: x, err: _ }) | Some(MirDataType::Option(x)) => {
+                    Some(*x)
+                }
                 x => x,
             },
             TryType::Option => match self.value.type_of(env, scope, span) {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Result { ok, .. },
-                    ..
-                }) => Some(ParserDataType::new(span, ParserInnerType::Option(ok))),
-                Some(
-                    opt @ ParserDataType {
-                        data_type: ParserInnerType::Option(_),
-                        ..
-                    },
-                ) => Some(opt),
+                Some(MirDataType::Result { ok, .. }) => Some(MirDataType::Option(ok)),
+                Some(opt @ MirDataType::Option(_)) => Some(opt),
                 _ => None,
             },
             TryType::Result => match self.value.type_of(env, scope, span) {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Option(ok),
-                    ..
-                }) => Some(ParserDataType::new(
-                    span,
-                    ParserInnerType::Result {
-                        ok,
-                        err: Box::new(ParserDataType::new(span, ParserInnerType::Dynamic)),
-                    },
-                )),
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Result { ok, .. },
-                    ..
-                }) => Some(ParserDataType::new(
-                    span,
-                    ParserInnerType::Result {
-                        ok,
-                        err: Box::new(ParserDataType::new(span, ParserInnerType::Dynamic)),
-                    },
-                )),
+                Some(MirDataType::Option(ok)) => Some(MirDataType::Result {
+                    ok,
+                    err: Box::new(MirDataType::Dynamic),
+                }),
+                Some(MirDataType::Result { ok, .. }) => Some(MirDataType::Result {
+                    ok,
+                    err: Box::new(MirDataType::Dynamic),
+                }),
                 _ => None,
             },
             TryType::Panic => match self.value.type_of(env, scope, span) {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Result { ok, .. },
-                    ..
-                })
-                | Some(ParserDataType {
-                    data_type: ParserInnerType::Option(ok),
-                    ..
-                }) => Some(*ok),
+                Some(MirDataType::Result { ok, .. }) | Some(MirDataType::Option(ok)) => Some(*ok),
                 x => x,
             },
         }
@@ -682,10 +650,10 @@ impl MirLowering for AstReturn {
                                 if let Some(x) = value.type_of(env, scope, span) {
                                     x.key()
                                 } else {
-                                    ParserInnerType::Dynamic
+                                    MirDataType::Dynamic
                                 }
                             } else {
-                                ParserInnerType::Null
+                                MirDataType::Null
                             };
 
                             // TODO Properly check for the generators inner type
@@ -693,8 +661,8 @@ impl MirLowering for AstReturn {
                                 println!("{}", self.value.unwrap());
                                 return Err(env.context.err_at_current(
                                     MiddleErr::InvalidReturnType {
-                                        expected: Box::new(ParserDataType::new(span, ret_ty)),
-                                        found: Box::new(ParserDataType::new(span, node_ty)),
+                                        expected: Box::new(ret_ty),
+                                        found: Box::new(node_ty),
                                     },
                                 ));
                             }
@@ -760,7 +728,7 @@ impl MirLowering for AstPipe {
                 && env
                     .symbols
                     .variables
-                    .get(&resolved)
+                    .get(&resolved.unwrap_variable())
                     .is_some_and(|var| var.data_type.is_callable())
             {
                 return true;
@@ -769,7 +737,7 @@ impl MirLowering for AstPipe {
             let from_type = point
                 .get_node()
                 .type_of(env, scope, span)
-                .map(|x| x.unwrap_all_refs().data_type);
+                .map(|x| x.unwrap_all_refs());
 
             from_type.map(|x| x.is_callable()).unwrap_or_default()
         };
@@ -906,7 +874,7 @@ impl MirLowering for AstPipe {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         let mut iter = self.values.iter();
         let first = iter.next()?;
         let mut current = first.get_node().type_of(env, scope, span)?;

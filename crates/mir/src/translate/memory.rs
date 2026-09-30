@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirDeref, MirDrop, MirMove, MirRef},
+    ast::{MiddleNode, MiddleNodeType, MirDeref, MirDrop, MirMove, MirRef, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -16,7 +16,7 @@ use calibre_parser::{
             declaration::AstDeclaration,
             memory::{AstDeref, AstDrop, AstMove, AstRef},
         },
-        types::{ParserDataType, ParserInnerType},
+        types::ParserDataType,
     },
 };
 use tracing::instrument;
@@ -43,14 +43,16 @@ impl MirLowering for AstRef {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType {
-            data_type: ParserInnerType::Ref(
-                Box::new(self.value.type_of(env, scope, span)?.unwrap_all_refs()),
-                self.mutability,
+    ) -> Option<MirDataType> {
+        Some(MirDataType::Ref(
+            Box::new(
+                self.value
+                    .type_of(env, scope, span)?
+                    .unwrap_all_refs()
+                    .clone(),
             ),
-            span,
-        })
+            self.mutability,
+        ))
     }
 }
 
@@ -75,10 +77,10 @@ impl MirLowering for AstDeref {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.value
             .type_of(env, scope, span)
-            .map(|x| x.unwrap_all_refs())
+            .map(|x| x.unwrap_all_refs().clone())
     }
 }
 
@@ -93,7 +95,9 @@ impl MirLowering for AstMove {
         match self.value.node_type {
             AstNodeType::Identifier(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::Move(MirMove {
-                    identifier: env.resolve(scope, &x.value, ResolutionOptions::idents())?,
+                    identifier: env
+                        .resolve(scope, &x.value, ResolutionOptions::idents())?
+                        .unwrap_variable(),
                 }),
                 span,
             }),
@@ -212,10 +216,10 @@ impl MirLowering for AstMove {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.value
             .type_of(env, scope, span)
-            .map(|x| x.unwrap_all_refs())
+            .map(|x| x.unwrap_all_refs().clone())
     }
 }
 
@@ -229,7 +233,9 @@ impl MirLowering for AstDrop {
     ) -> Result<MiddleNode, MiddleErr> {
         Ok(MiddleNode {
             node_type: MiddleNodeType::Drop(MirDrop {
-                identifier: env.resolve(scope, &self.value, ResolutionOptions::idents())?,
+                identifier: env
+                    .resolve(scope, &self.value, ResolutionOptions::idents())?
+                    .unwrap_variable(),
             }),
             span,
         })

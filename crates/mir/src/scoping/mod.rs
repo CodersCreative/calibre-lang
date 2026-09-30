@@ -1,4 +1,4 @@
-use crate::errors::MiddleErr;
+use crate::{ast::types::MirDataType, errors::MiddleErr};
 use calibre_parser::{
     Location, Span,
     ast::{idents::PotentialDollarIdentifier, nodes::AstNode, types::ParserInnerType},
@@ -15,7 +15,7 @@ pub type ScopeId = NodeId;
 pub struct Scoping {
     pub scopes: Arena<MiddleScope>,
     pub loop_stack: Vec<LoopContext>,
-    pub return_type_stack: Vec<ParserInnerType>,
+    pub return_type_stack: Vec<MirDataType>,
     pub generic_param_stack: Vec<Vec<Ustr>>,
     pub all_time_generics: UstrSet,
 }

@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -7,10 +7,7 @@ use crate::{
 };
 use calibre_parser::{
     Span,
-    ast::{
-        nodes::{AstNode, AstNodeType},
-        types::ParserDataType,
-    },
+    ast::nodes::{AstNode, AstNodeType},
 };
 use tracing::{debug, instrument, trace};
 use ustr::Ustr;
@@ -63,7 +60,7 @@ pub trait MirLowering {
         _env: &mut MiddleEnvironment,
         _scope: ScopeId,
         _span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         None
     }
 }
@@ -199,7 +196,7 @@ impl MirLowering for AstNode {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         _span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         env.resolve_type_from_node(scope, self)
     }
 }
@@ -207,11 +204,11 @@ impl MirLowering for AstNode {
 impl MiddleEnvironment {
     pub fn compare_types(
         &self,
-        type1: Option<ParserDataType>,
-        type2: Option<ParserDataType>,
+        type1: Option<MirDataType>,
+        type2: Option<MirDataType>,
         overload_tag: Option<&TagInfo>,
         span: Span,
-    ) -> Result<ParserDataType, MiddleErr> {
+    ) -> Result<MirDataType, MiddleErr> {
         if !self.context.type_check {
             return match (type1, type2) {
                 (Some(x), None) => Ok(x),
@@ -264,8 +261,8 @@ impl MiddleEnvironment {
 
     pub fn compare_types_ref(
         &self,
-        type1: Option<&ParserDataType>,
-        type2: Option<&ParserDataType>,
+        type1: Option<&MirDataType>,
+        type2: Option<&MirDataType>,
         overload_tag: Option<&TagInfo>,
         span: Span,
     ) -> Result<(), MiddleErr> {

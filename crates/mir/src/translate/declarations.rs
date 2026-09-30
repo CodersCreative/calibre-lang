@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirAs, MirVarDecl},
+    ast::{MiddleNode, MiddleNodeType, MirAs, MirVarDecl, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -50,6 +50,7 @@ impl MiddleEnvironment {
                     &g.identifier,
                     ResolutionOptions::default().with_dollar(),
                 )
+                .map(|x| x.unwrap_dollar())
             })
             .collect::<Result<Vec<_>, MiddleErr>>()
             .unwrap_or_default();
@@ -317,17 +318,21 @@ impl MirLowering for AstDeclaration {
         let data_type =
             env.compare_types(data_type, node_ty, Some(&TagInfo::IgnoreInvalidLet), span)?;
 
-        if is_function {
-            env.register_variable(scope, identifier, data_type.clone(), self.var_type)?;
-        }
+        let var_key = if is_function {
+            Some(env.register_variable(scope, identifier, data_type.clone(), self.var_type)?)
+        } else {
+            None
+        };
 
         let mut value = self.value.lower_or_empty(env, scope, span);
 
-        if !is_function {
-            env.register_variable(scope, identifier, data_type.clone(), self.var_type)?;
-        }
+        let var_key = if !is_function {
+            Some(env.register_variable(scope, identifier, data_type.clone(), self.var_type)?)
+        } else {
+            var_key
+        };
 
-        if matches!(data_type.data_type, ParserInnerType::DynamicTraits(_)) {
+        if matches!(data_type, MirDataType::DynamicTraits(_)) {
             value = MiddleNode::new(
                 MiddleNodeType::AsExpression(MirAs {
                     value: Box::new(value),
@@ -341,7 +346,7 @@ impl MirLowering for AstDeclaration {
         Ok(MiddleNode::new(
             MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: self.var_type,
-                identifier,
+                identifier: var_key.unwrap(),
                 value: Box::new(value),
                 data_type,
             }),

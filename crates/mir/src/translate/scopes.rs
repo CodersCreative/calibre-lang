@@ -1,9 +1,9 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirScopeDecl},
+    ast::{MiddleNode, MiddleNodeType, MirScopeDecl, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{ScopeId, ScopeMacro},
-    symbols::resolve::ResolutionOptions,
+    symbols::resolve::{KeyOrAstNode, ResolutionOptions},
     translate::MirLowering,
 };
 use calibre_parser::{
@@ -282,7 +282,7 @@ impl MirLowering for AstScopeDef {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         if self.define {
             None
         } else if let Some(body) = &self.body {
@@ -296,23 +296,16 @@ impl MirLowering for AstScopeDef {
             }
 
             typ
-        } else if let Some(named) = &self.named {
-            let name = env
-                .resolve(
+        } else if let Some(named) = &self.named
+            && let KeyOrAstNode::Node(node) = env
+                .resolve_potential_node(
                     scope,
                     &named.name,
                     ResolutionOptions::default().with_dollar(),
                 )
-                .ok()?;
-
-            let resolved = env
-                .scoping
-                .resolve_macro(scope, &name)?
-                .body
-                .last()?
-                .clone();
-
-            resolved.type_of(env, scope, span)
+                .ok()?
+        {
+            node.type_of(env, scope, span)
         } else {
             unreachable!()
         }
@@ -333,11 +326,13 @@ impl MirLowering for AstScopeAlias {
             ResolutionOptions::default().with_dollar(),
         )?;
 
-        let name = env.resolve(
-            scope,
-            &self.value.name,
-            ResolutionOptions::default().with_dollar(),
-        )?;
+        let name = env
+            .resolve(
+                scope,
+                &self.value.name,
+                ResolutionOptions::default().with_dollar(),
+            )?
+            .unwrap_dollar();
 
         let scope_macro = env
             .scoping
@@ -375,7 +370,7 @@ impl MirLowering for AstScopeAlias {
         env.scoping
             .scope_mut_or_err(scope)?
             .macros
-            .insert(identifer, scope_macro);
+            .insert(identifer.unwrap_dollar(), scope_macro);
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::EmptyLine,

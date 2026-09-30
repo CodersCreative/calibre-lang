@@ -6,8 +6,10 @@ use crate::{
         MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
         MirReturn, MirScopeDecl, MirVarDecl,
     },
+    scoping::FullyQualifiedPath,
 };
 use calibre_parser::{AlphaRenamable, UstrAlphaRenameState};
+use std::sync::Arc;
 use ustr::Ustr;
 
 impl AlphaRenamable for MiddleNode {
@@ -58,15 +60,14 @@ impl AlphaRenamable for MiddleNodeType {
                 value,
                 data_type,
             }) => {
-                let new_name = if !state.dont_change_local {
-                    let name =
-                        Ustr::from(&format!("{}->{}", identifier, fastrand::u32(0..u32::MAX)));
-                    state.data.insert(*identifier, name);
-                    name
-                } else {
-                    *identifier
-                };
-                *identifier = new_name;
+                if !state.dont_change_local {
+                    let name = *identifier.name();
+                    let new_name = Ustr::from(&format!("{}->{}", name, fastrand::u32(0..u32::MAX)));
+                    state.data.insert(name, new_name);
+                    let mut new_path = (*identifier.fully_qualified_path).clone();
+                    new_path.name = Some(new_name);
+                    identifier.fully_qualified_path = Arc::new(new_path);
+                }
                 value.rename(state);
                 data_type.rename(state);
             }
@@ -102,15 +103,19 @@ impl AlphaRenamable for MiddleNodeType {
                 default_args_id: _,
             }) => {
                 for param in parameters {
-                    let new_name =
-                        Ustr::from(&format!("{}->{}", param.0, fastrand::u32(0..u32::MAX)));
-                    state.data.insert(param.0, new_name);
+                    let name = *param.0.name();
+                    let new_name = Ustr::from(&format!("{}->{}", name, fastrand::u32(0..u32::MAX)));
+                    state.data.insert(name, new_name);
 
-                    if let Some(x) = memo_params.iter_mut().find(|x| x == &&param.0) {
-                        *x = new_name;
+                    if let Some(x) = memo_params.iter_mut().find(|x| x.name() == &name) {
+                        let mut new_path = (*x.fully_qualified_path).clone();
+                        new_path.name = Some(new_name);
+                        x.fully_qualified_path = Arc::new(new_path);
                     }
 
-                    param.0 = new_name;
+                    let mut new_path = (*param.0.fully_qualified_path).clone();
+                    new_path.name = Some(new_name);
+                    param.0.fully_qualified_path = Arc::new(new_path);
                     if let Some(default_value) = &mut param.2 {
                         default_value.rename(state);
                     }

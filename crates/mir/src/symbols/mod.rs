@@ -14,7 +14,7 @@ use calibre_parser::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, rc::Rc, sync::Arc};
+use std::{fmt::Debug, fmt::Display, rc::Rc, sync::Arc};
 use ustr::{Ustr, UstrMap};
 
 pub mod node;
@@ -29,7 +29,7 @@ pub struct Symbols {
     pub generic_fn_templates: UstrMap<(Vec<Ustr>, FunctionHeader, AstNode)>,
     pub specialization_decls_by_scope: FxHashMap<ScopeId, Vec<MiddleNode>>,
 
-    pub name_to_param_defaults: UstrMap<usize>,
+    pub name_to_param_defaults: FxHashMap<VariableKey, usize>,
     pub function_param_defaults: FxHashMap<usize, Rc<[FunctionParamDefault]>>,
     pub function_specializations: UstrMap<Ustr>,
     pub function_defers: Vec<AstNode>,
@@ -75,9 +75,33 @@ pub struct VariableKey {
     pub shadow_counter: Option<u32>,
 }
 
+impl VariableKey {
+    pub fn name(&self) -> &Ustr {
+        self.fully_qualified_path.name.as_ref().unwrap()
+    }
+}
+
+impl Display for VariableKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.fully_qualified_path)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TypeKey {
     pub fully_qualified_path: Arc<FullyQualifiedPath>,
+}
+
+impl TypeKey {
+    pub fn name(&self) -> &Ustr {
+        self.fully_qualified_path.name.as_ref().unwrap()
+    }
+}
+
+impl Display for TypeKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.fully_qualified_path)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -89,23 +113,13 @@ pub struct MiddleVariable {
 }
 
 impl MiddleVariable {
-    pub fn get_key(&self) -> VariableKey {
-        VariableKey {
-            fully_qualified_path: Arc::new(FullyQualifiedPath {
-                name: Some(self.name),
-                parent: Some(self.fully_qualified_path.clone()),
-            }),
-            shadow_counter: self.shadow_counter,
-        }
-    }
-
     pub fn fully_qualified_name(&self) -> String {
-        format!("{}::{}", self.fully_qualified_path, self.name)
+        format!("{}", self.key.fully_qualified_path)
     }
 
     pub fn matches_fqp_prefix(&self, prefix: &FullyQualifiedPath) -> bool {
-        self.fully_qualified_path.as_ref() == prefix
-            || self.fully_qualified_path.is_child_of(prefix)
+        self.key.fully_qualified_path.as_ref() == prefix
+            || self.key.fully_qualified_path.is_child_of(prefix)
     }
 }
 

@@ -1,15 +1,18 @@
-use crate::ast::{
-    MiddleNode, MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean,
-    MirBreak, MirCall, MirComparison, MirConditional, MirDeref, MirDiscriminant, MirDrop, MirEmit,
-    MirEnum, MirField, MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove,
-    MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
+use crate::{
+    MirVarKeysUsed,
+    ast::{
+        MiddleNode, MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean,
+        MirBreak, MirCall, MirComparison, MirConditional, MirDeref, MirDiscriminant, MirDrop,
+        MirEmit, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex, MirIs, MirList, MirLoop,
+        MirMove, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirSpawn, MirVarDecl,
+    },
+    symbols::VariableKey,
 };
-use calibre_parser::UstrIdentifiersUsed;
-use ustr::{Ustr, UstrSet};
+use rustc_hash::FxHashSet;
 
-impl UstrIdentifiersUsed for MiddleNode {
+impl MirVarKeysUsed for MiddleNode {
     /// I should probably mention that this INCLUDES identifiers used in closures within this function.
-    fn identifiers_used(&self) -> Vec<&Ustr> {
+    fn identifiers_used(&self) -> Vec<&VariableKey> {
         match &self.node_type {
             MiddleNodeType::Break(MirBreak { value: None, .. })
             | MiddleNodeType::EmptyLine
@@ -156,7 +159,7 @@ impl UstrIdentifiersUsed for MiddleNode {
 }
 
 impl MiddleNode {
-    pub fn captured(&self) -> Vec<&Ustr> {
+    pub fn captured(&self) -> Vec<&VariableKey> {
         let mut used = self.identifiers_used();
         let declared = self.identifiers_declared(false);
 
@@ -167,7 +170,7 @@ impl MiddleNode {
         used
     }
 
-    pub fn identifiers_declared(&self, include_functions: bool) -> UstrSet {
+    pub fn identifiers_declared(&self, include_functions: bool) -> FxHashSet<VariableKey> {
         match &self.node_type {
             MiddleNodeType::Break { .. }
             | MiddleNodeType::EmptyLine
@@ -187,7 +190,7 @@ impl MiddleNode {
             | MiddleNodeType::Return(MirReturn { value: None })
             | MiddleNodeType::Identifier(_)
             | MiddleNodeType::Drop(_)
-            | MiddleNodeType::Move(_) => UstrSet::default(),
+            | MiddleNodeType::Move(_) => FxHashSet::default(),
             MiddleNodeType::RefStatement(MirRef {
                 mutability: _,
                 value,
@@ -222,7 +225,7 @@ impl MiddleNode {
                 data_type: _,
             }) => {
                 let mut declared = value.identifiers_declared(include_functions);
-                declared.insert(*identifier);
+                declared.insert(identifier.clone());
                 declared
             }
             MiddleNodeType::BinaryExpression(MirBinary {
@@ -271,7 +274,7 @@ impl MiddleNode {
                 data_type: _,
                 values: body,
             }) => {
-                let mut amt = UstrSet::default();
+                let mut amt = FxHashSet::default();
 
                 for n in body {
                     amt.extend(n.identifiers_declared(include_functions));
@@ -283,7 +286,7 @@ impl MiddleNode {
                 identifier: _,
                 value,
             }) => {
-                let mut amt = UstrSet::default();
+                let mut amt = FxHashSet::default();
 
                 for n in value.iter() {
                     amt.extend(n.1.identifiers_declared(include_functions));
@@ -292,13 +295,13 @@ impl MiddleNode {
                 amt
             }
             MiddleNodeType::FunctionDeclaration(MirFunction { .. }) if !include_functions => {
-                UstrSet::default()
+                FxHashSet::default()
             }
             MiddleNodeType::FunctionDeclaration(MirFunction {
                 parameters, body, ..
             }) => {
                 let mut declared = body.identifiers_declared(include_functions);
-                declared.extend(parameters.iter().map(|x| x.0));
+                declared.extend(parameters.iter().map(|x| x.0.clone()));
                 declared
             }
             MiddleNodeType::Conditional(MirConditional {
@@ -320,11 +323,15 @@ impl MiddleNode {
         }
     }
 
-    pub fn identifiers_referenced(&self, include_functions: bool, in_ref: bool) -> UstrSet {
+    pub fn identifiers_referenced(
+        &self,
+        include_functions: bool,
+        in_ref: bool,
+    ) -> FxHashSet<VariableKey> {
         match &self.node_type {
             MiddleNodeType::Identifier(MirIdentifier { identifier }) if in_ref => {
-                let mut refed = UstrSet::default();
-                refed.insert(*identifier);
+                let mut refed = FxHashSet::default();
+                refed.insert(identifier.clone());
                 refed
             }
             MiddleNodeType::Break { .. }
@@ -345,7 +352,7 @@ impl MiddleNode {
             | MiddleNodeType::FloatLiteral(_)
             | MiddleNodeType::Return(MirReturn { value: None })
             | MiddleNodeType::Drop(_)
-            | MiddleNodeType::Move(_) => UstrSet::default(),
+            | MiddleNodeType::Move(_) => FxHashSet::default(),
 
             MiddleNodeType::RefStatement(MirRef {
                 mutability: _,
@@ -422,7 +429,7 @@ impl MiddleNode {
                 data_type: _,
                 values: body,
             }) => {
-                let mut amt = UstrSet::default();
+                let mut amt = FxHashSet::default();
 
                 for n in body {
                     amt.extend(n.identifiers_referenced(include_functions, in_ref));
@@ -434,7 +441,7 @@ impl MiddleNode {
                 identifier: _,
                 value,
             }) => {
-                let mut amt = UstrSet::default();
+                let mut amt = FxHashSet::default();
 
                 for n in value.iter() {
                     amt.extend(n.1.identifiers_referenced(include_functions, in_ref));
@@ -443,7 +450,7 @@ impl MiddleNode {
                 amt
             }
             MiddleNodeType::FunctionDeclaration(MirFunction { .. }) if !include_functions => {
-                UstrSet::default()
+                FxHashSet::default()
             }
             MiddleNodeType::FunctionDeclaration(MirFunction { body, .. }) => {
                 body.identifiers_referenced(include_functions, true)

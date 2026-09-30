@@ -1,11 +1,8 @@
 use crate::{
-    environment::MiddleEnvironment, scoping::ScopeId, symbols::resolve::ResolutionOptions,
+    ast::types::MirDataType, environment::MiddleEnvironment, scoping::ScopeId,
     translate::MirLowering,
 };
-use calibre_parser::ast::{
-    nodes::{AstNode, AstNodeType, flow::AstEmit},
-    types::{ParserDataType, ParserInnerType},
-};
+use calibre_parser::ast::nodes::{AstNode, AstNodeType, flow::AstEmit};
 use tracing::instrument;
 
 impl MiddleEnvironment {
@@ -13,55 +10,38 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         node: &AstNode,
-    ) -> Option<ParserDataType> {
-        let typ = match &node.node_type {
+    ) -> Option<MirDataType> {
+        match &node.node_type {
             AstNodeType::IfStatement { .. } | AstNodeType::MatchStatement { .. } => {
                 self.resolve_type_from_node(scope, node)
             }
             AstNodeType::Emit(AstEmit::Scope(x)) => self.resolve_type_from_node(scope, x),
             _ => None,
-        };
-
-        typ.and_then(|typ| {
-            self.resolve_data_type(scope, &typ, ResolutionOptions::typing())
-                .ok()
-        })
+        }
     }
 
-    pub fn resolve_curried_type(
-        &mut self,
-        scope: ScopeId,
-        value: &AstNode,
-    ) -> Option<ParserDataType> {
-        match self.resolve_type_from_node(scope, value)?.data_type {
-            ParserInnerType::Function {
+    pub fn resolve_curried_type(&mut self, scope: ScopeId, value: &AstNode) -> Option<MirDataType> {
+        match self.resolve_type_from_node(scope, value)? {
+            MirDataType::Function {
                 return_type,
                 parameters,
             }
-            | ParserInnerType::NativeFunction {
+            | MirDataType::NativeFunction {
                 return_type,
                 parameters,
             } => {
                 if parameters.is_empty() {
-                    return Some(ParserDataType::function(
-                        value.span,
-                        parameters,
-                        *return_type,
-                    ));
+                    return Some(MirDataType::function(parameters, *return_type));
                 }
 
                 let mut result = *return_type;
                 for parameter in parameters.iter().rev() {
-                    result = ParserDataType::function(value.span, vec![parameter.clone()], result);
+                    result = MirDataType::function(vec![parameter.clone()], result);
                 }
 
                 Some(result)
             }
-            other => Some(ParserDataType::function(
-                value.span,
-                Vec::new(),
-                ParserDataType::new(value.span, other),
-            )),
+            other => Some(MirDataType::function(Vec::new(), other)),
         }
     }
 
@@ -70,8 +50,8 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         node: &AstNode,
-    ) -> Option<ParserDataType> {
-        let typ = match &node.node_type {
+    ) -> Option<MirDataType> {
+        match &node.node_type {
             // Flow
             AstNodeType::Emit(x) => x.type_of(self, scope, node.span),
             AstNodeType::Try(x) => x.type_of(self, scope, node.span),
@@ -165,12 +145,7 @@ impl MiddleEnvironment {
             AstNodeType::Null
             | AstNodeType::Defer { .. }
             | AstNodeType::Drop(_)
-            | AstNodeType::EmptyLine => Some(ParserDataType::new(node.span, ParserInnerType::Null)),
-        };
-
-        typ.and_then(|typ| {
-            self.resolve_data_type(scope, &typ, ResolutionOptions::typing())
-                .ok()
-        })
+            | AstNodeType::EmptyLine => Some(MirDataType::Null),
+        }
     }
 }

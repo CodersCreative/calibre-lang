@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirNeg},
+    ast::{MiddleNode, MiddleNodeType, MirNeg, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -14,7 +14,6 @@ use calibre_parser::{
             binary::AstComparison,
             unary::{AstNeg, AstNot},
         },
-        types::{ParserDataType, ParserInnerType},
     },
 };
 use tracing::instrument;
@@ -40,7 +39,7 @@ impl MirLowering for AstNeg {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.value.type_of(env, scope, span)
     }
 }
@@ -68,11 +67,8 @@ impl MirLowering for AstNot {
         &self,
         _env: &mut MiddleEnvironment,
         _scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType {
-            data_type: ParserInnerType::Bool,
-            span,
-        })
+        _span: Span,
+    ) -> Option<MirDataType> {
+        Some(MirDataType::Bool)
     }
 }

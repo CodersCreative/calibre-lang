@@ -28,11 +28,17 @@ use calibre_parser::{
     },
 };
 use derive_builder::Builder;
+use rustc_hash::FxHashMap;
 use std::fmt::Display;
 use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
-use crate::{ast::types::MirDataType, errors::MiddleErr, scoping::ScopeId};
+use crate::{
+    ast::types::MirDataType,
+    errors::MiddleErr,
+    scoping::ScopeId,
+    symbols::{TypeKey, VariableKey},
+};
 
 pub mod identifiers;
 pub mod renaming;
@@ -51,11 +57,9 @@ impl MiddleNode {
     }
 
     #[inline(always)]
-    pub fn identifier(span: Span, text: impl ToString) -> Self {
+    pub fn identifier(span: Span, identifier: VariableKey) -> Self {
         Self::new(
-            MiddleNodeType::Identifier(MirIdentifier {
-                identifier: text.to_string().into(),
-            }),
+            MiddleNodeType::Identifier(MirIdentifier { identifier }),
             span,
         )
     }
@@ -63,6 +67,7 @@ impl MiddleNode {
     pub fn is_function(&self) -> bool {
         matches!(self.node_type, MiddleNodeType::FunctionDeclaration(_))
     }
+
     pub fn member_field(&self) -> Result<Ustr, MiddleErr> {
         Ok(match &self.node_type {
             MiddleNodeType::Identifier(name) => name.identifier,
@@ -146,7 +151,7 @@ impl MiddleNode {
     }
 
     #[instrument(skip_all)]
-    pub fn substitute(&mut self, repl: &UstrMap<MiddleNode>) {
+    pub fn substitute(&mut self, repl: &FxHashMap<VariableKey, MiddleNode>) {
         match &mut self.node_type {
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
                 if let Some(replacement) = repl.get(identifier) {
@@ -218,7 +223,7 @@ impl MiddleNode {
         }
     }
 
-    pub fn calls_self(&self, name: &Ustr) -> bool {
+    pub fn calls_self(&self, name: &VariableKey) -> bool {
         match &self.node_type {
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => identifier == name,
             MiddleNodeType::CallExpression(MirCall { caller, args }) => {
@@ -289,12 +294,12 @@ pub struct MirRef {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirDrop {
-    pub identifier: Ustr,
+    pub identifier: VariableKey,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirMove {
-    pub identifier: Ustr,
+    pub identifier: VariableKey,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -309,7 +314,7 @@ pub struct MirDeref {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirIdentifier {
-    pub identifier: Ustr,
+    pub identifier: VariableKey,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -444,13 +449,13 @@ pub struct MirAssignment {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirAggregate {
-    pub identifier: Option<Ustr>,
+    pub identifier: Option<TypeKey>,
     pub value: ObjectMap<MiddleNode>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirEnum {
-    pub identifier: Ustr,
+    pub identifier: TypeKey,
     pub value: Ustr,
     pub data: Option<Box<MiddleNode>>,
 }
@@ -458,7 +463,7 @@ pub struct MirEnum {
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirVarDecl {
     pub var_type: VarType,
-    pub identifier: Ustr,
+    pub identifier: VariableKey,
     pub value: Box<MiddleNode>,
     pub data_type: MirDataType,
 }
@@ -475,12 +480,12 @@ pub struct MirScopeDecl {
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirFunction {
     #[allow(clippy::complexity)]
-    pub parameters: Box<[(Ustr, MirDataType, Option<Box<MiddleNode>>)]>,
+    pub parameters: Box<[(VariableKey, MirDataType, Option<Box<MiddleNode>>)]>,
     pub body: Box<MiddleNode>,
     pub return_type: MirDataType,
     pub scope_id: ScopeId,
     pub default_args_id: Option<usize>,
-    pub memo_params: Box<[Ustr]>,
+    pub memo_params: Box<[VariableKey]>,
     pub memo: bool,
     pub pure: bool,
 }

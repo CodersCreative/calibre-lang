@@ -1,6 +1,8 @@
 use crate::{
-    environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
-    symbols::resolve::ResolutionOptions,
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    scoping::{FullyQualifiedPath, ScopeId},
+    symbols::{VariableKey, resolve::ResolutionOptions},
 };
 use calibre_parser::ast::{
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
@@ -14,6 +16,7 @@ use calibre_parser::ast::{
     },
     types::ParserDataType,
 };
+use std::sync::Arc;
 use tracing::instrument;
 use ustr::Ustr;
 
@@ -81,13 +84,16 @@ impl MiddleEnvironment {
                 value,
                 data_type,
             }) if *var_type == VarType::Constant => {
-                let new_name = ParserText::temp_name_with_suffix(&ident, node.span);
-
-                if self
-                    .symbols
-                    .variables
-                    .contains_key(&Ustr::from(&new_name.text))
-                {
+                if self.symbols.variables.contains_key(&VariableKey {
+                    fully_qualified_path: Arc::new(FullyQualifiedPath::combine(
+                        self.scoping
+                            .scope_or_err(scope)?
+                            .fully_qualified_path
+                            .clone(),
+                        ident,
+                    )),
+                    shadow_counter: None,
+                }) {
                     return Ok(());
                 }
 
@@ -102,14 +108,11 @@ impl MiddleEnvironment {
 
                 self.register_variable_with_temp_scope(
                     scope,
-                    Ustr::from(ident),
-                    Ustr::from(&new_name.text),
+                    ident,
                     data_type.clone(),
                     VarType::Constant,
                     false,
                 )?;
-
-                *ident = new_name;
 
                 Ok(())
             }
@@ -119,13 +122,16 @@ impl MiddleEnvironment {
                 return_type,
                 ..
             }) => {
-                let new_name = ParserText::temp_name_with_suffix(&ident, node.span);
-
-                if self
-                    .symbols
-                    .variables
-                    .contains_key(&Ustr::from(&new_name.text))
-                {
+                if self.symbols.variables.contains_key(&VariableKey {
+                    fully_qualified_path: Arc::new(FullyQualifiedPath::combine(
+                        self.scoping
+                            .scope_or_err(scope)?
+                            .fully_qualified_path
+                            .clone(),
+                        ident,
+                    )),
+                    shadow_counter: None,
+                }) {
                     return Ok(());
                 }
 
@@ -152,14 +158,11 @@ impl MiddleEnvironment {
 
                 self.register_variable_with_temp_scope(
                     scope,
-                    Ustr::from(ident),
-                    Ustr::from(&new_name.text),
+                    ident,
                     data_type.clone(),
                     VarType::Mutable,
                     false,
                 )?;
-
-                *ident = new_name;
 
                 Ok(())
             }
