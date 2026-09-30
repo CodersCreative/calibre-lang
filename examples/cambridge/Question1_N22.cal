@@ -1,0 +1,66 @@
+// From 9618 w22 qp 22
+
+import input from std::console;
+import (File, Path) from std::fs;
+
+const main := fn => {
+  let mut data_array := list:<int?>[none for 100];
+  read_file(data_array.&mut);
+  print("The number was found : " & find_values(data_array.&) & " times.");
+  bubble_sort(data_array.&mut)
+}
+
+const find_values := fn(data_array : &list:<int?>) -> uint => {
+  let mut number := input("Enter number : ") as int;
+
+  for let .Err : e <- number => {
+    print("Incorrect number entered : " & e & ".\nTry again...");
+    number := input("Enter number : ") as int;
+  }
+
+  if !((try!! number) in 0..=100) => {
+    print("Number : " & (try!! number) & " is not between 0 and 101. Try again...");
+    return find_values(data_array);
+  }
+
+  let number := try? number;
+  let mut out := 0u;
+
+  for val in data_array => {
+    if val = number =>
+      out += 1u;
+  }
+  
+  return out;
+}
+
+@current_context const read_file := fn(data_array : &mut list:<int?>) => {
+  let file : File = try File.open_read(Path.new(current_context.path.replace("Question1_N22.cal", "IntegerData.txt"))) : e => {
+    print(e);
+    return
+  };
+
+  let lines := try file.read_lines();
+
+  for i in len(lines).min(99) =>
+    data_array[i] := (try!! lines[i]) as? int
+}
+
+const bubble_sort := fn(data_array : &mut list:<int?>) => {
+  let n := len(data_array);
+
+  for i in n => {
+    let mut swapped := false;
+    for j in n-i-1 => 
+      if (try (try!! data_array[j]) => continue) > (try (try!! data_array[j+1]) => continue) => {
+        swapped := true;
+        let temp := try!! data_array[j];
+        data_array[j] := try!! data_array[j+1];
+        data_array[j+1] := temp;
+        print("swap");
+      }
+
+  } until !swapped;
+
+  print([data_array]);
+}

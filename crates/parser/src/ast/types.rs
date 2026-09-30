@@ -541,6 +541,14 @@ impl ParserInnerType {
         matches!(self, Self::Result { .. })
     }
 
+    pub fn is_option(&self) -> bool {
+        matches!(self, Self::Option(_))
+    }
+
+    pub fn is_ref(&self) -> bool {
+        matches!(self, Self::Ref(_, _))
+    }
+
     pub fn is_bool(&self) -> bool {
         matches!(self, Self::Bool)
     }

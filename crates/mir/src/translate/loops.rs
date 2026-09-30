@@ -542,13 +542,13 @@ impl MirLowering for AstLoop {
 
                 let is_count_loop = explicit_range.is_some()
                     || matches!(
-                        range_dt.as_ref().map(|x| &x.data_type),
+                        range_dt.as_ref().map(|x| x.data_type.unwrap_all_refs()),
                         Some(ParserInnerType::Int) | Some(ParserInnerType::UInt)
                     );
 
                 let is_indexable_loop = is_count_loop
                     || matches!(
-                        range_dt.as_ref().map(|x| &x.data_type),
+                        range_dt.as_ref().map(|x| x.data_type.unwrap_all_refs()),
                         Some(ParserInnerType::List(_))
                             | Some(ParserInnerType::Str)
                             | Some(ParserInnerType::Range)

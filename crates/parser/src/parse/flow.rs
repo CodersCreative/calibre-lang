@@ -9,15 +9,15 @@ use crate::{
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
+use chumsky::Parser;
 use chumsky::prelude::*;
-use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for AstEmit {
     type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Emit => () }.ignore_then(choice((
+        just(Token::Emit).ignore_then(choice((
             data.node
                 .clone()
                 .then(choice((
@@ -42,9 +42,9 @@ impl<'a> AstParser<'a> for AstBreak {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Break => () }
+        just(Token::Break)
             .ignore_then(
-                select! {Token::At => ()}
+                just(Token::At)
                     .ignore_then(data.dollar_ident.clone())
                     .or_not()
                     .then(data.node.clone().or_not()),
@@ -61,9 +61,9 @@ impl<'a> AstParser<'a> for AstContinue {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Continue => () }
+        just(Token::Continue)
             .ignore_then(
-                select! {Token::At => ()}
+                just(Token::At)
                     .ignore_then(data.dollar_ident.clone())
                     .or_not(),
             )
@@ -76,7 +76,7 @@ impl<'a> AstParser<'a> for AstReturn {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Return => () }
+        just(Token::Return)
             .ignore_then(data.node.clone().or_not())
             .map(|value| AstReturn {
                 value: value.map(Box::new),
@@ -89,10 +89,10 @@ impl<'a> AstParser<'a> for AstDefer {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Defer => () }
+        just(Token::Defer)
             .ignore_then(
-                select! { Token::Return => () }
-                    .map(|()| true)
+                just(Token::Return)
+                    .map(|_| true)
                     .or_not()
                     .map(|x| x.unwrap_or(false)),
             )
@@ -110,7 +110,7 @@ impl<'a> AstParser<'a> for TryCatch {
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
-            select! { Token::Colon => () }
+            just(Token::Colon)
                 .ignore_then(data.dollar_ident.clone())
                 .then(data.scope.clone())
                 .map(|(name, body)| TryCatch {
@@ -174,14 +174,14 @@ impl<'a> AstPrattParser<'a> for AstPipe {
         data: Self::Data,
     ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>> {
         choice((
-            select! { Token::Pipe => () }
+            just(Token::Pipe)
                 .padded_by(potential_new_line())
                 .ignore_then(data.stmt.clone())
                 .map(PipeSegment::Unnamed),
-            select! { Token::Face => () }
+            data.dollar_ident
+                .clone()
                 .padded_by(potential_new_line())
-                .ignore_then(data.dollar_ident.clone())
-                .then_ignore(select! { Token::Greater => () })
+                .delimited_by(just(Token::Face), just(Token::Greater))
                 .then(data.stmt.clone())
                 .map(|(identifier, node)| PipeSegment::Named { identifier, node }),
         ))

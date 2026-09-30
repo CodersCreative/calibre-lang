@@ -9,17 +9,17 @@ use crate::{
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
+use chumsky::Parser;
 use chumsky::error::Rich;
 use chumsky::prelude::*;
-use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for AstAssignDestructure {
     type Data = StatementData<'a>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        DestructurePattern::no_bracket_parser(data.clone())
-            .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
+        DestructurePattern::parser(data.clone())
+            .then_ignore(just(Token::Walrus).padded_by(potential_new_line()))
             .then(data.node.clone())
             .map(|(pattern, value)| AstAssignDestructure {
                 pattern,
@@ -33,18 +33,18 @@ impl<'a> AstParser<'a> for AstDeclaration {
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
-            select! { Token::Let => () }.map(|_| VarType::Immutable),
-            select! { Token::Const => () }.map(|_| VarType::Constant),
+            just(Token::Let).map(|_| VarType::Immutable),
+            just(Token::Const).map(|_| VarType::Constant),
         ))
-        .then(select! { Token::Mut => () }.or_not())
+        .then(just(Token::Mut).or_not())
         .then(data.dollar_ident.clone())
                     .then(
-                select! { Token::Colon => () }
+                just(Token::Colon)
                     .ignore_then(data.data_type.clone())
                     .or_not(),
             )
             .then(
-                choice((select! { Token::Eq => () }, select! { Token::Walrus => () })).padded_by(potential_new_line())
+                choice((just(Token::Eq), just(Token::Walrus))).padded_by(potential_new_line())
                     .ignore_then(data.node.clone())
                     .or_not(),
             )
@@ -83,9 +83,9 @@ impl<'a> AstParser<'a> for AstDeclareDestructure {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Let => () }
-            .ignore_then(DestructurePattern::no_bracket_parser(data.clone()))
-            .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
+        just(Token::Let)
+            .ignore_then(DestructurePattern::parser(data.clone()))
+            .then_ignore(just(Token::Walrus).padded_by(potential_new_line()))
             .then(data.node.clone())
             .map(|(pattern, value)| AstDeclareDestructure {
                 var_type: VarType::Immutable,

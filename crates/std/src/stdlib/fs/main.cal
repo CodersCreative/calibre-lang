@@ -24,23 +24,20 @@ impl Path {
 	};
 
 	const parent := fn (self : &Path) -> Path? => {
-		let p := path_parent(self.inner);
-		if p = null => return none else => return some(Path { inner : p });
+		let p : str = try path_parent(self.inner);
+		return some(Path.new(p));
 	};
 
 	const file_name := fn (self : &Path) -> str? => {
-		let name := path_file_name(self.inner);
-		if name = null => return none else => return some(name);
+		return path_file_name(self.inner);
 	};
 
 	const extension := fn (self : &Path) -> str? => {
-		let ext := path_extension(self.inner);
-		if ext = null => return none else => return some(ext);
+		return path_extension(self.inner);
 	};
 
 	const stem := fn (self : &Path) -> str? => {
-		let s := path_stem(self.inner);
-		if s = null => return none else => return some(s);
+		return path_stem(self.inner);
 	};
 
 	const join := fn (self : &Path, other : str) => path_join(self.inner, other);
@@ -50,22 +47,15 @@ impl Path {
 	const with_file_name := fn (self : &Path, file_name : str) -> Path => return Path { inner : path_with_file_name(self.inner, file_name) };
 
 	const read_dir := fn (self : &Path) -> str!list:<DirEntry> => {
-		match path_read_dir(self.inner) {
-			.Ok : entries => {
-				let entries : list:<host> = entries;
-				return ok(list:<DirEntry>[DirEntry { inner : try entries[i] => null } for i in 0..len(entries)]);
-			},
-			.Err : e => return err(e)
-		};
+		let entries : list:<host> = try path_read_dir(self.inner);
+		return ok(list:<DirEntry>[DirEntry { inner : try entries[i] => null } for i in 0..len(entries)]);
 	};
 };
 
 impl File {
 	const open := fn (path : Path, mode : str) -> str!File => {
-		match file_open(path.inner, mode) {
-			.Ok : f => return ok(File { inner : f }),
-			.Err : e => return err(e)
-		};
+		let f : host = try file_open(path.inner, mode);
+		return ok(File { inner : f });
 	};
 
 	const open_read := fn (path : Path) -> str!File => return File.open(path, "r");
@@ -111,8 +101,10 @@ impl File {
 
 	const read_lines := fn (self : &File) -> str!list:<str> => {
 		let result : str!str = self.read_all();
-		match {
-			.Ok : content => return ok(content.split("\n")),
+		match result {
+			.Ok : content => {
+				return ok((content as! str).split("\n"))
+			},
 			.Err : e => {
 				if e = "eof" => break;
 				return err(e);

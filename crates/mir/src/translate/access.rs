@@ -263,50 +263,42 @@ impl MirLowering for AstIndex {
 
         let index_type = self.index.type_of(env, scope, span).map(|x| x.data_type);
 
-        match (base_type, index_type) {
-            (Some(base_type), Some(ParserInnerType::Range)) => Some(match base_type {
-                ParserInnerType::List(_) => ParserDataType::new(
-                    span,
-                    ParserInnerType::Option(Box::new(ParserDataType::new(span, base_type))),
-                ),
-                ParserInnerType::Str => ParserDataType::new(
-                    span,
-                    ParserInnerType::Option(Box::new(ParserDataType::new(
-                        span,
-                        ParserInnerType::Str,
-                    ))),
-                ),
-                ParserInnerType::Range => ParserDataType::new(
-                    span,
-                    ParserInnerType::Option(Box::new(ParserDataType::new(
-                        span,
-                        ParserInnerType::Range,
-                    ))),
-                ),
-                _ => return None,
-            }),
-            (Some(base_type), _) => Some(match base_type {
-                ParserInnerType::List(inner) => {
-                    ParserDataType::new(span, ParserInnerType::Option(inner))
-                }
-                ParserInnerType::Str => ParserDataType::new(
-                    span,
-                    ParserInnerType::Option(Box::new(ParserDataType::new(
-                        span,
-                        ParserInnerType::Char,
-                    ))),
-                ),
-                ParserInnerType::Range => ParserDataType::new(
-                    span,
-                    ParserInnerType::Option(Box::new(ParserDataType::new(
-                        span,
-                        ParserInnerType::Int,
-                    ))),
-                ),
+        let ref_mutability = base_type.as_ref().and_then(|x| match x {
+            ParserInnerType::Ref(_, x) => Some(*x),
+            _ => None,
+        });
+
+        let data_type = match (base_type, index_type) {
+            (Some(base_type), Some(ParserInnerType::Range)) => {
+                Some(match base_type.unwrap_all_refs() {
+                    ParserInnerType::List(_) => ParserDataType::new(span, base_type),
+                    ParserInnerType::Str => ParserDataType::new(span, ParserInnerType::Str),
+                    ParserInnerType::Range => ParserDataType::new(span, ParserInnerType::Range),
+                    _ => return None,
+                })
+            }
+            (Some(base_type), _) => Some(match base_type.unwrap_all_refs() {
+                ParserInnerType::List(inner) => *inner.clone(),
+                ParserInnerType::Str => ParserDataType::new(span, ParserInnerType::Char),
+                ParserInnerType::Range => ParserDataType::new(span, ParserInnerType::Int),
                 _ => return None,
             }),
             _ => None,
-        }
+        };
+
+        data_type.map(|data_type| {
+            if let Some(ref_mutability) = ref_mutability {
+                ParserDataType::new(
+                    span,
+                    ParserInnerType::Option(Box::new(ParserDataType::new(
+                        span,
+                        ParserInnerType::Ref(Box::new(data_type), ref_mutability),
+                    ))),
+                )
+            } else {
+                ParserDataType::new(span, ParserInnerType::Option(Box::new(data_type)))
+            }
+        })
     }
 }
 

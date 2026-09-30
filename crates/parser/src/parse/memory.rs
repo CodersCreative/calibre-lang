@@ -14,9 +14,9 @@ impl<'a> AstParser<'a> for RefMutability {
     #[inline(always)]
     fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
-            select! { Token::MutRef => () }.map(|_| RefMutability::MutRef),
-            select! { Token::Mut => () }.map(|_| RefMutability::MutValue),
-            select! { Token::BitAnd => () }.map(|_| RefMutability::Ref),
+            just(Token::MutRef).map(|_| RefMutability::MutRef),
+            just(Token::Mut).map(|_| RefMutability::MutValue),
+            just(Token::BitAnd).map(|_| RefMutability::Ref),
         ))
         .or_not()
         .map(|x| x.unwrap_or(RefMutability::Value))
@@ -39,7 +39,7 @@ impl<'a> AstParser<'a> for AstMove {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Move => () }
+        just(Token::Move)
             .ignore_then(data.node.clone())
             .map(|value| AstMove {
                 value: Box::new(value),

@@ -233,10 +233,13 @@ impl MirLowering for AstTry {
     ) -> Result<MiddleNode, MiddleErr> {
         let resolved_type = self.value.type_of(env, scope, span);
 
-        let is_option = matches!(
-            resolved_type.as_ref().map(|t| t.key()),
-            Some(ParserInnerType::Option(_))
-        );
+        let is_option = resolved_type.as_ref().is_some_and(|x| x.is_option());
+        let (function_is_option, function_is_null) = {
+            match env.scoping.return_type_stack.last() {
+                Some(x) => (x.is_option(), x.is_null()),
+                None => (false, false),
+            }
+        };
 
         let enum_arm = |variant: &str, name: Option<PotentialDollarIdentifier>, body| {
             (
@@ -253,16 +256,7 @@ impl MirLowering for AstTry {
         };
 
         let return_call = |name: &str, args: Vec<CallArg>| {
-            AstNode::new(
-                span,
-                AstNodeType::Return(AstReturn {
-                    value: Some(Box::new(AstNode::call(
-                        span,
-                        AstNode::identifier(span, name),
-                        args,
-                    ))),
-                }),
-            )
+            AstNode::ret(AstNode::call(span, AstNode::identifier(span, name), args))
         };
 
         let emit_call = |name: &str, args: Vec<CallArg>| {
@@ -291,6 +285,12 @@ impl MirLowering for AstTry {
 
                         let err_arm = if let Some(catch) = self.catch {
                             enum_arm("None", catch.name, *catch.body)
+                        } else if function_is_null {
+                            enum_arm(
+                                "None",
+                                None,
+                                AstNode::new(span, AstNodeType::Return(AstReturn { value: None })),
+                            )
                         } else {
                             enum_arm(
                                 "None",
@@ -313,6 +313,14 @@ impl MirLowering for AstTry {
 
                         let err_arm = if let Some(catch) = self.catch {
                             enum_arm("Err", catch.name, *catch.body)
+                        } else if function_is_null {
+                            enum_arm(
+                                "Err",
+                                None,
+                                AstNode::new(span, AstNodeType::Return(AstReturn { value: None })),
+                            )
+                        } else if function_is_option {
+                            enum_arm("Err", None, AstNode::ret(AstNode::identifier(span, "none")))
                         } else {
                             let err_name = "anon_err_value";
                             enum_arm(
@@ -682,6 +690,7 @@ impl MirLowering for AstReturn {
 
                             // TODO Properly check for the generators inner type
                             if !node_ty.loose_eq(&ret_ty) && !ret_ty.is_gen() {
+                                println!("{}", self.value.unwrap());
                                 return Err(env.context.err_at_current(
                                     MiddleErr::InvalidReturnType {
                                         expected: Box::new(ParserDataType::new(span, ret_ty)),

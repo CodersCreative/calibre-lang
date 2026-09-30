@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - NewLine parsing
+// TODO Fix - FAILING - Functions not being called?
 import (Channel, Mutex, WaitGroup) from std::async;
 import Duration from std::thread;
 
@@ -68,7 +68,7 @@ const main := fn => {
 	print("all done, total=" & total.get());
 	
 	spawn@ for i in 0..100 => {
-		if i % 2 = 0 => {
+		if (i % 2) = 0 => {
 			Duration.from_ms(101 - i).sleep();
 		};
 		
@@ -88,7 +88,7 @@ const main := fn => {
 	
 	let width : int = 32;
 	let concurrent := [=> {
-		if i % 2 = 0 => {
+		if (i % 2) = 0 => {
 			Duration.from_ms((width + 1 - i) * 2).sleep();
 		};
 		

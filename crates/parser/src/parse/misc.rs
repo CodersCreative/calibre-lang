@@ -13,9 +13,10 @@ impl<'a> AstParser<'a> for AstParen {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::LeftParen => () }
-            .ignore_then(data.node.clone().padded_by(potential_new_line()))
-            .then_ignore(select! { Token::RightParen => () })
+        data.node
+            .clone()
+            .padded_by(potential_new_line())
+            .delimited_by(just(Token::LeftParen), just(Token::RightParen))
             .map(|value| AstParen {
                 value: Box::new(value),
             })
@@ -27,7 +28,7 @@ impl<'a> AstParser<'a> for AstTest {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Test => () }
+        just(Token::Test)
             .ignore_then(select! { Token::StringLiteral(x) => ParserText::decode_literal(x) })
             .then(data.scope.clone())
             .map(|(name, body)| AstTest {
@@ -45,27 +46,22 @@ impl<'a> AstParser<'a> for AstImport {
             .ignore_then(choice((
                 // import ... from module::path
                 choice((
-                    select! { Token::LeftParen => () }
-                        .ignore_then(
-                            data.dollar_ident
-                                .clone()
-                                .padded_by(potential_new_line())
-                                .separated_by(select! { Token::Comma => () })
-                                .allow_trailing()
-                                .collect::<Vec<_>>(),
-                        )
-                        .then_ignore(select! { Token::RightParen => () }),
-                    select! { Token::Mul => () }
+                    data.dollar_ident
+                        .clone()
+                        .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
+                        .padded_by(potential_new_line())
+                        .delimited_by(just(Token::LeftParen), just(Token::RightParen)),
+                    just(Token::Mul)
                         .map_with_span(|_, span| vec![PotentialDollarIdentifier::new(span, "*")]),
                     data.dollar_ident.clone().map(|x| vec![x]),
                 ))
-                .then_ignore(select! { Token::From => () }.padded_by(potential_new_line()))
+                .then_ignore(just(Token::From).padded_by(potential_new_line()))
                 .then(
                     data.dollar_ident
                         .clone()
-                        .separated_by(
-                            select! { Token::Scope => () }.padded_by(potential_new_line()),
-                        )
+                        .separated_by(just(Token::Scope).padded_by(potential_new_line()))
                         .at_least(1)
                         .collect::<Vec<_>>(),
                 )
@@ -73,11 +69,11 @@ impl<'a> AstParser<'a> for AstImport {
                 // import module::path as alias
                 data.dollar_ident
                     .clone()
-                    .separated_by(select! { Token::Scope => () }.padded_by(potential_new_line()))
+                    .separated_by(just(Token::Scope).padded_by(potential_new_line()))
                     .at_least(1)
                     .collect::<Vec<_>>()
                     .then(
-                        select! { Token::As => () }
+                        just(Token::As)
                             .padded_by(potential_new_line())
                             .ignore_then(data.dollar_ident.clone())
                             .or_not(),
@@ -97,20 +93,16 @@ impl<'a> AstParser<'a> for StandaloneTag {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::At => () }
+        just(Token::At)
             .ignore_then(ParserText::parser(()))
             .then(
-                select! { Token::LeftParen => () }
-                    .ignore_then(
-                        data.node
-                            .clone()
-                            .separated_by(select! { Token::Comma => () })
-                            .allow_trailing()
-                            .collect::<Vec<_>>()
-                            .or_not()
-                            .map(|x| x.unwrap_or_default()),
-                    )
-                    .then_ignore(select! { Token::RightParen => () })
+                data.node
+                    .clone()
+                    .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .padded_by(potential_new_line())
+                    .delimited_by(just(Token::LeftParen), just(Token::RightParen))
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
@@ -126,20 +118,16 @@ impl<'a> AstParser<'a> for AstTag {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::At => () }
+        just(Token::At)
             .ignore_then(ParserText::parser(()))
             .then(
-                select! { Token::LeftParen => () }
-                    .ignore_then(
-                        data.node
-                            .clone()
-                            .separated_by(select! { Token::Comma => () })
-                            .allow_trailing()
-                            .collect::<Vec<_>>()
-                            .or_not()
-                            .map(|x| x.unwrap_or_default()),
-                    )
-                    .then_ignore(select! { Token::RightParen => () })
+                data.node
+                    .clone()
+                    .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .padded_by(potential_new_line())
+                    .delimited_by(just(Token::LeftParen), just(Token::RightParen))
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )

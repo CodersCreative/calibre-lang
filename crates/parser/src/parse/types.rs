@@ -22,32 +22,25 @@ impl<'a> AstParser<'a> for TypeDefType {
     type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let struct_named_fields = select! { Token::LeftBracket => () }
-            .ignore_then(
-                StandaloneTag::parser(data.clone())
-                    .padded_by(potential_new_line())
+        let struct_named_fields = StandaloneTag::parser(data.clone())
+            .padded_by(potential_new_line())
+            .repeated()
+            .collect::<Vec<_>>()
+            .then(
+                data.dollar_ident
+                    .clone()
                     .repeated()
-                    .collect::<Vec<_>>()
-                    .then(
-                        data.dollar_ident
-                            .clone()
-                            .repeated()
-                            .at_least(1)
-                            .collect::<Vec<_>>(),
-                    )
-                    .then_ignore(select! { Token::Colon => () }.padded_by(potential_new_line()))
-                    .then(data.data_type.clone())
-                    .then(
-                        select! { Token::Eq => () }
-                            .ignore_then(data.node.clone())
-                            .or_not(),
-                    )
-                    .padded_by(potential_new_line())
-                    .separated_by(select! { Token::Comma => () })
-                    .allow_trailing()
+                    .at_least(1)
                     .collect::<Vec<_>>(),
             )
-            .then_ignore(select! { Token::RightBracket => () })
+            .then_ignore(just(Token::Colon).padded_by(potential_new_line()))
+            .then(data.data_type.clone())
+            .then(just(Token::Eq).ignore_then(data.node.clone()).or_not())
+            .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+            .allow_trailing()
+            .collect::<Vec<_>>()
+            .padded_by(potential_new_line())
+            .delimited_by(just(Token::LeftBracket), just(Token::RightBracket))
             .map(|groups| {
                 let mut fields = Vec::new();
                 for (((tags, names), ty), default_value) in groups {
@@ -63,51 +56,37 @@ impl<'a> AstParser<'a> for TypeDefType {
                 }
             });
 
-        let struct_tuple_fields = select! { Token::LeftParen => () }
-            .ignore_then(
-                StandaloneTag::parser(data.clone())
-                    .padded_by(potential_new_line())
-                    .repeated()
-                    .collect::<Vec<_>>()
-                    .then(data.data_type.clone())
-                    .separated_by(select! { Token::Comma => () })
-                    .allow_trailing()
-                    .collect::<Vec<_>>()
-                    .or_not()
-                    .map(|x| x.unwrap_or_default()),
-            )
-            .then_ignore(select! { Token::RightParen => () })
+        let struct_tuple_fields = StandaloneTag::parser(data.clone())
+            .padded_by(potential_new_line())
+            .repeated()
+            .collect::<Vec<_>>()
+            .then(data.data_type.clone())
+            .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+            .allow_trailing()
+            .collect::<Vec<_>>()
+            .padded_by(potential_new_line())
+            .delimited_by(just(Token::LeftParen), just(Token::RightParen))
             .map(|types| TypeDefType::Struct {
                 fields: ObjectType::Tuple(
                     types.into_iter().map(|(tags, t)| (tags, t, None)).collect(),
                 ),
             });
 
-        let enum_parser = select! { Token::Enum => () }
-            .ignore_then(select! { Token::LeftBracket => () })
+        let enum_parser = just(Token::Enum)
             .ignore_then(
                 StandaloneTag::parser(data.clone())
                     .padded_by(potential_new_line())
                     .repeated()
                     .collect::<Vec<_>>()
-                    .or_not()
-                    .map(|x| x.unwrap_or_default())
+                    .then(data.dollar_ident.clone().repeated().collect::<Vec<_>>())
                     .then(
-                        data.dollar_ident
-                            .clone()
-                            .repeated()
-                            .collect::<Vec<_>>()
-                            .or_not()
-                            .map(|x| x.unwrap_or_default()),
-                    )
-                    .then(
-                        select! { Token::Colon => () }
+                        just(Token::Colon)
                             .padded_by(potential_new_line())
                             .ignore_then(data.data_type.clone())
                             .or_not(),
                     )
                     .then(
-                        select! { Token::Eq => () }
+                        just(Token::Eq)
                             .padded_by(potential_new_line())
                             .ignore_then(data.node.clone())
                             .or_not(),
@@ -118,12 +97,12 @@ impl<'a> AstParser<'a> for TypeDefType {
                             .map(|name| (name, t.clone(), default_value.clone(), tags.clone()))
                             .collect::<Vec<_>>()
                     })
-                    .padded_by(potential_new_line())
-                    .separated_by(select! { Token::Comma => () })
+                    .separated_by(just(Token::Comma).padded_by(potential_new_line()))
                     .allow_trailing()
-                    .collect::<Vec<_>>(),
+                    .collect::<Vec<_>>()
+                    .padded_by(potential_new_line())
+                    .delimited_by(just(Token::LeftBracket), just(Token::RightBracket)),
             )
-            .then_ignore(select! { Token::RightBracket => () })
             .map(|groups| {
                 let mut variants = Vec::new();
                 let mut default_variant = None;
@@ -176,10 +155,10 @@ impl<'a> AstParser<'a> for Overload {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Const => () }
+        just(Token::Const)
             .ignore_then(select! { Token::StringLiteral(op) => ParserText::decode_literal(op) })
             .map_with_span(|op, sp| ParserText::new(sp, op))
-            .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
+            .then_ignore(just(Token::Walrus).padded_by(potential_new_line()))
             .then(data.node.clone())
             .try_map(|(operator, value), sp| match value.node_type {
                 AstNodeType::FunctionDeclaration(ref func) => Ok(Overload {
@@ -197,15 +176,16 @@ impl<'a> AstParser<'a> for TraitMember {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let const_member = select! { Token::Const => () }
+        let const_member = just(Token::Const)
             .ignore_then(data.dollar_ident.clone())
             .then(
-                select! { Token::Colon => () }
+                just(Token::Colon)
                     .ignore_then(data.data_type.clone())
                     .or_not(),
             )
             .then(
-                choice((select! { Token::Eq => () }, select! { Token::Walrus => () }))
+                choice((just(Token::Eq), just(Token::Walrus)))
+                    .padded_by(potential_new_line())
                     .ignore_then(data.node.clone())
                     .or_not(),
             )
@@ -216,7 +196,7 @@ impl<'a> AstParser<'a> for TraitMember {
                 value: value.map(Box::new),
             });
 
-        let type_member = select! { Token::Type => () }
+        let type_member = just(Token::Type)
             .ignore_then(data.dollar_ident.clone())
             .map_with_span(|identifier, span| TraitMember {
                 kind: TraitMemberKind::Type,
@@ -234,20 +214,18 @@ impl<'a> AstParser<'a> for AstImpl {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Impl => () }
+        just(Token::Impl)
             .ignore_then(GenericTypes::parser(data.clone()))
             .then(data.data_type.clone())
-            .then_ignore(select! { Token::LeftBracket => () })
             .then(
                 data.node
                     .clone()
                     .padded_by(potential_new_line())
                     .repeated()
                     .collect::<Vec<_>>()
-                    .or_not()
-                    .map(|x| x.unwrap_or_default()),
+                    .padded_by(potential_new_line())
+                    .delimited_by(just(Token::LeftBracket), just(Token::RightBracket)),
             )
-            .then_ignore(select! { Token::RightBracket => () })
             .map(|((generics, target), variables)| AstImpl {
                 generics,
                 target,
@@ -261,22 +239,20 @@ impl<'a> AstParser<'a> for AstImplTrait {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Impl => () }
+        just(Token::Impl)
             .ignore_then(GenericTypes::parser(data.clone()))
             .then(data.generic_ident.clone())
-            .then_ignore(select! { Token::For => () }.padded_by(potential_new_line()))
+            .then_ignore(just(Token::For).padded_by(potential_new_line()))
             .then(data.data_type.clone())
-            .then_ignore(select! { Token::LeftBracket => () })
             .then(
                 data.node
                     .clone()
                     .padded_by(potential_new_line())
                     .repeated()
                     .collect::<Vec<_>>()
-                    .or_not()
-                    .map(|x| x.unwrap_or_default()),
+                    .padded_by(potential_new_line())
+                    .delimited_by(just(Token::LeftBracket), just(Token::RightBracket)),
             )
-            .then_ignore(select! { Token::RightBracket => () })
             .map(
                 |(((generics, trait_ident), target), variables)| AstImplTrait {
                     generics,
@@ -293,17 +269,16 @@ impl<'a> AstParser<'a> for AstTrait {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Trait => () }
+        just(Token::Trait)
             .ignore_then(data.generic_ident.clone())
-            .then_ignore(select! { Token::LeftBracket => () })
             .then(
-                potential_new_line()
-                    .ignore_then(TraitMember::parser(data.clone()))
+                TraitMember::parser(data.clone())
                     .padded_by(potential_new_line())
                     .repeated()
-                    .collect::<Vec<_>>(),
+                    .collect::<Vec<_>>()
+                    .padded_by(potential_new_line())
+                    .delimited_by(just(Token::LeftBracket), just(Token::RightBracket)),
             )
-            .then_ignore(select! { Token::RightBracket => () })
             .map(|(identifier, members)| AstTrait {
                 identifier,
                 implied_traits: Vec::new(),
@@ -316,12 +291,12 @@ impl<'a> AstParser<'a> for AstType {
     type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Type => () }
+        just(Token::Type)
             .ignore_then(data.generic_ident.clone())
-            .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
+            .then_ignore(just(Token::Walrus).padded_by(potential_new_line()))
             .then(TypeDefType::parser(data.clone()))
             .then(
-                select! { Token::At => () }
+                just(Token::At)
                     .ignore_then(select! { Token::Identifier(ident) => ident })
                     .try_map(|ident, sp| {
                         if ident == "overload" {
@@ -331,17 +306,13 @@ impl<'a> AstParser<'a> for AstType {
                         }
                     })
                     .ignore_then(
-                        select! { Token::LeftBracket => () }.padded_by(potential_new_line()),
-                    )
-                    .ignore_then(
                         Overload::parser(data)
                             .padded_by(potential_new_line())
                             .repeated()
                             .collect::<Vec<_>>()
-                            .or_not()
-                            .map(|x| x.unwrap_or_default()),
+                            .padded_by(potential_new_line())
+                            .delimited_by(just(Token::LeftBracket), just(Token::RightBracket)),
                     )
-                    .then_ignore(select! { Token::RightBracket => () })
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )

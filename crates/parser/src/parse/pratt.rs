@@ -110,7 +110,7 @@ impl<'a> PrattParser {
             }
         }
 
-        let assignment = select! { Token::Walrus => () };
+        let assignment = just(Token::Walrus);
 
         let boolean = select! {
             Token::And => (BooleanOperator::And, false),
@@ -185,7 +185,7 @@ impl<'a> PrattParser {
             .padded_by(potential_new_line())
             .then(data.data_type.clone());
 
-        let is = select! { Token::Is => () }
+        let is = just(Token::Is)
             .padded_by(potential_new_line())
             .ignore_then(data.data_type.clone());
 
@@ -197,7 +197,7 @@ impl<'a> PrattParser {
                 }),
             ))
             .then(
-                select! { Token::Colon => () }
+                just(Token::Colon)
                     .padded_by(potential_new_line())
                     .ignore_then(data.stmt.clone().or_not())
                     .or_not(),
@@ -207,7 +207,7 @@ impl<'a> PrattParser {
             .ignore_then(data.stmt.clone().padded_by(potential_new_line()))
             .then_ignore(select! { Token::RightSquare => () });
 
-        let memory = select! { Token::Dot => () }
+        let memory = just(Token::Dot)
             .padded_by(potential_new_line())
             .ignore_then(select! {
                 Token::Mul => None,

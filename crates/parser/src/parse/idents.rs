@@ -5,7 +5,9 @@ use crate::{
         types::ParserDataType,
     },
     lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream},
+    parse::{
+        AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream, potential_new_line,
+    },
 };
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
@@ -27,18 +29,16 @@ impl<'a> AstParser<'a> for PotentialDollarIdentifier {
 
     #[inline(always)]
     fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! {
-            Token::Dollar => (),
-        }
-        .ignore_then(ParserText::parser(()).or_not())
-        .map_with_span(|ident, span| {
-            ident
-                .map(PotentialDollarIdentifier::DollarIdentifier)
-                .unwrap_or_else(|| {
-                    PotentialDollarIdentifier::Identifier(ParserText::new(span, "$"))
-                })
-        })
-        .or(ParserText::parser(()).map(PotentialDollarIdentifier::Identifier))
+        just(Token::Dollar)
+            .ignore_then(ParserText::parser(()).or_not())
+            .map_with_span(|ident, span| {
+                ident
+                    .map(PotentialDollarIdentifier::DollarIdentifier)
+                    .unwrap_or_else(|| {
+                        PotentialDollarIdentifier::Identifier(ParserText::new(span, "$"))
+                    })
+            })
+            .or(ParserText::parser(()).map(PotentialDollarIdentifier::Identifier))
     }
 }
 
@@ -50,16 +50,12 @@ impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         PotentialDollarIdentifier::parser(data)
             .then(
-                select! { Token::Vampire => () }
-                    .ignore_then(
-                        ParserDataType::parser(data)
-                            .separated_by(select! { Token::Comma => () })
-                            .allow_trailing()
-                            .collect::<Vec<_>>()
-                            .or_not()
-                            .map(|x| x.unwrap_or_default()),
-                    )
-                    .then_ignore(select! { Token::Greater => () })
+                ParserDataType::parser(data)
+                    .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .padded_by(potential_new_line())
+                    .delimited_by(just(Token::Vampire), just(Token::Greater))
                     .or_not(),
             )
             .map(|(identifier, generic_types)| {

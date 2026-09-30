@@ -35,7 +35,7 @@ impl<'a> AstParser<'a> for CallArg {
         choice((
             data.dollar_ident
                 .clone()
-                .then_ignore(select! { Token::Colon => () })
+                .then_ignore(just(Token::Colon))
                 .then(data.stmt.clone())
                 .map(|(name, value)| CallArg::Named(name, value)),
             data.stmt.clone().map(CallArg::Value),
@@ -65,19 +65,19 @@ impl<'a> AstParser<'a> for FnParamGroup {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let normal = select! { Token::Mut => () }
+        let normal = just(Token::Mut)
             .or_not()
             .ignore_then(data.dollar_ident.clone())
             .repeated()
             .at_least(1)
             .collect::<Vec<_>>()
             .then(
-                select! { Token::Colon => () }
+                just(Token::Colon)
                     .ignore_then(data.data_type.clone())
                     .or_not(),
             )
             .then(
-                choice((select! { Token::Eq => () }, select! { Token::Walrus => () }))
+                choice((just(Token::Eq), just(Token::Walrus)))
                     .ignore_then(data.node.clone())
                     .or_not(),
             )
@@ -92,12 +92,12 @@ impl<'a> AstParser<'a> for FnParamGroup {
 
         let destructure = DestructurePattern::parser(data.clone())
             .then(
-                select! { Token::Colon => () }
+                just(Token::Colon)
                     .ignore_then(data.data_type.clone())
                     .or_not(),
             )
             .then(
-                choice((select! { Token::Eq => () }, select! { Token::Walrus => () }))
+                choice((just(Token::Eq), just(Token::Walrus)))
                     .ignore_then(data.node.clone())
                     .or_not(),
             )
@@ -119,23 +119,20 @@ impl<'a> AstParser<'a> for FunctionHeader {
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let fn_param_groups = FnParamGroup::parser(data.clone())
-            .padded_by(potential_new_line())
-            .separated_by(select! { Token::Comma => () })
+            .separated_by(just(Token::Comma).padded_by(potential_new_line()))
             .allow_trailing()
-            .collect::<Vec<_>>()
-            .or_not()
-            .map(|x| x.unwrap_or_default());
+            .collect::<Vec<_>>();
 
-        let fn_params = select! { Token::LeftParen => () }
-            .ignore_then(fn_param_groups)
-            .then_ignore(select! { Token::RightParen => () })
+        let fn_params = fn_param_groups
+            .padded_by(potential_new_line())
+            .delimited_by(just(Token::LeftParen), just(Token::RightParen))
             .or_not()
             .map(|x| x.unwrap_or_default());
 
         GenericTypes::parser(data.clone())
             .then(fn_params)
             .then(
-                select! { Token::RightArrow => () }
+                just(Token::RightArrow)
                     .ignore_then(data.data_type.clone())
                     .or_not(),
             )
@@ -184,7 +181,7 @@ impl<'a> AstParser<'a> for AstFunction {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Fn => () }
+        just(Token::Fn)
             .ignore_then(FunctionHeader::parser(data.clone()))
             .then(data.scope)
             .map(|(header, body)| AstFunction {
@@ -198,30 +195,30 @@ impl<'a> AstParser<'a> for AstExtern {
     type Data = StatementData<'a>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Extern => () }
+        just(Token::Extern)
             .ignore_then(select! { Token::StringLiteral(abi) => ParserText::decode_literal(abi) })
-            .then_ignore(select! { Token::Const => () })
+            .then_ignore(just(Token::Const))
             .then(data.dollar_ident.clone())
-            .then_ignore(select! { Token::Walrus => () }.padded_by(potential_new_line()))
-            .then_ignore(select! { Token::Fn => () })
-            .then(select! { Token::LeftParen => () }.ignore_then(data.data_type
+            .then_ignore(just(Token::Walrus).padded_by(potential_new_line()))
+            .then_ignore(just(Token::Fn))
+            .then(data.data_type
                     .clone()
-                    .padded_by(potential_new_line())
-                    .separated_by(select! { Token::Comma => () })
+                    .separated_by(just(Token::Comma).padded_by(potential_new_line()))
                     .allow_trailing()
                     .collect::<Vec<_>>()
-                    .or_not()
-                    .map(|x| x.unwrap_or_default()),).then_ignore(select! { Token::RightParen => () }).or_not().map(|x| x.unwrap_or_default()))
+                    .padded_by(potential_new_line())
+                    .delimited_by(just(Token::LeftParen), just(Token::RightParen))
+                    .or_not().map(|x| x.unwrap_or_default()))
             .then(
-                select! { Token::RightArrow => () }
+                just(Token::RightArrow)
                     .padded_by(potential_new_line())
                     .ignore_then(data.data_type.clone())
                     .or_not(),
             )
-            .then_ignore(select! { Token::From => () }.padded_by(potential_new_line()))
+            .then_ignore(just(Token::From).padded_by(potential_new_line()))
             .then(select! { Token::StringLiteral(library) => ParserText::decode_literal(library) })
             .then(
-                select! { Token::As => () }
+                just(Token::As)
                     .padded_by(potential_new_line())
                     .ignore_then(select! { Token::StringLiteral(symbol) => ParserText::decode_literal(symbol) })
                     .or_not(),
@@ -245,7 +242,7 @@ impl<'a> AstParser<'a> for AstCurry {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Curry => () }
+        just(Token::Curry)
             .ignore_then(data.node.clone())
             .map(|value| AstCurry {
                 value: Box::new(value),
@@ -406,17 +403,12 @@ impl<'a> AstPrattParser<'a> for AstCall {
         data: Self::Data,
     ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>> {
         let call_args = choice((
-            select! { Token::LeftParen => () }
-                .ignore_then(
-                    CallArg::parser(data.clone())
-                        .padded_by(potential_new_line())
-                        .separated_by(select! { Token::Comma => () })
-                        .allow_trailing()
-                        .collect::<Vec<_>>()
-                        .or_not()
-                        .map(|x| x.unwrap_or_default()),
-                )
-                .then_ignore(select! { Token::RightParen => () })
+            CallArg::parser(data.clone())
+                .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+                .allow_trailing()
+                .collect::<Vec<_>>()
+                .padded_by(potential_new_line())
+                .delimited_by(just(Token::LeftParen), just(Token::RightParen))
                 .map(|x| (ParserText::default(), x)),
             select! { Token::StringLiteral(value) => value }.try_map(|value, span: SimpleSpan| {
                 let source_span: Span = span.into();
@@ -426,30 +418,24 @@ impl<'a> AstPrattParser<'a> for AstCall {
         ));
 
         let reverse_args = select! { Token::Lesser => () }
-            .ignore_then(select! { Token::LeftParen => () })
             .ignore_then(
                 data.stmt
                     .clone()
-                    .padded_by(potential_new_line())
-                    .separated_by(select! { Token::Comma => () })
+                    .separated_by(just(Token::Comma).padded_by(potential_new_line()))
                     .allow_trailing()
                     .collect::<Vec<_>>()
-                    .or_not()
-                    .map(|x| x.unwrap_or_default()),
+                    .padded_by(potential_new_line())
+                    .delimited_by(just(Token::LeftParen), just(Token::RightParen)),
             )
-            .then_ignore(select! { Token::RightParen => () })
             .or_not()
             .map(|x| x.unwrap_or_default());
 
-        select! { Token::Vampire => () }
-            .ignore_then(
-                data.data_type
-                    .clone()
-                    .padded_by(potential_new_line())
-                    .separated_by(select! { Token::Comma => () })
-                    .collect::<Vec<_>>(),
-            )
-            .then_ignore(select! { Token::Greater => () })
+        data.data_type
+            .clone()
+            .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+            .collect::<Vec<_>>()
+            .padded_by(potential_new_line())
+            .delimited_by(just(Token::Vampire), just(Token::Greater))
             .or_not()
             .then(call_args)
             .then(reverse_args)

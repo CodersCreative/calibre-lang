@@ -103,18 +103,13 @@ impl<'a> AstParser<'a> for AstTuple {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::LeftParen => () }
-            .ignore_then(
-                data.node
-                    .clone()
-                    .padded_by(potential_new_line())
-                    .separated_by(select! { Token::Comma => () })
-                    .allow_trailing()
-                    .collect::<Vec<_>>()
-                    .or_not()
-                    .map(|x| x.unwrap_or_default()),
-            )
-            .then_ignore(select! { Token::RightParen => () })
+        data.node
+            .clone()
+            .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+            .allow_trailing()
+            .collect::<Vec<_>>()
+            .padded_by(potential_new_line())
+            .delimited_by(just(Token::LeftParen), just(Token::RightParen))
             .map(|values| AstTuple { values })
     }
 }
@@ -126,28 +121,19 @@ impl<'a> AstParser<'a> for AstStruct {
         data.generic_ident
             .clone()
             .then(
-                select! { Token::LeftBracket => () }
-                    .ignore_then(
-                        select! { Token::Identifier(x) => x }
-                            .then(
-                                select! { Token::Colon => () }
-                                    .ignore_then(data.node.clone())
-                                    .or_not(),
-                            )
-                            .map_with_span(|(field, value), span| {
-                                (
-                                    Ustr::from(field),
-                                    value.unwrap_or_else(|| AstNode::identifier(span, field)),
-                                )
-                            })
-                            .padded_by(potential_new_line())
-                            .separated_by(select! { Token::Comma => () })
-                            .allow_trailing()
-                            .collect::<Vec<_>>()
-                            .or_not()
-                            .map(|x| x.unwrap_or_default()),
-                    )
-                    .then_ignore(select! { Token::RightBracket => () }),
+                select! { Token::Identifier(x) => x }
+                    .then(just(Token::Colon).ignore_then(data.node.clone()).or_not())
+                    .map_with_span(|(field, value), span| {
+                        (
+                            Ustr::from(field),
+                            value.unwrap_or_else(|| AstNode::identifier(span, field)),
+                        )
+                    })
+                    .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .padded_by(potential_new_line())
+                    .delimited_by(just(Token::LeftBracket), just(Token::RightBracket)),
             )
             .map(|(identifier, fields)| AstStruct {
                 identifier,
@@ -161,8 +147,8 @@ impl<'a> AstParser<'a> for AstDataType {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! {Token::Type => ()}
-            .then(select! {Token::Colon => ()})
+        just(Token::Type)
+            .then(just(Token::Colon))
             .ignore_then(data.data_type.clone())
             .map(|data_type| AstDataType { data_type })
     }

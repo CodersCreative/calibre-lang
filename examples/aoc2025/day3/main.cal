@@ -1,5 +1,5 @@
-// TODO Fix - FAILING - NewLine parsing
-import File from std::fs;
+// TODO Fix - FAILING - Type Inference
+import (File, Path) from std::fs;
 import Channel from std::async;
 
 const solve_part1 := fn (banks : list:<str>, worker_count : int) -> int => {
@@ -75,11 +75,11 @@ const worker_part2 := fn (banks : list:<str>, start_idx step : int, out : Channe
 const handle_part1 := fn (bank : str) -> int => {
 	let bank : list:<int> = bank.to_chars();
 	
-	let mut current := try!! bank[0] & try!! bank[1];
+	let mut current := (try!! bank[0]) & try!! bank[1];
 	
 	for i in 1..(len(bank) - 1) => {
-		let mut x := try!! bank[i] & try!! bank[i + 1];
-		let mut biggest := try!! current[0] & try!! bank[i + 1];
+		let mut x := (try!! bank[i]) & try!! bank[i + 1];
+		let mut biggest := (try!! current[0]) & try!! bank[i + 1];
 		
 		if (x as! int) > (biggest as! int) => {
 			biggest := move x;

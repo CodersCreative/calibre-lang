@@ -14,10 +14,11 @@ impl<'a> AstParser<'a> for AstList {
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let data_type = choice((
-            select! { Token::Identifier(x) if x == "list" => () }
-                .ignore_then(select! { Token::Vampire => () })
-                .ignore_then(data.data_type.clone())
-                .then_ignore(select! { Token::Greater => ()}),
+            select! { Token::Identifier(x) if x == "list" => () }.ignore_then(
+                data.data_type
+                    .clone()
+                    .delimited_by(just(Token::Vampire), just(Token::Greater)),
+            ),
             select! { Token::Identifier(x) if x == "list" => () }
                 .map_with_span(|_, span| ParserDataType::auto(span)),
         ))
@@ -25,18 +26,15 @@ impl<'a> AstParser<'a> for AstList {
         .map_with_span(|x, span| x.unwrap_or_else(|| ParserDataType::auto(span)));
 
         data_type
-            .then_ignore(select! { Token::LeftSquare => () })
             .then(
                 data.node
                     .clone()
-                    .padded_by(potential_new_line())
-                    .separated_by(select! { Token::Comma => () })
+                    .separated_by(just(Token::Comma).padded_by(potential_new_line()))
                     .allow_trailing()
                     .collect::<Vec<_>>()
-                    .or_not()
-                    .map(|x| x.unwrap_or_default()),
+                    .padded_by(potential_new_line())
+                    .delimited_by(just(Token::LeftSquare), just(Token::RightSquare)),
             )
-            .then_ignore(select! { Token::RightSquare => () })
             .map(|(data_type, values)| AstList { data_type, values })
     }
 }

@@ -5,8 +5,8 @@ use crate::{
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
+use chumsky::Parser;
 use chumsky::prelude::*;
-use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for AstScopeDef {
     type Data = PrattData<'a>;
@@ -14,31 +14,24 @@ impl<'a> AstParser<'a> for AstScopeDef {
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         let body = choice((
-            select! { Token::LeftBracket => () }
-                .ignore_then(select! { Token::LeftBracket => () })
-                .ignore_then(
-                    data.stmt
-                        .clone()
-                        .padded_by(potential_new_line())
-                        .repeated()
-                        .collect::<Vec<_>>()
-                        .or_not()
-                        .map(|x| x.unwrap_or_default()),
+            data.stmt
+                .clone()
+                .padded_by(potential_new_line())
+                .repeated()
+                .collect::<Vec<_>>()
+                .padded_by(potential_new_line())
+                .delimited_by(
+                    just(Token::LeftBracket).ignore_then(just(Token::LeftBracket)),
+                    just(Token::RightBracket).ignore_then(just(Token::RightBracket)),
                 )
-                .then_ignore(select! { Token::RightBracket => () })
-                .then_ignore(select! { Token::RightBracket => () })
                 .map(|items| (Some(items), Some(false))),
-            select! { Token::LeftBracket => () }
-                .ignore_then(
-                    data.stmt
-                        .clone()
-                        .padded_by(potential_new_line())
-                        .repeated()
-                        .collect::<Vec<_>>()
-                        .or_not()
-                        .map(|x| x.unwrap_or_default()),
-                )
-                .then_ignore(select! { Token::RightBracket => () })
+            data.stmt
+                .clone()
+                .padded_by(potential_new_line())
+                .repeated()
+                .collect::<Vec<_>>()
+                .padded_by(potential_new_line())
+                .delimited_by(just(Token::LeftBracket), just(Token::RightBracket))
                 .map(|items| (Some(items), Some(true))),
             // Im going to make node by itself produce a scope so that no scope is now an explicit action
             data.stmt
@@ -52,24 +45,15 @@ impl<'a> AstParser<'a> for AstScopeDef {
         let named = just(Token::At)
             .ignore_then(data.dollar_ident.clone())
             .then(
-                select! { Token::LeftSquare => () }
-                    .ignore_then(
-                        just(Token::Dollar)
-                            .ignore_then(data.dollar_ident.clone())
-                            .then(
-                                select! { Token::Colon => () }
-                                    .ignore_then(data.stmt.clone())
-                                    .or_not(),
-                            )
-                            .padded_by(potential_new_line())
-                            .map(|(ident, value)| (ident, value))
-                            .separated_by(select! { Token::Comma => () })
-                            .allow_trailing()
-                            .collect::<Vec<_>>()
-                            .or_not()
-                            .map(|x| x.unwrap_or_default()),
-                    )
-                    .then_ignore(select! { Token::RightSquare => () })
+                just(Token::Dollar)
+                    .ignore_then(data.dollar_ident.clone())
+                    .then(just(Token::Colon).ignore_then(data.stmt.clone()).or_not())
+                    .map(|(ident, value)| (ident, value))
+                    .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+                    .allow_trailing()
+                    .collect::<Vec<_>>()
+                    .padded_by(potential_new_line())
+                    .delimited_by(just(Token::LeftSquare), just(Token::RightSquare))
                     .or_not()
                     .map(|x| x.unwrap_or_default()),
             )
@@ -84,7 +68,7 @@ impl<'a> AstParser<'a> for AstScopeDef {
                     .collect(),
             });
 
-        select! { Token::FatArrow => () }
+        just(Token::FatArrow)
             .ignore_then(named.padded_by(potential_new_line()).or_not())
             .then(body.padded_by(potential_new_line()))
             .map(|(named, (body, create_new_scope))| AstScopeDef {
@@ -103,43 +87,34 @@ impl<'a> AstParser<'a> for AstScopeAlias {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let args = select! { Token::LeftSquare => () }
-            .ignore_then(
-                just(Token::Dollar)
-                    .ignore_then(data.dollar_ident.clone())
-                    .then(
-                        select! { Token::Colon => () }
-                            .ignore_then(data.node.clone())
-                            .or_not(),
-                    )
-                    .padded_by(potential_new_line())
-                    .map(|(ident, value)| (ident, value))
-                    .separated_by(select! { Token::Comma => () })
-                    .allow_trailing()
-                    .collect::<Vec<_>>()
-                    .or_not()
-                    .map(|x| x.unwrap_or_default()),
-            )
-            .then_ignore(select! { Token::RightSquare => () })
+        let args = just(Token::Dollar)
+            .ignore_then(data.dollar_ident.clone())
+            .then(just(Token::Colon).ignore_then(data.node.clone()).or_not())
+            .map(|(ident, value)| (ident, value))
+            .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+            .allow_trailing()
+            .collect::<Vec<_>>()
+            .padded_by(potential_new_line())
+            .delimited_by(just(Token::LeftBracket), just(Token::RightBracket))
             .or_not()
             .map(|x| x.unwrap_or_default());
 
         let call_mode = choice((
-            select! { Token::LeftBracket => () }
-                .then_ignore(select! { Token::LeftBracket => () })
-                .then_ignore(select! { Token::RightBracket => () })
-                .then_ignore(select! { Token::RightBracket => () })
-                .map(|()| Some(false)),
-            select! { Token::LeftBracket => () }
-                .then_ignore(select! { Token::RightBracket => () })
-                .map(|()| Some(true)),
+            just(Token::LeftBracket)
+                .then_ignore(just(Token::LeftBracket))
+                .then_ignore(just(Token::RightBracket))
+                .then_ignore(just(Token::RightBracket))
+                .map(|_| Some(false)),
+            just(Token::LeftBracket)
+                .then_ignore(just(Token::RightBracket))
+                .map(|_| Some(true)),
         ))
         .or_not()
         .map(|x| x.flatten());
 
-        select! { Token::Let => () }
+        just(Token::Let)
             .ignore_then(just(Token::At).ignore_then(data.dollar_ident.clone()))
-            .then_ignore(select! { Token::FatArrow => () }.padded_by(potential_new_line()))
+            .then_ignore(just(Token::FatArrow).padded_by(potential_new_line()))
             .then(data.dollar_ident.clone())
             .then(args.padded_by(potential_new_line()))
             .then(call_mode.padded_by(potential_new_line()))

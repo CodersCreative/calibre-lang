@@ -1,6 +1,6 @@
-// TODO Fix - FAILING - NewLine parsing
+// TODO Fix - FAILING - Type Inference
 import * from data;
-import File from std::fs;
+import (File, Path) from std::fs;
 import Channel from std::async;
 
 // Constants are immutable.
@@ -11,7 +11,7 @@ const even_numbers := fn (start stop : int) -> gen:<int> => {
 	let mut i := start;
 	
 	for i < stop => {
-		if i % 2 = 0 => return i;
+		if (i % 2) = 0 => return i;
 		i += 1;
 	};
 	
@@ -32,7 +32,7 @@ const mul3 := fn (a b c : int) -> int => a * b * c;
 
 const factorial := fn (x : int) -> int => if x <= 1 => 1 else => x * factorial(x - 1);
 
-const is_a_triangle := fn (a b c : float) -> bool => a + b > c && b + c > a && c + a > b;
+const is_a_triangle := fn (a b c : float) -> bool => ((a + b) > c) && ((b + c) > a) && ((c + a) > b);
 const heron := fn (a b c : float) -> float => {
 	let p := (a + b + c) / 2;
 	(p * (p - a) * (p - b) * (p - c)) ** 0.5;
@@ -111,7 +111,7 @@ const main := fn => {
 	let d := 10f;
 	print("suffixes => " & a & ", " & b & ", " & c & ", " & d);
 	
-	let mut x, mut y := 5, 6;
+	let (mut x, mut y) := (5, 6);
 	
 	// Destructuring declaration and assignment.
 	print("destructure assign => " & x & ", " & y);
@@ -121,14 +121,14 @@ const main := fn => {
 	print("struct destructure => " & (left + right));
 	
 	// Match with tuple patterns, rest, binding inference, and OR alternatives.
-	match 20, 40, 30 {
-		20, 40, 80 | 30 | 90 => print("or-arm "),
-		20, .., 90 => print("rest match"),
+	match (20, 40, 30) {
+		(20, 40, 80 | 30 | 90) => print("or-arm "),
+		(20, .., 90) => print("rest match"),
 		_ => print("fallback")
 	};
 	
 	// Match with enum payload destructuring.
-	let nested_lang : Language = Language.ARABIC : Language.FRENCH : FrenchData { data : 1, code : 2 }, Language.SPANISH;
+	let nested_lang : Language = Language.ARABIC : Language.FRENCH : (FrenchData { data : 1, code : 2 }, Language.SPANISH);
 	
 	/* match nested_lang {
 	.ARABIC : (.FRENCH : {data: l, code: r}, _) => print("nested enum/struct => " & (l + r)),
@@ -140,7 +140,7 @@ const main := fn => {
 		print("if let => " & (v + c));
 	};
 	
-	for let .ARABIC : left_lang, right_lang <- recursive_language => {
+	for let .ARABIC : (left_lang, right_lang) <- recursive_language => {
 		print("for let left => " & left_lang);
 		print("for let right => " & right_lang);
 		
@@ -150,7 +150,7 @@ const main := fn => {
 	/* List comprehensions with loops.
 	Also an example of the until statement that can be used to create end tested loops.
 	*/
-	let mut lst : list:<int> = [n ** 2 for n in 0..20 if n % 2 = 0 if n % 4 != 0];
+	let mut lst : list:<int> = [n ** 2 for n in 0..20 if (n % 2) = 0 if (n % 4) != 0];
 	
 	for i in len(lst) => {
 		lst[i] := (try!! list[i]) * 2;
@@ -167,7 +167,7 @@ const main := fn => {
 	// print("generator fn firsts => " & gen.next() & ", " & gen.next() & ", " & gen.next());
 	
 	// Until can also be used in generators and list comprehensions.
-	let inline := fn(n * 3 for n in 0..20 if n % 3 = 0 until n > 16);
+	let inline := fn(n * 3 for n in 0..20 if (n % 3) = 0 until n > 16);
 	print("inline gen firsts => " & inline.next() & ", " & inline.next() & ", " & inline.next());
 	
 	// Result and Option flow.
@@ -220,13 +220,13 @@ const main := fn => {
 	print("trait describe => " & p.describe());
 	
 	// Recursive-ish match destructuring on tuples/structs/options.
-	match 10, 90, 20 {
-		20, 40, 80 | 30 | 90 => print("match or-arm"),
-		10, mut value, 20 => {
+	match (10, 90, 20) {
+		(20, 40, 80 | 30 | 90) => print("match or-arm"),
+		(10, mut value, 20) => {
 			value += 1;
 			print("match mut bind => " & value);
 		},
-		10, const value, _ => print("match const bind => " & value),
+		(10, const value, _) => print("match const bind => " & value),
 		_ => {}
 	};
 	
@@ -276,7 +276,7 @@ const main := fn => {
 		2,
 		3,
 		4
-	].into_iter().filter(fn (x : int) -> bool => x % 2 = 0).collect();
+	].into_iter().filter(fn (x : int) -> bool => (x % 2) = 0).collect();
 	let folded := list:<int>[
 		1,
 		2,
@@ -365,5 +365,5 @@ const main := fn => {
 	
 	// Static functions on primitive families.
 	print("int gcd/lcm => " & int.gcd(84, 18) & ", " & int.lcm(12, 18));
-	print("uint pow => " & uint.pow(2u, 10u));
+	print("uint pow => " & 2u ** 10u);
 };

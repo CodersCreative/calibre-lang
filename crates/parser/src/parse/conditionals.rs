@@ -8,8 +8,8 @@ use crate::{
     lexer::Token,
     parse::{AstParser, AstParserErr, TokenStream},
 };
+use chumsky::Parser;
 use chumsky::prelude::*;
-use chumsky::{Parser, select};
 
 impl<'a> AstParser<'a> for IfComparisonType {
     type Data = StatementData<'a>;
@@ -18,9 +18,9 @@ impl<'a> AstParser<'a> for IfComparisonType {
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
         choice((
             // let ... <- ...
-            select! { Token::Let => () }
+            just(Token::Let)
                 .ignore_then(parse_pattern_list(data.clone()))
-                .then_ignore(select! { Token::LeftArrow => () })
+                .then_ignore(just(Token::LeftArrow))
                 .then(data.node.clone())
                 .map(|((patterns, _), value)| IfComparisonType::IfLet {
                     value,
@@ -44,14 +44,10 @@ impl<'a> AstParser<'a> for AstIf {
                 data.scope.clone().map(Box::new),
             ));
 
-            select! { Token::If => () }
+            just(Token::If)
                 .ignore_then(IfComparisonType::parser(data.clone()))
                 .then(data.scope.clone())
-                .then(
-                    select! { Token::Else => () }
-                        .ignore_then(else_block)
-                        .or_not(),
-                )
+                .then(just(Token::Else).ignore_then(else_block).or_not())
                 .map(|((cond, then), otherwise)| AstIf {
                     comparison: Box::new(cond),
                     then: Box::new(then),

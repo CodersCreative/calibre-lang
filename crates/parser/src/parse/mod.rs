@@ -257,7 +257,7 @@ impl<'a> AstNode {
             AstExtern::parser(data.clone()).map(AstNodeType::ExternFunctionDeclaration),
             AstCurry::parser(data.clone()).map(AstNodeType::CurryExpression),
             // Null
-            select! {Token::Null => ()}.map(|_| AstNodeType::Null),
+            just(Token::Null).map(|_| AstNodeType::Null),
             // Matching
             AstMatch::parser(data.clone()).map(AstNodeType::MatchStatement),
             // Assignment

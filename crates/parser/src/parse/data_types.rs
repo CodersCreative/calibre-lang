@@ -21,7 +21,7 @@ impl<'a> AstParser<'a> for ParserFfiInnerType {
 
     #[inline(always)]
     fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::At => () }
+        just(Token::At)
             .ignore_then(select! { Token::Identifier(x) => x })
             .try_map(|name, span| {
                 ParserFfiInnerType::from_str(name)
@@ -48,16 +48,10 @@ impl<'a> AstParser<'a> for ParserDataType {
             |ty: chumsky::recursive::Recursive<
                 dyn chumsky::Parser<'_, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
             >| {
-                let tuple_parser = select! { Token::Lesser => () }
-                    .ignore_then(
-                        ty.clone()
-                            .separated_by(select! { Token::Comma => () })
+                let tuple_parser = ty.clone()
+                            .separated_by(just(Token::Comma).padded_by(potential_new_line()))
                             .allow_trailing()
-                            .collect::<Vec<_>>()
-                            .or_not()
-                            .map(|x| x.unwrap_or_default()),
-                    )
-                    .then_ignore(select! { Token::Greater => () })
+                            .collect::<Vec<_>>().padded_by(potential_new_line()).delimited_by(just(Token::Lesser), just(Token::Greater))
                     .map_with_span(|types, span| {
                         if types.len() == 1 {
                             types.into_iter().next().unwrap()
@@ -73,23 +67,19 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
-                let function_parser = select! { Token::Fn => () }
+                let function_parser = just(Token::Fn)
                     .ignore_then(
-                        select! { Token::LeftParen => () }
-                            .ignore_then(
+
                                 ty.clone()
-                                    .padded_by(potential_new_line())
-                                    .separated_by(select! { Token::Comma => () })
+                                    .separated_by(just(Token::Comma).padded_by(potential_new_line()))
                                     .allow_trailing()
                                     .collect::<Vec<_>>()
-                                    .or_not()
-                                    .map(|x| x.unwrap_or_default()),
-                            )
-                            .then_ignore(select! { Token::RightParen => () })
+                                    .padded_by(potential_new_line())
+                            .delimited_by(just(Token::LeftParen), just(Token::RightParen))
                             .or_not(),
                     )
                     .then(
-                        select! { Token::RightArrow => () }
+                        just(Token::RightArrow)
                             .ignore_then(ty.clone())
                             .or_not(),
                     )
@@ -106,10 +96,10 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
-                let curry_parser = select! { Token::Curry => () }
+                let curry_parser = just(Token::Curry)
                     .ignore_then(
                         ty.clone()
-                            .separated_by(select! { Token::RightArrow => () })
+                            .separated_by(just(Token::RightArrow))
                             .at_least(2)
                             .collect::<Vec<_>>(),
                     )
@@ -131,16 +121,12 @@ impl<'a> AstParser<'a> for ParserDataType {
 
                 let struct_parser: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>> = select! { Token::Identifier(x) => x, Token::Dyn => "dyn" }
                     .then(
-                        select! { Token::Vampire => () }
-                            .ignore_then(
                                 ty.clone()
-                                    .separated_by(select! { Token::Comma => () })
+                                    .separated_by(just(Token::Comma).padded_by(potential_new_line()))
                                     .allow_trailing()
                                     .collect::<Vec<_>>()
-                                    .or_not()
-                                    .map(|x| x.unwrap_or_default()),
-                            )
-                            .then_ignore(select! { Token::Greater => () })
+                                    .padded_by(potential_new_line())
+                                    .delimited_by(just(Token::Vampire), just(Token::Greater))
                             .or_not(),
                     )
                     .try_map_with_span(|(name, generic_types), span| {
@@ -254,7 +240,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
-                let dollar_parser = select! { Token::Dollar => () }
+                let dollar_parser = just(Token::Dollar)
                     .ignore_then(select! { Token::Identifier(x) => x })
                     .map_with_span(|name, span| {
                         ParserDataType::new(
@@ -264,9 +250,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
-                let null_parser = select! {
-                    Token::Null => ()
-                }.map_with_span(|_, sp| {
+                let null_parser = just(Token::Null).map_with_span(|_, sp| {
                     ParserDataType::new(sp, ParserInnerType::Null)
                 }).boxed();
 
@@ -301,7 +285,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                             },
                         )
                     }),
-                    infix(left(90), select! { Token::Scope => () }, |left: ParserDataType, _, right: ParserDataType, _| {
+                    infix(left(90), just(Token::Scope), |left: ParserDataType, _, right: ParserDataType, _| {
                         let span = Span::new_from_spans(left.span, right.span);
                         let mut scopes = Vec::new();
 
@@ -337,16 +321,12 @@ impl<'a> AstParser<'a> for GenericTypes {
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        select! { Token::Lesser => () }
-            .ignore_then(
-                GenericType::parser(data)
-                    .separated_by(select! { Token::Comma => () })
-                    .allow_trailing()
-                    .collect::<Vec<_>>()
-                    .or_not()
-                    .map(|x| x.unwrap_or_default()),
-            )
-            .then_ignore(select! { Token::Greater => () })
+        GenericType::parser(data)
+            .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+            .allow_trailing()
+            .collect::<Vec<_>>()
+            .padded_by(potential_new_line())
+            .delimited_by(just(Token::Lesser), just(Token::Greater))
             .or_not()
             .map(|items| GenericTypes(items.unwrap_or_default()))
     }
@@ -360,7 +340,7 @@ impl<'a> AstParser<'a> for GenericType {
         data.dollar_ident
             .clone()
             .then(
-                select! { Token::Colon => () }
+                just(Token::Colon)
                     .ignore_then(
                         data.dollar_ident
                             .clone()
