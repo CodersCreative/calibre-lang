@@ -1,7 +1,7 @@
 use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    scoping::{MiddleScope, ScopeId, Scoping},
+    scoping::{FullyQualifiedPath, MiddleScope, ScopeId, Scoping},
     translate::MirLowering,
 };
 use calibre_parser::{
@@ -13,7 +13,7 @@ use calibre_parser::{
     },
 };
 use calibre_std::{get_globals_path, get_stdlib_file, get_stdlib_module_path, get_stdlib_path};
-use std::path::PathBuf;
+use std::{path::PathBuf, rc::Rc};
 use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
@@ -26,6 +26,7 @@ impl Scoping {
     ) -> ScopeId {
         let scope = self.add_scope(
             MiddleScope {
+                fully_qualified_path: Rc::new(FullyQualifiedPath::get(self, parent, namespace)),
                 macros: UstrMap::default(),
                 macro_args: UstrMap::default(),
                 namespace: namespace.cloned().unwrap_or_default(),
@@ -55,6 +56,11 @@ impl MiddleEnvironment {
         self.context.in_stdlib = Some(Ustr::default());
         let scope = self.scoping.add_scope(
             MiddleScope {
+                fully_qualified_path: Rc::new(FullyQualifiedPath::get(
+                    &self.scoping,
+                    parent,
+                    namespace,
+                )),
                 macros: UstrMap::default(),
                 macro_args: UstrMap::default(),
                 namespace: namespace.cloned().unwrap_or_default(),

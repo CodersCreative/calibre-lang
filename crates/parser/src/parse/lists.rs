@@ -17,6 +17,7 @@ impl<'a> AstParser<'a> for AstList {
             select! { Token::Identifier(x) if x == "list" => () }.ignore_then(
                 data.data_type
                     .clone()
+                    .padded_by(potential_new_line())
                     .delimited_by(just(Token::Vampire), just(Token::Greater)),
             ),
             select! { Token::Identifier(x) if x == "list" => () }

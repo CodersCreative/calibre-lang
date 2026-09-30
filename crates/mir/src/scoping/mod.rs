@@ -4,7 +4,8 @@ use calibre_parser::{
     ast::{idents::PotentialDollarIdentifier, nodes::AstNode, types::ParserInnerType},
 };
 use indextree::{Arena, Node, NodeId};
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
+use std::{fmt::Display, path::PathBuf, rc::Rc};
 use ustr::{Ustr, UstrMap, UstrSet};
 
 pub mod resolve;
@@ -156,6 +157,7 @@ impl Scoping {
 
         self.add_scope(
             MiddleScope {
+                fully_qualified_path: Rc::new(FullyQualifiedPath::get(self, parent, namespace)),
                 macros: UstrMap::default(),
                 macro_args: UstrMap::default(),
                 namespace: namespace.cloned().unwrap_or_default(),
@@ -357,9 +359,59 @@ pub struct ScopeMacro {
     pub create_new_scope: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct FullyQualifiedPath {
+    name: Option<Ustr>,
+    parent: Option<Rc<FullyQualifiedPath>>,
+}
+
+impl FullyQualifiedPath {
+    pub fn get(scoping: &Scoping, parent: Option<ScopeId>, namespace: Option<&Ustr>) -> Self {
+        match (parent, namespace) {
+            (Some(parent_id), Some(ns)) => FullyQualifiedPath {
+                name: Some(*ns),
+                parent: scoping
+                    .scopes
+                    .get(parent_id)
+                    .map(|x| x.get().fully_qualified_path.clone()),
+            },
+            (Some(parent_id), _) => FullyQualifiedPath {
+                name: None,
+                parent: scoping
+                    .scopes
+                    .get(parent_id)
+                    .map(|x| x.get().fully_qualified_path.clone()),
+            },
+            (_, Some(ns)) => FullyQualifiedPath {
+                name: Some(*ns),
+                parent: None,
+            },
+            _ => FullyQualifiedPath {
+                name: None,
+                parent: None,
+            },
+        }
+    }
+}
+
+impl Display for FullyQualifiedPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (&self.name, &self.parent) {
+            (Some(name), Some(parent)) => {
+                write!(f, "{}::{}", parent, name)
+            }
+            (Some(name), _) => {
+                write!(f, "{}", name)
+            }
+            _ => write!(f, ""),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleScope {
     pub namespace: Ustr,
+    pub fully_qualified_path: Rc<FullyQualifiedPath>,
     pub mappings: UstrMap<Ustr>,
     pub type_mappings: UstrMap<ParserInnerType>,
     pub macros: UstrMap<ScopeMacro>,

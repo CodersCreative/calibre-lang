@@ -1,6 +1,8 @@
+use std::rc::Rc;
+
 use crate::{
     environment::MiddleEnvironment,
-    scoping::{MiddleScope, ScopeId, Scoping},
+    scoping::{FullyQualifiedPath, MiddleScope, ScopeId, Scoping},
     symbols::{MiddleOverload, MiddleVariable, Symbols},
     tags::{Tagging, context::PackageMetadata},
     typing::Typing,
@@ -89,6 +91,7 @@ impl From<&Symbols> for ManifestSymbols {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ManifestScope {
     pub namespace: Ustr,
+    pub fully_qualified_path: Rc<FullyQualifiedPath>,
     pub mappings: UstrMap<Ustr>,
     pub type_mappings: UstrMap<ParserInnerType>,
     pub children: UstrMap<ScopeId>,
@@ -111,6 +114,7 @@ impl ManifestScoping {
             let scope = node.get();
 
             let manifest = ManifestScope {
+                fully_qualified_path: scope.fully_qualified_path.clone(),
                 namespace: if scope.namespace == "root" {
                     root_name
                 } else {
@@ -168,6 +172,7 @@ impl Scoping {
             let scope = node.get();
 
             let middle_scope = MiddleScope {
+                fully_qualified_path: scope.fully_qualified_path.clone(),
                 namespace: scope.namespace,
                 mappings: scope.mappings.clone(),
                 type_mappings: scope.type_mappings.clone(),
