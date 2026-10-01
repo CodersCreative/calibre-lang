@@ -312,7 +312,7 @@ impl VMEvaluation for VMLoadMember {
             RuntimeValue::Float(v) => bind_assoc(vm, "float", RuntimeValue::Float(v))?,
             RuntimeValue::Bool(v) => bind_assoc(vm, "bool", RuntimeValue::Bool(v))?,
             other => {
-                if let Some(type_name) = other.impl_name() {
+                if let Some(type_name) = other.impl_key() {
                     bind_assoc(vm, type_name.as_str(), other)?
                 } else {
                     return Err(RuntimeError::ExpectedStructOrAggregateFound {

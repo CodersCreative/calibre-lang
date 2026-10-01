@@ -159,9 +159,11 @@ fn format_command_line(command: &Ustr, args: &[Ustr]) -> String {
     }
 }
 
+// TODO Create macros for this honestly...
 fn process_result(command: Ustr, status: i64, stdout: Ustr, stderr: Ustr) -> RuntimeValue {
     RuntimeValue::Aggregate(
-        Some(Ustr::from("ProcessResult")),
+        // Some(Ustr::from("ProcessResult")),
+        None,
         Arc::new(GcMap::new(ObjectMap::from(vec![
             (String::from("command"), RuntimeValue::Str(command)),
             (String::from("status"), RuntimeValue::Int(status)),

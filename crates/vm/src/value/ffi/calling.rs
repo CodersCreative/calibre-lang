@@ -7,8 +7,7 @@ use crate::{
         hashable::HashKey,
     },
 };
-use calibre_lir::MirDataType;
-use calibre_parser::ast::{ffi::ParserFfiInnerType, types::ParserInnerType};
+use calibre_lir::{FullyQualifiedPath, MirDataType, VariableKey};
 use libffi::{
     low::CodePtr,
     middle::{Cif, Type},
@@ -39,10 +38,15 @@ impl ExternFunction {
             }
 
             if let Some(k) = key {
+                let symbol = VariableKey {
+                    fully_qualified_path: FullyQualifiedPath::combine(None, self.symbol.clone()),
+                    shadow_counter: None,
+                };
+
                 let cache_entry = env
                     .caches
                     .memo
-                    .entry(self.symbol)
+                    .entry(symbol.clone())
                     .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())));
 
                 let guard = cache_entry.lock().unwrap();
@@ -54,7 +58,7 @@ impl ExternFunction {
                 let result = self.call_inner(env, args)?;
                 env.caches
                     .memo
-                    .entry(self.symbol)
+                    .entry(symbol)
                     .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())))
                     .lock()
                     .unwrap()

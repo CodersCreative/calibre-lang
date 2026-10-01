@@ -14,8 +14,7 @@ use calibre_lir::{TypeImplKey, TypeKey, VariableKey, ast::BlockId};
 use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
 use dumpster::{TraceWith, Visitor};
-
-use ustr::{Ustr, UstrMap};
+use ustr::Ustr;
 
 use dyn_hash::DynHash;
 use std::{any::Any, ops::DerefMut};
@@ -233,12 +232,6 @@ pub enum RuntimeValue {
         type_name: TypeImplKey,
         state: Arc<Mutex<GeneratorState>>,
     },
-    DynObject {
-        type_name: TypeImplKey,
-        constraints: Arc<Vec<Ustr>>,
-        value: Gc<RuntimeValue>,
-        vtable: Arc<UstrMap<Ustr>>,
-    },
     BoundMethod {
         callee: Box<RuntimeValue>,
         receiver: Gc<RuntimeValue>,
@@ -285,7 +278,6 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
                 Ok(())
             }
             RuntimeValue::Generator { .. } => Ok(()),
-            RuntimeValue::DynObject { value, .. } => value.accept(visitor),
             RuntimeValue::BoundMethod { callee, receiver } => {
                 callee.accept(visitor)?;
                 receiver.accept(visitor)
@@ -327,7 +319,6 @@ impl RuntimeValue {
                 | RuntimeValue::Enum(_, _, _)
                 | RuntimeValue::Option(_)
                 | RuntimeValue::Result(_)
-                | RuntimeValue::DynObject { .. }
                 | RuntimeValue::BoundMethod { .. }
         )
     }
@@ -378,7 +369,7 @@ impl RuntimeValue {
         )
     }
 
-    pub fn impl_name(&self) -> Option<TypeImplKey> {
+    pub fn impl_key(&self) -> Option<TypeImplKey> {
         match self {
             RuntimeValue::Big(_) => Some("big"),
             RuntimeValue::Int(_) => Some("int"),
@@ -394,7 +385,6 @@ impl RuntimeValue {
                 return Some(TypeImplKey::from(name.clone()));
             }
             RuntimeValue::Generator { type_name, .. } => return Some(*type_name),
-            RuntimeValue::DynObject { type_name, .. } => return Some(*type_name),
             RuntimeValue::List(_) => Some("list"),
             RuntimeValue::Option(_) => Some("option"),
             RuntimeValue::Result(_) => Some("result"),

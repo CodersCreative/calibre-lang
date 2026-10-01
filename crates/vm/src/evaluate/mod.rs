@@ -116,7 +116,7 @@ impl VM {
         value: &RuntimeValue,
         constraints: &[Ustr],
     ) -> Option<(Ustr, UstrMap<Ustr>)> {
-        let concrete = value.impl_name()?;
+        let concrete = value.impl_key()?;
         if constraints.is_empty() {
             return Some((concrete, UstrMap::default()));
         }

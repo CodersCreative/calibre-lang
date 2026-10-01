@@ -9,8 +9,10 @@ use crate::{
 };
 use calibre_mir::{ast::types::unify::TypeImplKey, symbols::VariableKey};
 use rustc_hash::FxHashSet;
+use ustr::{Ustr, UstrSet};
 
 enum WorkItem {
+    FieldCall(Ustr),
     Function(VariableKey),
     Global(VariableKey),
     Type(TypeImplKey),
@@ -22,6 +24,7 @@ struct WorkList {
     seen_functions: FxHashSet<VariableKey>,
     seen_globals: FxHashSet<VariableKey>,
     seen_types: FxHashSet<TypeImplKey>,
+    seen_field_calls: UstrSet,
 }
 
 impl WorkList {
@@ -56,8 +59,13 @@ impl WorkList {
         self.stack.push(WorkItem::Type(value));
     }
 
-    pub fn has_work(&self) -> bool {
-        !self.stack.is_empty()
+    pub fn push_field_call(&mut self, value: Ustr) {
+        if self.seen_field_calls.contains(&value) {
+            return;
+        }
+
+        self.seen_field_calls.insert(value);
+        self.stack.push(WorkItem::FieldCall(value));
     }
 }
 
@@ -70,7 +78,8 @@ impl LirRegistry {
         let (reachable_functions, reachable_globals, referenced_types) =
             self.collect_references(entry_points, include_tests);
 
-        self.dyn_vtables
+        self.vtable
+            .impls
             .retain(|concrete_type, _| referenced_types.contains(concrete_type));
 
         self.functions
@@ -129,85 +138,60 @@ impl LirRegistry {
             }
         }
 
-        while worklist.has_work() {
-            for (concrete_type, trait_map) in &self.dyn_vtables {
-                if referenced_types.contains(concrete_type) {
-                    for methods in trait_map.values() {
-                        for function_name in methods.values() {
-                            if reachable_functions.insert(function_name.clone()) {
-                                worklist.push_function(function_name.clone());
-                            }
-                        }
+        while let Some(item) = worklist.pop() {
+            match item {
+                WorkItem::Function(func_name) => {
+                    if let Some(func) = self.functions.get(&func_name) {
+                        func.collect_references(
+                            self,
+                            &mut reachable_functions,
+                            &mut reachable_globals,
+                            &mut referenced_types,
+                            &mut worklist,
+                        );
                     }
                 }
-            }
-
-            // TODO Get rid of this and fully rely on vtables
-            for typ in referenced_types.clone().iter() {
-                for global in self
-                    .globals
-                    .iter()
-                    .filter(|x| x.0.name().contains(typ.name().as_str()))
-                {
-                    if reachable_globals.insert(global.0.clone()) {
-                        worklist.push_global(global.0.clone());
+                WorkItem::Global(global_name) => {
+                    if let Some(global) = self.globals.get(&global_name) {
+                        global.collect_references(
+                            self,
+                            &mut reachable_functions,
+                            &mut reachable_globals,
+                            &mut referenced_types,
+                            &mut worklist,
+                        );
                     }
                 }
-
-                for func in self
-                    .functions
-                    .iter()
-                    .filter(|x| x.0.name().contains(typ.name().as_str()))
-                {
-                    if reachable_functions.insert(func.0.clone()) {
-                        worklist.push_function(func.0.clone());
-                    }
-                }
-            }
-
-            while let Some(item) = worklist.pop() {
-                match item {
-                    WorkItem::Function(func_name) => {
-                        if let Some(func) = self.functions.get(&func_name) {
-                            func.collect_references(
-                                self,
-                                &mut reachable_functions,
-                                &mut reachable_globals,
-                                &mut referenced_types,
-                                &mut worklist,
-                            );
-                        }
-                    }
-                    WorkItem::Global(global_name) => {
-                        if let Some(global) = self.globals.get(&global_name) {
-                            global.collect_references(
-                                self,
-                                &mut reachable_functions,
-                                &mut reachable_globals,
-                                &mut referenced_types,
-                                &mut worklist,
-                            );
-                        }
-                    }
-                    WorkItem::Type(typ) => {
-                        for global in self
-                            .globals
+                WorkItem::FieldCall(field) => {
+                    for func in self.vtable.impls.iter().flat_map(|x| {
+                        x.1.members
                             .iter()
-                            .filter(|x| x.0.name().contains(typ.name().as_str()))
-                        {
-                            if reachable_globals.insert(global.0.clone()) {
-                                worklist.push_global(global.0.clone());
-                            }
+                            .filter(|x| x.0 == &field)
+                            .map(|x| x.1.clone())
+                    }) {
+                        if reachable_functions.insert(func.clone()) {
+                            worklist.push_function(func.clone());
                         }
+                    }
+                }
+                WorkItem::Type(typ) => {
+                    for global in self
+                        .globals
+                        .iter()
+                        .filter(|x| x.0.name().contains(typ.name().as_str()))
+                    {
+                        if reachable_globals.insert(global.0.clone()) {
+                            worklist.push_global(global.0.clone());
+                        }
+                    }
 
-                        for func in self
-                            .functions
-                            .iter()
-                            .filter(|x| x.0.name().contains(typ.name().as_str()))
-                        {
-                            if reachable_functions.insert(func.0.clone()) {
-                                worklist.push_function(func.0.clone());
-                            }
+                    for func in self
+                        .functions
+                        .iter()
+                        .filter(|x| x.0.name().contains(typ.name().as_str()))
+                    {
+                        if reachable_functions.insert(func.0.clone()) {
+                            worklist.push_function(func.0.clone());
                         }
                     }
                 }
@@ -308,6 +292,10 @@ impl LirNodeType {
                 }
             }
             LirNodeType::Call(LirCall { caller, args, .. }) => {
+                if let LirNodeType::Member(x) = &**caller {
+                    worklist.push_field_call(x.field);
+                }
+
                 caller.collect_references(
                     registry,
                     reachable_functions,

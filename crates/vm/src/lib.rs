@@ -11,6 +11,7 @@ use astro_float::Consts;
 use calibre_lir::{VariableKey, ast::BlockId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
+use std::sync::OnceLock;
 use std::{
     fmt::Debug,
     path::Path,
@@ -19,7 +20,6 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
-use std::{fmt::Display, sync::OnceLock};
 use tracing::instrument;
 use ustr::Ustr;
 use wasm_sync::Mutex;
@@ -670,35 +670,37 @@ impl VM {
     fn drop_runtime_value(&mut self, value: RuntimeValue) {
         let mut seen = FxHashSet::default();
         let mut seen_regs = FxHashSet::default();
-        self.drop_runtime_value_inner_ref(&value, &mut seen, &mut seen_regs);
+        let mut seen_refs = FxHashSet::default();
+
+        self.drop_runtime_value_inner_ref(&value, &mut seen, &mut seen_regs, &mut seen_refs);
     }
 
     fn drop_runtime_value_inner_ref(
         &mut self,
         value: &RuntimeValue,
         seen: &mut FxHashSet<VariableKey>,
+        seen_refs: &mut FxHashSet<usize>,
         seen_regs: &mut FxHashSet<usize>,
     ) {
-        let _ = self.call_trait_for_type(value, "drop", Vec::new(), Some(0));
+        let _ = self.call_method_for_type(value, &Ustr::from("drop"), Vec::new(), Some(0));
 
         match value {
             RuntimeValue::Ref(name) => {
-                if !seen.insert(*name) {
+                if !seen.insert(name.clone()) {
                     return;
                 }
 
                 if let Some(inner) = self.variables.remove(name) {
-                    self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
+                    self.drop_runtime_value_inner_ref(&inner, seen, seen_refs, seen_regs);
                 }
             }
             RuntimeValue::VarRef(id) => {
-                let key = Ustr::from(&format!("#{}", id));
-                if !seen.insert(key) {
+                if !seen_refs.insert(*id) {
                     return;
                 }
 
                 if let Some(inner) = self.variables.remove_by_id(*id) {
-                    self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
+                    self.drop_runtime_value_inner_ref(&inner, seen, seen_refs, seen_regs);
                 }
             }
             RuntimeValue::RegRef { frame, reg } => {
@@ -708,41 +710,41 @@ impl VM {
                 }
                 let inner = self.get_reg_value_in_frame(*frame, *reg).clone();
                 self.set_reg_value_in_frame(*frame, *reg, RuntimeValue::Null);
-                self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
+                self.drop_runtime_value_inner_ref(&inner, seen, seen_refs, seen_regs);
             }
             RuntimeValue::List(list) => {
                 for item in list.as_ref().0.iter() {
-                    self.drop_runtime_value_inner_ref(item, seen, seen_regs);
+                    self.drop_runtime_value_inner_ref(item, seen, seen_refs, seen_regs);
                 }
             }
             RuntimeValue::Aggregate(_, data) => {
                 for (_, value) in data.as_ref().0.0.iter() {
-                    self.drop_runtime_value_inner_ref(value, seen, seen_regs);
+                    self.drop_runtime_value_inner_ref(value, seen, seen_refs, seen_regs);
                 }
             }
             RuntimeValue::HashMap(map) => {
                 for value in map.map.values() {
-                    self.drop_runtime_value_inner_ref(value, seen, seen_regs);
+                    self.drop_runtime_value_inner_ref(value, seen, seen_refs, seen_regs);
                 }
             }
             RuntimeValue::HashSet(_) => {}
             RuntimeValue::Option(Some(x)) => {
-                self.drop_runtime_value_inner_ref(x.as_ref(), seen, seen_regs);
+                self.drop_runtime_value_inner_ref(x.as_ref(), seen, seen_refs, seen_regs);
             }
             RuntimeValue::Result(Ok(x)) => {
-                self.drop_runtime_value_inner_ref(x.as_ref(), seen, seen_regs);
+                self.drop_runtime_value_inner_ref(x.as_ref(), seen, seen_refs, seen_regs);
             }
             RuntimeValue::Result(Err(x)) => {
-                self.drop_runtime_value_inner_ref(x.as_ref(), seen, seen_regs);
+                self.drop_runtime_value_inner_ref(x.as_ref(), seen, seen_refs, seen_regs);
             }
             RuntimeValue::Enum(_, _, Some(val)) => {
-                self.drop_runtime_value_inner_ref(val.as_ref(), seen, seen_regs);
+                self.drop_runtime_value_inner_ref(val.as_ref(), seen, seen_refs, seen_regs);
             }
             RuntimeValue::Generator { .. } => {}
             RuntimeValue::Channel(ch) => {
                 if let Ok(mut queue) = ch.queue.try_lock() {
                     while let Some(item) = queue.pop_front() {
-                        self.drop_runtime_value_inner_ref(&item, seen, seen_regs);
+                        self.drop_runtime_value_inner_ref(&item, seen, seen_refs, seen_regs);
                     }
                 }
             }
@@ -751,28 +753,28 @@ impl VM {
     }
 
     // TODO Make an impl_name function for RuntimeValue
-    pub fn call_trait_for_type(
+    pub fn call_method_for_type(
         &mut self,
         value: &RuntimeValue,
-        method: impl Display,
+        method: &Ustr,
         mut args: Vec<RuntimeValue>,
         value_pos: Option<usize>,
     ) -> Result<RuntimeValue, RuntimeError> {
-        let type_name = match value {
-            RuntimeValue::Aggregate(Some(x), _) | RuntimeValue::Enum(x, _, _) => x.as_str(),
-            _ => return Ok(RuntimeValue::Null),
-        };
+        let key = value.impl_key().ok_or(RuntimeError::InvalidFunctionCall)?;
+        let name = self
+            .registry
+            .vtable
+            .get_function_from_type(&key, method)
+            .ok_or(RuntimeError::InvalidFunctionCall)?;
 
-        let drop_method_name = Ustr::from(&format!("{type_name}.{method}"));
-
-        if let Some(_drop_func) = self.registry.functions.get(&drop_method_name) {
+        if let Some(_drop_func) = self.registry.functions.get(&name) {
             if let Some(x) = value_pos {
                 args.insert(x, value.clone());
             }
 
             self.call_runtime_callable_at(
                 RuntimeValue::Function {
-                    name: drop_method_name,
+                    name: name.clone(),
                     captures: Arc::new(Vec::new()),
                 },
                 args,

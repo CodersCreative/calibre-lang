@@ -4,7 +4,7 @@ use crate::{
     value::{BIG_PRECISION, GcVec, RuntimeValue},
 };
 use astro_float::BigFloat;
-use calibre_lir::{MirDataType, TypeImplKey};
+use calibre_lir::MirDataType;
 use dumpster::sync::Gc;
 use std::sync::Arc;
 use ustr::Ustr;
@@ -15,24 +15,14 @@ impl RuntimeValue {
         env: &mut VM,
         data_type: &MirDataType,
     ) -> Result<RuntimeValue, RuntimeError> {
-        if let RuntimeValue::DynObject {
-            type_name, value, ..
-        } = &self
-            && type_name.name() == data_type.impl_name()
-        {
-            let resolved = env.resolve_value(value.as_ref().clone())?;
-            return Ok(resolved);
-        }
-
-        if matches!(data_type, MirDataType::Dynamic) {
+        if matches!(
+            data_type,
+            MirDataType::Dynamic | MirDataType::DynamicTraits(_)
+        ) {
             return Ok(self);
         }
 
         self = env.resolve_value(self)?;
-
-        if let MirDataType::DynamicTraits(traits) = data_type {
-            return env.wrap_dyn_object(self, traits.iter().map(|x| *x.name()).collect());
-        }
 
         match (self, data_type) {
             (RuntimeValue::Big(x), MirDataType::Int) => {
@@ -254,40 +244,5 @@ impl RuntimeValue {
             }
             (x, t) => Err(RuntimeError::CantConvert(Box::new(x), t.clone())),
         }
-    }
-}
-
-impl VM {
-    pub fn wrap_dyn_object(
-        &mut self,
-        value: RuntimeValue,
-        constraints: Vec<Ustr>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        if constraints.is_empty() {
-            return Ok(value);
-        }
-        let (stored_value, probe_value) = match value {
-            RuntimeValue::DynObject { value, .. } => {
-                let inner = value.as_ref().clone();
-                (inner.clone(), inner)
-            }
-            other => {
-                let probe = self.resolve_value(other.clone())?;
-                (other, probe)
-            }
-        };
-
-        let (type_name, vtable) = self
-            .build_dyn_vtable_for_value(&probe_value, constraints.as_slice())
-            .ok_or_else(|| {
-                RuntimeError::InvalidBytecode("failed to build dyn vtable".to_string())
-            })?;
-
-        Ok(RuntimeValue::DynObject {
-            type_name: TypeImplKey::from(type_name),
-            constraints: Arc::new(constraints),
-            value: Gc::new(stored_value),
-            vtable: Arc::new(vtable),
-        })
     }
 }

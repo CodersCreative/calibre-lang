@@ -7,4 +7,5 @@ pub use calibre_mir::{
     ast::types::{MirDataType, unify::TypeImplKey},
     scoping::FullyQualifiedPath,
     symbols::{TypeKey, VariableKey, resolve::Key},
+    vtable::VTable,
 };

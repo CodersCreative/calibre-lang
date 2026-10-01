@@ -523,7 +523,7 @@ impl VM {
             && let Some((owner, member)) = name.rsplit_once(".")
             && let Some(first) = args.first()
             && let Ok(receiver) = self.resolve_value_ref(self.get_reg_value(*first))
-            && let Some(receiver_type) = receiver.impl_name()
+            && let Some(receiver_type) = receiver.impl_key()
         {
             if self.callee_expects_receiver(&func)
                 && !ParserText::temp_name_suffix_matches(&receiver_type, &owner)

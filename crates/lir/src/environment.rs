@@ -1,9 +1,10 @@
 use crate::ast::{BlockId, LirBlock, LirNode, LirTerminator};
 use calibre_mir::{
-    ast::types::{MirDataType, unify::TypeImplKey},
+    ast::types::MirDataType,
     environment::MiddleEnvironment,
     scoping::{FullyQualifiedPath, ScopeId},
-    symbols::{TypeKey, VariableKey, resolve::Key},
+    symbols::{VariableKey, resolve::Key},
+    vtable::VTable,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -16,19 +17,14 @@ pub struct LirRegistry {
     pub functions: FxHashMap<VariableKey, LirFunction>,
     pub globals: FxHashMap<VariableKey, LirGlobal>,
     pub natives: UstrMap<Key>,
-    pub dyn_vtables: FxHashMap<TypeImplKey, UstrMap<UstrMap<VariableKey>>>,
+    pub vtable: VTable,
     pub scope_to_file: FxHashMap<ScopeId, Ustr>,
 }
 
 impl LirRegistry {
     pub fn append(&mut self, other: LirRegistry) {
         self.functions.extend(other.functions);
-        for (concrete, trait_map) in other.dyn_vtables {
-            let entry = self.dyn_vtables.entry(concrete).or_default();
-            for (trait_name, methods) in trait_map {
-                entry.entry(trait_name).or_default().extend(methods);
-            }
-        }
+        self.vtable.append(other.vtable);
     }
 }
 
@@ -143,7 +139,7 @@ impl<'a> LirEnvironment<'a> {
                 functions: FxHashMap::default(),
                 globals: FxHashMap::default(),
                 natives: env.symbols.native_mappings.clone(),
-                dyn_vtables: Self::build_dyn_vtables(env),
+                vtable: VTable::from(env),
                 scope_to_file,
             },
             blocks: vec![LirBlock {

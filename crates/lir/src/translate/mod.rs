@@ -3,18 +3,13 @@ use crate::{
     environment::{LirEnvironment, LirGlobal, LirRegistry},
 };
 use calibre_mir::{
-    ast::{
-        MiddleNode, MiddleNodeType,
-        types::{MirDataType, unify::TypeImplKey},
-    },
+    ast::{MiddleNode, MiddleNodeType, types::MirDataType},
     environment::MiddleEnvironment,
-    symbols::{TypeKey, VariableKey},
-    typing::{MiddleImpl, MiddleTrait},
+    symbols::VariableKey,
 };
 use calibre_parser::Span;
-use rustc_hash::FxHashMap;
 use tracing::{debug, info, instrument, trace};
-use ustr::{Ustr, UstrMap};
+use ustr::Ustr;
 
 pub mod access;
 pub mod declarations;
@@ -116,59 +111,6 @@ impl<'a> LirEnvironment<'a> {
         }
 
         self.get_temp()
-    }
-
-    fn collect_trait_methods(
-        imp: &MiddleImpl,
-        trait_def: Option<&MiddleTrait>,
-        trait_name: &TypeKey,
-    ) -> UstrMap<VariableKey> {
-        let mut methods: UstrMap<VariableKey> = UstrMap::default();
-        if let Some(trait_def) = trait_def {
-            for member in trait_def.members.keys() {
-                if let Some(mapped) = imp.get_member(member, &[]) {
-                    methods.insert(*member, mapped.symbol_name.clone());
-                }
-
-                // TODO Store trait members or properly handle in monomorphization
-                /*else if let Some(trait_member) = trait_def.members.get(member)
-                    && trait_member.default.is_some()
-                {
-                    let symbol_name = Ustr::from(&format!("{}.{}", trait_name, member));
-                    methods.insert(*member, symbol_name);
-                }*/
-            }
-        } else {
-            for (member, mapped) in imp.get_all_members() {
-                methods.insert(*member, mapped.symbol_name.clone());
-            }
-        }
-        methods
-    }
-
-    pub fn build_dyn_vtables(
-        env: &MiddleEnvironment,
-    ) -> FxHashMap<TypeImplKey, UstrMap<UstrMap<VariableKey>>> {
-        let mut out: FxHashMap<TypeImplKey, UstrMap<UstrMap<VariableKey>>> = FxHashMap::default();
-
-        for (concrete, imp) in env.typing.inherent_impls.iter() {
-            let trait_map = out.entry(concrete.clone()).or_default();
-
-            // TODO Update my vtable implementation
-            /*for trait_name in &imp.traits {
-                let methods = Self::collect_trait_methods(
-                    imp,
-                    env.typing.trait_defs.get(trait_name),
-                    trait_name,
-                );
-
-                if !methods.is_empty() {
-                    trait_map.insert(*trait_name, methods);
-                }
-            }*/
-        }
-
-        out
     }
 
     #[instrument(skip_all)]

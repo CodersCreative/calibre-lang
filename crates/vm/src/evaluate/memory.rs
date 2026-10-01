@@ -8,7 +8,7 @@ use crate::{
     evaluate::{instruction::VMEvaluation, write_back::Propagation},
     value::{RuntimeValue, TerminateValue},
 };
-use calibre_lir::ast::BlockId;
+use calibre_lir::{FullyQualifiedPath, VariableKey, ast::BlockId};
 use tracing::instrument;
 use ustr::Ustr;
 
@@ -45,7 +45,13 @@ impl VMEvaluation for VMRef {
                 {
                     RuntimeValue::VarRef(id)
                 } else {
-                    let name = Ustr::from(&vm.get_ref_id().to_string());
+                    let name = VariableKey {
+                        fully_qualified_path: FullyQualifiedPath::combine(
+                            None,
+                            Ustr::from(&vm.get_ref_id().to_string()),
+                        ),
+                        shadow_counter: None,
+                    };
                     let id = vm.variables.insert_with_id(name, other);
                     RuntimeValue::VarRef(id)
                 }

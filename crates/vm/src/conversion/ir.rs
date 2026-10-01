@@ -8,7 +8,7 @@ use crate::{
 };
 use astro_float::{BigFloat, Consts};
 use calibre_lir::{
-    Key, MirDataType, TypeImplKey, TypeKey, VariableKey,
+    Key, MirDataType, TypeImplKey, TypeKey, VTable, VariableKey,
     ast::{BlockId, LirLiteral},
     environment::{LirGlobal, LirRegistry},
 };
@@ -29,8 +29,7 @@ pub struct VMRegistry {
     pub functions: FxHashMap<VariableKey, Arc<VMFunction>>,
     pub globals: FxHashMap<VariableKey, VMGlobal>,
     pub natives: UstrMap<Key>,
-    #[serde(default)]
-    pub dyn_vtables: FxHashMap<TypeImplKey, UstrMap<UstrMap<VariableKey>>>,
+    pub vtable: VTable,
     #[serde(default)]
     pub scope_to_file: FxHashMap<NodeId, Ustr>,
 }
@@ -69,7 +68,7 @@ impl From<LirRegistry> for VMRegistry {
             functions,
             globals,
             natives: value.natives,
-            dyn_vtables: value.dyn_vtables,
+            vtable: value.vtable,
             scope_to_file: value.scope_to_file,
         }
     }
