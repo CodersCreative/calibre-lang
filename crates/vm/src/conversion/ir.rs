@@ -8,7 +8,7 @@ use crate::{
 };
 use astro_float::{BigFloat, Consts};
 use calibre_lir::{
-    Key, MirDataType, TypeImplKey, TypeKey, VTable, VariableKey,
+    Key, MirDataType, TypeKey, VTable, VariableKey,
     ast::{BlockId, LirLiteral},
     environment::{LirGlobal, LirRegistry},
 };
@@ -17,8 +17,7 @@ use calibre_parser::ast::idents::ParserText;
 use indextree::NodeId;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 use ustr::{Ustr, UstrMap};
 
 pub type Reg = u16;
@@ -134,11 +133,18 @@ pub struct VMFunction {
 }
 
 impl VMFunction {
-    pub fn rename(mut self, mut declared: FxHashMap<VariableKey, VariableKey>) -> Self {
+    pub fn rename(mut self, mut declared: UstrMap<Ustr>) -> Self {
         for param in self.params.iter_mut() {
-            let new_name = Ustr::from(&format!("{}->{}", param, fastrand::u32(0..u32::MAX)));
-            declared.insert(Ustr::from(param), new_name);
-            *param = new_name;
+            let param_name = *param.name();
+            let new_name = Ustr::from(&format!("{}->{}", param_name, fastrand::u32(0..u32::MAX)));
+            declared.insert(param_name, new_name);
+            let mut new_path = (*param.fully_qualified_path).clone();
+            new_path.name = Some(new_name);
+            let new_key = VariableKey {
+                fully_qualified_path: Arc::new(new_path),
+                shadow_counter: param.shadow_counter,
+            };
+            *param = new_key;
         }
 
         for block in self.blocks.iter_mut().flatten() {
@@ -149,30 +155,45 @@ impl VMFunction {
                     | VMInstruction::LoadVar(VMLoadVar { name, .. })
                     | VMInstruction::MoveVar(VMMoveVar { name, .. })
                     | VMInstruction::LoadVarRef(VMLoadVarRef { name, .. }) => {
-                        if let Some(dest) = block.local_strings.get(*name as usize)
-                            && !declared.contains_key(dest)
+                        if let Some(dest) = block.local_variables.get(*name as usize)
+                            && !declared.contains_key(dest.name())
                         {
-                            declared.insert(
-                                *dest,
-                                Ustr::from(&format!("{}->{}", dest, fastrand::u32(0..u32::MAX))),
-                            );
+                            let dest_name = *dest.name();
+                            let new_name = Ustr::from(&format!(
+                                "{}->{}",
+                                dest_name,
+                                fastrand::u32(0..u32::MAX)
+                            ));
+                            declared.insert(dest_name, new_name);
                         }
                     }
                     _ => {}
                 }
             }
 
-            for string in block.local_variables.iter_mut() {
-                if let Some(x) = declared.get(string) {
-                    *string = *x;
+            for var in block.local_variables.iter_mut() {
+                if let Some(new_name) = declared.get(var.name()) {
+                    let mut new_path = (*var.fully_qualified_path).clone();
+                    new_path.name = Some(*new_name);
+                    let new_key = VariableKey {
+                        fully_qualified_path: Arc::new(new_path),
+                        shadow_counter: var.shadow_counter,
+                    };
+                    *var = new_key;
                 }
             }
 
             for literal in block.local_literals.iter_mut() {
                 if let VMLiteral::Closure { label, captures: _ } = literal
-                    && let Some(x) = declared.get(label)
+                    && let Some(new_name) = declared.get(label.name())
                 {
-                    *label = *x;
+                    let mut new_path = (*label.fully_qualified_path).clone();
+                    new_path.name = Some(*new_name);
+                    let new_key = VariableKey {
+                        fully_qualified_path: Arc::new(new_path),
+                        shadow_counter: label.shadow_counter,
+                    };
+                    *label = new_key;
                 }
             }
         }

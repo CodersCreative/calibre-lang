@@ -1,7 +1,6 @@
 use crate::{
     VM,
     error::RuntimeError,
-    evaluate::calling::CallSite,
     native::{
         NativeFunction,
         utils::{
@@ -345,15 +344,7 @@ impl NativeFunction for MutexWith {
         let guard = m.lock();
         let current = guard.get_clone();
 
-        let result = env.call_runtime_callable_at(
-            func,
-            vec![current],
-            CallSite {
-                block: usize::MAX,
-                tag: u32::MAX.saturating_sub(4),
-            },
-            true,
-        )?;
+        let result = env.call_runtime_callable(func, vec![current], true)?;
 
         guard.set_value(result.clone());
         Ok(result)

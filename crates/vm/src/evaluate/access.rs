@@ -12,7 +12,9 @@ use crate::{
     native::stdlib::generator::GeneratorResumeFn,
     value::{GcMap, GcVec, RuntimeValue, TerminateValue, hashable::HashKey},
 };
-use calibre_lir::{TypeImplKey, TypeKey, VariableKey, ast::BlockId};
+use calibre_lir::{
+    FullyQualifiedPath, MirDataType, TypeImplKey, TypeKey, VariableKey, ast::BlockId,
+};
 use dumpster::sync::Gc;
 use std::sync::Arc;
 use tracing::instrument;
@@ -84,8 +86,8 @@ impl VMEvaluation for VMLoadMember {
             member: name.to_string(),
         };
 
-        let bind_assoc = |vm: &mut VM, type_name: &TypeKey, value: RuntimeValue| {
-            if let Some(callee) = vm.resolve_associated_member_value(type_name, name, short_name) {
+        let bind_assoc = |vm: &mut VM, impl_key: TypeImplKey, value: RuntimeValue| {
+            if let Some(callee) = vm.get_function_from_type_member(&impl_key, name, short_name) {
                 Ok(vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, value))
             } else {
                 Err(missing(value))
@@ -98,8 +100,13 @@ impl VMEvaluation for VMLoadMember {
         let val = match resolved {
             RuntimeValue::Null => {
                 if let RuntimeValue::Ref(owner) = &raw_receiver
-                    && let Some(callee) =
-                        vm.resolve_associated_member_value(owner, name, short_name)
+                    && let Some(callee) = vm.get_function_from_type_member(
+                        &TypeImplKey::Nominal(TypeKey {
+                            fully_qualified_path: owner.fully_qualified_path.clone(),
+                        }),
+                        name,
+                        short_name,
+                    )
                 {
                     vm.set_reg_value(self.dst, callee);
 
@@ -123,60 +130,18 @@ impl VMEvaluation for VMLoadMember {
                 "index" => RuntimeValue::Int(state.lock().unwrap().index),
                 "done" => RuntimeValue::Bool(state.lock().unwrap().completed),
                 _ => vm
-                    .resolve_associated_member_value(type_name, name, short_name)
+                    .get_function_from_type_member(
+                        &TypeImplKey::Nominal(type_name.clone()),
+                        name,
+                        short_name,
+                    )
                     .ok_or_else(|| {
                         missing(RuntimeValue::Generator {
-                            type_name: TypeImplKey::from(type_name),
+                            type_name: TypeImplKey::Nominal(type_name.clone()),
                             state,
                         })
                     })?,
             },
-            RuntimeValue::DynObject {
-                type_name,
-                value,
-                vtable,
-                constraints,
-            } => {
-                let member_short_ustr = Ustr::from(member_short);
-                if let Some(callee_name) =
-                    vtable.get(&member_short_ustr).or_else(|| vtable.get(name))
-                {
-                    if let Some(callee) = vm.resolve_dyn_method_callable(
-                        type_name.as_str(),
-                        member_short_ustr.as_str(),
-                        Some(callee_name.as_str()),
-                    ) {
-                        callee.bind_if_callable(value.as_ref().clone())
-                    } else {
-                        vm.get_value(callee_name).ok_or_else(|| {
-                            RuntimeError::FunctionNotFound(callee_name.to_string())
-                        })?
-                    }
-                } else if let Some(callee) = vm.resolve_dyn_method_callable(
-                    type_name.as_str(),
-                    member_short_ustr.as_str(),
-                    None,
-                ) {
-                    callee.bind_if_callable(value.as_ref().clone())
-                } else if member_short == "type" {
-                    RuntimeValue::Str(type_name)
-                } else if member_short == "traits" {
-                    RuntimeValue::List(Arc::new(GcVec::new(
-                        constraints.iter().map(|x| RuntimeValue::Str(*x)).collect(),
-                    )))
-                } else if let Some(x) =
-                    vm.get_value(&Ustr::from(&format!("{type_name}.{member_short}")))
-                {
-                    x
-                } else {
-                    return Err(missing(RuntimeValue::DynObject {
-                        type_name,
-                        constraints,
-                        value,
-                        vtable,
-                    }));
-                }
-            }
             RuntimeValue::Aggregate(None, map) => {
                 let idx = tuple_index.ok_or(RuntimeError::ExpectedIntIndexFound {
                     found: Box::new(RuntimeValue::Null),
@@ -215,10 +180,30 @@ impl VMEvaluation for VMLoadMember {
                             return Err(missing(RuntimeValue::Aggregate(Some(type_name), map)));
                         };
 
-                        let inner_name = inner_type.as_deref().unwrap_or_default();
+                        let inner_name = inner_type
+                            .as_ref()
+                            .map(|k| *k.name())
+                            .unwrap_or(Ustr::from(""));
+
+                        let inner_type_key = TypeKey {
+                            fully_qualified_path: inner_type
+                                .as_ref()
+                                .map(|k| k.fully_qualified_path.clone())
+                                .unwrap_or_else(|| {
+                                    Arc::new(FullyQualifiedPath {
+                                        name: Some(inner_name),
+                                        parent: None,
+                                    })
+                                }),
+                        };
 
                         let idx = vm
-                            .resolve_aggregate_member_slot(inner_name, &inner_map, name, short_name)
+                            .resolve_aggregate_member_slot(
+                                &inner_type_key,
+                                &inner_map,
+                                name,
+                                short_name,
+                            )
                             .ok_or_else(|| {
                                 missing(RuntimeValue::Aggregate(Some(type_name), map.clone()))
                             })?;
@@ -234,10 +219,14 @@ impl VMEvaluation for VMLoadMember {
                         RuntimeValue::from(inner_map.0.0[idx].1.clone())
                     }
                 } else {
+                    let impl_key = TypeImplKey::Nominal(type_name.clone());
                     let value = vm
-                        .resolve_associated_member_value(type_name.as_str(), name, short_name)
+                        .get_function_from_type_member(&impl_key, name, short_name)
                         .ok_or_else(|| {
-                            missing(RuntimeValue::Aggregate(Some(type_name), map.clone()))
+                            missing(RuntimeValue::Aggregate(
+                                Some(type_name.clone()),
+                                map.clone(),
+                            ))
                         })?;
 
                     vm.bind_member_receiver_if_callable(
@@ -259,8 +248,7 @@ impl VMEvaluation for VMLoadMember {
                 x.as_ref().clone()
             }
             RuntimeValue::Option(Some(inner)) => {
-                if let Some(callee) = vm.resolve_associated_member_value("option", name, short_name)
-                {
+                if let Some(callee) = vm.get_function_from_type_member(&TypeImplKey::Option, name) {
                     vm.bind_member_receiver_if_callable(
                         callee,
                         name,
@@ -274,7 +262,7 @@ impl VMEvaluation for VMLoadMember {
             RuntimeValue::Option(None) if is_next_or_zero => RuntimeValue::Null,
             option @ RuntimeValue::Option(_) => {
                 let callee = vm
-                    .resolve_associated_member_value("T?", name, short_name)
+                    .get_function_from_type_member(&TypeImplKey::Option, name)
                     .ok_or_else(|| missing(option.clone()))?;
                 vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, option)
             }
@@ -285,7 +273,7 @@ impl VMEvaluation for VMLoadMember {
             }
             result @ RuntimeValue::Result(_) => {
                 let callee = vm
-                    .resolve_associated_member_value("result", name, short_name)
+                    .get_function_from_type_member(&TypeImplKey::Result, name)
                     .ok_or_else(|| missing(result.clone()))?;
                 vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, result)
             }
@@ -294,8 +282,16 @@ impl VMEvaluation for VMLoadMember {
                 vm.ptr_heap.get(&id).cloned().unwrap_or_default()
             }
 
-            RuntimeValue::Char(v) => bind_assoc(vm, "char", RuntimeValue::Char(v))?,
-            RuntimeValue::Str(v) => bind_assoc(vm, "str", RuntimeValue::Str(v))?,
+            RuntimeValue::Char(v) => bind_assoc(
+                vm,
+                TypeImplKey::Primitive(Ustr::from("char")),
+                RuntimeValue::Char(v),
+            )?,
+            RuntimeValue::Str(v) => bind_assoc(
+                vm,
+                TypeImplKey::Primitive(Ustr::from("str")),
+                RuntimeValue::Str(v),
+            )?,
             RuntimeValue::List(v) => {
                 if let Some(index) = tuple_index {
                     v.as_ref()
@@ -304,16 +300,32 @@ impl VMEvaluation for VMLoadMember {
                         .map(|slot| RuntimeValue::from(slot.clone()))
                         .unwrap_or(RuntimeValue::Null)
                 } else {
-                    bind_assoc(vm, "list", RuntimeValue::List(v))?
+                    bind_assoc(vm, TypeImplKey::List, RuntimeValue::List(v))?
                 }
             }
-            RuntimeValue::Int(v) => bind_assoc(vm, "int", RuntimeValue::Int(v))?,
-            RuntimeValue::UInt(v) => bind_assoc(vm, "uint", RuntimeValue::UInt(v))?,
-            RuntimeValue::Float(v) => bind_assoc(vm, "float", RuntimeValue::Float(v))?,
-            RuntimeValue::Bool(v) => bind_assoc(vm, "bool", RuntimeValue::Bool(v))?,
+            RuntimeValue::Int(v) => bind_assoc(
+                vm,
+                TypeImplKey::Primitive(Ustr::from("int")),
+                RuntimeValue::Int(v),
+            )?,
+            RuntimeValue::UInt(v) => bind_assoc(
+                vm,
+                TypeImplKey::Primitive(Ustr::from("uint")),
+                RuntimeValue::UInt(v),
+            )?,
+            RuntimeValue::Float(v) => bind_assoc(
+                vm,
+                TypeImplKey::Primitive(Ustr::from("float")),
+                RuntimeValue::Float(v),
+            )?,
+            RuntimeValue::Bool(v) => bind_assoc(
+                vm,
+                TypeImplKey::Primitive(Ustr::from("bool")),
+                RuntimeValue::Bool(v),
+            )?,
             other => {
                 if let Some(type_name) = other.impl_key() {
-                    bind_assoc(vm, type_name.as_str(), other)?
+                    bind_assoc(vm, type_name, other)?
                 } else {
                     return Err(RuntimeError::ExpectedStructOrAggregateFound {
                         found: Box::new(other),

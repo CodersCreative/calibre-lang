@@ -238,7 +238,7 @@ fn run_task_slice(
 ) -> Option<TaskStatus> {
     let status = match &task.func {
         RuntimeValue::Function { name, captures } => {
-            let Some(func) = task.vm.resolve_function_by_name(name) else {
+            let Ok(func) = task.vm.resolve_function_by_name(name) else {
                 return Some(TaskStatus::Finished);
             };
 

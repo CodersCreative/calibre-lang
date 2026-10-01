@@ -38,7 +38,7 @@ impl NativeFunction for GeneratorResumeFn {
             return Ok(RuntimeValue::Option(None));
         }
 
-        let Some(func) = state.vm.resolve_function_by_name(&state.function_name) else {
+        let Ok(func) = state.vm.resolve_function_by_name(&state.function_name) else {
             state.completed = true;
             return Ok(RuntimeValue::Option(None));
         };

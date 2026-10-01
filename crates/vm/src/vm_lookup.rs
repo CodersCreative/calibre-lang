@@ -9,8 +9,15 @@ pub(crate) enum VarName {
 }
 
 impl VM {
-    pub(crate) fn resolve_function_by_name(&self, name: &VariableKey) -> Option<Arc<VMFunction>> {
-        self.registry.functions.get(name).cloned()
+    pub(crate) fn resolve_function_by_name(
+        &self,
+        name: &VariableKey,
+    ) -> Result<Arc<VMFunction>, RuntimeError> {
+        self.registry
+            .functions
+            .get(name)
+            .cloned()
+            .ok_or_else(|| RuntimeError::FunctionNotFound(name.to_string()))
     }
 
     pub(crate) fn resolve_library_candidates(name: &Ustr) -> Vec<String> {
@@ -118,7 +125,7 @@ impl VM {
 
     pub(crate) fn resolve_aggregate_member_slot(
         &mut self,
-        type_name: &str,
+        type_name: &TypeKey,
         map: &GcMap,
         name: &str,
         short_name: Option<&str>,

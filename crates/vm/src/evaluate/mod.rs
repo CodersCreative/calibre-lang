@@ -5,11 +5,9 @@ use crate::{
     evaluate::instruction::VMEvaluation,
     value::{RuntimeValue, TerminateValue},
 };
-use calibre_lir::{MirDataType, TypeImplKey, TypeKey, VariableKey, ast::BlockId};
-use calibre_parser::ast::idents::ParserText;
+use calibre_lir::{MirDataType, VariableKey, ast::BlockId};
 use std::{path::PathBuf, sync::Arc};
 use tracing::{debug, instrument};
-use ustr::{Ustr, UstrMap};
 
 pub mod access;
 pub mod binary;
@@ -31,179 +29,6 @@ enum CaptureRestore {
 }
 
 impl VM {
-    #[inline]
-    fn push_owner_member_candidates(
-        candidates: &mut Vec<String>,
-        owner: &str,
-        member: &str,
-        short_member: Option<&str>,
-    ) {
-        candidates.push(format!("{owner}::{member}"));
-        candidates.push(format!("{owner}.{member}"));
-        if let Some(short) = short_member {
-            candidates.push(format!("{owner}::{short}"));
-            candidates.push(format!("{owner}.{short}"));
-        }
-    }
-
-    #[inline]
-    fn push_short_owner_member_candidates(
-        candidates: &mut Vec<String>,
-        owner: &str,
-        member: &str,
-        short_member: Option<&str>,
-    ) {
-        let short_owner =
-            ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
-        if short_owner != owner {
-            Self::push_owner_member_candidates(candidates, &short_owner, member, short_member);
-        }
-    }
-
-    fn resolve_first_candidate<I>(&mut self, candidates: I) -> Option<RuntimeValue>
-    where
-        I: IntoIterator<Item = String>,
-    {
-        for candidate in candidates {
-            if let Some(resolved) = self.get_value(&Ustr::from(&candidate)) {
-                if matches!(resolved, RuntimeValue::Null) {
-                    continue;
-                }
-                return Some(resolved);
-            }
-        }
-        None
-    }
-
-    #[inline]
-    fn build_member_candidates(
-        owner: &VariableKey,
-        member: &str,
-        short_member: Option<&str>,
-        include_member_as_is: bool,
-        mapped: Option<&str>,
-    ) -> Vec<String> {
-        let mut candidates = Vec::with_capacity(10);
-        if let Some(mapped) = mapped {
-            candidates.push(mapped.to_string());
-        }
-        if include_member_as_is && member.contains("::") {
-            candidates.push(member.to_string());
-        }
-        Self::push_owner_member_candidates(&mut candidates, owner, member, short_member);
-        Self::push_short_owner_member_candidates(&mut candidates, owner, member, short_member);
-
-        candidates
-    }
-
-    fn lookup_dyn_trait_table(&self, concrete: &str, trait_name: &str) -> Option<&UstrMap<Ustr>> {
-        for (imp_ty, traits) in self.registry.dyn_vtables.iter() {
-            if !ParserText::temp_name_suffix_matches(imp_ty, &concrete) {
-                continue;
-            }
-            for (imp_trait, table) in traits {
-                if ParserText::temp_name_suffix_matches(imp_trait, &trait_name) {
-                    return Some(table);
-                }
-            }
-        }
-        None
-    }
-
-    #[instrument(skip_all)]
-    pub(crate) fn build_dyn_vtable_for_value(
-        &self,
-        value: &RuntimeValue,
-        constraints: &[Ustr],
-    ) -> Option<(Ustr, UstrMap<Ustr>)> {
-        let concrete = value.impl_key()?;
-        if constraints.is_empty() {
-            return Some((concrete, UstrMap::default()));
-        }
-
-        let mut merged = UstrMap::default();
-        for tr in constraints {
-            let table = self.lookup_dyn_trait_table(&concrete, tr)?;
-            for (member, callee) in table {
-                merged.entry(*member).or_insert_with(|| *callee);
-            }
-        }
-        Some((concrete, merged))
-    }
-
-    pub(crate) fn resolve_dyn_method_callable(
-        &mut self,
-        type_name: &str,
-        member: &str,
-        mapped: Option<&str>,
-    ) -> Option<RuntimeValue> {
-        let candidates = Self::build_member_candidates(type_name, member, None, false, mapped);
-        self.resolve_first_candidate(candidates)
-    }
-
-    pub(crate) fn resolve_associated_member_value(
-        &mut self,
-        owner: &TypeImplKey,
-        member: &str,
-        short_member: Option<&str>,
-    ) -> Option<RuntimeValue> {
-        let candidates = Self::build_member_candidates(owner, member, short_member, true, None);
-        for candidate in candidates {
-            if let Some(resolved) = self.get_value(&Ustr::from(&candidate)) {
-                if matches!(resolved, RuntimeValue::Null) {
-                    continue;
-                }
-                return Some(resolved);
-            }
-        }
-
-        if !owner.contains(":<")
-            && let Some(found) = self.resolve_struct_like_member(owner, member, short_member)
-        {
-            return Some(found);
-        }
-
-        if !ParserText::is_temp_name(&owner) {
-            let std_owner = format!("std::{owner}");
-            let candidates =
-                Self::build_member_candidates(&std_owner, member, short_member, true, None);
-            for candidate in candidates {
-                if let Some(resolved) = self.get_value(&Ustr::from(&candidate)) {
-                    return Some(resolved);
-                }
-            }
-        }
-        None
-    }
-
-    fn resolve_struct_like_member(
-        &mut self,
-        owner: &str,
-        member: &str,
-        short_member: Option<&str>,
-    ) -> Option<RuntimeValue> {
-        let mut resolved: Option<Arc<VMFunction>> = None;
-
-        for func in self.registry.functions.values() {
-            if !func.name.contains(owner)
-                || !(func.name.ends_with(&format!(".{member}"))
-                    || short_member.is_some_and(|short| func.name.ends_with(&format!(".{short}"))))
-            {
-                continue;
-            }
-
-            if resolved.is_some() {
-                return None;
-            }
-
-            resolved = Some(Arc::clone(func));
-        }
-
-        resolved.map(|func| self.make_runtime_function(&func))
-    }
-
-    // TODO Fix everything above to be way more consistent
-
     #[inline]
     fn install_captures(
         &mut self,
@@ -334,34 +159,16 @@ impl VM {
     }
 
     fn runtime_matches_type(&self, value: &RuntimeValue, target: &MirDataType) -> bool {
-        if let RuntimeValue::DynObject {
-            value: inner,
-            constraints,
-            ..
-        } = value
-        {
-            return match target {
-                MirDataType::Dynamic => true,
-                MirDataType::DynamicTraits(traits) => traits
-                    .iter()
-                    .all(|tr| constraints.iter().any(|x| x == tr.name())),
-                _ => self.runtime_matches_type(inner.as_ref(), target),
-            };
-        }
-
         match target {
             MirDataType::Dynamic => true,
-            MirDataType::DynamicTraits(traits) => match value {
-                RuntimeValue::DynObject { constraints, .. } => traits
-                    .iter()
-                    .all(|tr| constraints.iter().any(|x| x == tr.name())),
-                other => self
-                    .build_dyn_vtable_for_value(
-                        other,
-                        &traits.iter().map(|x| *x.name()).collect::<Vec<_>>(),
-                    )
-                    .is_some(),
-            },
+            MirDataType::DynamicTraits(traits) => value.to_type().is_some_and(|data_type| {
+                for key in traits {
+                    if !self.registry.vtable.does_type_implement(&data_type, key) {
+                        return false;
+                    }
+                }
+                true
+            }),
             MirDataType::Ref(inner, _) => self.runtime_matches_type(value, &inner),
             MirDataType::Big => matches!(value, RuntimeValue::Big(_)),
             MirDataType::Float => matches!(value, RuntimeValue::Float(_)),
