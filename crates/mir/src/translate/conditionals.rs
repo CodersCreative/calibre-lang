@@ -31,7 +31,7 @@ impl MirLowering for AstIf {
                 .otherwise
                 .as_ref()
                 .and_then(|x| x.type_of(env, scope, span))
-                .unwrap_or_else(|| MirDataType::Null);
+                .unwrap_or(MirDataType::Null);
 
             env.compare_types_ref(
                 then_type.as_ref(),
@@ -100,8 +100,8 @@ impl MirLowering for AstIf {
 
             match (then_ty, else_ty) {
                 (Some(a), Some(b)) if a.loose_eq(&b) => Some(a),
-                (Some(a), Some(b)) if a == MirDataType::Null => Some(b),
-                (Some(a), Some(b)) if b == MirDataType::Null => Some(a),
+                (Some(a), Some(b)) if a.is_null() => Some(b),
+                (Some(a), Some(b)) if b.is_null() => Some(a),
                 _ => Some(MirDataType::Null),
             }
         } else {

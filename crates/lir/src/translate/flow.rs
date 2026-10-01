@@ -85,7 +85,7 @@ impl LirLowering for MirConditional {
         let else_id = env.create_block();
 
         let temp = env.get_temp();
-        env.declare_temp_null(span, temp);
+        env.declare_temp_null(span, temp.clone());
 
         let cond = env.lower_node(*self.comparison);
         env.set_terminator(LirTerminator::Branch {
@@ -99,7 +99,7 @@ impl LirLowering for MirConditional {
         let then_val = env.lower_node(*self.then);
         let then_open = env.current_block_open();
         if then_open {
-            env.assign_temp_if_non_null(span, temp, then_val);
+            env.assign_temp_if_non_null(span, temp.clone(), then_val);
         }
 
         env.switch_to(else_id);
@@ -110,7 +110,7 @@ impl LirLowering for MirConditional {
         };
         let else_open = env.current_block_open();
         if else_open {
-            env.assign_temp_if_non_null(span, temp, else_val);
+            env.assign_temp_if_non_null(span, temp.clone(), else_val);
         }
 
         if then_open && else_open {

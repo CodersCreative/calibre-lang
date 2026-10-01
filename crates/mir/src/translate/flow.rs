@@ -6,7 +6,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::resolve::ResolutionOptions,
+    symbols::{VariableKey, resolve::ResolutionOptions},
     tags::TagInfo,
     translate::MirLowering,
 };
@@ -740,13 +740,13 @@ impl MirLowering for AstPipe {
         };
 
         let get_mapping =
-            |env: &MiddleEnvironment, key: &Ustr| -> Result<Option<Ustr>, MiddleErr> {
+            |env: &MiddleEnvironment, key: &Ustr| -> Result<Option<VariableKey>, MiddleErr> {
                 Ok(env.scoping.scope_or_err(scope)?.mappings.get(key).cloned())
             };
 
         let restore_mapping = |env: &mut MiddleEnvironment,
                                key: Ustr,
-                               value: Option<Ustr>|
+                               value: Option<VariableKey>|
          -> Result<(), MiddleErr> {
             let scope_ref = env.scoping.scope_mut_or_err(scope)?;
             if let Some(v) = value {

@@ -13,8 +13,8 @@ use crate::{
     environment::LirEnvironment,
     translate::LirLowering,
 };
-use calibre_mir::ast::{MirCall, MirDiscriminant, MirField, MirIndex};
-use calibre_parser::{Span, ast::types::ParserInnerType};
+use calibre_mir::ast::{MirCall, MirDiscriminant, MirField, MirIndex, types::MirDataType};
+use calibre_parser::Span;
 
 impl LirLowering for MirDiscriminant {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
@@ -77,8 +77,8 @@ impl LirLowering for MirCall {
         if let LirNodeType::Load(LirLoad { value }) | LirNodeType::Move(LirMove { value }) =
             &l_caller
             && let Some(var) = env.env.symbols.variables.get(value)
-            && let ParserInnerType::Function { return_type, .. }
-            | ParserInnerType::NativeFunction { return_type, .. } = &var.data_type.data_type
+            && let MirDataType::Function { return_type, .. }
+            | MirDataType::NativeFunction { return_type, .. } = &var.data_type
             && return_type.is_null()
         {
             returns_value = false;

@@ -123,7 +123,7 @@ impl MiddleEnvironment {
         variant_name: &Ustr,
     ) -> Option<i64> {
         if let Some(dt) = self.resolve_type_from_node(scope, value_node) {
-            return self.enum_variant_index_from_data_type(&dt.unwrap_all_refs(), variant_name);
+            return self.enum_variant_index_from_data_type(dt.unwrap_all_refs(), variant_name);
         }
         Self::builtin_enum_variant_index(variant_name)
     }

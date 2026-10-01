@@ -488,7 +488,7 @@ impl MiddleEnvironment {
                     let mut found_var_key = None;
                     let mut highest_counter = None;
 
-                    for (key, _var) in self.symbols.variables.iter() {
+                    for key in self.symbols.variables.keys() {
                         if key.name() == &ident
                             && key.fully_qualified_path.as_ref() == scope_fqp.as_ref()
                         {
@@ -514,14 +514,7 @@ impl MiddleEnvironment {
                     }
 
                     if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
-                        let var_key = VariableKey {
-                            fully_qualified_path: Arc::new(FullyQualifiedPath {
-                                name: Some(x),
-                                parent: None,
-                            }),
-                            shadow_counter: None,
-                        };
-                        return Ok(KeyOrAstNode::Key(Key::VariableKey(var_key)));
+                        return Ok(KeyOrAstNode::Key(Key::VariableKey(x)));
                     }
                 }
             } else if options.name_resolution {
@@ -531,7 +524,7 @@ impl MiddleEnvironment {
                 let mut found_var_key = None;
                 let mut highest_counter = None;
 
-                for (key, _var) in self.symbols.variables.iter() {
+                for key in self.symbols.variables.keys() {
                     if key.name() == &ident
                         && key.fully_qualified_path.as_ref() == scope_fqp.as_ref()
                     {
@@ -557,14 +550,7 @@ impl MiddleEnvironment {
                 }
 
                 if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
-                    let var_key = VariableKey {
-                        fully_qualified_path: Arc::new(FullyQualifiedPath {
-                            name: Some(x),
-                            parent: None,
-                        }),
-                        shadow_counter: None,
-                    };
-                    return Ok(KeyOrAstNode::Key(Key::VariableKey(var_key)));
+                    return Ok(KeyOrAstNode::Key(Key::VariableKey(x)));
                 }
             } else {
                 break;
@@ -601,7 +587,7 @@ impl MiddleEnvironment {
             }
 
             if options.name_resolution {
-                for (key, _var) in self.symbols.variables.iter() {
+                for key in self.symbols.variables.keys() {
                     if key.name() == &ident {
                         return Ok(KeyOrAstNode::Key(Key::VariableKey(key.clone())));
                     }
@@ -638,7 +624,7 @@ impl MiddleEnvironment {
             return Ok(KeyOrAstNode::Key(Key::VariableKey(var_key)));
         }
 
-        for (key, _var) in self.symbols.variables.iter() {
+        for key in self.symbols.variables.keys() {
             if key.name() == &ident {
                 return Ok(KeyOrAstNode::Key(Key::VariableKey(key.clone())));
             }

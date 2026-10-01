@@ -387,11 +387,14 @@ impl MirLowering for AstLoop {
 
         let temp_names = LoopTempNames::new(env, span, self.else_body.is_some());
 
-        if let (Some(result), Some(broke)) = (temp_names.result, temp_names.broke)
-            && let Ok(scope_data) = env.scoping.scope_mut_or_err(scope)
-        {
-            scope_data.mappings.insert(result, result);
-            scope_data.mappings.insert(broke, broke);
+        if let (Some(result), Some(broke)) = (temp_names.result, temp_names.broke) {
+            let result_key = env.get_new_variable_key(scope, result)?;
+            let broke_key = env.get_new_variable_key(scope, broke)?;
+
+            if let Ok(scope_data) = env.scoping.scope_mut_or_err(scope) {
+                scope_data.mappings.insert(result, result_key);
+                scope_data.mappings.insert(broke, broke_key);
+            }
         }
 
         match *self.loop_type {

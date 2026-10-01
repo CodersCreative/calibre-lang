@@ -17,14 +17,11 @@ use crate::{
 use calibre_mir::{
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirAssignment, MirDeref, MirEnum, MirField,
-        MirIdentifier, MirIndex,
+        MirIdentifier, MirIndex, types::MirDataType,
     },
     typing::MiddleTypeDefType,
 };
-use calibre_parser::{
-    Span,
-    ast::{ObjectMap, types::ParserDataType},
-};
+use calibre_parser::{Span, ast::ObjectMap};
 
 impl LirLowering for MirAssignment {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
@@ -41,8 +38,8 @@ impl LirLowering for MirAssignment {
                 env.add_instr(LirNode::new(
                     ident_span,
                     LirNodeType::Declare(LirDeclare {
-                        dest: ptr_tmp,
-                        data_type: ParserDataType::auto(ident_span),
+                        dest: ptr_tmp.clone(),
+                        data_type: MirDataType::Dynamic,
                         value: Box::new(ptr_expr),
                         is_referenced: true,
                     }),
@@ -57,8 +54,8 @@ impl LirLowering for MirAssignment {
                 env.add_instr(LirNode::new(
                     ident_span,
                     LirNodeType::Declare(LirDeclare {
-                        dest: base_tmp,
-                        data_type: ParserDataType::auto(ident_span),
+                        dest: base_tmp.clone(),
+                        data_type: MirDataType::Dynamic,
                         value: Box::new(base_expr),
                         is_referenced: true,
                     }),
@@ -74,15 +71,17 @@ impl LirLowering for MirAssignment {
                 let base_load = if let MiddleNodeType::Identifier(MirIdentifier { identifier }) =
                     &base.node_type
                 {
-                    LirNodeType::Load(LirLoad { value: *identifier })
+                    LirNodeType::Load(LirLoad {
+                        value: identifier.clone(),
+                    })
                 } else {
                     let base_expr = env.lower_node(*base);
                     let base_tmp = env.get_temp();
                     env.add_instr(LirNode::new(
                         ident_span,
                         LirNodeType::Declare(LirDeclare {
-                            dest: base_tmp,
-                            data_type: ParserDataType::auto(ident_span),
+                            dest: base_tmp.clone(),
+                            data_type: MirDataType::Dynamic,
                             value: Box::new(base_expr),
                             is_referenced: true,
                         }),

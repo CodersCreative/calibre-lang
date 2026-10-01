@@ -9,7 +9,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        idents::{ParserText, PotentialDollarIdentifier},
+        idents::PotentialDollarIdentifier,
         nodes::{
             AstNode, AstNodeType,
             declaration::AstDeclaration,
@@ -179,7 +179,6 @@ impl MirLowering for AstScopeDef {
 
         if let Some(mut body) = self.body {
             for stmt in body.iter() {
-                let span = stmt.span;
                 if let AstNodeType::VariableDeclaration(AstDeclaration {
                     identifier, value, ..
                 }) = &stmt.node_type
@@ -193,8 +192,7 @@ impl MirLowering for AstScopeDef {
                         )?
                         .unwrap_dollar();
 
-                    let new_name =
-                        Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
+                    let new_name = env.get_new_variable_key(scope, ident)?;
 
                     env.scoping
                         .scope_mut_or_err(new_scope)?

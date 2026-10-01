@@ -48,18 +48,16 @@ impl MirDataType {
             identifier,
             generic_types,
         } = self
+            && generic_types.is_empty()
+            && let Some(name) = identifier.fully_qualified_path.name
+            && generic_params.contains(&name)
         {
-            if generic_types.is_empty()
-                && let Some(name) = identifier.fully_qualified_path.name
-                && generic_params.contains(&name)
-            {
-                let name_str = name.to_string();
-                if let Some(existing) = bindings.get(&name_str) {
-                    return existing == other;
-                } else {
-                    bindings.insert(name_str, other.clone());
-                    return true;
-                }
+            let name_str = name.to_string();
+            if let Some(existing) = bindings.get(&name_str) {
+                return existing == other;
+            } else {
+                bindings.insert(name_str, other.clone());
+                return true;
             }
         }
 
@@ -164,14 +162,11 @@ impl MirDataType {
             identifier,
             generic_types,
         } = self
+            && generic_types.is_empty()
+            && let Some(name) = identifier.fully_qualified_path.name
+            && generic_params.contains(&name)
         {
-            if generic_types.is_empty() {
-                if let Some(name) = identifier.fully_qualified_path.name {
-                    if generic_params.contains(&name) {
-                        return 1;
-                    }
-                }
-            }
+            return 1;
         }
 
         match self {

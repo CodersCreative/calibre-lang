@@ -267,7 +267,7 @@ impl MirLowering for AstDeclaration {
 
             if let Some(first_ty) = first_ty
                 && let Some(mapped_name) = env.resolve_member_fn_name(
-                    &first_ty.unwrap_all_refs(),
+                    first_ty.unwrap_all_refs(),
                     &callee_ident.value.get_ident().text(),
                 )
                 && mapped_name.name() != callee_ident.value.get_ident().text()

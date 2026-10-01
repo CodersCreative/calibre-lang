@@ -64,7 +64,7 @@ impl Typing {
                 let score = imp.target.specificity(&imp.generic_params);
                 if best
                     .as_ref()
-                    .map_or(true, |(best_score, _)| score > *best_score)
+                    .is_none_or(|(best_score, _)| score > *best_score)
                 {
                     best = Some((score, imp));
                 }
@@ -91,11 +91,11 @@ impl Typing {
             let mut matched: Vec<(usize, &MiddleImplMember)> = Vec::new();
             for imp in candidates {
                 let mut bindings = FxHashMap::default();
-                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings) {
-                    if let Some(m) = imp.get_member(&member_name, &[]) {
-                        let score = imp.target.specificity(&imp.generic_params);
-                        matched.push((score, m));
-                    }
+                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
+                    && let Some(m) = imp.get_member(&member_name, &[])
+                {
+                    let score = imp.target.specificity(&imp.generic_params);
+                    matched.push((score, m));
                 }
             }
             if !matched.is_empty() {
@@ -108,11 +108,11 @@ impl Typing {
         for (_, impl_list) in &self.trait_impls {
             for imp in impl_list {
                 let mut bindings = FxHashMap::default();
-                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings) {
-                    if let Some(m) = imp.get_member(&member_name, &[]) {
-                        let score = imp.target.specificity(&imp.generic_params);
-                        matched_trait.push((score, m));
-                    }
+                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
+                    && let Some(m) = imp.get_member(&member_name, &[])
+                {
+                    let score = imp.target.specificity(&imp.generic_params);
+                    matched_trait.push((score, m));
                 }
             }
         }
@@ -137,11 +137,11 @@ impl Typing {
                 Vec::new();
             for imp in candidates {
                 let mut bindings = FxHashMap::default();
-                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings) {
-                    if let Some(m) = imp.get_member(&member_name, &[]) {
-                        let score = imp.target.specificity(&imp.generic_params);
-                        matched.push((score, m, bindings));
-                    }
+                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
+                    && let Some(m) = imp.get_member(&member_name, &[])
+                {
+                    let score = imp.target.specificity(&imp.generic_params);
+                    matched.push((score, m, bindings));
                 }
             }
             if !matched.is_empty() {
@@ -156,11 +156,11 @@ impl Typing {
         for (_, impl_list) in &self.trait_impls {
             for imp in impl_list {
                 let mut bindings = FxHashMap::default();
-                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings) {
-                    if let Some(m) = imp.get_member(&member_name, &[]) {
-                        let score = imp.target.specificity(&imp.generic_params);
-                        matched_trait.push((score, m, bindings));
-                    }
+                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
+                    && let Some(m) = imp.get_member(&member_name, &[])
+                {
+                    let score = imp.target.specificity(&imp.generic_params);
+                    matched_trait.push((score, m, bindings));
                 }
             }
         }
@@ -261,10 +261,9 @@ impl Typing {
                 if imp
                     .target
                     .can_unify(base, &imp.generic_params, &mut bindings)
+                    && let Some(assoc_type) = imp.assoc_types.get(name)
                 {
-                    if let Some(assoc_type) = imp.assoc_types.get(name) {
-                        return Some(assoc_type.clone());
-                    }
+                    return Some(assoc_type.clone());
                 }
             }
         }
@@ -402,11 +401,12 @@ impl MiddleImpl {
     ) -> Option<&MiddleImplMember> {
         let members = self.members.get(&Self::normalize_member_name(name))?;
 
-        if !generic_params.is_empty() {
-            if let Some(x) = members.iter().find(|x| x.generic_params == generic_params) {
-                return Some(x);
-            }
+        if !generic_params.is_empty()
+            && let Some(x) = members.iter().find(|x| x.generic_params == generic_params)
+        {
+            return Some(x);
         }
+
         members.first()
     }
 

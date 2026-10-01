@@ -11,21 +11,18 @@ use crate::{
     environment::{LirEnvironment, LirFunction, LirGlobal},
     translate::LirLowering,
 };
-use calibre_mir::ast::{MiddleNodeType, MirExtern, MirFunction, MirScopeDecl, MirVarDecl};
-use calibre_parser::{
-    Span,
-    ast::{
-        nodes::VarType,
-        types::{ParserDataType, ParserInnerType},
-    },
+use calibre_mir::{
+    ast::{MiddleNodeType, MirExtern, MirFunction, MirScopeDecl, MirVarDecl, types::MirDataType},
+    symbols::VariableKey,
 };
-use ustr::{Ustr, UstrSet};
+use calibre_parser::{Span, ast::nodes::VarType};
+use rustc_hash::FxHashSet;
 
 impl LirLowering for MirVarDecl {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
         if let MiddleNodeType::FunctionDeclaration { .. } = self.value.node_type {
-            env.last_ident = Some(self.identifier);
+            env.last_ident = Some(self.identifier.clone());
         } else {
             env.last_ident = None;
         }
@@ -84,7 +81,7 @@ impl LirLowering for MirScopeDecl {
                 }) = &stmt.node_type
                 {
                     let global_type = data_type.clone();
-                    let identifier = *identifier;
+                    let identifier = identifier.clone();
 
                     let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
 
@@ -93,7 +90,7 @@ impl LirLowering for MirScopeDecl {
                     env.registry.append(sub_lowerer.registry);
 
                     env.registry.globals.insert(
-                        identifier,
+                        identifier.clone(),
                         LirGlobal {
                             name: identifier,
                             data_type: global_type,
@@ -115,7 +112,7 @@ impl LirLowering for MirFunction {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         let referenced_names = self.body.identifiers_referenced(true, false);
         let mut referenced_params = 0;
-        let param_names: UstrSet = self
+        let param_names: FxHashSet<VariableKey> = self
             .parameters
             .iter()
             .enumerate()
@@ -123,26 +120,24 @@ impl LirLowering for MirFunction {
                 if referenced_names.contains(name) {
                     referenced_params |= 1 << i;
                 }
-                *name
+                name.clone()
             })
             .collect();
 
-        let captures: Vec<(Ustr, ParserDataType)> = self
+        let captures: Vec<(VariableKey, MirDataType)> = self
             .body
             .captured()
             .into_iter()
             .filter(|x| !param_names.contains(x))
             .map(|cap| {
                 (
-                    *cap,
+                    cap.clone(),
                     env.env
                         .symbols
                         .variables
                         .get(cap)
                         .map(|v| v.data_type.clone())
-                        .unwrap_or_else(|| {
-                            ParserDataType::new(Span::default(), ParserInnerType::Dynamic)
-                        }),
+                        .unwrap_or_else(|| MirDataType::Dynamic),
                 )
             })
             .collect();
@@ -175,21 +170,21 @@ impl LirLowering for MirFunction {
         let mut captures_for_func = Vec::with_capacity(captures.len());
 
         for (n, t) in captures.into_iter() {
-            capture_names.push(n);
+            capture_names.push(n.clone());
             captures_for_func.push((n, t));
         }
 
         let mut memo_params = 0;
         for (i, param) in self.parameters.iter().enumerate() {
-            if self.memo_params.contains(&param.0) {
+            if self.memo_params.contains(param.0.name()) {
                 memo_params |= 1 << i;
             }
         }
 
         env.registry.functions.insert(
-            internal_name,
+            internal_name.clone(),
             LirFunction {
-                name: internal_name,
+                name: internal_name.clone(),
                 params: self
                     .parameters
                     .into_iter()

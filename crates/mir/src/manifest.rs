@@ -89,7 +89,7 @@ impl From<&Symbols> for ManifestSymbols {
 pub struct ManifestScope {
     pub namespace: Ustr,
     pub fully_qualified_path: Arc<FullyQualifiedPath>,
-    pub mappings: UstrMap<Ustr>,
+    pub mappings: UstrMap<VariableKey>,
     pub type_mappings: UstrMap<MirDataType>,
     pub children: UstrMap<ScopeId>,
 }

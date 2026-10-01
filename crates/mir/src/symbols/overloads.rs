@@ -23,7 +23,7 @@ impl MiddleEnvironment {
     ) -> Option<MirDataType> {
         self.get_operator_overload(scope, left, right, &operator)
             .map(|x| x.return_type.clone())
-            .or_else(|| Some(MirDataType::Bool))
+            .or(Some(MirDataType::Bool))
     }
 
     #[instrument(skip_all)]

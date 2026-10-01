@@ -1,17 +1,21 @@
 use crate::ast::{BlockId, LirBlock, LirNode, LirTerminator};
-use calibre_mir::{environment::MiddleEnvironment, scoping::ScopeId};
-use calibre_parser::ast::types::ParserDataType;
-use rustc_hash::FxHashMap;
+use calibre_mir::{
+    ast::types::MirDataType,
+    environment::MiddleEnvironment,
+    scoping::{FullyQualifiedPath, ScopeId},
+    symbols::{VariableKey, resolve::Key},
+};
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use tracing::{debug, instrument};
-use ustr::{Ustr, UstrMap, UstrSet};
+use ustr::{Ustr, UstrMap};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LirRegistry {
-    pub functions: UstrMap<LirFunction>,
-    pub globals: UstrMap<LirGlobal>,
-    pub natives: UstrMap<Ustr>,
+    pub functions: FxHashMap<VariableKey, LirFunction>,
+    pub globals: FxHashMap<VariableKey, LirGlobal>,
+    pub natives: UstrMap<Key>,
     pub dyn_vtables: UstrMap<UstrMap<UstrMap<Ustr>>>,
     pub scope_to_file: FxHashMap<ScopeId, Ustr>,
 }
@@ -44,8 +48,8 @@ impl Display for LirRegistry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LirGlobal {
-    pub name: Ustr,
-    pub data_type: ParserDataType,
+    pub name: VariableKey,
+    pub data_type: MirDataType,
     pub blocks: Box<[Option<LirBlock>]>,
 }
 
@@ -63,10 +67,10 @@ impl Display for LirGlobal {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LirFunction {
-    pub name: Ustr,
-    pub params: Box<[(Ustr, ParserDataType)]>,
-    pub captures: Box<[(Ustr, ParserDataType)]>,
-    pub return_type: ParserDataType,
+    pub name: VariableKey,
+    pub params: Box<[(VariableKey, MirDataType)]>,
+    pub captures: Box<[(VariableKey, MirDataType)]>,
+    pub return_type: MirDataType,
     pub blocks: Box<[Option<LirBlock>]>,
     pub pure: bool,
     // Highkey probably overkill having this be a usize but it guarantees nothing goes wrong unless some idiot has over 32 args...
@@ -96,11 +100,11 @@ impl Display for LirFunction {
 #[derive(Debug, Clone)]
 pub struct LirEnvironment<'a> {
     pub env: &'a MiddleEnvironment,
-    pub last_ident: Option<Ustr>,
+    pub last_ident: Option<VariableKey>,
     pub registry: LirRegistry,
     pub blocks: Vec<LirBlock>,
     pub current_block: BlockId,
-    pub referenced_identifiers: UstrSet,
+    pub referenced_identifiers: FxHashSet<VariableKey>,
     pub loop_stack: Vec<(BlockId, BlockId, Option<Ustr>)>,
     pub allow_global_hoist: bool,
     pub counter: usize,
@@ -136,8 +140,8 @@ impl<'a> LirEnvironment<'a> {
             env,
             last_ident: None,
             registry: LirRegistry {
-                functions: UstrMap::default(),
-                globals: UstrMap::default(),
+                functions: FxHashMap::default(),
+                globals: FxHashMap::default(),
                 natives: env.symbols.native_mappings.clone(),
                 dyn_vtables: Self::build_dyn_vtables(env),
                 scope_to_file,
@@ -148,17 +152,24 @@ impl<'a> LirEnvironment<'a> {
                 terminator: None,
             }],
             current_block: entry_id,
-            referenced_identifiers: UstrSet::default(),
+            referenced_identifiers: FxHashSet::default(),
             loop_stack: vec![],
             allow_global_hoist,
             counter: 0,
         }
     }
 
-    pub fn get_temp(&mut self) -> Ustr {
+    pub fn get_temp_ustr(&mut self) -> Ustr {
         let id = self.counter;
         self.counter += 1;
         Ustr::from(&format!("tmp_{}", id))
+    }
+
+    pub fn get_temp(&mut self) -> VariableKey {
+        VariableKey {
+            fully_qualified_path: FullyQualifiedPath::combine(None, self.get_temp_ustr()),
+            shadow_counter: None,
+        }
     }
 
     #[inline]

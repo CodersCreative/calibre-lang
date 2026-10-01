@@ -1,3 +1,7 @@
+use calibre_mir::{
+    ast::types::MirDataType,
+    symbols::{TypeKey, VariableKey},
+};
 use calibre_parser::{
     Span,
     ast::{
@@ -6,7 +10,6 @@ use calibre_parser::{
         comparison::{BooleanOperator, ComparisonOperator},
         idents::ParserText,
         nodes::binary::AsFailureMode,
-        types::ParserDataType,
     },
 };
 use derive_builder::Builder;
@@ -71,19 +74,19 @@ pub struct LirSpawn {
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirClosure {
-    pub label: Ustr,
-    pub captures: Box<[Ustr]>,
+    pub label: VariableKey,
+    pub captures: Box<[VariableKey]>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirList {
     pub values: Box<[LirNodeType]>,
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirAggregate {
-    pub name: Option<Ustr>,
+    pub name: Option<TypeKey>,
     pub fields: ObjectMap<LirNodeType>,
 }
 
@@ -96,17 +99,17 @@ pub struct LirRange {
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirLoad {
-    pub value: Ustr,
+    pub value: VariableKey,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirMove {
-    pub value: Ustr,
+    pub value: VariableKey,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirDrop {
-    pub value: Ustr,
+    pub value: VariableKey,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
@@ -149,7 +152,7 @@ pub struct LirRef {
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirRefLoad {
-    pub value: Ustr,
+    pub value: VariableKey,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
@@ -171,7 +174,7 @@ pub struct LirMember {
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirEnum {
-    pub name: Ustr,
+    pub name: TypeKey,
     pub variant: u32,
     pub payload: Option<Box<LirNodeType>>,
 }
@@ -179,14 +182,14 @@ pub struct LirEnum {
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirAs {
     pub value: Box<LirNodeType>,
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
     pub failure_mode: AsFailureMode,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirIs {
     pub value: Box<LirNodeType>,
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
@@ -197,9 +200,9 @@ pub struct LirAssign {
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirDeclare {
-    pub dest: Ustr,
+    pub dest: VariableKey,
     pub value: Box<LirNodeType>,
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
     pub is_referenced: bool,
 }
 
@@ -208,8 +211,8 @@ pub struct LirExtern {
     pub abi: Ustr,
     pub library: Ustr,
     pub symbol: Ustr,
-    pub parameters: Box<[ParserDataType]>,
-    pub return_type: ParserDataType,
+    pub parameters: Box<[MirDataType]>,
+    pub return_type: MirDataType,
     pub memo_params: usize,
     pub memo: bool,
     pub pure: bool,
@@ -263,7 +266,7 @@ impl LirNodeType {
         matches!(self, LirNodeType::Literal(LirLiteral::Null))
     }
 
-    pub fn local_name(&self) -> Option<&Ustr> {
+    pub fn local_name(&self) -> Option<&VariableKey> {
         match self {
             LirNodeType::Declare(LirDeclare { dest, .. }) => Some(dest),
             LirNodeType::Assign(LirAssign {
@@ -456,7 +459,7 @@ pub struct BlockId(pub u32);
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LirLValue {
-    Var(Ustr),
+    Var(VariableKey),
     Ptr(Box<LirNodeType>),
 }
 

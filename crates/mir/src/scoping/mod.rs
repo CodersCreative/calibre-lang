@@ -1,4 +1,4 @@
-use crate::{ast::types::MirDataType, errors::MiddleErr};
+use crate::{ast::types::MirDataType, errors::MiddleErr, symbols::VariableKey};
 use calibre_parser::{
     Location, Span,
     ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
@@ -408,8 +408,8 @@ impl FullyQualifiedPath {
         let current = self;
         let mut current_parent = current.parent.as_deref();
 
-        while let Some(ref p) = current_parent {
-            if *p == parent {
+        while let Some(p) = current_parent {
+            if p == parent {
                 return true;
             }
             current_parent = p.parent.as_deref();
@@ -437,7 +437,7 @@ impl Display for FullyQualifiedPath {
 pub struct MiddleScope {
     pub namespace: Ustr,
     pub fully_qualified_path: Arc<FullyQualifiedPath>,
-    pub mappings: UstrMap<Ustr>,
+    pub mappings: UstrMap<VariableKey>,
     pub type_mappings: UstrMap<MirDataType>,
     pub macros: UstrMap<ScopeMacro>,
     pub macro_args: UstrMap<AstNode>,

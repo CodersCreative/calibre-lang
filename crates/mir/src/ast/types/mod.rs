@@ -31,10 +31,10 @@ impl MirDataType {
         names.push(base_key.clone());
 
         match self {
-            MirDataType::Struct { identifier, .. } => {
-                if let Some(name) = identifier.fully_qualified_path.name.as_ref() {
-                    names.push(name.to_string());
-                }
+            MirDataType::Struct { identifier, .. }
+                if let Some(name) = identifier.fully_qualified_path.name.as_ref() =>
+            {
+                names.push(name.to_string())
             }
             _ => {}
         }
@@ -722,7 +722,7 @@ impl MirDataType {
         }
     }
 
-    pub fn matches(&self, other: &Self, generic_params: &[&str]) -> bool {
+    pub fn matches(&self, other: &Self, _generic_params: &[&str]) -> bool {
         match (self, other) {
             (
                 MirDataType::Struct {
@@ -739,22 +739,22 @@ impl MirDataType {
                 }
                 ag.iter()
                     .zip(bg.iter())
-                    .all(|(x, y)| x.matches(&y, generic_params))
+                    .all(|(x, y)| x.matches(y, _generic_params))
             }
-            (MirDataType::List(a), MirDataType::List(b)) => a.matches(&b, generic_params),
-            (MirDataType::Option(a), MirDataType::Option(b)) => a.matches(&b, generic_params),
+            (MirDataType::List(a), MirDataType::List(b)) => a.matches(b, _generic_params),
+            (MirDataType::Option(a), MirDataType::Option(b)) => a.matches(b, _generic_params),
             (MirDataType::Result { ok: ao, err: ae }, MirDataType::Result { ok: bo, err: be }) => {
-                ao.matches(&bo, generic_params) && ae.matches(&be, generic_params)
+                ao.matches(bo, _generic_params) && ae.matches(be, _generic_params)
             }
-            (MirDataType::Ptr(a), MirDataType::Ptr(b)) => a.matches(&b, generic_params),
-            (MirDataType::Ref(a, _), MirDataType::Ref(b, _)) => a.matches(&b, generic_params),
+            (MirDataType::Ptr(a), MirDataType::Ptr(b)) => a.matches(b, _generic_params),
+            (MirDataType::Ref(a, _), MirDataType::Ref(b, _)) => a.matches(b, _generic_params),
             (MirDataType::Tuple(a), MirDataType::Tuple(b)) => {
                 if a.len() != b.len() {
                     return false;
                 }
                 a.iter()
                     .zip(b.iter())
-                    .all(|(x, y)| x.matches(&y, generic_params))
+                    .all(|(x, y)| x.matches(y, _generic_params))
             }
             (x, y) => x == y,
         }

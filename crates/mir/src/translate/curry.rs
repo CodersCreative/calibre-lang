@@ -59,7 +59,7 @@ impl MiddleEnvironment {
 
         for (_, param_type, _) in params.iter().rev() {
             result = MirDataType::function(
-                vec![param_type.clone().unwrap_or_else(|| MirDataType::Dynamic)],
+                vec![param_type.clone().unwrap_or(MirDataType::Dynamic)],
                 result,
             );
         }
@@ -183,7 +183,7 @@ impl MiddleEnvironment {
                 parameters,
             } => {
                 let params = parameters
-                    .into_iter()
+                    .iter()
                     .enumerate()
                     .map(|(index, param)| {
                         (

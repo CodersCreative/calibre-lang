@@ -3,8 +3,9 @@ use crate::{
     environment::{LirEnvironment, LirGlobal, LirRegistry},
 };
 use calibre_mir::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, types::MirDataType},
     environment::MiddleEnvironment,
+    symbols::VariableKey,
     typing::{MiddleImpl, MiddleTrait},
 };
 use calibre_parser::{
@@ -45,7 +46,7 @@ impl<'a> LirEnvironment<'a> {
             .collect()
     }
 
-    fn assign_var(&mut self, span: Span, name: Ustr, value: LirNodeType) {
+    fn assign_var(&mut self, span: Span, name: VariableKey, value: LirNodeType) {
         self.add_instr(LirNode::new(
             span,
             LirNodeType::Assign(LirAssign {
@@ -55,12 +56,12 @@ impl<'a> LirEnvironment<'a> {
         ));
     }
 
-    fn declare_temp_null(&mut self, span: Span, dest: Ustr) {
+    fn declare_temp_null(&mut self, span: Span, dest: VariableKey) {
         self.add_instr(LirNode::new(
             span,
             LirNodeType::Declare(LirDeclare {
                 dest,
-                data_type: ParserDataType::null(span),
+                data_type: MirDataType::Null,
                 value: Box::new(LirNodeType::null()),
                 is_referenced: true,
             }),
@@ -74,7 +75,7 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
-    fn assign_temp_if_non_null(&mut self, span: Span, temp: Ustr, value: LirNodeType) {
+    fn assign_temp_if_non_null(&mut self, span: Span, temp: VariableKey, value: LirNodeType) {
         if !value.is_null() {
             self.assign_var(span, temp, value);
         }
@@ -106,12 +107,13 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
-    fn next_function_label(&mut self) -> Ustr {
+    fn next_function_label(&mut self) -> VariableKey {
         if let Some(name) = self.last_ident.take()
-            && !name.contains("curry_capture")
+            && !name.name().contains("curry_capture")
         {
             return name;
         }
+
         self.get_temp()
     }
 

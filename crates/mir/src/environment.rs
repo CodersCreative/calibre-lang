@@ -123,17 +123,31 @@ impl MiddleEnvironment {
         )
     }
 
-    #[instrument(skip_all, fields(name = %name.to_string()))]
-    pub fn register_variable_with_temp_scope(
+    pub fn get_new_variable_key(
         &mut self,
         scope: ScopeId,
         name: Ustr,
-        data_type: MirDataType,
-        var_type: VarType,
+    ) -> Result<VariableKey, MiddleErr> {
+        self.get_new_variable_key_with_temp_scope(scope, name, self.context.in_temp_scope)
+    }
+
+    pub fn get_new_type_key(&mut self, scope: ScopeId, name: Ustr) -> Result<TypeKey, MiddleErr> {
+        let scope_ref = self.scoping.scope_or_err(scope)?;
+
+        Ok(TypeKey {
+            fully_qualified_path: FullyQualifiedPath::combine(
+                Some(scope_ref.fully_qualified_path.clone()),
+                name,
+            ),
+        })
+    }
+
+    pub fn get_new_variable_key_with_temp_scope(
+        &mut self,
+        scope: ScopeId,
+        name: Ustr,
         in_temp_scope: bool,
     ) -> Result<VariableKey, MiddleErr> {
-        debug!(var_type = ?var_type, data_type = %data_type, "registering variable");
-
         let scope_ref = self.scoping.scope_or_err(scope)?;
         let fully_qualified_path =
             FullyQualifiedPath::combine(Some(scope_ref.fully_qualified_path.clone()), name);
@@ -163,11 +177,24 @@ impl MiddleEnvironment {
             None
         };
 
-        let key = VariableKey {
+        Ok(VariableKey {
             fully_qualified_path: fully_qualified_path.clone(),
             shadow_counter,
-        };
+        })
+    }
 
+    #[instrument(skip_all, fields(name = %name.to_string()))]
+    pub fn register_variable_with_temp_scope(
+        &mut self,
+        scope: ScopeId,
+        name: Ustr,
+        data_type: MirDataType,
+        var_type: VarType,
+        in_temp_scope: bool,
+    ) -> Result<VariableKey, MiddleErr> {
+        debug!(var_type = ?var_type, data_type = %data_type, "registering variable");
+
+        let key = self.get_new_variable_key_with_temp_scope(scope, name, in_temp_scope)?;
         self.symbols.variables.insert(
             key.clone(),
             MiddleVariable {

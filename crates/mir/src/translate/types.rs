@@ -98,7 +98,7 @@ impl MirLowering for AstType {
             {
                 let scope_ref = env.scoping.scope_mut_or_err(scope)?;
 
-                scope_ref.type_mappings.insert(identifier, inner.into());
+                scope_ref.type_mappings.insert(identifier, inner);
             }
 
             if let Some(x) = env.context.in_stdlib
@@ -321,7 +321,8 @@ impl MirLowering for AstTrait {
                         ..
                     } = t
                     {
-                        generic_names.push(Ustr::from(s));
+                        let name = Ustr::from(s);
+                        generic_names.push((name, env.get_new_type_key(scope, name)?));
                     }
                 }
                 Ustr::from(&identifier.to_string())
@@ -329,11 +330,7 @@ impl MirLowering for AstTrait {
         };
 
         let trait_key = env
-            .resolve(
-                scope,
-                &self.identifier,
-                ResolutionOptions::typing().with_dollar(),
-            )?
+            .resolve(scope, &self.identifier, ResolutionOptions::typing())?
             .unwrap_typing();
 
         env.typing.objects.insert(
@@ -348,11 +345,23 @@ impl MirLowering for AstTrait {
 
         let mut prev_generics = Vec::new();
         if let Ok(scope_ref) = env.scoping.scope_mut_or_err(scope) {
-            scope_ref.mappings.insert(base_name, *trait_key.name());
+            scope_ref.type_mappings.insert(
+                base_name,
+                MirDataType::Struct {
+                    identifier: trait_key.clone(),
+                    generic_types: Vec::new(),
+                },
+            );
 
-            for name in &generic_names {
-                prev_generics.push((name, scope_ref.mappings.get(name).cloned()));
-                scope_ref.mappings.insert(*name, *name);
+            for (name, key) in &generic_names {
+                prev_generics.push((name, scope_ref.type_mappings.get(name).cloned()));
+                scope_ref.type_mappings.insert(
+                    *name,
+                    MirDataType::Struct {
+                        identifier: key.clone(),
+                        generic_types: Vec::new(),
+                    },
+                );
             }
         }
 
@@ -408,9 +417,9 @@ impl MirLowering for AstTrait {
         if let Ok(scope_ref) = env.scoping.scope_mut_or_err(scope) {
             for (name, prev) in prev_generics {
                 if let Some(prev) = prev {
-                    scope_ref.mappings.insert(*name, prev);
+                    scope_ref.type_mappings.insert(*name, prev);
                 } else {
-                    scope_ref.mappings.remove(name);
+                    scope_ref.type_mappings.remove(name);
                 }
             }
         }
@@ -424,7 +433,7 @@ impl MirLowering for AstTrait {
 
 struct GenericParamState {
     params: Vec<Ustr>,
-    prev_mappings: Vec<(Ustr, Option<Ustr>)>,
+    prev_mappings: Vec<(Ustr, Option<MirDataType>)>,
 }
 
 impl GenericParamState {
@@ -434,28 +443,35 @@ impl GenericParamState {
         generics: &GenericTypes,
     ) -> Result<Self, MiddleErr> {
         let mut prev_mappings = Vec::new();
+        let generics = generics
+            .0
+            .iter()
+            .map(|generic| {
+                let name = env
+                    .resolve(
+                        scope,
+                        &generic.identifier,
+                        ResolutionOptions::default().with_dollar(),
+                    )
+                    .map(|k| k.unwrap_dollar())?;
+                Ok((name, env.get_new_type_key(scope, name)?))
+            })
+            .collect::<Result<Vec<_>, MiddleErr>>()?;
 
         if let Ok(scope_ref) = env.scoping.scope_mut_or_err(scope) {
-            for generic in generics.0.iter() {
-                let name = Ustr::from(&generic.identifier.to_string());
-                prev_mappings.push((name, scope_ref.mappings.get(&name).cloned()));
-                scope_ref.mappings.insert(name, name);
+            for (name, key) in generics.clone().into_iter() {
+                prev_mappings.push((name, scope_ref.type_mappings.get(&name).cloned()));
+                scope_ref.type_mappings.insert(
+                    name,
+                    MirDataType::Struct {
+                        identifier: key,
+                        generic_types: Vec::new(),
+                    },
+                );
             }
         }
 
-        let params: Vec<Ustr> = generics
-            .0
-            .iter()
-            .map(|g| {
-                env.resolve(
-                    scope,
-                    &g.identifier,
-                    ResolutionOptions::default().with_dollar(),
-                )
-                .map(|k| k.unwrap_dollar())
-                .unwrap_or_else(|_| Ustr::from(&g.identifier.to_string()))
-            })
-            .collect();
+        let params: Vec<Ustr> = generics.into_iter().map(|x| x.0).collect();
 
         if !params.is_empty() {
             env.scoping.push_generic_params(params.clone());
@@ -472,7 +488,6 @@ impl GenericParamState {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         previous_self_type: Option<MirDataType>,
-        previous_self_mapping: Option<Ustr>,
     ) {
         let scope = env.scoping.scope_mut_or_err(scope);
 
@@ -481,15 +496,11 @@ impl GenericParamState {
                 scope.type_mappings.insert(Ustr::from("Self"), prev);
             }
 
-            if let Some(prev) = previous_self_mapping {
-                scope.mappings.insert(Ustr::from("Self"), prev);
-            }
-
             for (name, prev) in self.prev_mappings {
                 if let Some(prev) = prev {
-                    scope.mappings.insert(name, prev);
+                    scope.type_mappings.insert(name, prev);
                 } else {
-                    scope.mappings.remove(&name);
+                    scope.type_mappings.remove(&name);
                 }
             }
 
@@ -716,7 +727,7 @@ impl MirLowering for AstImpl {
         let previous_self_type = env.scoping.scope_mut_or_err(scope).ok().and_then(|scope| {
             scope
                 .type_mappings
-                .insert(Ustr::from("Self"), resolved.clone().into())
+                .insert(Ustr::from("Self"), resolved.clone())
         });
 
         env.typing.add_inherent_impl(imp);
@@ -772,7 +783,7 @@ impl MirLowering for AstImpl {
             })
             .collect::<Result<Vec<_>, MiddleErr>>()?;
 
-        generic_state.restore(env, scope, previous_self_type, None);
+        generic_state.restore(env, scope, previous_self_type);
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
@@ -846,19 +857,16 @@ impl MirLowering for AstImplTrait {
             ));
         }
 
-        let (previous_self_mapping, previous_self_type) = env
+        let previous_self_type = env
             .scoping
             .scope_mut_or_err(scope)
             .ok()
             .map(|scope| {
-                (
-                    scope.mappings.insert(Ustr::from("Self"), impl_key),
-                    scope
-                        .type_mappings
-                        .insert(Ustr::from("Self"), resolved_target.clone().into()),
-                )
+                scope
+                    .type_mappings
+                    .insert(Ustr::from("Self"), resolved_target.clone())
             })
-            .unwrap_or((None, None));
+            .unwrap_or(None);
 
         let mut imp = MiddleImpl::new_trait(
             resolved_trait.clone(),
@@ -970,7 +978,7 @@ impl MirLowering for AstImplTrait {
             })
             .collect::<Result<Vec<_>, MiddleErr>>()?;
 
-        generic_state.restore(env, scope, previous_self_type, previous_self_mapping);
+        generic_state.restore(env, scope, previous_self_type);
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
