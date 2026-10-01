@@ -1,9 +1,9 @@
 use crate::ast::{BlockId, LirBlock, LirNode, LirTerminator};
 use calibre_mir::{
-    ast::types::MirDataType,
+    ast::types::{MirDataType, unify::TypeImplKey},
     environment::MiddleEnvironment,
     scoping::{FullyQualifiedPath, ScopeId},
-    symbols::{VariableKey, resolve::Key},
+    symbols::{TypeKey, VariableKey, resolve::Key},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -16,7 +16,7 @@ pub struct LirRegistry {
     pub functions: FxHashMap<VariableKey, LirFunction>,
     pub globals: FxHashMap<VariableKey, LirGlobal>,
     pub natives: UstrMap<Key>,
-    pub dyn_vtables: UstrMap<UstrMap<UstrMap<Ustr>>>,
+    pub dyn_vtables: FxHashMap<TypeImplKey, UstrMap<UstrMap<VariableKey>>>,
     pub scope_to_file: FxHashMap<ScopeId, Ustr>,
 }
 

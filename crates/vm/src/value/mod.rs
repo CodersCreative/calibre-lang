@@ -10,7 +10,7 @@ use crate::{
     },
 };
 use astro_float::{BigFloat, RoundingMode};
-use calibre_lir::ast::BlockId;
+use calibre_lir::{TypeImplKey, TypeKey, VariableKey, ast::BlockId};
 use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
 use dumpster::{TraceWith, Visitor};
@@ -205,9 +205,9 @@ pub enum RuntimeValue {
     Bool(bool),
     Str(Ustr),
     Char(char),
-    Aggregate(Option<Ustr>, Arc<GcMap>),
-    Enum(Ustr, usize, Option<Gc<RuntimeValue>>),
-    Ref(Ustr),
+    Aggregate(Option<TypeKey>, Arc<GcMap>),
+    Enum(TypeKey, usize, Option<Gc<RuntimeValue>>),
+    Ref(VariableKey),
     VarRef(usize),
     RegRef {
         frame: usize,
@@ -226,15 +226,15 @@ pub enum RuntimeValue {
     #[cfg(feature = "native")]
     ExternFunction(Arc<ExternFunction>),
     Function {
-        name: Ustr,
-        captures: Arc<Vec<(Ustr, RuntimeValue)>>,
+        name: VariableKey,
+        captures: Arc<Vec<(VariableKey, RuntimeValue)>>,
     },
     Generator {
-        type_name: Ustr,
+        type_name: TypeImplKey,
         state: Arc<Mutex<GeneratorState>>,
     },
     DynObject {
-        type_name: Ustr,
+        type_name: TypeImplKey,
         constraints: Arc<Vec<Ustr>>,
         value: Gc<RuntimeValue>,
         vtable: Arc<UstrMap<Ustr>>,
@@ -378,7 +378,7 @@ impl RuntimeValue {
         )
     }
 
-    pub fn impl_name(&self) -> Option<Ustr> {
+    pub fn impl_name(&self) -> Option<TypeImplKey> {
         match self {
             RuntimeValue::Big(_) => Some("big"),
             RuntimeValue::Int(_) => Some("int"),
@@ -391,7 +391,7 @@ impl RuntimeValue {
             RuntimeValue::Range(_, _) => Some("range"),
             RuntimeValue::Ptr(_) => Some("ptr"),
             RuntimeValue::Aggregate(Some(name), _) | RuntimeValue::Enum(name, _, _) => {
-                return Some(*name);
+                return Some(TypeImplKey::from(name.clone()));
             }
             RuntimeValue::Generator { type_name, .. } => return Some(*type_name),
             RuntimeValue::DynObject { type_name, .. } => return Some(*type_name),
@@ -401,7 +401,6 @@ impl RuntimeValue {
             RuntimeValue::Null => Some("null"),
             _ => None,
         }
-        .map(Ustr::from)
     }
 }
 

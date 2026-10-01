@@ -5,7 +5,7 @@ use crate::{
     error::RuntimeError,
     value::{RuntimeValue, TerminateValue},
 };
-use calibre_lir::ast::BlockId;
+use calibre_lir::{VariableKey, ast::BlockId};
 use calibre_parser::ast::idents::ParserText;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
@@ -21,8 +21,8 @@ impl VM {
         }
     }
 
-    pub(crate) fn capture_value(&self, name: &Ustr, seen: &mut UstrSet) -> RuntimeValue {
-        match self.resolve_var_name(*name) {
+    pub(crate) fn capture_value(&self, name: &VariableKey, seen: &mut UstrSet) -> RuntimeValue {
+        match self.resolve_var_name(name.clone()) {
             Some(VarName::Var(var)) => {
                 if let Some(value) = self.variables.get(&var) {
                     value.clone()
@@ -228,7 +228,7 @@ impl VM {
         &mut self,
         function: &VMFunction,
         args: FunctionArgs<'b>,
-        captures: Arc<Vec<(Ustr, RuntimeValue)>>,
+        captures: Arc<Vec<(VariableKey, RuntimeValue)>>,
         budget: Option<usize>,
         state: &mut crate::TaskState,
         get_result: bool,

@@ -1,20 +1,24 @@
 use super::ssa::SSABuilder;
 use super::*;
 use crate::conversion::instructions::{VMInstruction, literals::VMLoadLiteral, registers::VMCopy};
-use calibre_lir::ast::{LirDeclare, LirLValue};
+use calibre_lir::{
+    MirDataType, VariableKey,
+    ast::{LirDeclare, LirLValue},
+};
 use calibre_parser::Span;
+use rustc_hash::FxHashSet;
 use tracing::{debug, instrument};
-use ustr::{Ustr, UstrMap, UstrSet};
+use ustr::UstrMap;
 
 impl VMFunction {
     #[instrument(skip_all, fields(name = %name))]
-    pub(crate) fn from_global(name: Ustr, blocks: Box<[Option<LirBlock>]>) -> Self {
+    pub(crate) fn from_global(name: VariableKey, blocks: Box<[Option<LirBlock>]>) -> Self {
         debug!("lowering global to VM function");
         let func = LirFunction {
             name,
             params: Vec::new().into_boxed_slice(),
             captures: Vec::new().into_boxed_slice(),
-            return_type: ParserDataType::new(Span::default(), ParserInnerType::Null),
+            return_type: MirDataType::Null,
             blocks,
             pure: false,
             memo: false,
@@ -43,7 +47,7 @@ impl VMFunction {
             ret_reg: lower.ret_reg,
             entry: lower.entry,
             block_map: lower.block_map,
-            param_names: UstrSet::default(),
+            param_names: FxHashSet::default(),
             pure: false,
             memo: false,
             memo_params: 0,
@@ -65,12 +69,12 @@ pub(crate) struct FunctionLowering {
     ssa_builder: SSABuilder,
     reg_count: Reg,
     param_regs: Vec<Reg>,
-    captures: UstrSet,
+    captures: FxHashSet<VariableKey>,
     entry: BlockId,
     null_reg: Reg,
     ret_reg: Reg,
     is_global: bool,
-    referenced_variables: UstrSet,
+    referenced_variables: FxHashSet<VariableKey>,
     big_consts: Consts,
 }
 
@@ -85,7 +89,8 @@ impl FunctionLowering {
 
         debug!("function lowering completed");
 
-        let param_names: UstrSet = lower.func.params.iter().map(|(n, _)| *n).collect();
+        let param_names: FxHashSet<VariableKey> =
+            lower.func.params.iter().map(|(n, _)| n.clone()).collect();
 
         lower.blocks =
             FunctionLowering::optimize_blocks(lower.blocks, lower.entry, &lower.block_map);
@@ -96,18 +101,17 @@ impl FunctionLowering {
                 .func
                 .params
                 .iter()
-                .map(|(n, _)| *n)
+                .map(|(n, _)| n.clone())
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
             captures: lower
                 .func
                 .captures
                 .iter()
-                .map(|(n, _)| *n)
+                .map(|(n, _)| n.clone())
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
-            returns_value: lower.func.return_type
-                != ParserDataType::new(Span::default(), ParserInnerType::Null),
+            returns_value: !lower.func.return_type.is_null(),
             blocks: lower.blocks,
             renamed: UstrMap::default(),
             reg_count: lower.reg_count,
@@ -139,18 +143,19 @@ impl FunctionLowering {
             .filter_map(|(idx, block)| block.as_ref().map(|x| (x.id, idx)))
             .collect();
 
-        let mut locals = UstrSet::default();
+        let mut locals = FxHashSet::default();
         if !is_global {
-            locals.extend(func.params.iter().map(|(name, _)| *name));
+            locals.extend(func.params.iter().map(|(name, _)| name.clone()));
 
             for instr in func.blocks.iter().flatten().flat_map(|b| &b.instructions) {
                 if let LirNodeType::Declare(LirDeclare { dest, .. }) = &instr.node_type {
-                    locals.insert(*dest);
+                    locals.insert(dest.clone());
                 }
             }
         }
 
-        let captures: UstrSet = func.captures.iter().map(|(n, _)| *n).collect();
+        let captures: FxHashSet<VariableKey> =
+            func.captures.iter().map(|(n, _)| n.clone()).collect();
 
         let param_regs: Vec<Reg> = (0..func.params.len() as Reg).collect();
         let mut reg_count = param_regs.len() as Reg;
@@ -183,15 +188,15 @@ impl FunctionLowering {
             })
             .collect();
 
-        let referenced_variables: UstrSet = func
+        let referenced_variables: FxHashSet<VariableKey> = func
             .blocks
             .iter()
             .flatten()
             .flat_map(|block| &block.instructions)
             .filter_map(|node| match &node.node_type {
-                LirNodeType::Declare(decl) if decl.is_referenced => Some(decl.dest),
-                LirNodeType::Assign(assign) => match assign.dest {
-                    LirLValue::Var(name) => Some(name),
+                LirNodeType::Declare(decl) if decl.is_referenced => Some(decl.dest.clone()),
+                LirNodeType::Assign(assign) => match &assign.dest {
+                    LirLValue::Var(name) => Some(name.clone()),
                     _ => None,
                 },
                 _ => None,
@@ -245,6 +250,8 @@ impl FunctionLowering {
                     instruction_spans: Vec::new(),
                     local_literals: Vec::new(),
                     local_strings: Vec::new(),
+                    local_types: Vec::new(),
+                    local_variables: Vec::new(),
                     aggregate_layouts: Vec::new(),
                     edge_copies: Vec::new(),
                     phis: info.phis.clone(),
@@ -267,8 +274,10 @@ impl FunctionLowering {
                     uint_literals: FxHashMap::default(),
                     float_literals: FxHashMap::default(),
                     char_literals: FxHashMap::default(),
+                    vars_map: FxHashMap::default(),
+                    type_map: FxHashMap::default(),
                     string_literals: UstrMap::default(),
-                    current_fn_name: self.func.name,
+                    current_fn_name: self.func.name.clone(),
                     big_consts: &mut self.big_consts,
                 };
 

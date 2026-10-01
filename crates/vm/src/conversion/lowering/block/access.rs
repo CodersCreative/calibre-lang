@@ -113,7 +113,7 @@ impl VMLowering for LirRef {
                 if let Some(reg) = env.map.get(&value) {
                     env.emit(VMInstruction::Copy(VMCopy { dst, src: *reg }), span);
                 } else {
-                    let idx = env.add_string(value);
+                    let idx = env.add_variable(value);
                     env.emit(
                         VMInstruction::LoadVarRef(VMLoadVarRef { dst, name: idx }),
                         span,
@@ -140,7 +140,7 @@ impl VMLowering for LirRefLoad {
         if let Some(reg) = env.map.get(&self.value) {
             env.emit(VMInstruction::Copy(VMCopy { dst, src: *reg }), span);
         } else {
-            let idx = env.add_string(self.value);
+            let idx = env.add_variable(self.value);
             env.emit(
                 VMInstruction::LoadVarRef(VMLoadVarRef { dst, name: idx }),
                 span,

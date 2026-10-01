@@ -98,6 +98,7 @@ impl Typing {
                     matched.push((score, m));
                 }
             }
+
             if !matched.is_empty() {
                 matched.sort_by(|a, b| b.0.cmp(&a.0));
                 return Some(matched[0].1);
@@ -116,6 +117,7 @@ impl Typing {
                 }
             }
         }
+
         if !matched_trait.is_empty() {
             matched_trait.sort_by(|a, b| b.0.cmp(&a.0));
             return Some(matched_trait[0].1);

@@ -18,6 +18,29 @@ pub enum TypeImplKey {
     Dynamic,
 }
 
+impl TypeImplKey {
+    pub fn name(&self) -> String {
+        match self {
+            Self::Dynamic => String::from("dynamic"),
+            Self::List => String::from("list"),
+            Self::Tuple => String::from("tuple"),
+            Self::Option => String::from("option"),
+            Self::Result => String::from("result"),
+            Self::Ptr => String::from("ptr"),
+            Self::Gen => String::from("gen"),
+            Self::Nominal(x) => x.name().to_string(),
+            Self::Primitive(x) => x.to_string(),
+            Self::Function => String::from("fn"),
+        }
+    }
+}
+
+impl From<TypeKey> for TypeImplKey {
+    fn from(value: TypeKey) -> Self {
+        TypeImplKey::Nominal(value)
+    }
+}
+
 impl From<&MirDataType> for TypeImplKey {
     fn from(value: &MirDataType) -> Self {
         match value.unwrap_all_refs() {

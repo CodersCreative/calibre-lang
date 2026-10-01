@@ -3,15 +3,16 @@ use crate::{
     environment::{LirEnvironment, LirGlobal, LirRegistry},
 };
 use calibre_mir::{
-    ast::{MiddleNode, MiddleNodeType, types::MirDataType},
+    ast::{
+        MiddleNode, MiddleNodeType,
+        types::{MirDataType, unify::TypeImplKey},
+    },
     environment::MiddleEnvironment,
-    symbols::VariableKey,
+    symbols::{TypeKey, VariableKey},
     typing::{MiddleImpl, MiddleTrait},
 };
-use calibre_parser::{
-    Span,
-    ast::types::{ParserDataType, ParserInnerType},
-};
+use calibre_parser::Span;
+use rustc_hash::FxHashMap;
 use tracing::{debug, info, instrument, trace};
 use ustr::{Ustr, UstrMap};
 
@@ -120,44 +121,51 @@ impl<'a> LirEnvironment<'a> {
     fn collect_trait_methods(
         imp: &MiddleImpl,
         trait_def: Option<&MiddleTrait>,
-        trait_name: &str,
-    ) -> UstrMap<Ustr> {
-        let mut methods: UstrMap<Ustr> = UstrMap::default();
+        trait_name: &TypeKey,
+    ) -> UstrMap<VariableKey> {
+        let mut methods: UstrMap<VariableKey> = UstrMap::default();
         if let Some(trait_def) = trait_def {
             for member in trait_def.members.keys() {
                 if let Some(mapped) = imp.get_member(member, &[]) {
-                    methods.insert(*member, mapped.symbol_name);
-                } else if let Some(trait_member) = trait_def.members.get(member)
+                    methods.insert(*member, mapped.symbol_name.clone());
+                }
+
+                // TODO Store trait members or properly handle in monomorphization
+                /*else if let Some(trait_member) = trait_def.members.get(member)
                     && trait_member.default.is_some()
                 {
                     let symbol_name = Ustr::from(&format!("{}.{}", trait_name, member));
                     methods.insert(*member, symbol_name);
-                }
+                }*/
             }
         } else {
             for (member, mapped) in imp.get_all_members() {
-                methods.insert(*member, mapped.symbol_name);
+                methods.insert(*member, mapped.symbol_name.clone());
             }
         }
         methods
     }
 
-    pub fn build_dyn_vtables(env: &MiddleEnvironment) -> UstrMap<UstrMap<UstrMap<Ustr>>> {
-        let mut out: UstrMap<UstrMap<UstrMap<Ustr>>> = UstrMap::default();
+    pub fn build_dyn_vtables(
+        env: &MiddleEnvironment,
+    ) -> FxHashMap<TypeImplKey, UstrMap<UstrMap<VariableKey>>> {
+        let mut out: FxHashMap<TypeImplKey, UstrMap<UstrMap<VariableKey>>> = FxHashMap::default();
 
-        for (concrete, imp) in env.typing.impls.iter() {
-            let trait_map = out.entry(*concrete).or_default();
+        for (concrete, imp) in env.typing.inherent_impls.iter() {
+            let trait_map = out.entry(concrete.clone()).or_default();
 
-            for trait_name in &imp.traits {
+            // TODO Update my vtable implementation
+            /*for trait_name in &imp.traits {
                 let methods = Self::collect_trait_methods(
                     imp,
                     env.typing.trait_defs.get(trait_name),
                     trait_name,
                 );
+
                 if !methods.is_empty() {
                     trait_map.insert(*trait_name, methods);
                 }
-            }
+            }*/
         }
 
         out
@@ -180,7 +188,7 @@ impl<'a> LirEnvironment<'a> {
     pub fn lower_with_root(
         env: &'a MiddleEnvironment,
         node: MiddleNode,
-        root_name: Ustr,
+        root_name: VariableKey,
     ) -> LirRegistry {
         debug!("lowering with root");
         let mut this = Self::new(env);
@@ -191,11 +199,12 @@ impl<'a> LirEnvironment<'a> {
                 .into_iter()
                 .map(Some)
                 .collect();
+
             this.registry.globals.insert(
-                root_name,
+                root_name.clone(),
                 LirGlobal {
                     name: root_name,
-                    data_type: ParserDataType::new(Span::default(), ParserInnerType::Dynamic),
+                    data_type: MirDataType::Dynamic,
                     blocks,
                 },
             );

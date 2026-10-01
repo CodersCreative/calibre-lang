@@ -1,9 +1,9 @@
 use crate::conversion::Reg;
+use calibre_lir::MirDataType;
 use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
     nodes::binary::AsFailureMode,
-    types::ParserDataType,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -12,7 +12,7 @@ use std::fmt::Display;
 pub struct VMAs {
     pub dst: Reg,
     pub src: Reg,
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
     pub failure_mode: AsFailureMode,
 }
 
@@ -37,7 +37,7 @@ impl Display for VMAs {
 pub struct VMIs {
     pub dst: Reg,
     pub src: Reg,
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
 }
 
 impl Display for VMIs {

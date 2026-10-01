@@ -8,13 +8,14 @@ use crate::{
 };
 use astro_float::{BigFloat, Consts};
 use calibre_lir::{
+    Key, MirDataType, TypeImplKey, TypeKey, VariableKey,
     ast::{BlockId, LirLiteral},
     environment::{LirGlobal, LirRegistry},
 };
 use calibre_parser::Span;
 use calibre_parser::ast::{idents::ParserText, types::ParserDataType};
 use indextree::NodeId;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::sync::Arc;
@@ -24,12 +25,12 @@ pub type Reg = u16;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct VMRegistry {
-    #[serde(with = "crate::serialization::serde_ustrmap_rc")]
-    pub functions: UstrMap<Arc<VMFunction>>,
-    pub globals: UstrMap<VMGlobal>,
-    pub natives: UstrMap<Ustr>,
+    // #[serde(with = "crate::serialization::serde_ustrmap_rc")]
+    pub functions: FxHashMap<VariableKey, Arc<VMFunction>>,
+    pub globals: FxHashMap<VariableKey, VMGlobal>,
+    pub natives: UstrMap<Key>,
     #[serde(default)]
-    pub dyn_vtables: UstrMap<UstrMap<UstrMap<Ustr>>>,
+    pub dyn_vtables: FxHashMap<TypeImplKey, UstrMap<UstrMap<VariableKey>>>,
     #[serde(default)]
     pub scope_to_file: FxHashMap<NodeId, Ustr>,
 }
@@ -53,13 +54,13 @@ impl Display for VMRegistry {
 impl From<LirRegistry> for VMRegistry {
     fn from(value: LirRegistry) -> Self {
         let mut functions =
-            UstrMap::with_capacity_and_hasher(value.functions.len(), Default::default());
+            FxHashMap::with_capacity_and_hasher(value.functions.len(), Default::default());
         for (k, func) in value.functions {
             functions.insert(k, Arc::new(func.into()));
         }
 
         let mut globals =
-            UstrMap::with_capacity_and_hasher(value.globals.len(), Default::default());
+            FxHashMap::with_capacity_and_hasher(value.globals.len(), Default::default());
         for (k, v) in value.globals {
             globals.insert(k, v.into());
         }
@@ -76,7 +77,7 @@ impl From<LirRegistry> for VMRegistry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VMGlobal {
-    pub name: String,
+    pub name: VariableKey,
     pub blocks: Box<[Option<VMBlock>]>,
     pub reg_count: Reg,
     pub entry: BlockId,
@@ -100,9 +101,9 @@ impl Display for VMGlobal {
 
 impl From<LirGlobal> for VMGlobal {
     fn from(value: LirGlobal) -> Self {
-        let func = VMFunction::from_global(value.name, value.blocks);
+        let func = VMFunction::from_global(value.name.clone(), value.blocks);
         Self {
-            name: value.name.to_string(),
+            name: value.name.clone(),
             blocks: func.blocks,
             reg_count: func.reg_count,
             entry: func.entry,
@@ -113,11 +114,11 @@ impl From<LirGlobal> for VMGlobal {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VMFunction {
-    pub name: Ustr,
-    pub params: Box<[Ustr]>,
+    pub name: VariableKey,
+    pub params: Box<[VariableKey]>,
     #[serde(skip)]
-    pub param_names: UstrSet,
-    pub captures: Box<[Ustr]>,
+    pub param_names: FxHashSet<VariableKey>,
+    pub captures: Box<[VariableKey]>,
     pub returns_value: bool,
     pub blocks: Box<[Option<VMBlock>]>,
     pub renamed: UstrMap<Ustr>,
@@ -134,7 +135,7 @@ pub struct VMFunction {
 }
 
 impl VMFunction {
-    pub fn rename(mut self, mut declared: UstrMap<Ustr>) -> Self {
+    pub fn rename(mut self, mut declared: FxHashMap<VariableKey, VariableKey>) -> Self {
         for param in self.params.iter_mut() {
             let new_name = Ustr::from(&format!("{}->{}", param, fastrand::u32(0..u32::MAX)));
             declared.insert(Ustr::from(param), new_name);
@@ -232,6 +233,8 @@ pub struct VMBlock {
     pub instruction_spans: Vec<Span>,
     pub local_literals: Vec<VMLiteral>,
     pub local_strings: Vec<Ustr>,
+    pub local_variables: Vec<VariableKey>,
+    pub local_types: Vec<TypeKey>,
     pub aggregate_layouts: Vec<AggregateLayout>,
     #[serde(default)]
     pub edge_copies: Vec<EdgeCopy>,
@@ -284,12 +287,12 @@ impl Display for VMBlock {
 pub struct PhiNode {
     pub dest: Reg,
     pub sources: Vec<(BlockId, Reg)>,
-    pub name: Option<Ustr>,
+    pub name: Option<VariableKey>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregateLayout {
-    pub name: Option<Ustr>,
+    pub name: Option<TypeKey>,
     pub members: Vec<Ustr>,
 }
 
@@ -305,15 +308,15 @@ pub enum VMLiteral {
     String(Ustr),
     Null,
     Closure {
-        label: Ustr,
-        captures: Box<[Ustr]>,
+        label: VariableKey,
+        captures: Box<[VariableKey]>,
     },
     ExternFunction {
         abi: Ustr,
         library: Ustr,
         symbol: Ustr,
-        parameters: Box<[ParserDataType]>,
-        return_type: ParserDataType,
+        parameters: Box<[MirDataType]>,
+        return_type: MirDataType,
         memo_params: usize,
         memo: bool,
         pure: bool,

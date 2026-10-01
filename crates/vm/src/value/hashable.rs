@@ -7,6 +7,7 @@ use crate::{
     error::RuntimeError,
     value::{GcVec, Host, RuntimeValue, ValueSlot},
 };
+use calibre_lir::{FullyQualifiedPath, TypeKey, VariableKey};
 use calibre_parser::ast::{ObjectMap, types::ParserInnerType};
 use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -25,10 +26,10 @@ pub enum HashKey {
     Ptr(u64),
     Range(i64, i64),
     List(Vec<HashKey>),
-    Aggregate(Option<Ustr>, Vec<(Ustr, HashKey)>),
+    Aggregate(Option<TypeKey>, Vec<(Ustr, HashKey)>),
     Option(Option<Box<HashKey>>),
     Result(Box<HashKey>, bool),
-    Function(Ustr, Option<Vec<HashKey>>),
+    Function(VariableKey, Option<Vec<HashKey>>),
     Host(Host),
 }
 
@@ -210,7 +211,18 @@ impl From<HashKey> for RuntimeValue {
                     captures
                         .map(|b| {
                             b.into_iter()
-                                .map(|k| (Ustr::default(), RuntimeValue::from(k)))
+                                .map(|k| {
+                                    (
+                                        VariableKey {
+                                            fully_qualified_path: Arc::new(FullyQualifiedPath {
+                                                name: None,
+                                                parent: None,
+                                            }),
+                                            shadow_counter: None,
+                                        },
+                                        RuntimeValue::from(k),
+                                    )
+                                })
                                 .collect()
                         })
                         .unwrap_or_default(),

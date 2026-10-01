@@ -8,7 +8,7 @@ use crate::{
     variables::VariableStore,
 };
 use astro_float::Consts;
-use calibre_lir::ast::BlockId;
+use calibre_lir::{VariableKey, ast::BlockId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use std::{
@@ -69,7 +69,7 @@ pub struct VMFrame {
     pub reg_count: usize,
     pub mutation_handles: Vec<Option<Arc<MutationHandle>>>,
     pub func_ptr: usize,
-    pub func_name: Option<Ustr>,
+    pub func_name: Option<VariableKey>,
 }
 
 impl VMFrame {
@@ -268,7 +268,7 @@ impl VM {
     }
 
     #[inline]
-    pub(crate) fn get_function_ref(&self, name: &Ustr) -> Option<&VMFunction> {
+    pub(crate) fn get_function_ref(&self, name: &VariableKey) -> Option<&VMFunction> {
         self.registry.functions.get(name).map(Arc::as_ref)
     }
 
@@ -294,14 +294,14 @@ impl VM {
             self.scheduler = Some(scheduler::SchedulerHandle::new(&self.config));
         }
         if let RuntimeValue::Function { name: _, captures } = &mut func {
-            let resolved: Vec<(Ustr, RuntimeValue)> = captures
+            let resolved: Vec<(VariableKey, RuntimeValue)> = captures
                 .as_ref()
                 .iter()
                 .map(|(key, value)| {
                     let resolved = self
                         .resolve_value_ref(value)
                         .unwrap_or_else(|_| RuntimeValue::Null);
-                    (*key, resolved)
+                    (key.clone(), resolved)
                 })
                 .collect();
             *captures = Arc::new(resolved);
@@ -345,7 +345,7 @@ impl VM {
         id
     }
 
-    fn push_frame(&mut self, reg_count: usize, func_ptr: usize, func_name: Option<Ustr>) {
+    fn push_frame(&mut self, reg_count: usize, func_ptr: usize, func_name: Option<VariableKey>) {
         let start = self.reg_top;
         let new_top = self.reg_top.saturating_add(reg_count);
 
@@ -583,7 +583,7 @@ impl VM {
     #[instrument(skip_all)]
     fn resolve_reference_chain(&self, value: &RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
         let mut owned: Option<RuntimeValue> = None;
-        let mut seen_refs = UstrSet::default();
+        let mut seen_refs = FxHashSet::default();
         let mut seen_var_refs: FxHashSet<usize> = FxHashSet::default();
         let mut seen_reg_refs: FxHashSet<(usize, u16)> = FxHashSet::default();
 
@@ -595,7 +595,7 @@ impl VM {
 
             match current {
                 RuntimeValue::Ref(pointer) => {
-                    if !seen_refs.insert(*pointer) {
+                    if !seen_refs.insert(pointer.clone()) {
                         return Err(RuntimeError::DanglingRef(format!("ref-cycle({})", pointer)));
                     }
 
@@ -617,7 +617,7 @@ impl VM {
                         return Err(RuntimeError::DanglingRef(format!(
                             "varref-cycle(id = #{} name = '{}')",
                             id,
-                            self.variables.name_of(*id).unwrap_or_default()
+                            self.variables.name_of(*id).unwrap()
                         )));
                     }
 
@@ -668,7 +668,7 @@ impl VM {
     }
 
     fn drop_runtime_value(&mut self, value: RuntimeValue) {
-        let mut seen = UstrSet::default();
+        let mut seen = FxHashSet::default();
         let mut seen_regs = FxHashSet::default();
         self.drop_runtime_value_inner_ref(&value, &mut seen, &mut seen_regs);
     }
@@ -676,7 +676,7 @@ impl VM {
     fn drop_runtime_value_inner_ref(
         &mut self,
         value: &RuntimeValue,
-        seen: &mut UstrSet,
+        seen: &mut FxHashSet<VariableKey>,
         seen_regs: &mut FxHashSet<usize>,
     ) {
         let _ = self.call_trait_for_type(value, "drop", Vec::new(), Some(0));

@@ -1,15 +1,16 @@
 use super::*;
+use calibre_lir::VariableKey;
 use calibre_parser::ast::idents::ParserText;
 use ustr::Ustr;
 
 #[derive(Debug, Clone)]
 pub(crate) enum VarName {
-    Var(Ustr),
-    Func(Ustr),
+    Var(VariableKey),
+    Func(VariableKey),
 }
 
 impl VM {
-    pub(crate) fn resolve_function_by_name(&self, name: &Ustr) -> Option<Arc<VMFunction>> {
+    pub(crate) fn resolve_function_by_name(&self, name: &VariableKey) -> Option<Arc<VMFunction>> {
         self.registry.functions.get(name).cloned()
     }
 
@@ -74,15 +75,15 @@ impl VM {
     #[instrument(skip_all)]
     pub(crate) fn capture_values(
         &self,
-        captures: &[Ustr],
+        captures: &[VariableKey],
         seen: &mut UstrSet,
-    ) -> Vec<(Ustr, RuntimeValue)> {
+    ) -> Vec<(VariableKey, RuntimeValue)> {
         if captures.is_empty() {
             return Vec::new();
         }
 
         let mut out = Vec::with_capacity(captures.len());
-        let mut seen_names = UstrSet::default();
+        let mut seen_names = FxHashSet::default();
 
         for name in captures {
             if seen_names.insert(*name) {
@@ -94,14 +95,14 @@ impl VM {
     }
 
     pub(crate) fn make_runtime_function(&self, func: &VMFunction) -> RuntimeValue {
-        let mut seen = UstrSet::default();
+        let mut seen = FxHashSet::default();
         self.make_runtime_function_inner(func, &mut seen)
     }
 
     pub(crate) fn make_runtime_function_inner(
         &self,
         func: &VMFunction,
-        seen: &mut UstrSet,
+        seen: &mut FxHashSet<VariableKey>,
     ) -> RuntimeValue {
         let name = func.name;
 
@@ -142,7 +143,7 @@ impl VM {
         })
     }
 
-    pub(crate) fn resolve_var_name(&self, name: Ustr) -> Option<VarName> {
+    pub(crate) fn resolve_var_name(&self, name: VariableKey) -> Option<VarName> {
         if self.get_function_ref(&name).is_some() {
             Some(VarName::Func(name))
         } else if self.variables.contains_key(&name) {

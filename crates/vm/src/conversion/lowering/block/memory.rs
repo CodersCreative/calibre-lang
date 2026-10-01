@@ -27,7 +27,7 @@ impl VMLowering for LirLoad {
         {
             *reg
         } else {
-            let idx = env.add_string(self.value);
+            let idx = env.add_variable(self.value);
             let dst = env.alloc_reg();
             env.emit(VMInstruction::LoadVar(VMLoadVar { dst, name: idx }), span);
             dst
@@ -39,7 +39,7 @@ impl VMLowering for LirMove {
     #[inline(always)]
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
         if env.captures.contains(&self.value) || !env.map.contains_key(&self.value) {
-            let idx = env.add_string(self.value);
+            let idx = env.add_variable(self.value);
             let dst = env.alloc_reg();
             env.emit(VMInstruction::MoveVar(VMMoveVar { dst, name: idx }), span);
             dst
@@ -55,7 +55,7 @@ impl VMLowering for LirDrop {
     #[inline(always)]
     fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
         if env.captures.contains(&self.value) || !env.map.contains_key(&self.value) {
-            let idx = env.add_string(self.value);
+            let idx = env.add_variable(self.value);
             env.emit(VMInstruction::DropVar(VMDropVar { name: idx }), span);
         } else {
             env.map.insert(self.value, env.null_reg);
