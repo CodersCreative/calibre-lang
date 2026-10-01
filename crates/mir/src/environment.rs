@@ -138,7 +138,7 @@ impl MiddleEnvironment {
 
         let scope_ref = self.scoping.scope_or_err(scope)?;
         let fully_qualified_path =
-            FullyQualifiedPath::combine(scope_ref.fully_qualified_path.clone(), name);
+            FullyQualifiedPath::combine(Some(scope_ref.fully_qualified_path.clone()), name);
 
         if !in_temp_scope {
             let key = VariableKey {

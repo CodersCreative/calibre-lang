@@ -50,3 +50,4 @@ target/
 **.zip
 .codex
 *.folded
+.continue/*

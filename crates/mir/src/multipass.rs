@@ -123,13 +123,15 @@ impl MiddleEnvironment {
                 ..
             }) => {
                 if self.symbols.variables.contains_key(&VariableKey {
-                    fully_qualified_path: Arc::new(FullyQualifiedPath::combine(
-                        self.scoping
-                            .scope_or_err(scope)?
-                            .fully_qualified_path
-                            .clone(),
+                    fully_qualified_path: FullyQualifiedPath::combine(
+                        Some(
+                            self.scoping
+                                .scope_or_err(scope)?
+                                .fully_qualified_path
+                                .clone(),
+                        ),
                         ident,
-                    )),
+                    ),
                     shadow_counter: None,
                 }) {
                     return Ok(());

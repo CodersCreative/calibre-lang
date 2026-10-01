@@ -1,4 +1,5 @@
 use crate::{
+    MirRenamable, MirRenameState,
     ast::{MiddleNode, types::MirDataType},
     environment::MiddleEnvironment,
     scoping::{FullyQualifiedPath, ScopeId},
@@ -126,6 +127,18 @@ impl From<TypeKey> for PotentialDollarIdentifier {
 impl From<TypeKey> for PotentialGenericTypeIdentifier {
     fn from(value: TypeKey) -> Self {
         Self::Identifier(PotentialDollarIdentifier::from(value))
+    }
+}
+
+impl MirRenamable for VariableKey {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        *self = state.mapped_variable_or_original(self.clone());
+    }
+}
+
+impl MirRenamable for TypeKey {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        *self = state.mapped_type_or_original(self.clone());
     }
 }
 

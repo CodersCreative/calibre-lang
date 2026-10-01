@@ -69,7 +69,7 @@ impl From<&Tagging> for ManifestTagging {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ManifestSymbols {
     pub variables: FxHashMap<VariableKey, MiddleVariable>,
-    pub native_mappings: UstrMap<Ustr>,
+    pub native_mappings: UstrMap<VariableKey>,
     pub overloads: Vec<MiddleOverload>,
     pub generic_fn_templates: UstrMap<(Vec<Ustr>, FunctionHeader, AstNode)>,
     pub fn_specializations: UstrMap<Ustr>,

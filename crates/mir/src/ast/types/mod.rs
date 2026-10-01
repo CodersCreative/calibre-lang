@@ -1,5 +1,7 @@
+use crate::symbols::TypeKey;
+use crate::{MirRenamable, MirRenameState, MirTypeKeysUsed, scoping::FullyQualifiedPath};
 use calibre_parser::{
-    AlphaRenamable, Span,
+    Span,
     ast::{
         RefMutability,
         ffi::ParserFfiInnerType,
@@ -18,9 +20,7 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Display, sync::Arc};
 use ustr::Ustr;
 
-use crate::{MirTypeKeysUsed, scoping::FullyQualifiedPath};
-
-use crate::symbols::TypeKey;
+pub mod unify;
 
 impl MirDataType {
     pub fn member_base_name_candidates(&self) -> Vec<String> {
@@ -267,8 +267,101 @@ impl From<MirDataType> for ParserInnerType {
     }
 }
 
-impl AlphaRenamable for MirDataType {
-    fn rename(&mut self, state: &mut calibre_parser::UstrAlphaRenameState) {
+impl From<ParserDataType> for MirDataType {
+    fn from(value: ParserDataType) -> Self {
+        value.data_type.into()
+    }
+}
+
+impl From<&ParserDataType> for MirDataType {
+    fn from(value: &ParserDataType) -> Self {
+        (&value.data_type).into()
+    }
+}
+
+impl From<ParserInnerType> for MirDataType {
+    fn from(value: ParserInnerType) -> Self {
+        match value {
+            ParserInnerType::Float => MirDataType::Float,
+            ParserInnerType::UInt => MirDataType::UInt,
+            ParserInnerType::Byte => MirDataType::Byte,
+            ParserInnerType::Int => MirDataType::Int,
+            ParserInnerType::Big => MirDataType::Big,
+            ParserInnerType::Null => MirDataType::Null,
+            ParserInnerType::Bool => MirDataType::Bool,
+            ParserInnerType::Str => MirDataType::Str,
+            ParserInnerType::Char => MirDataType::Char,
+            ParserInnerType::Host => MirDataType::Host,
+            ParserInnerType::Dynamic => MirDataType::Dynamic,
+            ParserInnerType::Range => MirDataType::Range,
+            ParserInnerType::Tuple(xs) => {
+                MirDataType::Tuple(xs.into_iter().map(MirDataType::from).collect())
+            }
+            ParserInnerType::List(x) => MirDataType::List(Box::new((*x).into())),
+            ParserInnerType::Gen(x) => MirDataType::Gen(Box::new((*x).into())),
+            ParserInnerType::Option(x) => MirDataType::Option(Box::new((*x).into())),
+            ParserInnerType::Result { ok, err } => MirDataType::Result {
+                ok: Box::new((*ok).into()),
+                err: Box::new((*err).into()),
+            },
+            ParserInnerType::Function {
+                return_type,
+                parameters,
+            } => MirDataType::Function {
+                return_type: Box::new((*return_type).into()),
+                parameters: parameters.into_iter().map(MirDataType::from).collect(),
+            },
+            ParserInnerType::Ref(x, m) => MirDataType::Ref(Box::new((*x).into()), m),
+            ParserInnerType::Ptr(x) => MirDataType::Ptr(Box::new((*x).into())),
+            ParserInnerType::Struct(name) => MirDataType::Struct {
+                identifier: TypeKey {
+                    fully_qualified_path: Arc::new(FullyQualifiedPath {
+                        name: Some(Ustr::from(&name)),
+                        parent: None,
+                    }),
+                },
+                generic_types: Vec::new(),
+            },
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types,
+            } => {
+                if identifier == "ptr" && generic_types.len() == 1 {
+                    MirDataType::Ptr(Box::new(generic_types[0].clone().into()))
+                } else if identifier == "list" && generic_types.len() == 1 {
+                    MirDataType::List(Box::new(generic_types[0].clone().into()))
+                } else if identifier == "gen" && generic_types.len() == 1 {
+                    MirDataType::Gen(Box::new(generic_types[0].clone().into()))
+                } else {
+                    MirDataType::Struct {
+                        identifier: TypeKey {
+                            fully_qualified_path: Arc::new(FullyQualifiedPath {
+                                name: Some(Ustr::from(&identifier)),
+                                parent: None,
+                            }),
+                        },
+                        generic_types: generic_types.into_iter().map(MirDataType::from).collect(),
+                    }
+                }
+            }
+            ParserInnerType::DynamicTraits(traits) => MirDataType::DynamicTraits(
+                traits
+                    .into_iter()
+                    .map(|t| TypeKey {
+                        fully_qualified_path: Arc::new(FullyQualifiedPath {
+                            name: Some(Ustr::from(&t)),
+                            parent: None,
+                        }),
+                    })
+                    .collect(),
+            ),
+            _ => MirDataType::Null,
+        }
+    }
+}
+
+impl MirRenamable for MirDataType {
+    fn rename(&mut self, state: &mut MirRenameState) {
         match self {
             MirDataType::Big
             | MirDataType::Byte
@@ -286,24 +379,14 @@ impl AlphaRenamable for MirDataType {
                 identifier,
                 generic_types,
             } => {
-                if let Some(name) = identifier.fully_qualified_path.name {
-                    let mapped = state.mapped_name_or_original(name);
-                    let mut new_path = (*identifier.fully_qualified_path).clone();
-                    new_path.name = Some(mapped);
-                    identifier.fully_qualified_path = Arc::new(new_path);
-                }
+                *identifier = state.mapped_type_or_original(identifier.clone());
                 for g in generic_types {
                     g.rename(state);
                 }
             }
             MirDataType::DynamicTraits(x) => {
                 for item in x {
-                    if let Some(name) = item.fully_qualified_path.name {
-                        let mapped = state.mapped_name_or_original(name);
-                        let mut new_path = (*item.fully_qualified_path).clone();
-                        new_path.name = Some(mapped);
-                        item.fully_qualified_path = Arc::new(new_path);
-                    }
+                    *item = state.mapped_type_or_original(item.clone());
                 }
             }
             MirDataType::List(x) => x.rename(state),
@@ -339,6 +422,12 @@ impl AlphaRenamable for MirDataType {
             MirDataType::Gen(x) => x.rename(state),
             MirDataType::Ref(x, _) => x.rename(state),
         }
+    }
+}
+
+impl From<&ParserInnerType> for MirDataType {
+    fn from(value: &ParserInnerType) -> Self {
+        value.clone().into()
     }
 }
 

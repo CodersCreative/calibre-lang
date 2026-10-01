@@ -552,29 +552,26 @@ impl MirLowering for AstExtern {
         &self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
-        span: Span,
+        _span: Span,
     ) -> Option<MirDataType> {
-        Some(MirDataType {
-            span,
-            data_type: ParserInnerType::NativeFunction {
-                return_type: Box::new(
-                    env.resolve_data_type(
-                        scope,
-                        &self.return_type.clone().resolve_ffi(),
-                        ResolutionOptions::typing(),
-                    )
-                    .ok()?,
-                ),
-                parameters: self
-                    .parameters
-                    .clone()
-                    .into_iter()
-                    .map(|x| {
-                        env.resolve_data_type(scope, &x.resolve_ffi(), ResolutionOptions::typing())
-                    })
-                    .collect::<Result<Vec<_>, MiddleErr>>()
-                    .ok()?,
-            },
+        Some(MirDataType::NativeFunction {
+            return_type: Box::new(
+                env.resolve_data_type(
+                    scope,
+                    &self.return_type.clone().resolve_ffi(),
+                    ResolutionOptions::typing(),
+                )
+                .ok()?,
+            ),
+            parameters: self
+                .parameters
+                .clone()
+                .into_iter()
+                .map(|x| {
+                    env.resolve_data_type(scope, &x.resolve_ffi(), ResolutionOptions::typing())
+                })
+                .collect::<Result<Vec<_>, MiddleErr>>()
+                .ok()?,
         })
     }
 }
@@ -902,7 +899,7 @@ impl MirLowering for AstFunction {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.header.type_of(env, scope, span)
     }
 }
@@ -1086,7 +1083,7 @@ impl MirLowering for AstCall {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         if let AstNodeType::FieldAccess(AstField { base, field }) = &self.caller.node_type {
             let member_name = env
                 .resolve(scope, field, ResolutionOptions::default().with_dollar())
@@ -1104,7 +1101,7 @@ impl MirLowering for AstCall {
                     return method_ty.apply_callable();
                 }
 
-                return Some(ParserDataType::new(base.span, ParserInnerType::Dynamic));
+                return Some(MirDataType::Dynamic);
             }
         }
 

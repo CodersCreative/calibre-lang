@@ -393,10 +393,10 @@ impl FullyQualifiedPath {
         }
     }
 
-    pub fn combine(parent: Arc<FullyQualifiedPath>, next: Ustr) -> Arc<FullyQualifiedPath> {
+    pub fn combine(parent: Option<Arc<FullyQualifiedPath>>, next: Ustr) -> Arc<FullyQualifiedPath> {
         Arc::new(FullyQualifiedPath {
             name: Some(next),
-            parent: Some(parent),
+            parent,
         })
     }
 
