@@ -68,13 +68,14 @@ impl RuntimeValue {
                             .join(", ")
                     )
                 } else if data.as_ref().0.is_empty() {
-                    let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
-                        .unwrap_or_default();
+                    let name = x.as_ref().map(|k| k.name().as_str()).unwrap_or("tuple");
                     format!("{} {{}}", name)
                 } else {
-                    let mut txt =
-                        ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
-                            .unwrap_or_default();
+                    let mut txt = x
+                        .as_ref()
+                        .map(|k| k.name().as_str())
+                        .unwrap_or("tuple")
+                        .to_string();
                     txt.push_str(" {\n");
 
                     let fields = &data.as_ref().0.0;
@@ -185,13 +186,14 @@ impl RuntimeValue {
                             .join(", ")
                     )
                 } else if data.as_ref().0.is_empty() {
-                    let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
-                        .unwrap_or_default();
+                    let name = x.as_ref().map(|k| k.name().as_str()).unwrap_or("tuple");
                     format!("{} {{}}", name)
                 } else {
-                    let mut txt =
-                        ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
-                            .unwrap_or_default();
+                    let mut txt = x
+                        .as_ref()
+                        .map(|k| k.name().as_str())
+                        .unwrap_or("tuple")
+                        .to_string();
                     txt.push_str(" {\n");
 
                     let fields = &data.as_ref().0.0;
@@ -262,12 +264,10 @@ impl Display for RuntimeValue {
                             .join(", ")
                     )
                 } else if data.as_ref().0.is_empty() {
-                    let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
-                        .unwrap_or_default();
+                    let name = x.as_ref().map(|k| k.name().as_str()).unwrap_or("tuple");
                     write!(f, "{}{{}}", name)
                 } else {
-                    let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
-                        .unwrap_or_default();
+                    let name = x.as_ref().map(|k| k.name().as_str()).unwrap_or("tuple");
                     let mut txt = format!("{}{{\n", name);
 
                     for val in data.as_ref().0.iter() {
