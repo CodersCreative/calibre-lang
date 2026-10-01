@@ -37,24 +37,20 @@ impl MirLowering for AstStruct {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = env
-            .resolve(scope, &self.identifier, ResolutionOptions::typing())?
-            .unwrap_typing();
-        let obj = env.typing.objects.get(&identifier).cloned();
-
-        // TODO Handle generators a bit better, I'm just lazy rn
-        if obj.is_none()
-            && !identifier.contains("gen")
-            && !env
-                .tagging
-                .tag_info
-                .contains(&TagInfo::IgnoreInvalidTypeCheck)
+        let identifier = match env
+            .resolve_to_data_type(scope, &self.identifier)?
+            .unwrap_all_refs()
         {
-            return Err(MiddleErr::At(
-                span,
-                Box::new(MiddleErr::Object(identifier.to_string())),
-            ));
+            MirDataType::Struct { identifier, .. } => identifier.clone(),
+            _ => {
+                return Err(MiddleErr::At(
+                    span,
+                    Box::new(MiddleErr::Object("gen".to_string())),
+                ));
+            }
         };
+
+        let obj = env.typing.objects.get(&identifier).cloned();
 
         let value = match self.value {
             ObjectType::Map(x) => {

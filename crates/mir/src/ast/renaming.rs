@@ -136,10 +136,8 @@ impl MirRenamable for MiddleNodeType {
                         },
                     );
 
-                    if let Some(x) = memo_params.iter_mut().find(|x| *x == &param.0) {
-                        let mut new_path = (*x.fully_qualified_path).clone();
-                        new_path.name = Some(new_name);
-                        x.fully_qualified_path = Arc::new(new_path);
+                    if let Some(x) = memo_params.iter_mut().find(|x| *x == param.0.name()) {
+                        *x = new_name;
                     }
 
                     let mut new_path = (*param.0.fully_qualified_path).clone();

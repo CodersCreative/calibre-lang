@@ -1,7 +1,7 @@
 use crate::{ast::types::MirDataType, errors::MiddleErr};
 use calibre_parser::{
     Location, Span,
-    ast::{idents::PotentialDollarIdentifier, nodes::AstNode, types::ParserInnerType},
+    ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
 };
 use indextree::{Arena, Node, NodeId};
 use serde::{Deserialize, Serialize};
@@ -438,7 +438,7 @@ pub struct MiddleScope {
     pub namespace: Ustr,
     pub fully_qualified_path: Arc<FullyQualifiedPath>,
     pub mappings: UstrMap<Ustr>,
-    pub type_mappings: UstrMap<ParserInnerType>,
+    pub type_mappings: UstrMap<MirDataType>,
     pub macros: UstrMap<ScopeMacro>,
     pub macro_args: UstrMap<AstNode>,
     pub children: UstrMap<NodeId>,

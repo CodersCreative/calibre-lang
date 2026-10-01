@@ -62,13 +62,14 @@ impl MirLowering for AstField {
             && let Ok(ty) = env.resolve_to_data_type(scope, &ident.value)
         {
             if let Some(member) = env.typing.find_impl_member(&ty, &field_name) {
-                return Ok(MiddleNode::identifier(span, member.symbol_name));
+                return Ok(MiddleNode::identifier(span, member.symbol_name.clone()));
             }
 
-            if let Some(MiddleTypeDefType::Enum { .. }) = env
-                .typing
-                .find_object_for_struct_name(&Ustr::from(&ty.impl_name()))
-                .map(|x| &x.object_type)
+            if let MirDataType::Struct { identifier, .. } = ty
+                && let Some(MiddleTypeDefType::Enum { .. }) = env
+                    .typing
+                    .find_object_for_struct_name(&identifier)
+                    .map(|x| &x.object_type)
             {
                 return AstNode::new(
                     span,
@@ -86,7 +87,7 @@ impl MirLowering for AstField {
             && let Some(x) = env
                 .typing
                 .find_impl_member(&ty, &field_name)
-                .map(|x| x.symbol_name)
+                .map(|x| x.symbol_name.clone())
         {
             return Ok(MiddleNode::identifier(span, x));
         }
@@ -127,15 +128,16 @@ impl MirLowering for AstField {
             return Some(member_type);
         }
 
-        if let Some(MiddleTypeDefType::Enum { .. }) = env
-            .typing
-            .find_object_for_struct_name(&Ustr::from(&ty.impl_name()))
-            .map(|x| &x.object_type)
+        if let MirDataType::Struct { identifier, .. } = &ty
+            && let Some(MiddleTypeDefType::Enum { .. }) = env
+                .typing
+                .find_object_for_struct_name(identifier)
+                .map(|x| &x.object_type)
         {
             return Some(ty);
         }
 
-        env.resolve_member_field_type(scope, &ty, &member, span)
+        env.resolve_member_field_type(scope, &ty, &member)
     }
 }
 

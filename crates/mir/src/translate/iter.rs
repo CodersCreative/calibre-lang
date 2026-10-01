@@ -288,6 +288,8 @@ impl MirLowering for AstIter {
             });
         }
 
+        let resolved_data_type = ParserDataType::from(resolved_data_type);
+
         if self.spawned {
             return transform_spawn_iter(
                 span,
@@ -300,10 +302,7 @@ impl MirLowering for AstIter {
             .lower(env, scope, span);
         }
 
-        let list_ident = PotentialDollarIdentifier::from(ParserText::temp_name_with_suffix(
-            "anon_iter_list",
-            span,
-        ));
+        let list_ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
         let list_ident_node = AstNode::identifier(span, &list_ident);
 
         let list_type = ParserDataType::new(

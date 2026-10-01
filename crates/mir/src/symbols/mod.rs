@@ -29,7 +29,7 @@ pub struct Symbols {
     pub variables: FxHashMap<VariableKey, MiddleVariable>,
     pub native_mappings: UstrMap<Key>,
     pub overloads: Vec<MiddleOverload>,
-    pub generic_fn_templates: UstrMap<(Vec<Ustr>, FunctionHeader, AstNode)>,
+    pub generic_fn_templates: FxHashMap<VariableKey, (Vec<Ustr>, FunctionHeader, AstNode)>,
     pub specialization_decls_by_scope: FxHashMap<ScopeId, Vec<MiddleNode>>,
 
     pub name_to_param_defaults: FxHashMap<VariableKey, usize>,

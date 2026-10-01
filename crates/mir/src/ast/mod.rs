@@ -485,7 +485,7 @@ pub struct MirFunction {
     pub return_type: MirDataType,
     pub scope_id: ScopeId,
     pub default_args_id: Option<usize>,
-    pub memo_params: Box<[VariableKey]>,
+    pub memo_params: Box<[Ustr]>,
     pub memo: bool,
     pub pure: bool,
 }

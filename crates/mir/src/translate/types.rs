@@ -104,13 +104,10 @@ impl MirLowering for AstType {
             if let Some(x) = env.context.in_stdlib
                 && let Some(ref y) = target_name
             {
-                let vk = VariableKey {
-                    fully_qualified_path: y.fully_qualified_path.clone(),
-                    shadow_counter: None,
-                };
-                env.symbols
-                    .native_mappings
-                    .insert(Ustr::from(&format!("{}.{}", x, identifier)), vk);
+                env.symbols.native_mappings.insert(
+                    Ustr::from(&format!("{}.{}", x, identifier)),
+                    Key::TypeKey(y.clone()),
+                );
             }
 
             if !self.overloads.is_empty() {
@@ -208,25 +205,29 @@ impl MirLowering for AstType {
         );
 
         if let Some(x) = env.context.in_stdlib {
-            let vk = VariableKey {
-                fully_qualified_path: type_key.fully_qualified_path.clone(),
-                shadow_counter: None,
-            };
-            env.symbols
-                .native_mappings
-                .insert(Ustr::from(&format!("{}.{}", x, ident_ustr)), vk);
+            env.symbols.native_mappings.insert(
+                Ustr::from(&format!("{}.{}", x, ident_ustr)),
+                Key::TypeKey(type_key.clone()),
+            );
         }
 
         let previous_self_type = {
             let scope = env.scoping.scope_mut_or_err(scope)?;
 
-            scope
-                .type_mappings
-                .insert(ident_ustr, ParserInnerType::Struct(type_key.to_string()));
+            scope.type_mappings.insert(
+                ident_ustr,
+                MirDataType::Struct {
+                    identifier: type_key.clone(),
+                    generic_types: Vec::new(),
+                },
+            );
 
             scope.type_mappings.insert(
                 Ustr::from("Self"),
-                ParserInnerType::Struct(type_key.to_string()),
+                MirDataType::Struct {
+                    identifier: type_key.clone(),
+                    generic_types: Vec::new(),
+                },
             )
         };
 
@@ -470,7 +471,7 @@ impl GenericParamState {
         self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
-        previous_self_type: Option<ParserInnerType>,
+        previous_self_type: Option<MirDataType>,
         previous_self_mapping: Option<Ustr>,
     ) {
         let scope = env.scoping.scope_mut_or_err(scope);
@@ -522,6 +523,7 @@ impl ProcessedVariable {
                 identifier,
                 value,
                 data_type,
+                declared: _,
             }) => {
                 let identifier = env
                     .resolve(
@@ -571,6 +573,7 @@ impl ProcessedVariable {
                             )),
                             value,
                             data_type,
+                            declared: false,
                         }),
                     },
                     identifier,
@@ -838,6 +841,7 @@ impl MirLowering for AstImplTrait {
                     identifier: PotentialDollarIdentifier::Identifier(ParserText::from(name)),
                     data_type: member.data_type.clone().into(),
                     value: Box::new(default),
+                    declared: false,
                 }),
             ));
         }

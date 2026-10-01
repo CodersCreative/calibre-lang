@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAssignment, MirBreak, MirContinue, MirEmit, MirInt,
-        MirReturn, MirScopeDecl, types::MirDataType,
+        MiddleNode, MiddleNodeType, MirBreak, MirContinue, MirEmit, MirReturn, MirScopeDecl,
+        types::MirDataType,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -13,9 +13,10 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialDollarIdentifier},
+        idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
             AstNode, AstNodeType, VarType,
+            assignment::AstAssignment,
             declaration::AstDeclaration,
             flow::{
                 AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment,
@@ -25,7 +26,7 @@ use calibre_parser::{
             matching::{AstMatch, MatchArmType, MatchBody},
             scopes::AstScopeDef,
         },
-        types::{ParserDataType, ParserInnerType},
+        types::ParserDataType,
     },
 };
 use tracing::instrument;
@@ -107,6 +108,7 @@ impl MirLowering for AstBreak {
                 let label_text = self.label.as_ref().and_then(|l| {
                     env.resolve(scope, l, ResolutionOptions::default().with_dollar())
                         .ok()
+                        .map(|x| x.unwrap_dollar())
                 });
 
                 let (result_target, broke_target, target_scope) = {
@@ -130,37 +132,31 @@ impl MirLowering for AstBreak {
                 let value_node = self.value.map(|v| v.lower_or_empty(env, scope, span));
 
                 if has_break_value && let Some(result_target) = result_target {
-                    let assign = MiddleNode::new(
-                        MiddleNodeType::AssignmentExpression(MirAssignment {
-                            identifier: Box::new(MiddleNode::identifier(span, result_target)),
-                            value: Box::new(
-                                value_node.unwrap_or(MiddleNode::new(MiddleNodeType::Null, span)),
-                            ),
-                        }),
-                        span,
+                    lst.push(
+                        AstNode::new(
+                            span,
+                            AstNodeType::AssignmentExpression(AstAssignment {
+                                identifier: Box::new(AstNode::identifier(span, result_target)),
+                                value: Box::new(AstNode::null(span)),
+                            }),
+                        )
+                        .lower_or_empty(env, scope, span),
                     );
-                    lst.push(assign);
                 } else if let Some(val) = value_node {
                     lst.push(val);
                 }
 
                 if has_break_value && let Some(broke_target) = broke_target {
-                    let assign = MiddleNode::new(
-                        MiddleNodeType::AssignmentExpression(MirAssignment {
-                            identifier: Box::new(MiddleNode::identifier(span, broke_target)),
-                            value: Box::new(MiddleNode::new(
-                                MiddleNodeType::IntLiteral(MirInt {
-                                    value: ParsedIntLiteral {
-                                        value: 1,
-                                        int_type: IntLiteralType::Int,
-                                    },
-                                }),
-                                span,
-                            )),
-                        }),
-                        span,
+                    lst.push(
+                        AstNode::new(
+                            span,
+                            AstNodeType::AssignmentExpression(AstAssignment {
+                                identifier: Box::new(AstNode::identifier(span, broke_target)),
+                                value: Box::new(AstNode::int(span, "1")),
+                            }),
+                        )
+                        .lower_or_empty(env, scope, span),
                     );
-                    lst.push(assign);
                 }
 
                 if let Some(target_scope) = target_scope {
@@ -813,6 +809,7 @@ impl MirLowering for AstPipe {
                                     identifier: PotentialDollarIdentifier::new(span, ident),
                                     value: Box::new(value),
                                     data_type: ParserDataType::auto(span),
+                                    declared: false,
                                 }),
                             )
                         }
@@ -823,6 +820,7 @@ impl MirLowering for AstPipe {
                                 identifier: ParserText::from("$".to_string()).into(),
                                 value: Box::new(value),
                                 data_type: ParserDataType::auto(span),
+                                declared: false,
                             }),
                         ),
                     };

@@ -1,14 +1,12 @@
 use crate::{
+    ast::types::MirDataType,
     environment::MiddleEnvironment,
     scoping::{FullyQualifiedPath, MiddleScope, ScopeId, Scoping},
     symbols::{MiddleOverload, MiddleVariable, Symbols, VariableKey, resolve::Key},
     tags::{Tagging, context::PackageMetadata},
     typing::Typing,
 };
-use calibre_parser::ast::{
-    nodes::{AstNode, functions::FunctionHeader},
-    types::ParserInnerType,
-};
+use calibre_parser::ast::nodes::{AstNode, functions::FunctionHeader};
 use indextree::Arena;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -53,8 +51,8 @@ impl From<&MiddleEnvironment> for Manifest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ManifestTagging {
-    pub init_functions: Vec<(i32, Ustr)>,
-    pub fin_functions: Vec<(i32, Ustr)>,
+    pub init_functions: Vec<(i32, VariableKey)>,
+    pub fin_functions: Vec<(i32, VariableKey)>,
 }
 
 impl From<&Tagging> for ManifestTagging {
@@ -71,7 +69,7 @@ pub struct ManifestSymbols {
     pub variables: FxHashMap<VariableKey, MiddleVariable>,
     pub native_mappings: UstrMap<Key>,
     pub overloads: Vec<MiddleOverload>,
-    pub generic_fn_templates: UstrMap<(Vec<Ustr>, FunctionHeader, AstNode)>,
+    pub generic_fn_templates: FxHashMap<VariableKey, (Vec<Ustr>, FunctionHeader, AstNode)>,
     pub fn_specializations: UstrMap<Ustr>,
 }
 
@@ -92,7 +90,7 @@ pub struct ManifestScope {
     pub namespace: Ustr,
     pub fully_qualified_path: Arc<FullyQualifiedPath>,
     pub mappings: UstrMap<Ustr>,
-    pub type_mappings: UstrMap<ParserInnerType>,
+    pub type_mappings: UstrMap<MirDataType>,
     pub children: UstrMap<ScopeId>,
 }
 

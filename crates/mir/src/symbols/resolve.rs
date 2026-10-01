@@ -213,7 +213,7 @@ impl MiddleEnvironment {
     pub fn resolve_member_field_type(
         &mut self,
         scope: ScopeId,
-        base: &ParserDataType,
+        base: &MirDataType,
         member: &Ustr,
     ) -> Option<MirDataType> {
         fn trait_member_type(
@@ -248,13 +248,7 @@ impl MiddleEnvironment {
             None
         }
 
-        let resolved = self
-            .resolve_data_type(scope, base, ResolutionOptions::typing())
-            .ok()?
-            .unwrap_all_refs()
-            .clone();
-
-        let out = match &resolved {
+        let out = match base {
             MirDataType::Struct { identifier, .. } => self
                 .typing
                 .find_object_for_struct_name(identifier)
@@ -307,7 +301,7 @@ impl MiddleEnvironment {
             );
         }
 
-        if let Some(imp) = self.typing.find_inherent_impl_for_type(&resolved)
+        if let Some(imp) = self.typing.find_inherent_impl_for_type(base)
             && let Some(mapped_member) = imp.get_member(&member, &[])
         {
             return self

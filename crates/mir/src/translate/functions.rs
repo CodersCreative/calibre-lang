@@ -607,11 +607,13 @@ impl MirLowering for AstFunction {
 
         for param in self.header.parameters {
             param_idents.push(param.0.clone());
-            let og_name = env.resolve(
-                new_scope,
-                &param.0,
-                ResolutionOptions::default().with_dollar(),
-            )?;
+            let og_name = env
+                .resolve(
+                    new_scope,
+                    &param.0,
+                    ResolutionOptions::default().with_dollar(),
+                )?
+                .unwrap_dollar();
 
             let data_type = if let Some(x) = param.1 {
                 env.resolve_data_type(new_scope, &x, ResolutionOptions::typing())?
@@ -650,8 +652,7 @@ impl MirLowering for AstFunction {
         }
 
         if needs_caller_context {
-            let caller_context_type =
-                ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
+            let caller_context_type = env.resolve_to_data_type(new_scope, &"ExecContext")?;
 
             let caller_key = env.register_variable_with_temp_scope(
                 new_scope,
@@ -712,7 +713,7 @@ impl MirLowering for AstFunction {
         }
 
         if let Some(elem_type) = return_type.clone().get_gen() {
-            body = MiddleEnvironment::wrap_generator_body(body, elem_type, span);
+            body = MiddleEnvironment::wrap_generator_body(env, body, elem_type.into(), span);
         }
 
         let body = body.lower(env, new_scope, span)?;
@@ -733,7 +734,7 @@ impl MirLowering for AstFunction {
                 scope_body.push(defer.lower(env, scope_id, span)?);
             }
 
-            if return_type.data_type != ParserInnerType::Null
+            if return_type != MirDataType::Null
                 && let Some(last_node) = last.take()
             {
                 if matches!(last_node.node_type, MiddleNodeType::Return { .. }) {
@@ -917,14 +918,14 @@ impl MirLowering for AstCall {
         match self.caller.node_type.clone() {
             AstNodeType::FieldAccess(AstField { base, field }) => {
                 let field_name = env
-                    .resolve(scope, &field, ResolutionOptions::default().with_dollar())
-                    .unwrap_or(Ustr::from(field.text()));
+                    .resolve(scope, &field, ResolutionOptions::default().with_dollar())?
+                    .unwrap_dollar();
 
                 if let Some(ty) = base.type_of(env, scope, span)
                     && let Some(x) = env
                         .typing
                         .find_impl_member(&ty, &field_name)
-                        .map(|x| x.symbol_name)
+                        .map(|x| x.symbol_name.clone())
                 {
                     self.args.insert(0, CallArg::Value(*base));
                     return AstCall {
@@ -980,8 +981,9 @@ impl MirLowering for AstCall {
                     _ => {}
                 }
 
-                if let Ok(caller) =
-                    env.resolve(scope, &caller_ident.value, ResolutionOptions::typing())
+                if let Ok(caller) = env
+                    .resolve(scope, &caller_ident.value, ResolutionOptions::typing())
+                    .map(|x| x.unwrap_typing())
                     && env.typing.objects.contains_key(&caller)
                 {
                     return Ok(env.aggregate_from_call_nodes(
@@ -999,10 +1001,10 @@ impl MirLowering for AstCall {
         let data_type = self
             .caller
             .type_of(env, scope, span)
-            .map(|x| x.unwrap_all_refs().data_type);
+            .map(|x| x.unwrap_all_refs().clone());
 
         if !env.context.type_check
-            && let Some(ParserInnerType::Function { parameters, .. }) = &data_type
+            && let Some(MirDataType::Function { parameters, .. }) = &data_type
         {
             let all_args: Vec<&AstNode> = self
                 .args
@@ -1028,34 +1030,29 @@ impl MirLowering for AstCall {
             }
         }
 
-        let caller_name = if let AstNodeType::Identifier(ident) = &self.caller.node_type {
-            env.resolve(
-                scope,
-                &ident.value,
-                ResolutionOptions::default().with_dollar(),
-            )?
-        } else {
-            Ustr::default()
-        };
+        if let AstNodeType::Identifier(ident) = &self.caller.node_type {
+            let caller_name = env
+                .resolve(scope, &ident.value, ResolutionOptions::idents())?
+                .unwrap_variable();
 
-        let needs_caller_context = if let Some(var) = env.symbols.variables.get(&caller_name) {
-            match var.data_type.clone().unwrap_all_refs().data_type {
-                ParserInnerType::Function {
-                    return_type: _,
-                    parameters,
-                } if !parameters.is_empty() => {
-                    parameters.last().unwrap().data_type
-                        == ParserInnerType::Struct(String::from("ExecContext"))
+            let needs_caller_context = if let Some(var) = env.symbols.variables.get(&caller_name) {
+                match var.data_type.unwrap_all_refs() {
+                    MirDataType::Function {
+                        return_type: _,
+                        parameters,
+                    } if !parameters.is_empty() => {
+                        matches!(parameters.last(), Some(MirDataType::Struct { identifier, .. }) if identifier.name() == "ExecContext")
+                    }
+                    _ => false,
                 }
-                _ => false,
-            }
-        } else {
-            false
-        };
+            } else {
+                false
+            };
 
-        if needs_caller_context && let Some(x) = env.get_caller_context(scope, span) {
-            self.reverse_args.push(x);
-        }
+            if needs_caller_context && let Some(x) = env.get_caller_context(scope, span) {
+                self.reverse_args.push(x);
+            }
+        };
 
         let caller = self.caller.lower(env, scope, span)?;
 
@@ -1065,7 +1062,7 @@ impl MirLowering for AstCall {
                     scope,
                     span,
                     &caller,
-                    &data_type,
+                    &data_type.map(ParserInnerType::from),
                     self.args.clone(),
                     self.reverse_args.clone(),
                 ) {

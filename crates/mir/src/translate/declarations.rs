@@ -33,7 +33,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         header: &AstFunction,
-        new_name: Ustr,
+        new_name: VariableKey,
     ) -> bool {
         if header.header.generics.0.is_empty() {
             return false;
@@ -72,7 +72,6 @@ impl MiddleEnvironment {
         scope: ScopeId,
         header: &FunctionHeader,
         new_name: VariableKey,
-        identifier: VariableKey,
     ) {
         let defaults = FunctionParamDefault::get(self, scope, header);
 
@@ -81,9 +80,6 @@ impl MiddleEnvironment {
 
             self.symbols.function_param_defaults.insert(index, defaults);
             self.symbols.name_to_param_defaults.insert(new_name, index);
-            self.symbols
-                .name_to_param_defaults
-                .insert(identifier, index);
         }
     }
 
@@ -274,7 +270,7 @@ impl MirLowering for AstDeclaration {
                     &first_ty.unwrap_all_refs(),
                     &callee_ident.value.get_ident().text(),
                 )
-                && mapped_name != callee_ident.value.get_ident().text()
+                && mapped_name.name() != callee_ident.value.get_ident().text()
             {
                 *self.value = AstNode::new(
                     self.value.span,
@@ -289,27 +285,6 @@ impl MirLowering for AstDeclaration {
             }
         }
 
-        let mut is_function = false;
-
-        if let AstNodeType::FunctionDeclaration(func) = &self.value.node_type {
-            is_function = true;
-            env.handle_function_template(scope, func, identifier);
-
-            for tag in &env.tagging.tag_info {
-                match tag {
-                    TagInfo::Init(priority) => {
-                        env.tagging.init_functions.push((*priority, identifier))
-                    }
-                    TagInfo::Fin(priority) => {
-                        env.tagging.fin_functions.push((*priority, identifier))
-                    }
-                    _ => {}
-                }
-            }
-
-            env.process_parameter_defaults(scope, &func.header, identifier, identifier);
-        }
-
         let node_ty = self.value.type_of(env, scope, span);
 
         let data_type = if self.data_type.is_auto() {
@@ -321,8 +296,29 @@ impl MirLowering for AstDeclaration {
         let data_type =
             env.compare_types(data_type, node_ty, Some(&TagInfo::IgnoreInvalidLet), span)?;
 
-        let var_key = if is_function {
-            Some(env.register_variable(scope, identifier, data_type.clone(), self.var_type)?)
+        let mut is_function = false;
+
+        let var_key = if let AstNodeType::FunctionDeclaration(func) = &self.value.node_type {
+            is_function = true;
+
+            let key = env.register_variable(scope, identifier, data_type.clone(), self.var_type)?;
+            env.handle_function_template(scope, func, key.clone());
+
+            for tag in &env.tagging.tag_info {
+                match tag {
+                    TagInfo::Init(priority) => {
+                        env.tagging.init_functions.push((*priority, key.clone()))
+                    }
+                    TagInfo::Fin(priority) => {
+                        env.tagging.fin_functions.push((*priority, key.clone()))
+                    }
+                    _ => {}
+                }
+            }
+
+            env.process_parameter_defaults(scope, &func.header, key.clone());
+
+            Some(key)
         } else {
             None
         };
