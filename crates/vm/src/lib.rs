@@ -21,7 +21,7 @@ use std::{
 };
 use std::{fmt::Display, sync::OnceLock};
 use tracing::instrument;
-use ustr::{Ustr, UstrMap, UstrSet};
+use ustr::Ustr;
 use wasm_sync::Mutex;
 
 pub(crate) use vm_lookup::VarName;
@@ -44,7 +44,7 @@ mod vm_lookup;
 #[derive(Debug, Clone)]
 pub enum RootBinding {
     FrameReg { frame: usize, reg: Reg },
-    Ref(Ustr),
+    Ref(VariableKey),
     VarRef(usize),
     RegRef { frame: usize, reg: Reg },
 }
@@ -168,10 +168,10 @@ impl Clone for VM {
 
 #[derive(Debug, Clone, Default)]
 pub struct VMCaches {
-    call: UstrMap<Arc<VMFunction>>,
-    callsite: FxHashMap<(usize, usize, u32), Arc<VMFunction>>,
+    /*call: UstrMap<Arc<VMFunction>>,
+    callsite: FxHashMap<(usize, usize, u32), Arc<VMFunction>>,*/
     #[allow(clippy::type_complexity)]
-    memo: UstrMap<Arc<Mutex<FxHashMap<Vec<HashKey>, RuntimeValue>>>>,
+    memo: FxHashMap<VariableKey, Arc<Mutex<FxHashMap<Vec<HashKey>, RuntimeValue>>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -686,6 +686,7 @@ impl VM {
                 if !seen.insert(*name) {
                     return;
                 }
+
                 if let Some(inner) = self.variables.remove(name) {
                     self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
                 }
@@ -695,6 +696,7 @@ impl VM {
                 if !seen.insert(key) {
                     return;
                 }
+
                 if let Some(inner) = self.variables.remove_by_id(*id) {
                     self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
                 }

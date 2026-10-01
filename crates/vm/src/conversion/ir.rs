@@ -13,13 +13,13 @@ use calibre_lir::{
     environment::{LirGlobal, LirRegistry},
 };
 use calibre_parser::Span;
-use calibre_parser::ast::{idents::ParserText, types::ParserDataType};
+use calibre_parser::ast::idents::ParserText;
 use indextree::NodeId;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::sync::Arc;
-use ustr::{Ustr, UstrMap, UstrSet};
+use ustr::{Ustr, UstrMap};
 
 pub type Reg = u16;
 
@@ -163,7 +163,7 @@ impl VMFunction {
                 }
             }
 
-            for string in block.local_strings.iter_mut() {
+            for string in block.local_variables.iter_mut() {
                 if let Some(x) = declared.get(string) {
                     *string = *x;
                 }

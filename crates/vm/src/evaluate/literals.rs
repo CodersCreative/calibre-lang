@@ -9,12 +9,12 @@ use crate::{
     native::stdlib::generator::GeneratorState,
     value::{GcMap, GcVec, RuntimeValue, TerminateValue},
 };
-use calibre_lir::ast::BlockId;
+use calibre_lir::{TypeImplKey, VariableKey, ast::BlockId};
 use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
+use rustc_hash::FxHashSet;
 use std::sync::Arc;
 use tracing::instrument;
-use ustr::{Ustr, UstrSet};
 use wasm_sync::Mutex;
 
 impl VMEvaluation for VMLoadLiteral {
@@ -34,7 +34,7 @@ impl VMEvaluation for VMLoadLiteral {
 
         match lit {
             VMLiteral::Closure { label, captures } => {
-                let mut seen = UstrSet::default();
+                let mut seen = FxHashSet::default();
                 let caps = vm.capture_values(&captures, &mut seen);
 
                 vm.set_reg_value(
@@ -199,8 +199,8 @@ impl VMEvaluation for VMAggregate {
             entries.push((name, value));
         }
 
-        if let Some(type_name) = layout.name
-            && VM::is_gen_type_name(&type_name)
+        if let Some(type_name) = &layout.name
+            && type_name.name() == "gen"
         {
             let next_fn = entries.iter().find_map(|(field, value)| {
                 let short = field.rsplit(".").next().unwrap_or(field.as_str());
@@ -208,11 +208,11 @@ impl VMEvaluation for VMAggregate {
             });
 
             if let Some(RuntimeValue::Function { name, captures }) = next_fn {
-                let resolved_caps: Vec<(Ustr, RuntimeValue)> = captures
+                let resolved_caps: Vec<(VariableKey, RuntimeValue)> = captures
                     .iter()
                     .map(|(k, v)| {
                         let resolved = vm.resolve_value_ref(v).unwrap_or_else(|_| v.clone());
-                        (*k, resolved)
+                        (k.clone(), resolved)
                     })
                     .collect();
 
@@ -220,7 +220,7 @@ impl VMEvaluation for VMAggregate {
                     VM::new_shared(vm.registry.clone(), vm.mappings.clone(), vm.config.clone());
 
                 for (k, v) in &resolved_caps {
-                    gen_vm.variables.insert(*k, v.clone());
+                    gen_vm.variables.insert(k.clone(), v.clone());
                 }
 
                 if !vm.ptr_heap.is_empty() {
@@ -230,7 +230,7 @@ impl VMEvaluation for VMAggregate {
                 vm.set_reg_value(
                     self.dst,
                     RuntimeValue::Generator {
-                        type_name,
+                        type_name: TypeImplKey::from(type_name.clone()),
                         state: Arc::new(Mutex::new(GeneratorState {
                             vm: gen_vm,
                             function_name: name,
@@ -249,7 +249,7 @@ impl VMEvaluation for VMAggregate {
         vm.set_reg_value(
             self.dst,
             RuntimeValue::Aggregate(
-                layout.name,
+                layout.name.clone(),
                 Arc::new(GcMap::new(ObjectMap(
                     entries.into_iter().map(|x| (*x.0, x.1)).collect(),
                 ))),
@@ -269,14 +269,14 @@ impl VMEvaluation for VMEnum {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let name = vm.local_string(block, self.name)?;
+        let name = vm.local_type(block, self.name)?;
         let payload = self
             .payload
             .map(|reg| Gc::new(vm.get_reg_value(reg).clone()));
 
         vm.set_reg_value(
             self.dst,
-            RuntimeValue::Enum(*name, self.variant as usize, payload),
+            RuntimeValue::Enum(name.clone(), self.variant as usize, payload),
         );
         Ok(TerminateValue::None)
     }

@@ -6,7 +6,7 @@ use calibre_mir::{
         MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
     },
     scoping::ScopeId,
-    symbols::resolve::ResolutionOptions,
+    symbols::resolve::{Key, KeyOrAstNode::Key, ResolutionOptions},
 };
 
 impl CalibreLanguageServer {
@@ -183,26 +183,31 @@ impl CalibreLanguageServer {
                 .or_else(|_| env.resolve(scope, &word, ResolutionOptions::all()));
 
             if let Ok(resolved) = resolved {
-                if let Some(var) = env.symbols.variables.get(&resolved)
-                    && let Some(loc) = &var.location
-                    && let Ok(uri) = Url::from_file_path(&loc.path)
-                    && let Some(target_text) = all_documents.get(&uri)
-                {
-                    return Some(GotoDefinitionResponse::Scalar(Location::new(
-                        uri,
-                        Self::lsp_range(loc.span, target_text),
-                    )));
-                }
-
-                if let Some(obj) = env.typing.objects.get(&resolved)
-                    && let Some(loc) = &obj.location
-                    && let Ok(uri) = Url::from_file_path(&loc.path)
-                    && let Some(target_text) = all_documents.get(&uri)
-                {
-                    return Some(GotoDefinitionResponse::Scalar(Location::new(
-                        uri,
-                        Self::lsp_range(loc.span, target_text),
-                    )));
+                match resolved {
+                    Key::VariableKey(resolved) => {
+                        if let Some(var) = env.symbols.variables.get(&resolved)
+                            && let Some(loc) = &var.location
+                            && let Ok(uri) = Url::from_file_path(&loc.path)
+                            && let Some(target_text) = all_documents.get(&uri)
+                        {
+                            return Some(GotoDefinitionResponse::Scalar(Location::new(
+                                uri,
+                                Self::lsp_range(loc.span, target_text),
+                            )));
+                        }
+                    }
+                    Key::TypeKey(resolved) => {
+                        if let Some(obj) = env.typing.objects.get(&resolved)
+                            && let Some(loc) = &obj.location
+                            && let Ok(uri) = Url::from_file_path(&loc.path)
+                            && let Some(target_text) = all_documents.get(&uri)
+                        {
+                            return Some(GotoDefinitionResponse::Scalar(Location::new(
+                                uri,
+                                Self::lsp_range(loc.span, target_text),
+                            )));
+                        }
+                    }
                 }
             }
         }

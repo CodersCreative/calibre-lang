@@ -1,4 +1,4 @@
-use calibre_parser::ast::types::ParserDataType;
+use calibre_lir::MirDataType;
 use libloading::Library;
 use std::os::raw::c_void;
 use std::{ffi::CString, sync::Arc};
@@ -12,8 +12,8 @@ pub struct ExternFunction {
     pub abi: Ustr,
     pub library: Ustr,
     pub symbol: Ustr,
-    pub parameters: Box<[ParserDataType]>,
-    pub return_type: ParserDataType,
+    pub parameters: Box<[MirDataType]>,
+    pub return_type: MirDataType,
     pub handle: Arc<Library>,
     pub memo_params: usize,
     pub memo: bool,

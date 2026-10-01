@@ -1,3 +1,4 @@
+use calibre_lir::{Key, VariableKey};
 use ustr::Ustr;
 
 use crate::{VM, error::RuntimeError, value::RuntimeValue};
@@ -12,13 +13,15 @@ pub trait NativeFunction: Send + Sync {
 
     fn name(&self) -> String;
 
-    fn get_resolved_name(&self, env: &VM) -> Ustr {
+    fn get_resolved_name(&self, env: &VM) -> VariableKey {
         let name = self.name();
+
         env.registry
             .natives
             .get(&Ustr::from(&name))
             .cloned()
-            .unwrap_or_default()
+            .unwrap()
+            .unwrap_variable()
     }
 }
 
@@ -62,8 +65,10 @@ impl VM {
             .iter()
             .chain(RuntimeValue::natives())
         {
-            if let Some(name) = self.registry.natives.get(&Ustr::from(full_name)) {
-                let _ = self.variables.insert(*name, value.clone());
+            if let Some(key) = self.registry.natives.get(&Ustr::from(full_name))
+                && let Key::VariableKey(name) = key
+            {
+                let _ = self.variables.insert(name.clone(), value.clone());
             }
         }
     }

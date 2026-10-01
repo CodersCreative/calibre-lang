@@ -8,11 +8,10 @@ use crate::{
     evaluate::{calling::RegisterCall, instruction::VMEvaluation},
     value::{RuntimeValue, TerminateValue, hashable::HashKey, spawn::WaitGroupInner},
 };
-use calibre_lir::ast::BlockId;
+use calibre_lir::{VariableKey, ast::BlockId};
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::instrument;
-use ustr::Ustr;
 use wasm_sync::Mutex;
 
 impl VMEvaluation for VMCall {
@@ -85,7 +84,7 @@ impl VMEvaluation for VMCallSelf {
                     let cache_entry = vm
                         .caches
                         .memo
-                        .entry(func.name)
+                        .entry(func.name.clone())
                         .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())));
 
                     let guard = cache_entry.lock().unwrap();
@@ -106,7 +105,7 @@ impl VMEvaluation for VMCallSelf {
                     let cache_entry = vm
                         .caches
                         .memo
-                        .entry(func.name)
+                        .entry(func.name.clone())
                         .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default())));
 
                     cache_entry.lock().unwrap().insert(k, value.clone());
@@ -145,16 +144,17 @@ impl VMEvaluation for VMSpawn {
 
         let to_spawn = match resolved {
             RuntimeValue::Function { name, captures } => {
-                let resolved_caps: Vec<(Ustr, RuntimeValue)> = captures
+                let resolved_caps: Vec<(VariableKey, RuntimeValue)> = captures
                     .as_ref()
                     .iter()
                     .map(|(k, v)| {
                         let resolved = vm
                             .resolve_value_ref(v)
                             .unwrap_or_else(|_| RuntimeValue::Null);
-                        (*k, resolved)
+                        (k.clone(), resolved)
                     })
                     .collect();
+
                 RuntimeValue::Function {
                     name,
                     captures: Arc::new(resolved_caps),

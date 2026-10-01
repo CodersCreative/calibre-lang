@@ -8,16 +8,16 @@ use crate::{
     },
     value::RuntimeValue,
 };
+use calibre_lir::VariableKey;
 use dumpster::sync::Gc;
 use std::sync::Arc;
-use ustr::Ustr;
 use wasm_sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct GeneratorState {
     pub vm: VM,
-    pub function_name: Ustr,
-    pub captures: Arc<Vec<(Ustr, RuntimeValue)>>,
+    pub function_name: VariableKey,
+    pub captures: Arc<Vec<(VariableKey, RuntimeValue)>>,
     pub task_state: TaskState,
     pub index: i64,
     pub completed: bool,

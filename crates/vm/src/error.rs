@@ -1,4 +1,5 @@
 use crate::value::RuntimeValue;
+use calibre_lir::MirDataType;
 use calibre_parser::Span;
 use calibre_parser::ast::{
     binary::BinaryOperator,
@@ -24,7 +25,7 @@ pub enum RuntimeError {
     },
     ParseFloat(ParseFloatError),
     ParseInt(ParseIntError),
-    CantConvert(Box<RuntimeValue>, ParserInnerType),
+    CantConvert(Box<RuntimeValue>, MirDataType),
     StackUnderflow,
     FunctionNotFound(String),
     InvalidFunctionCall,

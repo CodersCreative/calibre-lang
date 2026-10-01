@@ -56,7 +56,7 @@ impl VM {
 
     fn get_root_binding(&self, source: Reg) -> RootBinding {
         match self.get_reg_value(source) {
-            RuntimeValue::Ref(name) => RootBinding::Ref(*name),
+            RuntimeValue::Ref(name) => RootBinding::Ref(name.clone()),
             RuntimeValue::VarRef(id) => RootBinding::VarRef(*id),
             RuntimeValue::RegRef { frame, reg } => RootBinding::RegRef {
                 frame: *frame,
@@ -126,7 +126,7 @@ impl VM {
                     reg: *reg,
                 }
             }
-            RootBinding::Ref(name) => RuntimeValue::Ref(*name),
+            RootBinding::Ref(name) => RuntimeValue::Ref(name.clone()),
             RootBinding::VarRef(id) => RuntimeValue::VarRef(*id),
         }
     }

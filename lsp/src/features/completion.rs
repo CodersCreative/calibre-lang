@@ -1,4 +1,9 @@
-use calibre_mir::{scoping::ScopeId, symbols::resolve::ResolutionOptions, typing::MiddleObject};
+use calibre_mir::{
+    ast::types::{MirDataType, unify::TypeImplKey},
+    scoping::ScopeId,
+    symbols::resolve::{Key, ResolutionOptions},
+    typing::MiddleObject,
+};
 use calibre_parser::ast::idents::ParserText;
 use ustr::Ustr;
 
@@ -68,7 +73,7 @@ impl CalibreLanguageServer {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         base_expr: &str,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         let cleaned = Self::clean_base_expr(base_expr);
         if cleaned.is_empty() {
             return None;
@@ -84,22 +89,15 @@ impl CalibreLanguageServer {
         }
 
         let first = parts[0];
-        let canonical_first = env
-            .resolve(scope, &first, ResolutionOptions::all())
-            .unwrap_or_else(|_| Ustr::from(first));
+        let canonical_first = env.resolve(scope, &first, ResolutionOptions::all()).ok()?;
 
-        let mut current = if let Some(var) = env.symbols.variables.get(&canonical_first) {
-            var.data_type.clone()
-        } else if env.typing.objects.contains_key(&canonical_first) {
-            ParserDataType::new(
-                CalSpan::default(),
-                ParserInnerType::Struct(canonical_first.to_string()),
-            )
-        } else {
-            ParserDataType::new(
-                CalSpan::default(),
-                ParserInnerType::Struct(first.to_string()),
-            )
+        let mut current = match canonical_first {
+            Key::VariableKey(x) => env.symbols.variables.get(&x).map(|x| x.data_type.clone())?,
+            Key::TypeKey(x) if env.typing.objects.contains_key(&x) => MirDataType::Struct {
+                identifier: x,
+                generic_types: Vec::new(),
+            },
+            _ => return None,
         };
 
         for member in parts.iter().skip(1) {
@@ -107,22 +105,15 @@ impl CalibreLanguageServer {
             if member.is_empty() {
                 continue;
             }
-            if let Some(field_ty) = env.resolve_member_field_type(
-                scope,
-                &current,
-                &Ustr::from(member),
-                CalSpan::default(),
-            ) {
+            if let Some(field_ty) =
+                env.resolve_member_field_type(scope, &current, &Ustr::from(member))
+            {
                 current = field_ty;
                 continue;
             }
 
             if let Some(method_ty) = env.resolve_member_fn_type(&current, &member) {
-                current = match method_ty.data_type {
-                    ParserInnerType::Function { return_type, .. }
-                    | ParserInnerType::NativeFunction { return_type, .. } => *return_type,
-                    _ => method_ty,
-                };
+                current = method_ty.apply_callable().unwrap_or(method_ty);
                 continue;
             }
 
@@ -135,11 +126,12 @@ impl CalibreLanguageServer {
     #[inline]
     pub(super) fn object_from_type<'a>(
         env: &'a MiddleEnvironment,
-        data_type: &ParserDataType,
+        data_type: &MirDataType,
     ) -> Option<&'a MiddleObject> {
-        env.typing.objects.get(&Ustr::from(
-            &data_type.clone().unwrap_all_refs().impl_name(),
-        ))
+        match data_type {
+            MirDataType::Struct { identifier, .. } => env.typing.objects.get(identifier),
+            _ => None,
+        }
     }
 
     pub(super) fn extract_callee_before_open_paren(text: &str, open_idx: usize) -> Option<String> {
@@ -276,11 +268,11 @@ impl CalibreLanguageServer {
 
     pub(super) fn signature_information_for_data_type(
         _name: &str,
-        data_type: &ParserDataType,
+        data_type: &MirDataType,
     ) -> Option<SignatureInformation> {
-        match &data_type.data_type {
-            ParserInnerType::Function { parameters, .. }
-            | ParserInnerType::NativeFunction { parameters, .. } => Some(SignatureInformation {
+        match data_type {
+            MirDataType::Function { parameters, .. }
+            | MirDataType::NativeFunction { parameters, .. } => Some(SignatureInformation {
                 label: data_type.to_string(),
                 documentation: Some(Documentation::String("A function".to_string())),
                 parameters: Some(
@@ -335,13 +327,7 @@ impl CalibreLanguageServer {
             .split(',')
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .map(|p| {
-                if let Some(x) = ParserText::get_temp_name_suffix(&p) {
-                    x.trim().to_string()
-                } else {
-                    p.to_string()
-                }
-            })
+            .map(String::from)
             .collect::<Vec<_>>();
 
         let label = format!("{name}({})", params.join(", "));
@@ -382,7 +368,7 @@ impl CalibreLanguageServer {
             if let Ok(canonical) = env
                 .resolve(current_scope, &callee, ResolutionOptions::idents())
                 .or_else(|_| env.resolve(scope, &callee, ResolutionOptions::idents()))
-                && let Some(var) = env.symbols.variables.get(&canonical)
+                && let Some(var) = env.symbols.variables.get(&canonical.unwrap_variable())
                 && let Some(sig) =
                     Self::signature_information_for_data_type(&callee, &var.data_type)
             {
@@ -502,12 +488,12 @@ impl CalibreLanguageServer {
         let display_name = Self::sanitize_name(visible);
         let (detail, kind, documentation) = if let Some(var) = env.symbols.variables.get(&canonical)
         {
-            match &var.data_type.data_type {
-                ParserInnerType::Function {
+            match &var.data_type {
+                MirDataType::Function {
                     parameters,
                     return_type,
                 }
-                | ParserInnerType::NativeFunction {
+                | MirDataType::NativeFunction {
                     return_type,
                     parameters,
                 } => (
@@ -712,10 +698,7 @@ impl CalibreLanguageServer {
             }
         }
 
-        if let Some(imp) = env
-            .typing
-            .find_impl_for_type(&Ustr::from(&base_ty.impl_name()))
-        {
+        if let Some(imp) = env.typing.find_inherent_impl_for_type(&base_ty) {
             for (member_name, canonical_member) in imp.get_all_members() {
                 let display_name = Self::sanitize_name(member_name);
                 if !prefix.is_empty() && !display_name.starts_with(prefix) {

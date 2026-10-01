@@ -7,7 +7,7 @@ use crate::{
 };
 use calibre_lir::{VariableKey, ast::BlockId};
 use calibre_parser::ast::idents::ParserText;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tracing::{instrument, trace};
 use ustr::{Ustr, UstrSet};
@@ -21,7 +21,11 @@ impl VM {
         }
     }
 
-    pub(crate) fn capture_value(&self, name: &VariableKey, seen: &mut UstrSet) -> RuntimeValue {
+    pub(crate) fn capture_value(
+        &self,
+        name: &VariableKey,
+        seen: &mut FxHashSet<VariableKey>,
+    ) -> RuntimeValue {
         match self.resolve_var_name(name.clone()) {
             Some(VarName::Var(var)) => {
                 if let Some(value) = self.variables.get(&var) {
@@ -42,19 +46,19 @@ impl VM {
 
     fn refresh_captures(
         &mut self,
-        captures: &[(Ustr, RuntimeValue)],
-    ) -> Arc<Vec<(Ustr, RuntimeValue)>> {
-        let mut seen = UstrSet::default();
-        let mut names = UstrSet::default();
+        captures: &[(VariableKey, RuntimeValue)],
+    ) -> Arc<Vec<(VariableKey, RuntimeValue)>> {
+        let mut seen = FxHashSet::default();
+        let mut names = FxHashSet::default();
         let mut refreshed = Vec::with_capacity(captures.len());
 
         for (name, old_value) in captures {
-            if !names.insert(*name) {
+            if !names.insert(name.clone()) {
                 continue;
             }
             let value = self.capture_value(name, &mut seen);
             refreshed.push((
-                *name,
+                name.clone(),
                 if value.is_null() && !old_value.is_null() {
                     old_value.clone()
                 } else {
@@ -68,7 +72,7 @@ impl VM {
 
     fn resolve_vm_function(
         &mut self,
-        name: Ustr,
+        name: VariableKey,
         site: CallSite,
     ) -> Result<Arc<VMFunction>, RuntimeError> {
         let callsite = (self.current_frame().func_ptr, site.block, site.tag);

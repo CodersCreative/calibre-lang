@@ -12,7 +12,7 @@ use crate::{
     native::stdlib::generator::GeneratorResumeFn,
     value::{GcMap, GcVec, RuntimeValue, TerminateValue, hashable::HashKey},
 };
-use calibre_lir::ast::BlockId;
+use calibre_lir::{TypeImplKey, TypeKey, VariableKey, ast::BlockId};
 use dumpster::sync::Gc;
 use std::sync::Arc;
 use tracing::instrument;
@@ -84,7 +84,7 @@ impl VMEvaluation for VMLoadMember {
             member: name.to_string(),
         };
 
-        let bind_assoc = |vm: &mut VM, type_name: &str, value: RuntimeValue| {
+        let bind_assoc = |vm: &mut VM, type_name: &TypeKey, value: RuntimeValue| {
             if let Some(callee) = vm.resolve_associated_member_value(type_name, name, short_name) {
                 Ok(vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, value))
             } else {
@@ -113,15 +113,23 @@ impl VMEvaluation for VMLoadMember {
                     return Err(missing(RuntimeValue::Null));
                 }
             }
-            RuntimeValue::Generator { type_name, state } => match member_short {
+            RuntimeValue::Generator {
+                type_name: TypeImplKey::Nominal(type_name),
+                state,
+            } => match member_short {
                 "data" | "next" => RuntimeValue::NativeFunction(Arc::new(GeneratorResumeFn {
                     state: state.clone(),
                 })),
                 "index" => RuntimeValue::Int(state.lock().unwrap().index),
                 "done" => RuntimeValue::Bool(state.lock().unwrap().completed),
                 _ => vm
-                    .resolve_associated_member_value(type_name.as_str(), name, short_name)
-                    .ok_or_else(|| missing(RuntimeValue::Generator { type_name, state }))?,
+                    .resolve_associated_member_value(type_name, name, short_name)
+                    .ok_or_else(|| {
+                        missing(RuntimeValue::Generator {
+                            type_name: TypeImplKey::from(type_name),
+                            state,
+                        })
+                    })?,
             },
             RuntimeValue::DynObject {
                 type_name,
@@ -343,7 +351,7 @@ impl VMEvaluation for VMSetMember {
         let value = vm.get_reg_value(self.value).clone();
         let (short_name, tuple_index) = VM::member_parts(name);
 
-        let update_aggregate = |agg_name: &Option<Ustr>, mut map: Arc<GcMap>| {
+        let update_aggregate = |agg_name: &Option<TypeKey>, mut map: Arc<GcMap>| {
             let entries = &mut Arc::make_mut(&mut map);
 
             match (agg_name.as_ref(), tuple_index) {

@@ -1,6 +1,5 @@
 use super::*;
-use calibre_lir::VariableKey;
-use calibre_parser::ast::idents::ParserText;
+use calibre_lir::{TypeKey, VariableKey};
 use ustr::Ustr;
 
 #[derive(Debug, Clone)]
@@ -76,7 +75,7 @@ impl VM {
     pub(crate) fn capture_values(
         &self,
         captures: &[VariableKey],
-        seen: &mut UstrSet,
+        seen: &mut FxHashSet<VariableKey>,
     ) -> Vec<(VariableKey, RuntimeValue)> {
         if captures.is_empty() {
             return Vec::new();
@@ -86,8 +85,8 @@ impl VM {
         let mut seen_names = FxHashSet::default();
 
         for name in captures {
-            if seen_names.insert(*name) {
-                out.push((*name, self.capture_value(name, seen)));
+            if seen_names.insert(name.clone()) {
+                out.push((name.clone(), self.capture_value(name, seen)));
             }
         }
 
@@ -104,26 +103,17 @@ impl VM {
         func: &VMFunction,
         seen: &mut FxHashSet<VariableKey>,
     ) -> RuntimeValue {
-        let name = func.name;
-
-        if !seen.insert(name) || func.captures.is_empty() {
+        if !seen.insert(func.name.clone()) || func.captures.is_empty() {
             return RuntimeValue::Function {
-                name,
+                name: func.name.clone(),
                 captures: Arc::new(Vec::new()),
             };
         }
 
         RuntimeValue::Function {
-            name,
+            name: func.name.clone(),
             captures: Arc::new(self.capture_values(&func.captures, seen)),
         }
-    }
-
-    #[inline]
-    pub(crate) fn is_gen_type_name(type_name: &str) -> bool {
-        let short =
-            ParserText::get_temp_name_suffix(&type_name).unwrap_or_else(|| type_name.to_string());
-        short == "gen" || short.starts_with("gen:<")
     }
 
     pub(crate) fn resolve_aggregate_member_slot(
@@ -172,5 +162,49 @@ impl VM {
     ) -> Result<&'a Ustr, RuntimeError> {
         let idx = self.checked_local_string_idx(block, idx)?;
         Ok(&block.local_strings[idx])
+    }
+
+    #[inline]
+    fn checked_local_variable_idx(&self, block: &VMBlock, idx: u16) -> Result<usize, RuntimeError> {
+        let idx = idx as usize;
+        if idx < block.local_strings.len() {
+            return Ok(idx);
+        }
+
+        Err(RuntimeError::InvalidBytecode(format!(
+            "missing string {}",
+            idx
+        )))
+    }
+
+    pub(crate) fn local_variable<'a>(
+        &self,
+        block: &'a VMBlock,
+        idx: u16,
+    ) -> Result<&'a VariableKey, RuntimeError> {
+        let idx = self.checked_local_string_idx(block, idx)?;
+        Ok(&block.local_variables[idx])
+    }
+
+    #[inline]
+    fn checked_local_type_idx(&self, block: &VMBlock, idx: u16) -> Result<usize, RuntimeError> {
+        let idx = idx as usize;
+        if idx < block.local_variables.len() {
+            return Ok(idx);
+        }
+
+        Err(RuntimeError::InvalidBytecode(format!(
+            "missing string {}",
+            idx
+        )))
+    }
+
+    pub(crate) fn local_type<'a>(
+        &self,
+        block: &'a VMBlock,
+        idx: u16,
+    ) -> Result<&'a TypeKey, RuntimeError> {
+        let idx = self.checked_local_string_idx(block, idx)?;
+        Ok(&block.local_types[idx])
     }
 }
