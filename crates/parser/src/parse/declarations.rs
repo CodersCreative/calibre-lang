@@ -73,6 +73,7 @@ impl<'a> AstParser<'a> for AstDeclaration {
                 identifier,
                 value: Box::new(value),
                 data_type: data_type.unwrap_or_else(|| ParserDataType::auto(value_span)),
+                declared : false,
             })
         })
     }

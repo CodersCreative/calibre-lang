@@ -76,6 +76,7 @@ pub fn transform_spawn_iter(
             identifier: value_ident.clone(),
             data_type: ParserDataType::auto(span),
             value: Box::new(map),
+            declared: false,
         }),
     ));
 
@@ -190,6 +191,7 @@ pub fn transform_spawn_iter(
                     vec![data_type.clone()],
                     Vec::new(),
                 )),
+                declared: false,
             }),
         ),
         AstNode::new(
@@ -203,6 +205,7 @@ pub fn transform_spawn_iter(
                     AstNode::member(span, AstNode::identifier(span, "WaitGroup"), "new"),
                     Vec::new(),
                 )),
+                declared: false,
             }),
         ),
         dispatch_loop,
@@ -229,6 +232,7 @@ pub fn transform_spawn_iter(
                     }),
                 )),
                 data_type: list_type.clone(),
+                declared: false,
             }),
         ),
         collect_loop,
@@ -371,6 +375,7 @@ impl MirLowering for AstIter {
                         }),
                     )),
                     data_type: list_type,
+                    declared: false,
                 }),
             ),
             loop_node,

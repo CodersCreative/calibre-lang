@@ -1,7 +1,8 @@
 use ast::{MiddleNode, MiddleNodeType};
 use rustc_hash::FxHashMap;
+use ustr::UstrMap;
 
-use crate::symbols::{TypeKey, VariableKey};
+use crate::symbols::{TypeKey, VariableKey, resolve::Key};
 
 pub mod ast;
 pub mod context;
@@ -52,6 +53,28 @@ impl MirRenameState {
     #[inline(always)]
     pub fn mapped_type_or_original(&self, original: TypeKey) -> TypeKey {
         self.types.get(&original).cloned().unwrap_or(original)
+    }
+
+    #[inline]
+    pub fn from_native_mappings(
+        &mut self,
+        new_mappings: &UstrMap<Key>,
+        old_mappings: &UstrMap<Key>,
+    ) {
+        for (k, v) in new_mappings {
+            if let Some(old_v) = old_mappings.get(k) {
+                match v {
+                    Key::VariableKey(v) => {
+                        self.variables
+                            .insert(old_v.unwrap_variable_ref().clone(), v.clone());
+                    }
+                    Key::TypeKey(v) => {
+                        self.types
+                            .insert(old_v.unwrap_typing_ref().clone(), v.clone());
+                    }
+                }
+            }
+        }
     }
 }
 

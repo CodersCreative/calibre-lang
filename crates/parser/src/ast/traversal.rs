@@ -182,11 +182,13 @@ pub trait NodeVisitor {
                 identifier,
                 data_type,
                 value,
+                declared,
             }) => AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type,
                 identifier,
                 data_type,
                 value: Box::new(self.visit(*value)),
+                declared,
             }),
             AstNodeType::TypeDeclaration(AstType {
                 identifier,
@@ -300,6 +302,7 @@ pub trait NodeVisitor {
                 return_type,
                 library,
                 symbol,
+                declared,
             }) => AstNodeType::ExternFunctionDeclaration(AstExtern {
                 abi,
                 identifier,
@@ -307,6 +310,7 @@ pub trait NodeVisitor {
                 return_type,
                 library,
                 symbol,
+                declared,
             }),
             AstNodeType::Return(AstReturn { value }) => AstNodeType::Return(AstReturn {
                 value: value.map(|n| Box::new(self.visit(*n))),

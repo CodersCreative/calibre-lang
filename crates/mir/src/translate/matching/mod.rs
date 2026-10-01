@@ -147,6 +147,7 @@ impl MirLowering for AstMatch {
                         identifier: PotentialDollarIdentifier::new(span, &tmp_name),
                         data_type: ParserDataType::auto(span),
                         value,
+                        declared: false,
                     }),
                 )),
                 Some(AstNode::identifier(span, tmp_name)),

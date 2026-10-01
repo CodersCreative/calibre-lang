@@ -1,11 +1,18 @@
-use std::sync::Arc;
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirScopeDecl, MirVarDecl, types::{MirDataType, unify::TypeImplKey},
-    }, environment::MiddleEnvironment, errors::MiddleErr, scoping::{FullyQualifiedPath, ScopeId}, symbols::{
+        MiddleNode, MiddleNodeType, MirScopeDecl, MirVarDecl,
+        types::{MirDataType, unify::TypeImplKey},
+    },
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    scoping::{FullyQualifiedPath, ScopeId},
+    symbols::{
         TypeKey, VariableKey,
         resolve::{Key, ResolutionOptions},
-    }, tags::TagInfo, translate::MirLowering, typing::{
+    },
+    tags::TagInfo,
+    translate::MirLowering,
+    typing::{
         MiddleImpl, MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember,
         MiddleTypeDefType, Typing,
     },
@@ -25,6 +32,7 @@ use calibre_parser::{
     },
 };
 use rustc_hash::FxHashMap;
+use std::sync::Arc;
 use tracing::instrument;
 use ustr::{Ustr, UstrMap, UstrSet};
 
@@ -882,12 +890,10 @@ impl MirLowering for AstImplTrait {
                 imp.insert_member_placeholder(
                     &identifier.to_string(),
                     VariableKey {
-                        fully_qualified_path: Arc::new(
-                            FullyQualifiedPath {
-                                name: Some(resolved_iden),
-                                parent: None,
-                            },
-                        ),
+                        fully_qualified_path: Arc::new(FullyQualifiedPath {
+                            name: Some(resolved_iden),
+                            parent: None,
+                        }),
                         shadow_counter: None,
                     },
                     generic_params.clone(),

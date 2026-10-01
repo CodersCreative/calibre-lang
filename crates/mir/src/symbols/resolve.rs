@@ -12,6 +12,7 @@ use calibre_parser::ast::{
     types::{ParserDataType, ParserInnerType},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
+use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr, sync::Arc, write};
 use tracing::{instrument, trace, warn};
 use ustr::Ustr;
@@ -22,7 +23,7 @@ pub enum KeyOrAstNode {
     Node(Box<AstNode>),
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Key {
     TypeKey(TypeKey),
     VariableKey(VariableKey),
@@ -46,6 +47,20 @@ impl Key {
     }
 
     pub fn unwrap_variable(self) -> VariableKey {
+        match self {
+            Self::VariableKey(x) => x,
+            Self::TypeKey(x) => panic!("Called unwrap_variable on type_key : {}", x),
+        }
+    }
+
+    pub fn unwrap_typing_ref(&self) -> &TypeKey {
+        match self {
+            Self::TypeKey(x) => x,
+            Self::VariableKey(x) => panic!("Called unwrap_typing on variable_key : {}", x),
+        }
+    }
+
+    pub fn unwrap_variable_ref(&self) -> &VariableKey {
         match self {
             Self::VariableKey(x) => x,
             Self::TypeKey(x) => panic!("Called unwrap_variable on type_key : {}", x),

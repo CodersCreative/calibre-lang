@@ -3,10 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::{
-        VariableKey,
-        resolve::{KeyOrAstNode, ResolutionOptions},
-    },
+    symbols::resolve::{KeyOrAstNode, ResolutionOptions},
     translate::MirLowering,
     typing::MiddleTypeDefType,
 };
@@ -21,7 +18,6 @@ use calibre_parser::{
             functions::CallArg,
             literals::AstEnum,
         },
-        types::{ParserDataType, ParserInnerType},
     },
 };
 use tracing::instrument;

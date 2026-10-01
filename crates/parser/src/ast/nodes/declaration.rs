@@ -11,6 +11,7 @@ pub struct AstDeclaration {
     pub identifier: PotentialDollarIdentifier,
     pub value: Box<AstNode>,
     pub data_type: ParserDataType,
+    pub declared: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

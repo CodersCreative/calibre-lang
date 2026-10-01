@@ -166,6 +166,7 @@ impl PatternTranslatorDispatcher {
                                 ParserInnerType::Auto(None),
                             )
                         }),
+                        declared: false,
                     }),
                 )
             })

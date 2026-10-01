@@ -49,6 +49,7 @@ impl MirLowering for AstSelect {
                 identifier: done_ident.clone(),
                 data_type: ParserDataType::new(span, ParserInnerType::Bool),
                 value: Box::new(AstNode::bool(span, false)),
+                declared: false,
             }),
         );
 
@@ -111,6 +112,7 @@ impl MirLowering for AstSelect {
                                 identifier: tmp_ident.clone(),
                                 data_type: ParserDataType::auto(span),
                                 value: Box::new(try_get_call),
+                                declared: false,
                             }),
                         ));
 
@@ -145,6 +147,7 @@ impl MirLowering for AstSelect {
                                     identifier: ident.value.into(),
                                     data_type: ParserDataType::auto(span),
                                     value: Box::new(extracted),
+                                    declared: false,
                                 }),
                             ),
                             _ => AstNode::new(
@@ -375,6 +378,7 @@ impl MirLowering for AstSpawn {
                                     auto_wait: false,
                                 }),
                             )),
+                            declared: false,
                         }),
                     ),
                     AstNode::call(
@@ -438,6 +442,7 @@ impl MirLowering for AstSpawn {
                                 ),
                                 Vec::new(),
                             )),
+                            declared: false,
                         }),
                     );
 
@@ -503,6 +508,7 @@ impl MirLowering for AstSpawn {
                         AstNode::member(span, AstNode::identifier(span, "WaitGroup"), "new"),
                         Vec::new(),
                     )),
+                    declared: false,
                 }),
             )];
 

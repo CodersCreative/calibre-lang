@@ -121,6 +121,7 @@ impl MiddleEnvironment {
                         identifier: name.clone(),
                         data_type: ParserDataType::auto(span),
                         value: Box::new(member),
+                        declared: false,
                     }),
                 ));
             } else {
@@ -374,6 +375,7 @@ impl MirLowering for AstDeclareDestructure {
                 identifier: tmp_ident.clone(),
                 data_type: ParserDataType::auto(span),
                 value: self.value,
+                declared: false,
             }),
         );
 

@@ -115,6 +115,7 @@ impl MirLowering for AstTest {
                         body: self.body,
                     }),
                 )),
+                declared: false,
             }),
         )
         .lower(env, scope, span)

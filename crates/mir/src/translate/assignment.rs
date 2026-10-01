@@ -178,6 +178,7 @@ impl MirLowering for AstAssignDestructure {
                 identifier: tmp_ident.clone(),
                 data_type: ParserDataType::auto(span),
                 value: self.value,
+                declared: false,
             }),
         );
 

@@ -137,6 +137,7 @@ impl MiddleEnvironment {
                             )])),
                         }),
                     )),
+                    declared: false,
                 }),
             );
             methods.push(setter);
@@ -230,6 +231,7 @@ impl MiddleEnvironment {
                                             ),
                                             Vec::new(),
                                         )),
+                                        declared: false,
                                     }),
                                 )
                             } else {
@@ -249,6 +251,7 @@ impl MiddleEnvironment {
                         ])),
                     }),
                 )),
+                declared: false,
             }),
         ));
 

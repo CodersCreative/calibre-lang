@@ -21,9 +21,7 @@ pub enum TypeImplKey {
 impl From<&MirDataType> for TypeImplKey {
     fn from(value: &MirDataType) -> Self {
         match value.unwrap_all_refs() {
-            MirDataType::Struct { identifier, .. } => {
-                TypeImplKey::Nominal(identifier.clone())
-            }
+            MirDataType::Struct { identifier, .. } => TypeImplKey::Nominal(identifier.clone()),
             MirDataType::List(_) => TypeImplKey::List,
             MirDataType::Tuple(_) => TypeImplKey::Tuple,
             MirDataType::Option(_) => TypeImplKey::Option,

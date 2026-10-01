@@ -24,7 +24,6 @@ use calibre_parser::{
                 AstTuple,
             },
         },
-        types::{ParserDataType, ParserInnerType},
     },
 };
 use tracing::instrument;

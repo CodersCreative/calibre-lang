@@ -232,6 +232,7 @@ impl<'a> AstParser<'a> for AstExtern {
                         .unwrap_or_else(|| ParserDataType::null(Span::default())),
                     library: library.to_string(),
                     symbol: symbol.map(|s| s.to_string()),
+                    declared : false,
                 },
             )
     }

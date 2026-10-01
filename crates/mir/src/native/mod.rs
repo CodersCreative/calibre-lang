@@ -2,7 +2,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{FullyQualifiedPath, MiddleScope, ScopeId, Scoping},
-    symbols::resolve::ResolutionOptions,
+    symbols::resolve::{Key, ResolutionOptions},
     translate::MirLowering,
 };
 use calibre_parser::{
@@ -165,7 +165,9 @@ impl MiddleEnvironment {
                 }
             };
 
-            self.symbols.native_mappings.insert(original_name, name);
+            self.symbols
+                .native_mappings
+                .insert(original_name, Key::VariableKey(name));
         }
     }
 
@@ -298,7 +300,7 @@ impl MiddleEnvironment {
 
             self.symbols
                 .native_mappings
-                .insert(Ustr::from(original_name), name);
+                .insert(Ustr::from(original_name), Key::VariableKey(name));
         }
 
         if load_source {

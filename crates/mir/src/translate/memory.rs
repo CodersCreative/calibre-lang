@@ -116,6 +116,7 @@ impl MirLowering for AstMove {
                                 value: Box::new(*base),
                             }),
                         )),
+                        declared: false,
                     }),
                 );
 
@@ -151,6 +152,7 @@ impl MirLowering for AstMove {
                                 value: Box::new(*base),
                             }),
                         )),
+                        declared: false,
                     }),
                 );
 
@@ -185,6 +187,7 @@ impl MirLowering for AstMove {
                                 value: Box::new(*base),
                             }),
                         )),
+                        declared: false,
                     }),
                 );
 

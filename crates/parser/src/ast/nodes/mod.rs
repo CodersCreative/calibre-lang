@@ -226,6 +226,7 @@ impl AstNode {
                 var_type,
                 value: Box::new(value),
                 data_type,
+                declared: false,
             }),
         )
     }

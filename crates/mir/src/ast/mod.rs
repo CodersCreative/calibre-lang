@@ -638,6 +638,7 @@ impl From<MiddleNodeType> for AstNodeType {
                     identifier: value.identifier.into(),
                     value: Box::new((*value.value).into()),
                     data_type: value.data_type.into(),
+                    declared: false,
                 })
             }
             MiddleNodeType::EnumExpression(value) => AstNodeType::EnumExpression(AstEnum {
@@ -694,6 +695,7 @@ impl From<MiddleNodeType> for AstNodeType {
                     return_type: value.return_type.into(),
                     library: value.library.to_string(),
                     symbol: None,
+                    declared: false,
                 })
             }
             MiddleNodeType::AssignmentExpression(value) => {

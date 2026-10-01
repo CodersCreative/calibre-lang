@@ -7,8 +7,11 @@ use crate::{
         MirReturn, MirScopeDecl, MirVarDecl,
     },
     scoping::FullyQualifiedPath,
-    symbols::VariableKey,
-    typing::{MiddleImpl, MiddleImplMember},
+    symbols::{MiddleOverload, MiddleVariable, VariableKey},
+    typing::{
+        MiddleImpl, MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember,
+        MiddleTypeDefType,
+    },
 };
 use std::sync::Arc;
 use ustr::Ustr;
@@ -280,6 +283,81 @@ impl MirRenamable for MiddleImpl {
 
         for ty in self.assoc_types.values_mut() {
             ty.rename(state);
+        }
+    }
+}
+
+impl MirRenamable for MiddleTraitMember {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        self.data_type.rename(state);
+    }
+}
+
+impl MirRenamable for MiddleTrait {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        for t in &mut self.implied_traits {
+            t.rename(state);
+        }
+
+        for member in self.members.values_mut() {
+            member.rename(state);
+        }
+
+        for assoc_type in self.assoc_types.values_mut() {
+            assoc_type.rename(state);
+        }
+    }
+}
+
+impl MirRenamable for MiddleTypeDefType {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        match self {
+            MiddleTypeDefType::Enum { variants, .. } => {
+                for (_, data_type) in variants {
+                    if let Some(dt) = data_type {
+                        dt.rename(state);
+                    }
+                }
+            }
+            MiddleTypeDefType::Struct(fields) => {
+                for (_, (data_type, _)) in &mut fields.0 {
+                    data_type.rename(state);
+                }
+            }
+            MiddleTypeDefType::NewType(dt) => {
+                dt.rename(state);
+            }
+            MiddleTypeDefType::Trait => {}
+        }
+    }
+}
+
+impl MirRenamable for MiddleObject {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        self.object_type.rename(state);
+
+        for (var_key, _) in self.variables.values_mut() {
+            var_key.rename(state);
+        }
+
+        for t in &mut self.traits {
+            t.rename(state);
+        }
+    }
+}
+
+impl MirRenamable for MiddleVariable {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        self.key.rename(state);
+        self.data_type.rename(state);
+    }
+}
+
+impl MirRenamable for MiddleOverload {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        self.return_type.rename(state);
+        for p in &mut self.parameters {
+            p.rename(state);
         }
     }
 }

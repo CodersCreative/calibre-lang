@@ -1,3 +1,5 @@
+use crate::MirRenamable;
+use crate::MirRenameState;
 use crate::ast::types::MirDataType;
 use crate::ast::{MiddleNode, MiddleNodeType, MirScopeDecl};
 use crate::context::MiddleContext;
@@ -10,13 +12,9 @@ use crate::tags::Tagging;
 use crate::tags::context::PackageMetadata;
 use crate::testing::Testing;
 use crate::translate::MirLowering;
-use crate::typing::{
-    MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember, MiddleTypeDefType, Typing,
-};
-use calibre_parser::ast::ObjectMap;
+use crate::typing::Typing;
 use calibre_parser::ast::nodes::scopes::AstScopeDef;
 use calibre_parser::ast::nodes::types::Overload;
-use calibre_parser::{AlphaRenamable, UstrAlphaRenameState};
 use calibre_parser::{
     Span,
     ast::{
@@ -296,10 +294,9 @@ impl MiddleEnvironment {
         Self::new_and_evaluate_with_package(node, path, None, included, no_std, type_check)
     }
 
-    // TODO Reduce cloning
     #[instrument(skip_all)]
     pub fn import_manifest(&mut self, mut manifest: Manifest) -> Result<(), MiddleErr> {
-        let mut rename_state = UstrAlphaRenameState::default();
+        let mut rename_state = MirRenameState::default();
         rename_state.from_native_mappings(
             &self.symbols.native_mappings,
             &manifest.symbols.native_mappings,
@@ -308,152 +305,39 @@ impl MiddleEnvironment {
         manifest
             .symbols
             .variables
-            .retain(|name, _| !rename_state.data.contains_key(name));
+            .retain(|name, _| !rename_state.variables.contains_key(name));
 
         manifest
             .typing
             .objects
-            .retain(|name, _| !rename_state.data.contains_key(name));
+            .retain(|name, _| !rename_state.types.contains_key(name));
 
-        for (name, impl_data) in std::mem::take(&mut manifest.typing.impls) {
-            let renamed_name = if let Some(new_name) = rename_state.data.get(&name) {
-                *new_name
-            } else {
-                name
-            };
-
-            if let Some(existing) = self.typing.impls.get_mut(&renamed_name) {
-                for (member_name, member) in impl_data.get_all_members() {
-                    existing.insert_member(
-                        member_name,
-                        MiddleImplMember {
-                            symbol_name: rename_state.mapped_name_or_original(member.symbol_name),
-                            generic_params: member
-                                .generic_params
-                                .iter()
-                                .map(|p| rename_state.mapped_name_or_original(*p))
-                                .collect(),
-                            dependant: member.dependant,
-                        },
-                    );
-                }
-
-                existing.traits.extend(impl_data.traits);
-                for (assoc_name, assoc_type) in &impl_data.assoc_types {
-                    existing.assoc_types.insert(
-                        *assoc_name,
-                        assoc_type.clone().rename_owned(&mut rename_state),
-                    );
-                }
-            } else {
-                self.typing
-                    .get_or_create_impl(renamed_name, impl_data.location.clone());
-
-                let existing = self.typing.impls.get_mut(&renamed_name).unwrap();
-                existing.traits = impl_data
-                    .traits
-                    .iter()
-                    .map(|t| rename_state.mapped_name_or_original(*t))
-                    .collect();
-
-                for (assoc_name, assoc_type) in &impl_data.assoc_types {
-                    existing.assoc_types.insert(
-                        *assoc_name,
-                        assoc_type.clone().rename_owned(&mut rename_state),
-                    );
-                }
-
-                for (member_name, member) in impl_data.get_all_members() {
-                    let renamed_member = MiddleImplMember {
-                        symbol_name: rename_state.mapped_name_or_original(member.symbol_name),
-                        generic_params: member
-                            .generic_params
-                            .iter()
-                            .map(|p| rename_state.mapped_name_or_original(*p))
-                            .collect(),
-                        dependant: member.dependant,
-                    };
-                    existing.insert_member(member_name, renamed_member);
-                }
+        for (_key, impl_list) in std::mem::take(&mut manifest.typing.inherent_impls) {
+            for mut imp in impl_list {
+                imp.rename(&mut rename_state);
+                self.typing.add_inherent_impl(imp);
             }
         }
 
-        for (name, trait_def) in std::mem::take(&mut manifest.typing.trait_defs) {
-            let renamed_name = rename_state.data.get(&name).cloned().unwrap_or(name);
+        for (_key, impl_list) in std::mem::take(&mut manifest.typing.trait_impls) {
+            for mut imp in impl_list {
+                imp.rename(&mut rename_state);
+                self.typing.add_trait_impl(imp);
+            }
+        }
 
-            let renamed_implied_traits = trait_def
-                .implied_traits
-                .iter()
-                .map(|t| rename_state.mapped_name_or_original(*t))
-                .collect();
-
-            let renamed_members = trait_def
-                .members
-                .iter()
-                .map(|(k, v)| {
-                    (
-                        rename_state.mapped_name_or_original(*k),
-                        MiddleTraitMember {
-                            data_type: v.data_type.clone().rename_owned(&mut rename_state),
-                            default: v.default.clone(),
-                        },
-                    )
-                })
-                .collect();
-
-            let renamed_assoc_types = trait_def
-                .assoc_types
-                .iter()
-                .map(|(k, v)| (*k, v.clone().rename_owned(&mut rename_state)))
-                .collect();
-
-            self.typing.trait_defs.insert(
-                renamed_name,
-                MiddleTrait {
-                    implied_traits: renamed_implied_traits,
-                    members: renamed_members,
-                    assoc_types: renamed_assoc_types,
-                },
-            );
+        for (mut name, mut trait_def) in std::mem::take(&mut manifest.typing.trait_defs) {
+            name.rename(&mut rename_state);
+            trait_def.rename(&mut rename_state);
+            self.typing.trait_defs.insert(name, trait_def);
         }
 
         for (name, template) in std::mem::take(&mut manifest.typing.generic_type_templates) {
-            let renamed_name = if let Some(new_name) = rename_state.data.get(&name) {
-                *new_name
-            } else {
-                name
-            };
-
-            // TODO Ensure everything is being renamed here
-            self.typing.generic_type_templates.insert(
-                renamed_name,
-                (
-                    template
-                        .0
-                        .iter()
-                        .map(|p| rename_state.mapped_name_or_original(*p))
-                        .collect(),
-                    template.1,
-                    template.2,
-                ),
-            );
+            self.typing.generic_type_templates.insert(name, template);
         }
 
-        for overload in std::mem::take(&mut manifest.symbols.overloads) {
-            let overload = MiddleOverload {
-                return_type: overload.return_type.rename_owned(&mut rename_state),
-                parameters: overload
-                    .parameters
-                    .into_iter()
-                    .map(|p| p.rename_owned(&mut rename_state))
-                    .collect(),
-                generic_params: overload
-                    .generic_params
-                    .into_iter()
-                    .map(|p| rename_state.mapped_name_or_original(p))
-                    .collect(),
-                ..overload
-            };
+        for mut overload in std::mem::take(&mut manifest.symbols.overloads) {
+            overload.rename(&mut rename_state);
 
             if !self.symbols.overloads.contains(&overload) {
                 self.symbols.overloads.push(overload);
@@ -468,111 +352,31 @@ impl MiddleEnvironment {
             .fin_functions
             .append(&mut manifest.tagging.fin_functions);
 
-        for (name, var) in manifest.symbols.variables {
-            self.symbols.variables.insert(
-                name,
-                MiddleVariable {
-                    data_type: var.data_type.rename_owned(&mut rename_state),
-                    ..var
-                },
-            );
+        for (mut name, mut var) in manifest.symbols.variables {
+            name.rename(&mut rename_state);
+            var.rename(&mut rename_state);
+            self.symbols.variables.insert(name, var);
         }
 
-        for (name, obj) in manifest.typing.objects {
-            let name = if let Some(new_name) = rename_state.data.get(&name) {
-                *new_name
-            } else {
-                name
-            };
-
-            let new_obj = match &obj.object_type {
-                MiddleTypeDefType::Struct(fields) => MiddleTypeDefType::Struct(ObjectMap(
-                    fields
-                        .0
-                        .iter()
-                        .map(|(field_name, (data_type, default_val))| {
-                            (
-                                *field_name,
-                                (
-                                    data_type.clone().rename_owned(&mut rename_state),
-                                    default_val.clone(),
-                                ),
-                            )
-                        })
-                        .collect(),
-                )),
-                MiddleTypeDefType::Enum {
-                    variants,
-                    default_variant,
-                    default_value,
-                } => MiddleTypeDefType::Enum {
-                    variants: variants
-                        .iter()
-                        .map(|(variant_name, data_type)| {
-                            (
-                                *variant_name,
-                                data_type
-                                    .as_ref()
-                                    .map(|t| t.clone().rename_owned(&mut rename_state)),
-                            )
-                        })
-                        .collect(),
-                    default_variant: *default_variant,
-                    default_value: default_value.clone(),
-                },
-                MiddleTypeDefType::NewType(t) => {
-                    MiddleTypeDefType::NewType(t.clone().rename_owned(&mut rename_state))
-                }
-                MiddleTypeDefType::Trait => MiddleTypeDefType::Trait,
-            };
-
-            self.typing.objects.insert(
-                name,
-                MiddleObject {
-                    object_type: new_obj,
-                    variables: obj
-                        .variables
-                        .iter()
-                        .map(|(k, (v, b))| (*k, (rename_state.mapped_name_or_original(*v), *b)))
-                        .collect(),
-                    traits: obj
-                        .traits
-                        .iter()
-                        .map(|t| rename_state.mapped_name_or_original(*t))
-                        .collect(),
-                    location: obj.location,
-                },
-            );
+        for (mut name, mut obj) in manifest.typing.objects {
+            name.rename(&mut rename_state);
+            obj.rename(&mut rename_state);
+            self.typing.objects.insert(name, obj);
         }
 
         self.scoping
             .append_manifest(manifest.metadata.name, manifest.scoping);
 
         for (name, (params, header, node)) in manifest.symbols.generic_fn_templates {
-            let name = if let Some(new_name) = rename_state.data.get(&name) {
-                *new_name
-            } else {
-                name
-            };
-
-            self.symbols.generic_fn_templates.insert(
-                name,
-                (
-                    params
-                        .iter()
-                        .map(|p| rename_state.mapped_name_or_original(*p))
-                        .collect(),
-                    header,
-                    node,
-                ),
-            );
+            self.symbols
+                .generic_fn_templates
+                .insert(name, (params, header, node));
         }
 
         for (original, specialized) in manifest.symbols.fn_specializations {
-            self.symbols.function_specializations.insert(
-                rename_state.mapped_name_or_original(original),
-                rename_state.mapped_name_or_original(specialized),
-            );
+            self.symbols
+                .function_specializations
+                .insert(original, specialized);
         }
 
         Ok(())

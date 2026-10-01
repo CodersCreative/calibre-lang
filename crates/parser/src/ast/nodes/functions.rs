@@ -31,6 +31,7 @@ pub struct AstExtern {
     pub return_type: ParserDataType,
     pub library: String,
     pub symbol: Option<String>,
+    pub declared: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

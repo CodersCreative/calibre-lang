@@ -342,6 +342,7 @@ impl MiddleEnvironment {
                         body: Box::new(next_body),
                     }),
                 )),
+                declared: false,
             }),
         );
 
@@ -1087,7 +1088,8 @@ impl MirLowering for AstCall {
         if let AstNodeType::FieldAccess(AstField { base, field }) = &self.caller.node_type {
             let member_name = env
                 .resolve(scope, field, ResolutionOptions::default().with_dollar())
-                .unwrap_or(Ustr::from(field.text()));
+                .ok()?
+                .unwrap_dollar();
 
             if !member_name.is_empty() {
                 if let Some(ty) = &base.type_of(env, scope, span).or_else(|| {
@@ -1115,43 +1117,27 @@ impl MirLowering for AstCall {
                         let ty = arg.get_node().type_of(env, scope, span)?;
                         lst.push(ty);
                     }
-                    return Some(ParserDataType {
-                        data_type: ParserInnerType::Tuple(lst),
-                        span,
-                    });
+
+                    return Some(MirDataType::Tuple(lst));
                 }
                 "curry" if self.args.len() == 1 && self.reverse_args.is_empty() => {
                     return env.resolve_curried_type(scope, self.args[0].get_node());
                 }
                 "discriminant" => {
-                    return Some(ParserDataType {
-                        data_type: ParserInnerType::Int,
-                        span,
-                    });
+                    return Some(MirDataType::Int);
                 }
                 _ => {}
             }
 
             if let Ok(caller_ty) = env.resolve_to_data_type(scope, &caller.value) {
-                match &caller_ty.data_type {
-                    ParserInnerType::Struct(name)
-                        if env.typing.objects.contains_key(&Ustr::from(name)) =>
-                    {
-                        return Some(ParserDataType {
-                            data_type: ParserInnerType::Struct(name.clone()),
-                            span,
-                        });
-                    }
-                    ParserInnerType::StructWithGenerics {
+                match &caller_ty {
+                    MirDataType::Struct {
                         identifier,
                         generic_types,
-                    } if env.typing.objects.contains_key(&Ustr::from(identifier)) => {
-                        return Some(ParserDataType {
-                            data_type: ParserInnerType::StructWithGenerics {
-                                identifier: identifier.clone(),
-                                generic_types: generic_types.clone(),
-                            },
-                            span,
+                    } if env.typing.objects.contains_key(identifier) => {
+                        return Some(MirDataType::Struct {
+                            identifier: identifier.clone(),
+                            generic_types: generic_types.clone(),
                         });
                     }
                     _ => {}
@@ -1161,6 +1147,6 @@ impl MirLowering for AstCall {
 
         caller_type = caller_type.or_else(|| self.caller.type_of(env, scope, span));
 
-        caller_type?.data_type.apply_callable()
+        caller_type?.apply_callable()
     }
 }
