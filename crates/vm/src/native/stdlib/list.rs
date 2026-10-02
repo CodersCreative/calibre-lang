@@ -1,7 +1,6 @@
 use crate::{
     VM,
     error::RuntimeError,
-    evaluate::calling::CallSite,
     native::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null, resolve_int, resolve_list},

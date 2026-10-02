@@ -12,9 +12,7 @@ use crate::{
     native::stdlib::generator::GeneratorResumeFn,
     value::{GcMap, GcVec, RuntimeValue, TerminateValue, hashable::HashKey},
 };
-use calibre_lir::{
-    FullyQualifiedPath, MirDataType, TypeImplKey, TypeKey, VariableKey, ast::BlockId,
-};
+use calibre_lir::{FullyQualifiedPath, TypeImplKey, TypeKey, ast::BlockId};
 use dumpster::sync::Gc;
 use std::sync::Arc;
 use tracing::instrument;
@@ -75,20 +73,19 @@ impl VMEvaluation for VMLoadMember {
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         let source_reg = self.value;
-        let name = vm.local_string(block, self.member)?;
+        let member = vm.local_string(block, self.member)?;
+        let tuple_index = member.parse::<usize>().ok();
         let raw_receiver = vm.get_reg_value(self.value).clone();
-        let (short_name, tuple_index) = VM::member_parts(name);
-        let is_next_or_zero = name == "next" || name == "0";
-        let member_short = short_name.unwrap_or(name);
+        let is_next_or_zero = member == "next" || member == "0";
 
         let missing = |target: RuntimeValue| RuntimeError::MissingMember {
             target: Box::new(target),
-            member: name.to_string(),
+            member: member.to_string(),
         };
 
         let bind_assoc = |vm: &mut VM, impl_key: TypeImplKey, value: RuntimeValue| {
-            if let Some(callee) = vm.get_function_from_type_member(&impl_key, name, short_name) {
-                Ok(vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, value))
+            if let Some(callee) = vm.get_function_from_type_member(&impl_key, member) {
+                Ok(vm.bind_member_receiver_if_callable(callee, member, &raw_receiver, value))
             } else {
                 Err(missing(value))
             }
@@ -104,13 +101,12 @@ impl VMEvaluation for VMLoadMember {
                         &TypeImplKey::Nominal(TypeKey {
                             fully_qualified_path: owner.fully_qualified_path.clone(),
                         }),
-                        name,
-                        short_name,
+                        member,
                     )
                 {
                     vm.set_reg_value(self.dst, callee);
 
-                    let handle = vm.new_mutation_handle(source_reg, PathSegment::Field(*name));
+                    let handle = vm.new_mutation_handle(source_reg, PathSegment::Field(*member));
 
                     vm.current_frame_mut()
                         .set_shared_mutation_handle(self.dst, handle);
@@ -123,18 +119,14 @@ impl VMEvaluation for VMLoadMember {
             RuntimeValue::Generator {
                 type_name: TypeImplKey::Nominal(type_name),
                 state,
-            } => match member_short {
+            } => match member.as_str() {
                 "data" | "next" => RuntimeValue::NativeFunction(Arc::new(GeneratorResumeFn {
                     state: state.clone(),
                 })),
                 "index" => RuntimeValue::Int(state.lock().unwrap().index),
                 "done" => RuntimeValue::Bool(state.lock().unwrap().completed),
                 _ => vm
-                    .get_function_from_type_member(
-                        &TypeImplKey::Nominal(type_name.clone()),
-                        name,
-                        short_name,
-                    )
+                    .get_function_from_type_member(&TypeImplKey::Nominal(type_name.clone()), member)
                     .ok_or_else(|| {
                         missing(RuntimeValue::Generator {
                             type_name: TypeImplKey::Nominal(type_name.clone()),
@@ -155,9 +147,7 @@ impl VMEvaluation for VMLoadMember {
                     .ok_or_else(|| missing(RuntimeValue::Aggregate(None, map)))?
             }
             RuntimeValue::Aggregate(Some(type_name), map) => {
-                if let Some(idx) =
-                    vm.resolve_aggregate_member_slot(&type_name, &map, name, short_name)
-                {
+                if let Some(idx) = vm.resolve_aggregate_member_slot(&type_name, &map, member) {
                     let field_name = &map.0.0[idx].0;
 
                     member_source = Some(vm.new_mutation_handle(
@@ -198,12 +188,7 @@ impl VMEvaluation for VMLoadMember {
                         };
 
                         let idx = vm
-                            .resolve_aggregate_member_slot(
-                                &inner_type_key,
-                                &inner_map,
-                                name,
-                                short_name,
-                            )
+                            .resolve_aggregate_member_slot(&inner_type_key, &inner_map, member)
                             .ok_or_else(|| {
                                 missing(RuntimeValue::Aggregate(Some(type_name), map.clone()))
                             })?;
@@ -221,7 +206,7 @@ impl VMEvaluation for VMLoadMember {
                 } else {
                     let impl_key = TypeImplKey::Nominal(type_name.clone());
                     let value = vm
-                        .get_function_from_type_member(&impl_key, name, short_name)
+                        .get_function_from_type_member(&impl_key, member)
                         .ok_or_else(|| {
                             missing(RuntimeValue::Aggregate(
                                 Some(type_name.clone()),
@@ -231,7 +216,7 @@ impl VMEvaluation for VMLoadMember {
 
                     vm.bind_member_receiver_if_callable(
                         value,
-                        name,
+                        member,
                         &raw_receiver,
                         RuntimeValue::Aggregate(Some(type_name), map),
                     )
@@ -248,10 +233,11 @@ impl VMEvaluation for VMLoadMember {
                 x.as_ref().clone()
             }
             RuntimeValue::Option(Some(inner)) => {
-                if let Some(callee) = vm.get_function_from_type_member(&TypeImplKey::Option, name) {
+                if let Some(callee) = vm.get_function_from_type_member(&TypeImplKey::Option, member)
+                {
                     vm.bind_member_receiver_if_callable(
                         callee,
-                        name,
+                        member,
                         &raw_receiver,
                         RuntimeValue::Option(Some(inner)),
                     )
@@ -262,9 +248,9 @@ impl VMEvaluation for VMLoadMember {
             RuntimeValue::Option(None) if is_next_or_zero => RuntimeValue::Null,
             option @ RuntimeValue::Option(_) => {
                 let callee = vm
-                    .get_function_from_type_member(&TypeImplKey::Option, name)
+                    .get_function_from_type_member(&TypeImplKey::Option, member)
                     .ok_or_else(|| missing(option.clone()))?;
-                vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, option)
+                vm.bind_member_receiver_if_callable(callee, member, &raw_receiver, option)
             }
 
             RuntimeValue::Result(Ok(x)) | RuntimeValue::Result(Err(x)) if is_next_or_zero => {
@@ -273,9 +259,9 @@ impl VMEvaluation for VMLoadMember {
             }
             result @ RuntimeValue::Result(_) => {
                 let callee = vm
-                    .get_function_from_type_member(&TypeImplKey::Result, name)
+                    .get_function_from_type_member(&TypeImplKey::Result, member)
                     .ok_or_else(|| missing(result.clone()))?;
-                vm.bind_member_receiver_if_callable(callee, name, &raw_receiver, result)
+                vm.bind_member_receiver_if_callable(callee, member, &raw_receiver, result)
             }
 
             RuntimeValue::Ptr(id) if is_next_or_zero => {
@@ -340,7 +326,7 @@ impl VMEvaluation for VMLoadMember {
             if let Some(index) = tuple_index {
                 vm.new_mutation_handle(source_reg, PathSegment::Index(index))
             } else {
-                vm.new_mutation_handle(source_reg, PathSegment::Field(*name))
+                vm.new_mutation_handle(source_reg, PathSegment::Field(*member))
             }
         });
         vm.current_frame_mut()
@@ -359,9 +345,9 @@ impl VMEvaluation for VMSetMember {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let name = vm.local_string(block, self.member)?;
+        let member = vm.local_string(block, self.member)?;
+        let tuple_index = member.parse::<usize>().ok();
         let value = vm.get_reg_value(self.value).clone();
-        let (short_name, tuple_index) = VM::member_parts(name);
 
         let update_aggregate = |agg_name: &Option<TypeKey>, mut map: Arc<GcMap>| {
             let entries = &mut Arc::make_mut(&mut map);
@@ -374,9 +360,7 @@ impl VMEvaluation for VMSetMember {
                     entries[idx].1 = value.clone().into();
                 }
                 (Some(_), _) => {
-                    if let Some(entry) = entries.iter_mut().find(|entry| {
-                        entry.0 == *name || short_name.is_some_and(|short| entry.0 == short)
-                    }) {
+                    if let Some(entry) = entries.iter_mut().find(|entry| entry.0 == *member) {
                         entry.1 = value.clone().into();
                     } else {
                         return Err(RuntimeError::StackUnderflow);
@@ -400,16 +384,15 @@ impl VMEvaluation for VMSetMember {
                     });
                 };
 
-                let member_key = short_name.unwrap_or(name);
-                if !matches!(member_key, "done" | "index") {
+                if !matches!(member.as_str(), "done" | "index") {
                     return Err(RuntimeError::MissingMember {
                         target: Box::new(RuntimeValue::Generator { type_name, state }),
-                        member: name.to_string(),
+                        member: member.to_string(),
                     });
                 }
 
                 let mut guard = state.lock().unwrap();
-                match member_key {
+                match member.as_str() {
                     "index" => match &value {
                         RuntimeValue::Int(x) => guard.index = (*x).max(0),
                         RuntimeValue::UInt(x) => guard.index = *x as i64,

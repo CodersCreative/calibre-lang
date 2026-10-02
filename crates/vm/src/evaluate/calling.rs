@@ -9,6 +9,7 @@ use calibre_lir::{TypeImplKey, TypeKey, VariableKey, ast::BlockId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tracing::{instrument, trace};
+use ustr::Ustr;
 use wasm_sync::Mutex;
 
 impl VM {
@@ -459,7 +460,6 @@ impl VM {
                     .get_function_from_type_member(
                         &TypeImplKey::Nominal(type_name.clone()),
                         member_name,
-                        short_name,
                     )
                     .map(|callee| {
                         self.bind_member_receiver_if_callable(
@@ -475,7 +475,6 @@ impl VM {
                             fully_qualified_path: owner.fully_qualified_path.clone(),
                         }),
                         member_name,
-                        short_name,
                     )
                     .or_else(|| None),
                 _ => None,
@@ -487,13 +486,14 @@ impl VM {
         };
 
         let func = if let RuntimeValue::Function { name, .. } = &func
-            && let Some((owner, member)) = name.name().as_str().rsplit_once(".")
+            && let Some((_, member)) = name.name().as_str().rsplit_once(".")
             && let Some(first) = args.first()
             && let Ok(receiver) = self.resolve_value_ref(self.get_reg_value(*first))
             && let Some(receiver_type) = receiver.impl_key()
         {
             if self.callee_expects_receiver(&func)
-                && let Some(resolved) = self.get_function_from_type_member(&receiver_type, member)
+                && let Some(resolved) =
+                    self.get_function_from_type_member(&receiver_type, &Ustr::from(member))
                 && resolved.is_callable()
             {
                 resolved
@@ -549,13 +549,6 @@ impl VM {
         let frame_idx = self.frames.len().saturating_sub(1);
         self.propagate_member_source_args(args, frame_idx)?;
         Ok(None)
-    }
-
-    #[inline]
-    pub(crate) fn member_parts(name: &str) -> (Option<&str>, Option<usize>) {
-        let short_name = name.rsplit_once(".").map(|(_, short)| short);
-        let tuple_index = name.parse::<usize>().ok();
-        (short_name, tuple_index)
     }
 
     #[inline]

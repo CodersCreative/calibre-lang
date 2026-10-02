@@ -128,16 +128,13 @@ impl VM {
         type_name: &TypeKey,
         map: &GcMap,
         name: &str,
-        short_name: Option<&str>,
     ) -> Option<usize> {
         let _ = type_name;
-        map.0.0.iter().enumerate().find_map(|(idx, (field, _))| {
-            if field == name || short_name.is_some_and(|short| field == short) {
-                Some(idx)
-            } else {
-                None
-            }
-        })
+        map.0.0.iter().enumerate().find_map(
+            |(idx, (field, _))| {
+                if field == name { Some(idx) } else { None }
+            },
+        )
     }
 
     pub(crate) fn resolve_var_name(&self, name: VariableKey) -> Option<VarName> {
