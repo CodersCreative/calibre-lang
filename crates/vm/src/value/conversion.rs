@@ -175,7 +175,7 @@ impl RuntimeValue {
                 let converted = if **inner == MirDataType::Null {
                     value
                 } else {
-                    value.convert(env, &inner)?
+                    value.convert(env, inner)?
                 };
 
                 let id = env.get_ref_id();
@@ -198,7 +198,7 @@ impl RuntimeValue {
                 let mut lst = Vec::new();
 
                 for d in data.as_ref().0.iter() {
-                    lst.push(RuntimeValue::from(d.clone()).convert(env, &t)?);
+                    lst.push(RuntimeValue::from(d.clone()).convert(env, t)?);
                 }
 
                 Ok(RuntimeValue::List(Arc::new(GcVec::new(lst))))

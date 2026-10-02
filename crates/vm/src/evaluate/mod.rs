@@ -169,7 +169,7 @@ impl VM {
                 }
                 true
             }),
-            MirDataType::Ref(inner, _) => self.runtime_matches_type(value, &inner),
+            MirDataType::Ref(inner, _) => self.runtime_matches_type(value, inner),
             MirDataType::Big => matches!(value, RuntimeValue::Big(_)),
             MirDataType::Float => matches!(value, RuntimeValue::Float(_)),
             MirDataType::Int => matches!(value, RuntimeValue::Int(_)),
@@ -189,7 +189,7 @@ impl VM {
                         .as_ref()
                         .0
                         .iter()
-                        .all(|item| self.runtime_matches_type(item, &inner))
+                        .all(|item| self.runtime_matches_type(item, inner))
                 } else {
                     false
                 }
@@ -205,7 +205,7 @@ impl VM {
                             .0
                             .iter()
                             .find(|(name, _)| name == &i.to_string())
-                            .map(|(_, v)| self.runtime_matches_type(v, &t))
+                            .map(|(_, v)| self.runtime_matches_type(v, t))
                             .unwrap_or(false)
                     })
                 } else {
@@ -213,13 +213,13 @@ impl VM {
                 }
             }
             MirDataType::Option(inner) => match value {
-                RuntimeValue::Option(Some(v)) => self.runtime_matches_type(v.as_ref(), &inner),
+                RuntimeValue::Option(Some(v)) => self.runtime_matches_type(v.as_ref(), inner),
                 RuntimeValue::Option(None) => true,
                 _ => false,
             },
             MirDataType::Result { ok, err } => match value {
-                RuntimeValue::Result(Ok(v)) => self.runtime_matches_type(v.as_ref(), &ok),
-                RuntimeValue::Result(Err(v)) => self.runtime_matches_type(v.as_ref(), &err),
+                RuntimeValue::Result(Ok(v)) => self.runtime_matches_type(v.as_ref(), ok),
+                RuntimeValue::Result(Err(v)) => self.runtime_matches_type(v.as_ref(), err),
                 _ => false,
             },
             MirDataType::Function { .. } | MirDataType::NativeFunction { .. } => {

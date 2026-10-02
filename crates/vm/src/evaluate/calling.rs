@@ -555,7 +555,7 @@ impl VM {
     pub(crate) fn bind_member_receiver_if_callable(
         &mut self,
         callee: RuntimeValue,
-        member_name: &str,
+        _member_name: &str,
         raw_receiver: &RuntimeValue,
         resolved_receiver: RuntimeValue,
     ) -> RuntimeValue {

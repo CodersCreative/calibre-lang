@@ -1,8 +1,8 @@
 use calibre_mir::{
     ast::types::MirDataType,
     scoping::{FullyQualifiedPath, ScopeId},
-    symbols::{TypeKey, VariableKey},
     symbols::resolve::{Key, ResolutionOptions},
+    symbols::{TypeKey, VariableKey},
     typing::MiddleObject,
 };
 use calibre_parser::ast::idents::ParserText;
@@ -494,7 +494,8 @@ impl CalibreLanguageServer {
             shadow_counter: None,
         };
         let display_name = Self::sanitize_name(visible);
-        let (detail, kind, documentation) = if let Some(var) = env.symbols.variables.get(&canonical_key)
+        let (detail, kind, documentation) = if let Some(var) =
+            env.symbols.variables.get(&canonical_key)
         {
             match &var.data_type {
                 MirDataType::Function {
@@ -540,34 +541,34 @@ impl CalibreLanguageServer {
             };
             if env.typing.objects.contains_key(&type_key) {
                 let (detail, kind) = if let Some(object) = env.typing.objects.get(&type_key) {
-                (
-                    object.object_type.to_string(),
-                    match &object.object_type {
-                        MiddleTypeDefType::Struct(_) => CompletionItemKind::STRUCT,
-                        MiddleTypeDefType::Enum { .. } => CompletionItemKind::ENUM,
-                        MiddleTypeDefType::NewType(_) => CompletionItemKind::TYPE_PARAMETER,
-                        MiddleTypeDefType::Trait => CompletionItemKind::INTERFACE,
-                    },
-                )
-            } else {
-                ("semantic type".to_string(), CompletionItemKind::STRUCT)
-            };
-            let doc = format!(
-                "Resolved type `{}`\n\nCanonical: `{}`\n\n{detail}",
-                display_name, canonical
-            );
-            (detail, kind, doc)
-        } else {
-            (
-                "semantic symbol".to_string(),
-                CompletionItemKind::FIELD,
-                format!(
-                    "Resolved symbol `{}`\n\nCanonical: `{}`",
+                    (
+                        object.object_type.to_string(),
+                        match &object.object_type {
+                            MiddleTypeDefType::Struct(_) => CompletionItemKind::STRUCT,
+                            MiddleTypeDefType::Enum { .. } => CompletionItemKind::ENUM,
+                            MiddleTypeDefType::NewType(_) => CompletionItemKind::TYPE_PARAMETER,
+                            MiddleTypeDefType::Trait => CompletionItemKind::INTERFACE,
+                        },
+                    )
+                } else {
+                    ("semantic type".to_string(), CompletionItemKind::STRUCT)
+                };
+                let doc = format!(
+                    "Resolved type `{}`\n\nCanonical: `{}`\n\n{detail}",
                     display_name, canonical
-                ),
-            )
-        }
-        }
+                );
+                (detail, kind, doc)
+            } else {
+                (
+                    "semantic symbol".to_string(),
+                    CompletionItemKind::FIELD,
+                    format!(
+                        "Resolved symbol `{}`\n\nCanonical: `{}`",
+                        display_name, canonical
+                    ),
+                )
+            }
+        };
 
         CompletionItem {
             label: display_name.clone(),

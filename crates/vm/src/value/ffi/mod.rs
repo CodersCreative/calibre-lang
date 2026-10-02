@@ -20,7 +20,9 @@ pub struct ExternFunction {
     pub pure: bool,
 }
 
+// TODO Rework ffi handling
 #[derive(Debug)]
+#[allow(unused)]
 pub(crate) enum FfiArg {
     U8(u8),
     I8(i8),

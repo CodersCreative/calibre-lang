@@ -61,7 +61,7 @@ impl MirLowering for AstField {
         if let AstNodeType::Identifier(ident) = &self.base.node_type
             && let Ok(ty) = env.resolve_to_data_type(scope, &ident.value)
         {
-            if let Some(member) = env.typing.find_impl_member(&ty, &field_name) {
+            if let Some(member) = env.typing.find_impl_member(&ty, field_name) {
                 return Ok(MiddleNode::identifier(span, member.symbol_name.clone()));
             }
 
@@ -86,7 +86,7 @@ impl MirLowering for AstField {
         if let Some(ty) = self.base.type_of(env, scope, span)
             && let Some(x) = env
                 .typing
-                .find_impl_member(&ty, &field_name)
+                .find_impl_member(&ty, field_name)
                 .map(|x| x.symbol_name.clone())
         {
             return Ok(MiddleNode::identifier(span, x));

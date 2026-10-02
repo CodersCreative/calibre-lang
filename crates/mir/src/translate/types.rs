@@ -708,7 +708,7 @@ impl MirLowering for AstImpl {
 
         for var in placeholders {
             imp.insert_member_placeholder(
-                &var.0,
+                var.0,
                 VariableKey {
                     fully_qualified_path: Arc::new(FullyQualifiedPath {
                         name: Some(var.1),
@@ -770,7 +770,7 @@ impl MirLowering for AstImpl {
                     .and_then(|v| v.last_mut())
                 {
                     impl_ref.insert_member(
-                        &processed.identifier,
+                        processed.identifier,
                         MiddleImplMember::new(
                             new_name.clone(),
                             generic_params.clone(),
@@ -900,7 +900,7 @@ impl MirLowering for AstImplTrait {
             {
                 let resolved_iden = Ustr::from(&format!("{}.{}", impl_key, identifier));
                 imp.insert_member_placeholder(
-                    &identifier.to_string(),
+                    identifier.to_string(),
                     VariableKey {
                         fully_qualified_path: Arc::new(FullyQualifiedPath {
                             name: Some(resolved_iden),
@@ -953,7 +953,7 @@ impl MirLowering for AstImplTrait {
                     .and_then(|v| v.last_mut())
                 {
                     impl_ref.insert_member(
-                        &processed.identifier,
+                        processed.identifier,
                         MiddleImplMember::new(
                             new_name.clone(),
                             generic_params.clone(),

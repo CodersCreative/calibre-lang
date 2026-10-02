@@ -924,7 +924,7 @@ impl MirLowering for AstCall {
                 if let Some(ty) = base.type_of(env, scope, span)
                     && let Some(x) = env
                         .typing
-                        .find_impl_member(&ty, &field_name)
+                        .find_impl_member(&ty, field_name)
                         .map(|x| x.symbol_name.clone())
                 {
                     self.args.insert(0, CallArg::Value(*base));

@@ -58,8 +58,10 @@ impl Typing {
         let key = TypeImplKey::from(ty);
         let candidates = self.inherent_impls.get(&key)?;
         let mut best: Option<(usize, &MiddleImpl)> = None;
+        let mut bindings = FxHashMap::default();
+
         for imp in candidates {
-            let mut bindings = FxHashMap::default();
+            bindings.clear();
             if imp.target.can_unify(ty, &imp.generic_params, &mut bindings) {
                 let score = imp.target.specificity(&imp.generic_params);
                 if best
@@ -78,101 +80,108 @@ impl Typing {
         self.find_inherent_impl_for_type(&target)
     }
 
-    #[instrument(skip_all, fields(ty = %ty, member = %member.to_string()))]
+    #[instrument(skip_all, fields(ty = %ty, member = %member.as_ref()))]
     pub fn find_impl_member(
         &self,
         ty: &MirDataType,
-        member: &impl ToString,
+        member: impl AsRef<str>,
     ) -> Option<&MiddleImplMember> {
         let member_name = MiddleImpl::normalize_member_name(member);
-
         let key = TypeImplKey::from(ty);
+
+        let mut best: Option<(usize, &MiddleImplMember)> = None;
+        let mut bindings = FxHashMap::default();
+
         if let Some(candidates) = self.inherent_impls.get(&key) {
-            let mut matched: Vec<(usize, &MiddleImplMember)> = Vec::new();
             for imp in candidates {
-                let mut bindings = FxHashMap::default();
+                bindings.clear();
                 if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
-                    && let Some(m) = imp.get_member(&member_name, &[])
+                    && let Some(m) = imp.get_member(member_name, &[])
                 {
                     let score = imp.target.specificity(&imp.generic_params);
-                    matched.push((score, m));
+                    if best
+                        .as_ref()
+                        .is_none_or(|(best_score, _)| score > *best_score)
+                    {
+                        best = Some((score, m));
+                    }
                 }
             }
 
-            if !matched.is_empty() {
-                matched.sort_by(|a, b| b.0.cmp(&a.0));
-                return Some(matched[0].1);
+            if best.is_some() {
+                return best.map(|(_, m)| m);
             }
         }
 
-        let mut matched_trait: Vec<(usize, &MiddleImplMember)> = Vec::new();
-        for (_, impl_list) in &self.trait_impls {
+        for impl_list in self.trait_impls.values() {
             for imp in impl_list {
-                let mut bindings = FxHashMap::default();
+                bindings.clear();
                 if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
-                    && let Some(m) = imp.get_member(&member_name, &[])
+                    && let Some(m) = imp.get_member(member_name, &[])
                 {
                     let score = imp.target.specificity(&imp.generic_params);
-                    matched_trait.push((score, m));
+                    if best
+                        .as_ref()
+                        .is_none_or(|(best_score, _)| score > *best_score)
+                    {
+                        best = Some((score, m));
+                    }
                 }
             }
         }
 
-        if !matched_trait.is_empty() {
-            matched_trait.sort_by(|a, b| b.0.cmp(&a.0));
-            return Some(matched_trait[0].1);
-        }
-
-        None
+        best.map(|(_, m)| m)
     }
 
     pub fn find_impl_member_with_subst(
         &self,
         ty: &MirDataType,
-        member: &impl ToString,
+        member: impl AsRef<str>,
     ) -> Option<(&MiddleImplMember, FxHashMap<String, MirDataType>)> {
         let member_name = MiddleImpl::normalize_member_name(member);
-
         let key = TypeImplKey::from(ty);
+
+        let mut best: Option<(usize, &MiddleImplMember, FxHashMap<String, MirDataType>)> = None;
+        let mut bindings = FxHashMap::default();
+
         if let Some(candidates) = self.inherent_impls.get(&key) {
-            let mut matched: Vec<(usize, &MiddleImplMember, FxHashMap<String, MirDataType>)> =
-                Vec::new();
             for imp in candidates {
-                let mut bindings = FxHashMap::default();
+                bindings.clear();
                 if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
-                    && let Some(m) = imp.get_member(&member_name, &[])
+                    && let Some(m) = imp.get_member(member_name, &[])
                 {
                     let score = imp.target.specificity(&imp.generic_params);
-                    matched.push((score, m, bindings));
+                    if best
+                        .as_ref()
+                        .is_none_or(|(best_score, _, _)| score > *best_score)
+                    {
+                        best = Some((score, m, bindings.clone()));
+                    }
                 }
             }
-            if !matched.is_empty() {
-                matched.sort_by(|a, b| b.0.cmp(&a.0));
-                let (_, m, b) = matched.remove(0);
+            if let Some((_, m, b)) = best {
                 return Some((m, b));
             }
         }
 
-        let mut matched_trait: Vec<(usize, &MiddleImplMember, FxHashMap<String, MirDataType>)> =
-            Vec::new();
-        for (_, impl_list) in &self.trait_impls {
+        for impl_list in self.trait_impls.values() {
             for imp in impl_list {
-                let mut bindings = FxHashMap::default();
+                bindings.clear();
                 if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
-                    && let Some(m) = imp.get_member(&member_name, &[])
+                    && let Some(m) = imp.get_member(member_name, &[])
                 {
                     let score = imp.target.specificity(&imp.generic_params);
-                    matched_trait.push((score, m, bindings));
+                    if best
+                        .as_ref()
+                        .is_none_or(|(best_score, _, _)| score > *best_score)
+                    {
+                        best = Some((score, m, bindings.clone()));
+                    }
                 }
             }
         }
-        if !matched_trait.is_empty() {
-            matched_trait.sort_by(|a, b| b.0.cmp(&a.0));
-            let (_, m, b) = matched_trait.remove(0);
-            return Some((m, b));
-        }
 
-        None
+        best.map(|(_, m, b)| (m, b))
     }
 
     #[instrument(skip_all, fields(root_trait = %root_trait))]
@@ -210,12 +219,11 @@ impl Typing {
             for (name, member) in &def.members {
                 if member.default.is_none()
                     || provided.contains(name)
-                    || seen_members.contains(name)
+                    || !seen_members.insert(*name)
                 {
                     continue;
                 }
 
-                seen_members.insert(name);
                 out.push((*name, member.clone()));
             }
         }
@@ -233,10 +241,7 @@ impl Typing {
     pub fn resolve_associated_type(&self, base: &MirDataType, name: &Ustr) -> Option<MirDataType> {
         trace!("resolving associated type");
 
-        if let MirDataType::Struct {
-            identifier,
-            generic_types: _,
-        } = &base
+        if let MirDataType::Struct { identifier, .. } = &base
             && let Some(trait_def) = self.trait_defs.get(identifier)
             && let Some(assoc_type) = trait_def.type_members.get(name)
         {
@@ -248,7 +253,7 @@ impl Typing {
                 return Some(assoc_type.clone());
             }
 
-            for trait_name in imp.traits.iter() {
+            for trait_name in &imp.traits {
                 if let Some(trait_def) = self.trait_defs.get(trait_name)
                     && let Some(assoc_type) = trait_def.type_members.get(name)
                 {
@@ -257,9 +262,10 @@ impl Typing {
             }
         }
 
+        let mut bindings = FxHashMap::default();
         for impl_list in self.trait_impls.values() {
             for imp in impl_list {
-                let mut bindings = FxHashMap::default();
+                bindings.clear();
                 if imp
                     .target
                     .can_unify(base, &imp.generic_params, &mut bindings)
@@ -354,17 +360,18 @@ impl MiddleImpl {
         }
     }
 
-    pub fn normalize_member_name(name: &impl ToString) -> Ustr {
-        let name_str = name.to_string();
+    #[inline]
+    pub fn normalize_member_name(name: impl AsRef<str>) -> Ustr {
+        let name_str = name.as_ref();
         let short_name = name_str
             .rsplit_once("::")
             .map(|x| x.1)
             .or_else(|| name_str.rsplit_once('.').map(|x| x.1))
-            .unwrap_or(&name_str);
+            .unwrap_or(name_str);
         Ustr::from(short_name)
     }
 
-    pub fn insert_member(&mut self, name: &impl ToString, member: MiddleImplMember) {
+    pub fn insert_member(&mut self, name: impl AsRef<str>, member: MiddleImplMember) {
         let entry = self
             .members
             .entry(Self::normalize_member_name(name))
@@ -382,7 +389,7 @@ impl MiddleImpl {
 
     pub fn insert_member_placeholder(
         &mut self,
-        name: &impl ToString,
+        name: impl AsRef<str>,
         symbol_name: VariableKey,
         generic_params: Vec<Ustr>,
     ) {
@@ -398,7 +405,7 @@ impl MiddleImpl {
 
     pub fn get_member(
         &self,
-        name: &impl ToString,
+        name: impl AsRef<str>,
         generic_params: &[Ustr],
     ) -> Option<&MiddleImplMember> {
         let members = self.members.get(&Self::normalize_member_name(name))?;
@@ -413,10 +420,11 @@ impl MiddleImpl {
     }
 
     pub fn get_all_members(&self) -> Vec<(&Ustr, &MiddleImplMember)> {
-        let mut members = Vec::new();
+        let total_count: usize = self.members.values().map(|v| v.len()).sum();
+        let mut members = Vec::with_capacity(total_count);
 
-        for (name, member) in &self.members {
-            for value in member {
+        for (name, member_list) in &self.members {
+            for value in member_list {
                 members.push((name, value));
             }
         }
@@ -490,18 +498,17 @@ impl Display for MiddleTypeDefType {
                 if fields.0.is_empty() {
                     write!(f, "struct {{}}")
                 } else if is_tuple {
-                    let types: Vec<String> = fields
-                        .0
-                        .iter()
-                        .map(|(_, (data_type, default_val))| {
-                            if let Some(val) = default_val {
-                                format!("{} = {:?}", data_type, val)
-                            } else {
-                                format!("{}", data_type)
-                            }
-                        })
-                        .collect();
-                    write!(f, "({})", types.join(", "))
+                    write!(f, "(")?;
+                    for (i, (_, (data_type, default_val))) in fields.0.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", data_type)?;
+                        if let Some(val) = default_val {
+                            write!(f, " = {:?}", val)?;
+                        }
+                    }
+                    write!(f, ")")
                 } else {
                     writeln!(f, "struct {{")?;
                     for (name, (data_type, default_val)) in fields.0.iter() {
@@ -537,7 +544,7 @@ impl MiddleTypeDefType {
                 default_value,
             } => MiddleTypeDefType::Enum {
                 variants: {
-                    let mut lst = Vec::new();
+                    let mut lst = Vec::with_capacity(variants.len());
 
                     for (_, k, v) in variants {
                         let name = match env.resolve(
@@ -546,7 +553,7 @@ impl MiddleTypeDefType {
                             ResolutionOptions::default().with_dollar(),
                         ) {
                             Ok(key) => key.unwrap_dollar(),
-                            Err(_) => Ustr::from(&k.to_string()),
+                            Err(_) => Ustr::from(k.text()),
                         };
                         let ty = v.map(|v| {
                             env.resolve_data_type(scope, &v, ResolutionOptions::typing())
@@ -560,31 +567,29 @@ impl MiddleTypeDefType {
                 default_value,
             },
             TypeDefType::Struct { fields } => MiddleTypeDefType::Struct({
-                let mut map = Vec::new();
-
                 match fields {
                     ObjectType::Map(field_map) => {
+                        let mut map = Vec::with_capacity(field_map.len());
                         for (k, (_, t, v)) in field_map {
                             let resolved_type = env
                                 .resolve_data_type(scope, &t, ResolutionOptions::typing())
                                 .unwrap_or_else(|_| MirDataType::from(t));
                             map.push((k, (resolved_type, v.map(Box::new))));
                         }
+                        ObjectMap(map)
                     }
                     ObjectType::Tuple(types) => {
+                        let mut map = Vec::with_capacity(types.len());
                         for (_, t, v) in types {
                             let resolved_type = env
                                 .resolve_data_type(scope, &t, ResolutionOptions::typing())
                                 .unwrap_or_else(|_| MirDataType::from(t));
-                            map.push((
-                                Ustr::from(&map.len().to_string()),
-                                (resolved_type, v.map(Box::new)),
-                            ));
+                            let idx_str = map.len().to_string();
+                            map.push((Ustr::from(&idx_str), (resolved_type, v.map(Box::new))));
                         }
+                        ObjectMap(map)
                     }
                 }
-
-                ObjectMap(map)
             }),
             TypeDefType::NewType(x) => MiddleTypeDefType::NewType(
                 env.resolve_data_type(scope, x.as_ref(), ResolutionOptions::typing())

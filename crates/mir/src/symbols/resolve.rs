@@ -203,7 +203,7 @@ impl MiddleEnvironment {
     pub fn resolve_member_fn_type(
         &self,
         ty: &MirDataType,
-        member: &impl ToString,
+        member: &impl AsRef<str>,
     ) -> Option<MirDataType> {
         self.resolve_member_fn_name(ty, member)
             .and_then(|name| self.symbols.variables.get(&name))
@@ -302,7 +302,7 @@ impl MiddleEnvironment {
         }
 
         if let Some(imp) = self.typing.find_inherent_impl_for_type(base)
-            && let Some(mapped_member) = imp.get_member(&member, &[])
+            && let Some(mapped_member) = imp.get_member(member, &[])
         {
             return self
                 .symbols
@@ -317,7 +317,7 @@ impl MiddleEnvironment {
     pub fn resolve_member_fn_name(
         &self,
         ty: &MirDataType,
-        member: &impl ToString,
+        member: &impl AsRef<str>,
     ) -> Option<VariableKey> {
         let symbol_name = self
             .typing

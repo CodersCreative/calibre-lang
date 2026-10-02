@@ -764,7 +764,7 @@ impl VM {
         key: &TypeImplKey,
         method: &Ustr,
     ) -> Option<&VariableKey> {
-        self.registry.vtable.get_function_from_type(&key, method)
+        self.registry.vtable.get_function_from_type(key, method)
     }
 
     // TODO Make an impl_name function for RuntimeValue
@@ -780,7 +780,7 @@ impl VM {
             .get_function_name_from_type_member(&key, method)
             .ok_or(RuntimeError::InvalidFunctionCall)?;
 
-        if let Some(_drop_func) = self.registry.functions.get(&name) {
+        if let Some(_drop_func) = self.registry.functions.get(name) {
             if let Some(x) = value_pos {
                 args.insert(x, value.clone());
             }

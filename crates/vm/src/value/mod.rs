@@ -386,9 +386,9 @@ impl RuntimeValue {
             RuntimeValue::Range(_, _) => Some(TypeImplKey::Primitive(Ustr::from("range"))),
             RuntimeValue::Ptr(_) => Some(TypeImplKey::Ptr),
             RuntimeValue::Aggregate(Some(name), _) | RuntimeValue::Enum(name, _, _) => {
-                return Some(TypeImplKey::from(name.clone()));
+                Some(TypeImplKey::from(name.clone()))
             }
-            RuntimeValue::Generator { type_name, .. } => return Some(type_name.clone()),
+            RuntimeValue::Generator { type_name, .. } => Some(type_name.clone()),
             RuntimeValue::List(_) => Some(TypeImplKey::List),
             RuntimeValue::Option(_) => Some(TypeImplKey::Option),
             RuntimeValue::Result(_) => Some(TypeImplKey::Result),

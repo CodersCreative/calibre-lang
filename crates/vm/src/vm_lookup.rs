@@ -186,7 +186,7 @@ impl VM {
         block: &'a VMBlock,
         idx: u16,
     ) -> Result<&'a VariableKey, RuntimeError> {
-        let idx = self.checked_local_string_idx(block, idx)?;
+        let idx = self.checked_local_variable_idx(block, idx)?;
         Ok(&block.local_variables[idx])
     }
 
@@ -208,7 +208,7 @@ impl VM {
         block: &'a VMBlock,
         idx: u16,
     ) -> Result<&'a TypeKey, RuntimeError> {
-        let idx = self.checked_local_string_idx(block, idx)?;
+        let idx = self.checked_local_type_idx(block, idx)?;
         Ok(&block.local_types[idx])
     }
 }

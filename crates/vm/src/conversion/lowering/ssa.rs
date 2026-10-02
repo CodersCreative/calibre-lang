@@ -121,7 +121,7 @@ impl SSABuilder {
                             let pred_idx = self.block_map[pred];
                             let reg = self.infos[pred_idx]
                                 .out_map
-                                .get(&var)
+                                .get(var)
                                 .copied()
                                 .unwrap_or(self.null_reg);
 
@@ -149,7 +149,7 @@ impl SSABuilder {
                                 .or_insert_with(|| self.alloc_reg())
                         };
 
-                        if let Some(&phi_reg) = current_info.phi_for.get(&var) {
+                        if let Some(&phi_reg) = current_info.phi_for.get(var) {
                             sources.sort_unstable_by_key(|(block, _)| block.0);
 
                             if let Some(p) =

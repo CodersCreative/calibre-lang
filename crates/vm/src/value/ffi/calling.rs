@@ -39,7 +39,7 @@ impl ExternFunction {
 
             if let Some(k) = key {
                 let symbol = VariableKey {
-                    fully_qualified_path: FullyQualifiedPath::combine(None, self.symbol.clone()),
+                    fully_qualified_path: FullyQualifiedPath::combine(None, self.symbol),
                     shadow_counter: None,
                 };
 
