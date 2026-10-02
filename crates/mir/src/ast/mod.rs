@@ -827,9 +827,11 @@ impl From<MiddleNodeType> for AstNodeType {
                 } else {
                     value.value.contains_key("0")
                 };
+
                 if is_tuple {
                     let caller_span = Span::default();
 
+                    // TODO Fix invalid conversion of FQP Ident to str
                     AstNodeType::CallExpression(AstCall {
                         string_fn: None,
                         generic_types: Vec::new(),
@@ -856,6 +858,7 @@ impl From<MiddleNodeType> for AstNodeType {
                         reverse_args: Vec::new(),
                     })
                 } else {
+                    // TODO Fix invalid conversion of FQP Ident to str
                     AstNodeType::StructLiteral(AstStruct {
                         identifier: PotentialGenericTypeIdentifier::new(
                             Span::default(),

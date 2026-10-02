@@ -300,7 +300,7 @@ impl MiddleEnvironment {
         elem_type: ParserDataType,
         span: Span,
     ) -> AstNode {
-        let next_name = self.context.get_temp();
+        let next_name = self.context.get_temp("gen_next");
         let rewritten = Self::rewrite_generator_returns(body);
 
         let next_body = match rewritten.node_type {
@@ -524,7 +524,12 @@ impl MirLowering for AstExtern {
             }
         }
 
-        let var_key = env.register_variable(scope, ident, fn_type.clone(), VarType::Constant)?;
+        let var_key = if self.declared {
+            env.resolve(scope, ident, ResolutionOptions::idents())?
+                .unwrap_variable()
+        } else {
+            env.register_variable(scope, ident, fn_type.clone(), VarType::Constant)?
+        };
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
@@ -921,6 +926,7 @@ impl MirLowering for AstCall {
                     .resolve(scope, &field, ResolutionOptions::default().with_dollar())?
                     .unwrap_dollar();
 
+                // TODO Fix invalid conversion of FQP Ident to str
                 if let Some(ty) = base.type_of(env, scope, span)
                     && let Some(x) = env
                         .typing
@@ -936,6 +942,7 @@ impl MirLowering for AstCall {
                     .lower(env, scope, span);
                 }
 
+                // TODO Fix invalid conversion of FQP Ident to str
                 if let Ok(resolved) = (AstField {
                     base: base.clone(),
                     field: field.clone(),

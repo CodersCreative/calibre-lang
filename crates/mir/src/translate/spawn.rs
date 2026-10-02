@@ -40,7 +40,7 @@ impl MirLowering for AstSelect {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let done_ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
+        let done_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("select_done"));
 
         let done_decl = AstNode::new(
             span,
@@ -99,8 +99,10 @@ impl MirLowering for AstSelect {
                     SelectArmKind::Recv => {
                         let Some(left) = left.clone() else { continue };
                         let Some(right) = right.clone() else { continue };
-                        let tmp_ident =
-                            PotentialDollarIdentifier::new(span, env.context.get_temp());
+                        let tmp_ident = PotentialDollarIdentifier::new(
+                            span,
+                            env.context.get_temp("select_ident"),
+                        );
 
                         let try_get_call =
                             AstNode::call(span, AstNode::member(span, right, "try_get"), vec![]);
@@ -361,7 +363,7 @@ impl MirLowering for AstSpawn {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         if self.auto_wait {
-            let ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
+            let ident = PotentialDollarIdentifier::new(span, env.context.get_temp("spawn_wg"));
 
             AstNode::new_temp_scope_with_create(
                 vec![
@@ -425,7 +427,8 @@ impl MirLowering for AstSpawn {
                     label,
                     else_body,
                 }) => {
-                    let ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
+                    let ident =
+                        PotentialDollarIdentifier::new(span, env.context.get_temp("spawn_wg"));
 
                     let decl = AstNode::new(
                         span,
@@ -495,7 +498,7 @@ impl MirLowering for AstSpawn {
                 span,
             ))
         } else {
-            let ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
+            let ident = PotentialDollarIdentifier::new(span, env.context.get_temp("spawn_wg"));
 
             let mut body = vec![AstNode::new(
                 span,

@@ -169,7 +169,7 @@ impl MirLowering for AstAssignDestructure {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         let tmp_ident: PotentialDollarIdentifier =
-            PotentialDollarIdentifier::new(span, env.context.get_temp());
+            PotentialDollarIdentifier::new(span, env.context.get_temp("destructure"));
 
         let tmp_decl = AstNode::new(
             span,

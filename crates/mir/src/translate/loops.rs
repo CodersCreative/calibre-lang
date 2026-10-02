@@ -177,16 +177,16 @@ struct LoopTempNames {
 impl LoopTempNames {
     fn new(env: &mut MiddleEnvironment, span: Span, needs_else: bool) -> Self {
         let (result, broke) = if needs_else {
-            let result = Ustr::from(&env.context.get_temp());
-            let broke = Ustr::from(&env.context.get_temp());
+            let result = Ustr::from(&env.context.get_temp("loop_result"));
+            let broke = Ustr::from(&env.context.get_temp("loop_broke"));
             (Some(result), Some(broke))
         } else {
             (None, None)
         };
 
-        let iter = PotentialDollarIdentifier::new(span, env.context.get_temp());
-        let idx = PotentialDollarIdentifier::new(span, env.context.get_temp());
-        let next = PotentialDollarIdentifier::new(span, env.context.get_temp());
+        let iter = PotentialDollarIdentifier::new(span, env.context.get_temp("loop_iter"));
+        let idx = PotentialDollarIdentifier::new(span, env.context.get_temp("loop_index"));
+        let next = PotentialDollarIdentifier::new(span, env.context.get_temp("loop_next"));
 
         Self {
             result,

@@ -265,6 +265,7 @@ impl MirLowering for AstDeclaration {
                     _ => None,
                 });
 
+            // TODO Fix invalid conversion of FQP Ident to str
             if let Some(first_ty) = first_ty
                 && let Some(mapped_name) = env.resolve_member_fn_name(
                     first_ty.unwrap_all_refs(),
@@ -296,12 +297,14 @@ impl MirLowering for AstDeclaration {
         let data_type =
             env.compare_types(data_type, node_ty, Some(&TagInfo::IgnoreInvalidLet), span)?;
 
-        let mut is_function = false;
-
         let var_key = if let AstNodeType::FunctionDeclaration(func) = &self.value.node_type {
-            is_function = true;
+            let key = if self.declared {
+                env.resolve(scope, identifier, ResolutionOptions::idents())?
+                    .unwrap_variable()
+            } else {
+                env.register_variable(scope, identifier, data_type.clone(), self.var_type)?
+            };
 
-            let key = env.register_variable(scope, identifier, data_type.clone(), self.var_type)?;
             env.handle_function_template(scope, func, key.clone());
 
             for tag in &env.tagging.tag_info {
@@ -325,10 +328,15 @@ impl MirLowering for AstDeclaration {
 
         let mut value = self.value.lower_or_empty(env, scope, span);
 
-        let var_key = if !is_function {
-            Some(env.register_variable(scope, identifier, data_type.clone(), self.var_type)?)
-        } else {
+        let var_key = if let Some(var_key) = var_key {
             var_key
+        } else {
+            if self.declared {
+                env.resolve(scope, identifier, ResolutionOptions::idents())?
+                    .unwrap_variable()
+            } else {
+                env.register_variable(scope, identifier, data_type.clone(), self.var_type)?
+            }
         };
 
         if matches!(data_type, MirDataType::DynamicTraits(_)) {
@@ -345,7 +353,7 @@ impl MirLowering for AstDeclaration {
         Ok(MiddleNode::new(
             MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: self.var_type,
-                identifier: var_key.unwrap(),
+                identifier: var_key,
                 value: Box::new(value),
                 data_type,
             }),
@@ -362,7 +370,7 @@ impl MirLowering for AstDeclareDestructure {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
+        let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("destructure"));
 
         let tmp_decl = AstNode::new(
             span,

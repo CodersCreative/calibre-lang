@@ -137,7 +137,7 @@ impl MirLowering for AstMatch {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         let (decl, value) = if let Some(value) = self.value {
-            let tmp_name = env.context.get_temp();
+            let tmp_name = env.context.get_temp("match_ident");
 
             (
                 Some(AstNode::new(

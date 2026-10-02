@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{ast::MiddleNode, errors::MiddleErr, tags::context::PackageMetadata};
 use calibre_parser::{Location, Span};
 use ustr::Ustr;
@@ -60,7 +62,7 @@ impl MiddleContext {
         }
     }
 
-    pub fn get_temp(&mut self) -> String {
-        format!("mir_tmp_{}", self.increment_counter())
+    pub fn get_temp(&mut self, name: impl Display) -> String {
+        format!("mir_tmp_{}_{}", name, self.increment_counter())
     }
 }

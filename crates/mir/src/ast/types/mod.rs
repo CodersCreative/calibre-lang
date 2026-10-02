@@ -600,6 +600,7 @@ impl MirDataType {
         }
     }
 
+    #[deprecated(note = "If an impl is required use TypeImplKey::from")]
     pub fn impl_name(&self) -> String {
         match self.key() {
             MirDataType::Struct { identifier, .. } => identifier.to_string(),
@@ -669,45 +670,6 @@ impl MirDataType {
     #[inline]
     pub fn is_gen(&self) -> bool {
         self.impl_name() == "gen" || self.impl_name().starts_with("gen:<")
-    }
-
-    pub fn verify(self) -> Self {
-        match self {
-            Self::Result { ok, err } => Self::Result {
-                ok: Box::new(ok.verify()),
-                err: Box::new(err.verify()),
-            },
-            Self::Ref(x, y) => Self::Ref(Box::new(x.verify()), y),
-            Self::Ptr(x) => Self::Ptr(Box::new(x.verify())),
-            Self::Option(x) => Self::Option(Box::new(x.verify())),
-            Self::List(x) => Self::List(Box::new(x.verify())),
-            Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.verify()).collect()),
-            Self::DynamicTraits(traits) => {
-                let mut normalized = traits
-                    .into_iter()
-                    .map(|s| s.to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect::<Vec<_>>();
-                normalized.sort();
-                normalized.dedup();
-                if normalized.is_empty() {
-                    Self::Dynamic
-                } else {
-                    Self::DynamicTraits(
-                        normalized
-                            .into_iter()
-                            .map(|s| TypeKey {
-                                fully_qualified_path: Arc::new(FullyQualifiedPath {
-                                    name: Some(Ustr::from(&s)),
-                                    parent: None,
-                                }),
-                            })
-                            .collect(),
-                    )
-                }
-            }
-            ty => ty,
-        }
     }
 
     pub fn contains_auto(&self) -> bool {

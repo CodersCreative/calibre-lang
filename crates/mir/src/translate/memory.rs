@@ -102,7 +102,7 @@ impl MirLowering for AstMove {
                 span,
             }),
             AstNodeType::FieldAccess(AstField { base, field }) => {
-                let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
+                let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("move"));
 
                 let tmp_decl = AstNode::new(
                     span,
@@ -138,7 +138,7 @@ impl MirLowering for AstMove {
                 AstNode::new_temp_scope(vec![tmp_decl, member]).lower(env, scope, span)
             }
             AstNodeType::ScopeAccess(AstScope { base, field }) => {
-                let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
+                let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("move"));
 
                 let tmp_decl = AstNode::new(
                     span,
@@ -173,7 +173,7 @@ impl MirLowering for AstMove {
                 AstNode::new_temp_scope(vec![tmp_decl, member]).lower(env, scope, span)
             }
             AstNodeType::IndexAccess(AstIndex { base, index }) => {
-                let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
+                let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("move"));
 
                 let tmp_decl = AstNode::new(
                     span,

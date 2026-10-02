@@ -302,7 +302,7 @@ impl MirLowering for AstIter {
             .lower(env, scope, span);
         }
 
-        let list_ident = PotentialDollarIdentifier::new(span, env.context.get_temp());
+        let list_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("iter_list"));
         let list_ident_node = AstNode::identifier(span, &list_ident);
 
         let list_type = ParserDataType::new(

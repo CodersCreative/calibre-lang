@@ -2,19 +2,19 @@ type Args := struct { };
 type Vars := struct { };
 
 impl Args {
-	const nth := fn (idx : int) -> str? => return get(idx);
+	const nth := fn (idx : uint) -> str? => return get(idx);
 
 	const all := fn -> list:<str> => {
 		let mut out : list:<str> = list:<str>[];
 		
-		let mut idx := 0;
+		let mut idx := 0u;
 		
 		// Fix Args.nth
 		for  => {
 			match Args.nth(idx) as! str? {
 				.Some : x => {
 					out <<= x;
-					idx += 1;
+					idx += 1u;
 				},
 				.None => break
 			};
@@ -23,12 +23,12 @@ impl Args {
 		return out;
 	};
 
-	const count := fn -> int => {
-		let mut idx := 0;
+	const count := fn -> uint => {
+		let mut idx := 0u;
 		
 		for  => {
 			match Args.nth(idx) as! str? {
-				.Some : _ => idx += 1,
+				.Some : _ => idx += 1u,
 				.None => break
 			};
 		};
@@ -36,9 +36,9 @@ impl Args {
 		return idx;
 	};
 
-	const first := fn -> str? => return get(0);
+	const first := fn -> str? => return get(0u);
 
-	const is_empty := fn -> bool => return Args.count() = 0;
+	const is_empty := fn -> bool => return Args.count() = 0u;
 };
 
 impl Vars {

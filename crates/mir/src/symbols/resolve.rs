@@ -433,6 +433,7 @@ impl MiddleEnvironment {
                 {
                     return Ok(KeyOrAstNode::Key(Key::TypeKey(key.clone())));
                 }
+
                 if let Some(key) = self
                     .typing
                     .trait_defs
@@ -441,6 +442,7 @@ impl MiddleEnvironment {
                 {
                     return Ok(KeyOrAstNode::Key(Key::TypeKey(key.clone())));
                 }
+
                 if let Some(key) = self
                     .typing
                     .trait_impls
@@ -891,7 +893,6 @@ impl MiddleEnvironment {
                     .collect::<Result<Vec<_>, MiddleErr>>()?,
             ),
             x => x.into(),
-        }
-        .verify())
+        })
     }
 }
