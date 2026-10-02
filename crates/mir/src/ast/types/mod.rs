@@ -115,6 +115,11 @@ impl MirTypeKeysUsed for MirDataType {
                 types.extend(ok.identifiers_used());
                 types.extend(err.identifiers_used());
             }
+            MirDataType::DynamicTraits(traits) => {
+                for trait_key in traits {
+                    types.push(trait_key);
+                }
+            }
             _ => {}
         }
         types
@@ -355,6 +360,10 @@ impl From<ParserInnerType> for MirDataType {
                     })
                     .collect(),
             ),
+            ParserInnerType::Scope(types) => types
+                .into_iter()
+                .next()
+                .map_or(MirDataType::Null, |t| t.into()),
             _ => MirDataType::Null,
         }
     }

@@ -29,8 +29,30 @@ pub struct VTable {
 }
 
 impl VTable {
-    pub fn append(&mut self, _other: Self) {
-        todo!()
+    pub fn append(&mut self, other: Self) {
+        for (key, other_trait) in other.traits {
+            self.traits
+                .entry(key)
+                .and_modify(|trait_entry| {
+                    trait_entry.members.extend(other_trait.members.clone());
+                    trait_entry
+                        .type_members
+                        .extend(other_trait.type_members.clone());
+                    trait_entry
+                        .associated
+                        .extend(other_trait.associated.clone());
+                })
+                .or_insert(other_trait);
+        }
+
+        for (key, other_impl) in other.impls {
+            self.impls
+                .entry(key)
+                .and_modify(|impl_entry| {
+                    impl_entry.members.extend(other_impl.members.clone());
+                })
+                .or_insert(other_impl);
+        }
     }
 
     pub fn get_function_from_type<'a>(

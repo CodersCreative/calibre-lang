@@ -8,6 +8,7 @@ use calibre_mir::{
     scoping::ScopeId,
     symbols::resolve::{Key, ResolutionOptions},
 };
+use ustr::Ustr;
 
 impl CalibreLanguageServer {
     pub(super) fn find_scope_at_with(

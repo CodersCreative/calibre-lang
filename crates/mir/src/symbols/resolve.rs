@@ -849,31 +849,25 @@ impl MiddleEnvironment {
                 err: Box::new(self.resolve_data_type(scope, err.as_ref(), options)?),
                 ok: Box::new(self.resolve_data_type(scope, ok.as_ref(), options)?),
             },
-            // TODO Scopesss
-            ParserInnerType::Scope(_) => {
-                /*let mut lst = Vec::new();
-
-                for x in x {
-                    lst.push(
-                        self.resolve_data_type(scope, x, options)
-                            .unwrap_or(x.clone()),
-                    );
+            ParserInnerType::Scope(types) => {
+                let mut resolved_types = Vec::new();
+                for ty in types {
+                    resolved_types.push(self.resolve_data_type(scope, ty, options)?);
                 }
 
-                if lst.len() == 2
-                    && let ParserInnerType::Struct(name) = &lst[1].data_type
-                    && let Some(resolved) = self
+                if resolved_types.len() == 2
+                    && let MirDataType::Struct { identifier, .. } = &resolved_types[1]
+                    && let Some(associated) = self
                         .typing
-                        .resolve_associated_type(&lst[0], &Ustr::from(name))
+                        .resolve_associated_type(&resolved_types[0], identifier.name())
                 {
-                    return Ok(resolved);
+                    return Ok(associated);
                 }
 
-                ParserDataType {
-                    data_type: ParserInnerType::Scope(lst),
-                    span: self.context.current_span(),
-                }*/
-                todo!()
+                resolved_types
+                    .into_iter()
+                    .next()
+                    .unwrap_or(MirDataType::Null)
             }
             ParserInnerType::DollarIdentifier(x) => {
                 if let Some(node) = self.scoping.resolve_macro_arg(scope, &Ustr::from(x)) {

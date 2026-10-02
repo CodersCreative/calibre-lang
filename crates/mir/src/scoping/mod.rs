@@ -423,7 +423,12 @@ impl Display for FullyQualifiedPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match (&self.name, &self.parent) {
             (Some(name), Some(parent)) => {
-                write!(f, "{}::{}", parent, name)
+                let parent = parent.to_string();
+                if parent.is_empty() {
+                    write!(f, "{}", name)
+                } else {
+                    write!(f, "{}::{}", parent, name)
+                }
             }
             (Some(name), _) => {
                 write!(f, "{}", name)

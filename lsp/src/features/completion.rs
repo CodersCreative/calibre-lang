@@ -5,7 +5,6 @@ use calibre_mir::{
     symbols::{TypeKey, VariableKey},
     typing::MiddleObject,
 };
-use calibre_parser::ast::idents::ParserText;
 use std::sync::Arc;
 use ustr::Ustr;
 
@@ -597,7 +596,11 @@ impl CalibreLanguageServer {
                     }
 
                     out.entry(display_name.clone()).or_insert_with(|| {
-                        Self::global_semantic_completion_item(env, visible, canonical)
+                        Self::global_semantic_completion_item(
+                            env,
+                            visible,
+                            canonical.name().as_str(),
+                        )
                     });
                 }
             }
@@ -665,7 +668,7 @@ impl CalibreLanguageServer {
                 label: display_name.clone(),
                 detail: Some("trait".to_string()),
                 kind: Some(CompletionItemKind::INTERFACE),
-                documentation: Some(Documentation::String(format!("Trait: {}", trait_name))),
+                documentation: Some(Documentation::String(format!("Trait: {}", trait_key))),
                 sort_text: Some(format!("1_{}", display_name)),
                 ..CompletionItem::default()
             });

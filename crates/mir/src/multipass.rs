@@ -15,6 +15,8 @@ use ustr::Ustr;
 impl MiddleEnvironment {
     #[instrument(skip_all)]
     pub fn predeclare_nodes(&mut self, scope: ScopeId, nodes: &mut [AstNode]) {
+        // TODO Fix predeclaration causing variable shadowing error
+        return;
         for node in nodes {
             let _ = self.predeclare_node(scope, node);
         }

@@ -485,8 +485,13 @@ impl CalibreStandalone for CalibreEngine {
 
         let entry_name = env
             .resolve(scope, &self.entry_name, ResolutionOptions::idents())
-            .map(|x| x.unwrap_variable())
-            .unwrap();
+            .map_err(|e| CalibreError::Middle {
+                path: path.clone(),
+                ast_artifacts: Some(Box::new(ast.clone())),
+                contents: full_source.clone(),
+                error: Box::new(e),
+            })?
+            .unwrap_variable();
 
         let mut init_functions = std::mem::take(&mut env.tagging.init_functions);
 

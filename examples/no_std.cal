@@ -1,0 +1,13 @@
+const true : bool = 1 > 0;
+const false : bool = 1 < 0;
+
+const main := fn => {
+    try ("4" as int)
+    for 4 => 3;
+    match 4 {
+        1 => emit 2,
+        _ => emit 3,
+    };
+    if true => 4;
+    2;
+}
