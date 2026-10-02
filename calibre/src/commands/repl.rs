@@ -1,5 +1,5 @@
 use crate::commands::utils::{is_persistent_decl, is_repl_file};
-use calibre_lir::environment::LirEnvironment;
+use calibre_lir::{VariableKey, environment::LirEnvironment};
 use calibre_mir::{environment::MiddleEnvironment, errors::MiddleErr};
 use calibre_vm::{VM, config::VMConfig, conversion::VMRegistry, value::RuntimeValue};
 use derive_builder::Builder;
@@ -145,25 +145,27 @@ impl<'a> RunSource<'a> {
             return Err(String::from("compile failed").into());
         }
 
+        let root_name =
+            env.get_new_variable_key_with_temp_scope(scope, Ustr::from("__repl"), false)?;
         let middle_result = (env, scope, middle_node);
 
         let lir_result = LirEnvironment::lower_with_root(
             &middle_result.0,
             middle_result.2.clone(),
-            Ustr::from("__repl"),
+            root_name.clone(),
         );
 
-        let mappings: Vec<Ustr> = middle_result
+        let mappings: Vec<VariableKey> = middle_result
             .0
             .symbols
             .variables
             .iter()
-            .map(|x| *x.0)
+            .map(|x| x.0.clone())
             .collect();
 
         let mut vm: VM = VM::new(VMRegistry::from(lir_result), mappings, self.vm_config);
         let mut globals = vm.registry.globals.clone();
-        let repl_global = globals.remove(&Ustr::from("__repl"));
+        let repl_global = globals.remove(&root_name);
 
         for (_, global) in globals {
             if let Err(err) = vm.run_global(&global) {

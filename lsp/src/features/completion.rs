@@ -1,10 +1,12 @@
 use calibre_mir::{
-    ast::types::{MirDataType, unify::TypeImplKey},
-    scoping::ScopeId,
+    ast::types::MirDataType,
+    scoping::{FullyQualifiedPath, ScopeId},
+    symbols::{TypeKey, VariableKey},
     symbols::resolve::{Key, ResolutionOptions},
     typing::MiddleObject,
 };
 use calibre_parser::ast::idents::ParserText;
+use std::sync::Arc;
 use ustr::Ustr;
 
 use super::*;
@@ -484,9 +486,15 @@ impl CalibreLanguageServer {
         visible: &str,
         canonical: &str,
     ) -> CompletionItem {
-        let canonical = Ustr::from(canonical);
+        let canonical_key = VariableKey {
+            fully_qualified_path: Arc::new(FullyQualifiedPath {
+                name: Some(Ustr::from(canonical)),
+                parent: None,
+            }),
+            shadow_counter: None,
+        };
         let display_name = Self::sanitize_name(visible);
-        let (detail, kind, documentation) = if let Some(var) = env.symbols.variables.get(&canonical)
+        let (detail, kind, documentation) = if let Some(var) = env.symbols.variables.get(&canonical_key)
         {
             match &var.data_type {
                 MirDataType::Function {
@@ -523,8 +531,15 @@ impl CalibreLanguageServer {
                     )
                 }
             }
-        } else if env.typing.objects.contains_key(&canonical) {
-            let (detail, kind) = if let Some(object) = env.typing.objects.get(&canonical) {
+        } else {
+            let type_key = TypeKey {
+                fully_qualified_path: Arc::new(FullyQualifiedPath {
+                    name: Some(Ustr::from(canonical)),
+                    parent: None,
+                }),
+            };
+            if env.typing.objects.contains_key(&type_key) {
+                let (detail, kind) = if let Some(object) = env.typing.objects.get(&type_key) {
                 (
                     object.object_type.to_string(),
                     match &object.object_type {
@@ -551,7 +566,8 @@ impl CalibreLanguageServer {
                     display_name, canonical
                 ),
             )
-        };
+        }
+        }
 
         CompletionItem {
             label: display_name.clone(),
@@ -576,10 +592,6 @@ impl CalibreLanguageServer {
                     let display_name = Self::sanitize_name(visible);
 
                     if !prefix.is_empty() && !display_name.starts_with(prefix) {
-                        continue;
-                    }
-
-                    if ParserText::is_temp_name(&visible.to_string()) {
                         continue;
                     }
 
@@ -619,8 +631,8 @@ impl CalibreLanguageServer {
         prefix: &str,
         out: &mut HashMap<String, CompletionItem>,
     ) {
-        for (type_name, object) in &env.typing.objects {
-            let display_name = Self::sanitize_name(type_name);
+        for (type_key, object) in &env.typing.objects {
+            let display_name = Self::sanitize_name(type_key.name().as_str());
             if !prefix.is_empty() && !display_name.starts_with(prefix) {
                 continue;
             }
@@ -636,14 +648,14 @@ impl CalibreLanguageServer {
                 label: display_name.clone(),
                 detail: Some(object.object_type.to_string()),
                 kind: Some(kind),
-                documentation: Some(Documentation::String(format!("Type: {}", type_name))),
+                documentation: Some(Documentation::String(format!("Type: {}", type_key))),
                 sort_text: Some(format!("1_{}", display_name)),
                 ..CompletionItem::default()
             });
         }
 
-        for trait_name in env.typing.trait_defs.keys() {
-            let display_name = Self::sanitize_name(trait_name);
+        for trait_key in env.typing.trait_defs.keys() {
+            let display_name = Self::sanitize_name(trait_key.name().as_str());
             if !prefix.is_empty() && !display_name.starts_with(prefix) {
                 continue;
             }
@@ -660,11 +672,6 @@ impl CalibreLanguageServer {
     }
 
     fn sanitize_name(name: &str) -> String {
-        if ParserText::is_temp_name(&name.to_string())
-            && let Some(suffix) = ParserText::get_temp_name_suffix(&name.to_string())
-        {
-            return suffix;
-        }
         name.to_string()
     }
 

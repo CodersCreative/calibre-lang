@@ -83,13 +83,16 @@ impl MirLowering for AstTest {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let func_identifier = format!("test::{}", self.identifier.text.trim());
+        let func_identifier = env.get_new_variable_key(
+            scope,
+            Ustr::from(&format!("test::{}", self.identifier.text.trim())),
+        )?;
 
         let file_path = env.scoping.scope_or_err(scope).map(|s| s.path.clone()).ok();
 
         env.register_test(
             Ustr::from(&self.identifier.text),
-            Ustr::from(&func_identifier),
+            func_identifier.clone(),
             scope,
             file_path,
         );
@@ -100,7 +103,7 @@ impl MirLowering for AstTest {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                     span,
-                    func_identifier,
+                    func_identifier.name(),
                 )),
                 data_type: ParserDataType::auto(span),
                 value: Box::new(AstNode::new(
@@ -115,7 +118,7 @@ impl MirLowering for AstTest {
                         body: self.body,
                     }),
                 )),
-                declared: false,
+                declared: true,
             }),
         )
         .lower(env, scope, span)

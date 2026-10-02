@@ -1,4 +1,5 @@
 use crate::{CalibreArtifacts, CalibreEngine, CalibreError, RunResult, Timed};
+use calibre_lir::VariableKey;
 use calibre_lir::environment::LirEnvironment;
 use calibre_mir::symbols::resolve::ResolutionOptions;
 use calibre_mir::{environment::MiddleEnvironment, errors::MiddleErr, testing::Testing};
@@ -18,11 +19,11 @@ const CACHE_FORMAT_VERSION: &str = "v10";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedProgramBlob {
-    entry_name: Ustr,
-    mappings: Vec<Ustr>,
+    entry_name: VariableKey,
+    mappings: Vec<VariableKey>,
     registry: VMRegistry,
-    init_functions: Option<Vec<(i32, Ustr)>>,
-    fin_functions: Option<Vec<(i32, Ustr)>>,
+    init_functions: Option<Vec<(i32, VariableKey)>>,
+    fin_functions: Option<Vec<(i32, VariableKey)>>,
     testing: Option<Testing>,
 }
 
@@ -117,7 +118,7 @@ impl CalibreStandalone for CalibreEngine {
 
         let mut vm = VM::new(
             artifacts.registry.clone(),
-            artifacts.mappings.iter().map(|x| Ustr::from(x)).collect(),
+            artifacts.mappings.clone(),
             self.vm_config.clone(),
         );
         vm.set_source_file_override(&path);
@@ -342,7 +343,7 @@ impl CalibreStandalone for CalibreEngine {
 
         let mut writer = std::io::BufWriter::new(file);
         let cache = CachedProgramBlob {
-            entry_name: artifacts.entry_name,
+            entry_name: artifacts.entry_name.clone(),
             mappings: artifacts.mappings.clone(),
             registry: artifacts.registry.clone(),
             init_functions: Some(artifacts.init_functions.clone()),
@@ -483,13 +484,14 @@ impl CalibreStandalone for CalibreEngine {
         debug!("MIR construction completed");
 
         let entry_name = env
-            .resolve(scope, &self.entry_name, ResolutionOptions::all())
-            .unwrap_or_else(|_| Ustr::from(&self.entry_name));
+            .resolve(scope, &self.entry_name, ResolutionOptions::idents())
+            .map(|x| x.unwrap_variable())
+            .unwrap();
 
         let mut init_functions = std::mem::take(&mut env.tagging.init_functions);
 
         if !init_functions.iter().any(|x| x.1 == entry_name) {
-            init_functions.push((0, entry_name));
+            init_functions.push((0, entry_name.clone()));
         }
 
         init_functions.sort_by_key(|a| a.0);

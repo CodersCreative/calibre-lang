@@ -1,4 +1,6 @@
-use crate::{environment::MiddleEnvironment, scoping::ScopeId, tags::TagInfo};
+use crate::{
+    environment::MiddleEnvironment, scoping::ScopeId, symbols::VariableKey, tags::TagInfo,
+};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use ustr::Ustr;
@@ -17,7 +19,7 @@ pub enum TestOrBench {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Test {
     pub name: Ustr,
-    pub function_name: Ustr,
+    pub function_name: VariableKey,
     pub kind: TestOrBench,
     pub skip: bool,
     pub skip_reason: Option<Ustr>,
@@ -81,7 +83,7 @@ impl MiddleEnvironment {
     pub fn register_test(
         &mut self,
         name: Ustr,
-        function_name: Ustr,
+        function_name: VariableKey,
         scope_id: ScopeId,
         file_path: Option<PathBuf>,
     ) {

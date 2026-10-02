@@ -6,7 +6,7 @@ use calibre_mir::{
         MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
     },
     scoping::ScopeId,
-    symbols::resolve::{Key, KeyOrAstNode::Key, ResolutionOptions},
+    symbols::resolve::{Key, ResolutionOptions},
 };
 
 impl CalibreLanguageServer {
@@ -370,7 +370,7 @@ impl CalibreLanguageServer {
             .iter()
             .flat_map(|s| s.get().mappings.iter())
         {
-            if mapped_canonical != canonical {
+            if mapped_canonical.name() != &Ustr::from(canonical) {
                 continue;
             }
 
@@ -382,8 +382,8 @@ impl CalibreLanguageServer {
                         ResolutionOptions::all(),
                     )
                     .ok()
-                    .as_deref()
-                    == Some(canonical)
+                    .map(|k| k.to_string())
+                    == Some(canonical.to_string())
                 {
                     out.push(Location::new(uri.clone(), range));
                 }

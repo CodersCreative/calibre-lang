@@ -1,4 +1,5 @@
 use calibre_frontend::config::ProjectContext;
+use calibre_lir::VariableKey;
 use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::{config::VMConfig, conversion::VMRegistry};
 use std::{error::Error, path::PathBuf, process::Command, time::Duration};
@@ -83,8 +84,8 @@ pub fn runtime_error_message(err: &calibre_vm::error::RuntimeError) -> String {
 pub fn run_named_function_once(
     vm_config: &VMConfig,
     registry: VMRegistry,
-    mappings: Vec<Ustr>,
-    key: &Ustr,
+    mappings: Vec<VariableKey>,
+    key: &VariableKey,
     suppress_output: bool,
 ) -> Result<(Duration, Vec<Ustr>), (String, Vec<Ustr>)> {
     let mut vm = calibre_vm::VM::new(registry, mappings, vm_config.clone());

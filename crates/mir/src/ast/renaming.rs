@@ -301,7 +301,7 @@ impl MirRenamable for MiddleTrait {
             member.rename(state);
         }
 
-        for assoc_type in self.assoc_types.values_mut() {
+        for assoc_type in self.type_members.values_mut() {
             assoc_type.rename(state);
         }
     }

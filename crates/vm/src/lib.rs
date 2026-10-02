@@ -116,7 +116,7 @@ pub struct TaskState {
 pub struct VM {
     pub variables: VariableStore,
     pub registry: Arc<VMRegistry>,
-    pub mappings: Arc<Vec<Ustr>>,
+    pub mappings: Arc<Vec<VariableKey>>,
     pub program_args: Arc<Vec<Ustr>>,
     pub counter: u64,
     pub ptr_heap: FxHashMap<u64, RuntimeValue>,
@@ -204,7 +204,7 @@ impl From<VMRegistry> for VM {
 impl VM {
     fn from_shared_parts(
         registry: Arc<VMRegistry>,
-        mappings: Arc<Vec<Ustr>>,
+        mappings: Arc<Vec<VariableKey>>,
         config: VMConfig,
         install_builtins: bool,
     ) -> Self {
@@ -271,13 +271,13 @@ impl VM {
         self.registry.functions.get(name).map(Arc::as_ref)
     }
 
-    pub fn new(registry: VMRegistry, mappings: Vec<Ustr>, config: VMConfig) -> Self {
+    pub fn new(registry: VMRegistry, mappings: Vec<VariableKey>, config: VMConfig) -> Self {
         Self::from_shared_parts(Arc::new(registry), Arc::new(mappings), config, true)
     }
 
     pub fn new_shared(
         registry: Arc<VMRegistry>,
-        mappings: Arc<Vec<Ustr>>,
+        mappings: Arc<Vec<VariableKey>>,
         config: VMConfig,
     ) -> Self {
         Self::from_shared_parts(registry, mappings, config, true)

@@ -366,7 +366,7 @@ impl MirLowering for AstTrait {
         }
 
         let mut trait_members = UstrMap::default();
-        let mut assoc_types = UstrMap::default();
+        let mut type_members = UstrMap::default();
         for member in self.members {
             match member.kind {
                 TraitMemberKind::Type => {
@@ -376,7 +376,7 @@ impl MirLowering for AstTrait {
                         ResolutionOptions::typing(),
                     )?;
 
-                    assoc_types.insert(Ustr::from(&member.identifier.to_string()), data_type);
+                    type_members.insert(Ustr::from(&member.identifier.to_string()), data_type);
                 }
                 TraitMemberKind::Const => {
                     let data_type = env.resolve_data_type(
@@ -410,7 +410,7 @@ impl MirLowering for AstTrait {
             MiddleTrait {
                 implied_traits: implied,
                 members: trait_members,
-                assoc_types,
+                type_members,
             },
         );
 

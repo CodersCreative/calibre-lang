@@ -238,7 +238,7 @@ impl Typing {
             generic_types: _,
         } = &base
             && let Some(trait_def) = self.trait_defs.get(identifier)
-            && let Some(assoc_type) = trait_def.assoc_types.get(name)
+            && let Some(assoc_type) = trait_def.type_members.get(name)
         {
             return Some(assoc_type.clone());
         }
@@ -250,14 +250,14 @@ impl Typing {
 
             for trait_name in imp.traits.iter() {
                 if let Some(trait_def) = self.trait_defs.get(trait_name)
-                    && let Some(assoc_type) = trait_def.assoc_types.get(name)
+                    && let Some(assoc_type) = trait_def.type_members.get(name)
                 {
                     return Some(assoc_type.clone());
                 }
             }
         }
 
-        for (_, impl_list) in &self.trait_impls {
+        for impl_list in self.trait_impls.values() {
             for imp in impl_list {
                 let mut bindings = FxHashMap::default();
                 if imp
@@ -435,7 +435,7 @@ pub struct MiddleTraitMember {
 pub struct MiddleTrait {
     pub implied_traits: Vec<TypeKey>,
     pub members: UstrMap<MiddleTraitMember>,
-    pub assoc_types: UstrMap<MirDataType>,
+    pub type_members: UstrMap<MirDataType>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

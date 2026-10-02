@@ -17,6 +17,7 @@ use calibre_frontend::{
     config::ProjectContext,
     paths::{collect_cal_sources, collect_project_sources, resolve_run_targets},
 };
+use calibre_lir::VariableKey;
 use calibre_mir::testing::{Test, TestOrBench};
 use calibre_vm::{config::VMConfig, conversion::VMRegistry};
 use derive_builder::Builder;
@@ -36,7 +37,9 @@ pub struct RunSuite<'a> {
 }
 
 impl<'a> RunSuite<'a> {
-    async fn execute(self) -> Result<Vec<(String, VMRegistry, Vec<Ustr>, Test)>, Box<dyn Error>> {
+    async fn execute(
+        self,
+    ) -> Result<Vec<(String, VMRegistry, Vec<VariableKey>, Test)>, Box<dyn Error>> {
         let cwd = std::env::current_dir()?;
         let project = ProjectContext::load(&cwd).map_err(|e| format!("config error: {e}"))?;
         let vm_config = project.as_ref().map(VMConfig::from).unwrap_or_default();

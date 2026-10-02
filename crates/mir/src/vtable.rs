@@ -56,8 +56,8 @@ impl From<&MiddleEnvironment> for VTable {
             let entry = out.traits.entry(name.clone()).or_default();
             entry
                 .associated
-                .extend(imp.assoc_types.iter().map(|x| x.1.clone()));
-            entry.type_members.extend(imp.assoc_types.clone());
+                .extend(imp.type_members.iter().map(|x| x.1.clone()));
+            entry.type_members.extend(imp.type_members.clone());
             entry.members.extend(imp.members.iter().map(|x| *x.0));
         }
 

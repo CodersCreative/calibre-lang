@@ -132,7 +132,7 @@ impl CheckSource {
             engine = engine.with_no_std(no_std);
         }
 
-        let mut artifacts = match engine.compile_source(self.contents.clone(), true) {
+        let artifacts = match engine.compile_source(self.contents.clone(), true) {
             Ok(artifacts) => artifacts,
             Err(CalibreError::Parse { errors, .. }) => {
                 calibre_frontend::diagnostics::emit_calibre_errors(
@@ -235,10 +235,7 @@ impl CheckSource {
             calibre_frontend::diagnostics::emit_error(
                 &self.path,
                 &self.contents,
-                format!(
-                    "Missing @init fn or {} fn",
-                    std::mem::take(&mut artifacts.entry_name)
-                ),
+                format!("Missing @init fn or {} fn", artifacts.entry_name),
                 None,
             );
             return Err("runtime error".into());
