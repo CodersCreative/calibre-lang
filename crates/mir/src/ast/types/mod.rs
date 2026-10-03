@@ -551,51 +551,6 @@ impl MirDataType {
                 identifier: identifier.clone(),
                 generic_types: Vec::new(),
             },
-            MirDataType::List(_) => MirDataType::Struct {
-                identifier: TypeKey {
-                    fully_qualified_path: Arc::new(FullyQualifiedPath {
-                        name: Some(Ustr::from("list")),
-                        parent: None,
-                    }),
-                },
-                generic_types: Vec::new(),
-            },
-            MirDataType::Ptr(_) => MirDataType::Struct {
-                identifier: TypeKey {
-                    fully_qualified_path: Arc::new(FullyQualifiedPath {
-                        name: Some(Ustr::from("ptr")),
-                        parent: None,
-                    }),
-                },
-                generic_types: Vec::new(),
-            },
-            MirDataType::Gen(_) => MirDataType::Struct {
-                identifier: TypeKey {
-                    fully_qualified_path: Arc::new(FullyQualifiedPath {
-                        name: Some(Ustr::from("gen")),
-                        parent: None,
-                    }),
-                },
-                generic_types: Vec::new(),
-            },
-            MirDataType::Option(_) => MirDataType::Struct {
-                identifier: TypeKey {
-                    fully_qualified_path: Arc::new(FullyQualifiedPath {
-                        name: Some(Ustr::from("option")),
-                        parent: None,
-                    }),
-                },
-                generic_types: Vec::new(),
-            },
-            MirDataType::Result { .. } => MirDataType::Struct {
-                identifier: TypeKey {
-                    fully_qualified_path: Arc::new(FullyQualifiedPath {
-                        name: Some(Ustr::from("result")),
-                        parent: None,
-                    }),
-                },
-                generic_types: Vec::new(),
-            },
             x => x.clone(),
         }
     }

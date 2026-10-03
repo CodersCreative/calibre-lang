@@ -1,3 +1,14 @@
+type Point := struct {
+    x y : int
+};
+
+impl Point {
+    const new := fn(x y : int) -> Self =>
+        return Point {x, y}
+}
+
+type Identity:<T> := struct {value : T};
+
 const main := fn => {
     try ("4" as int)
     
@@ -9,6 +20,10 @@ const main := fn => {
 
     let mut lst := list:<int>[1 for 5];
     console_output(1, lst & "\n");
+
+    console_output(1, Point.new(10,10) & "\n");
+
+    console_output(1, Identity {value : 90} & "\n");
 
     for element in lst =>
         console_output(1, element & "\n");
