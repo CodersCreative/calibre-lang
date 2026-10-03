@@ -1,11 +1,15 @@
 use std::fmt::Display;
 
-use crate::{ast::MiddleNode, errors::MiddleErr, tags::context::PackageMetadata};
+use crate::{
+    ast::MiddleNode, errors::MiddleErr, symbols::resolve::Key, tags::context::PackageMetadata,
+};
 use calibre_parser::{Location, Span};
+use rustc_hash::FxHashMap;
 use ustr::Ustr;
 
 #[derive(Debug, Clone, Default)]
 pub struct MiddleContext {
+    pub ustr_to_key: FxHashMap<Ustr, Key>,
     pub current_location: Option<Location>,
     pub errors: Vec<MiddleErr>,
     pub stdlib_nodes: Vec<MiddleNode>,
@@ -64,5 +68,15 @@ impl MiddleContext {
 
     pub fn get_temp(&mut self, name: impl Display) -> String {
         format!("mir_tmp_{}_{}", name, self.increment_counter())
+    }
+
+    pub fn convert_key_to_ustr(&mut self, key: Key) -> Ustr {
+        let temp_ident = Ustr::from(&format!("#{}", self.increment_counter()));
+        self.ustr_to_key.insert(temp_ident, key);
+        temp_ident
+    }
+
+    pub fn convert_ustr_to_key(&self, name: &Ustr) -> Option<&Key> {
+        self.ustr_to_key.get(name)
     }
 }

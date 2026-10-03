@@ -292,6 +292,7 @@ impl VM {
         if self.scheduler.is_none() {
             self.scheduler = Some(scheduler::SchedulerHandle::new(&self.config));
         }
+
         if let RuntimeValue::Function { name: _, captures } = &mut func {
             let resolved: Vec<(VariableKey, RuntimeValue)> = captures
                 .as_ref()
@@ -305,6 +306,7 @@ impl VM {
                 .collect();
             *captures = Arc::new(resolved);
         }
+
         if let Some(scheduler) = &self.scheduler {
             scheduler.spawn(self, func, wait_group);
         }

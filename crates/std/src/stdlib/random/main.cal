@@ -1,15 +1,15 @@
 const RAND_MAX := 2147483647;
 
-const generate := fn -> int => return try rand(-RAND_MAX..RAND_MAX) as int => 0;
+const generate := fn -> int => return try rand(-RAND_MAX..RAND_MAX) as int => emit 0;
 
 const bool := fn -> bool => return rand(0..=100) > 50.0;
 
-const ratio := fn -> float => return rand(0..RAND_MAX) / (try RAND_MAX as float => 1f);
+const ratio := fn -> float => return rand(0..RAND_MAX) / (try RAND_MAX as float => emit 1f);
 
 const range := fn (min max : int, inclusive : bool = false) -> int => {
 	if inclusive => max += 1;
 	if max <= min => return min else => {
-		return try rand(min..max) as int => 0;
+		return try rand(min..max) as int => emit 0;
 	};
 };
 

@@ -50,7 +50,7 @@ const main := fn => {
 	let squares := squares.collect();
 	print("squares => " & squares);
 	
-	let opt := try some(10).map(fn (x : int) -> int => return x + 1) => 0;
+	let opt := try some(10).map(fn (x : int) -> int => return x + 1) => emit 0;
 	print("option map => " & opt);
 	let opt3 := some(5).and_then(fn (x : int) -> int? => if x > 3 => return some(x * 3) else => return none);
 	print("option and_then => " & opt3);

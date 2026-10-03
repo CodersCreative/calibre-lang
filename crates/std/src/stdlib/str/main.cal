@@ -26,13 +26,12 @@ impl str {
 	const lines := fn (self : str) -> list:<str> => return self.split_lines();
 
 	const split_at := fn (self : str, idx : int) -> <str, str> => {
-		let chars := self.to_chars();
-		let l := len(chars);
+		let l := len(self);
 		let cut := if idx < 0 => emit 0 else => emit if idx > l => emit l else => emit idx;
 		let mut left := "";
 		let mut right := "";
-		for i in 0..cut => left &= try!! chars[i];
-		for i in cut..l => right &= try!! chars[i];
+		for i in 0..cut => left &= try!! self[i];
+		for i in cut..l => right &= try!! self[i];
 		return tuple(left, right);
 	};
 
@@ -89,40 +88,35 @@ impl str {
 	};
 
 	const lowercase := fn (self : str) -> str => {
-		let chars := self.to_chars();
 		let mut out := "";
-		for i in 0..len(chars) => out &= (try!! chars[i]).lowercase();
+		for i in len(self) => out &= (try!! self[i]).lowercase();
 		return out;
 	};
 
 	const uppercase := fn (self : str) -> str => {
-		let chars := self.to_chars();
 		let mut out := "";
-		for i in 0..len(chars) => out &= (try!! chars[i]).uppercase();
+		for i in len(self) => out &= (try!! self[i]).uppercase();
 		return out;
 	};
 
 	const trim_start := fn (self : str) -> str => {
-		let chars := self.to_chars();
 		let mut start := 0;
-		for (start < len(chars)) && (try!! chars[start]).is_whitespace() => start += 1;
+		for (start < len(self)) && (try!! self[start]).is_whitespace() => start += 1;
 		let mut out := "";
-		for i in start..len(chars) => out &= try!! chars[i];
+		for i in start..len(self) => out &= try!! self[i];
 		return out;
 	};
 
 	const trim_end := fn (self : str) -> str => {
-		let chars := self.to_chars();
-		let mut end := len(chars);
-		for (end > 0) && (try!! chars[end - 1]).is_whitespace() => end -= 1;
+		let mut end := len(self);
+		for (end > 0) && (try!! self[end - 1]).is_whitespace() => end -= 1;
 		let mut out := "";
-		for i in 0..end => out &= try!! chars[i];
+		for i in 0..end => out &= try!! self[i];
 		return out;
 	};
 
 	const is_whitespace := fn (self : str) -> bool => {
-		let chars := self.to_chars();
-		for i in 0..len(chars) => if !(try!! chars[i]).is_whitespace() => return false;
+		for i in len(self) => if !(try!! self[i]).is_whitespace() => return false;
 		return true;
 	};
 };

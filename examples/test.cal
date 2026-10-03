@@ -96,6 +96,7 @@ const main := fn => {
 	
 	let hello := try ok("Yesssss") : hello => {
 		print("Nooooo");
+		emit "wow"
 	};
 	
 	print(hello);

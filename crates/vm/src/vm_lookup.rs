@@ -171,12 +171,12 @@ impl VM {
     #[inline]
     fn checked_local_variable_idx(&self, block: &VMBlock, idx: u16) -> Result<usize, RuntimeError> {
         let idx = idx as usize;
-        if idx < block.local_strings.len() {
+        if idx < block.local_variables.len() {
             return Ok(idx);
         }
 
         Err(RuntimeError::InvalidBytecode(format!(
-            "missing string {}",
+            "missing variable {}",
             idx
         )))
     }
@@ -193,12 +193,12 @@ impl VM {
     #[inline]
     fn checked_local_type_idx(&self, block: &VMBlock, idx: u16) -> Result<usize, RuntimeError> {
         let idx = idx as usize;
-        if idx < block.local_variables.len() {
+        if idx < block.local_types.len() {
             return Ok(idx);
         }
 
         Err(RuntimeError::InvalidBytecode(format!(
-            "missing string {}",
+            "missing type {}",
             idx
         )))
     }

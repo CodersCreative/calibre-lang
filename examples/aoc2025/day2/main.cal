@@ -70,7 +70,7 @@ const worker_sum_part1 := fn (ranges : list:<str>, start_idx step : int, out : C
 	let mut local := 0;
 	
 	for idx < len(ranges) => {
-		local += handle_range_part1(try ranges[idx] => "");
+		local += handle_range_part1(try ranges[idx] => emit "");
 		idx += step;
 	};
 	
@@ -82,7 +82,7 @@ const worker_sum_part2 := fn (ranges : list:<str>, start_idx step : int, out : C
 	let mut local := 0;
 	
 	for idx < len(ranges) => {
-		local += handle_range_part2(try ranges[idx] => "");
+		local += handle_range_part2(try ranges[idx] => emit "");
 		idx += step;
 	};
 	
@@ -91,8 +91,8 @@ const worker_sum_part2 := fn (ranges : list:<str>, start_idx step : int, out : C
 
 const parse_range := fn (cur : str) -> <int, int> => {
 	let cur : list:<str> = cur.split("-");
-	let start := (try cur[0] => "") as! int;
-	let end := (try cur[1] => "") as! int;
+	let start := (try cur[0] => emit "") as! int;
+	let end := (try cur[1] => emit "") as! int;
 	return (start, end);
 };
 

@@ -22,7 +22,7 @@ const CELL_KEY := 1000000;
 const build_grid := fn (lines : list:<str>) -> list:<list:<char>> => {
 	let mut grid := list:<list:<char>>[];
 	
-	for i in 0..len(lines) => grid <<= trim(try lines[i] => "").to_chars();
+	for i in 0..len(lines) => grid <<= trim(try lines[i] => emit "").to_chars();
 	return grid;
 };
 
@@ -46,7 +46,7 @@ const count_neighbors := fn (grid : list:<list:<char>>, row col : int) -> int =>
 			let nr := row + dr;
 			let nc := col + dc;
 			
-			if (nr >= 0) && (nr < rows) && (nc >= 0) && (try grid[nr][nc] => ' ' = '@') => count += 1;
+			if (nr >= 0) && (nr < rows) && (nc >= 0) && ((try grid[nr][nc] => emit ' ') = '@') => count += 1;
 			
 			dc += 1;
 		};
@@ -92,7 +92,7 @@ const solve_part2 := fn (lines : list:<str>) -> int => {
 	for r in 0..len(grid) => {
 		let row := try grid[r] => continue;
 		for c in 0..len(row) => {
-			if (try row[c] => ' ' = '@') && (try degree[r][c] => 0 < 4) => queue <<= (r * CELL_KEY + c);
+			if (try row[c] => emit ' ' = '@') && (try degree[r][c] => emit 0 < 4) => queue <<= (r * CELL_KEY + c);
 		};
 	};
 	
@@ -106,7 +106,7 @@ const solve_part2 := fn (lines : list:<str>) -> int => {
 		let r := key / CELL_KEY;
 		let c := key % CELL_KEY;
 		
-		if (try degree[r][c] => 0 >= 4) || (try grid[r][c] => ' ' != '@') || (r < 0) || (r >= len(grid)) || (c < 0) || (c >= len(try!! grid[r])) => continue;
+		if (try degree[r][c] => emit 0 >= 4) || (try grid[r][c] => emit ' ' != '@') || (r < 0) || (r >= len(grid)) || (c < 0) || (c >= len(try!! grid[r])) => continue;
 		
 		let mut row := try!! grid[r];
 		row[c] := '.';

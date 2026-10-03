@@ -229,7 +229,7 @@ impl MiddleEnvironment {
 
         let scope = if no_std {
             debug!("creating root scope without stdlib");
-            env.scoping.new_root_scope_no_std(None, path, None)
+            env.new_root_scope_no_std(None, path, None)
         } else {
             debug!("creating root scope with stdlib");
             env.new_root_scope_with_std(None, path, None)

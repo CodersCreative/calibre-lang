@@ -17,16 +17,20 @@ use std::{path::PathBuf, sync::Arc};
 use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
-impl Scoping {
+impl MiddleEnvironment {
     pub fn new_root_scope_no_std(
         &mut self,
         parent: Option<ScopeId>,
         path: PathBuf,
         namespace: Option<&Ustr>,
     ) -> ScopeId {
-        let scope = self.add_scope(
+        let scope = self.scoping.add_scope(
             MiddleScope {
-                fully_qualified_path: Arc::new(FullyQualifiedPath::get(self, parent, namespace)),
+                fully_qualified_path: Arc::new(FullyQualifiedPath::get(
+                    &self.scoping,
+                    parent,
+                    namespace,
+                )),
                 macros: UstrMap::default(),
                 macro_args: UstrMap::default(),
                 namespace: namespace.cloned().unwrap_or_default(),
@@ -40,11 +44,12 @@ impl Scoping {
             parent,
         );
 
-        self.new_scope(Some(scope), path, Some(&Ustr::from("root")))
-    }
-}
+        self.setup_global(scope, true);
 
-impl MiddleEnvironment {
+        self.scoping
+            .new_scope(Some(scope), path, Some(&Ustr::from("root")))
+    }
+
     #[instrument(skip_all)]
     pub fn new_root_scope_with_std(
         &mut self,
@@ -74,7 +79,7 @@ impl MiddleEnvironment {
             parent,
         );
 
-        self.setup_global(scope);
+        self.setup_global(scope, false);
         self.context.stdlib_nodes.clear();
         let mut parser = Parser::default();
 
@@ -134,15 +139,21 @@ impl MiddleEnvironment {
     }
 
     #[instrument(skip_all)]
-    pub fn setup_global(&mut self, scope: ScopeId) {
-        let mut funcs = ParserDataType::natives()
-            .iter()
-            .filter(|x| !x.0.contains("."))
-            .collect();
-
-        let mut vars: Vec<(&String, &ParserDataType)> =
-            ParserDataType::constants().iter().collect();
-        vars.append(&mut funcs);
+    pub fn setup_global(&mut self, scope: ScopeId, no_std: bool) {
+        let vars = if no_std {
+            ParserDataType::constants()
+                .iter()
+                .chain(ParserDataType::natives_no_std().iter())
+                .filter(|x| !x.0.contains("."))
+                .collect::<Vec<_>>()
+        } else {
+            ParserDataType::natives()
+                .iter()
+                .chain(ParserDataType::constants().iter())
+                .chain(ParserDataType::natives_no_std().iter())
+                .filter(|x| !x.0.contains("."))
+                .collect::<Vec<_>>()
+        };
 
         for (name, var) in vars {
             let original_name = Ustr::from(name);
@@ -268,6 +279,7 @@ impl MiddleEnvironment {
 
         let funcs: Vec<(&String, &ParserDataType)> = ParserDataType::natives()
             .iter()
+            .chain(ParserDataType::natives_no_std().iter())
             .filter(|x| x.0.contains(&format!("{}.", name)))
             .collect();
 

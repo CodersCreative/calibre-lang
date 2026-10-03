@@ -398,9 +398,7 @@ impl MirLowering for AstTrait {
 
         let mut implied = Vec::new();
         for imp in self.implied_traits {
-            if let Ok(resolved) =
-                env.resolve(scope, &imp, ResolutionOptions::typing().with_dollar())
-            {
+            if let Ok(resolved) = env.resolve(scope, &imp, ResolutionOptions::typing()) {
                 implied.push(resolved.unwrap_typing());
             }
         }

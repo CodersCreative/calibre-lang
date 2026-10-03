@@ -603,7 +603,7 @@ impl MirDataType {
     #[deprecated(note = "If an impl is required use TypeImplKey::from")]
     pub fn impl_name(&self) -> String {
         match self.key() {
-            MirDataType::Struct { identifier, .. } => identifier.to_string(),
+            MirDataType::Struct { identifier, .. } => identifier.name().to_string(),
             other => other.to_string(),
         }
     }
@@ -652,6 +652,11 @@ impl MirDataType {
         matches!(self, Self::Tuple(_))
     }
 
+    #[inline]
+    pub fn is_gen(&self) -> bool {
+        matches!(self, Self::Gen(_))
+    }
+
     pub fn loose_eq(&self, other: &Self) -> bool {
         other.is_tuple()
             || other.is_host()
@@ -665,11 +670,6 @@ impl MirDataType {
             || self.is_dyn_trait()
             || other == self
             || self.impl_name() == other.impl_name()
-    }
-
-    #[inline]
-    pub fn is_gen(&self) -> bool {
-        self.impl_name() == "gen" || self.impl_name().starts_with("gen:<")
     }
 
     pub fn contains_auto(&self) -> bool {

@@ -295,6 +295,20 @@ impl Display for VMBlock {
             }
         }
 
+        if !self.local_types.is_empty() {
+            txt.push_str("\nTYPES:");
+            for (i, string) in self.local_types.iter().enumerate() {
+                txt.push_str(&format!("\n\t{} : {}", i, string));
+            }
+        }
+
+        if !self.local_variables.is_empty() {
+            txt.push_str("\nVARIABLES:");
+            for (i, string) in self.local_variables.iter().enumerate() {
+                txt.push_str(&format!("\n\t{} : {}", i, string));
+            }
+        }
+
         for instr in &self.instructions {
             txt.push_str(&format!("\n{};", instr));
         }

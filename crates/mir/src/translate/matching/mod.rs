@@ -197,7 +197,7 @@ impl MirLowering for AstMatch {
                     env.bool_and_nodes(compilation.condition, guard_cond)
                 };
 
-                body_nodes.push(*pattern.2);
+                body_nodes.append(&mut pattern.2.nodes());
 
                 ifs.push(AstNode::new(
                     span,
@@ -226,7 +226,7 @@ impl MirLowering for AstMatch {
         };
 
         if let Some(decl) = decl {
-            AstNode::new_temp_scope(vec![decl, ifs])
+            AstNode::new_temp_scope(vec![decl, AstNode::emit(ifs)])
         } else {
             ifs
         }

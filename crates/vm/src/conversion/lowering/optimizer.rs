@@ -285,6 +285,13 @@ impl VMBlock {
         let start_strings_index = self.local_strings.len() as u16;
         self.local_strings.append(&mut target_block.local_strings);
 
+        let start_variables_index = self.local_variables.len() as u16;
+        self.local_variables
+            .append(&mut target_block.local_variables);
+
+        let start_types_index = self.local_types.len() as u16;
+        self.local_types.append(&mut target_block.local_types);
+
         let start_aggregate_layout = self.aggregate_layouts.len() as u16;
         self.aggregate_layouts
             .append(&mut target_block.aggregate_layouts);
@@ -295,19 +302,26 @@ impl VMBlock {
                     VMInstruction::Aggregate(VMAggregate { layout, .. }) => {
                         *layout += start_aggregate_layout
                     }
+
                     VMInstruction::LoadLiteral(VMLoadLiteral { literal, .. }) => {
                         *literal += start_literals_index
                     }
-                    VMInstruction::Enum(VMEnum { name, .. })
-                    | VMInstruction::DropVar(VMDropVar { name, .. })
+
+                    VMInstruction::Enum(VMEnum { name, .. }) => *name += start_types_index,
+
+                    VMInstruction::LoadMember(VMLoadMember { member: name, .. })
+                    | VMInstruction::SetMember(VMSetMember { member: name, .. }) => {
+                        *name += start_strings_index
+                    }
+
+                    VMInstruction::DropVar(VMDropVar { name, .. })
                     | VMInstruction::MoveVar(VMMoveVar { name, .. })
                     | VMInstruction::StoreVar(VMStoreVar { name, .. })
                     | VMInstruction::LoadVarRef(VMLoadVarRef { name, .. })
-                    | VMInstruction::LoadMember(VMLoadMember { member: name, .. })
-                    | VMInstruction::SetMember(VMSetMember { member: name, .. })
                     | VMInstruction::LoadVar(VMLoadVar { name, .. }) => {
-                        *name += start_strings_index
+                        *name += start_variables_index
                     }
+
                     _ => {}
                 }
                 x

@@ -253,18 +253,19 @@ impl MirLowering for AstTry {
         };
 
         let return_call = |name: &str, args: Vec<CallArg>| {
-            AstNode::ret(AstNode::call(span, AstNode::identifier(span, name), args))
+            AstNode::new_temp_scope(vec![AstNode::ret(AstNode::call(
+                span,
+                AstNode::identifier(span, name),
+                args,
+            ))])
         };
 
         let emit_call = |name: &str, args: Vec<CallArg>| {
-            AstNode::new(
+            AstNode::new_temp_scope(vec![AstNode::emit(AstNode::call(
                 span,
-                AstNodeType::Emit(AstEmit::Scope(Box::new(AstNode::call(
-                    span,
-                    AstNode::identifier(span, name),
-                    args,
-                )))),
-            )
+                AstNode::identifier(span, name),
+                args,
+            ))])
         };
 
         match self.try_type {
@@ -272,12 +273,14 @@ impl MirLowering for AstTry {
                 node_type: AstNodeType::MatchStatement(AstMatch {
                     value: Some(self.value),
                     body: if is_option {
-                        let ok_name = "anon_ok_value";
+                        let ok_name = env.context.get_temp("anon_ok_value");
 
                         let ok_arm = enum_arm(
                             "Some",
                             Some(ParserText::from(ok_name.to_string()).into()),
-                            AstNode::identifier(span, ok_name),
+                            AstNode::new_temp_scope(vec![AstNode::emit(AstNode::identifier(
+                                span, ok_name,
+                            ))]),
                         );
 
                         let err_arm = if let Some(catch) = self.catch {
@@ -300,12 +303,14 @@ impl MirLowering for AstTry {
                             values: vec![ok_arm, err_arm],
                         }
                     } else {
-                        let ok_name = "anon_ok_value";
+                        let ok_name = env.context.get_temp("anon_ok_value");
 
                         let ok_arm = enum_arm(
                             "Ok",
                             Some(ParserText::from(ok_name.to_string()).into()),
-                            AstNode::identifier(span, ok_name),
+                            AstNode::new_temp_scope(vec![AstNode::emit(AstNode::identifier(
+                                span, ok_name,
+                            ))]),
                         );
 
                         let err_arm = if let Some(catch) = self.catch {
@@ -319,7 +324,7 @@ impl MirLowering for AstTry {
                         } else if function_is_option {
                             enum_arm("Err", None, AstNode::ret(AstNode::identifier(span, "none")))
                         } else {
-                            let err_name = "anon_err_value";
+                            let err_name = env.context.get_temp("anon_err_value");
                             enum_arm(
                                 "Err",
                                 Some(ParserText::from(err_name.to_string()).into()),
@@ -342,7 +347,7 @@ impl MirLowering for AstTry {
                 if is_option {
                     self.value.lower(env, scope, span)
                 } else {
-                    let ok_name = "anon_ok_value";
+                    let ok_name = env.context.get_temp("anon_ok_value");
 
                     let ok_arm = enum_arm(
                         "Ok",
@@ -356,7 +361,9 @@ impl MirLowering for AstTry {
                     let err_arm = enum_arm(
                         "Err",
                         None,
-                        AstNode::emit(AstNode::identifier(span, "none")),
+                        AstNode::new_temp_scope(vec![AstNode::emit(AstNode::identifier(
+                            span, "none",
+                        ))]),
                     );
 
                     AstNode {
@@ -372,8 +379,8 @@ impl MirLowering for AstTry {
                 }
             }
             TryType::Result => {
-                let ok_name = "anon_ok_value";
-                let err_name = "anon_err_value";
+                let ok_name = env.context.get_temp("anon_ok_value");
+                let err_name = env.context.get_temp("anon_err_value");
 
                 if is_option {
                     let ok_arm_some = enum_arm(
@@ -449,19 +456,23 @@ impl MirLowering for AstTry {
                 }
             }
             TryType::Panic => {
-                let ok_name = "anon_ok_value";
+                let ok_name = env.context.get_temp("anon_ok_value");
 
                 let ok_arm = if is_option {
                     enum_arm(
                         "Some",
                         Some(ParserText::from(ok_name.to_string()).into()),
-                        AstNode::identifier(span, ok_name),
+                        AstNode::new_temp_scope(vec![AstNode::emit(AstNode::identifier(
+                            span, ok_name,
+                        ))]),
                     )
                 } else {
                     enum_arm(
                         "Ok",
                         Some(ParserText::from(ok_name.to_string()).into()),
-                        AstNode::identifier(span, ok_name),
+                        AstNode::new_temp_scope(vec![AstNode::emit(AstNode::identifier(
+                            span, ok_name,
+                        ))]),
                     )
                 };
 
@@ -477,7 +488,7 @@ impl MirLowering for AstTry {
                             ),
                         )
                     } else {
-                        let err_name = "anon_err_value";
+                        let err_name = env.context.get_temp("anon_err_value");
                         enum_arm(
                             "Err",
                             Some(ParserText::from(err_name.to_string()).into()),
@@ -496,7 +507,7 @@ impl MirLowering for AstTry {
                             AstNode::call(span, AstNode::identifier(span, "panic"), Vec::new()),
                         )
                     } else {
-                        let err_name = "anon_err_value";
+                        let err_name = env.context.get_temp("anon_err_value");
                         enum_arm(
                             "Err",
                             Some(ParserText::from(err_name.to_string()).into()),
@@ -654,8 +665,13 @@ impl MirLowering for AstReturn {
                                 MirDataType::Null
                             };
 
-                            // TODO Properly check for the generators inner type
-                            if !node_ty.loose_eq(&ret_ty) && !ret_ty.is_gen() {
+                            let ret_ty = if let MirDataType::Gen(x) = ret_ty {
+                                *x
+                            } else {
+                                ret_ty
+                            };
+
+                            if !node_ty.loose_eq(&ret_ty) {
                                 println!("{}", self.value.unwrap());
                                 return Err(env.context.err_at_current(
                                     MiddleErr::InvalidReturnType {

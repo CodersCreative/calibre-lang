@@ -51,19 +51,19 @@ impl<T> list:<T> {
 
 	const split_at := fn (self : list:<T>, idx : int) -> <list:<T>, list:<T>> => {
 		let cut := if idx < 0 => emit 0 else => emit if idx > len(self) => emit len(self) else => emit idx;
-		return tuple(try self[0..cut] => list:<T>[], try self[cut..len(self)] => list:<T>[]);
+		return tuple(try self[0..cut] => emit list:<T>[], try self[cut..len(self)] => emit list:<T>[]);
 	};
 
 	const take := fn (self : list:<T>, n : int) -> list:<T> => {
 		let end := if n < 0 => emit 0 else => emit n;
 		
-		return try self[0..end] => list:<T>[];
+		return try self[0..end] => emit list:<T>[];
 	};
 
 	const skip := fn (self : list:<T>, n : int) -> list:<T> => {
 		let start := if n < 0 => emit 0 else => emit n;
 		
-		return try self[start..len(self)] => list:<T>[];
+		return try self[start..len(self)] => emit list:<T>[];
 	};
 
 	const reverse := fn (self : list:<T>) -> list:<T> => {
@@ -197,7 +197,7 @@ impl list:<float> {
 		if len(values) = 0u => return 0f;
 		let mut acc := 0f;
 		for i in 0..len(values) => acc += try!! values[i];
-		return acc / (try len(values) as float => 1f);
+		return acc / (try len(values) as float => emit 1f);
 	};
 
 	const variance := fn (values : list:<float>) -> float => {
@@ -211,7 +211,7 @@ impl list:<float> {
 			acc += (d * d);
 		};
 		
-		return acc / (try n as float => 1f);
+		return acc / (try n as float => emit 1f);
 	};
 
 	const std_dev := fn (values : list:<float>) -> float => return values.variance() ** 0.5;

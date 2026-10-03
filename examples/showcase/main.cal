@@ -79,7 +79,7 @@ test "showcase_conversions" => {
 	for count < 2000 => {
 		let next := gen.next();
 		assert(next.is_some(), "generator ended too early during benchmark");
-		sum += try next => 0;
+		sum += try next => emit 0;
 		count += 1;
 	};
 	
@@ -179,7 +179,7 @@ const main := fn => {
 		.Err : e => print("result err => " & e)
 	};
 	
-	let mut maybe := try some(9).map(fn (n : int) -> int => n * 2) => 0;
+	let mut maybe := try some(9).map(fn (n : int) -> int => n * 2) => emit 0;
 	
 	// Examples of mutable references and capturing
 	fn => {
@@ -259,8 +259,8 @@ const main := fn => {
 		let mut txt : str = "";
 		
 		for i in len(splits) => {
-			txt &= try splits[i] => "";
-			if i < len(inputs) => txt &= try inputs[i] => "";
+			txt &= try splits[i] => emit "";
+			if i < len(inputs) => txt &= try inputs[i] => emit "";
 		};
 		
 		return txt;

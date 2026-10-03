@@ -6,7 +6,10 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::{FunctionParamDefault, TypeKey, resolve::ResolutionOptions},
+    symbols::{
+        FunctionParamDefault, TypeKey,
+        resolve::{Key, ResolutionOptions},
+    },
     tags::TagInfo,
     translate::MirLowering,
 };
@@ -926,7 +929,6 @@ impl MirLowering for AstCall {
                     .resolve(scope, &field, ResolutionOptions::default().with_dollar())?
                     .unwrap_dollar();
 
-                // TODO Fix invalid conversion of FQP Ident to str
                 if let Some(ty) = base.type_of(env, scope, span)
                     && let Some(x) = env
                         .typing
@@ -936,13 +938,15 @@ impl MirLowering for AstCall {
                     self.args.insert(0, CallArg::Value(*base));
                     return AstCall {
                         string_fn: None,
-                        caller: Box::new(AstNode::identifier(self.caller.span, x)),
+                        caller: Box::new(AstNode::identifier(
+                            self.caller.span,
+                            env.context.convert_key_to_ustr(Key::VariableKey(x)),
+                        )),
                         ..self
                     }
                     .lower(env, scope, span);
                 }
 
-                // TODO Fix invalid conversion of FQP Ident to str
                 if let Ok(resolved) = (AstField {
                     base: base.clone(),
                     field: field.clone(),
@@ -952,7 +956,11 @@ impl MirLowering for AstCall {
                 {
                     return AstCall {
                         string_fn: None,
-                        caller: Box::new(AstNode::identifier(self.caller.span, symbol.identifier)),
+                        caller: Box::new(AstNode::identifier(
+                            self.caller.span,
+                            env.context
+                                .convert_key_to_ustr(Key::VariableKey(symbol.identifier)),
+                        )),
                         ..self
                     }
                     .lower(env, scope, span);
@@ -988,9 +996,8 @@ impl MirLowering for AstCall {
                     _ => {}
                 }
 
-                if let Ok(caller) = env
-                    .resolve(scope, &caller_ident.value, ResolutionOptions::typing())
-                    .map(|x| x.unwrap_typing())
+                if let Ok(Key::TypeKey(caller)) =
+                    env.resolve(scope, &caller_ident.value, ResolutionOptions::typing())
                     && env.typing.objects.contains_key(&caller)
                 {
                     return Ok(env.aggregate_from_call_nodes(

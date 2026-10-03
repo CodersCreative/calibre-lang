@@ -90,6 +90,28 @@ impl MiddleNode {
         }
     }
 
+    pub fn nodes_if_isnt_temp(self) -> Box<[Self]> {
+        match self.node_type {
+            MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                body: items,
+                is_temp: false,
+                ..
+            }) => items,
+            _ => Box::new([self]),
+        }
+    }
+
+    pub fn nodes_if_no_new_scope(self) -> Box<[Self]> {
+        match self.node_type {
+            MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                body: items,
+                create_new_scope: false,
+                ..
+            }) => items,
+            _ => Box::new([self]),
+        }
+    }
+
     pub fn len(&self) -> usize {
         let mut count = 1;
         match &self.node_type {
@@ -838,7 +860,7 @@ impl From<MiddleNodeType> for AstNodeType {
                         caller: Box::new(AstNode::identifier(
                             caller_span,
                             if let Some(identifier) = value.identifier {
-                                identifier.to_string()
+                                identifier.name().to_string()
                             } else {
                                 String::from("tuple")
                             },
@@ -864,7 +886,7 @@ impl From<MiddleNodeType> for AstNodeType {
                             Span::default(),
                             value
                                 .identifier
-                                .map(|x| x.to_string())
+                                .map(|x| x.name().to_string())
                                 .unwrap_or_else(|| "map".to_string()),
                         ),
                         value: ObjectType::Map(

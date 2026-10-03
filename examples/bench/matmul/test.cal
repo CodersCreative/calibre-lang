@@ -11,7 +11,7 @@ const matmul := fn (a b : list:<list:<float>>) -> list:<list:<float>> => {
 			let aik : float = try!! a[i][k];
 			let bk : list:<float> = try!! b[k];
 			
-			for j in m => ci[j] := (try ci[j] => 0) + (aik * try bk[j] => 0);
+			for j in m => ci[j] := (try ci[j] => emit 0) + (aik * try bk[j] => emit 0);
 		};
 		
 		c <<= ci;

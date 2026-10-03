@@ -170,12 +170,12 @@ impl float {
 
 	const floor := fn (x : float) -> int => {
 		let t := float.trunc(x);
-		if (x < 0f) && ((try t as float => 0f) != x) => return t - 1 else => return t;
+		if (x < 0f) && ((try t as float => emit 0f) != x) => return t - 1 else => return t;
 	};
 
 	const ceil := fn (x : float) -> int => {
 		let t := float.trunc(x);
-		if (x > 0f) && ((try t as float => 0f) != x) => return t + 1 else => return t;
+		if (x > 0f) && ((try t as float => emit 0f) != x) => return t + 1 else => return t;
 	};
 
 	const floor_div := fn (a b : float) -> int => if b = 0f => return 0 else => return float.floor(a / b);
@@ -186,7 +186,7 @@ impl float {
 		if x >= 0f => return float.floor(x + 0.5) else => return float.ceil(x - 0.5);
 	};
 
-	const frac := fn (x : float) -> float => return x - (try float.floor(x) as float => 0f);
+	const frac := fn (x : float) -> float => return x - (try float.floor(x) as float => emit 0f);
 
 	const cbrt := fn (x : float) -> float => {
 		if x = 0f => return 0f;
@@ -211,7 +211,7 @@ impl float {
 		let mut n := 1;
 		
 		for n < 32 => {
-			term *= x / (try n as float => 1f);
+			term *= x / (try n as float => emit 1f);
 			sum += term;
 			n += 1;
 		};

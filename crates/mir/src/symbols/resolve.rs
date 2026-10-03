@@ -13,7 +13,7 @@ use calibre_parser::ast::{
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, str::FromStr, sync::Arc, write};
+use std::{fmt::Display, panic::Location, str::FromStr, sync::Arc, write};
 use tracing::{instrument, trace, warn};
 use ustr::Ustr;
 
@@ -39,31 +39,59 @@ impl Display for Key {
 }
 
 impl Key {
+    #[track_caller]
     pub fn unwrap_typing(self) -> TypeKey {
+        let caller = Location::caller();
         match self {
             Self::TypeKey(x) => x,
-            Self::VariableKey(x) => panic!("Called unwrap_typing on variable_key : {}", x),
+            Self::VariableKey(x) => panic!(
+                "Called unwrap_typing on variable_key : {} from file '{}' at line {}",
+                x,
+                caller.file(),
+                caller.line()
+            ),
         }
     }
 
+    #[track_caller]
     pub fn unwrap_variable(self) -> VariableKey {
+        let caller = Location::caller();
         match self {
             Self::VariableKey(x) => x,
-            Self::TypeKey(x) => panic!("Called unwrap_variable on type_key : {}", x),
+            Self::TypeKey(x) => panic!(
+                "Called unwrap_variable on type_key : {} from file '{}' at line {}",
+                x,
+                caller.file(),
+                caller.line()
+            ),
         }
     }
 
+    #[track_caller]
     pub fn unwrap_typing_ref(&self) -> &TypeKey {
+        let caller = Location::caller();
         match self {
             Self::TypeKey(x) => x,
-            Self::VariableKey(x) => panic!("Called unwrap_typing on variable_key : {}", x),
+            Self::VariableKey(x) => panic!(
+                "Called unwrap_typing on variable_key : {} from file '{}' at line {}",
+                x,
+                caller.file(),
+                caller.line()
+            ),
         }
     }
 
+    #[track_caller]
     pub fn unwrap_variable_ref(&self) -> &VariableKey {
+        let caller = Location::caller();
         match self {
             Self::VariableKey(x) => x,
-            Self::TypeKey(x) => panic!("Called unwrap_variable on type_key : {}", x),
+            Self::TypeKey(x) => panic!(
+                "Called unwrap_variable on type_key : {} from file '{}' at line {}",
+                x,
+                caller.file(),
+                caller.line()
+            ),
         }
     }
 
@@ -405,6 +433,10 @@ impl MiddleEnvironment {
             IdentifierType::Ustr(x) => x,
         };
 
+        if let Some(key) = self.context.convert_ustr_to_key(&ident) {
+            return Ok(KeyOrAstNode::Key(key.clone()));
+        }
+
         if options.type_resolution {
             match ParserInnerType::from_str(&ident) {
                 Ok(ParserInnerType::Struct(_) | ParserInnerType::StructWithGenerics { .. })
@@ -484,72 +516,13 @@ impl MiddleEnvironment {
                     return Ok(KeyOrAstNode::Key(Key::TypeKey(type_key)));
                 }
 
-                if options.name_resolution {
-                    // Try to find variable in current scope using composite key
-                    let scope_fqp = &scope_ref.fully_qualified_path;
-                    let mut found_var_key = None;
-                    let mut highest_counter = None;
-
-                    for key in self.symbols.variables.keys() {
-                        if key.name() == &ident
-                            && key.fully_qualified_path.as_ref() == scope_fqp.as_ref()
-                        {
-                            match (highest_counter, key.shadow_counter) {
-                                (None, Some(counter)) => {
-                                    highest_counter = Some(counter);
-                                    found_var_key = Some(key.clone());
-                                }
-                                (Some(highest), Some(counter)) if counter > highest => {
-                                    highest_counter = Some(counter);
-                                    found_var_key = Some(key.clone());
-                                }
-                                (None, None) => {
-                                    found_var_key = Some(key.clone());
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-
-                    if let Some(key) = found_var_key {
-                        return Ok(KeyOrAstNode::Key(Key::VariableKey(key)));
-                    }
-
-                    if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
-                        return Ok(KeyOrAstNode::Key(Key::VariableKey(x)));
-                    }
+                if options.name_resolution
+                    && let Some(x) = scope_ref.mappings.get(&ident).cloned()
+                {
+                    return Ok(KeyOrAstNode::Key(Key::VariableKey(x)));
                 }
             } else if options.name_resolution {
-                // Try to find variable in current scope using composite key
                 let scope_ref = self.scoping.scope_or_err(current_scope)?;
-                let scope_fqp = &scope_ref.fully_qualified_path;
-                let mut found_var_key = None;
-                let mut highest_counter = None;
-
-                for key in self.symbols.variables.keys() {
-                    if key.name() == &ident
-                        && key.fully_qualified_path.as_ref() == scope_fqp.as_ref()
-                    {
-                        match (highest_counter, key.shadow_counter) {
-                            (None, Some(counter)) => {
-                                highest_counter = Some(counter);
-                                found_var_key = Some(key.clone());
-                            }
-                            (Some(highest), Some(counter)) if counter > highest => {
-                                highest_counter = Some(counter);
-                                found_var_key = Some(key.clone());
-                            }
-                            (None, None) => {
-                                found_var_key = Some(key.clone());
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-
-                if let Some(key) = found_var_key {
-                    return Ok(KeyOrAstNode::Key(Key::VariableKey(key)));
-                }
 
                 if let Some(x) = scope_ref.mappings.get(&ident).cloned() {
                     return Ok(KeyOrAstNode::Key(Key::VariableKey(x)));

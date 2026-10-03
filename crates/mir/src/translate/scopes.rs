@@ -178,35 +178,15 @@ impl MirLowering for AstScopeDef {
         }
 
         if let Some(mut body) = self.body {
-            for stmt in body.iter() {
-                if let AstNodeType::VariableDeclaration(AstDeclaration {
-                    identifier, value, ..
-                }) = &stmt.node_type
-                    && matches!(value.node_type, AstNodeType::FunctionDeclaration { .. })
-                {
-                    let ident = env
-                        .resolve(
-                            new_scope,
-                            identifier,
-                            ResolutionOptions::default().with_dollar(),
-                        )?
-                        .unwrap_dollar();
-
-                    let new_name = env.get_new_variable_key(scope, ident)?;
-
-                    env.scoping
-                        .scope_mut_or_err(new_scope)?
-                        .mappings
-                        .entry(ident)
-                        .or_insert(new_name);
-                }
-            }
-
             if self.is_temp {
                 let last = body.pop();
                 for statement in body.into_iter() {
                     let span = statement.span;
-                    stmts.push(statement.lower_or_empty(env, new_scope, span));
+                    stmts.extend(
+                        statement
+                            .lower_or_empty(env, new_scope, span)
+                            .nodes_if_no_new_scope(),
+                    );
                 }
 
                 let last = last.map(|x| {
@@ -220,17 +200,20 @@ impl MirLowering for AstScopeDef {
                 {
                     for x in env.scoping.scope_or_err(new_scope)?.defers.clone() {
                         let span = x.span;
-                        stmts.push(x.lower_or_empty(env, new_scope, span));
+                        stmts.extend(
+                            x.lower_or_empty(env, new_scope, span)
+                                .nodes_if_no_new_scope(),
+                        );
                     }
                 }
 
                 if let Some(last) = last {
-                    stmts.push(last);
+                    stmts.extend(last.nodes_if_no_new_scope());
                 }
             } else {
                 for statement in body.into_iter() {
                     if let Ok(x) = statement.clone().lower(env, new_scope, statement.span) {
-                        stmts.push(x);
+                        stmts.extend(x.nodes_if_isnt_temp());
                     }
                 }
             }
