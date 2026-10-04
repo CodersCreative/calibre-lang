@@ -104,34 +104,6 @@ impl NativeFunction for ErrFn {
     }
 }
 
-pub struct Repr;
-
-impl NativeFunction for Repr {
-    fn name(&self) -> String {
-        String::from("repr")
-    }
-
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
-
-        Ok(RuntimeValue::Str(Ustr::from(&args[0].repr(env))))
-    }
-}
-
-pub struct Display;
-
-impl NativeFunction for Display {
-    fn name(&self) -> String {
-        String::from("display")
-    }
-
-    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
-
-        Ok(RuntimeValue::Str(Ustr::from(&args[0].display(env))))
-    }
-}
-
 pub struct OkFn;
 
 impl NativeFunction for OkFn {

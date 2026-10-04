@@ -12,29 +12,26 @@ use crate::{
     },
     tags::TagInfo,
     translate::MirLowering,
-    typing::{
-        MiddleImpl, MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember,
-        MiddleTypeDefType, Typing,
-    },
+    typing::{MiddleImpl, MiddleImplMember, MiddleObject, MiddleTypeDefType},
 };
 use calibre_parser::{
     Span,
     ast::{
-        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
-            AstNode, AstNodeType, VarType,
+            AstNode, AstNodeType,
             declaration::AstDeclaration,
             functions::AstFunction,
             misc::AstTag,
-            types::{AstImpl, AstImplTrait, AstTrait, AstType, TraitMemberKind, TypeDefType},
+            types::{AstImpl, AstType, TypeDefType},
         },
-        types::{GenericTypes, ParserDataType, ParserInnerType},
+        types::GenericTypes,
     },
 };
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use tracing::instrument;
-use ustr::{Ustr, UstrMap, UstrSet};
+use ustr::{Ustr, UstrMap};
 
 impl MirLowering for AstType {
     #[instrument(skip_all, fields(scope, identifier))]
@@ -65,20 +62,6 @@ impl MirLowering for AstType {
 
         // TODO Work on NewTypes
         if let TypeDefType::NewType(inner) = &self.object {
-            let generic_params: Vec<Ustr> = match &self.identifier {
-                PotentialGenericTypeIdentifier::Generic { generic_types, .. } => generic_types
-                    .iter()
-                    .filter_map(|t| match t {
-                        ParserDataType {
-                            data_type: ParserInnerType::Struct(s),
-                            ..
-                        } => Some(Ustr::from(s)),
-                        _ => None,
-                    })
-                    .collect(),
-                _ => Vec::new(),
-            };
-
             let identifier = env
                 .resolve(
                     scope,
@@ -110,19 +93,6 @@ impl MirLowering for AstType {
                 );
             }
 
-            if !self.overloads.is_empty() {
-                for overload in self.overloads {
-                    if let Some(processed) = env.process_overload(
-                        scope,
-                        overload,
-                        generic_params.clone(),
-                        target_name.clone(),
-                    )? {
-                        env.symbols.overloads.push(processed);
-                    }
-                }
-            }
-
             return Ok(MiddleNode {
                 node_type: MiddleNodeType::EmptyLine,
                 span,
@@ -141,36 +111,6 @@ impl MirLowering for AstType {
             },
         };
         let ident_ustr = *type_key.name();
-
-        let generic_params = if let PotentialGenericTypeIdentifier::Generic {
-            identifier: _,
-            generic_types,
-        } = self.identifier.clone()
-        {
-            let template_params: Vec<Ustr> = generic_types
-                .iter()
-                .filter_map(|t| match t {
-                    ParserDataType {
-                        data_type: ParserInnerType::Struct(s),
-                        ..
-                    } => Some(Ustr::from(s)),
-                    _ => None,
-                })
-                .collect();
-
-            env.typing
-                .generic_type_templates
-                .entry(ident_ustr)
-                .or_insert((template_params, self.object.clone(), self.overloads.clone()));
-
-            env.typing
-                .generic_type_templates
-                .get(&ident_ustr)
-                .map(|(params, _, _)| params.clone())
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
 
         let object = MiddleTypeDefType::from_type_def_type(env, scope, self.object.clone());
 
@@ -251,17 +191,6 @@ impl MirLowering for AstType {
             None
         };
 
-        for overload in self.overloads {
-            if let Some(processed) = env.process_overload(
-                scope,
-                overload,
-                generic_params.clone(),
-                Some(type_key.clone()),
-            )? {
-                env.symbols.overloads.push(processed);
-            }
-        }
-
         {
             let scope = env.scoping.scope_mut_or_err(scope)?;
 
@@ -297,135 +226,6 @@ impl MirLowering for AstType {
                 span,
             }),
         }
-    }
-}
-
-impl MirLowering for AstTrait {
-    #[instrument(skip_all)]
-    fn lower(
-        self,
-        env: &mut MiddleEnvironment,
-        scope: ScopeId,
-        span: Span,
-    ) -> Result<MiddleNode, MiddleErr> {
-        let mut generic_names = Vec::new();
-        let base_name = match &self.identifier {
-            PotentialGenericTypeIdentifier::Identifier(x) => Ustr::from(&x.to_string()),
-            PotentialGenericTypeIdentifier::Generic {
-                identifier,
-                generic_types,
-            } => {
-                for t in generic_types {
-                    if let ParserDataType {
-                        data_type: ParserInnerType::Struct(s),
-                        ..
-                    } = t
-                    {
-                        let name = Ustr::from(s);
-                        generic_names.push((name, env.get_new_type_key(scope, name)?));
-                    }
-                }
-                Ustr::from(&identifier.to_string())
-            }
-        };
-
-        let trait_key = env
-            .resolve(scope, &self.identifier, ResolutionOptions::typing())?
-            .unwrap_typing();
-
-        env.typing.objects.insert(
-            trait_key.clone(),
-            MiddleObject {
-                object_type: MiddleTypeDefType::Trait,
-                variables: UstrMap::default(),
-                traits: Vec::new(),
-                location: env.context.current_location.clone(),
-            },
-        );
-
-        let mut prev_generics = Vec::new();
-        if let Ok(scope_ref) = env.scoping.scope_mut_or_err(scope) {
-            scope_ref.type_mappings.insert(
-                base_name,
-                MirDataType::Struct {
-                    identifier: trait_key.clone(),
-                    generic_types: Vec::new(),
-                },
-            );
-
-            for (name, key) in &generic_names {
-                prev_generics.push((name, scope_ref.type_mappings.get(name).cloned()));
-                scope_ref.type_mappings.insert(
-                    *name,
-                    MirDataType::Struct {
-                        identifier: key.clone(),
-                        generic_types: Vec::new(),
-                    },
-                );
-            }
-        }
-
-        let mut trait_members = UstrMap::default();
-        let mut type_members = UstrMap::default();
-        for member in self.members {
-            match member.kind {
-                TraitMemberKind::Type => {
-                    let data_type = env.resolve_data_type(
-                        scope,
-                        &member.data_type,
-                        ResolutionOptions::typing(),
-                    )?;
-
-                    type_members.insert(Ustr::from(&member.identifier.to_string()), data_type);
-                }
-                TraitMemberKind::Const => {
-                    let data_type = env.resolve_data_type(
-                        scope,
-                        &member.data_type,
-                        ResolutionOptions::typing(),
-                    )?;
-
-                    trait_members.insert(
-                        Ustr::from(&member.identifier.to_string()),
-                        MiddleTraitMember {
-                            data_type,
-                            default: member.value.map(|x| *x),
-                        },
-                    );
-                }
-            }
-        }
-
-        let mut implied = Vec::new();
-        for imp in self.implied_traits {
-            if let Ok(resolved) = env.resolve(scope, &imp, ResolutionOptions::typing()) {
-                implied.push(resolved.unwrap_typing());
-            }
-        }
-
-        env.typing.trait_defs.insert(
-            trait_key,
-            MiddleTrait {
-                implied_traits: implied,
-                members: trait_members,
-                type_members,
-            },
-        );
-
-        if let Ok(scope_ref) = env.scoping.scope_mut_or_err(scope) {
-            for (name, prev) in prev_generics {
-                if let Some(prev) = prev {
-                    scope_ref.type_mappings.insert(*name, prev);
-                } else {
-                    scope_ref.type_mappings.remove(name);
-                }
-            }
-        }
-
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::EmptyLine,
-            span,
-        })
     }
 }
 
@@ -775,201 +575,6 @@ impl MirLowering for AstImpl {
                             processed.is_dependant,
                         ),
                     );
-                }
-
-                Some(Ok(dec))
-            })
-            .collect::<Result<Vec<_>, MiddleErr>>()?;
-
-        generic_state.restore(env, scope, previous_self_type);
-
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                body: statements.into_boxed_slice(),
-                create_new_scope: false,
-                is_temp: false,
-                function_body: false,
-                scope_id: scope,
-            }),
-            span,
-        })
-    }
-}
-
-impl MirLowering for AstImplTrait {
-    #[instrument(skip_all)]
-    fn lower(
-        mut self,
-        env: &mut MiddleEnvironment,
-        scope: ScopeId,
-        span: Span,
-    ) -> Result<MiddleNode, MiddleErr> {
-        let generic_state = GenericParamState::setup(env, scope, &self.generics)?;
-        let generic_params = &generic_state.params;
-
-        let resolved_trait = env
-            .resolve(scope, &self.trait_ident, ResolutionOptions::typing())?
-            .unwrap_typing();
-
-        let resolved_target = env
-            .resolve_data_type(scope, &self.target, ResolutionOptions::typing())?
-            .unwrap_all_refs()
-            .clone();
-
-        let impl_key = Ustr::from(&resolved_target.to_string());
-
-        let mut provided = UstrSet::default();
-        let mut assoc_types = Vec::new();
-        for var in &self.variables {
-            match &var.node_type {
-                AstNodeType::VariableDeclaration(AstDeclaration { identifier, .. }) => {
-                    provided.insert(Ustr::from(&identifier.to_string()));
-                }
-                AstNodeType::TypeDeclaration(AstType {
-                    identifier, object, ..
-                }) => {
-                    assoc_types.push((identifier.clone(), object.clone()));
-                }
-                _ => {}
-            }
-        }
-
-        for (name, member) in Typing::collect_trait_default_members(
-            &env.typing.trait_defs,
-            &resolved_trait,
-            &provided,
-        ) {
-            if member.default.is_none() {
-                continue;
-            }
-            let default = member.default.unwrap();
-            self.variables.push(AstNode::new(
-                default.span,
-                AstNodeType::VariableDeclaration(AstDeclaration {
-                    var_type: VarType::Constant,
-                    identifier: PotentialDollarIdentifier::Identifier(ParserText::from(name)),
-                    data_type: member.data_type.clone().into(),
-                    value: Box::new(default),
-                    declared: false,
-                }),
-            ));
-        }
-
-        let previous_self_type = env
-            .scoping
-            .scope_mut_or_err(scope)
-            .ok()
-            .map(|scope| {
-                scope
-                    .type_mappings
-                    .insert(Ustr::from("Self"), resolved_target.clone())
-            })
-            .unwrap_or(None);
-
-        let mut imp = MiddleImpl::new_trait(
-            resolved_trait.clone(),
-            resolved_target.clone(),
-            generic_params.clone(),
-            env.context.current_location.clone(),
-        );
-
-        for (identifier, object) in assoc_types {
-            if let TypeDefType::NewType(inner) = object {
-                let resolved_ty = env
-                    .resolve_data_type(scope, inner.as_ref(), ResolutionOptions::typing())?
-                    .unwrap_all_refs()
-                    .clone();
-
-                let ident = env
-                    .resolve(
-                        scope,
-                        identifier.get_ident(),
-                        ResolutionOptions::default().with_dollar(),
-                    )?
-                    .unwrap_dollar();
-
-                imp.assoc_types.insert(ident, resolved_ty);
-            }
-        }
-
-        for var in &self.variables {
-            if let AstNodeType::VariableDeclaration(AstDeclaration { identifier, .. }) =
-                &var.node_type
-            {
-                let resolved_iden = Ustr::from(&format!("{}.{}", impl_key, identifier));
-                imp.insert_member_placeholder(
-                    identifier.to_string(),
-                    VariableKey {
-                        fully_qualified_path: Arc::new(FullyQualifiedPath {
-                            name: Some(resolved_iden),
-                            parent: None,
-                        }),
-                        shadow_counter: None,
-                    },
-                    generic_params.clone(),
-                );
-            }
-        }
-
-        env.typing.add_trait_impl(imp);
-
-        let statements = self
-            .variables
-            .into_iter()
-            .filter_map(|var| {
-                let processed = match ProcessedVariable::process(
-                    env,
-                    scope,
-                    &resolved_target,
-                    generic_params,
-                    impl_key,
-                    var,
-                ) {
-                    Ok(Some(x)) => x,
-                    Ok(None) => return None,
-                    Err(e) => return Some(Err(e)),
-                };
-
-                let dec = processed.node.lower_or_empty(env, scope, span);
-
-                let new_name = match &dec.node_type {
-                    MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => {
-                        identifier
-                    }
-                    _ => {
-                        return Some(Err(MiddleErr::At(
-                            dec.span,
-                            Box::new(MiddleErr::InternalImplBodyNotVariableDeclaration),
-                        )));
-                    }
-                };
-
-                if let Some(impl_ref) = env
-                    .typing
-                    .trait_impls
-                    .get_mut(&resolved_trait)
-                    .and_then(|v| v.last_mut())
-                {
-                    impl_ref.insert_member(
-                        processed.identifier,
-                        MiddleImplMember::new(
-                            new_name.clone(),
-                            generic_params.clone(),
-                            processed.is_dependant,
-                        ),
-                    );
-
-                    if !impl_ref.traits.contains(&resolved_trait) {
-                        impl_ref.traits.push(resolved_trait.clone());
-                    }
-
-                    if let Some(trait_def) = env.typing.trait_defs.get(&resolved_trait) {
-                        for implied in &trait_def.implied_traits {
-                            if !impl_ref.traits.contains(implied) {
-                                impl_ref.traits.push(implied.clone());
-                            }
-                        }
-                    }
                 }
 
                 Some(Ok(dec))

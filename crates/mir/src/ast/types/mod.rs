@@ -115,11 +115,6 @@ impl MirTypeKeysUsed for MirDataType {
                 types.extend(ok.identifiers_used());
                 types.extend(err.identifiers_used());
             }
-            MirDataType::DynamicTraits(traits) => {
-                for trait_key in traits {
-                    types.push(trait_key);
-                }
-            }
             _ => {}
         }
         types
@@ -140,7 +135,6 @@ pub enum MirDataType {
     Char,
     Host,
     Dynamic,
-    DynamicTraits(Vec<TypeKey>),
     Tuple(Vec<MirDataType>),
     List(Box<MirDataType>),
     Gen(Box<MirDataType>),
@@ -211,11 +205,6 @@ impl From<MirDataType> for ParserInnerType {
             MirDataType::Range => ParserInnerType::Range,
             MirDataType::Null => ParserInnerType::Null,
             MirDataType::UInt => ParserInnerType::UInt,
-            MirDataType::DynamicTraits(x) => ParserInnerType::DynamicTraits(
-                x.into_iter()
-                    .map(|x| x.fully_qualified_path.name.unwrap_or_default().to_string())
-                    .collect(),
-            ),
             MirDataType::Function {
                 return_type,
                 parameters,
@@ -349,17 +338,6 @@ impl From<ParserInnerType> for MirDataType {
                     }
                 }
             }
-            ParserInnerType::DynamicTraits(traits) => MirDataType::DynamicTraits(
-                traits
-                    .into_iter()
-                    .map(|t| TypeKey {
-                        fully_qualified_path: Arc::new(FullyQualifiedPath {
-                            name: Some(Ustr::from(&t)),
-                            parent: None,
-                        }),
-                    })
-                    .collect(),
-            ),
             ParserInnerType::Scope(types) => types
                 .into_iter()
                 .next()
@@ -391,11 +369,6 @@ impl MirRenamable for MirDataType {
                 *identifier = state.mapped_type_or_original(identifier.clone());
                 for g in generic_types {
                     g.rename(state);
-                }
-            }
-            MirDataType::DynamicTraits(x) => {
-                for item in x {
-                    *item = state.mapped_type_or_original(item.clone());
                 }
             }
             MirDataType::List(x) => x.rename(state),
@@ -568,10 +541,6 @@ impl MirDataType {
         matches!(self, Self::Dynamic)
     }
 
-    pub fn is_dyn_trait(&self) -> bool {
-        matches!(self, Self::DynamicTraits { .. })
-    }
-
     pub fn is_result(&self) -> bool {
         matches!(self, Self::Result { .. })
     }
@@ -601,7 +570,7 @@ impl MirDataType {
     }
 
     pub fn is_dyn_list(&self) -> bool {
-        matches!(self, Self::List(x) if x.is_dyn() || x.is_dyn_trait() || x.is_dyn_list())
+        matches!(self, Self::List(x) if x.is_dyn() || x.is_dyn_list())
     }
 
     pub fn is_tuple(&self) -> bool {
@@ -617,11 +586,9 @@ impl MirDataType {
         let result = other.is_host()
             || other.is_dyn()
             || other.is_dyn_list()
-            || other.is_dyn_trait()
             || self.is_host()
             || self.is_dyn()
             || self.is_dyn_list()
-            || self.is_dyn_trait()
             || other == self;
 
         if result {
@@ -664,7 +631,6 @@ impl MirDataType {
             MirDataType::Struct { generic_types, .. } => {
                 generic_types.iter().any(|x| x.contains_auto())
             }
-            MirDataType::DynamicTraits(_) => false,
             _ => false,
         }
     }

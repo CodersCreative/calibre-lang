@@ -161,14 +161,6 @@ impl VM {
     fn runtime_matches_type(&self, value: &RuntimeValue, target: &MirDataType) -> bool {
         match target {
             MirDataType::Dynamic => true,
-            MirDataType::DynamicTraits(traits) => value.to_type().is_some_and(|data_type| {
-                for key in traits {
-                    if !self.registry.vtable.does_type_implement(&data_type, key) {
-                        return false;
-                    }
-                }
-                true
-            }),
             MirDataType::Ref(inner, _) => self.runtime_matches_type(value, inner),
             MirDataType::Big => matches!(value, RuntimeValue::Big(_)),
             MirDataType::Float => matches!(value, RuntimeValue::Float(_)),

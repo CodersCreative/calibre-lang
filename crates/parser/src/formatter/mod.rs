@@ -292,8 +292,6 @@ impl AstFormatting for AstNode {
 
             // Types
             AstNodeType::ImplDeclaration(x) => x.format(formatter),
-            AstNodeType::ImplTraitDeclaration(x) => x.format(formatter),
-            AstNodeType::TraitDeclaration(x) => x.format(formatter),
             AstNodeType::TypeDeclaration(x) => x.format(formatter),
 
             // Loops

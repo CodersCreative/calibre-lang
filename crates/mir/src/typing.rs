@@ -8,10 +8,7 @@ use calibre_parser::{
     Location,
     ast::{
         ObjectMap, ObjectType,
-        nodes::{
-            AstNode,
-            types::{Overload, TypeDefType},
-        },
+        nodes::{AstNode, types::TypeDefType},
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -24,31 +21,17 @@ use ustr::{Ustr, UstrMap, UstrSet};
 pub struct Typing {
     pub objects: FxHashMap<TypeKey, MiddleObject>,
     pub inherent_impls: FxHashMap<TypeImplKey, Vec<MiddleImpl>>,
-    pub trait_impls: FxHashMap<TypeKey, Vec<MiddleImpl>>,
-    pub trait_defs: FxHashMap<TypeKey, MiddleTrait>,
-    pub generic_type_templates: UstrMap<(Vec<Ustr>, TypeDefType, Vec<Overload>)>,
+    pub generic_type_templates: UstrMap<(Vec<Ustr>, TypeDefType)>,
 }
 
 impl Typing {
     pub fn all_impls(&self) -> impl Iterator<Item = &MiddleImpl> {
-        self.inherent_impls
-            .values()
-            .flatten()
-            .chain(self.trait_impls.values().flatten())
+        self.inherent_impls.values().flatten()
     }
 
     pub fn add_inherent_impl(&mut self, imp: MiddleImpl) {
         let key = TypeImplKey::from(&imp.target);
         self.inherent_impls.entry(key).or_default().push(imp);
-    }
-
-    pub fn add_trait_impl(&mut self, imp: MiddleImpl) {
-        if let Some(trait_key) = &imp.trait_key {
-            self.trait_impls
-                .entry(trait_key.clone())
-                .or_default()
-                .push(imp);
-        }
     }
 
     #[instrument(skip_all, fields(ty = %ty))]
@@ -113,23 +96,6 @@ impl Typing {
             }
         }
 
-        for impl_list in self.trait_impls.values() {
-            for imp in impl_list {
-                bindings.clear();
-                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
-                    && let Some(m) = imp.get_member(member_name, &[])
-                {
-                    let score = imp.target.specificity(&imp.generic_params);
-                    if best
-                        .as_ref()
-                        .is_none_or(|(best_score, _)| score > *best_score)
-                    {
-                        best = Some((score, m));
-                    }
-                }
-            }
-        }
-
         best.map(|(_, m)| m)
     }
 
@@ -161,23 +127,6 @@ impl Typing {
             }
             if let Some((_, m, b)) = best {
                 return Some((m, b));
-            }
-        }
-
-        for impl_list in self.trait_impls.values() {
-            for imp in impl_list {
-                bindings.clear();
-                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
-                    && let Some(m) = imp.get_member(member_name, &[])
-                {
-                    let score = imp.target.specificity(&imp.generic_params);
-                    if best
-                        .as_ref()
-                        .is_none_or(|(best_score, _, _)| score > *best_score)
-                    {
-                        best = Some((score, m, bindings.clone()));
-                    }
-                }
             }
         }
 
@@ -235,48 +184,6 @@ impl Typing {
     pub fn find_object_for_struct_name(&self, struct_name: &TypeKey) -> Option<&MiddleObject> {
         trace!("finding object for struct name");
         self.objects.get(struct_name)
-    }
-
-    #[instrument(skip_all, fields(base = %base, name = %name))]
-    pub fn resolve_associated_type(&self, base: &MirDataType, name: &Ustr) -> Option<MirDataType> {
-        trace!("resolving associated type");
-
-        if let MirDataType::Struct { identifier, .. } = &base
-            && let Some(trait_def) = self.trait_defs.get(identifier)
-            && let Some(assoc_type) = trait_def.type_members.get(name)
-        {
-            return Some(assoc_type.clone());
-        }
-
-        if let Some(imp) = self.find_inherent_impl_for_type(base) {
-            if let Some(assoc_type) = imp.assoc_types.get(name) {
-                return Some(assoc_type.clone());
-            }
-
-            for trait_name in &imp.traits {
-                if let Some(trait_def) = self.trait_defs.get(trait_name)
-                    && let Some(assoc_type) = trait_def.type_members.get(name)
-                {
-                    return Some(assoc_type.clone());
-                }
-            }
-        }
-
-        let mut bindings = FxHashMap::default();
-        for impl_list in self.trait_impls.values() {
-            for imp in impl_list {
-                bindings.clear();
-                if imp
-                    .target
-                    .can_unify(base, &imp.generic_params, &mut bindings)
-                    && let Some(assoc_type) = imp.assoc_types.get(name)
-                {
-                    return Some(assoc_type.clone());
-                }
-            }
-        }
-
-        None
     }
 
     #[instrument(skip_all, fields(name = %name))]

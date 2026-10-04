@@ -657,22 +657,6 @@ impl CalibreLanguageServer {
                 ..CompletionItem::default()
             });
         }
-
-        for trait_key in env.typing.trait_defs.keys() {
-            let display_name = Self::sanitize_name(trait_key.name().as_str());
-            if !prefix.is_empty() && !display_name.starts_with(prefix) {
-                continue;
-            }
-
-            out.entry(display_name.clone()).or_insert(CompletionItem {
-                label: display_name.clone(),
-                detail: Some("trait".to_string()),
-                kind: Some(CompletionItemKind::INTERFACE),
-                documentation: Some(Documentation::String(format!("Trait: {}", trait_key))),
-                sort_text: Some(format!("1_{}", display_name)),
-                ..CompletionItem::default()
-            });
-        }
     }
 
     fn sanitize_name(name: &str) -> String {

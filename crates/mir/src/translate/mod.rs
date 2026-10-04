@@ -168,9 +168,7 @@ impl MirLowering for AstNode {
 
             // Types
             AstNodeType::TypeDeclaration(x) => x.lower(env, scope, span),
-            AstNodeType::TraitDeclaration(x) => x.lower(env, scope, span),
             AstNodeType::ImplDeclaration(x) => x.lower(env, scope, span),
-            AstNodeType::ImplTraitDeclaration(x) => x.lower(env, scope, span),
 
             // Lists
             AstNodeType::IterExpression(x) => x.lower(env, scope, span),

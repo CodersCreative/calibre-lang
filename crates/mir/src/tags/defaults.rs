@@ -2,12 +2,10 @@ use crate::environment::MiddleEnvironment;
 use crate::scoping::ScopeId;
 use crate::translate::MirLowering;
 use crate::{ast::MiddleNode, errors::MiddleErr, typing::MiddleTypeDefType};
-use calibre_parser::ast::idents::{
-    ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
-};
+use calibre_parser::ast::idents::{ParserText, PotentialDollarIdentifier};
 use calibre_parser::ast::nodes::declaration::AstDeclaration;
 use calibre_parser::ast::nodes::functions::{AstFunction, FunctionHeader};
-use calibre_parser::ast::nodes::types::AstImplTrait;
+use calibre_parser::ast::nodes::types::AstImpl;
 use calibre_parser::ast::nodes::{
     AstNode, AstNodeType, VarType,
     literals::{AstEnum, AstStruct},
@@ -151,9 +149,8 @@ impl MiddleEnvironment {
 
         AstNode::new(
             span,
-            AstNodeType::ImplTraitDeclaration(AstImplTrait {
+            AstNodeType::ImplDeclaration(AstImpl {
                 generics: GenericTypes::default(),
-                trait_ident: PotentialGenericTypeIdentifier::new(Span::default(), "Default"),
                 target: ParserDataType::object(span, &identifier.text),
                 variables: vec![default_fn],
             }),

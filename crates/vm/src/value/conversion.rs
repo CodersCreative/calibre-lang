@@ -15,10 +15,7 @@ impl RuntimeValue {
         env: &mut VM,
         data_type: &MirDataType,
     ) -> Result<RuntimeValue, RuntimeError> {
-        if matches!(
-            data_type,
-            MirDataType::Dynamic | MirDataType::DynamicTraits(_)
-        ) {
+        if matches!(data_type, MirDataType::Dynamic) {
             return Ok(self);
         }
 

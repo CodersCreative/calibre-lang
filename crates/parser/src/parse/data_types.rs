@@ -132,19 +132,6 @@ impl<'a> AstParser<'a> for ParserDataType {
                     .try_map_with_span(|(name, generic_types), span| {
                         Ok(if let Some(generic_types) = generic_types && !generic_types.is_empty() {
                             match name {
-                                "dyn" => {
-                                    let traits = generic_types
-                                        .into_iter()
-                                        .filter_map(|ty| {
-                                            let text = ty.to_string().trim().to_string();
-                                            (!text.is_empty()).then_some(text)
-                                        })
-                                        .collect::<Vec<_>>();
-                                    ParserDataType::new(
-                                        span,
-                                        ParserInnerType::DynamicTraits(traits),
-                                    )
-                                }
                                 "list" => {
                                     if generic_types.len() == 1 {
                                         ParserDataType::new(

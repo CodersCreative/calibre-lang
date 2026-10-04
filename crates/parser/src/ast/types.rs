@@ -169,7 +169,6 @@ pub enum ParserInnerType {
     Char,
     Host,
     Dynamic,
-    DynamicTraits(Vec<String>),
     Tuple(Vec<ParserDataType>),
     Paren(Box<ParserDataType>),
     List(Box<ParserDataType>),
@@ -229,11 +228,6 @@ impl AlphaRenamable for ParserInnerType {
                 *identifier = state.mapped_str_or_original(identifier);
                 for g in generic_types {
                     g.rename(state);
-                }
-            }
-            ParserInnerType::DynamicTraits(x) => {
-                for item in x {
-                    *item = state.mapped_str_or_original(item);
                 }
             }
             ParserInnerType::Paren(x)
@@ -507,10 +501,6 @@ impl ParserInnerType {
         matches!(self, Self::Dynamic) || matches!(self, Self::Struct(x) if x.contains("dyn"))
     }
 
-    pub fn is_dyn_trait(&self) -> bool {
-        matches!(self, Self::DynamicTraits { .. })
-    }
-
     pub fn is_result(&self) -> bool {
         matches!(self, Self::Result { .. })
     }
@@ -544,7 +534,7 @@ impl ParserInnerType {
     }
 
     pub fn is_dyn_list(&self) -> bool {
-        matches!(self, Self::List(x) if x.is_dyn() || x.is_dyn_trait() || x.is_dyn_list())
+        matches!(self, Self::List(x) if x.is_dyn() || x.is_dyn_list())
     }
 
     pub fn is_tuple(&self) -> bool {
@@ -557,13 +547,11 @@ impl ParserInnerType {
             || other.is_host()
             || other.is_dyn()
             || other.is_dyn_list()
-            || other.is_dyn_trait()
             || self.is_auto()
             || self.is_tuple()
             || self.is_host()
             || self.is_dyn()
             || self.is_dyn_list()
-            || self.is_dyn_trait()
             || other == self
             || self.impl_name() == other.impl_name()
             || self.clone().resolve_ffi() == other.clone().resolve_ffi()
@@ -580,20 +568,6 @@ impl ParserInnerType {
             Self::Option(x) => Self::Option(Box::new(x.verify())),
             Self::List(x) => Self::List(Box::new(x.verify())),
             Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.verify()).collect()),
-            Self::DynamicTraits(traits) => {
-                let mut normalized = traits
-                    .into_iter()
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect::<Vec<_>>();
-                normalized.sort();
-                normalized.dedup();
-                if normalized.is_empty() {
-                    Self::Dynamic
-                } else {
-                    Self::DynamicTraits(normalized)
-                }
-            }
             Self::Struct(x) => Self::from_str(&x).unwrap_or(Self::Struct(x)),
             ty => ty,
         }
@@ -617,7 +591,6 @@ impl ParserInnerType {
                 generic_types.iter().any(|x| x.contains_auto())
             }
             ParserInnerType::Scope(x) => x.iter().any(|x| x.contains_auto()),
-            ParserInnerType::DynamicTraits(_) => false,
             _ => false,
         }
     }
@@ -649,7 +622,6 @@ impl ParserInnerType {
                 generic_types: generic_types.into_iter().map(|x| x.resolve_ffi()).collect(),
             },
             Self::Scope(x) => Self::Scope(x.into_iter().map(|x| x.resolve_ffi()).collect()),
-            Self::DynamicTraits(x) => Self::DynamicTraits(x),
             x => x,
         }
     }
@@ -681,13 +653,6 @@ impl Display for ParserInnerType {
             Self::Null => write!(f, "null"),
             Self::Host => write!(f, "host"),
             Self::Dynamic => write!(f, "dyn"),
-            Self::DynamicTraits(traits) => {
-                if traits.is_empty() {
-                    write!(f, "dyn")
-                } else {
-                    write!(f, "dyn:<{}>", traits.join(", "))
-                }
-            }
             Self::Bool => write!(f, "bool"),
             Self::Str => write!(f, "str"),
             Self::Char => write!(f, "char"),

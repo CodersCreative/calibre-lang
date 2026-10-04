@@ -1,3 +1,8 @@
+@overload("as") fn (self : str) -> gen:<char> => {
+	for i in len(self) => 
+		return try!! self[i];
+}
+
 impl str {
 	const len := fn (self : str) -> uint => return len(self);
 
@@ -11,15 +16,7 @@ impl str {
 
 	const ends_with := fn (self suffix : str) -> bool => return ends_with(self, suffix);
 
-	const iter := fn (self : &str) -> StrIter => return iter_str(self);
-
-	const iter_mut := fn (self : &mut str) -> StrIter => return iter_str(self);
-
-	const into_iter := fn (self : str) -> StrIter => return iter_str(self);
-
 	const is_empty := fn (self : str) -> bool => return len(self) = 0u;
-
-	const to_chars := fn (self : str) -> list:<char> => return self.iter().collect();
 
 	const split_lines := fn (self : str) -> list:<str> => return split(self, "\n");
 

@@ -54,7 +54,7 @@ impl From<&MirDataType> for TypeImplKey {
             MirDataType::Function { .. } | MirDataType::NativeFunction { .. } => {
                 TypeImplKey::Function
             }
-            MirDataType::Dynamic | MirDataType::DynamicTraits(_) => TypeImplKey::Dynamic,
+            MirDataType::Dynamic => TypeImplKey::Dynamic,
             other => TypeImplKey::Primitive(Ustr::from(&other.to_string())),
         }
     }
@@ -173,9 +173,6 @@ impl MirDataType {
                         .zip(param_c)
                         .all(|(p, c)| p.can_unify(c, generic_params, bindings))
             }
-            (MirDataType::DynamicTraits(traits_p), MirDataType::DynamicTraits(traits_c)) => {
-                traits_p == traits_c
-            }
             _ => false,
         }
     }
@@ -244,8 +241,6 @@ impl MirDataType {
                         .map(|item| item.specificity(generic_params))
                         .sum::<usize>()
             }
-
-            MirDataType::DynamicTraits(traits) => 10 + traits.len() * 5,
         }
     }
 }

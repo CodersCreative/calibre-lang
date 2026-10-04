@@ -4,7 +4,6 @@ use calibre_mir::{
     environment::MiddleEnvironment,
     scoping::{FullyQualifiedPath, ScopeId},
     symbols::{VariableKey, resolve::Key},
-    vtable::VTable,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
@@ -17,14 +16,12 @@ pub struct LirRegistry {
     pub functions: FxHashMap<VariableKey, LirFunction>,
     pub globals: FxHashMap<VariableKey, LirGlobal>,
     pub natives: UstrMap<Key>,
-    pub vtable: VTable,
     pub scope_to_file: FxHashMap<ScopeId, Ustr>,
 }
 
 impl LirRegistry {
     pub fn append(&mut self, other: LirRegistry) {
         self.functions.extend(other.functions);
-        self.vtable.append(other.vtable);
     }
 }
 
@@ -139,7 +136,6 @@ impl<'a> LirEnvironment<'a> {
                 functions: FxHashMap::default(),
                 globals: FxHashMap::default(),
                 natives: env.symbols.native_mappings.clone(),
-                vtable: VTable::from(env),
                 scope_to_file,
             },
             blocks: vec![LirBlock {

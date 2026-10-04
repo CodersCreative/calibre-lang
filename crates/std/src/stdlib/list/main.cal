@@ -1,11 +1,10 @@
+@overload("as") fn<T>(self : list:<T>) -> gen:<T> => {
+	for i in len(self) => 
+		return try!! self[i];
+};
+
 impl<T> list:<T> {
 	const len := fn (self : list:<T>) -> uint => return len(self);
-
-	const iter := fn (self : &list:<T>) -> ListIter:<T> => return iter_list(self);
-
-	const iter_mut := fn (self : &mut list:<T>) -> ListIter:<T> => return iter_list(self);
-
-	const into_iter := fn (self : list:<T>) -> ListIter:<T> => return iter_list(self);
 
 	const is_empty := fn (self : list:<T>) -> bool => return len(self) = 0u;
 

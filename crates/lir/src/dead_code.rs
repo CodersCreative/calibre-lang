@@ -9,10 +9,8 @@ use crate::{
 };
 use calibre_mir::{ast::types::unify::TypeImplKey, symbols::VariableKey};
 use rustc_hash::FxHashSet;
-use ustr::{Ustr, UstrSet};
 
 enum WorkItem {
-    FieldCall(Ustr),
     Function(VariableKey),
     Global(VariableKey),
     Type(TypeImplKey),
@@ -24,7 +22,6 @@ struct WorkList {
     seen_functions: FxHashSet<VariableKey>,
     seen_globals: FxHashSet<VariableKey>,
     seen_types: FxHashSet<TypeImplKey>,
-    seen_field_calls: UstrSet,
 }
 
 impl WorkList {
@@ -58,15 +55,6 @@ impl WorkList {
         self.seen_types.insert(value.clone());
         self.stack.push(WorkItem::Type(value));
     }
-
-    pub fn push_field_call(&mut self, value: Ustr) {
-        if self.seen_field_calls.contains(&value) {
-            return;
-        }
-
-        self.seen_field_calls.insert(value);
-        self.stack.push(WorkItem::FieldCall(value));
-    }
 }
 
 impl LirRegistry {
@@ -75,12 +63,8 @@ impl LirRegistry {
         entry_points: Vec<VariableKey>,
         include_tests: bool,
     ) -> LirRegistry {
-        let (reachable_functions, reachable_globals, referenced_types) =
+        let (reachable_functions, reachable_globals, _) =
             self.collect_references(entry_points, include_tests);
-
-        self.vtable
-            .impls
-            .retain(|concrete_type, _| referenced_types.contains(concrete_type));
 
         self.functions
             .retain(|name, _| reachable_functions.contains(name));
@@ -160,18 +144,6 @@ impl LirRegistry {
                             &mut referenced_types,
                             &mut worklist,
                         );
-                    }
-                }
-                WorkItem::FieldCall(field) => {
-                    for func in self.vtable.impls.iter().flat_map(|x| {
-                        x.1.members
-                            .iter()
-                            .filter(|x| x.0 == &field)
-                            .map(|x| x.1.clone())
-                    }) {
-                        if reachable_functions.insert(func.clone()) {
-                            worklist.push_function(func.clone());
-                        }
                     }
                 }
                 WorkItem::Type(typ) => {
@@ -292,10 +264,6 @@ impl LirNodeType {
                 }
             }
             LirNodeType::Call(LirCall { caller, args, .. }) => {
-                if let LirNodeType::Member(x) = &**caller {
-                    worklist.push_field_call(x.field);
-                }
-
                 caller.collect_references(
                     registry,
                     reachable_functions,

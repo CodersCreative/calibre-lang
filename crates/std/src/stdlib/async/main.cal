@@ -18,12 +18,8 @@ impl<T> Channel:<T> {
 	const send_all := fn (self : &mut Channel:<T>, values : list:<T>) => {
 		for i in 0..len(values) => emit self <- try!! values[i];
 	};
-};
 
-impl<T> Send for Channel:<T> {
-	type Item := T;
-
-	const send := fn (self : &mut Self, value : Self::Item) -> bool => {
+	const send := fn (self : &mut Self, value : T) -> bool => {
 		return channel_try_send(self.inner, value);
 	};
 };

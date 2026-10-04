@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirAs, MirVarDecl, types::MirDataType},
+    ast::{MiddleNode, MiddleNodeType, MirVarDecl},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -16,7 +16,7 @@ use calibre_parser::{
             AstNode, AstNodeType, DestructurePattern, VarType,
             access::{AstField, AstIdentifier, AstIndex},
             assignment::AstAssignment,
-            binary::{AsFailureMode, AstBinary},
+            binary::AstBinary,
             declaration::{AstDeclaration, AstDeclareDestructure},
             functions::{AstCall, AstFunction, FunctionHeader},
             memory::AstRef,
@@ -330,7 +330,7 @@ impl MirLowering for AstDeclaration {
             None
         };
 
-        let mut value = self.value.lower_or_empty(env, scope, span);
+        let value = self.value.lower_or_empty(env, scope, span);
 
         let var_key = if let Some(var_key) = var_key {
             var_key
@@ -342,17 +342,6 @@ impl MirLowering for AstDeclaration {
                 env.register_variable(scope, identifier, data_type.clone(), self.var_type)?
             }
         };
-
-        if matches!(data_type, MirDataType::DynamicTraits(_)) {
-            value = MiddleNode::new(
-                MiddleNodeType::AsExpression(MirAs {
-                    value: Box::new(value),
-                    data_type: data_type.clone(),
-                    failure_mode: AsFailureMode::Panic,
-                }),
-                span,
-            );
-        }
 
         Ok(MiddleNode::new(
             MiddleNodeType::VariableDeclaration(MirVarDecl {

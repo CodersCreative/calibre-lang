@@ -3,7 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::VariableKey,
+    symbols::{VariableKey, resolve::ResolutionOptions},
     translate::MirLowering,
 };
 use calibre_parser::ast::{
@@ -11,6 +11,7 @@ use calibre_parser::ast::{
     nodes::{
         AstNode, AstNodeType,
         functions::{AstCall, CallArg},
+        types::Overload,
     },
 };
 use std::{fmt::Debug, sync::Arc};
@@ -687,6 +688,59 @@ impl MiddleEnvironment {
             Ustr::from("current_context"),
             TagHandler {
                 handler: current_context_handler,
+            },
+        );
+
+        let overload_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: ScopeId,
+             node: AstNode,
+             _tag: ParserText,
+             mut args: Vec<AstNode>| {
+                let span = node.span;
+
+                let operator = match args.pop().map(|x| x.node_type) {
+                    Some(AstNodeType::StringLiteral(x)) => x.value,
+                    _ => unimplemented!(),
+                };
+
+                match node.node_type {
+                    AstNodeType::FunctionDeclaration(x) => {
+                        let generics = x
+                            .header
+                            .generics
+                            .0
+                            .iter()
+                            .map(|x| {
+                                env.resolve(
+                                    scope,
+                                    &x.identifier,
+                                    ResolutionOptions::default().with_dollar(),
+                                )
+                                .map(|x| x.unwrap_dollar())
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
+                        let overload = Overload {
+                            operator,
+                            body: x.body,
+                            header: x.header,
+                        };
+
+                        if let Some(processed) = env.process_overload(scope, overload, generics)? {
+                            env.symbols.overloads.push(processed);
+                        }
+                    }
+                    _ => unimplemented!(),
+                }
+
+                Ok(MiddleNode::new(MiddleNodeType::EmptyLine, span))
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            Ustr::from("overload"),
+            TagHandler {
+                handler: overload_handler,
             },
         );
     }

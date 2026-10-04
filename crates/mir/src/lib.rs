@@ -18,7 +18,6 @@ pub mod tags;
 pub mod testing;
 pub mod translate;
 pub mod typing;
-pub mod vtable;
 
 pub trait MirVarKeysUsed {
     fn identifiers_used(&self) -> Vec<&VariableKey>;

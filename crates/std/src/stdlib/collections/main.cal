@@ -1,20 +1,27 @@
-type HashMap:<K, V> := struct { inner : host } @overload {
-	const "[]" := fn (self : &HashMap:<K, V>, key : K) -> V? => return self.get(key);
+type HashMap:<K, V> := struct { inner : host };
 
-	const "[]=" := fn (self : &mut HashMap:<K, V>, key : K, value : V) => {
-		self.set(key, value);
-	};
+@overload("[]") fn<K, V>(self : &HashMap:<K, V>, key : K) -> V? => return self.get(key);
 
-	const "in" := fn (key : K, map : HashMap:<K, V>) -> bool => return map.contains(key);
-};
+@overload("[]=") fn<K, V>(self : &mut HashMap:<K, V>, key : K, value : V) => {
+	self.set(key, value);
+}
 
-type HashSet:<T> := struct { inner : host } @overload {
-	const "in" := fn (value : T, set : HashSet:<T>) -> bool => return set.contains(value);
-};
+@overload("in") fn<K, V>(key : K, map : HashMap:<K, V>) -> bool => return map.contains(key);
 
-type HashMapIter:<K, V> := struct { data : list:<<K, V>>, index : int };
+@overload("as") fn<K, V>(self : HashMap:<K, V>) -> gen:<<K, V>> => {
+	for i in len(self) => 
+		return try!! self[i];
+} 
 
-type HashSetIter:<T> := struct { data : list:<T>, index : int };
+type HashSet:<T> := struct { inner : host };
+
+@overload("in") fn<T>(value : T, set : HashSet:<T>) -> bool => return set.contains(value);
+
+@overload("as") fn<T>(self : &HashSet:<T>) -> gen:<&T> => {
+	let values : list:<&T> = self.values()
+	return values as! gen:<&T>
+} 
+
 
 impl<K, V> HashMap:<K, V> {
 	const new := fn (entries : list:<<K, V>>) -> HashMap:<K, V> => return HashMap:<K, V> { inner : hashmap_new(entries) };
@@ -45,12 +52,6 @@ impl<K, V> HashMap:<K, V> {
 			self.set(pair.0, pair.1);
 		};
 	};
-
-	const iter := fn (self : &HashMap:<K, V>) -> HashMapIter:<K, V> => return HashMapIter:<K, V> { data : self.entries(), index : 0 };
-
-	const iter_mut := fn (self : &mut HashMap:<K, V>) -> HashMapIter:<K, V> => return HashMapIter:<K, V> { data : self.entries(), index : 0 };
-
-	const into_iter := fn (self : HashMap:<K, V>) -> HashMapIter:<K, V> => return HashMapIter:<K, V> { data : self.entries(), index : 0 };
 };
 
 impl<T> HashSet:<T> {
@@ -69,34 +70,4 @@ impl<T> HashSet:<T> {
 	const values := fn (self : &HashSet:<T>) -> list:<&T> => return hashset_values(self.inner);
 
 	const clear := fn (self : &mut HashSet:<T>) => hashset_clear(self.inner);
-
-	const iter := fn (self : &HashSet:<T>) -> HashSetIter:<T> => return HashSetIter:<T> { data : self.values(), index : 0 };
-
-	const iter_mut := fn (self : &mut HashSet:<T>) -> HashSetIter:<T> => return HashSetIter:<T> { data : self.values(), index : 0 };
-
-	const into_iter := fn (self : HashSet:<T>) -> HashSetIter:<T> => return HashSetIter:<T> { data : self.values(), index : 0 };
-};
-
-impl<K, V> Iter for HashMapIter:<K, V> {
-	type Item := <K, V>;
-
-	const next := fn (self : &mut Self) -> Self::Item? => {
-		if self.index >= len(self.data) => none else => {
-			return self.data[self.index += 1];
-		};
-		
-		return none;
-	};
-};
-
-impl<T> Iter for HashSetIter:<T> {
-	type Item := T;
-
-	const next := fn (self : &mut Self) -> Self::Item? => {
-		if self.index >= len(self.data) => none else => {
-			return self.data[self.index += 1];
-		};
-		
-		return none;
-	};
 };
