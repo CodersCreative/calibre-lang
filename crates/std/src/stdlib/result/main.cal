@@ -9,11 +9,6 @@ impl<E, T> result:<E, T> {
 		.Err : _ => return true
 	};
 
-	const unwrap := fn (self : E!T) -> T => match self {
-		.Ok : v => return v,
-		.Err : _ => panic("unwrap on err")
-	};
-
 	const map := fn <U> (self : E!T, op : fn (T) -> U) -> U!E => match self {
 		.Ok : v => return ok(op(v)),
 		.Err : e => return err(e)

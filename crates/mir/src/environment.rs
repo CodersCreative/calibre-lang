@@ -56,7 +56,6 @@ impl MiddleEnvironment {
         scope: ScopeId,
         overload: Overload,
         generic_params: Vec<Ustr>,
-        target_name: Option<TypeKey>,
     ) -> Result<Option<MiddleOverload>, MiddleErr> {
         debug!("processing overload");
         overload.verify().map_err(MiddleErr::Overload)?;
@@ -69,7 +68,6 @@ impl MiddleEnvironment {
             ResolutionOptions::typing(),
         )?;
 
-        let mut contains_target = false;
         let params = overload.header.parameters.iter().map(|param| {
             let ty = match param.1.clone() {
                 Some(x) if param.2.is_none() => {
@@ -82,20 +80,8 @@ impl MiddleEnvironment {
                 }
             };
 
-            if let Some(ref target) = target_name
-                && let MirDataType::Struct { identifier, .. } = ty.unwrap_all_refs()
-                && identifier == target
-            {
-                contains_target = true;
-            }
-
             Ok(ty)
         }).collect::<Result<Vec<_>, MiddleErr>>()?;
-
-        if target_name.is_some() && !contains_target {
-            debug!("overload does not contain target, skipping");
-            return Ok(None);
-        }
 
         debug!(operator = %operator, "overload processed successfully");
         Ok(Some(MiddleOverload {
@@ -349,19 +335,6 @@ impl MiddleEnvironment {
                 imp.rename(&mut rename_state);
                 self.typing.add_inherent_impl(imp);
             }
-        }
-
-        for (_key, impl_list) in std::mem::take(&mut manifest.typing.trait_impls) {
-            for mut imp in impl_list {
-                imp.rename(&mut rename_state);
-                self.typing.add_trait_impl(imp);
-            }
-        }
-
-        for (mut name, mut trait_def) in std::mem::take(&mut manifest.typing.trait_defs) {
-            name.rename(&mut rename_state);
-            trait_def.rename(&mut rename_state);
-            self.typing.trait_defs.insert(name, trait_def);
         }
 
         for (name, template) in std::mem::take(&mut manifest.typing.generic_type_templates) {

@@ -90,6 +90,8 @@ impl PatternTranslator for ListPatternTranslator {
                         data_type: None,
                     });
 
+                    let indexed_value = env.match_index_access(value.clone(), idx);
+
                     bindings.append(
                         &mut item_aliases
                             .into_iter()
@@ -102,7 +104,7 @@ impl PatternTranslator for ListPatternTranslator {
                                             ResolutionOptions::default().with_dollar(),
                                         )?
                                         .unwrap_dollar(),
-                                    value: env.match_index_access(value.clone(), idx),
+                                    value: indexed_value.clone(),
                                     var_type,
                                     data_type: None,
                                 })
@@ -120,7 +122,7 @@ impl PatternTranslator for ListPatternTranslator {
                         AstNode::new(
                             env.context.current_span(),
                             AstNodeType::ComparisonExpression(AstComparison {
-                                left: Box::new(current),
+                                left: Box::new(current.clone()),
                                 right: Box::new(expected),
                                 operator: ComparisonOperator::Equal,
                             }),
@@ -139,7 +141,7 @@ impl PatternTranslator for ListPatternTranslator {
                                             ResolutionOptions::default().with_dollar(),
                                         )?
                                         .unwrap_dollar(),
-                                    value: env.match_index_access(value.clone(), idx),
+                                    value: current.clone(),
                                     var_type,
                                     data_type: None,
                                 })

@@ -18,7 +18,7 @@ use crate::ast::{
         misc::{AstImport, AstParen, AstTag, AstTest},
         scopes::{AstScopeAlias, AstScopeDef},
         spawn::{AstSelect, AstSpawn},
-        types::{AstImpl, AstImplTrait, AstTrait, AstType},
+        types::{AstImpl, AstType},
         unary::{AstNeg, AstNot},
     },
 };
@@ -190,15 +190,9 @@ pub trait NodeVisitor {
                 value: Box::new(self.visit(*value)),
                 declared,
             }),
-            AstNodeType::TypeDeclaration(AstType {
-                identifier,
-                object,
-                overloads,
-            }) => AstNodeType::TypeDeclaration(AstType {
-                identifier,
-                object,
-                overloads,
-            }),
+            AstNodeType::TypeDeclaration(AstType { identifier, object }) => {
+                AstNodeType::TypeDeclaration(AstType { identifier, object })
+            }
             AstNodeType::FunctionDeclaration(AstFunction { header, body }) => {
                 AstNodeType::FunctionDeclaration(AstFunction {
                     header,
@@ -356,26 +350,6 @@ pub trait NodeVisitor {
                 generics,
                 target,
                 variables: variables.into_iter().map(|n| self.visit(n)).collect(),
-            }),
-            AstNodeType::ImplTraitDeclaration(AstImplTrait {
-                generics,
-                trait_ident,
-                target,
-                variables,
-            }) => AstNodeType::ImplTraitDeclaration(AstImplTrait {
-                generics,
-                trait_ident,
-                target,
-                variables: variables.into_iter().map(|n| self.visit(n)).collect(),
-            }),
-            AstNodeType::TraitDeclaration(AstTrait {
-                identifier,
-                implied_traits,
-                members,
-            }) => AstNodeType::TraitDeclaration(AstTrait {
-                identifier,
-                implied_traits,
-                members,
             }),
             AstNodeType::EnumExpression(AstEnum {
                 identifier,

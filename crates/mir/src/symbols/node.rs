@@ -131,8 +131,6 @@ impl MiddleEnvironment {
             | AstNodeType::Continue { .. }
             | AstNodeType::VariableDeclaration { .. }
             | AstNodeType::ImplDeclaration { .. }
-            | AstNodeType::ImplTraitDeclaration { .. }
-            | AstNodeType::TraitDeclaration { .. }
             | AstNodeType::TypeDeclaration { .. }
             | AstNodeType::Return { .. }
             | AstNodeType::ImportStatement { .. }

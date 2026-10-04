@@ -21,7 +21,7 @@ use crate::{
             misc::{AstImport, AstParen, AstTag, AstTest},
             scopes::{AstScopeAlias, AstScopeDef},
             spawn::{AstSelect, AstSpawn},
-            types::{AstImpl, AstImplTrait, AstTrait, AstType},
+            types::{AstImpl, AstType},
         },
         types::ParserDataType,
     },
@@ -222,11 +222,6 @@ impl<'a> AstNode {
                 AstTag::parser(data.clone()).map(AstNodeType::Tag),
             )));
 
-        let impl_start = just(Token::Impl).rewind().ignore_then(choice((
-            AstImplTrait::parser(data.clone()).map(AstNodeType::ImplTraitDeclaration),
-            AstImpl::parser(data.clone()).map(AstNodeType::ImplDeclaration),
-        )));
-
         let type_start = just(Token::Type).rewind().ignore_then(choice((
             AstDataType::parser(data.clone()).map(AstNodeType::DataType),
             AstType::parser(data.clone()).map(AstNodeType::TypeDeclaration),
@@ -249,7 +244,6 @@ impl<'a> AstNode {
             memory,
             declarations,
             misc,
-            impl_start,
             type_start,
             // Conditionals
             AstIf::parser(data.clone()).map(AstNodeType::IfStatement),
@@ -263,7 +257,7 @@ impl<'a> AstNode {
             // Assignment
             AstAssignDestructure::parser(data.clone()).map(AstNodeType::DestructureAssignment),
             // Types
-            AstTrait::parser(data.clone()).map(AstNodeType::TraitDeclaration),
+            AstImpl::parser(data.clone()).map(AstNodeType::ImplDeclaration),
             // Loops
             AstLoop::parser(data.clone()).map(AstNodeType::LoopDeclaration),
             // Scopes

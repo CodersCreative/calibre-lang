@@ -253,12 +253,12 @@ impl MiddleEnvironment {
         add("random", false);
         add("fs", false);
         add("math", true);
+        add("generators", true);
         add("list", true);
         add("collections", true);
         add("str", true);
         add("env", true);
         add("range", true);
-        add("generators", true);
         add("crypto", false);
         add("regex", false);
         add("process", false);

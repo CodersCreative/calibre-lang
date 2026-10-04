@@ -7,7 +7,7 @@ use crate::{
     variables::VariableStore,
 };
 use astro_float::Consts;
-use calibre_lir::{TypeImplKey, VariableKey, ast::BlockId};
+use calibre_lir::{VariableKey, ast::BlockId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use std::sync::OnceLock;
@@ -531,10 +531,13 @@ impl VM {
     #[instrument(skip_all)]
     pub(crate) fn maybe_collect_garbage(&mut self) {
         self.gc.counter = self.gc.counter.wrapping_add(1);
+
         if self.gc.counter < self.gc.interval {
             return;
         }
+
         self.gc.counter = 0;
+
         if self
             .gc
             .in_flight
@@ -543,6 +546,7 @@ impl VM {
         {
             return;
         }
+
         dumpster::sync::collect();
         self.gc.in_flight.store(false, Ordering::Release);
     }
@@ -683,8 +687,6 @@ impl VM {
         seen_refs: &mut FxHashSet<usize>,
         seen_regs: &mut FxHashSet<usize>,
     ) {
-        let _ = self.call_method_for_type(value, &Ustr::from("drop"), Vec::new(), Some(0));
-
         match value {
             RuntimeValue::Ref(name) => {
                 if !seen.insert(name.clone()) {
@@ -750,53 +752,6 @@ impl VM {
                 }
             }
             _ => {}
-        }
-    }
-
-    pub(crate) fn get_function_from_type_member(
-        &mut self,
-        _key: &TypeImplKey,
-        _member: &Ustr,
-    ) -> Option<RuntimeValue> {
-        todo!()
-    }
-
-    pub fn get_function_name_from_type_member(
-        &self,
-        key: &TypeImplKey,
-        method: &Ustr,
-    ) -> Option<&VariableKey> {
-        self.registry.vtable.get_function_from_type(key, method)
-    }
-
-    // TODO Make an impl_name function for RuntimeValue
-    pub fn call_method_for_type(
-        &mut self,
-        value: &RuntimeValue,
-        method: &Ustr,
-        mut args: Vec<RuntimeValue>,
-        value_pos: Option<usize>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let key = value.impl_key().ok_or(RuntimeError::InvalidFunctionCall)?;
-        let name = self
-            .get_function_name_from_type_member(&key, method)
-            .ok_or(RuntimeError::InvalidFunctionCall)?;
-
-        if let Some(_drop_func) = self.registry.functions.get(name) {
-            if let Some(x) = value_pos {
-                args.insert(x, value.clone());
-            }
-
-            self.call_runtime_callable(
-                RuntimeValue::Function {
-                    name: name.clone(),
-                    captures: Arc::new(Vec::new()),
-                },
-                args,
-                true,
-            )
-        } else {
-            Err(RuntimeError::InvalidFunctionCall)
         }
     }
 }

@@ -169,11 +169,9 @@ pub enum ParserInnerType {
     Char,
     Host,
     Dynamic,
-    DynamicTraits(Vec<String>),
     Tuple(Vec<ParserDataType>),
     Paren(Box<ParserDataType>),
     List(Box<ParserDataType>),
-    Gen(Box<ParserDataType>),
     Scope(Vec<ParserDataType>),
     Auto(Option<u16>),
     Range,
@@ -231,11 +229,6 @@ impl AlphaRenamable for ParserInnerType {
                     g.rename(state);
                 }
             }
-            ParserInnerType::DynamicTraits(x) => {
-                for item in x {
-                    *item = state.mapped_str_or_original(item);
-                }
-            }
             ParserInnerType::Paren(x)
             | ParserInnerType::Ptr(x)
             | ParserInnerType::List(x)
@@ -268,7 +261,6 @@ impl AlphaRenamable for ParserInnerType {
                     item.rename(state);
                 }
             }
-            ParserInnerType::Gen(x) => x.rename(state),
             ParserInnerType::Ref(x, _) => x.rename(state),
             // TODO Implement
             ParserInnerType::Scope(_) => {}
@@ -333,7 +325,10 @@ impl ParserDataType {
 
     pub fn get_gen(self) -> Option<ParserDataType> {
         match self.unwrap_all_refs().data_type {
-            ParserInnerType::Gen(x) => Some(*x),
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types,
+            } if identifier == "gen" => generic_types.first().cloned(),
             _ => None,
         }
     }
@@ -438,7 +433,6 @@ impl FromStr for ParserInnerType {
             "str" => Self::Str,
             "char" => Self::Char,
             "dyn" => Self::Dynamic,
-            "gen" => Self::Gen(Box::new(ParserDataType::auto(Span::default()))),
             "option" => Self::Option(Box::new(ParserDataType::auto(Span::default()))),
             "result" => Self::Result {
                 ok: Box::new(ParserDataType::auto(Span::default())),
@@ -484,7 +478,6 @@ impl ParserInnerType {
             } => ParserInnerType::Struct(identifier),
             ParserInnerType::List(_) => ParserInnerType::Struct(String::from("list")),
             ParserInnerType::Ptr(_) => ParserInnerType::Struct(String::from("ptr")),
-            ParserInnerType::Gen(_) => ParserInnerType::Struct(String::from("gen")),
             ParserInnerType::Option(_) => ParserInnerType::Struct(String::from("option")),
             ParserInnerType::Result { .. } => ParserInnerType::Struct(String::from("result")),
             x => x,
@@ -505,10 +498,6 @@ impl ParserInnerType {
 
     pub fn is_dyn(&self) -> bool {
         matches!(self, Self::Dynamic) || matches!(self, Self::Struct(x) if x.contains("dyn"))
-    }
-
-    pub fn is_dyn_trait(&self) -> bool {
-        matches!(self, Self::DynamicTraits { .. })
     }
 
     pub fn is_result(&self) -> bool {
@@ -540,11 +529,11 @@ impl ParserInnerType {
     }
 
     pub fn is_gen(&self) -> bool {
-        matches!(self, Self::Gen(_))
+        matches!(self, Self::Struct(identifier) | Self::StructWithGenerics { identifier, .. } if identifier == "gen")
     }
 
     pub fn is_dyn_list(&self) -> bool {
-        matches!(self, Self::List(x) if x.is_dyn() || x.is_dyn_trait() || x.is_dyn_list())
+        matches!(self, Self::List(x) if x.is_dyn() || x.is_dyn_list())
     }
 
     pub fn is_tuple(&self) -> bool {
@@ -557,13 +546,11 @@ impl ParserInnerType {
             || other.is_host()
             || other.is_dyn()
             || other.is_dyn_list()
-            || other.is_dyn_trait()
             || self.is_auto()
             || self.is_tuple()
             || self.is_host()
             || self.is_dyn()
             || self.is_dyn_list()
-            || self.is_dyn_trait()
             || other == self
             || self.impl_name() == other.impl_name()
             || self.clone().resolve_ffi() == other.clone().resolve_ffi()
@@ -580,20 +567,6 @@ impl ParserInnerType {
             Self::Option(x) => Self::Option(Box::new(x.verify())),
             Self::List(x) => Self::List(Box::new(x.verify())),
             Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.verify()).collect()),
-            Self::DynamicTraits(traits) => {
-                let mut normalized = traits
-                    .into_iter()
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect::<Vec<_>>();
-                normalized.sort();
-                normalized.dedup();
-                if normalized.is_empty() {
-                    Self::Dynamic
-                } else {
-                    Self::DynamicTraits(normalized)
-                }
-            }
             Self::Struct(x) => Self::from_str(&x).unwrap_or(Self::Struct(x)),
             ty => ty,
         }
@@ -617,7 +590,6 @@ impl ParserInnerType {
                 generic_types.iter().any(|x| x.contains_auto())
             }
             ParserInnerType::Scope(x) => x.iter().any(|x| x.contains_auto()),
-            ParserInnerType::DynamicTraits(_) => false,
             _ => false,
         }
     }
@@ -649,7 +621,6 @@ impl ParserInnerType {
                 generic_types: generic_types.into_iter().map(|x| x.resolve_ffi()).collect(),
             },
             Self::Scope(x) => Self::Scope(x.into_iter().map(|x| x.resolve_ffi()).collect()),
-            Self::DynamicTraits(x) => Self::DynamicTraits(x),
             x => x,
         }
     }
@@ -681,13 +652,6 @@ impl Display for ParserInnerType {
             Self::Null => write!(f, "null"),
             Self::Host => write!(f, "host"),
             Self::Dynamic => write!(f, "dyn"),
-            Self::DynamicTraits(traits) => {
-                if traits.is_empty() {
-                    write!(f, "dyn")
-                } else {
-                    write!(f, "dyn:<{}>", traits.join(", "))
-                }
-            }
             Self::Bool => write!(f, "bool"),
             Self::Str => write!(f, "str"),
             Self::Char => write!(f, "char"),
@@ -701,7 +665,6 @@ impl Display for ParserInnerType {
             Self::Paren(x) => write!(f, "<{}>", x),
             Self::Option(x) => write!(f, "{}?", x),
             Self::Ptr(x) => write!(f, "ptr:<{}>", x),
-            Self::Gen(x) => write!(f, "gen:<{}>", x),
             Self::Struct(x) => write!(f, "{}", x),
             Self::StructWithGenerics {
                 identifier,

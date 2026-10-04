@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use crate::{
     IdentifiersUsed, Span,
     ast::{
@@ -15,6 +13,7 @@ use crate::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum TypeDefType {
@@ -160,20 +159,6 @@ impl Overload {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum TraitMemberKind {
-    Const,
-    Type,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TraitMember {
-    pub kind: TraitMemberKind,
-    pub identifier: PotentialDollarIdentifier,
-    pub data_type: ParserDataType,
-    pub value: Option<Box<AstNode>>,
-}
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstImpl {
     pub generics: GenericTypes,
@@ -182,23 +167,7 @@ pub struct AstImpl {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstImplTrait {
-    pub generics: GenericTypes,
-    pub trait_ident: PotentialGenericTypeIdentifier,
-    pub target: ParserDataType,
-    pub variables: Vec<AstNode>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstTrait {
-    pub identifier: PotentialGenericTypeIdentifier,
-    pub implied_traits: Vec<PotentialDollarIdentifier>,
-    pub members: Vec<TraitMember>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstType {
     pub identifier: PotentialGenericTypeIdentifier,
     pub object: TypeDefType,
-    pub overloads: Vec<Overload>,
 }

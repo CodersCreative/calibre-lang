@@ -5,9 +5,7 @@ use crate::{
         nodes::{
             AstNode,
             misc::StandaloneTag,
-            types::{
-                AstImpl, AstImplTrait, AstTrait, AstType, Overload, TraitMemberKind, TypeDefType,
-            },
+            types::{AstImpl, AstType, TypeDefType},
         },
         types::{GenericTypes, ParserDataType},
     },
@@ -44,114 +42,14 @@ impl AstFormatting for AstImpl {
     }
 }
 
-impl AstFormatting for AstImplTrait {
-    type PreFormat = ();
-
-    fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let mut txt = format!(
-            "impl{} {} for {} {{",
-            self.generics.format(formatter),
-            self.trait_ident,
-            self.target
-        );
-
-        if !self.variables.is_empty() {
-            txt.push_str(&format!(
-                "\n{}\n}}",
-                self.variables
-                    .iter()
-                    .map(|var| {
-                        let temp = handle_comment!(
-                            formatter.get_potential_comment(&var.span),
-                            var.format(formatter)
-                        );
-                        format!("{};", formatter.fmt_txt_with_tab(&temp, 1, true))
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n\n")
-            ));
-        } else {
-            txt.push('}');
-        }
-
-        txt
-    }
-}
-
-impl AstFormatting for AstTrait {
-    type PreFormat = ();
-
-    fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let mut txt = format!("trait {}", self.identifier);
-
-        if !self.implied_traits.is_empty() {
-            txt.push_str(&format!(
-                " : {}",
-                self.implied_traits
-                    .iter()
-                    .map(|imp| imp.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" + ")
-            ));
-        }
-
-        txt.push_str(" {");
-
-        if !self.members.is_empty() {
-            txt.push_str(&format!(
-                "\n{}\n}}",
-                self.members
-                    .iter()
-                    .map(|member| {
-                        let mut line = match member.kind {
-                            TraitMemberKind::Type => format!("type {}", member.identifier),
-                            TraitMemberKind::Const => format!("const {}", member.identifier),
-                        };
-
-                        match member.kind {
-                            TraitMemberKind::Type => {
-                                if !member.data_type.is_auto() {
-                                    line.push_str(&format!(" := {}", member.data_type));
-                                }
-                            }
-                            TraitMemberKind::Const => {
-                                line.push_str(&match (member.data_type.is_auto(), &member.value) {
-                                    (true, Some(value)) => {
-                                        format!(" := {}", value.format(formatter))
-                                    }
-                                    (false, Some(value)) => format!(
-                                        " : {} = {}",
-                                        member.data_type,
-                                        value.format(formatter)
-                                    ),
-                                    (true, None) => String::new(),
-                                    (false, None) => format!(" : {}", member.data_type),
-                                });
-                            }
-                        }
-
-                        format!("{};", formatter.fmt_txt_with_tab(&line, 1, true))
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n\n")
-            ));
-        } else {
-            txt.push('}');
-        }
-
-        txt
-    }
-}
-
 impl AstFormatting for AstType {
     type PreFormat = ();
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         format!(
-            "type {} := {}{}",
+            "type {} := {}",
             self.identifier,
             self.object.format(formatter),
-            Overload::format_all(&self.overloads, formatter)
         )
     }
 }
@@ -653,101 +551,6 @@ impl TypeDefPreFormat {
         }
 
         grouped
-    }
-}
-
-impl AstFormatting for Overload {
-    type PreFormat = ();
-
-    fn narrow_format(&self, formatter: &mut Formatter) -> String {
-        let mut txt = format!("const \"{}\" := fn (", self.operator);
-
-        #[allow(clippy::type_complexity)]
-        let adjusted_params = self.header.parameters.iter().fold(
-            Vec::new(),
-            |mut groups: Vec<
-                Vec<&(
-                    PotentialDollarIdentifier,
-                    Option<ParserDataType>,
-                    Option<Box<AstNode>>,
-                )>,
-            >,
-             param| {
-                let should_group = groups
-                    .last()
-                    .and_then(|g| g.first())
-                    .map(|last| last.1 == param.1)
-                    .unwrap_or(false);
-
-                if should_group {
-                    if let Some(group) = groups.last_mut() {
-                        group.push(param);
-                    } else {
-                        groups.push(vec![param]);
-                    }
-                } else {
-                    groups.push(vec![param]);
-                }
-                groups
-            },
-        );
-
-        let params_str = adjusted_params
-            .iter()
-            .map(|params| {
-                let names: String = params.iter().map(|id| format!("{} ", id.0)).collect();
-                let type_str = params
-                    .last()
-                    .and_then(|last| last.1.as_ref())
-                    .map(|dt| format!(": {}", dt))
-                    .unwrap_or_default();
-                format!("{}{}", names, type_str)
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        txt.push_str(&params_str);
-        txt.push_str(") ");
-
-        if self.header.return_type.is_null() {
-            txt.push_str(&self.body.format(formatter));
-        } else {
-            txt.push_str(&format!(
-                "-> {} {}",
-                self.header.return_type,
-                self.body.format(formatter)
-            ));
-        }
-
-        txt
-    }
-}
-
-impl Overload {
-    pub fn format_all(overloads: &[Self], formatter: &mut Formatter) -> String {
-        if overloads.is_empty() {
-            return String::new();
-        }
-
-        format!(
-            " @overload {{\n{}\n}}",
-            overloads
-                .iter()
-                .enumerate()
-                .map(|(i, func)| {
-                    let temp = handle_comment!(
-                        formatter.get_potential_comment(func.span()),
-                        func.format(formatter)
-                    );
-                    format!(
-                        "{}{};",
-                        if i == 0 { "" } else { "\n" },
-                        formatter.fmt_txt_with_tab(&temp, 1, true)
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n\n")
-        )
     }
 }
 

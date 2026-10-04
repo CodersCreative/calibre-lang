@@ -1,25 +1,196 @@
 const suspend := fn <T> (value : T) -> T => return gen_suspend(value);
 
-impl<T> Iter for gen:<T> {
-	type Item := T;
-
-	@ignore_invalid_type_check const next := fn (self : &mut gen:<T>) -> T? => {
+impl gen:<T> {
+	const next := fn (self : &mut Self) -> T? => {
 		if self.done => return none;
 		let value : T? = (self.data)();
-		if value = none => {
-			self.done := true;
-			return none;
-		};
-		
-		self.index += 1;
 		return value;
 	};
-};
 
-impl<T> gen:<T> {
-	@ignore_invalid_type_check const iter := fn (self : Self) -> Self => return self;
+	const collect := fn (self : Self) -> list:<T> => {
+		let mut out := list:<T>[];
+		
+		for => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				out <<= value;
+			} else => {
+				break;
+			};
+		};
+		
+		return out;
+	};
 
-	@ignore_invalid_type_check const iter_mut := fn (self : &mut Self) -> Self => return self.*;
+	const map := fn<U>(self : Self, op : fn(T) -> U) -> gen:<U> => {
+		for => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				return op(value);
+			} else => {
+				return;
+			};
+		};
+	}
 
-	@ignore_invalid_type_check const into_iter := fn (self : Self) -> Self => return self;
+	const filter := fn(self : Self, pred : fn(T) -> bool) -> gen:<T> => {
+		for => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				if pred(value) => return value;
+			} else => {
+				return;
+			};
+		};
+	}
+
+	const for_each := fn(self : Self, op : fn(T)) => {
+		for => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				op(value);
+			} else => {
+				return;
+			};
+		};
+	}
+
+	const fold := fn<U>(self : Self, init : U, op : fn (U, T) -> U) -> U => {
+		let mut acc := init;
+		
+		for => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				acc := op(acc, value);
+			} else => {
+				break;
+			};
+		};
+		
+		return acc;
+	}
+
+	const any := fn(self : Self, pred : fn (T) -> bool) -> bool => {
+		for => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				if pred(value) => return true;
+			} else => {
+				break;
+			};
+		};
+		
+		return false;
+	}
+
+	const all := fn (self : Self, pred : fn (T) -> bool) -> bool => {
+		for => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				if !pred(value) => return false;
+			} else => {
+				break;
+			};
+		};
+		
+		return true;
+	};
+
+
+	const find := fn (self : Self, pred : fn (T) -> bool) -> T? => {
+		for => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				if pred(value) => return some(value);
+			} else => {
+				break;
+			};
+		};
+		
+		return none;
+	};
+
+	const count := fn (self : Self) -> uint => {
+		let mut n := 0u;
+		
+		for  => {
+			let v : T? = self.next();
+			if v.is_some() => {
+				n += 1u;
+			} else => {
+				break;
+			};
+		};
+		
+		return n;
+	};
+
+	const take := fn (self : Self, n : int) -> gen:<T> => {
+		let mut i := 0;
+		
+		for i < n => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				return value;
+				i += 1;
+			} else => {
+				return;
+			};
+		};
+	};
+
+	const skip := fn (self : Self, n : int) -> gen:<T> => {
+		let mut i := 0;
+		
+		for i < n => {
+			let v : T? = self.next();
+			
+			if v.is_none() => {
+				return;
+			};
+			
+			i += 1;
+		};
+		
+		
+		for => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				return value;
+			} else => {
+				return;
+			};
+		};
+	};
+
+
+	const enumerate := fn (self : Self) -> gen:<<int, T>> => {
+		let mut i := 0;
+	
+		for => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				return (i += 1, value);
+			} else => {
+				return;
+			};
+		};
+	};
+
+
+	const step_by := fn (self : Self, step : int) -> gen:<T> => {
+		if step <= 1 => return self;
+		
+		let mut i := 0;
+		
+		for => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				if (i % step) = 0 => return value;
+				i += 1;
+			} else => {
+				return;
+			};
+		};
+	};
 };

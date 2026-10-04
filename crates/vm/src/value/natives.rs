@@ -33,8 +33,6 @@ impl RuntimeValue {
                 ("ok", Arc::new(native::global::OkFn)),
                 ("err", Arc::new(native::global::ErrFn)),
                 ("some", Arc::new(native::global::SomeFn)),
-                ("repr", Arc::new(native::global::Repr)),
-                ("display", Arc::new(native::global::Display)),
                 ("len", Arc::new(native::global::Len)),
                 ("trim", Arc::new(native::global::Trim)),
                 ("wait", Arc::new(native::global::Wait)),

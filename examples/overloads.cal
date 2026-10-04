@@ -3,33 +3,31 @@ import * from std::console;
 import * from std::list;
 import * from std::str;
 
-type int := int @overload {
-	const "as" := fn (self : int) -> str!str => ok("int");
+@overload("as") fn (self : int) -> str!str => ok("int");
+
+type Vec2 := struct { x y : int }
+
+@overload("+") fn (a b : Vec2) -> Vec2 => return Vec2 { x : a.x + b.x, y : a.y + b.y };
+
+@overload("=") fn (a b : Vec2) -> bool => return (a.x = b.x) && (a.y = b.y);
+
+@overload("[]") fn (self : Vec2, idx : int) -> int => {
+	if idx = 0 => return self.x;
+	
+	if idx = 1 => return self.y;
+	
+	return 0;
 };
 
-type Vec2 := struct { x y : int } @overload {
-	const "+" := fn (a b : Vec2) -> Vec2 => return Vec2 { x : a.x + b.x, y : a.y + b.y };
-
-	const "=" := fn (a b : Vec2) -> bool => return a.x = b.x && a.y = b.y;
-
-	const "[]" := fn (self : Vec2, idx : int) -> int => {
-		if idx = 0 => return self.x;
-		
-		if idx = 1 => return self.y;
-		
-		return 0;
-	};
-
-	const "[]=" := fn (self : Vec2, idx value : int) -> Vec2 => {
-		if idx = 0 => self.x := value;
-		if idx = 1 => self.y := value;
-		return self;
-	};
-
-	const "in" := fn (value : int, vec : Vec2) -> bool => return value = vec.x || value = vec.y;
-
-	const "as" := fn (self : Vec2) -> str!str => return ok("Vec2");
+@overload("[]=") fn (self : Vec2, idx value : int) -> Vec2 => {
+	if idx = 0 => self.x := value;
+	if idx = 1 => self.y := value;
+	return self;
 };
+
+@overload("in") fn (value : int, vec : Vec2) -> bool => return (value = vec.x) || (value = vec.y);
+
+@overload("as") fn (self : Vec2) -> str!str => return ok("Vec2");
 
 const main := fn => {
 	let mut v := Vec2 { x : 1, y : 2 };

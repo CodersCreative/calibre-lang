@@ -665,14 +665,13 @@ impl MirLowering for AstReturn {
                                 MirDataType::Null
                             };
 
-                            let ret_ty = if let MirDataType::Gen(x) = ret_ty {
-                                *x
+                            let ret_ty = if let Some(x) = ret_ty.get_gen() {
+                                x
                             } else {
                                 ret_ty
                             };
 
                             if !node_ty.loose_eq(&ret_ty) {
-                                println!("{}", self.value.unwrap());
                                 return Err(env.context.err_at_current(
                                     MiddleErr::InvalidReturnType {
                                         expected: Box::new(ret_ty),

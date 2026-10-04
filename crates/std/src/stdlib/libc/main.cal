@@ -12,8 +12,6 @@ impl ErrNo {
 	const set := fn (self : Self) => {
 		set_c_errno(self.code);
 	};
-};
 
-impl Display for ErrNo {
 	const display := fn (self : &Self) -> str => self.description();
 };

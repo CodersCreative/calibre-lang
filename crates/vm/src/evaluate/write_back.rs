@@ -161,12 +161,6 @@ impl VM {
     ) -> Option<RuntimeValue> {
         self.mutate_handle(handle, |value| Some(std::mem::replace(value, replacement)))
     }
-
-    pub(crate) fn read_mutation_handle(&self, handle: &MutationHandle) -> Option<RuntimeValue> {
-        let target = self.get_root(&handle.root);
-        let root = self.resolve_value_ref(&target).ok()?;
-        root.read_path(&handle.path)
-    }
 }
 
 impl Propagation for VM {

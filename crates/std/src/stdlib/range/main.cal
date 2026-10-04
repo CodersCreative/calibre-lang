@@ -1,3 +1,11 @@
+@overload("as") fn (self : range) -> gen:<int> => {
+	let end := len(self.range);
+	let start := min_or_zero(self.range);
+	let current := start + self.index;
+	if current >= end => return;
+	return start + (self.index += 1);
+} 
+
 impl range {
 	const len := fn (self : range) -> uint => return len(self);
 
@@ -22,6 +30,4 @@ impl range {
 		for i in self => acc += i;
 		return acc;
 	};
-
-	const into_iter := fn (self : range) -> RangeIter => return iter_range(self);
 };

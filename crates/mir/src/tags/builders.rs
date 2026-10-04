@@ -67,7 +67,6 @@ impl MiddleEnvironment {
                 object: TypeDefType::Struct {
                     fields: ObjectType::Map(optional_fields),
                 },
-                overloads: Vec::new(),
             }),
         );
 

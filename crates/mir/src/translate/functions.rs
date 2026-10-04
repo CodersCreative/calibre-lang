@@ -21,6 +21,7 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType, VarType,
             access::AstField,
+            binary::{AsFailureMode, AstAs},
             declaration::AstDeclaration,
             flow::AstReturn,
             functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
@@ -35,17 +36,27 @@ use calibre_parser::{
 use tracing::instrument;
 use ustr::Ustr;
 
-struct GeneratorReturnsRewriter;
+struct GeneratorReturnsRewriter<'a> {
+    _env: &'a mut MiddleEnvironment,
+    _scope: ScopeId,
+    _return_type: &'a MirDataType,
+}
 
-impl NodeVisitor for GeneratorReturnsRewriter {
+// TODO Detect when the value being returned is a gen that matches the return type and not rewrite it into a yield
+impl<'a> NodeVisitor for GeneratorReturnsRewriter<'a> {
     fn visit(&mut self, node: AstNode) -> AstNode {
         let span = node.span;
         match node.node_type {
-            AstNodeType::Return(AstReturn { value: Some(value) }) => AstNode::call(
-                span,
-                AstNode::identifier(span, "gen_suspend"),
-                vec![CallArg::Value(*value)],
-            ),
+            AstNodeType::Return(AstReturn { value: Some(value) })
+              
+                     =>
+            {
+                AstNode::call(
+                    span,
+                    AstNode::identifier(span, "gen_suspend"),
+                    vec![CallArg::Value(*value)],
+                )
+            }
             AstNodeType::Return(AstReturn { value: None }) => AstNode::new(
                 span,
                 AstNodeType::Return(AstReturn {
@@ -145,8 +156,15 @@ impl MiddleEnvironment {
                     AstNode::new(
                         span,
                         AstNodeType::ListLiteral(AstList {
-                            data_type: list_inner_type,
-                            values: vec![arg],
+                            data_type: list_inner_type.clone(),
+                            values: vec![AstNode::new(
+                                span,
+                                AstNodeType::AsExpression(AstAs {
+                                    value: Box::new(arg),
+                                    data_type: list_inner_type,
+                                    failure_mode: AsFailureMode::Panic,
+                                }),
+                            )],
                         }),
                     )
                 }
@@ -154,8 +172,20 @@ impl MiddleEnvironment {
                 AstNode::new(
                     span,
                     AstNodeType::ListLiteral(AstList {
-                        data_type: list_inner_type,
-                        values: args.into_iter().map(Into::into).collect(),
+                        data_type: list_inner_type.clone(),
+                        values: args
+                            .into_iter()
+                            .map(|x| {
+                                AstNode::new(
+                                    span,
+                                    AstNodeType::AsExpression(AstAs {
+                                        value: Box::new(x.into()),
+                                        data_type: list_inner_type.clone(),
+                                        failure_mode: AsFailureMode::Panic,
+                                    }),
+                                )
+                            })
+                            .collect(),
                     }),
                 )
             };
@@ -292,19 +322,31 @@ impl MiddleEnvironment {
         }
     }
 
-    fn rewrite_generator_returns(node: AstNode) -> AstNode {
-        let mut rewriter = GeneratorReturnsRewriter;
+    fn rewrite_generator_returns(
+        &mut self,
+        scope: ScopeId,
+        return_type: &MirDataType,
+        node: AstNode,
+    ) -> AstNode {
+        let mut rewriter = GeneratorReturnsRewriter {
+            _env: self,
+            _scope: scope,
+            _return_type: return_type,
+        };
         rewriter.visit(node)
     }
 
     pub(crate) fn wrap_generator_body(
         &mut self,
+        scope: ScopeId,
         body: AstNode,
-        elem_type: ParserDataType,
+        elem_type: MirDataType,
         span: Span,
     ) -> AstNode {
         let next_name = self.context.get_temp("gen_next");
-        let rewritten = Self::rewrite_generator_returns(body);
+        let rewritten = Self::rewrite_generator_returns(self, scope, &elem_type, body);
+
+        let elem_type: ParserDataType = elem_type.into();
 
         let next_body = match rewritten.node_type {
             AstNodeType::ScopeDeclaration(AstScopeDef {
@@ -362,12 +404,12 @@ impl MiddleEnvironment {
                 value: ObjectType::Map(vec![
                     (Ustr::from("data"), AstNode::identifier(span, &next_name)),
                     (Ustr::from("index"), AstNode::int(span, 0)),
-                    (Ustr::from("done"), AstNode::identifier(span, "false")),
+                    (Ustr::from("done"), AstNode::bool(span, false)),
                 ]),
             }),
         );
 
-        AstNode::new_temp_scope_with_create(vec![next_decl, gen_value], Some(false))
+        AstNode::new_temp_scope_with_create(vec![next_decl, AstNode::ret(gen_value)], Some(true))
     }
 
     pub fn get_caller_context(&self, scope: ScopeId, span: Span) -> Option<AstNode> {
@@ -721,7 +763,7 @@ impl MirLowering for AstFunction {
         }
 
         if let Some(elem_type) = return_type.clone().get_gen() {
-            body = MiddleEnvironment::wrap_generator_body(env, body, elem_type.into(), span);
+            body = MiddleEnvironment::wrap_generator_body(env, scope, body, elem_type, span);
         }
 
         let body = body.lower(env, new_scope, span)?;

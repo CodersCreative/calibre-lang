@@ -13,7 +13,6 @@ pub enum TypeImplKey {
     Option,
     Result,
     Ptr,
-    Gen,
     Function,
     Dynamic,
 }
@@ -27,7 +26,6 @@ impl TypeImplKey {
             Self::Option => String::from("option"),
             Self::Result => String::from("result"),
             Self::Ptr => String::from("ptr"),
-            Self::Gen => String::from("gen"),
             Self::Nominal(x) => x.name().to_string(),
             Self::Primitive(x) => x.to_string(),
             Self::Function => String::from("fn"),
@@ -50,11 +48,10 @@ impl From<&MirDataType> for TypeImplKey {
             MirDataType::Option(_) => TypeImplKey::Option,
             MirDataType::Result { .. } => TypeImplKey::Result,
             MirDataType::Ptr(_) => TypeImplKey::Ptr,
-            MirDataType::Gen(_) => TypeImplKey::Gen,
             MirDataType::Function { .. } | MirDataType::NativeFunction { .. } => {
                 TypeImplKey::Function
             }
-            MirDataType::Dynamic | MirDataType::DynamicTraits(_) => TypeImplKey::Dynamic,
+            MirDataType::Dynamic => TypeImplKey::Dynamic,
             other => TypeImplKey::Primitive(Ustr::from(&other.to_string())),
         }
     }
@@ -102,7 +99,6 @@ impl MirDataType {
                 p.can_unify(c, generic_params, bindings)
             }
             (MirDataType::Ptr(p), MirDataType::Ptr(c)) => p.can_unify(c, generic_params, bindings),
-            (MirDataType::Gen(p), MirDataType::Gen(c)) => p.can_unify(c, generic_params, bindings),
             (MirDataType::Option(p), MirDataType::Option(c)) => {
                 p.can_unify(c, generic_params, bindings)
             }
@@ -173,9 +169,6 @@ impl MirDataType {
                         .zip(param_c)
                         .all(|(p, c)| p.can_unify(c, generic_params, bindings))
             }
-            (MirDataType::DynamicTraits(traits_p), MirDataType::DynamicTraits(traits_c)) => {
-                traits_p == traits_c
-            }
             _ => false,
         }
     }
@@ -208,7 +201,6 @@ impl MirDataType {
 
             MirDataType::List(inner)
             | MirDataType::Ptr(inner)
-            | MirDataType::Gen(inner)
             | MirDataType::Option(inner)
             | MirDataType::Ref(inner, _) => 10 + inner.specificity(generic_params),
 
@@ -244,8 +236,6 @@ impl MirDataType {
                         .map(|item| item.specificity(generic_params))
                         .sum::<usize>()
             }
-
-            MirDataType::DynamicTraits(traits) => 10 + traits.len() * 5,
         }
     }
 }

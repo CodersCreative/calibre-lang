@@ -115,11 +115,6 @@ impl MirTypeKeysUsed for MirDataType {
                 types.extend(ok.identifiers_used());
                 types.extend(err.identifiers_used());
             }
-            MirDataType::DynamicTraits(traits) => {
-                for trait_key in traits {
-                    types.push(trait_key);
-                }
-            }
             _ => {}
         }
         types
@@ -140,10 +135,8 @@ pub enum MirDataType {
     Char,
     Host,
     Dynamic,
-    DynamicTraits(Vec<TypeKey>),
     Tuple(Vec<MirDataType>),
     List(Box<MirDataType>),
-    Gen(Box<MirDataType>),
     Range,
     Option(Box<MirDataType>),
     Result {
@@ -211,11 +204,6 @@ impl From<MirDataType> for ParserInnerType {
             MirDataType::Range => ParserInnerType::Range,
             MirDataType::Null => ParserInnerType::Null,
             MirDataType::UInt => ParserInnerType::UInt,
-            MirDataType::DynamicTraits(x) => ParserInnerType::DynamicTraits(
-                x.into_iter()
-                    .map(|x| x.fully_qualified_path.name.unwrap_or_default().to_string())
-                    .collect(),
-            ),
             MirDataType::Function {
                 return_type,
                 parameters,
@@ -230,7 +218,6 @@ impl From<MirDataType> for ParserInnerType {
                 return_type: Box::new((*return_type).into()),
                 parameters: parameters.into_iter().map(ParserDataType::from).collect(),
             },
-            MirDataType::Gen(x) => ParserInnerType::Gen(Box::new((*x).into())),
             MirDataType::List(x) => ParserInnerType::List(Box::new((*x).into())),
             MirDataType::Option(x) => ParserInnerType::Option(Box::new((*x).into())),
             MirDataType::Ptr(x) => ParserInnerType::Ptr(Box::new((*x).into())),
@@ -303,7 +290,6 @@ impl From<ParserInnerType> for MirDataType {
                 MirDataType::Tuple(xs.into_iter().map(MirDataType::from).collect())
             }
             ParserInnerType::List(x) => MirDataType::List(Box::new((*x).into())),
-            ParserInnerType::Gen(x) => MirDataType::Gen(Box::new((*x).into())),
             ParserInnerType::Option(x) => MirDataType::Option(Box::new((*x).into())),
             ParserInnerType::Result { ok, err } => MirDataType::Result {
                 ok: Box::new((*ok).into()),
@@ -335,8 +321,6 @@ impl From<ParserInnerType> for MirDataType {
                     MirDataType::Ptr(Box::new(generic_types[0].clone().into()))
                 } else if identifier == "list" && generic_types.len() == 1 {
                     MirDataType::List(Box::new(generic_types[0].clone().into()))
-                } else if identifier == "gen" && generic_types.len() == 1 {
-                    MirDataType::Gen(Box::new(generic_types[0].clone().into()))
                 } else {
                     MirDataType::Struct {
                         identifier: TypeKey {
@@ -349,17 +333,6 @@ impl From<ParserInnerType> for MirDataType {
                     }
                 }
             }
-            ParserInnerType::DynamicTraits(traits) => MirDataType::DynamicTraits(
-                traits
-                    .into_iter()
-                    .map(|t| TypeKey {
-                        fully_qualified_path: Arc::new(FullyQualifiedPath {
-                            name: Some(Ustr::from(&t)),
-                            parent: None,
-                        }),
-                    })
-                    .collect(),
-            ),
             ParserInnerType::Scope(types) => types
                 .into_iter()
                 .next()
@@ -393,11 +366,6 @@ impl MirRenamable for MirDataType {
                     g.rename(state);
                 }
             }
-            MirDataType::DynamicTraits(x) => {
-                for item in x {
-                    *item = state.mapped_type_or_original(item.clone());
-                }
-            }
             MirDataType::List(x) => x.rename(state),
             MirDataType::Option(x) => x.rename(state),
             MirDataType::Result { ok, err } => {
@@ -428,7 +396,6 @@ impl MirRenamable for MirDataType {
                     item.rename(state);
                 }
             }
-            MirDataType::Gen(x) => x.rename(state),
             MirDataType::Ref(x, _) => x.rename(state),
         }
     }
@@ -457,7 +424,10 @@ impl MirDataType {
 
     pub fn get_gen(&self) -> Option<MirDataType> {
         match self.unwrap_all_refs() {
-            MirDataType::Gen(x) => Some(*x.clone()),
+            MirDataType::Struct {
+                identifier,
+                generic_types,
+            } if identifier.name() == "gen" => generic_types.first().cloned(),
             _ => None,
         }
     }
@@ -568,10 +538,6 @@ impl MirDataType {
         matches!(self, Self::Dynamic)
     }
 
-    pub fn is_dyn_trait(&self) -> bool {
-        matches!(self, Self::DynamicTraits { .. })
-    }
-
     pub fn is_result(&self) -> bool {
         matches!(self, Self::Result { .. })
     }
@@ -601,7 +567,7 @@ impl MirDataType {
     }
 
     pub fn is_dyn_list(&self) -> bool {
-        matches!(self, Self::List(x) if x.is_dyn() || x.is_dyn_trait() || x.is_dyn_list())
+        matches!(self, Self::List(x) if x.is_dyn() || x.is_dyn_list())
     }
 
     pub fn is_tuple(&self) -> bool {
@@ -610,18 +576,16 @@ impl MirDataType {
 
     #[inline]
     pub fn is_gen(&self) -> bool {
-        matches!(self, Self::Gen(_))
+        matches!(self.key(), Self::Struct { identifier, .. } if identifier.name() == "gen")
     }
 
     pub fn loose_eq(&self, other: &Self) -> bool {
         let result = other.is_host()
             || other.is_dyn()
             || other.is_dyn_list()
-            || other.is_dyn_trait()
             || self.is_host()
             || self.is_dyn()
             || self.is_dyn_list()
-            || self.is_dyn_trait()
             || other == self;
 
         if result {
@@ -664,7 +628,6 @@ impl MirDataType {
             MirDataType::Struct { generic_types, .. } => {
                 generic_types.iter().any(|x| x.contains_auto())
             }
-            MirDataType::DynamicTraits(_) => false,
             _ => false,
         }
     }
@@ -695,6 +658,8 @@ impl MirDataType {
             }
             (MirDataType::Ptr(a), MirDataType::Ptr(b)) => a.matches(b, _generic_params),
             (MirDataType::Ref(a, _), MirDataType::Ref(b, _)) => a.matches(b, _generic_params),
+            (MirDataType::Ref(a, _), b) => a.matches(b, _generic_params),
+            (a, MirDataType::Ref(b, _)) => a.matches(b, _generic_params),
             (MirDataType::Tuple(a), MirDataType::Tuple(b)) => {
                 if a.len() != b.len() {
                     return false;

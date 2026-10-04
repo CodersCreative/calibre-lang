@@ -1,18 +1,13 @@
 use crate::ast::ObjectType;
-use crate::ast::idents::ParserText;
 use crate::ast::nodes::misc::StandaloneTag;
-use crate::ast::nodes::types::{
-    AstImpl, AstImplTrait, AstTrait, AstType, Overload, TraitMember, TraitMemberKind, TypeDefType,
-};
+use crate::ast::nodes::types::{AstImpl, AstType, TypeDefType};
 use crate::ast::types::GenericTypes;
-use crate::ast::types::ParserDataType;
 use crate::ast::types::ParserInnerType;
 use crate::parse::StatementData;
 use crate::parse::potential_new_line;
 use crate::{
-    ast::nodes::AstNodeType,
     lexer::Token,
-    parse::{AstParser, AstParserErr, MapWithSpanExt, TokenStream},
+    parse::{AstParser, AstParserErr, TokenStream},
 };
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
@@ -150,65 +145,6 @@ impl<'a> AstParser<'a> for TypeDefType {
     }
 }
 
-impl<'a> AstParser<'a> for Overload {
-    type Data = StatementData<'a>;
-
-    #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        just(Token::Const)
-            .ignore_then(select! { Token::StringLiteral(op) => ParserText::decode_literal(op) })
-            .map_with_span(|op, sp| ParserText::new(sp, op))
-            .then_ignore(just(Token::Walrus).padded_by(potential_new_line()))
-            .then(data.node.clone())
-            .try_map(|(operator, value), sp| match value.node_type {
-                AstNodeType::FunctionDeclaration(ref func) => Ok(Overload {
-                    operator,
-                    header: func.header.clone(),
-                    body: Box::new(value),
-                }),
-                _ => Err(Rich::custom(sp, "expected function declaration")),
-            })
-    }
-}
-
-impl<'a> AstParser<'a> for TraitMember {
-    type Data = StatementData<'a>;
-
-    #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        let const_member = just(Token::Const)
-            .ignore_then(data.dollar_ident.clone())
-            .then(
-                just(Token::Colon)
-                    .ignore_then(data.data_type.clone())
-                    .or_not(),
-            )
-            .then(
-                choice((just(Token::Eq), just(Token::Walrus)))
-                    .padded_by(potential_new_line())
-                    .ignore_then(data.node.clone())
-                    .or_not(),
-            )
-            .map_with_span(|((identifier, data_type), value), span| TraitMember {
-                kind: TraitMemberKind::Const,
-                identifier,
-                data_type: data_type.unwrap_or_else(|| ParserDataType::auto(span)),
-                value: value.map(Box::new),
-            });
-
-        let type_member = just(Token::Type)
-            .ignore_then(data.dollar_ident.clone())
-            .map_with_span(|identifier, span| TraitMember {
-                kind: TraitMemberKind::Type,
-                identifier,
-                data_type: ParserDataType::auto(span),
-                value: None,
-            });
-
-        choice((const_member, type_member))
-    }
-}
-
 impl<'a> AstParser<'a> for AstImpl {
     type Data = StatementData<'a>;
 
@@ -234,59 +170,6 @@ impl<'a> AstParser<'a> for AstImpl {
     }
 }
 
-impl<'a> AstParser<'a> for AstImplTrait {
-    type Data = StatementData<'a>;
-
-    #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        just(Token::Impl)
-            .ignore_then(GenericTypes::parser(data.clone()))
-            .then(data.generic_ident.clone())
-            .then_ignore(just(Token::For).padded_by(potential_new_line()))
-            .then(data.data_type.clone())
-            .then(
-                data.node
-                    .clone()
-                    .padded_by(potential_new_line())
-                    .repeated()
-                    .collect::<Vec<_>>()
-                    .padded_by(potential_new_line())
-                    .delimited_by(just(Token::LeftBracket), just(Token::RightBracket)),
-            )
-            .map(
-                |(((generics, trait_ident), target), variables)| AstImplTrait {
-                    generics,
-                    trait_ident,
-                    target,
-                    variables,
-                },
-            )
-    }
-}
-
-impl<'a> AstParser<'a> for AstTrait {
-    type Data = StatementData<'a>;
-
-    #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
-        just(Token::Trait)
-            .ignore_then(data.generic_ident.clone())
-            .then(
-                TraitMember::parser(data.clone())
-                    .padded_by(potential_new_line())
-                    .repeated()
-                    .collect::<Vec<_>>()
-                    .padded_by(potential_new_line())
-                    .delimited_by(just(Token::LeftBracket), just(Token::RightBracket)),
-            )
-            .map(|(identifier, members)| AstTrait {
-                identifier,
-                implied_traits: Vec::new(),
-                members,
-            })
-    }
-}
-
 impl<'a> AstParser<'a> for AstType {
     type Data = StatementData<'a>;
 
@@ -295,31 +178,6 @@ impl<'a> AstParser<'a> for AstType {
             .ignore_then(data.generic_ident.clone())
             .then_ignore(just(Token::Walrus).padded_by(potential_new_line()))
             .then(TypeDefType::parser(data.clone()))
-            .then(
-                just(Token::At)
-                    .ignore_then(select! { Token::Identifier(ident) => ident })
-                    .try_map(|ident, sp| {
-                        if ident == "overload" {
-                            Ok(ident)
-                        } else {
-                            Err(Rich::custom(sp, "expected 'overload'"))
-                        }
-                    })
-                    .ignore_then(
-                        Overload::parser(data)
-                            .padded_by(potential_new_line())
-                            .repeated()
-                            .collect::<Vec<_>>()
-                            .padded_by(potential_new_line())
-                            .delimited_by(just(Token::LeftBracket), just(Token::RightBracket)),
-                    )
-                    .or_not()
-                    .map(|x| x.unwrap_or_default()),
-            )
-            .map(|((identifier, object), overloads)| AstType {
-                identifier,
-                object,
-                overloads,
-            })
+            .map(|(identifier, object)| AstType { identifier, object })
     }
 }

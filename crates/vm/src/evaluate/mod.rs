@@ -161,21 +161,15 @@ impl VM {
     fn runtime_matches_type(&self, value: &RuntimeValue, target: &MirDataType) -> bool {
         match target {
             MirDataType::Dynamic => true,
-            MirDataType::DynamicTraits(traits) => value.to_type().is_some_and(|data_type| {
-                for key in traits {
-                    if !self.registry.vtable.does_type_implement(&data_type, key) {
-                        return false;
-                    }
-                }
-                true
-            }),
             MirDataType::Ref(inner, _) => self.runtime_matches_type(value, inner),
             MirDataType::Big => matches!(value, RuntimeValue::Big(_)),
             MirDataType::Float => matches!(value, RuntimeValue::Float(_)),
             MirDataType::Int => matches!(value, RuntimeValue::Int(_)),
             MirDataType::UInt => matches!(value, RuntimeValue::UInt(_)),
             MirDataType::Host => matches!(value, RuntimeValue::Host(_)),
-            MirDataType::Gen(_) => matches!(value, RuntimeValue::Generator { .. }),
+            MirDataType::Struct { identifier, .. } if identifier.name() == "gen" => {
+                matches!(value, RuntimeValue::Generator { .. })
+            }
             MirDataType::Byte => matches!(value, RuntimeValue::Byte(_)),
             MirDataType::Null => matches!(value, RuntimeValue::Null),
             MirDataType::Bool => matches!(value, RuntimeValue::Bool(_)),
@@ -378,7 +372,7 @@ impl VM {
         &mut self,
         block: &VMBlock,
         prev: Option<BlockId>,
-        start_ip: usize,
+        mut start_ip: usize,
         mut budget: Option<usize>,
     ) -> Result<TerminateValue, RuntimeError> {
         loop {
@@ -406,6 +400,7 @@ impl VM {
                     TerminateValue::None => {}
                     TerminateValue::Jump(target) => {
                         if target == block.id {
+                            start_ip = 0;
                             recurse = true;
                             break;
                         }

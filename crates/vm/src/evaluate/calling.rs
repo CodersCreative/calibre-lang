@@ -1,15 +1,14 @@
 use super::{super::VM, write_back::Propagation};
 use crate::{
-    PathSegment, RootBinding, VarName,
+    VarName,
     conversion::{Reg, VMBlock, VMFunction},
     error::RuntimeError,
     value::{RuntimeValue, TerminateValue},
 };
-use calibre_lir::{TypeImplKey, TypeKey, VariableKey, ast::BlockId};
+use calibre_lir::{VariableKey, ast::BlockId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tracing::{instrument, trace};
-use ustr::Ustr;
 use wasm_sync::Mutex;
 
 impl VM {
@@ -429,81 +428,6 @@ impl VM {
             }
         };
 
-        let func = if func.is_callable() {
-            func
-        } else if let Some(handle) = self.current_frame().get_mutation_handle(callee) {
-            let Some(PathSegment::Field(member_name)) = handle.path.last() else {
-                return Err(RuntimeError::FunctionNotFound(
-                    "<mutation-handle>".to_string(),
-                ));
-            };
-
-            let RootBinding::FrameReg {
-                frame,
-                reg: source_reg,
-            } = handle.root
-            else {
-                return Err(RuntimeError::FunctionNotFound(member_name.to_string()));
-            };
-
-            let raw_receiver = self
-                .read_mutation_handle(&handle)
-                .unwrap_or_else(|| self.get_reg_value_in_frame(frame, source_reg).clone());
-            let resolved_receiver = self
-                .resolve_value_ref(&raw_receiver)
-                .unwrap_or(func.clone());
-
-            //
-
-            let resolved = match &resolved_receiver {
-                RuntimeValue::Aggregate(Some(type_name), _) => self
-                    .get_function_from_type_member(
-                        &TypeImplKey::Nominal(type_name.clone()),
-                        member_name,
-                    )
-                    .map(|callee| {
-                        self.bind_member_receiver_if_callable(
-                            callee,
-                            member_name,
-                            &raw_receiver,
-                            resolved_receiver.clone(),
-                        )
-                    }),
-                RuntimeValue::Ref(owner) => self
-                    .get_function_from_type_member(
-                        &TypeImplKey::Nominal(TypeKey {
-                            fully_qualified_path: owner.fully_qualified_path.clone(),
-                        }),
-                        member_name,
-                    )
-                    .or_else(|| None),
-                _ => None,
-            };
-
-            resolved.unwrap_or(func)
-        } else {
-            func
-        };
-
-        let func = if let RuntimeValue::Function { name, .. } = &func
-            && let Some((_, member)) = name.name().as_str().rsplit_once(".")
-            && let Some(first) = args.first()
-            && let Ok(receiver) = self.resolve_value_ref(self.get_reg_value(*first))
-            && let Some(receiver_type) = receiver.impl_key()
-        {
-            if self.callee_expects_receiver(&func)
-                && let Some(resolved) =
-                    self.get_function_from_type_member(&receiver_type, &Ustr::from(member))
-                && resolved.is_callable()
-            {
-                resolved
-            } else {
-                func
-            }
-        } else {
-            func
-        };
-
         match func {
             RuntimeValue::BoundMethod { callee, receiver } => {
                 let value = self.run_bound_method_call(
@@ -549,47 +473,5 @@ impl VM {
         let frame_idx = self.frames.len().saturating_sub(1);
         self.propagate_member_source_args(args, frame_idx)?;
         Ok(None)
-    }
-
-    #[inline]
-    pub(crate) fn bind_member_receiver_if_callable(
-        &mut self,
-        callee: RuntimeValue,
-        _member_name: &str,
-        raw_receiver: &RuntimeValue,
-        resolved_receiver: RuntimeValue,
-    ) -> RuntimeValue {
-        if !self.callee_expects_receiver(&callee) {
-            return callee;
-        }
-
-        let receiver = match raw_receiver {
-            RuntimeValue::Ref(_) | RuntimeValue::VarRef(_) | RuntimeValue::RegRef { .. } => {
-                raw_receiver.clone()
-            }
-
-            _ => resolved_receiver,
-        };
-
-        callee.bind_if_callable(receiver)
-    }
-
-    pub(crate) fn callee_expects_receiver(&mut self, callee: &RuntimeValue) -> bool {
-        match callee {
-            RuntimeValue::Function { name, .. } => {
-                if let Ok(func) = self.resolve_function_by_name(name) {
-                    func.params
-                        .first()
-                        .map(|first| {
-                            *first.name() == "self" || first.name().as_str().ends_with(":self")
-                        })
-                        .unwrap_or(true)
-                } else {
-                    true
-                }
-            }
-            RuntimeValue::BoundMethod { .. } => true,
-            _ => true,
-        }
     }
 }

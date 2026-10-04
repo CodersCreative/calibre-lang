@@ -131,12 +131,6 @@ impl ParserDataType {
                     ParserInnerType::Null,
                 ),
                 ("wait", vec![ParserInnerType::Int], ParserInnerType::Null),
-                ("repr", vec![ParserInnerType::Dynamic], ParserInnerType::Str),
-                (
-                    "display",
-                    vec![ParserInnerType::Dynamic],
-                    ParserInnerType::Str,
-                ),
                 ("assert", vec![ParserInnerType::Bool], ParserInnerType::Null),
                 ("gen_suspend", vec![], ParserInnerType::Dynamic),
                 ("trim", vec![ParserInnerType::Str], ParserInnerType::Str),

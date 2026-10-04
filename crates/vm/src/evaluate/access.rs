@@ -83,56 +83,28 @@ impl VMEvaluation for VMLoadMember {
             member: member.to_string(),
         };
 
-        let bind_assoc = |vm: &mut VM, impl_key: TypeImplKey, value: RuntimeValue| {
-            if let Some(callee) = vm.get_function_from_type_member(&impl_key, member) {
-                Ok(vm.bind_member_receiver_if_callable(callee, member, &raw_receiver, value))
-            } else {
-                Err(missing(value))
-            }
-        };
-
         let resolved = vm.resolve_value_ref(&raw_receiver)?;
         let mut member_source: Option<Arc<MutationHandle>> = None;
 
         let val = match resolved {
-            RuntimeValue::Null => {
-                if let RuntimeValue::Ref(owner) = &raw_receiver
-                    && let Some(callee) = vm.get_function_from_type_member(
-                        &TypeImplKey::Nominal(TypeKey {
-                            fully_qualified_path: owner.fully_qualified_path.clone(),
-                        }),
-                        member,
-                    )
-                {
-                    vm.set_reg_value(self.dst, callee);
-
-                    let handle = vm.new_mutation_handle(source_reg, PathSegment::Field(*member));
-
-                    vm.current_frame_mut()
-                        .set_shared_mutation_handle(self.dst, handle);
-
-                    return Ok(TerminateValue::None);
-                } else {
-                    return Err(missing(RuntimeValue::Null));
-                }
-            }
+            RuntimeValue::Null if member == "done" => RuntimeValue::Bool(true),
             RuntimeValue::Generator {
                 type_name: TypeImplKey::Nominal(type_name),
                 state,
             } => match member.as_str() {
-                "data" | "next" => RuntimeValue::NativeFunction(Arc::new(GeneratorResumeFn {
-                    state: state.clone(),
-                })),
+                "data" | "next" | "0" => {
+                    RuntimeValue::NativeFunction(Arc::new(GeneratorResumeFn {
+                        state: state.clone(),
+                    }))
+                }
                 "index" => RuntimeValue::Int(state.lock().unwrap().index),
                 "done" => RuntimeValue::Bool(state.lock().unwrap().completed),
-                _ => vm
-                    .get_function_from_type_member(&TypeImplKey::Nominal(type_name.clone()), member)
-                    .ok_or_else(|| {
-                        missing(RuntimeValue::Generator {
-                            type_name: TypeImplKey::Nominal(type_name.clone()),
-                            state,
-                        })
-                    })?,
+                _ => {
+                    return Err(missing(RuntimeValue::Generator {
+                        type_name: TypeImplKey::Nominal(type_name.clone()),
+                        state,
+                    }));
+                }
             },
             RuntimeValue::Aggregate(None, map) => {
                 let idx = tuple_index.ok_or(RuntimeError::ExpectedIntIndexFound {
@@ -204,22 +176,10 @@ impl VMEvaluation for VMLoadMember {
                         RuntimeValue::from(inner_map.0.0[idx].1.clone())
                     }
                 } else {
-                    let impl_key = TypeImplKey::Nominal(type_name.clone());
-                    let value = vm
-                        .get_function_from_type_member(&impl_key, member)
-                        .ok_or_else(|| {
-                            missing(RuntimeValue::Aggregate(
-                                Some(type_name.clone()),
-                                map.clone(),
-                            ))
-                        })?;
-
-                    vm.bind_member_receiver_if_callable(
-                        value,
-                        member,
-                        &raw_receiver,
-                        RuntimeValue::Aggregate(Some(type_name), map),
-                    )
+                    return Err(missing(RuntimeValue::Aggregate(
+                        Some(type_name.clone()),
+                        map.clone(),
+                    )));
                 }
             }
             RuntimeValue::Enum(_, _, Some(x)) if is_next_or_zero => {
@@ -232,91 +192,22 @@ impl VMEvaluation for VMLoadMember {
                 member_source = Some(vm.unwrap_mutation_handle(source_reg));
                 x.as_ref().clone()
             }
-            RuntimeValue::Option(Some(inner)) => {
-                if let Some(callee) = vm.get_function_from_type_member(&TypeImplKey::Option, member)
-                {
-                    vm.bind_member_receiver_if_callable(
-                        callee,
-                        member,
-                        &raw_receiver,
-                        RuntimeValue::Option(Some(inner)),
-                    )
-                } else {
-                    return Err(missing(RuntimeValue::Option(Some(inner))));
-                }
-            }
             RuntimeValue::Option(None) if is_next_or_zero => RuntimeValue::Null,
-            option @ RuntimeValue::Option(_) => {
-                let callee = vm
-                    .get_function_from_type_member(&TypeImplKey::Option, member)
-                    .ok_or_else(|| missing(option.clone()))?;
-                vm.bind_member_receiver_if_callable(callee, member, &raw_receiver, option)
-            }
 
-            RuntimeValue::Result(Ok(x)) | RuntimeValue::Result(Err(x)) if is_next_or_zero => {
+            RuntimeValue::Result(Ok(x)) | RuntimeValue::Result(Err(x))
+                if is_next_or_zero || member.as_str() == "ok" || member.as_str() == "err" =>
+            {
                 member_source = Some(vm.unwrap_mutation_handle(source_reg));
                 x.as_ref().clone()
-            }
-            result @ RuntimeValue::Result(_) => {
-                let callee = vm
-                    .get_function_from_type_member(&TypeImplKey::Result, member)
-                    .ok_or_else(|| missing(result.clone()))?;
-                vm.bind_member_receiver_if_callable(callee, member, &raw_receiver, result)
             }
 
             RuntimeValue::Ptr(id) if is_next_or_zero => {
                 vm.ptr_heap.get(&id).cloned().unwrap_or_default()
             }
-
-            RuntimeValue::Char(v) => bind_assoc(
-                vm,
-                TypeImplKey::Primitive(Ustr::from("char")),
-                RuntimeValue::Char(v),
-            )?,
-            RuntimeValue::Str(v) => bind_assoc(
-                vm,
-                TypeImplKey::Primitive(Ustr::from("str")),
-                RuntimeValue::Str(v),
-            )?,
-            RuntimeValue::List(v) => {
-                if let Some(index) = tuple_index {
-                    v.as_ref()
-                        .0
-                        .get(index)
-                        .map(|slot| RuntimeValue::from(slot.clone()))
-                        .unwrap_or(RuntimeValue::Null)
-                } else {
-                    bind_assoc(vm, TypeImplKey::List, RuntimeValue::List(v))?
-                }
-            }
-            RuntimeValue::Int(v) => bind_assoc(
-                vm,
-                TypeImplKey::Primitive(Ustr::from("int")),
-                RuntimeValue::Int(v),
-            )?,
-            RuntimeValue::UInt(v) => bind_assoc(
-                vm,
-                TypeImplKey::Primitive(Ustr::from("uint")),
-                RuntimeValue::UInt(v),
-            )?,
-            RuntimeValue::Float(v) => bind_assoc(
-                vm,
-                TypeImplKey::Primitive(Ustr::from("float")),
-                RuntimeValue::Float(v),
-            )?,
-            RuntimeValue::Bool(v) => bind_assoc(
-                vm,
-                TypeImplKey::Primitive(Ustr::from("bool")),
-                RuntimeValue::Bool(v),
-            )?,
             other => {
-                if let Some(type_name) = other.impl_key() {
-                    bind_assoc(vm, type_name, other)?
-                } else {
-                    return Err(RuntimeError::ExpectedStructOrAggregateFound {
-                        found: Box::new(other),
-                    });
-                }
+                return Err(RuntimeError::ExpectedStructOrAggregateFound {
+                    found: Box::new(other),
+                });
             }
         };
 

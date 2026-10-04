@@ -106,9 +106,7 @@ impl CalibreLanguageServer {
             if member.is_empty() {
                 continue;
             }
-            if let Some(field_ty) =
-                env.resolve_member_field_type(scope, &current, &Ustr::from(member))
-            {
+            if let Some(field_ty) = env.resolve_member_field_type(&current, &Ustr::from(member)) {
                 current = field_ty;
                 continue;
             }
@@ -653,22 +651,6 @@ impl CalibreLanguageServer {
                 detail: Some(object.object_type.to_string()),
                 kind: Some(kind),
                 documentation: Some(Documentation::String(format!("Type: {}", type_key))),
-                sort_text: Some(format!("1_{}", display_name)),
-                ..CompletionItem::default()
-            });
-        }
-
-        for trait_key in env.typing.trait_defs.keys() {
-            let display_name = Self::sanitize_name(trait_key.name().as_str());
-            if !prefix.is_empty() && !display_name.starts_with(prefix) {
-                continue;
-            }
-
-            out.entry(display_name.clone()).or_insert(CompletionItem {
-                label: display_name.clone(),
-                detail: Some("trait".to_string()),
-                kind: Some(CompletionItemKind::INTERFACE),
-                documentation: Some(Documentation::String(format!("Trait: {}", trait_key))),
                 sort_text: Some(format!("1_{}", display_name)),
                 ..CompletionItem::default()
             });

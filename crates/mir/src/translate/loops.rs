@@ -15,7 +15,7 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType, VarType,
             access::AstIndex,
-            binary::AstComparison,
+            binary::{AsFailureMode, AstAs, AstComparison},
             conditionals::{AstIf, IfComparisonType},
             flow::AstBreak,
             functions::CallArg,
@@ -331,10 +331,14 @@ impl MirLowering for AstLoop {
                                 range.clone()
                             }
                         } else {
-                            AstNode::call(
+                            // TODO Get gen type
+                            AstNode::new(
                                 span,
-                                AstNode::member(span, range.clone(), "into_iter"),
-                                vec![],
+                                AstNodeType::AsExpression(AstAs {
+                                    value: Box::new(range),
+                                    data_type: ParserDataType::new(span, ParserInnerType::Dynamic),
+                                    failure_mode: AsFailureMode::Panic,
+                                }),
                             )
                         },
                         AstNode::int(span, 0),

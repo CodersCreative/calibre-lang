@@ -28,7 +28,7 @@ use crate::{
             misc::{AstImport, AstParen, AstTag, AstTest},
             scopes::{AstScopeAlias, AstScopeDef},
             spawn::{AstSelect, AstSpawn},
-            types::{AstImpl, AstImplTrait, AstTrait, AstType},
+            types::{AstImpl, AstType},
             unary::{AstNeg, AstNot},
         },
         types::ParserDataType,
@@ -537,8 +537,6 @@ pub enum AstNodeType {
 
     // Types
     ImplDeclaration(AstImpl),
-    ImplTraitDeclaration(AstImplTrait),
-    TraitDeclaration(AstTrait),
     TypeDeclaration(AstType),
 
     // Loops

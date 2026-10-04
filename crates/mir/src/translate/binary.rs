@@ -26,6 +26,7 @@ use calibre_parser::{
             lists::AstList,
             literals::AstRange,
         },
+        types::{ParserDataType, ParserInnerType},
     },
 };
 use std::sync::LazyLock;
@@ -59,26 +60,10 @@ pub static VALID_BINARY: LazyLock<[(MirDataType, BinaryOperator, MirDataType); 9
             (MirDataType::Int, BinaryOperator::Pow, MirDataType::Float),
             (MirDataType::UInt, BinaryOperator::Pow, MirDataType::Float),
             (MirDataType::Byte, BinaryOperator::Pow, MirDataType::Float),
-            (
-                MirDataType::Str,
-                BinaryOperator::BitAnd,
-                MirDataType::Dynamic,
-            ),
-            (
-                MirDataType::Dynamic,
-                BinaryOperator::BitAnd,
-                MirDataType::Str,
-            ),
-            (
-                MirDataType::Char,
-                BinaryOperator::BitAnd,
-                MirDataType::Dynamic,
-            ),
-            (
-                MirDataType::Dynamic,
-                BinaryOperator::BitAnd,
-                MirDataType::Char,
-            ),
+            (MirDataType::Str, BinaryOperator::BitAnd, MirDataType::Str),
+            (MirDataType::Char, BinaryOperator::BitAnd, MirDataType::Char),
+            (MirDataType::Char, BinaryOperator::BitAnd, MirDataType::Str),
+            (MirDataType::Str, BinaryOperator::BitAnd, MirDataType::Char),
             (
                 MirDataType::List(Box::new(MirDataType::Dynamic)),
                 BinaryOperator::Shl,
@@ -95,7 +80,7 @@ pub static VALID_BINARY: LazyLock<[(MirDataType, BinaryOperator, MirDataType); 9
 impl MirLowering for AstBinary {
     #[instrument(skip_all)]
     fn lower(
-        self,
+        mut self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
@@ -110,17 +95,51 @@ impl MirLowering for AstBinary {
             return Ok(x);
         }
 
-        if !env.tagging.tag_info.contains(&TagInfo::IgnoreInvalidBinary) {
-            let left_type = self
-                .left
-                .type_of(env, scope, span)
-                .unwrap_or(MirDataType::Dynamic);
-            let right_type = self
-                .right
-                .type_of(env, scope, span)
-                .unwrap_or(MirDataType::Dynamic);
+        let mut left_type = self
+            .left
+            .type_of(env, scope, span)
+            .unwrap_or(MirDataType::Dynamic);
 
-            if !(VALID_BINARY_GENERAL
+        let mut right_type = self
+            .right
+            .type_of(env, scope, span)
+            .unwrap_or(MirDataType::Dynamic);
+
+        #[allow(clippy::single_match)]
+        match &self.operator {
+            BinaryOperator::BitAnd => {
+                let is_string_concat = left_type.loose_eq(&MirDataType::Str)
+                    || right_type.loose_eq(&MirDataType::Str)
+                    || left_type.loose_eq(&MirDataType::Char)
+                    || right_type.loose_eq(&MirDataType::Char);
+
+                if is_string_concat && !left_type.loose_eq(&right_type) {
+                    left_type = MirDataType::Str;
+                    right_type = MirDataType::Str;
+
+                    *self.left = AstNode::new(
+                        span,
+                        AstNodeType::AsExpression(AstAs {
+                            value: self.left.clone(),
+                            data_type: ParserDataType::new(span, ParserInnerType::Str),
+                            failure_mode: AsFailureMode::Panic,
+                        }),
+                    );
+                    *self.right = AstNode::new(
+                        span,
+                        AstNodeType::AsExpression(AstAs {
+                            value: self.right.clone(),
+                            data_type: ParserDataType::new(span, ParserInnerType::Str),
+                            failure_mode: AsFailureMode::Panic,
+                        }),
+                    );
+                }
+            }
+            _ => {}
+        }
+
+        if !env.tagging.tag_info.contains(&TagInfo::IgnoreInvalidBinary)
+            && !(VALID_BINARY_GENERAL
                 .iter()
                 .find(|x| {
                     x.0.loose_eq(&left_type) && x.1.loose_eq(&right_type)
@@ -135,16 +154,15 @@ impl MirLowering for AstBinary {
                             && x.2.loose_eq(&right_type)
                     })
                     .is_some())
-            {
-                return Err(env.context.err_at_span(
-                    span,
-                    MiddleErr::InvalidBinaryOperation {
-                        operator: self.operator,
-                        left: Box::new(left_type),
-                        right: Box::new(right_type),
-                    },
-                ));
-            }
+        {
+            return Err(env.context.err_at_span(
+                span,
+                MiddleErr::InvalidBinaryOperation {
+                    operator: self.operator,
+                    left: Box::new(left_type),
+                    right: Box::new(right_type),
+                },
+            ));
         }
 
         Ok(MiddleNode {
@@ -176,23 +194,23 @@ impl MirLowering for AstBinary {
 
             #[allow(clippy::single_match)]
             match &self.operator {
-                BinaryOperator::BitAnd => {
-                    if let Some(x) = &left
-                        && let MirDataType::Str = &x
-                    {
-                        return left;
-                    }
-
-                    if let Some(x) = &right
-                        && let MirDataType::Str = &x
-                    {
-                        return right;
-                    }
+                BinaryOperator::BitAnd
+                    if left.as_ref().is_some_and(|x| x.loose_eq(&MirDataType::Str))
+                        || right
+                            .as_ref()
+                            .is_some_and(|x| x.loose_eq(&MirDataType::Str))
+                        || left
+                            .as_ref()
+                            .is_some_and(|x| x.loose_eq(&MirDataType::Char))
+                        || right
+                            .as_ref()
+                            .is_some_and(|x| x.loose_eq(&MirDataType::Char)) =>
+                {
+                    Some(MirDataType::Str)
                 }
-                _ => {}
-            }
 
-            left.or(right)
+                _ => left.or(right),
+            }
         }
     }
 }
@@ -405,6 +423,13 @@ impl MirLowering for AstAs {
 
         if let Some(x) = env.handle_as_overload(scope, span, *self.value.clone(), &target)? {
             return Ok(x);
+        }
+
+        let value_ty = self.value.type_of(env, scope, span);
+        if value_ty.is_some_and(|x| x.loose_eq(&target))
+            && self.failure_mode == AsFailureMode::Panic
+        {
+            return self.value.lower(env, scope, span);
         }
 
         Ok(MiddleNode {

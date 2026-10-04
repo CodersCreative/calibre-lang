@@ -4,14 +4,13 @@ use crate::{
     errors::MiddleErr::{self},
     scoping::{FullyQualifiedPath, ScopeId},
     symbols::{TypeKey, VariableKey},
-    typing::{MiddleTrait, MiddleTypeDefType},
+    typing::MiddleTypeDefType,
 };
 use calibre_parser::ast::{
     idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::{AstNode, AstNodeType, literals::AstDataType},
     types::{ParserDataType, ParserInnerType},
 };
-use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, panic::Location, str::FromStr, sync::Arc, write};
 use tracing::{instrument, trace, warn};
@@ -240,43 +239,25 @@ impl MiddleEnvironment {
 
     pub fn resolve_member_field_type(
         &mut self,
-        scope: ScopeId,
         base: &MirDataType,
         member: &Ustr,
     ) -> Option<MirDataType> {
-        fn trait_member_type(
-            defs: &FxHashMap<TypeKey, MiddleTrait>,
-            trait_name: &TypeKey,
-            member: &Ustr,
-        ) -> Option<MirDataType> {
-            let root = defs
-                .iter()
-                .find(|(name, _)| name == &trait_name)
-                .map(|(name, _)| name.clone())?;
-            let mut stack = vec![root];
-            let mut visited = FxHashSet::default();
-
-            while let Some(current) = stack.pop() {
-                if !visited.insert(current.clone()) {
-                    continue;
-                }
-                let Some(def) = defs.get(&current) else {
-                    continue;
-                };
-
-                if let Some(m) = def.members.get(member) {
-                    return Some(m.data_type.clone());
-                }
-
-                for implied in &def.implied_traits {
-                    stack.push(implied.clone());
-                }
-            }
-
-            None
-        }
-
         let out = match base {
+            MirDataType::Struct {
+                identifier,
+                generic_types,
+            } if identifier.name() == "gen" && member == "next" || member == "0" => {
+                let return_type = MirDataType::Option(Box::new(
+                    generic_types
+                        .first()
+                        .cloned()
+                        .unwrap_or(MirDataType::Dynamic),
+                ));
+                Some(MirDataType::Function {
+                    return_type: Box::new(return_type),
+                    parameters: Vec::new(),
+                })
+            }
             MirDataType::Struct { identifier, .. } => self
                 .typing
                 .find_object_for_struct_name(identifier)
@@ -310,23 +291,11 @@ impl MiddleEnvironment {
                     None
                 }
             }
-            MirDataType::DynamicTraits(traits) => {
-                for tr in traits {
-                    if let Some(found) = trait_member_type(&self.typing.trait_defs, tr, member) {
-                        return Some(found);
-                    }
-                }
-                None
-            }
             _ => None,
         };
 
         if let Some(out) = out {
-            let parser_type = ParserInnerType::from(out.clone());
-            return Some(
-                self.resolve_data_type(scope, &parser_type, ResolutionOptions::typing())
-                    .unwrap_or(out),
-            );
+            return Some(out);
         }
 
         if let Some(imp) = self.typing.find_inherent_impl_for_type(base)
@@ -466,24 +435,6 @@ impl MiddleEnvironment {
                     return Ok(KeyOrAstNode::Key(Key::TypeKey(key.clone())));
                 }
 
-                if let Some(key) = self
-                    .typing
-                    .trait_defs
-                    .keys()
-                    .find(|k| k.fully_qualified_path.name == Some(ident))
-                {
-                    return Ok(KeyOrAstNode::Key(Key::TypeKey(key.clone())));
-                }
-
-                if let Some(key) = self
-                    .typing
-                    .trait_impls
-                    .keys()
-                    .find(|k| k.fully_qualified_path.name == Some(ident))
-                {
-                    return Ok(KeyOrAstNode::Key(Key::TypeKey(key.clone())));
-                }
-
                 let ty = ParserDataType::from(
                     ParserInnerType::from_str(&ident)
                         .unwrap_or(ParserInnerType::Struct(ident.to_string())),
@@ -533,19 +484,7 @@ impl MiddleEnvironment {
         }
 
         if options.type_resolution {
-            for key in self.typing.trait_defs.keys() {
-                if key.fully_qualified_path.name == Some(ident) {
-                    return Ok(KeyOrAstNode::Key(Key::TypeKey(key.clone())));
-                }
-            }
-
             for key in self.typing.objects.keys() {
-                if key.fully_qualified_path.name == Some(ident) {
-                    return Ok(KeyOrAstNode::Key(Key::TypeKey(key.clone())));
-                }
-            }
-
-            for key in self.typing.trait_impls.keys() {
                 if key.fully_qualified_path.name == Some(ident) {
                     return Ok(KeyOrAstNode::Key(Key::TypeKey(key.clone())));
                 }
@@ -673,13 +612,9 @@ impl MiddleEnvironment {
                         resolved_gens.into_iter().next().unwrap(),
                     )));
                 }
+
                 if name_str == "list" && resolved_gens.len() == 1 {
                     return Ok(MirDataType::List(Box::new(
-                        resolved_gens.into_iter().next().unwrap(),
-                    )));
-                }
-                if name_str == "gen" && resolved_gens.len() == 1 {
-                    return Ok(MirDataType::Gen(Box::new(
                         resolved_gens.into_iter().next().unwrap(),
                     )));
                 }
@@ -729,10 +664,6 @@ impl MiddleEnvironment {
 
                 if identifier == "list" && resolved_gens.len() == 1 {
                     return Ok(MirDataType::List(Box::new(resolved_gens.remove(0))));
-                }
-
-                if identifier == "gen" && resolved_gens.len() == 1 {
-                    return Ok(MirDataType::Gen(Box::new(resolved_gens.remove(0))));
                 }
 
                 let identifier = match self.resolve(scope, identifier, options)? {
@@ -812,28 +743,15 @@ impl MiddleEnvironment {
                 x.as_ref(),
                 options,
             )?)),
-            ParserInnerType::Gen(x) => MirDataType::Gen(Box::new(self.resolve_data_type(
-                scope,
-                x.as_ref(),
-                options,
-            )?)),
             ParserInnerType::Result { ok, err } => MirDataType::Result {
                 err: Box::new(self.resolve_data_type(scope, err.as_ref(), options)?),
                 ok: Box::new(self.resolve_data_type(scope, ok.as_ref(), options)?),
             },
+            // TODO Fix
             ParserInnerType::Scope(types) => {
                 let mut resolved_types = Vec::new();
                 for ty in types {
                     resolved_types.push(self.resolve_data_type(scope, ty, options)?);
-                }
-
-                if resolved_types.len() == 2
-                    && let MirDataType::Struct { identifier, .. } = &resolved_types[1]
-                    && let Some(associated) = self
-                        .typing
-                        .resolve_associated_type(&resolved_types[0], identifier.name())
-                {
-                    return Ok(associated);
                 }
 
                 resolved_types
@@ -853,15 +771,6 @@ impl MiddleEnvironment {
                     return Err(self.context.err_at_current(MiddleErr::MacroArg(x.clone())));
                 }
             }
-            ParserInnerType::DynamicTraits(traits) => MirDataType::DynamicTraits(
-                traits
-                    .iter()
-                    .map(|t| {
-                        self.resolve(scope, t, ResolutionOptions::typing())
-                            .map(|x| x.unwrap_typing())
-                    })
-                    .collect::<Result<Vec<_>, MiddleErr>>()?,
-            ),
             x => x.into(),
         })
     }
