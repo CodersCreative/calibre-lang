@@ -162,21 +162,6 @@ impl<'a> AstParser<'a> for ParserDataType {
                                         ))
                                     }
                                 }
-                                "gen" => {
-                                    if generic_types.len() == 1 {
-                                        ParserDataType::new(
-                                            span,
-                                            ParserInnerType::Gen(Box::new(
-                                                generic_types.into_iter().next().unwrap(),
-                                            )),
-                                        )
-                                    } else {
-                                        return Err(Rich::custom(
-                                            span.into(),
-                                            "expected exactly one type parameter with a 'gen' type",
-                                        ))
-                                    }
-                                }
                                 "option" => {
                                     if generic_types.len() == 1 {
                                         ParserDataType::new(

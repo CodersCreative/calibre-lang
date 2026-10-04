@@ -137,7 +137,6 @@ pub enum MirDataType {
     Dynamic,
     Tuple(Vec<MirDataType>),
     List(Box<MirDataType>),
-    Gen(Box<MirDataType>),
     Range,
     Option(Box<MirDataType>),
     Result {
@@ -219,7 +218,6 @@ impl From<MirDataType> for ParserInnerType {
                 return_type: Box::new((*return_type).into()),
                 parameters: parameters.into_iter().map(ParserDataType::from).collect(),
             },
-            MirDataType::Gen(x) => ParserInnerType::Gen(Box::new((*x).into())),
             MirDataType::List(x) => ParserInnerType::List(Box::new((*x).into())),
             MirDataType::Option(x) => ParserInnerType::Option(Box::new((*x).into())),
             MirDataType::Ptr(x) => ParserInnerType::Ptr(Box::new((*x).into())),
@@ -292,7 +290,6 @@ impl From<ParserInnerType> for MirDataType {
                 MirDataType::Tuple(xs.into_iter().map(MirDataType::from).collect())
             }
             ParserInnerType::List(x) => MirDataType::List(Box::new((*x).into())),
-            ParserInnerType::Gen(x) => MirDataType::Gen(Box::new((*x).into())),
             ParserInnerType::Option(x) => MirDataType::Option(Box::new((*x).into())),
             ParserInnerType::Result { ok, err } => MirDataType::Result {
                 ok: Box::new((*ok).into()),
@@ -324,8 +321,6 @@ impl From<ParserInnerType> for MirDataType {
                     MirDataType::Ptr(Box::new(generic_types[0].clone().into()))
                 } else if identifier == "list" && generic_types.len() == 1 {
                     MirDataType::List(Box::new(generic_types[0].clone().into()))
-                } else if identifier == "gen" && generic_types.len() == 1 {
-                    MirDataType::Gen(Box::new(generic_types[0].clone().into()))
                 } else {
                     MirDataType::Struct {
                         identifier: TypeKey {
@@ -401,7 +396,6 @@ impl MirRenamable for MirDataType {
                     item.rename(state);
                 }
             }
-            MirDataType::Gen(x) => x.rename(state),
             MirDataType::Ref(x, _) => x.rename(state),
         }
     }
@@ -430,7 +424,10 @@ impl MirDataType {
 
     pub fn get_gen(&self) -> Option<MirDataType> {
         match self.unwrap_all_refs() {
-            MirDataType::Gen(x) => Some(*x.clone()),
+            MirDataType::Struct {
+                identifier,
+                generic_types,
+            } if identifier.name() == "gen" => generic_types.first().cloned(),
             _ => None,
         }
     }
@@ -579,7 +576,7 @@ impl MirDataType {
 
     #[inline]
     pub fn is_gen(&self) -> bool {
-        matches!(self, Self::Gen(_))
+        matches!(self, Self::Struct { identifier, .. } if identifier.name() == "gen")
     }
 
     pub fn loose_eq(&self, other: &Self) -> bool {

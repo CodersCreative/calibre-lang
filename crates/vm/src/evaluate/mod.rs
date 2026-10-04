@@ -167,7 +167,9 @@ impl VM {
             MirDataType::Int => matches!(value, RuntimeValue::Int(_)),
             MirDataType::UInt => matches!(value, RuntimeValue::UInt(_)),
             MirDataType::Host => matches!(value, RuntimeValue::Host(_)),
-            MirDataType::Gen(_) => matches!(value, RuntimeValue::Generator { .. }),
+            MirDataType::Struct { identifier, .. } if identifier.name() == "gen" => {
+                matches!(value, RuntimeValue::Generator { .. })
+            }
             MirDataType::Byte => matches!(value, RuntimeValue::Byte(_)),
             MirDataType::Null => matches!(value, RuntimeValue::Null),
             MirDataType::Bool => matches!(value, RuntimeValue::Bool(_)),

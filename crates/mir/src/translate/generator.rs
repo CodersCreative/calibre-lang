@@ -19,6 +19,7 @@ use calibre_parser::{
             generator::AstGenerator,
             loops::AstLoop,
         },
+        types::{ParserDataType, ParserInnerType},
     },
 };
 use tracing::instrument;
@@ -101,13 +102,27 @@ impl MirLowering for AstGenerator {
         scope: ScopeId,
         span: Span,
     ) -> Option<MirDataType> {
-        let elem = match &self.data_type {
-            Some(dt) => env
-                .resolve_data_type(scope, dt, ResolutionOptions::typing())
-                .ok()?,
-            _ => self.map.type_of(env, scope, span)?,
-        };
+        let ty = ParserDataType::new(
+            span,
+            ParserInnerType::StructWithGenerics {
+                identifier: String::from("gen"),
+                generic_types: vec![
+                    self.data_type
+                        .clone()
+                        .unwrap_or(ParserDataType::new(span, ParserInnerType::Dynamic)),
+                ],
+            },
+        );
+        let mut ty = env
+            .resolve_data_type(scope, &ty, ResolutionOptions::typing())
+            .ok()?;
 
-        Some(MirDataType::Gen(Box::new(elem)))
+        if let MirDataType::Struct { generic_types, .. } = &mut ty
+            && generic_types.first().is_none_or(|x| x.is_dyn())
+        {
+            generic_types[0] = self.map.type_of(env, scope, span)?;
+        }
+
+        Some(ty)
     }
 }

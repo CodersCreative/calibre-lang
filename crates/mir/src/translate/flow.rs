@@ -665,8 +665,8 @@ impl MirLowering for AstReturn {
                                 MirDataType::Null
                             };
 
-                            let ret_ty = if let MirDataType::Gen(x) = ret_ty {
-                                *x
+                            let ret_ty = if let Some(x) = ret_ty.get_gen() {
+                                x
                             } else {
                                 ret_ty
                             };

@@ -730,6 +730,40 @@ impl MiddleEnvironment {
                             env.symbols.overloads.push(processed);
                         }
                     }
+                    AstNodeType::VariableDeclaration(x) => {
+                        match x.value.node_type.clone() {
+                            AstNodeType::FunctionDeclaration(x) => {
+                                let generics = x
+                                    .header
+                                    .generics
+                                    .0
+                                    .iter()
+                                    .map(|x| {
+                                        env.resolve(
+                                            scope,
+                                            &x.identifier,
+                                            ResolutionOptions::default().with_dollar(),
+                                        )
+                                        .map(|x| x.unwrap_dollar())
+                                    })
+                                    .collect::<Result<Vec<_>, _>>()?;
+                                let overload = Overload {
+                                    operator,
+                                    body: x.body,
+                                    header: x.header,
+                                };
+
+                                if let Some(processed) =
+                                    env.process_overload(scope, overload, generics)?
+                                {
+                                    env.symbols.overloads.push(processed);
+                                }
+                            }
+                            _ => unimplemented!(),
+                        }
+
+                        return x.lower(env, scope, span);
+                    }
                     _ => unimplemented!(),
                 }
 

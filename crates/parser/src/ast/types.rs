@@ -172,7 +172,6 @@ pub enum ParserInnerType {
     Tuple(Vec<ParserDataType>),
     Paren(Box<ParserDataType>),
     List(Box<ParserDataType>),
-    Gen(Box<ParserDataType>),
     Scope(Vec<ParserDataType>),
     Auto(Option<u16>),
     Range,
@@ -262,7 +261,6 @@ impl AlphaRenamable for ParserInnerType {
                     item.rename(state);
                 }
             }
-            ParserInnerType::Gen(x) => x.rename(state),
             ParserInnerType::Ref(x, _) => x.rename(state),
             // TODO Implement
             ParserInnerType::Scope(_) => {}
@@ -327,7 +325,10 @@ impl ParserDataType {
 
     pub fn get_gen(self) -> Option<ParserDataType> {
         match self.unwrap_all_refs().data_type {
-            ParserInnerType::Gen(x) => Some(*x),
+            ParserInnerType::StructWithGenerics {
+                identifier,
+                generic_types,
+            } if identifier == "gen" => generic_types.first().cloned(),
             _ => None,
         }
     }
@@ -432,7 +433,6 @@ impl FromStr for ParserInnerType {
             "str" => Self::Str,
             "char" => Self::Char,
             "dyn" => Self::Dynamic,
-            "gen" => Self::Gen(Box::new(ParserDataType::auto(Span::default()))),
             "option" => Self::Option(Box::new(ParserDataType::auto(Span::default()))),
             "result" => Self::Result {
                 ok: Box::new(ParserDataType::auto(Span::default())),
@@ -478,7 +478,6 @@ impl ParserInnerType {
             } => ParserInnerType::Struct(identifier),
             ParserInnerType::List(_) => ParserInnerType::Struct(String::from("list")),
             ParserInnerType::Ptr(_) => ParserInnerType::Struct(String::from("ptr")),
-            ParserInnerType::Gen(_) => ParserInnerType::Struct(String::from("gen")),
             ParserInnerType::Option(_) => ParserInnerType::Struct(String::from("option")),
             ParserInnerType::Result { .. } => ParserInnerType::Struct(String::from("result")),
             x => x,
@@ -530,7 +529,7 @@ impl ParserInnerType {
     }
 
     pub fn is_gen(&self) -> bool {
-        matches!(self, Self::Gen(_))
+        matches!(self, Self::Struct(identifier) | Self::StructWithGenerics { identifier, .. } if identifier == "gen")
     }
 
     pub fn is_dyn_list(&self) -> bool {
@@ -666,7 +665,6 @@ impl Display for ParserInnerType {
             Self::Paren(x) => write!(f, "<{}>", x),
             Self::Option(x) => write!(f, "{}?", x),
             Self::Ptr(x) => write!(f, "ptr:<{}>", x),
-            Self::Gen(x) => write!(f, "gen:<{}>", x),
             Self::Struct(x) => write!(f, "{}", x),
             Self::StructWithGenerics {
                 identifier,

@@ -602,13 +602,9 @@ impl MiddleEnvironment {
                         resolved_gens.into_iter().next().unwrap(),
                     )));
                 }
+
                 if name_str == "list" && resolved_gens.len() == 1 {
                     return Ok(MirDataType::List(Box::new(
-                        resolved_gens.into_iter().next().unwrap(),
-                    )));
-                }
-                if name_str == "gen" && resolved_gens.len() == 1 {
-                    return Ok(MirDataType::Gen(Box::new(
                         resolved_gens.into_iter().next().unwrap(),
                     )));
                 }
@@ -658,10 +654,6 @@ impl MiddleEnvironment {
 
                 if identifier == "list" && resolved_gens.len() == 1 {
                     return Ok(MirDataType::List(Box::new(resolved_gens.remove(0))));
-                }
-
-                if identifier == "gen" && resolved_gens.len() == 1 {
-                    return Ok(MirDataType::Gen(Box::new(resolved_gens.remove(0))));
                 }
 
                 let identifier = match self.resolve(scope, identifier, options)? {
@@ -737,11 +729,6 @@ impl MiddleEnvironment {
                 options,
             )?)),
             ParserInnerType::Option(x) => MirDataType::Option(Box::new(self.resolve_data_type(
-                scope,
-                x.as_ref(),
-                options,
-            )?)),
-            ParserInnerType::Gen(x) => MirDataType::Gen(Box::new(self.resolve_data_type(
                 scope,
                 x.as_ref(),
                 options,
