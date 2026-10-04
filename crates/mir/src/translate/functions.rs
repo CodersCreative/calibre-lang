@@ -21,6 +21,7 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType, VarType,
             access::AstField,
+            binary::{AsFailureMode, AstAs},
             declaration::AstDeclaration,
             flow::AstReturn,
             functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
@@ -145,8 +146,15 @@ impl MiddleEnvironment {
                     AstNode::new(
                         span,
                         AstNodeType::ListLiteral(AstList {
-                            data_type: list_inner_type,
-                            values: vec![arg],
+                            data_type: list_inner_type.clone(),
+                            values: vec![AstNode::new(
+                                span,
+                                AstNodeType::AsExpression(AstAs {
+                                    value: Box::new(arg),
+                                    data_type: list_inner_type,
+                                    failure_mode: AsFailureMode::Panic,
+                                }),
+                            )],
                         }),
                     )
                 }
@@ -154,8 +162,20 @@ impl MiddleEnvironment {
                 AstNode::new(
                     span,
                     AstNodeType::ListLiteral(AstList {
-                        data_type: list_inner_type,
-                        values: args.into_iter().map(Into::into).collect(),
+                        data_type: list_inner_type.clone(),
+                        values: args
+                            .into_iter()
+                            .map(|x| {
+                                AstNode::new(
+                                    span,
+                                    AstNodeType::AsExpression(AstAs {
+                                        value: Box::new(x.into()),
+                                        data_type: list_inner_type.clone(),
+                                        failure_mode: AsFailureMode::Panic,
+                                    }),
+                                )
+                            })
+                            .collect(),
                     }),
                 )
             };

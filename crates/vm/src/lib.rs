@@ -7,7 +7,7 @@ use crate::{
     variables::VariableStore,
 };
 use astro_float::Consts;
-use calibre_lir::{TypeImplKey, VariableKey, ast::BlockId};
+use calibre_lir::{VariableKey, ast::BlockId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 use std::sync::OnceLock;
@@ -749,13 +749,5 @@ impl VM {
             }
             _ => {}
         }
-    }
-
-    pub(crate) fn get_function_from_type_member(
-        &mut self,
-        _key: &TypeImplKey,
-        _member: &Ustr,
-    ) -> Option<RuntimeValue> {
-        todo!()
     }
 }

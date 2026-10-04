@@ -38,6 +38,7 @@ impl MiddleEnvironment {
         if matches!(operator, Operator::As) {
             return Ok(None);
         }
+
         if let (Some(left_ty), Some(right_ty)) = (
             self.resolve_type_from_node(scope, &left),
             self.resolve_type_from_node(scope, &right),

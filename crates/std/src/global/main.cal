@@ -9,7 +9,7 @@ type ExecContext := struct {
 
 type gen:<T> := struct { data : fn () -> T?, index : int, done : bool };
 
-const print := fn (msg : list:<dyn>) => {
+const print := fn (msg : list:<str>) => {
 	let mut txt := "";
 	for m in msg => txt &= m;
 	
@@ -33,7 +33,7 @@ const range := fn (start end : mut int, step : int = 1, inclusive : bool = false
 	
 };
 
-const fmt := fn (splits : list:<str>, inputs : list:<dyn>) -> str => {
+const fmt := fn (splits : list:<str>, inputs : list:<str>) -> str => {
 	let mut txt : str = "";
 	
 	for i in len(splits) => {

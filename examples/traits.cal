@@ -1,56 +1,65 @@
-import File from std::fs;
+// import File from std::fs;
 
-trait Person {
-	const get_name : fn (&Self) -> str;
+// Is being used as a trait
+type Person := struct {
+	name : str,
+}
 
-	const greeting := fn (self : &Self) -> str => {
+impl Person {
+	const get_name := fn(self : &Self) -> str => 
+		return self.name;
+
+	const greeting := fn(self : &Self) -> str => 
 		return "Hello " & self.get_name();
-	};
-};
+}
 
 type User := struct { name : str };
 
-impl Person for User {
-	const get_name := fn (self : &User) -> str => return self.name;
-};
+// Basically implementing the trait
+@overload("as") fn(self : User) -> Person => 
+	return Person {name : self.name};
 
-trait Human {
-	const name : str;
+// Is being used as a trait
+@default
+type Human := struct {
+	name : str,
+	age : uint = 10u,
+	country : str = "Zimbabwe",
+}
 
-	const age := 10;
-
-	const country := "Zimbabwe";
-};
-
-type Ty := struct { };
-type Tadiwa := struct { };
-
-impl Human for Ty {
-	const name := "Ty";
-};
-
-impl Human for Tadiwa {
-	const name := "Tadiwa";
-
-	const age := 21;
-
-	const country := "US";
-};
-
-const show := fn (label : str, p : dyn:<Human>) => {
+const show := fn (label : str, p : Human) => {
 	print(label & " -> name=" & p.name & ", age=" & p.age & ", country=" & p.country);
 };
 
+
+type Ty := struct { };
+
+@overload("as") fn(self : Ty) -> Human => {
+	let mut human := Human.default();
+	human.name = "Ty";
+	return human;
+}
+
+type Tadiwa := struct { };
+
+@overload("as") fn(self : Tadiwa) -> Human =>
+	return Human {
+		name : "Tadiwa",
+		age : 21u,
+		country : "United States"
+	};
+
+
 @current_context const main := fn => {
 	let user := User { name : "Ty" };
-	print(user.greeting());
+	print((user as! Person).greeting());
 	
 	let parts := "a,b,c".split(",");
-	print(try parts[1] => emit "");
+	// print(try parts[1] => emit "");
 	print("calibre".starts_with("cal"));
 	
-	let ty := Ty { };
-	let tadiwa := Tadiwa { };
+	let ty := Ty { } as! Human;
+	let tadiwa := Tadiwa { } as! Human;
 	
 	print(ty.name);
 	print(ty.age);
