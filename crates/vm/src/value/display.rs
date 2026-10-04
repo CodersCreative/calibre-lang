@@ -47,7 +47,7 @@ impl RuntimeValue {
                         .join(", ")
                 )
             }
-            Self::Generator { type_name, .. } => format!("{} {{ ... }}", type_name.name()),
+            Self::Generator { type_name, state } => format!("{} is {:?}", type_name.name(), state),
             Self::GeneratorSuspend(value) => format!("<gen-suspend {}>", value.display(vm)),
             Self::Option(Some(x)) => format!("Some : {}", x.display(vm)),
             Self::Result(Ok(x)) => format!("Ok : {}", x.display(vm)),
@@ -193,7 +193,9 @@ impl Display for RuntimeValue {
             Self::Str(x) => write!(f, "{:?}", x),
             Self::Char(x) => write!(f, "{:?}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
-            Self::Generator { type_name: x, .. } => write!(f, "{}{{ ... }}", x.name()),
+            Self::Generator { type_name, state } => {
+                write!(f, "{} is {:?}", type_name.name(), state)
+            }
             Self::BoundMethod { .. } => write!(f, "<bound-method>"),
             Self::GeneratorSuspend(value) => write!(f, "<gen-suspend {}>", value),
         }

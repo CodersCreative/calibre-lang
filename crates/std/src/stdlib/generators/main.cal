@@ -4,13 +4,22 @@ impl gen:<T> {
 	const next := fn (self : &mut Self) -> T? => {
 		if self.done => return none;
 		let value : T? = (self.data)();
-		if value = none => {
-			self.done := true;
-			return none;
+		return value;
+	};
+
+	const collect := fn (self : Self) -> list:<T> => {
+		let mut out := list:<T>[];
+		
+		for => {
+			let v : T? = self.next();
+			if let .Some : value <- v => {
+				out <<= value;
+			} else => {
+				break;
+			};
 		};
 		
-		self.index += 1;
-		return value;
+		return out;
 	};
 
 	const map := fn<U>(self : Self, op : fn(T) -> U) -> gen:<U> => {

@@ -5,7 +5,12 @@ use calibre_parser::{
 };
 use indextree::{Arena, Node, NodeId};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, hash::Hash, path::PathBuf, sync::Arc};
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+    path::PathBuf,
+    sync::Arc,
+};
 use ustr::{Ustr, UstrMap, UstrSet};
 
 pub mod resolve;
@@ -359,7 +364,7 @@ pub struct ScopeMacro {
     pub create_new_scope: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct FullyQualifiedPath {
     pub name: Option<Ustr>,
     pub parent: Option<Arc<FullyQualifiedPath>>,
@@ -416,6 +421,12 @@ impl FullyQualifiedPath {
         }
 
         false
+    }
+}
+
+impl Debug for FullyQualifiedPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
     }
 }
 

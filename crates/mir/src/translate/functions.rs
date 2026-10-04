@@ -382,7 +382,7 @@ impl MiddleEnvironment {
                 value: ObjectType::Map(vec![
                     (Ustr::from("data"), AstNode::identifier(span, &next_name)),
                     (Ustr::from("index"), AstNode::int(span, 0)),
-                    (Ustr::from("done"), AstNode::identifier(span, "false")),
+                    (Ustr::from("done"), AstNode::bool(span, false)),
                 ]),
             }),
         );

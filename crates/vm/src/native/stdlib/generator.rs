@@ -10,10 +10,10 @@ use crate::{
 };
 use calibre_lir::VariableKey;
 use dumpster::sync::Gc;
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 use wasm_sync::Mutex;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GeneratorState {
     pub vm: VM,
     pub function_name: VariableKey,
@@ -21,6 +21,22 @@ pub struct GeneratorState {
     pub task_state: TaskState,
     pub index: i64,
     pub completed: bool,
+}
+
+impl Debug for GeneratorState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Generator with fn {} at index {} {}",
+            self.function_name,
+            self.index,
+            if self.completed {
+                "that has completed"
+            } else {
+                "that has not yet completed"
+            }
+        )
+    }
 }
 
 #[derive(Debug, Clone)]

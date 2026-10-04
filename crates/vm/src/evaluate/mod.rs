@@ -372,7 +372,7 @@ impl VM {
         &mut self,
         block: &VMBlock,
         prev: Option<BlockId>,
-        start_ip: usize,
+        mut start_ip: usize,
         mut budget: Option<usize>,
     ) -> Result<TerminateValue, RuntimeError> {
         loop {
@@ -400,6 +400,7 @@ impl VM {
                     TerminateValue::None => {}
                     TerminateValue::Jump(target) => {
                         if target == block.id {
+                            start_ip = 0;
                             recurse = true;
                             break;
                         }

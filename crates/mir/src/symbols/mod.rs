@@ -76,7 +76,7 @@ impl FunctionParamDefault {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct VariableKey {
     pub fully_qualified_path: Arc<FullyQualifiedPath>,
     pub shadow_counter: Option<u32>,
@@ -85,6 +85,12 @@ pub struct VariableKey {
 impl VariableKey {
     pub fn name(&self) -> &Ustr {
         self.fully_qualified_path.name.as_ref().unwrap()
+    }
+}
+
+impl Debug for VariableKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}({:?})", self, self.shadow_counter)
     }
 }
 

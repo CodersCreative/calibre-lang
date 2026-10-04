@@ -531,10 +531,13 @@ impl VM {
     #[instrument(skip_all)]
     pub(crate) fn maybe_collect_garbage(&mut self) {
         self.gc.counter = self.gc.counter.wrapping_add(1);
+
         if self.gc.counter < self.gc.interval {
             return;
         }
+
         self.gc.counter = 0;
+
         if self
             .gc
             .in_flight
@@ -543,6 +546,7 @@ impl VM {
         {
             return;
         }
+
         dumpster::sync::collect();
         self.gc.in_flight.store(false, Ordering::Release);
     }

@@ -205,7 +205,6 @@ impl VMEvaluation for VMLoadMember {
                 vm.ptr_heap.get(&id).cloned().unwrap_or_default()
             }
             other => {
-                println!("{}", member);
                 return Err(RuntimeError::ExpectedStructOrAggregateFound {
                     found: Box::new(other),
                 });

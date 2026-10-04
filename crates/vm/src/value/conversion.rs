@@ -239,6 +239,7 @@ impl RuntimeValue {
                     t.clone(),
                 ))
             }
+            (x, MirDataType::Str) => Ok(RuntimeValue::Str(Ustr::from(&x.display(env)))),
             (x, t) => Err(RuntimeError::CantConvert(Box::new(x), t.clone())),
         }
     }
