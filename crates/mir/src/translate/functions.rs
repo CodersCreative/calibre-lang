@@ -387,7 +387,7 @@ impl MiddleEnvironment {
             }),
         );
 
-        AstNode::new_temp_scope_with_create(vec![next_decl, gen_value], Some(false))
+        AstNode::new_temp_scope_with_create(vec![next_decl, AstNode::ret(gen_value)], Some(true))
     }
 
     pub fn get_caller_context(&self, scope: ScopeId, span: Span) -> Option<AstNode> {

@@ -142,7 +142,7 @@ impl MirLowering for AstField {
             return Some(ty);
         }
 
-        env.resolve_member_field_type(scope, &ty, &member)
+        env.resolve_member_field_type(&ty, &member)
     }
 }
 

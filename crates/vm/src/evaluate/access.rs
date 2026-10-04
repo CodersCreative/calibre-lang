@@ -87,13 +87,16 @@ impl VMEvaluation for VMLoadMember {
         let mut member_source: Option<Arc<MutationHandle>> = None;
 
         let val = match resolved {
+            RuntimeValue::Null if member == "done" => RuntimeValue::Bool(true),
             RuntimeValue::Generator {
                 type_name: TypeImplKey::Nominal(type_name),
                 state,
             } => match member.as_str() {
-                "data" | "next" => RuntimeValue::NativeFunction(Arc::new(GeneratorResumeFn {
-                    state: state.clone(),
-                })),
+                "data" | "next" | "0" => {
+                    RuntimeValue::NativeFunction(Arc::new(GeneratorResumeFn {
+                        state: state.clone(),
+                    }))
+                }
                 "index" => RuntimeValue::Int(state.lock().unwrap().index),
                 "done" => RuntimeValue::Bool(state.lock().unwrap().completed),
                 _ => {
@@ -191,7 +194,9 @@ impl VMEvaluation for VMLoadMember {
             }
             RuntimeValue::Option(None) if is_next_or_zero => RuntimeValue::Null,
 
-            RuntimeValue::Result(Ok(x)) | RuntimeValue::Result(Err(x)) if is_next_or_zero => {
+            RuntimeValue::Result(Ok(x)) | RuntimeValue::Result(Err(x))
+                if is_next_or_zero || member.as_str() == "ok" || member.as_str() == "err" =>
+            {
                 member_source = Some(vm.unwrap_mutation_handle(source_reg));
                 x.as_ref().clone()
             }
@@ -200,6 +205,7 @@ impl VMEvaluation for VMLoadMember {
                 vm.ptr_heap.get(&id).cloned().unwrap_or_default()
             }
             other => {
+                println!("{}", member);
                 return Err(RuntimeError::ExpectedStructOrAggregateFound {
                     found: Box::new(other),
                 });

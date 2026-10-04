@@ -106,9 +106,7 @@ impl CalibreLanguageServer {
             if member.is_empty() {
                 continue;
             }
-            if let Some(field_ty) =
-                env.resolve_member_field_type(scope, &current, &Ustr::from(member))
-            {
+            if let Some(field_ty) = env.resolve_member_field_type(&current, &Ustr::from(member)) {
                 current = field_ty;
                 continue;
             }

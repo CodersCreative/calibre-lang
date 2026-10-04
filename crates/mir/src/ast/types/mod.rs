@@ -658,6 +658,8 @@ impl MirDataType {
             }
             (MirDataType::Ptr(a), MirDataType::Ptr(b)) => a.matches(b, _generic_params),
             (MirDataType::Ref(a, _), MirDataType::Ref(b, _)) => a.matches(b, _generic_params),
+            (MirDataType::Ref(a, _), b) => a.matches(b, _generic_params),
+            (a, MirDataType::Ref(b, _)) => a.matches(b, _generic_params),
             (MirDataType::Tuple(a), MirDataType::Tuple(b)) => {
                 if a.len() != b.len() {
                     return false;

@@ -32,7 +32,16 @@ impl MirLowering for AstGenerator {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let return_type = self.type_of(env, scope, span).unwrap();
+        let map_type = self.map.type_of(env, scope, span).map(|x| {
+            ParserDataType::new(
+                span,
+                ParserInnerType::StructWithGenerics {
+                    identifier: String::from("gen"),
+                    generic_types: vec![x.into()],
+                },
+            )
+        });
+
         let guard = self.conditionals.into_iter().reduce(|left, right| {
             AstNode::new(
                 span,
@@ -85,7 +94,16 @@ impl MirLowering for AstGenerator {
                 span,
                 AstNodeType::FunctionDeclaration(AstFunction {
                     header: FunctionHeader {
-                        return_type: return_type.into(),
+                        return_type: self.data_type.or(map_type).unwrap_or(ParserDataType::new(
+                            span,
+                            ParserInnerType::StructWithGenerics {
+                                identifier: String::from("gen"),
+                                generic_types: vec![ParserDataType::new(
+                                    span,
+                                    ParserInnerType::Dynamic,
+                                )],
+                            },
+                        )),
                         ..Default::default()
                     },
                     body: Box::new(AstNode::new_temp_scope(vec![loop_node])),
@@ -102,27 +120,28 @@ impl MirLowering for AstGenerator {
         scope: ScopeId,
         span: Span,
     ) -> Option<MirDataType> {
-        let ty = ParserDataType::new(
-            span,
-            ParserInnerType::StructWithGenerics {
-                identifier: String::from("gen"),
-                generic_types: vec![
-                    self.data_type
-                        .clone()
-                        .unwrap_or(ParserDataType::new(span, ParserInnerType::Dynamic)),
-                ],
-            },
-        );
-        let mut ty = env
-            .resolve_data_type(scope, &ty, ResolutionOptions::typing())
-            .ok()?;
-
-        if let MirDataType::Struct { generic_types, .. } = &mut ty
-            && generic_types.first().is_none_or(|x| x.is_dyn())
-        {
-            generic_types[0] = self.map.type_of(env, scope, span)?;
-        }
-
-        Some(ty)
+        self.data_type
+            .as_ref()
+            .and_then(|x| {
+                env.resolve_data_type(scope, x, ResolutionOptions::typing())
+                    .ok()
+            })
+            .or_else(|| {
+                self.map
+                    .type_of(env, scope, span)
+                    .map(|x| {
+                        ParserDataType::new(
+                            span,
+                            ParserInnerType::StructWithGenerics {
+                                identifier: String::from("gen"),
+                                generic_types: vec![x.into()],
+                            },
+                        )
+                    })
+                    .and_then(|x| {
+                        env.resolve_data_type(scope, &x, ResolutionOptions::typing())
+                            .ok()
+                    })
+            })
     }
 }

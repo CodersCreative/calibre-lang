@@ -68,6 +68,9 @@ impl PatternTranslator for TuplePatternTranslator {
                         data_type: None,
                     });
 
+                    let indexed_value =
+                        AstNode::member(env.context.current_span(), value.clone(), idx.to_string());
+
                     bindings.append(
                         &mut item_aliases
                             .into_iter()
@@ -80,11 +83,7 @@ impl PatternTranslator for TuplePatternTranslator {
                                             ResolutionOptions::default().with_dollar(),
                                         )?
                                         .unwrap_dollar(),
-                                    value: AstNode::member(
-                                        env.context.current_span(),
-                                        value.clone(),
-                                        idx.to_string(),
-                                    ),
+                                    value: indexed_value.clone(),
                                     var_type,
                                     data_type: None,
                                 })
@@ -103,7 +102,7 @@ impl PatternTranslator for TuplePatternTranslator {
                         AstNode::new(
                             env.context.current_span(),
                             AstNodeType::ComparisonExpression(AstComparison {
-                                left: Box::new(current),
+                                left: Box::new(current.clone()),
                                 right: Box::new(expected),
                                 operator: ComparisonOperator::Equal,
                             }),
@@ -122,11 +121,7 @@ impl PatternTranslator for TuplePatternTranslator {
                                             ResolutionOptions::default().with_dollar(),
                                         )?
                                         .unwrap_dollar(),
-                                    value: AstNode::member(
-                                        env.context.current_span(),
-                                        value.clone(),
-                                        idx.to_string(),
-                                    ),
+                                    value: current.clone(),
                                     var_type,
                                     data_type: None,
                                 })

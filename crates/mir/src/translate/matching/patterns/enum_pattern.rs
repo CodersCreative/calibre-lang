@@ -69,7 +69,15 @@ impl PatternTranslator for EnumPatternTranslator {
             .collect::<Result<Vec<_>, MiddleErr>>()?;
 
         if let Some(payload_pattern) = payload_pattern {
-            let payload_value = AstNode::member(env.context.current_span(), value.clone(), "next");
+            let payload_value = AstNode::member(
+                env.context.current_span(),
+                value.clone(),
+                match resolved_variant.as_str() {
+                    "Ok" => "ok",
+                    "Err" => "err",
+                    _ => "next",
+                },
+            );
 
             if name.is_some() || destructure.is_some() {
                 let name = match name {
@@ -110,7 +118,15 @@ impl PatternTranslator for EnumPatternTranslator {
                 _ => Ustr::from("match_destructure"),
             };
 
-            let payload_value = AstNode::member(env.context.current_span(), value.clone(), "next");
+            let payload_value = AstNode::member(
+                env.context.current_span(),
+                value.clone(),
+                match resolved_variant.as_str() {
+                    "Ok" => "ok",
+                    "Err" => "err",
+                    _ => "next",
+                },
+            );
 
             bindings.push(BindingDeclaration {
                 name,

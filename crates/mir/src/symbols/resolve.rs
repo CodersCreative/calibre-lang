@@ -239,11 +239,25 @@ impl MiddleEnvironment {
 
     pub fn resolve_member_field_type(
         &mut self,
-        scope: ScopeId,
         base: &MirDataType,
         member: &Ustr,
     ) -> Option<MirDataType> {
         let out = match base {
+            MirDataType::Struct {
+                identifier,
+                generic_types,
+            } if identifier.name() == "gen" && member == "next" || member == "0" => {
+                let return_type = MirDataType::Option(Box::new(
+                    generic_types
+                        .first()
+                        .cloned()
+                        .unwrap_or(MirDataType::Dynamic),
+                ));
+                Some(MirDataType::Function {
+                    return_type: Box::new(return_type),
+                    parameters: Vec::new(),
+                })
+            }
             MirDataType::Struct { identifier, .. } => self
                 .typing
                 .find_object_for_struct_name(identifier)
@@ -281,11 +295,7 @@ impl MiddleEnvironment {
         };
 
         if let Some(out) = out {
-            let parser_type = ParserInnerType::from(out.clone());
-            return Some(
-                self.resolve_data_type(scope, &parser_type, ResolutionOptions::typing())
-                    .unwrap_or(out),
-            );
+            return Some(out);
         }
 
         if let Some(imp) = self.typing.find_inherent_impl_for_type(base)
