@@ -576,7 +576,7 @@ impl MirDataType {
 
     #[inline]
     pub fn is_gen(&self) -> bool {
-        matches!(self, Self::Struct { identifier, .. } if identifier.name() == "gen")
+        matches!(self.key(), Self::Struct { identifier, .. } if identifier.name() == "gen")
     }
 
     pub fn loose_eq(&self, other: &Self) -> bool {
