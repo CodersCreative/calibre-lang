@@ -1,9 +1,9 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirAs, MirVarDecl},
+    ast::{MiddleNode, MiddleNodeType, MirAs, MirVarDecl, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::{FunctionParamDefault, resolve::ResolutionOptions},
+    symbols::{FunctionParamDefault, VariableKey, resolve::ResolutionOptions},
     tags::TagInfo,
     translate::MirLowering,
 };
@@ -11,7 +11,7 @@ use calibre_parser::{
     Span,
     ast::{
         binary::BinaryOperator,
-        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+        idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, DestructurePattern, VarType,
             access::{AstField, AstIdentifier, AstIndex},
@@ -22,7 +22,7 @@ use calibre_parser::{
             memory::AstRef,
             scopes::AstScopeDef,
         },
-        types::{ParserDataType, ParserInnerType},
+        types::ParserDataType,
     },
 };
 use tracing::instrument;
@@ -33,7 +33,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         header: &AstFunction,
-        new_name: Ustr,
+        new_name: VariableKey,
     ) -> bool {
         if header.header.generics.0.is_empty() {
             return false;
@@ -50,6 +50,7 @@ impl MiddleEnvironment {
                     &g.identifier,
                     ResolutionOptions::default().with_dollar(),
                 )
+                .map(|x| x.unwrap_dollar())
             })
             .collect::<Result<Vec<_>, MiddleErr>>()
             .unwrap_or_default();
@@ -70,8 +71,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         header: &FunctionHeader,
-        new_name: Ustr,
-        identifier: Ustr,
+        new_name: VariableKey,
     ) {
         let defaults = FunctionParamDefault::get(self, scope, header);
 
@@ -80,9 +80,6 @@ impl MiddleEnvironment {
 
             self.symbols.function_param_defaults.insert(index, defaults);
             self.symbols.name_to_param_defaults.insert(new_name, index);
-            self.symbols
-                .name_to_param_defaults
-                .insert(identifier, index);
         }
     }
 
@@ -120,6 +117,7 @@ impl MiddleEnvironment {
                         identifier: name.clone(),
                         data_type: ParserDataType::auto(span),
                         value: Box::new(member),
+                        declared: false,
                     }),
                 ));
             } else {
@@ -238,13 +236,13 @@ impl MirLowering for AstDeclaration {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = env.resolve(
-            scope,
-            &self.identifier,
-            ResolutionOptions::default().with_dollar(),
-        )?;
-
-        let new_name = Ustr::from(&ParserText::temp_name_with_suffix(identifier.trim(), span).text);
+        let identifier = env
+            .resolve(
+                scope,
+                &self.identifier,
+                ResolutionOptions::default().with_dollar(),
+            )?
+            .unwrap_dollar();
 
         if let AstNodeType::CallExpression(AstCall {
             caller,
@@ -267,12 +265,13 @@ impl MirLowering for AstDeclaration {
                     _ => None,
                 });
 
+            // TODO Fix invalid conversion of FQP Ident to str
             if let Some(first_ty) = first_ty
                 && let Some(mapped_name) = env.resolve_member_fn_name(
-                    &first_ty.unwrap_all_refs(),
+                    first_ty.unwrap_all_refs(),
                     &callee_ident.value.get_ident().text(),
                 )
-                && mapped_name != callee_ident.value.get_ident().text()
+                && mapped_name.name() != callee_ident.value.get_ident().text()
             {
                 *self.value = AstNode::new(
                     self.value.span,
@@ -287,25 +286,6 @@ impl MirLowering for AstDeclaration {
             }
         }
 
-        let mut is_function = false;
-
-        if let AstNodeType::FunctionDeclaration(func) = &self.value.node_type {
-            is_function = true;
-            env.handle_function_template(scope, func, new_name);
-
-            for tag in &env.tagging.tag_info {
-                match tag {
-                    TagInfo::Init(priority) => {
-                        env.tagging.init_functions.push((*priority, new_name))
-                    }
-                    TagInfo::Fin(priority) => env.tagging.fin_functions.push((*priority, new_name)),
-                    _ => {}
-                }
-            }
-
-            env.process_parameter_defaults(scope, &func.header, new_name, identifier);
-        }
-
         let node_ty = self.value.type_of(env, scope, span);
 
         let data_type = if self.data_type.is_auto() {
@@ -314,32 +294,56 @@ impl MirLowering for AstDeclaration {
             Some(env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?)
         };
 
-        let data_type =
-            env.compare_types(data_type, node_ty, Some(&TagInfo::IgnoreInvalidLet), span)?;
+        let data_type = env.compare_types(
+            data_type,
+            node_ty.clone(),
+            Some(&TagInfo::IgnoreInvalidLet),
+            span,
+        )?;
 
-        if is_function {
-            env.register_variable(
-                scope,
-                identifier,
-                new_name,
-                data_type.clone(),
-                self.var_type,
-            )?;
-        }
+        let var_key = if let AstNodeType::FunctionDeclaration(func) = &self.value.node_type {
+            let key = if self.declared {
+                env.resolve(scope, identifier, ResolutionOptions::idents())?
+                    .unwrap_variable()
+            } else {
+                env.register_variable(scope, identifier, data_type.clone(), self.var_type)?
+            };
+
+            env.handle_function_template(scope, func, key.clone());
+
+            for tag in &env.tagging.tag_info {
+                match tag {
+                    TagInfo::Init(priority) => {
+                        env.tagging.init_functions.push((*priority, key.clone()))
+                    }
+                    TagInfo::Fin(priority) => {
+                        env.tagging.fin_functions.push((*priority, key.clone()))
+                    }
+                    _ => {}
+                }
+            }
+
+            env.process_parameter_defaults(scope, &func.header, key.clone());
+
+            Some(key)
+        } else {
+            None
+        };
 
         let mut value = self.value.lower_or_empty(env, scope, span);
 
-        if !is_function {
-            env.register_variable(
-                scope,
-                identifier,
-                new_name,
-                data_type.clone(),
-                self.var_type,
-            )?;
-        }
+        let var_key = if let Some(var_key) = var_key {
+            var_key
+        } else {
+            if self.declared {
+                env.resolve(scope, identifier, ResolutionOptions::idents())?
+                    .unwrap_variable()
+            } else {
+                env.register_variable(scope, identifier, data_type.clone(), self.var_type)?
+            }
+        };
 
-        if matches!(data_type.data_type, ParserInnerType::DynamicTraits(_)) {
+        if matches!(data_type, MirDataType::DynamicTraits(_)) {
             value = MiddleNode::new(
                 MiddleNodeType::AsExpression(MirAs {
                     value: Box::new(value),
@@ -353,7 +357,7 @@ impl MirLowering for AstDeclaration {
         Ok(MiddleNode::new(
             MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: self.var_type,
-                identifier: new_name,
+                identifier: var_key,
                 value: Box::new(value),
                 data_type,
             }),
@@ -370,8 +374,7 @@ impl MirLowering for AstDeclareDestructure {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let tmp_ident: PotentialDollarIdentifier =
-            ParserText::temp_name_with_suffix("destructure_tmp", span).into();
+        let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("destructure"));
 
         let tmp_decl = AstNode::new(
             span,
@@ -380,6 +383,7 @@ impl MirLowering for AstDeclareDestructure {
                 identifier: tmp_ident.clone(),
                 data_type: ParserDataType::auto(span),
                 value: self.value,
+                declared: false,
             }),
         );
 

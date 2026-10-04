@@ -1,0 +1,55 @@
+type Point := struct {
+    x y : int
+};
+
+impl Point {
+    const new := fn(x y : int) -> Self =>
+        return Point {x, y}
+}
+
+type ListIter:<T> := struct { data : list:<T>, index : int };
+
+type Identity:<T> := struct {value : T};
+
+const main := fn => {
+    try ("4" as int)
+    
+    let mut i := 0;
+    for 4 => i += 3;
+    console_output(1, "hi " & i & "\n");
+
+    if true => console_output(1, "oui\n");
+
+    let mut lst := list:<int>[1 for 5];
+    console_output(1, lst & "\n");
+
+    console_output(1, Point.new(10,10) & "\n");
+
+    console_output(1, Identity {value : 90} & "\n");
+
+    let mut iter := ListIter:<int> {
+        data : list:<int>[10, 30],
+        index : 0
+    };
+    
+    for element in lst =>
+        console_output(1, element & "\n");
+
+    // TODO Fix variable shadowing
+    for i in 0..4 =>
+        console_output(1, i & " ");
+
+    console_output(1, "\n");
+
+    // TODO when matching is working test the next line:
+    // console_output(1, (try err(10) => emit 1) & "\n");
+
+    console_output(1, "" & match 4 {
+        1 => emit 2,
+        _ => emit 3,
+    } & "\n");
+
+    if true => console_output(1, "after\n");
+
+    2;
+}

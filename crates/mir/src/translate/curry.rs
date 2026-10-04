@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::MiddleNode,
+    ast::{MiddleNode, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -17,7 +17,7 @@ use calibre_parser::{
             functions::{AstCurry, AstFunction, CallArg, FunctionHeader},
             matching::AstFnMatch,
         },
-        types::{GenericTypes, ParserDataType, ParserInnerType},
+        types::GenericTypes,
     },
 };
 use tracing::instrument;
@@ -39,7 +39,7 @@ impl MirLowering for AstCurry {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         _span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         env.resolve_curried_type(scope, &self.value)
     }
 }
@@ -47,24 +47,19 @@ impl MirLowering for AstCurry {
 impl MiddleEnvironment {
     #[allow(clippy::type_complexity)]
     fn build_curried_return_type(
-        span: Span,
+        _span: Span,
         params: &[(
             PotentialDollarIdentifier,
-            Option<ParserDataType>,
+            Option<MirDataType>,
             Option<Box<AstNode>>,
         )],
-        return_type: ParserDataType,
-    ) -> ParserDataType {
+        return_type: MirDataType,
+    ) -> MirDataType {
         let mut result = return_type;
 
         for (_, param_type, _) in params.iter().rev() {
-            result = ParserDataType::function(
-                span,
-                vec![
-                    param_type
-                        .clone()
-                        .unwrap_or_else(|| ParserDataType::new(span, ParserInnerType::Dynamic)),
-                ],
+            result = MirDataType::function(
+                vec![param_type.clone().unwrap_or(MirDataType::Dynamic)],
                 result,
             );
         }
@@ -77,10 +72,10 @@ impl MiddleEnvironment {
         target: AstNode,
         params: Vec<(
             PotentialDollarIdentifier,
-            Option<ParserDataType>,
+            Option<MirDataType>,
             Option<Box<AstNode>>,
         )>,
-        return_type: ParserDataType,
+        return_type: MirDataType,
         mut bound: Vec<AstNode>,
     ) -> AstNode {
         let mut params = params.into_iter();
@@ -109,12 +104,13 @@ impl MiddleEnvironment {
             AstNodeType::FunctionDeclaration(AstFunction {
                 header: FunctionHeader {
                     generics: GenericTypes::default(),
-                    parameters: vec![(first_name, Some(first_type), first_default)],
+                    parameters: vec![(first_name, Some(first_type.into()), first_default)],
                     return_type: Self::build_curried_return_type(
                         span,
                         &params,
                         return_type.clone(),
-                    ),
+                    )
+                    .into(),
                     param_destructures: Vec::new(),
                 },
                 body: Box::new(AstNode::new_temp_scope(vec![AstNode::ret(
@@ -136,10 +132,13 @@ impl MiddleEnvironment {
                 header: FunctionHeader {
                     generics: GenericTypes::default(),
                     parameters: Vec::new(),
-                    return_type: self.resolve_type_from_node(scope, &target).ok_or_else(|| {
-                        self.context
-                            .err_at_current(MiddleErr::CannotInferCurryTargetType)
-                    })?,
+                    return_type: self
+                        .resolve_type_from_node(scope, &target)
+                        .ok_or_else(|| {
+                            self.context
+                                .err_at_current(MiddleErr::CannotInferCurryTargetType)
+                        })?
+                        .into(),
                     param_destructures: Vec::new(),
                 },
                 body: Box::new(AstNode::new_temp_scope(vec![AstNode::ret(target)])),
@@ -163,7 +162,7 @@ impl MiddleEnvironment {
                 let ident = self.resolve(scope, &x.value, ResolutionOptions::idents())?;
                 self.symbols
                     .name_to_param_defaults
-                    .get(&ident)
+                    .get(&ident.unwrap_variable())
                     .and_then(|x| self.symbols.function_param_defaults.get(x).cloned())
                     .unwrap_or_default()
             }
@@ -174,17 +173,17 @@ impl MiddleEnvironment {
             _ => Rc::default(),
         };
 
-        match ty.unwrap_all_refs().data_type {
-            ParserInnerType::Function {
+        match ty.unwrap_all_refs() {
+            MirDataType::Function {
                 return_type,
                 parameters,
             }
-            | ParserInnerType::NativeFunction {
+            | MirDataType::NativeFunction {
                 return_type,
                 parameters,
             } => {
                 let params = parameters
-                    .into_iter()
+                    .iter()
                     .enumerate()
                     .map(|(index, param)| {
                         (
@@ -192,7 +191,7 @@ impl MiddleEnvironment {
                                 span,
                                 format!("curry_arg_{index}"),
                             )),
-                            Some(param),
+                            Some(param.clone()),
                             defaults
                                 .get(index)
                                 .and_then(|d| d.explicit_default.clone())
@@ -205,7 +204,7 @@ impl MiddleEnvironment {
                     span,
                     target,
                     params,
-                    *return_type,
+                    *return_type.clone(),
                     Vec::new(),
                 ))
             }

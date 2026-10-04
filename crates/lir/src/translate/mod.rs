@@ -3,16 +3,13 @@ use crate::{
     environment::{LirEnvironment, LirGlobal, LirRegistry},
 };
 use calibre_mir::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, types::MirDataType},
     environment::MiddleEnvironment,
-    typing::{MiddleImpl, MiddleTrait},
+    symbols::VariableKey,
 };
-use calibre_parser::{
-    Span,
-    ast::types::{ParserDataType, ParserInnerType},
-};
+use calibre_parser::Span;
 use tracing::{debug, info, instrument, trace};
-use ustr::{Ustr, UstrMap};
+use ustr::Ustr;
 
 pub mod access;
 pub mod declarations;
@@ -45,7 +42,7 @@ impl<'a> LirEnvironment<'a> {
             .collect()
     }
 
-    fn assign_var(&mut self, span: Span, name: Ustr, value: LirNodeType) {
+    fn assign_var(&mut self, span: Span, name: VariableKey, value: LirNodeType) {
         self.add_instr(LirNode::new(
             span,
             LirNodeType::Assign(LirAssign {
@@ -55,12 +52,12 @@ impl<'a> LirEnvironment<'a> {
         ));
     }
 
-    fn declare_temp_null(&mut self, span: Span, dest: Ustr) {
+    fn declare_temp_null(&mut self, span: Span, dest: VariableKey) {
         self.add_instr(LirNode::new(
             span,
             LirNodeType::Declare(LirDeclare {
                 dest,
-                data_type: ParserDataType::null(span),
+                data_type: MirDataType::Null,
                 value: Box::new(LirNodeType::null()),
                 is_referenced: true,
             }),
@@ -74,7 +71,7 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
-    fn assign_temp_if_non_null(&mut self, span: Span, temp: Ustr, value: LirNodeType) {
+    fn assign_temp_if_non_null(&mut self, span: Span, temp: VariableKey, value: LirNodeType) {
         if !value.is_null() {
             self.assign_var(span, temp, value);
         }
@@ -106,59 +103,14 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[inline]
-    fn next_function_label(&mut self) -> Ustr {
+    fn next_function_label(&mut self) -> VariableKey {
         if let Some(name) = self.last_ident.take()
-            && !name.contains("curry_capture")
+            && !name.name().contains("curry_capture")
         {
             return name;
         }
+
         self.get_temp()
-    }
-
-    fn collect_trait_methods(
-        imp: &MiddleImpl,
-        trait_def: Option<&MiddleTrait>,
-        trait_name: &str,
-    ) -> UstrMap<Ustr> {
-        let mut methods: UstrMap<Ustr> = UstrMap::default();
-        if let Some(trait_def) = trait_def {
-            for member in trait_def.members.keys() {
-                if let Some(mapped) = imp.get_member(member, &[]) {
-                    methods.insert(*member, mapped.symbol_name);
-                } else if let Some(trait_member) = trait_def.members.get(member)
-                    && trait_member.default.is_some()
-                {
-                    let symbol_name = Ustr::from(&format!("{}.{}", trait_name, member));
-                    methods.insert(*member, symbol_name);
-                }
-            }
-        } else {
-            for (member, mapped) in imp.get_all_members() {
-                methods.insert(*member, mapped.symbol_name);
-            }
-        }
-        methods
-    }
-
-    pub fn build_dyn_vtables(env: &MiddleEnvironment) -> UstrMap<UstrMap<UstrMap<Ustr>>> {
-        let mut out: UstrMap<UstrMap<UstrMap<Ustr>>> = UstrMap::default();
-
-        for (concrete, imp) in env.typing.impls.iter() {
-            let trait_map = out.entry(*concrete).or_default();
-
-            for trait_name in &imp.traits {
-                let methods = Self::collect_trait_methods(
-                    imp,
-                    env.typing.trait_defs.get(trait_name),
-                    trait_name,
-                );
-                if !methods.is_empty() {
-                    trait_map.insert(*trait_name, methods);
-                }
-            }
-        }
-
-        out
     }
 
     #[instrument(skip_all)]
@@ -178,7 +130,7 @@ impl<'a> LirEnvironment<'a> {
     pub fn lower_with_root(
         env: &'a MiddleEnvironment,
         node: MiddleNode,
-        root_name: Ustr,
+        root_name: VariableKey,
     ) -> LirRegistry {
         debug!("lowering with root");
         let mut this = Self::new(env);
@@ -189,11 +141,12 @@ impl<'a> LirEnvironment<'a> {
                 .into_iter()
                 .map(Some)
                 .collect();
+
             this.registry.globals.insert(
-                root_name,
+                root_name.clone(),
                 LirGlobal {
                     name: root_name,
-                    data_type: ParserDataType::new(Span::default(), ParserInnerType::Dynamic),
+                    data_type: MirDataType::Dynamic,
                     blocks,
                 },
             );

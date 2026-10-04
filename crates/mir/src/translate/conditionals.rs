@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirConditional},
+    ast::{MiddleNode, MiddleNodeType, MirConditional, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -8,14 +8,11 @@ use crate::{
 };
 use calibre_parser::{
     Span,
-    ast::{
-        nodes::{
-            AstNode, AstNodeType,
-            conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType},
-            functions::CallArg,
-            matching::{AstMatch, MatchArmType, MatchBody},
-        },
-        types::{ParserDataType, ParserInnerType},
+    ast::nodes::{
+        AstNode, AstNodeType,
+        conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType},
+        functions::CallArg,
+        matching::{AstMatch, MatchArmType, MatchBody},
     },
 };
 use tracing::instrument;
@@ -34,7 +31,7 @@ impl MirLowering for AstIf {
                 .otherwise
                 .as_ref()
                 .and_then(|x| x.type_of(env, scope, span))
-                .unwrap_or_else(|| ParserDataType::null(span));
+                .unwrap_or(MirDataType::Null);
 
             env.compare_types_ref(
                 then_type.as_ref(),
@@ -89,7 +86,7 @@ impl MirLowering for AstIf {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         if let Some(otherwise) = &self.otherwise {
             let otherwise =
                 if let AstNodeType::IfStatement(AstIf { then, .. }) = &otherwise.node_type {
@@ -102,13 +99,13 @@ impl MirLowering for AstIf {
             let else_ty = otherwise.type_of(env, scope, span);
 
             match (then_ty, else_ty) {
-                (Some(a), Some(b)) if a.data_type == b.data_type => Some(a),
-                (Some(a), Some(b)) if a.data_type == ParserInnerType::Null => Some(b),
-                (Some(a), Some(b)) if b.data_type == ParserInnerType::Null => Some(a),
-                _ => Some(ParserDataType::new(span, ParserInnerType::Null)),
+                (Some(a), Some(b)) if a.loose_eq(&b) => Some(a),
+                (Some(a), Some(b)) if a.is_null() => Some(b),
+                (Some(a), Some(b)) if b.is_null() => Some(a),
+                _ => Some(MirDataType::Null),
             }
         } else {
-            Some(ParserDataType::new(span, ParserInnerType::Null))
+            Some(MirDataType::Null)
         }
     }
 }
@@ -197,22 +194,18 @@ impl MirLowering for AstTernary {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         match self.ternary_type {
             TernaryType::Normal => self.then.type_of(env, scope, span),
-            TernaryType::Option => Some(ParserDataType::new(
-                span,
-                ParserInnerType::Option(Box::new(self.then.type_of(env, scope, span)?)),
-            )),
+            TernaryType::Option => Some(MirDataType::Option(Box::new(
+                self.then.type_of(env, scope, span)?,
+            ))),
             TernaryType::Result => {
                 if let Some(otherwise) = &self.otherwise {
-                    Some(ParserDataType::new(
-                        span,
-                        ParserInnerType::Result {
-                            ok: Box::new(self.then.type_of(env, scope, span)?),
-                            err: Box::new(otherwise.type_of(env, scope, span)?),
-                        },
-                    ))
+                    Some(MirDataType::Result {
+                        ok: Box::new(self.then.type_of(env, scope, span)?),
+                        err: Box::new(otherwise.type_of(env, scope, span)?),
+                    })
                 } else {
                     None
                 }

@@ -1,5 +1,8 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirIs},
+    ast::{
+        MiddleNode, MiddleNodeType, MirAs, MirBinary, MirBoolean, MirComparison, MirIs,
+        types::MirDataType,
+    },
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -23,88 +26,68 @@ use calibre_parser::{
             lists::AstList,
             literals::AstRange,
         },
-        types::{ParserDataType, ParserInnerType},
     },
 };
 use std::sync::LazyLock;
 use tracing::instrument;
 
-pub static VALID_BINARY_GENERAL: LazyLock<[(ParserInnerType, ParserInnerType); 17]> =
-    LazyLock::new(|| {
-        [
-            (ParserInnerType::Int, ParserInnerType::Int),
-            (ParserInnerType::Int, ParserInnerType::Float),
-            (ParserInnerType::Int, ParserInnerType::UInt),
-            (ParserInnerType::Int, ParserInnerType::Byte),
-            (ParserInnerType::Float, ParserInnerType::Float),
-            (ParserInnerType::Float, ParserInnerType::Int),
-            (ParserInnerType::Float, ParserInnerType::UInt),
-            (ParserInnerType::Float, ParserInnerType::Byte),
-            (ParserInnerType::UInt, ParserInnerType::UInt),
-            (ParserInnerType::UInt, ParserInnerType::Int),
-            (ParserInnerType::UInt, ParserInnerType::Float),
-            (ParserInnerType::UInt, ParserInnerType::Byte),
-            (ParserInnerType::Byte, ParserInnerType::Byte),
-            (ParserInnerType::Byte, ParserInnerType::Int),
-            (ParserInnerType::Byte, ParserInnerType::Float),
-            (ParserInnerType::Byte, ParserInnerType::UInt),
-            (ParserInnerType::Big, ParserInnerType::Big),
-        ]
-    });
+pub static VALID_BINARY_GENERAL: LazyLock<[(MirDataType, MirDataType); 17]> = LazyLock::new(|| {
+    [
+        (MirDataType::Int, MirDataType::Int),
+        (MirDataType::Int, MirDataType::Float),
+        (MirDataType::Int, MirDataType::UInt),
+        (MirDataType::Int, MirDataType::Byte),
+        (MirDataType::Float, MirDataType::Float),
+        (MirDataType::Float, MirDataType::Int),
+        (MirDataType::Float, MirDataType::UInt),
+        (MirDataType::Float, MirDataType::Byte),
+        (MirDataType::UInt, MirDataType::UInt),
+        (MirDataType::UInt, MirDataType::Int),
+        (MirDataType::UInt, MirDataType::Float),
+        (MirDataType::UInt, MirDataType::Byte),
+        (MirDataType::Byte, MirDataType::Byte),
+        (MirDataType::Byte, MirDataType::Int),
+        (MirDataType::Byte, MirDataType::Float),
+        (MirDataType::Byte, MirDataType::UInt),
+        (MirDataType::Big, MirDataType::Big),
+    ]
+});
 
-pub static VALID_BINARY: LazyLock<[(ParserInnerType, BinaryOperator, ParserInnerType); 9]> =
+pub static VALID_BINARY: LazyLock<[(MirDataType, BinaryOperator, MirDataType); 9]> =
     LazyLock::new(|| {
         [
+            (MirDataType::Int, BinaryOperator::Pow, MirDataType::Float),
+            (MirDataType::UInt, BinaryOperator::Pow, MirDataType::Float),
+            (MirDataType::Byte, BinaryOperator::Pow, MirDataType::Float),
             (
-                ParserInnerType::Int,
-                BinaryOperator::Pow,
-                ParserInnerType::Float,
-            ),
-            (
-                ParserInnerType::UInt,
-                BinaryOperator::Pow,
-                ParserInnerType::Float,
-            ),
-            (
-                ParserInnerType::Byte,
-                BinaryOperator::Pow,
-                ParserInnerType::Float,
-            ),
-            (
-                ParserInnerType::Str,
+                MirDataType::Str,
                 BinaryOperator::BitAnd,
-                ParserInnerType::Dynamic,
+                MirDataType::Dynamic,
             ),
             (
-                ParserInnerType::Dynamic,
+                MirDataType::Dynamic,
                 BinaryOperator::BitAnd,
-                ParserInnerType::Str,
+                MirDataType::Str,
             ),
             (
-                ParserInnerType::Char,
+                MirDataType::Char,
                 BinaryOperator::BitAnd,
-                ParserInnerType::Dynamic,
+                MirDataType::Dynamic,
             ),
             (
-                ParserInnerType::Dynamic,
+                MirDataType::Dynamic,
                 BinaryOperator::BitAnd,
-                ParserInnerType::Char,
+                MirDataType::Char,
             ),
             (
-                ParserInnerType::List(Box::new(ParserDataType::new(
-                    Span::default(),
-                    ParserInnerType::Dynamic,
-                ))),
+                MirDataType::List(Box::new(MirDataType::Dynamic)),
                 BinaryOperator::Shl,
-                ParserInnerType::Dynamic,
+                MirDataType::Dynamic,
             ),
             (
-                ParserInnerType::Dynamic,
+                MirDataType::Dynamic,
                 BinaryOperator::Shr,
-                ParserInnerType::List(Box::new(ParserDataType::new(
-                    Span::default(),
-                    ParserInnerType::Dynamic,
-                ))),
+                MirDataType::List(Box::new(MirDataType::Dynamic)),
             ),
         ]
     });
@@ -131,31 +114,25 @@ impl MirLowering for AstBinary {
             let left_type = self
                 .left
                 .type_of(env, scope, span)
-                .unwrap_or(ParserDataType::new(
-                    Span::default(),
-                    ParserInnerType::Dynamic,
-                ));
+                .unwrap_or(MirDataType::Dynamic);
             let right_type = self
                 .right
                 .type_of(env, scope, span)
-                .unwrap_or(ParserDataType::new(
-                    Span::default(),
-                    ParserInnerType::Dynamic,
-                ));
+                .unwrap_or(MirDataType::Dynamic);
 
             if !(VALID_BINARY_GENERAL
                 .iter()
                 .find(|x| {
-                    x.0.loose_eq(&left_type.data_type) && x.1.loose_eq(&right_type.data_type)
-                        || x.0.loose_eq(&right_type.data_type) && x.1.loose_eq(&left_type.data_type)
+                    x.0.loose_eq(&left_type) && x.1.loose_eq(&right_type)
+                        || x.0.loose_eq(&right_type) && x.1.loose_eq(&left_type)
                 })
                 .is_some()
                 || VALID_BINARY
                     .iter()
                     .find(|x| {
-                        x.0.loose_eq(&left_type.data_type)
+                        x.0.loose_eq(&left_type)
                             && x.1 == self.operator
-                            && x.2.loose_eq(&right_type.data_type)
+                            && x.2.loose_eq(&right_type)
                     })
                     .is_some())
             {
@@ -185,7 +162,7 @@ impl MirLowering for AstBinary {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         if let Some(x) = env.get_operator_overload(
             scope,
             &self.left,
@@ -201,13 +178,13 @@ impl MirLowering for AstBinary {
             match &self.operator {
                 BinaryOperator::BitAnd => {
                     if let Some(x) = &left
-                        && let ParserInnerType::Str = &x.data_type
+                        && let MirDataType::Str = &x
                     {
                         return left;
                     }
 
                     if let Some(x) = &right
-                        && let ParserInnerType::Str = &x.data_type
+                        && let MirDataType::Str = &x
                     {
                         return right;
                     }
@@ -264,7 +241,7 @@ impl MirLowering for AstBoolean {
                     )
                 })?;
 
-            if !data_type.data_type.loose_eq(&ParserInnerType::Bool) {
+            if !data_type.loose_eq(&MirDataType::Bool) {
                 return Err(env.context.err_at_span(
                     span,
                     MiddleErr::InvalidBooleanOperation {
@@ -290,14 +267,13 @@ impl MirLowering for AstBoolean {
         &self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
+        _span: Span,
+    ) -> Option<MirDataType> {
         env.resolve_operator_or_bool(
             scope,
             &self.left,
             &self.right,
             Operator::Boolean(self.operator),
-            span,
         )
     }
 }
@@ -361,14 +337,13 @@ impl MirLowering for AstComparison {
         &self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
+        _span: Span,
+    ) -> Option<MirDataType> {
         env.resolve_operator_or_bool(
             scope,
             &self.left,
             &self.right,
             Operator::Comparison(self.operator),
-            span,
         )
     }
 }
@@ -384,7 +359,7 @@ impl MirLowering for AstAs {
         let target = env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?;
 
         if env
-            .handle_as_overload_exists(scope, *self.value.clone(), target.clone())
+            .handle_as_overload_exists(scope, *self.value.clone(), &target)
             .unwrap_or_default()
         {
             match &self.failure_mode {
@@ -428,7 +403,7 @@ impl MirLowering for AstAs {
             }
         }
 
-        if let Some(x) = env.handle_as_overload(scope, span, *self.value.clone(), target.clone())? {
+        if let Some(x) = env.handle_as_overload(scope, span, *self.value.clone(), &target)? {
             return Ok(x);
         }
 
@@ -446,24 +421,18 @@ impl MirLowering for AstAs {
         &self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
+        _span: Span,
+    ) -> Option<MirDataType> {
         let ok = env
             .resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
             .ok()?;
 
         match &self.failure_mode {
             AsFailureMode::Panic => Some(ok),
-            AsFailureMode::Option => Some(ParserDataType {
-                data_type: ParserInnerType::Option(Box::new(ok)),
-                span,
-            }),
-            AsFailureMode::Result => Some(ParserDataType {
-                data_type: ParserInnerType::Result {
-                    ok: Box::new(ok),
-                    err: Box::new(ParserDataType::new(span, ParserInnerType::Dynamic)),
-                },
-                span,
+            AsFailureMode::Option => Some(MirDataType::Option(Box::new(ok))),
+            AsFailureMode::Result => Some(MirDataType::Result {
+                ok: Box::new(ok),
+                err: Box::new(MirDataType::Dynamic),
             }),
         }
     }
@@ -494,12 +463,9 @@ impl MirLowering for AstIs {
         &self,
         _env: &mut MiddleEnvironment,
         _scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType {
-            data_type: ParserInnerType::Bool,
-            span,
-        })
+        _span: Span,
+    ) -> Option<MirDataType> {
+        Some(MirDataType::Bool)
     }
 }
 
@@ -590,8 +556,8 @@ impl MirLowering for AstIn {
 
         if let Some(data_type) = self.value.type_of(env, scope, span)
             && matches!(
-                data_type.data_type.unwrap_all_refs(),
-                ParserInnerType::List(_) | ParserInnerType::Str
+                data_type.unwrap_all_refs(),
+                MirDataType::List(_) | MirDataType::Str
             )
         {
             let member = AstNode::new(
@@ -621,8 +587,8 @@ impl MirLowering for AstIn {
         &self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        env.resolve_operator_or_bool(scope, &self.identifier, &self.value, Operator::In, span)
+        _span: Span,
+    ) -> Option<MirDataType> {
+        env.resolve_operator_or_bool(scope, &self.identifier, &self.value, Operator::In)
     }
 }

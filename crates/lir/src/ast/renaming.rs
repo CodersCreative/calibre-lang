@@ -1,31 +1,35 @@
+use std::sync::Arc;
+
 use crate::ast::{
     LirAggregate, LirAs, LirAssign, LirBinary, LirBoolean, LirCall, LirClosure, LirComparison,
     LirDeclare, LirDeref, LirDiscriminant, LirDrop, LirEmit, LirEnum, LirIndex, LirIs, LirLValue,
     LirList, LirLoad, LirMember, LirMove, LirNode, LirNodeType, LirRange, LirRef, LirRefLoad,
     LirSpawn,
 };
-use calibre_parser::{AlphaRenamable, AlphaRenameState};
+use calibre_mir::{
+    MirRenamable, MirRenameState, scoping::FullyQualifiedPath, symbols::VariableKey,
+};
 use ustr::Ustr;
 
-impl AlphaRenamable for LirNode {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+impl MirRenamable for LirNode {
+    fn rename(&mut self, state: &mut MirRenameState) {
         self.node_type.rename(state);
     }
 }
 
-impl AlphaRenamable for LirLValue {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+impl MirRenamable for LirLValue {
+    fn rename(&mut self, state: &mut MirRenameState) {
         match self {
             Self::Var(x) => {
-                *x = state.mapped_name_or_original(*x);
+                *x = state.mapped_variable_or_original(x.clone());
             }
             Self::Ptr(x) => x.rename(state),
         }
     }
 }
 
-impl AlphaRenamable for LirNodeType {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+impl MirRenamable for LirNodeType {
+    fn rename(&mut self, state: &mut MirRenameState) {
         match self {
             Self::Literal(_) | Self::Noop | Self::ExternFunction(_) => {}
             Self::As(LirAs {
@@ -52,14 +56,24 @@ impl AlphaRenamable for LirNodeType {
                 data_type,
                 is_referenced: _,
             }) => {
-                let new_name = if !state.dont_change_local {
-                    let name = Ustr::from(&format!("{}->{}", dest, fastrand::u32(0..u32::MAX)));
-                    state.data.insert(*dest, name);
-                    name
-                } else {
-                    *dest
-                };
-                *dest = new_name;
+                if !state.dont_change_local {
+                    let new_name =
+                        Ustr::from(&format!("{}->{}", dest.name(), fastrand::u32(0..u32::MAX)));
+                    state.variables.insert(
+                        dest.clone(),
+                        VariableKey {
+                            fully_qualified_path: FullyQualifiedPath::combine(
+                                dest.fully_qualified_path.parent.clone(),
+                                new_name,
+                            ),
+                            shadow_counter: None,
+                        },
+                    );
+                    let mut new_path = (*dest.fully_qualified_path).clone();
+                    new_path.name = Some(new_name);
+                    dest.fully_qualified_path = Arc::new(new_path);
+                }
+
                 value.rename(state);
                 data_type.rename(state);
             }
@@ -74,9 +88,10 @@ impl AlphaRenamable for LirNodeType {
                 }
             }
             Self::Aggregate(LirAggregate { name, fields }) => {
-                if let Some(n) = name {
-                    *name = Some(state.mapped_name_or_original(*n));
+                if let Some(n) = std::mem::take(name) {
+                    *name = Some(state.mapped_type_or_original(n));
                 }
+
                 for (_, v) in &mut fields.0 {
                     v.rename(state);
                 }
@@ -106,21 +121,21 @@ impl AlphaRenamable for LirNodeType {
                 right.rename(state);
             }
             Self::Closure(LirClosure { label, captures }) => {
-                *label = state.mapped_name_or_original(*label);
+                *label = state.mapped_variable_or_original(label.clone());
                 for c in captures {
-                    *c = state.mapped_name_or_original(*c);
+                    *c = state.mapped_variable_or_original(c.clone());
                 }
             }
             Self::Deref(LirDeref { value }) => value.rename(state),
             Self::Drop(LirDrop { value }) => {
-                *value = state.mapped_name_or_original(*value);
+                *value = state.mapped_variable_or_original(value.clone());
             }
             Self::Enum(LirEnum {
                 name,
                 variant: _,
                 payload,
             }) => {
-                *name = state.mapped_name_or_original(*name);
+                *name = state.mapped_type_or_original(name.clone());
                 if let Some(p) = payload {
                     p.rename(state);
                 }
@@ -140,15 +155,15 @@ impl AlphaRenamable for LirNodeType {
                 data_type.rename(state);
             }
             Self::Move(LirMove { value }) => {
-                *value = state.mapped_name_or_original(*value);
+                *value = state.mapped_variable_or_original(value.clone());
             }
             Self::Load(LirLoad { value }) => {
-                *value = state.mapped_name_or_original(*value);
+                *value = state.mapped_variable_or_original(value.clone());
             }
             Self::Member(LirMember { base, field: _ }) => base.rename(state),
             Self::Ref(LirRef { value }) => value.rename(state),
             Self::RefLoad(LirRefLoad { value }) => {
-                *value = state.mapped_name_or_original(*value);
+                *value = state.mapped_variable_or_original(value.clone());
             }
             Self::Range(LirRange {
                 from,

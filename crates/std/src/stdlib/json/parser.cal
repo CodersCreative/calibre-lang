@@ -128,7 +128,7 @@ impl Parser {
 			let t := self.expect_eat(TokenType.Number);
 			return JsonValue.Number : try t.value as float : e => {
 				self.errors <<= e;
-				0;
+				emit 0;
 			};
 		};
 		

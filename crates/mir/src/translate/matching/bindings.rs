@@ -26,7 +26,9 @@ impl BindingExtractor {
             .into_iter()
             .map(|(var_type, name)| {
                 Ok(BindingDeclaration {
-                    name: env.resolve(scope, &name, ResolutionOptions::default().with_dollar())?,
+                    name: env
+                        .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar(),
                     value: value.clone(),
                     var_type,
                     data_type: None,
@@ -37,7 +39,9 @@ impl BindingExtractor {
         match &inner_pattern {
             MatchArmType::Let { var_type, name } => {
                 bindings.push(BindingDeclaration {
-                    name: env.resolve(scope, name, ResolutionOptions::default().with_dollar())?,
+                    name: env
+                        .resolve(scope, name, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar(),
                     value: value.clone(),
                     var_type: *var_type,
                     data_type: None,
@@ -76,7 +80,9 @@ impl BindingExtractor {
                             name,
                         } => {
                             bindings.push(BindingDeclaration {
-                                name: env.resolve(scope, name, ResolutionOptions::default())?,
+                                name: env
+                                    .resolve(scope, name, ResolutionOptions::default())?
+                                    .unwrap_dollar(),
                                 value: AstNode::member(
                                     env.context.current_span(),
                                     value.clone(),
@@ -96,11 +102,13 @@ impl BindingExtractor {
                     match part {
                         MatchStringPatternPart::Binding { var_type, name } => {
                             bindings.push(BindingDeclaration {
-                                name: env.resolve(
-                                    scope,
-                                    name,
-                                    ResolutionOptions::default().with_dollar(),
-                                )?,
+                                name: env
+                                    .resolve(
+                                        scope,
+                                        name,
+                                        ResolutionOptions::default().with_dollar(),
+                                    )?
+                                    .unwrap_dollar(),
                                 value: value.clone(),
                                 var_type: *var_type,
                                 data_type: Some(ParserDataType::new(
@@ -123,9 +131,9 @@ impl BindingExtractor {
             } => {
                 if name.is_some() || destructure.is_some() || payload_pattern.is_some() {
                     let name = match name {
-                        Some(x) => {
-                            env.resolve(scope, x, ResolutionOptions::default().with_dollar())?
-                        }
+                        Some(x) => env
+                            .resolve(scope, x, ResolutionOptions::default().with_dollar())?
+                            .unwrap_dollar(),
                         _ => Ustr::from("match_destructure"),
                     };
 
@@ -173,7 +181,9 @@ impl BindingExtractor {
             .into_iter()
             .map(|(var_type, name)| {
                 Ok(BindingDeclaration {
-                    name: env.resolve(scope, &name, ResolutionOptions::default().with_dollar())?,
+                    name: env
+                        .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar(),
                     value: value.clone(),
                     var_type,
                     data_type: None,
@@ -184,7 +194,9 @@ impl BindingExtractor {
         match inner_item {
             MatchTupleItem::Binding { var_type, name } => {
                 bindings.push(BindingDeclaration {
-                    name: env.resolve(scope, &name, ResolutionOptions::default().with_dollar())?,
+                    name: env
+                        .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar(),
                     value,
                     var_type,
                     data_type: None,
@@ -199,9 +211,9 @@ impl BindingExtractor {
             } => {
                 if name.is_some() || destructure.is_some() || payload_pattern.is_some() {
                     let name = match name {
-                        Some(x) => {
-                            env.resolve(scope, &x, ResolutionOptions::default().with_dollar())?
-                        }
+                        Some(x) => env
+                            .resolve(scope, &x, ResolutionOptions::default().with_dollar())?
+                            .unwrap_dollar(),
                         _ => Ustr::from("match_destructure"),
                     };
 

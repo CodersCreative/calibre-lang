@@ -1,8 +1,9 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirSpawn},
+    ast::{MiddleNode, MiddleNodeType, MirSpawn, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
+    symbols::resolve::ResolutionOptions,
     translate::MirLowering,
 };
 use calibre_parser::{
@@ -10,7 +11,7 @@ use calibre_parser::{
     ast::{
         RefMutability,
         comparison::{BooleanOperator, ComparisonOperator},
-        idents::{ParserText, PotentialDollarIdentifier},
+        idents::PotentialDollarIdentifier,
         nodes::{
             AstNode, AstNodeType, VarType,
             access::AstField,
@@ -39,8 +40,7 @@ impl MirLowering for AstSelect {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let done_ident: PotentialDollarIdentifier =
-            ParserText::temp_name_with_suffix("select_done", span).into();
+        let done_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("select_done"));
 
         let done_decl = AstNode::new(
             span,
@@ -49,6 +49,7 @@ impl MirLowering for AstSelect {
                 identifier: done_ident.clone(),
                 data_type: ParserDataType::new(span, ParserInnerType::Bool),
                 value: Box::new(AstNode::bool(span, false)),
+                declared: false,
             }),
         );
 
@@ -98,8 +99,9 @@ impl MirLowering for AstSelect {
                     SelectArmKind::Recv => {
                         let Some(left) = left.clone() else { continue };
                         let Some(right) = right.clone() else { continue };
-                        let tmp_ident = PotentialDollarIdentifier::Identifier(
-                            ParserText::temp_name_with_suffix("select", span),
+                        let tmp_ident = PotentialDollarIdentifier::new(
+                            span,
+                            env.context.get_temp("select_ident"),
                         );
 
                         let try_get_call =
@@ -112,6 +114,7 @@ impl MirLowering for AstSelect {
                                 identifier: tmp_ident.clone(),
                                 data_type: ParserDataType::auto(span),
                                 value: Box::new(try_get_call),
+                                declared: false,
                             }),
                         ));
 
@@ -146,6 +149,7 @@ impl MirLowering for AstSelect {
                                     identifier: ident.value.into(),
                                     data_type: ParserDataType::auto(span),
                                     value: Box::new(extracted),
+                                    declared: false,
                                 }),
                             ),
                             _ => AstNode::new(
@@ -359,8 +363,7 @@ impl MirLowering for AstSpawn {
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
         if self.auto_wait {
-            let ident: PotentialDollarIdentifier =
-                ParserText::temp_name_with_suffix("spawn_wait_wg", span).into();
+            let ident = PotentialDollarIdentifier::new(span, env.context.get_temp("spawn_wg"));
 
             AstNode::new_temp_scope_with_create(
                 vec![
@@ -377,6 +380,7 @@ impl MirLowering for AstSpawn {
                                     auto_wait: false,
                                 }),
                             )),
+                            declared: false,
                         }),
                     ),
                     AstNode::call(
@@ -423,10 +427,8 @@ impl MirLowering for AstSpawn {
                     label,
                     else_body,
                 }) => {
-                    let ident: PotentialDollarIdentifier =
-                        ParserText::temp_name_with_suffix("spawn_wg", span)
-                            .clone()
-                            .into();
+                    let ident =
+                        PotentialDollarIdentifier::new(span, env.context.get_temp("spawn_wg"));
 
                     let decl = AstNode::new(
                         span,
@@ -443,6 +445,7 @@ impl MirLowering for AstSpawn {
                                 ),
                                 Vec::new(),
                             )),
+                            declared: false,
                         }),
                     );
 
@@ -495,8 +498,7 @@ impl MirLowering for AstSpawn {
                 span,
             ))
         } else {
-            let ident: PotentialDollarIdentifier =
-                ParserText::temp_name_with_suffix("spawn_wg", span).into();
+            let ident = PotentialDollarIdentifier::new(span, env.context.get_temp("spawn_wg"));
 
             let mut body = vec![AstNode::new(
                 span,
@@ -509,6 +511,7 @@ impl MirLowering for AstSpawn {
                         AstNode::member(span, AstNode::identifier(span, "WaitGroup"), "new"),
                         Vec::new(),
                     )),
+                    declared: false,
                 }),
             )];
 
@@ -559,17 +562,20 @@ impl MirLowering for AstSpawn {
 
     fn type_of(
         &self,
-        _env: &mut MiddleEnvironment,
-        _scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType::new(
-            span,
-            if self.auto_wait {
-                ParserInnerType::Null
-            } else {
-                ParserInnerType::Struct(String::from("WaitGroup"))
-            },
-        ))
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        _span: Span,
+    ) -> Option<MirDataType> {
+        Some(if self.auto_wait {
+            MirDataType::Null
+        } else {
+            MirDataType::Struct {
+                identifier: env
+                    .resolve(scope, &"WaitGroup", ResolutionOptions::typing())
+                    .ok()?
+                    .unwrap_typing(),
+                generic_types: Vec::new(),
+            }
+        })
     }
 }

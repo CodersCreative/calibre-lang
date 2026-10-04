@@ -10,12 +10,11 @@ use crate::{
     },
 };
 use astro_float::{BigFloat, RoundingMode};
-use calibre_lir::ast::BlockId;
+use calibre_lir::{MirDataType, TypeImplKey, TypeKey, VariableKey, ast::BlockId};
 use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
 use dumpster::{TraceWith, Visitor};
-
-use ustr::{Ustr, UstrMap};
+use ustr::Ustr;
 
 use dyn_hash::DynHash;
 use std::{any::Any, ops::DerefMut};
@@ -205,9 +204,9 @@ pub enum RuntimeValue {
     Bool(bool),
     Str(Ustr),
     Char(char),
-    Aggregate(Option<Ustr>, Arc<GcMap>),
-    Enum(Ustr, usize, Option<Gc<RuntimeValue>>),
-    Ref(Ustr),
+    Aggregate(Option<TypeKey>, Arc<GcMap>),
+    Enum(TypeKey, usize, Option<Gc<RuntimeValue>>),
+    Ref(VariableKey),
     VarRef(usize),
     RegRef {
         frame: usize,
@@ -226,18 +225,12 @@ pub enum RuntimeValue {
     #[cfg(feature = "native")]
     ExternFunction(Arc<ExternFunction>),
     Function {
-        name: Ustr,
-        captures: Arc<Vec<(Ustr, RuntimeValue)>>,
+        name: VariableKey,
+        captures: Arc<Vec<(VariableKey, RuntimeValue)>>,
     },
     Generator {
-        type_name: Ustr,
+        type_name: TypeImplKey,
         state: Arc<Mutex<GeneratorState>>,
-    },
-    DynObject {
-        type_name: Ustr,
-        constraints: Arc<Vec<Ustr>>,
-        value: Gc<RuntimeValue>,
-        vtable: Arc<UstrMap<Ustr>>,
     },
     BoundMethod {
         callee: Box<RuntimeValue>,
@@ -285,7 +278,6 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
                 Ok(())
             }
             RuntimeValue::Generator { .. } => Ok(()),
-            RuntimeValue::DynObject { value, .. } => value.accept(visitor),
             RuntimeValue::BoundMethod { callee, receiver } => {
                 callee.accept(visitor)?;
                 receiver.accept(visitor)
@@ -327,7 +319,6 @@ impl RuntimeValue {
                 | RuntimeValue::Enum(_, _, _)
                 | RuntimeValue::Option(_)
                 | RuntimeValue::Result(_)
-                | RuntimeValue::DynObject { .. }
                 | RuntimeValue::BoundMethod { .. }
         )
     }
@@ -378,30 +369,32 @@ impl RuntimeValue {
         )
     }
 
-    pub fn impl_name(&self) -> Option<Ustr> {
+    pub fn to_type(&self) -> Option<MirDataType> {
+        todo!()
+    }
+
+    pub fn impl_key(&self) -> Option<TypeImplKey> {
         match self {
-            RuntimeValue::Big(_) => Some("big"),
-            RuntimeValue::Int(_) => Some("int"),
-            RuntimeValue::UInt(_) => Some("uint"),
-            RuntimeValue::Byte(_) => Some("byte"),
-            RuntimeValue::Float(_) => Some("float"),
-            RuntimeValue::Bool(_) => Some("bool"),
-            RuntimeValue::Str(_) => Some("str"),
-            RuntimeValue::Char(_) => Some("char"),
-            RuntimeValue::Range(_, _) => Some("range"),
-            RuntimeValue::Ptr(_) => Some("ptr"),
+            RuntimeValue::Big(_) => Some(TypeImplKey::Primitive(Ustr::from("big"))),
+            RuntimeValue::Int(_) => Some(TypeImplKey::Primitive(Ustr::from("int"))),
+            RuntimeValue::UInt(_) => Some(TypeImplKey::Primitive(Ustr::from("uint"))),
+            RuntimeValue::Byte(_) => Some(TypeImplKey::Primitive(Ustr::from("byte"))),
+            RuntimeValue::Float(_) => Some(TypeImplKey::Primitive(Ustr::from("float"))),
+            RuntimeValue::Bool(_) => Some(TypeImplKey::Primitive(Ustr::from("bool"))),
+            RuntimeValue::Str(_) => Some(TypeImplKey::Primitive(Ustr::from("str"))),
+            RuntimeValue::Char(_) => Some(TypeImplKey::Primitive(Ustr::from("char"))),
+            RuntimeValue::Range(_, _) => Some(TypeImplKey::Primitive(Ustr::from("range"))),
+            RuntimeValue::Ptr(_) => Some(TypeImplKey::Ptr),
             RuntimeValue::Aggregate(Some(name), _) | RuntimeValue::Enum(name, _, _) => {
-                return Some(*name);
+                Some(TypeImplKey::from(name.clone()))
             }
-            RuntimeValue::Generator { type_name, .. } => return Some(*type_name),
-            RuntimeValue::DynObject { type_name, .. } => return Some(*type_name),
-            RuntimeValue::List(_) => Some("list"),
-            RuntimeValue::Option(_) => Some("option"),
-            RuntimeValue::Result(_) => Some("result"),
-            RuntimeValue::Null => Some("null"),
+            RuntimeValue::Generator { type_name, .. } => Some(type_name.clone()),
+            RuntimeValue::List(_) => Some(TypeImplKey::List),
+            RuntimeValue::Option(_) => Some(TypeImplKey::Option),
+            RuntimeValue::Result(_) => Some(TypeImplKey::Result),
+            RuntimeValue::Null => Some(TypeImplKey::Primitive(Ustr::from("null"))),
             _ => None,
         }
-        .map(Ustr::from)
     }
 }
 

@@ -1,21 +1,22 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAssignment, MirBreak, MirContinue, MirEmit, MirInt,
-        MirReturn, MirScopeDecl,
+        MiddleNode, MiddleNodeType, MirBreak, MirContinue, MirEmit, MirReturn, MirScopeDecl,
+        types::MirDataType,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::resolve::ResolutionOptions,
+    symbols::{VariableKey, resolve::ResolutionOptions},
     tags::TagInfo,
     translate::MirLowering,
 };
 use calibre_parser::{
     Span,
     ast::{
-        idents::{IntLiteralType, ParsedIntLiteral, ParserText, PotentialDollarIdentifier},
+        idents::{ParserText, PotentialDollarIdentifier},
         nodes::{
             AstNode, AstNodeType, VarType,
+            assignment::AstAssignment,
             declaration::AstDeclaration,
             flow::{
                 AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment,
@@ -25,7 +26,7 @@ use calibre_parser::{
             matching::{AstMatch, MatchArmType, MatchBody},
             scopes::AstScopeDef,
         },
-        types::{ParserDataType, ParserInnerType},
+        types::ParserDataType,
     },
 };
 use tracing::instrument;
@@ -82,15 +83,16 @@ impl MirLowering for AstEmit {
         &self,
         _env: &mut MiddleEnvironment,
         _scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
+        _span: Span,
+    ) -> Option<MirDataType> {
         match self {
             AstEmit::Scope(_) => None,
-            _ => Some(ParserDataType::new(span, ParserInnerType::Bool)),
+            _ => Some(MirDataType::Bool),
         }
     }
 }
 
+// Make this transform an AstNode which gets lowered to a MiddleNode once fully built
 impl MirLowering for AstBreak {
     #[instrument(skip_all)]
     fn lower(
@@ -106,6 +108,7 @@ impl MirLowering for AstBreak {
                 let label_text = self.label.as_ref().and_then(|l| {
                     env.resolve(scope, l, ResolutionOptions::default().with_dollar())
                         .ok()
+                        .map(|x| x.unwrap_dollar())
                 });
 
                 let (result_target, broke_target, target_scope) = {
@@ -129,37 +132,31 @@ impl MirLowering for AstBreak {
                 let value_node = self.value.map(|v| v.lower_or_empty(env, scope, span));
 
                 if has_break_value && let Some(result_target) = result_target {
-                    let assign = MiddleNode::new(
-                        MiddleNodeType::AssignmentExpression(MirAssignment {
-                            identifier: Box::new(MiddleNode::identifier(span, result_target)),
-                            value: Box::new(
-                                value_node.unwrap_or(MiddleNode::new(MiddleNodeType::Null, span)),
-                            ),
-                        }),
-                        span,
+                    lst.push(
+                        AstNode::new(
+                            span,
+                            AstNodeType::AssignmentExpression(AstAssignment {
+                                identifier: Box::new(AstNode::identifier(span, result_target)),
+                                value: Box::new(AstNode::null(span)),
+                            }),
+                        )
+                        .lower_or_empty(env, scope, span),
                     );
-                    lst.push(assign);
                 } else if let Some(val) = value_node {
                     lst.push(val);
                 }
 
                 if has_break_value && let Some(broke_target) = broke_target {
-                    let assign = MiddleNode::new(
-                        MiddleNodeType::AssignmentExpression(MirAssignment {
-                            identifier: Box::new(MiddleNode::identifier(span, broke_target)),
-                            value: Box::new(MiddleNode::new(
-                                MiddleNodeType::IntLiteral(MirInt {
-                                    value: ParsedIntLiteral {
-                                        value: 1,
-                                        int_type: IntLiteralType::Int,
-                                    },
-                                }),
-                                span,
-                            )),
-                        }),
-                        span,
+                    lst.push(
+                        AstNode::new(
+                            span,
+                            AstNodeType::AssignmentExpression(AstAssignment {
+                                identifier: Box::new(AstNode::identifier(span, broke_target)),
+                                value: Box::new(AstNode::int(span, "1")),
+                            }),
+                        )
+                        .lower_or_empty(env, scope, span),
                     );
-                    lst.push(assign);
                 }
 
                 if let Some(target_scope) = target_scope {
@@ -256,18 +253,19 @@ impl MirLowering for AstTry {
         };
 
         let return_call = |name: &str, args: Vec<CallArg>| {
-            AstNode::ret(AstNode::call(span, AstNode::identifier(span, name), args))
+            AstNode::new_temp_scope(vec![AstNode::ret(AstNode::call(
+                span,
+                AstNode::identifier(span, name),
+                args,
+            ))])
         };
 
         let emit_call = |name: &str, args: Vec<CallArg>| {
-            AstNode::new(
+            AstNode::new_temp_scope(vec![AstNode::emit(AstNode::call(
                 span,
-                AstNodeType::Emit(AstEmit::Scope(Box::new(AstNode::call(
-                    span,
-                    AstNode::identifier(span, name),
-                    args,
-                )))),
-            )
+                AstNode::identifier(span, name),
+                args,
+            ))])
         };
 
         match self.try_type {
@@ -275,12 +273,14 @@ impl MirLowering for AstTry {
                 node_type: AstNodeType::MatchStatement(AstMatch {
                     value: Some(self.value),
                     body: if is_option {
-                        let ok_name = "anon_ok_value";
+                        let ok_name = env.context.get_temp("anon_ok_value");
 
                         let ok_arm = enum_arm(
                             "Some",
                             Some(ParserText::from(ok_name.to_string()).into()),
-                            AstNode::identifier(span, ok_name),
+                            AstNode::new_temp_scope(vec![AstNode::emit(AstNode::identifier(
+                                span, ok_name,
+                            ))]),
                         );
 
                         let err_arm = if let Some(catch) = self.catch {
@@ -303,12 +303,14 @@ impl MirLowering for AstTry {
                             values: vec![ok_arm, err_arm],
                         }
                     } else {
-                        let ok_name = "anon_ok_value";
+                        let ok_name = env.context.get_temp("anon_ok_value");
 
                         let ok_arm = enum_arm(
                             "Ok",
                             Some(ParserText::from(ok_name.to_string()).into()),
-                            AstNode::identifier(span, ok_name),
+                            AstNode::new_temp_scope(vec![AstNode::emit(AstNode::identifier(
+                                span, ok_name,
+                            ))]),
                         );
 
                         let err_arm = if let Some(catch) = self.catch {
@@ -322,7 +324,7 @@ impl MirLowering for AstTry {
                         } else if function_is_option {
                             enum_arm("Err", None, AstNode::ret(AstNode::identifier(span, "none")))
                         } else {
-                            let err_name = "anon_err_value";
+                            let err_name = env.context.get_temp("anon_err_value");
                             enum_arm(
                                 "Err",
                                 Some(ParserText::from(err_name.to_string()).into()),
@@ -345,7 +347,7 @@ impl MirLowering for AstTry {
                 if is_option {
                     self.value.lower(env, scope, span)
                 } else {
-                    let ok_name = "anon_ok_value";
+                    let ok_name = env.context.get_temp("anon_ok_value");
 
                     let ok_arm = enum_arm(
                         "Ok",
@@ -359,7 +361,9 @@ impl MirLowering for AstTry {
                     let err_arm = enum_arm(
                         "Err",
                         None,
-                        AstNode::emit(AstNode::identifier(span, "none")),
+                        AstNode::new_temp_scope(vec![AstNode::emit(AstNode::identifier(
+                            span, "none",
+                        ))]),
                     );
 
                     AstNode {
@@ -375,8 +379,8 @@ impl MirLowering for AstTry {
                 }
             }
             TryType::Result => {
-                let ok_name = "anon_ok_value";
-                let err_name = "anon_err_value";
+                let ok_name = env.context.get_temp("anon_ok_value");
+                let err_name = env.context.get_temp("anon_err_value");
 
                 if is_option {
                     let ok_arm_some = enum_arm(
@@ -452,19 +456,23 @@ impl MirLowering for AstTry {
                 }
             }
             TryType::Panic => {
-                let ok_name = "anon_ok_value";
+                let ok_name = env.context.get_temp("anon_ok_value");
 
                 let ok_arm = if is_option {
                     enum_arm(
                         "Some",
                         Some(ParserText::from(ok_name.to_string()).into()),
-                        AstNode::identifier(span, ok_name),
+                        AstNode::new_temp_scope(vec![AstNode::emit(AstNode::identifier(
+                            span, ok_name,
+                        ))]),
                     )
                 } else {
                     enum_arm(
                         "Ok",
                         Some(ParserText::from(ok_name.to_string()).into()),
-                        AstNode::identifier(span, ok_name),
+                        AstNode::new_temp_scope(vec![AstNode::emit(AstNode::identifier(
+                            span, ok_name,
+                        ))]),
                     )
                 };
 
@@ -480,7 +488,7 @@ impl MirLowering for AstTry {
                             ),
                         )
                     } else {
-                        let err_name = "anon_err_value";
+                        let err_name = env.context.get_temp("anon_err_value");
                         enum_arm(
                             "Err",
                             Some(ParserText::from(err_name.to_string()).into()),
@@ -499,7 +507,7 @@ impl MirLowering for AstTry {
                             AstNode::call(span, AstNode::identifier(span, "panic"), Vec::new()),
                         )
                     } else {
-                        let err_name = "anon_err_value";
+                        let err_name = env.context.get_temp("anon_err_value");
                         enum_arm(
                             "Err",
                             Some(ParserText::from(err_name.to_string()).into()),
@@ -527,64 +535,32 @@ impl MirLowering for AstTry {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         match self.try_type {
             TryType::Normal => match self.value.type_of(env, scope, span) {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Result { ok: x, err: _ },
-                    ..
-                })
-                | Some(ParserDataType {
-                    data_type: ParserInnerType::Option(x),
-                    ..
-                }) => Some(*x),
+                Some(MirDataType::Result { ok: x, err: _ }) | Some(MirDataType::Option(x)) => {
+                    Some(*x)
+                }
                 x => x,
             },
             TryType::Option => match self.value.type_of(env, scope, span) {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Result { ok, .. },
-                    ..
-                }) => Some(ParserDataType::new(span, ParserInnerType::Option(ok))),
-                Some(
-                    opt @ ParserDataType {
-                        data_type: ParserInnerType::Option(_),
-                        ..
-                    },
-                ) => Some(opt),
+                Some(MirDataType::Result { ok, .. }) => Some(MirDataType::Option(ok)),
+                Some(opt @ MirDataType::Option(_)) => Some(opt),
                 _ => None,
             },
             TryType::Result => match self.value.type_of(env, scope, span) {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Option(ok),
-                    ..
-                }) => Some(ParserDataType::new(
-                    span,
-                    ParserInnerType::Result {
-                        ok,
-                        err: Box::new(ParserDataType::new(span, ParserInnerType::Dynamic)),
-                    },
-                )),
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Result { ok, .. },
-                    ..
-                }) => Some(ParserDataType::new(
-                    span,
-                    ParserInnerType::Result {
-                        ok,
-                        err: Box::new(ParserDataType::new(span, ParserInnerType::Dynamic)),
-                    },
-                )),
+                Some(MirDataType::Option(ok)) => Some(MirDataType::Result {
+                    ok,
+                    err: Box::new(MirDataType::Dynamic),
+                }),
+                Some(MirDataType::Result { ok, .. }) => Some(MirDataType::Result {
+                    ok,
+                    err: Box::new(MirDataType::Dynamic),
+                }),
                 _ => None,
             },
             TryType::Panic => match self.value.type_of(env, scope, span) {
-                Some(ParserDataType {
-                    data_type: ParserInnerType::Result { ok, .. },
-                    ..
-                })
-                | Some(ParserDataType {
-                    data_type: ParserInnerType::Option(ok),
-                    ..
-                }) => Some(*ok),
+                Some(MirDataType::Result { ok, .. }) | Some(MirDataType::Option(ok)) => Some(*ok),
                 x => x,
             },
         }
@@ -605,6 +581,7 @@ impl MirLowering for AstContinue {
 
                 let label_text = self.label.as_ref().and_then(|l| {
                     env.resolve(scope, l, ResolutionOptions::default().with_dollar())
+                        .map(|x| x.unwrap_dollar())
                         .ok()
                 });
 
@@ -682,19 +659,24 @@ impl MirLowering for AstReturn {
                                 if let Some(x) = value.type_of(env, scope, span) {
                                     x.key()
                                 } else {
-                                    ParserInnerType::Dynamic
+                                    MirDataType::Dynamic
                                 }
                             } else {
-                                ParserInnerType::Null
+                                MirDataType::Null
                             };
 
-                            // TODO Properly check for the generators inner type
-                            if !node_ty.loose_eq(&ret_ty) && !ret_ty.is_gen() {
+                            let ret_ty = if let MirDataType::Gen(x) = ret_ty {
+                                *x
+                            } else {
+                                ret_ty
+                            };
+
+                            if !node_ty.loose_eq(&ret_ty) {
                                 println!("{}", self.value.unwrap());
                                 return Err(env.context.err_at_current(
                                     MiddleErr::InvalidReturnType {
-                                        expected: Box::new(ParserDataType::new(span, ret_ty)),
-                                        found: Box::new(ParserDataType::new(span, node_ty)),
+                                        expected: Box::new(ret_ty),
+                                        found: Box::new(node_ty),
                                     },
                                 ));
                             }
@@ -760,28 +742,27 @@ impl MirLowering for AstPipe {
                 && env
                     .symbols
                     .variables
-                    .get(&resolved)
+                    .get(&resolved.unwrap_variable())
                     .is_some_and(|var| var.data_type.is_callable())
             {
                 return true;
             }
 
-            let from_type = point
+            point
                 .get_node()
                 .type_of(env, scope, span)
-                .map(|x| x.unwrap_all_refs().data_type);
-
-            from_type.map(|x| x.is_callable()).unwrap_or_default()
+                .map(|x| x.unwrap_all_refs().is_callable())
+                .unwrap_or_default()
         };
 
         let get_mapping =
-            |env: &MiddleEnvironment, key: &Ustr| -> Result<Option<Ustr>, MiddleErr> {
+            |env: &MiddleEnvironment, key: &Ustr| -> Result<Option<VariableKey>, MiddleErr> {
                 Ok(env.scoping.scope_or_err(scope)?.mappings.get(key).cloned())
             };
 
         let restore_mapping = |env: &mut MiddleEnvironment,
                                key: Ustr,
-                               value: Option<Ustr>|
+                               value: Option<VariableKey>|
          -> Result<(), MiddleErr> {
             let scope_ref = env.scoping.scope_mut_or_err(scope)?;
             if let Some(v) = value {
@@ -827,11 +808,13 @@ impl MirLowering for AstPipe {
                     let keep_scope = point.is_named();
                     let var_dec = match &point {
                         PipeSegment::Named { identifier, .. } => {
-                            let ident = env.resolve(
-                                scope,
-                                identifier,
-                                ResolutionOptions::default().with_dollar(),
-                            )?;
+                            let ident = env
+                                .resolve(
+                                    scope,
+                                    identifier,
+                                    ResolutionOptions::default().with_dollar(),
+                                )?
+                                .unwrap_dollar();
 
                             prior_mappings.insert(ident, get_mapping(env, &ident)?);
 
@@ -842,6 +825,7 @@ impl MirLowering for AstPipe {
                                     identifier: PotentialDollarIdentifier::new(span, ident),
                                     value: Box::new(value),
                                     data_type: ParserDataType::auto(span),
+                                    declared: false,
                                 }),
                             )
                         }
@@ -852,6 +836,7 @@ impl MirLowering for AstPipe {
                                 identifier: ParserText::from("$".to_string()).into(),
                                 value: Box::new(value),
                                 data_type: ParserDataType::auto(span),
+                                declared: false,
                             }),
                         ),
                     };
@@ -906,7 +891,7 @@ impl MirLowering for AstPipe {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         let mut iter = self.values.iter();
         let first = iter.next()?;
         let mut current = first.get_node().type_of(env, scope, span)?;
@@ -928,7 +913,7 @@ impl MirLowering for AstPipe {
                 if next_callable {
                     current = next_ty
                         .and_then(|x| x.apply_callable())
-                        .unwrap_or(ParserDataType::auto(span));
+                        .unwrap_or(MirDataType::Null);
                     idx += 2;
                     continue;
                 }
@@ -937,9 +922,9 @@ impl MirLowering for AstPipe {
             current = if point_callable {
                 point_ty
                     .and_then(|x| x.apply_callable())
-                    .unwrap_or(ParserDataType::auto(span))
+                    .unwrap_or(MirDataType::Null)
             } else {
-                point_ty.unwrap_or(ParserDataType::new(span, ParserInnerType::Auto(None)))
+                point_ty.unwrap_or(MirDataType::Null)
             };
             idx += 1;
         }

@@ -5,42 +5,21 @@ use crate::{
         ffi::{ExternFunction, FfiArg},
     },
 };
-use calibre_parser::ast::{
-    ffi::ParserFfiInnerType,
-    types::{ParserDataType, ParserInnerType},
-};
+use calibre_lir::MirDataType;
 use libffi::middle::{Arg, Type};
 use std::os::raw::c_void;
 
 impl ExternFunction {
-    pub(crate) fn type_to_libffi_type(typ: &ParserDataType) -> Type {
-        match &typ.data_type {
-            ParserInnerType::Int => Type::i64(),
-            ParserInnerType::UInt => Type::u64(),
-            ParserInnerType::Float => Type::f64(),
-            ParserInnerType::Bool => Type::u8(),
-            ParserInnerType::Char => Type::u8(),
-            ParserInnerType::Str => Type::pointer(),
-            ParserInnerType::Ptr(_) => Type::pointer(),
-            ParserInnerType::Null => Type::void(),
-            ParserInnerType::FfiType(x) => match x {
-                ParserFfiInnerType::F32 => Type::f32(),
-                ParserFfiInnerType::F64 | ParserFfiInnerType::LongDouble => Type::f64(),
-                ParserFfiInnerType::U8 | ParserFfiInnerType::UChar => Type::u8(),
-                ParserFfiInnerType::I8 | ParserFfiInnerType::SChar => Type::i8(),
-                ParserFfiInnerType::U16 | ParserFfiInnerType::UShort => Type::u16(),
-                ParserFfiInnerType::I16 | ParserFfiInnerType::Short => Type::i16(),
-                ParserFfiInnerType::U32 | ParserFfiInnerType::UInt => Type::u32(),
-                ParserFfiInnerType::I32 | ParserFfiInnerType::Int => Type::i32(),
-                ParserFfiInnerType::U64
-                | ParserFfiInnerType::ULong
-                | ParserFfiInnerType::ULongLong => Type::u64(),
-                ParserFfiInnerType::I64
-                | ParserFfiInnerType::Long
-                | ParserFfiInnerType::LongLong => Type::i64(),
-                ParserFfiInnerType::USize => Type::u64(),
-                ParserFfiInnerType::ISize => Type::i64(),
-            },
+    pub(crate) fn type_to_libffi_type(typ: &MirDataType) -> Type {
+        match &typ {
+            MirDataType::Int => Type::i64(),
+            MirDataType::UInt => Type::u64(),
+            MirDataType::Float => Type::f64(),
+            MirDataType::Bool => Type::u8(),
+            MirDataType::Char => Type::u8(),
+            MirDataType::Str => Type::pointer(),
+            MirDataType::Ptr(_) => Type::pointer(),
+            MirDataType::Null => Type::void(),
             _ => Type::pointer(),
         }
     }

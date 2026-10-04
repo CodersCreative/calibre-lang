@@ -3,6 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
+    symbols::VariableKey,
     translate::MirLowering,
 };
 use calibre_parser::ast::{
@@ -76,8 +77,8 @@ pub struct MemoInfo {
 #[derive(Debug, Clone, Default)]
 pub struct Tagging {
     pub tag_handlers: UstrMap<TagHandler>,
-    pub init_functions: Vec<(i32, Ustr)>,
-    pub fin_functions: Vec<(i32, Ustr)>,
+    pub init_functions: Vec<(i32, VariableKey)>,
+    pub fin_functions: Vec<(i32, VariableKey)>,
     pub tag_info: Vec<TagInfo>,
     pub caller_context: UstrMap<Ustr>,
 }

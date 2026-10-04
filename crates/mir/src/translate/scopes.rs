@@ -1,23 +1,21 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirScopeDecl},
+    ast::{MiddleNode, MiddleNodeType, MirScopeDecl, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{ScopeId, ScopeMacro},
-    symbols::resolve::ResolutionOptions,
+    symbols::resolve::{KeyOrAstNode, ResolutionOptions},
     translate::MirLowering,
 };
 use calibre_parser::{
     Span,
     ast::{
-        idents::{ParserText, PotentialDollarIdentifier},
+        idents::PotentialDollarIdentifier,
         nodes::{
             AstNode, AstNodeType,
-            declaration::AstDeclaration,
             flow::AstBreak,
             loops::{AstLoop, LoopType},
             scopes::{AstScopeAlias, AstScopeDef},
         },
-        types::ParserDataType,
     },
 };
 use tracing::instrument;
@@ -49,14 +47,19 @@ impl MirLowering for AstScopeDef {
         let mut create_new_scope = self.create_new_scope.unwrap_or(true);
         let mut macro_args_to_insert: Vec<(Ustr, AstNode)> = Vec::new();
 
+        let in_temp_scope = env.context.in_temp_scope;
+        env.context.in_temp_scope = self.is_temp;
+
         if let Some(named) = self.named {
-            if self.define {
-                let name = env.resolve(
+            let name = env
+                .resolve(
                     scope,
                     &named.name,
                     ResolutionOptions::default().with_dollar(),
-                )?;
+                )?
+                .unwrap_dollar();
 
+            if self.define {
                 let scope_macro = ScopeMacro {
                     name,
                     args: named.args.clone(),
@@ -69,17 +72,13 @@ impl MirLowering for AstScopeDef {
                     .macros
                     .insert(name, scope_macro);
 
+                env.context.in_temp_scope = in_temp_scope;
+
                 return Ok(MiddleNode {
                     node_type: MiddleNodeType::EmptyLine,
                     span,
                 });
             }
-
-            let name = env.resolve(
-                scope,
-                &named.name,
-                ResolutionOptions::default().with_dollar(),
-            )?;
 
             if env.scoping.resolve_macro(scope, &name).is_none() {
                 if !named.args.is_empty() {
@@ -107,6 +106,8 @@ impl MirLowering for AstScopeDef {
                     }),
                 ));
 
+                env.context.in_temp_scope = in_temp_scope;
+
                 return AstLoop {
                     loop_type: Box::new(LoopType::Loop),
                     body: Box::new(AstNode::new_temp_scope_with_create(
@@ -115,7 +116,10 @@ impl MirLowering for AstScopeDef {
                     )),
                     until: None,
                     label: Some(named.name),
-                    else_body: Some(Box::new(AstNode::new(span, AstNodeType::Null))),
+                    else_body: Some(Box::new(AstNode::new_temp_scope(vec![AstNode::new(
+                        span,
+                        AstNodeType::Null,
+                    )]))),
                 }
                 .lower(env, scope, span);
             }
@@ -135,15 +139,19 @@ impl MirLowering for AstScopeDef {
             };
 
             for arg in named.args {
-                let arg_text =
-                    env.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?;
+                let arg_text = env
+                    .resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?
+                    .unwrap_dollar();
+
                 added.push(arg_text);
                 macro_args_to_insert.push((arg_text, arg.1));
             }
 
             for arg in scope_macro_args {
-                let arg_text =
-                    env.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?;
+                let arg_text = env
+                    .resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?
+                    .unwrap_dollar();
+
                 if !added.contains(&arg_text) {
                     added.push(arg_text);
                     macro_args_to_insert.push((arg_text, arg.1));
@@ -169,35 +177,15 @@ impl MirLowering for AstScopeDef {
         }
 
         if let Some(mut body) = self.body {
-            for stmt in body.iter() {
-                let span = stmt.span;
-                if let AstNodeType::VariableDeclaration(AstDeclaration {
-                    identifier, value, ..
-                }) = &stmt.node_type
-                    && matches!(value.node_type, AstNodeType::FunctionDeclaration { .. })
-                {
-                    let ident = env.resolve(
-                        new_scope,
-                        identifier,
-                        ResolutionOptions::default().with_dollar(),
-                    )?;
-
-                    let new_name =
-                        Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
-
-                    env.scoping
-                        .scope_mut_or_err(new_scope)?
-                        .mappings
-                        .entry(ident)
-                        .or_insert(new_name);
-                }
-            }
-
             if self.is_temp {
                 let last = body.pop();
                 for statement in body.into_iter() {
                     let span = statement.span;
-                    stmts.push(statement.lower_or_empty(env, new_scope, span));
+                    stmts.extend(
+                        statement
+                            .lower_or_empty(env, new_scope, span)
+                            .nodes_if_no_new_scope(),
+                    );
                 }
 
                 let last = last.map(|x| {
@@ -211,17 +199,20 @@ impl MirLowering for AstScopeDef {
                 {
                     for x in env.scoping.scope_or_err(new_scope)?.defers.clone() {
                         let span = x.span;
-                        stmts.push(x.lower_or_empty(env, new_scope, span));
+                        stmts.extend(
+                            x.lower_or_empty(env, new_scope, span)
+                                .nodes_if_no_new_scope(),
+                        );
                     }
                 }
 
                 if let Some(last) = last {
-                    stmts.push(last);
+                    stmts.extend(last.nodes_if_no_new_scope());
                 }
             } else {
                 for statement in body.into_iter() {
                     if let Ok(x) = statement.clone().lower(env, new_scope, statement.span) {
-                        stmts.push(x);
+                        stmts.extend(x.nodes_if_isnt_temp());
                     }
                 }
             }
@@ -248,6 +239,8 @@ impl MirLowering for AstScopeDef {
             }
         }
 
+        env.context.in_temp_scope = in_temp_scope;
+
         Ok(MiddleNode {
             node_type: MiddleNodeType::ScopeDeclaration(MirScopeDecl {
                 body: {
@@ -270,7 +263,7 @@ impl MirLowering for AstScopeDef {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         if self.define {
             None
         } else if let Some(body) = &self.body {
@@ -284,23 +277,16 @@ impl MirLowering for AstScopeDef {
             }
 
             typ
-        } else if let Some(named) = &self.named {
-            let name = env
-                .resolve(
+        } else if let Some(named) = &self.named
+            && let KeyOrAstNode::Node(node) = env
+                .resolve_potential_node(
                     scope,
                     &named.name,
                     ResolutionOptions::default().with_dollar(),
                 )
-                .ok()?;
-
-            let resolved = env
-                .scoping
-                .resolve_macro(scope, &name)?
-                .body
-                .last()?
-                .clone();
-
-            resolved.type_of(env, scope, span)
+                .ok()?
+        {
+            node.type_of(env, scope, span)
         } else {
             unreachable!()
         }
@@ -321,11 +307,13 @@ impl MirLowering for AstScopeAlias {
             ResolutionOptions::default().with_dollar(),
         )?;
 
-        let name = env.resolve(
-            scope,
-            &self.value.name,
-            ResolutionOptions::default().with_dollar(),
-        )?;
+        let name = env
+            .resolve(
+                scope,
+                &self.value.name,
+                ResolutionOptions::default().with_dollar(),
+            )?
+            .unwrap_dollar();
 
         let scope_macro = env
             .scoping
@@ -363,7 +351,7 @@ impl MirLowering for AstScopeAlias {
         env.scoping
             .scope_mut_or_err(scope)?
             .macros
-            .insert(identifer, scope_macro);
+            .insert(identifer.unwrap_dollar(), scope_macro);
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::EmptyLine,

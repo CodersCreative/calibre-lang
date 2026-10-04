@@ -5,8 +5,9 @@ use crate::{
 };
 use chumsky::span::SimpleSpan;
 use logos::Logos;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::AtomicU64;
+use std::hash::Hash;
 use std::{fmt::Display, ops::Range, path::PathBuf};
 use thiserror::Error;
 use tracing::{debug, instrument};
@@ -18,15 +19,13 @@ pub mod lexer;
 pub mod native;
 pub mod parse;
 
-pub static COUNTER: AtomicU64 = AtomicU64::new(0);
-
 #[derive(Default, Clone, Debug)]
-pub struct AlphaRenameState {
+pub struct UstrAlphaRenameState {
     pub data: UstrMap<Ustr>,
     pub dont_change_local: bool,
 }
 
-impl AlphaRenameState {
+impl UstrAlphaRenameState {
     #[inline(always)]
     pub fn mapped_name_or_original(&self, original: Ustr) -> Ustr {
         self.data.get(&original).cloned().unwrap_or(original)
@@ -54,11 +53,37 @@ impl AlphaRenameState {
     }
 }
 
+#[derive(Default, Clone, Debug)]
+pub struct AlphaRenameState<T: Eq + Hash + Clone> {
+    pub data: FxHashMap<T, T>,
+    pub dont_change_local: bool,
+}
+
+impl<T: Eq + Hash + Clone> AlphaRenameState<T> {
+    #[inline(always)]
+    pub fn mapped_name_or_original(&self, original: T) -> T {
+        self.data.get(&original).cloned().unwrap_or(original)
+    }
+
+    #[inline]
+    pub fn from_native_mappings(
+        &mut self,
+        new_mappings: &FxHashMap<T, T>,
+        old_mappings: &FxHashMap<T, T>,
+    ) {
+        for (k, v) in new_mappings {
+            if let Some(old_v) = old_mappings.get(k) {
+                self.data.insert(old_v.clone(), v.clone());
+            }
+        }
+    }
+}
+
 pub trait AlphaRenamable {
-    fn rename(&mut self, state: &mut AlphaRenameState);
+    fn rename(&mut self, state: &mut UstrAlphaRenameState);
 
     #[inline(always)]
-    fn rename_owned(mut self, state: &mut AlphaRenameState) -> Self
+    fn rename_owned(mut self, state: &mut UstrAlphaRenameState) -> Self
     where
         Self: Sized,
     {

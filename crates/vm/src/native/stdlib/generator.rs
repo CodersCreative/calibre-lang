@@ -8,16 +8,16 @@ use crate::{
     },
     value::RuntimeValue,
 };
+use calibre_lir::VariableKey;
 use dumpster::sync::Gc;
 use std::sync::Arc;
-use ustr::Ustr;
 use wasm_sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct GeneratorState {
     pub vm: VM,
-    pub function_name: Ustr,
-    pub captures: Arc<Vec<(Ustr, RuntimeValue)>>,
+    pub function_name: VariableKey,
+    pub captures: Arc<Vec<(VariableKey, RuntimeValue)>>,
     pub task_state: TaskState,
     pub index: i64,
     pub completed: bool,
@@ -38,7 +38,7 @@ impl NativeFunction for GeneratorResumeFn {
             return Ok(RuntimeValue::Option(None));
         }
 
-        let Some(func) = state.vm.resolve_function_by_name(&state.function_name) else {
+        let Ok(func) = state.vm.resolve_function_by_name(&state.function_name) else {
             state.completed = true;
             return Ok(RuntimeValue::Option(None));
         };

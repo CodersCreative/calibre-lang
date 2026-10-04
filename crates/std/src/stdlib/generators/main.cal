@@ -1,9 +1,9 @@
-const suspend := fn <T> (value : T) -> T => try gen_suspend(value) as T => value;
+const suspend := fn <T> (value : T) -> T => return gen_suspend(value);
 
 impl<T> Iter for gen:<T> {
 	type Item := T;
 
-	const next := fn (self : &mut gen:<T>) -> T? => {
+	@ignore_invalid_type_check const next := fn (self : &mut gen:<T>) -> T? => {
 		if self.done => return none;
 		let value : T? = (self.data)();
 		if value = none => {

@@ -1,18 +1,13 @@
 use crate::{
-    environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+    ast::types::MirDataType, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
 };
 use calibre_parser::ast::{
-    idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
+    idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::{
-        AstNode, AstNodeType, DestructurePattern, VarType,
-        assignment::AstAssignDestructure,
-        declaration::AstDeclaration,
-        functions::{AstExtern, AstFunction},
-        misc::AstTag,
-        types::AstType,
+        AstNode, AstNodeType, VarType, declaration::AstDeclaration, functions::AstExtern,
+        misc::AstTag, types::AstType,
     },
-    types::ParserDataType,
 };
 use tracing::instrument;
 use ustr::Ustr;
@@ -27,45 +22,6 @@ impl MiddleEnvironment {
 
     fn predeclare_node(&mut self, scope: ScopeId, node: &mut AstNode) -> Result<(), MiddleErr> {
         match &mut node.node_type {
-            AstNodeType::DestructureAssignment(AstAssignDestructure {
-                pattern: DestructurePattern::Tuple(bindings),
-                value,
-            }) if matches!(value.node_type, AstNodeType::FunctionDeclaration(_)) => {
-                let AstNodeType::FunctionDeclaration(AstFunction { header, .. }) = &value.node_type
-                else {
-                    unreachable!()
-                };
-                let data_type = ParserDataType::function(
-                    node.span,
-                    header
-                        .parameters
-                        .iter()
-                        .map(|(_, ty, _)| {
-                            ty.clone()
-                                .unwrap_or_else(|| ParserDataType::auto(node.span))
-                        })
-                        .collect(),
-                    header.return_type.clone(),
-                );
-
-                for binding in bindings.iter().flatten() {
-                    let (var_type, identifier) = binding;
-                    if *var_type != VarType::Mutable {
-                        let original = Ustr::from(&identifier.to_string());
-                        let renamed = Ustr::from(
-                            &ParserText::temp_name_with_suffix(identifier, node.span).text,
-                        );
-                        self.register_variable(
-                            scope,
-                            original,
-                            renamed,
-                            data_type.clone(),
-                            *var_type,
-                        )?;
-                    }
-                }
-                Ok(())
-            }
             AstNodeType::Tag(AstTag { node: inner, .. }) => {
                 self.predeclare_node(scope, inner.as_mut())
             }
@@ -83,14 +39,10 @@ impl MiddleEnvironment {
                 identifier: PotentialDollarIdentifier::Identifier(ident),
                 value,
                 data_type,
+                declared,
             }) if *var_type == VarType::Constant => {
-                let new_name = ParserText::temp_name_with_suffix(&ident, node.span);
-
-                if self
-                    .symbols
-                    .variables
-                    .contains_key(&Ustr::from(&new_name.text))
-                {
+                let name = Ustr::from(&ident.text);
+                if *declared {
                     return Ok(());
                 }
 
@@ -101,33 +53,29 @@ impl MiddleEnvironment {
                     })?
                 } else {
                     self.resolve_data_type(scope, &*data_type, ResolutionOptions::typing())?
-                };
+                }
+                .into();
 
-                self.register_variable(
+                self.register_variable_with_temp_scope(
                     scope,
-                    Ustr::from(ident),
-                    Ustr::from(&new_name.text),
-                    data_type.clone(),
+                    name,
+                    data_type.clone().into(),
                     VarType::Constant,
+                    false,
                 )?;
 
-                *ident = new_name;
-
+                *declared = true;
                 Ok(())
             }
             AstNodeType::ExternFunctionDeclaration(AstExtern {
                 identifier: PotentialDollarIdentifier::Identifier(ident),
                 parameters,
                 return_type,
+                declared,
                 ..
             }) => {
-                let new_name = ParserText::temp_name_with_suffix(&ident, node.span);
-
-                if self
-                    .symbols
-                    .variables
-                    .contains_key(&Ustr::from(&new_name.text))
-                {
+                let name = Ustr::from(&ident.text);
+                if *declared {
                     return Ok(());
                 }
 
@@ -146,22 +94,17 @@ impl MiddleEnvironment {
                     ResolutionOptions::typing(),
                 )?;
 
-                let data_type = ParserDataType::function(
-                    self.context.current_span(),
-                    params.clone(),
-                    return_type.clone(),
-                );
+                let data_type = MirDataType::function(params, return_type);
 
-                self.register_variable(
+                self.register_variable_with_temp_scope(
                     scope,
-                    Ustr::from(ident),
-                    Ustr::from(&new_name.text),
-                    data_type.clone(),
+                    name,
+                    data_type,
                     VarType::Mutable,
+                    false,
                 )?;
 
-                *ident = new_name;
-
+                *declared = true;
                 Ok(())
             }
             _ => Ok(()),

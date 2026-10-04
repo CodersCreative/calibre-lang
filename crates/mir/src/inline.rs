@@ -1,24 +1,31 @@
-use crate::ast::{
-    MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBinary, MirBoolean, MirCall,
-    MirComparison, MirDeref, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex, MirIs,
-    MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
+use crate::{
+    ast::{
+        MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBinary, MirBoolean, MirCall,
+        MirComparison, MirDeref, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex, MirIs,
+        MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
+    },
+    symbols::VariableKey,
 };
+use rustc_hash::FxHashMap;
 use tracing::instrument;
-use ustr::{Ustr, UstrMap};
 
 struct InlineFn {
-    params: Vec<Ustr>,
+    params: Vec<VariableKey>,
     body: MiddleNode,
 }
 
 #[instrument(skip_all)]
 pub fn inline_small_calls(root: &mut MiddleNode, max_nodes: usize) {
-    let mut inline_map: UstrMap<InlineFn> = UstrMap::default();
+    let mut inline_map: FxHashMap<VariableKey, InlineFn> = FxHashMap::default();
     collect_inlineable(root, &mut inline_map, max_nodes);
     inline_in_node(root, &inline_map);
 }
 
-fn collect_inlineable(node: &MiddleNode, map: &mut UstrMap<InlineFn>, max_nodes: usize) {
+fn collect_inlineable(
+    node: &MiddleNode,
+    map: &mut FxHashMap<VariableKey, InlineFn>,
+    max_nodes: usize,
+) {
     match &node.node_type {
         MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
             for stmt in body {
@@ -35,8 +42,8 @@ fn collect_inlineable(node: &MiddleNode, map: &mut UstrMap<InlineFn>, max_nodes:
                 && !&expr.calls_self(identifier)
                 && expr.len() <= max_nodes
             {
-                let params = parameters.iter().map(|(p, _, _)| *p).collect();
-                map.insert(*identifier, InlineFn { params, body: expr });
+                let params = parameters.iter().map(|(p, _, _)| p.clone()).collect();
+                map.insert(identifier.clone(), InlineFn { params, body: expr });
             }
         }
         _ => {}
@@ -60,7 +67,7 @@ fn extract_single_return_expr(body: &MiddleNode) -> Option<MiddleNode> {
     }
 }
 
-fn inline_in_node(node: &mut MiddleNode, map: &UstrMap<InlineFn>) {
+fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<VariableKey, InlineFn>) {
     match &mut node.node_type {
         MiddleNodeType::CallExpression(MirCall { caller, args }) => {
             inline_in_node(caller, map);
@@ -71,9 +78,9 @@ fn inline_in_node(node: &mut MiddleNode, map: &UstrMap<InlineFn>) {
                 && let Some(inline_fn) = map.get(identifier)
                 && inline_fn.params.len() == args.len()
             {
-                let mut replacements: UstrMap<MiddleNode> = UstrMap::default();
+                let mut replacements: FxHashMap<VariableKey, MiddleNode> = FxHashMap::default();
                 for (param, arg) in inline_fn.params.iter().zip(args.iter()) {
-                    replacements.insert(*param, arg.clone());
+                    replacements.insert(param.clone(), arg.clone());
                 }
                 let mut inlined = inline_fn.body.clone();
                 inlined.substitute(&replacements);

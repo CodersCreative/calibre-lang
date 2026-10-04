@@ -36,7 +36,9 @@ impl PatternTranslator for ListPatternTranslator {
             .into_iter()
             .map(|(var_type, name)| {
                 Ok(BindingDeclaration {
-                    name: env.resolve(scope, &name, ResolutionOptions::default().with_dollar())?,
+                    name: env
+                        .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar(),
                     value: value.clone(),
                     var_type,
                     data_type: None,
@@ -80,11 +82,9 @@ impl PatternTranslator for ListPatternTranslator {
                     let current = env.match_index_access(value.clone(), idx);
 
                     bindings.push(BindingDeclaration {
-                        name: env.resolve(
-                            scope,
-                            &name,
-                            ResolutionOptions::default().with_dollar(),
-                        )?,
+                        name: env
+                            .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                            .unwrap_dollar(),
                         value: current,
                         var_type,
                         data_type: None,
@@ -95,11 +95,13 @@ impl PatternTranslator for ListPatternTranslator {
                             .into_iter()
                             .map(|(var_type, name)| {
                                 Ok(BindingDeclaration {
-                                    name: env.resolve(
-                                        scope,
-                                        &name,
-                                        ResolutionOptions::default().with_dollar(),
-                                    )?,
+                                    name: env
+                                        .resolve(
+                                            scope,
+                                            &name,
+                                            ResolutionOptions::default().with_dollar(),
+                                        )?
+                                        .unwrap_dollar(),
                                     value: env.match_index_access(value.clone(), idx),
                                     var_type,
                                     data_type: None,
@@ -130,11 +132,13 @@ impl PatternTranslator for ListPatternTranslator {
                             .into_iter()
                             .map(|(var_type, name)| {
                                 Ok(BindingDeclaration {
-                                    name: env.resolve(
-                                        scope,
-                                        &name,
-                                        ResolutionOptions::default().with_dollar(),
-                                    )?,
+                                    name: env
+                                        .resolve(
+                                            scope,
+                                            &name,
+                                            ResolutionOptions::default().with_dollar(),
+                                        )?
+                                        .unwrap_dollar(),
                                     value: env.match_index_access(value.clone(), idx),
                                     var_type,
                                     data_type: None,

@@ -1,11 +1,11 @@
-use crate::errors::MiddleErr;
+use crate::{ast::types::MirDataType, errors::MiddleErr, symbols::VariableKey};
 use calibre_parser::{
     Location, Span,
-    ast::{idents::PotentialDollarIdentifier, nodes::AstNode, types::ParserInnerType},
+    ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
 };
 use indextree::{Arena, Node, NodeId};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, path::PathBuf, sync::Arc};
+use std::{fmt::Display, hash::Hash, path::PathBuf, sync::Arc};
 use ustr::{Ustr, UstrMap, UstrSet};
 
 pub mod resolve;
@@ -15,7 +15,7 @@ pub type ScopeId = NodeId;
 pub struct Scoping {
     pub scopes: Arena<MiddleScope>,
     pub loop_stack: Vec<LoopContext>,
-    pub return_type_stack: Vec<ParserInnerType>,
+    pub return_type_stack: Vec<MirDataType>,
     pub generic_param_stack: Vec<Vec<Ustr>>,
     pub all_time_generics: UstrSet,
 }
@@ -359,10 +359,10 @@ pub struct ScopeMacro {
     pub create_new_scope: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct FullyQualifiedPath {
-    name: Option<Ustr>,
-    parent: Option<Arc<FullyQualifiedPath>>,
+    pub name: Option<Ustr>,
+    pub parent: Option<Arc<FullyQualifiedPath>>,
 }
 
 impl FullyQualifiedPath {
@@ -392,16 +392,54 @@ impl FullyQualifiedPath {
             },
         }
     }
+
+    pub fn combine(parent: Option<Arc<FullyQualifiedPath>>, next: Ustr) -> Arc<FullyQualifiedPath> {
+        Arc::new(FullyQualifiedPath {
+            name: Some(next),
+            parent,
+        })
+    }
+
+    pub fn is_child_of(&self, parent: &FullyQualifiedPath) -> bool {
+        if self.parent.is_none() {
+            return false;
+        }
+
+        let current = self;
+        let mut current_parent = current.parent.as_deref();
+
+        while let Some(p) = current_parent {
+            if p == parent {
+                return true;
+            }
+            current_parent = p.parent.as_deref();
+        }
+
+        false
+    }
 }
 
 impl Display for FullyQualifiedPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match (&self.name, &self.parent) {
             (Some(name), Some(parent)) => {
-                write!(f, "{}::{}", parent, name)
+                let parent = parent.to_string();
+                if parent.is_empty() {
+                    write!(f, "{}", name)
+                } else {
+                    write!(f, "{}::{}", parent, name)
+                }
             }
             (Some(name), _) => {
                 write!(f, "{}", name)
+            }
+            (_, Some(parent)) => {
+                let parent = parent.to_string();
+                if parent.is_empty() {
+                    write!(f, "")
+                } else {
+                    write!(f, "{}", parent)
+                }
             }
             _ => write!(f, ""),
         }
@@ -412,8 +450,8 @@ impl Display for FullyQualifiedPath {
 pub struct MiddleScope {
     pub namespace: Ustr,
     pub fully_qualified_path: Arc<FullyQualifiedPath>,
-    pub mappings: UstrMap<Ustr>,
-    pub type_mappings: UstrMap<ParserInnerType>,
+    pub mappings: UstrMap<VariableKey>,
+    pub type_mappings: UstrMap<MirDataType>,
     pub macros: UstrMap<ScopeMacro>,
     pub macro_args: UstrMap<AstNode>,
     pub children: UstrMap<NodeId>,

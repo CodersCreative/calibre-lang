@@ -1,17 +1,18 @@
 use super::super::ir::{PhiNode, Reg};
-use calibre_lir::ast::{BlockId, LirBlock, LirTerminator};
-use calibre_parser::ast::types::ParserDataType;
-use rustc_hash::FxHashMap;
-use ustr::{Ustr, UstrMap, UstrSet};
+use calibre_lir::{
+    MirDataType, VariableKey,
+    ast::{BlockId, LirBlock, LirTerminator},
+};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[derive(Clone, Default)]
 pub struct SSABlockInfo {
     // Names to registers at entry
-    pub in_map: UstrMap<Reg>,
+    pub in_map: FxHashMap<VariableKey, Reg>,
     // Names to registers at exit
-    pub out_map: UstrMap<Reg>,
+    pub out_map: FxHashMap<VariableKey, Reg>,
     // Names to phi nodes
-    pub phi_for: UstrMap<Reg>,
+    pub phi_for: FxHashMap<VariableKey, Reg>,
     pub phis: Vec<PhiNode>,
 }
 
@@ -20,7 +21,7 @@ pub struct SSABuilder {
     preds: Vec<Vec<BlockId>>,
     infos: Vec<SSABlockInfo>,
     reg_count: Reg,
-    locals: UstrSet,
+    locals: FxHashSet<VariableKey>,
     param_regs: Vec<Reg>,
     null_reg: Reg,
     assign_regs: Vec<Vec<Option<Reg>>>,
@@ -29,7 +30,7 @@ pub struct SSABuilder {
 impl SSABuilder {
     pub fn new(
         block_map: FxHashMap<BlockId, usize>,
-        locals: UstrSet,
+        locals: FxHashSet<VariableKey>,
         param_regs: Vec<Reg>,
         null_reg: Reg,
         assign_regs: Vec<Vec<Option<Reg>>>,
@@ -86,9 +87,9 @@ impl SSABuilder {
         }
     }
 
-    pub fn build(&mut self, blocks: &[Option<LirBlock>], params: &[(Ustr, ParserDataType)]) {
-        let mut scratch_in = UstrMap::default();
-        let mut scratch_out = UstrMap::default();
+    pub fn build(&mut self, blocks: &[Option<LirBlock>], params: &[(VariableKey, MirDataType)]) {
+        let mut scratch_in: FxHashMap<VariableKey, Reg> = FxHashMap::default();
+        let mut scratch_out: FxHashMap<VariableKey, Reg> = FxHashMap::default();
         let mut changed = true;
 
         while changed {
@@ -102,12 +103,12 @@ impl SSABuilder {
 
                 if preds.len() == 1 && preds[0].0 == u32::MAX {
                     for ((name, _), &reg) in params.iter().zip(self.param_regs.iter()) {
-                        scratch_in.insert(*name, reg);
+                        scratch_in.insert(name.clone(), reg);
                     }
                 } else {
                     let locals = std::mem::take(&mut self.locals);
 
-                    for &var in &locals {
+                    for var in &locals {
                         let mut sources = Vec::with_capacity(preds.len());
                         let mut all_same = true;
                         let mut first_reg = None;
@@ -120,7 +121,7 @@ impl SSABuilder {
                             let pred_idx = self.block_map[pred];
                             let reg = self.infos[pred_idx]
                                 .out_map
-                                .get(&var)
+                                .get(var)
                                 .copied()
                                 .unwrap_or(self.null_reg);
 
@@ -144,11 +145,11 @@ impl SSABuilder {
                         } else {
                             *current_info
                                 .phi_for
-                                .entry(var)
+                                .entry(var.clone())
                                 .or_insert_with(|| self.alloc_reg())
                         };
 
-                        if let Some(&phi_reg) = current_info.phi_for.get(&var) {
+                        if let Some(&phi_reg) = current_info.phi_for.get(var) {
                             sources.sort_unstable_by_key(|(block, _)| block.0);
 
                             if let Some(p) =
@@ -159,12 +160,12 @@ impl SSABuilder {
                                 current_info.phis.push(PhiNode {
                                     dest: phi_reg,
                                     sources,
-                                    name: Some(var),
+                                    name: Some(var.clone()),
                                 });
                             }
                         }
 
-                        scratch_in.insert(var, reg);
+                        scratch_in.insert(var.clone(), reg);
                     }
 
                     self.locals = locals;
@@ -182,7 +183,7 @@ impl SSABuilder {
                                 self.assign_regs[idx][instr_idx] = Some(new_reg);
                                 new_reg
                             };
-                            scratch_out.insert(*name, reg);
+                            scratch_out.insert(name.clone(), reg);
                         }
                     }
                 }

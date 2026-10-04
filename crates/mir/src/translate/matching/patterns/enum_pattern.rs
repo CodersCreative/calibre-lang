@@ -34,11 +34,13 @@ impl PatternTranslator for EnumPatternTranslator {
             )));
         };
 
-        let resolved_variant = env.resolve(
-            scope,
-            &variant_name,
-            ResolutionOptions::default().with_dollar(),
-        )?;
+        let resolved_variant = env
+            .resolve(
+                scope,
+                &variant_name,
+                ResolutionOptions::default().with_dollar(),
+            )?
+            .unwrap_dollar();
 
         let variant_index = env
             .enum_variant_index_from_value(scope, value, &resolved_variant)
@@ -56,7 +58,9 @@ impl PatternTranslator for EnumPatternTranslator {
             .into_iter()
             .map(|(var_type, name)| {
                 Ok(BindingDeclaration {
-                    name: env.resolve(scope, &name, ResolutionOptions::default().with_dollar())?,
+                    name: env
+                        .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar(),
                     value: value.clone(),
                     var_type,
                     data_type: None,
@@ -69,9 +73,9 @@ impl PatternTranslator for EnumPatternTranslator {
 
             if name.is_some() || destructure.is_some() {
                 let name = match name {
-                    Some(x) => {
-                        env.resolve(scope, &x, ResolutionOptions::default().with_dollar())?
-                    }
+                    Some(x) => env
+                        .resolve(scope, &x, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar(),
                     _ => Ustr::from("match_destructure"),
                 };
 
@@ -100,7 +104,9 @@ impl PatternTranslator for EnumPatternTranslator {
             })
         } else if name.is_some() || destructure.is_some() {
             let name = match name {
-                Some(x) => env.resolve(scope, &x, ResolutionOptions::default().with_dollar())?,
+                Some(x) => env
+                    .resolve(scope, &x, ResolutionOptions::default().with_dollar())?
+                    .unwrap_dollar(),
                 _ => Ustr::from("match_destructure"),
             };
 

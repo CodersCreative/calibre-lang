@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -38,7 +38,7 @@ impl MirLowering for AstParen {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.value.type_of(env, scope, span)
     }
 }
@@ -70,7 +70,7 @@ impl MirLowering for AstTag {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.node.type_of(env, scope, span)
     }
 }
@@ -83,16 +83,16 @@ impl MirLowering for AstTest {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let func_identifier = format!(
-            "test::{}",
-            ParserText::temp_name_with_suffix(self.identifier.text.trim(), span).text
-        );
+        let func_identifier = env.get_new_variable_key(
+            scope,
+            Ustr::from(&format!("test::{}", self.identifier.text.trim())),
+        )?;
 
         let file_path = env.scoping.scope_or_err(scope).map(|s| s.path.clone()).ok();
 
         env.register_test(
             Ustr::from(&self.identifier.text),
-            Ustr::from(&func_identifier),
+            func_identifier.clone(),
             scope,
             file_path,
         );
@@ -103,7 +103,7 @@ impl MirLowering for AstTest {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                     span,
-                    func_identifier,
+                    func_identifier.name(),
                 )),
                 data_type: ParserDataType::auto(span),
                 value: Box::new(AstNode::new(
@@ -118,6 +118,7 @@ impl MirLowering for AstTest {
                         body: self.body,
                     }),
                 )),
+                declared: true,
             }),
         )
         .lower(env, scope, span)
@@ -149,7 +150,8 @@ impl MirLowering for AstImport {
                 .ok()
         } else {
             None
-        };
+        }
+        .map(|x| x.unwrap_dollar());
 
         let (new_scope, build_node) = if let Some(alias) = alias {
             if ["super", "root"].contains(&alias.as_str()) {

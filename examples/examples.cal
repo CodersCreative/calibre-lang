@@ -17,7 +17,7 @@ const main := fn => {
 		
 		for i in len(splits) => {
 			txt &= try!! splits[i];
-			if i < len(inputs) => txt &= try inputs[i] => "";
+			if i < len(inputs) => txt &= try inputs[i] => emit "";
 		};
 		
 		return txt;

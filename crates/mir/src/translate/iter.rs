@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirList},
+    ast::{MiddleNode, MiddleNodeType, MirList, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -76,6 +76,7 @@ pub fn transform_spawn_iter(
             identifier: value_ident.clone(),
             data_type: ParserDataType::auto(span),
             value: Box::new(map),
+            declared: false,
         }),
     ));
 
@@ -190,6 +191,7 @@ pub fn transform_spawn_iter(
                     vec![data_type.clone()],
                     Vec::new(),
                 )),
+                declared: false,
             }),
         ),
         AstNode::new(
@@ -203,6 +205,7 @@ pub fn transform_spawn_iter(
                     AstNode::member(span, AstNode::identifier(span, "WaitGroup"), "new"),
                     Vec::new(),
                 )),
+                declared: false,
             }),
         ),
         dispatch_loop,
@@ -229,6 +232,7 @@ pub fn transform_spawn_iter(
                     }),
                 )),
                 data_type: list_type.clone(),
+                declared: false,
             }),
         ),
         collect_loop,
@@ -284,6 +288,8 @@ impl MirLowering for AstIter {
             });
         }
 
+        let resolved_data_type = ParserDataType::from(resolved_data_type);
+
         if self.spawned {
             return transform_spawn_iter(
                 span,
@@ -296,10 +302,7 @@ impl MirLowering for AstIter {
             .lower(env, scope, span);
         }
 
-        let list_ident = PotentialDollarIdentifier::from(ParserText::temp_name_with_suffix(
-            "anon_iter_list",
-            span,
-        ));
+        let list_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("iter_list"));
         let list_ident_node = AstNode::identifier(span, &list_ident);
 
         let list_type = ParserDataType::new(
@@ -371,6 +374,7 @@ impl MirLowering for AstIter {
                         }),
                     )),
                     data_type: list_type,
+                    declared: false,
                 }),
             ),
             loop_node,
@@ -384,30 +388,27 @@ impl MirLowering for AstIter {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
-        let data_type = ParserDataType {
-            span,
-            data_type: ParserInnerType::List(Box::new(if self.data_type.is_auto() {
-                self.map
-                    .type_of(env, scope, span)
-                    .ok_or_else(|| {
-                        env.context
-                            .err_at_current(MiddleErr::CannotInferLoopIteratorType)
-                    })
-                    .ok()?
-            } else {
-                env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
-                    .ok()?
-            })),
-        };
+    ) -> Option<MirDataType> {
+        let data_type = MirDataType::List(Box::new(if self.data_type.is_auto() {
+            self.map
+                .type_of(env, scope, span)
+                .ok_or_else(|| {
+                    env.context
+                        .err_at_current(MiddleErr::CannotInferLoopIteratorType)
+                })
+                .ok()?
+        } else {
+            env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
+                .ok()?
+        }));
 
         if self.spawned {
-            Some(ParserDataType {
-                data_type: ParserInnerType::StructWithGenerics {
-                    identifier: String::from("Mutex"),
-                    generic_types: vec![data_type],
-                },
-                span,
+            Some(MirDataType::Struct {
+                identifier: env
+                    .resolve(scope, &"Mutex", ResolutionOptions::typing())
+                    .ok()?
+                    .unwrap_typing(),
+                generic_types: vec![data_type],
             })
         } else {
             Some(data_type)

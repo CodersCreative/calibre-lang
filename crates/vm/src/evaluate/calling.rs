@@ -5,12 +5,11 @@ use crate::{
     error::RuntimeError,
     value::{RuntimeValue, TerminateValue},
 };
-use calibre_lir::ast::BlockId;
-use calibre_parser::ast::idents::ParserText;
-use rustc_hash::FxHashMap;
+use calibre_lir::{TypeImplKey, TypeKey, VariableKey, ast::BlockId};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 use tracing::{instrument, trace};
-use ustr::{Ustr, UstrSet};
+use ustr::Ustr;
 use wasm_sync::Mutex;
 
 impl VM {
@@ -21,8 +20,12 @@ impl VM {
         }
     }
 
-    pub(crate) fn capture_value(&self, name: &Ustr, seen: &mut UstrSet) -> RuntimeValue {
-        match self.resolve_var_name(*name) {
+    pub(crate) fn capture_value(
+        &self,
+        name: &VariableKey,
+        seen: &mut FxHashSet<VariableKey>,
+    ) -> RuntimeValue {
+        match self.resolve_var_name(name.clone()) {
             Some(VarName::Var(var)) => {
                 if let Some(value) = self.variables.get(&var) {
                     value.clone()
@@ -42,19 +45,19 @@ impl VM {
 
     fn refresh_captures(
         &mut self,
-        captures: &[(Ustr, RuntimeValue)],
-    ) -> Arc<Vec<(Ustr, RuntimeValue)>> {
-        let mut seen = UstrSet::default();
-        let mut names = UstrSet::default();
+        captures: &[(VariableKey, RuntimeValue)],
+    ) -> Arc<Vec<(VariableKey, RuntimeValue)>> {
+        let mut seen = FxHashSet::default();
+        let mut names = FxHashSet::default();
         let mut refreshed = Vec::with_capacity(captures.len());
 
         for (name, old_value) in captures {
-            if !names.insert(*name) {
+            if !names.insert(name.clone()) {
                 continue;
             }
             let value = self.capture_value(name, &mut seen);
             refreshed.push((
-                *name,
+                name.clone(),
                 if value.is_null() && !old_value.is_null() {
                     old_value.clone()
                 } else {
@@ -66,27 +69,16 @@ impl VM {
         Arc::new(refreshed)
     }
 
-    fn resolve_vm_function(
-        &mut self,
-        name: Ustr,
-        site: CallSite,
-    ) -> Result<Arc<VMFunction>, RuntimeError> {
-        let callsite = (self.current_frame().func_ptr, site.block, site.tag);
-        self.resolve_callable_cached(name, callsite)
-            .ok_or_else(|| RuntimeError::FunctionNotFound(name.to_string()))
-    }
-
-    #[instrument(skip_all, fields(args_count = args.len(), callsite = ?site))]
-    pub(crate) fn call_runtime_callable_at(
+    #[instrument(skip_all, fields(args_count = args.len()))]
+    pub(crate) fn call_runtime_callable(
         &mut self,
         callable: RuntimeValue,
         args: Vec<RuntimeValue>,
-        site: CallSite,
         get_result: bool,
     ) -> Result<RuntimeValue, RuntimeError> {
         match self.resolve_value_ref(&callable)? {
             RuntimeValue::Function { name, captures } => {
-                let func = self.resolve_vm_function(name, site)?;
+                let func = self.resolve_function_by_name(&name)?;
 
                 if func.pure && (!get_result || !func.returns_value) {
                     return Ok(RuntimeValue::Null);
@@ -131,15 +123,7 @@ impl VM {
                     }
                 }
 
-                self.call_runtime_callable_at(
-                    *callee,
-                    full_args,
-                    CallSite {
-                        block: site.block,
-                        tag: site.tag.saturating_sub(1),
-                    },
-                    get_result,
-                )
+                self.call_runtime_callable(*callee, full_args, get_result)
             }
             other => Err(RuntimeError::InvalidFunctionCallValue(Box::new(other))),
         }
@@ -149,12 +133,6 @@ impl VM {
 pub enum FunctionArgs<'a> {
     Values(&'a [RuntimeValue]),
     Regs(&'a [Reg]),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct CallSite {
-    pub block: usize,
-    pub tag: u32,
 }
 
 pub(crate) struct RegisterCall<'a> {
@@ -171,7 +149,7 @@ impl VM {
         &mut self,
         function: &VMFunction,
         args: I,
-        captures: Arc<Vec<(Ustr, RuntimeValue)>>,
+        captures: Arc<Vec<(VariableKey, RuntimeValue)>>,
         get_result: bool,
     ) -> Result<RuntimeValue, RuntimeError>
     where
@@ -200,7 +178,7 @@ impl VM {
         &mut self,
         function: &VMFunction,
         args: I,
-        captures: Arc<Vec<(Ustr, RuntimeValue)>>,
+        captures: Arc<Vec<(VariableKey, RuntimeValue)>>,
         get_result: bool,
     ) -> Result<RuntimeValue, RuntimeError>
     where
@@ -228,7 +206,7 @@ impl VM {
         &mut self,
         function: &VMFunction,
         args: FunctionArgs<'b>,
-        captures: Arc<Vec<(Ustr, RuntimeValue)>>,
+        captures: Arc<Vec<(VariableKey, RuntimeValue)>>,
         budget: Option<usize>,
         state: &mut crate::TaskState,
         get_result: bool,
@@ -240,7 +218,11 @@ impl VM {
 
         let prev_vars = if state.block.is_none() {
             let func_ptr = function as *const VMFunction as usize;
-            self.push_frame(function.reg_count as usize, func_ptr, Some(function.name));
+            self.push_frame(
+                function.reg_count as usize,
+                func_ptr,
+                Some(function.name.clone()),
+            );
 
             match args {
                 FunctionArgs::Values(args) => {
@@ -270,13 +252,14 @@ impl VM {
                 .zip(function.param_regs.iter().copied())
             {
                 let value = self.get_reg_value(reg).clone();
-                let _ = self.variables.insert(*name, value);
+                let _ = self.variables.insert(name.clone(), value);
             }
 
-            let filtered_captures: Vec<(Ustr, RuntimeValue)> = captures
+            let filtered_captures: Vec<(VariableKey, RuntimeValue)> = captures
                 .iter()
                 .filter(|(name, _)| {
-                    Self::should_install_capture(name) && !function.param_names.contains(name)
+                    Self::should_install_capture(name.name())
+                        && !function.param_names.contains(name)
                 })
                 .cloned()
                 .collect();
@@ -371,8 +354,6 @@ impl VM {
         callee: RuntimeValue,
         receiver: RuntimeValue,
         args: &[u16],
-        block: &VMBlock,
-        ip: u32,
         get_result: bool,
     ) -> Result<RuntimeValue, RuntimeError> {
         let _ = self.resolve_value_ref(&receiver)?;
@@ -385,15 +366,7 @@ impl VM {
 
         let mut full_args = vec![receiver];
         full_args.extend(self.collect_call_args_vec(args));
-        let out = self.call_runtime_callable_at(
-            callee,
-            full_args,
-            CallSite {
-                block: block.id.0 as usize,
-                tag: ip,
-            },
-            get_result,
-        )?;
+        let out = self.call_runtime_callable(callee, full_args, get_result)?;
 
         if let Some((frame_idx, reg)) = receiver_reg
             && frame_idx == self.frames.len().saturating_sub(1)
@@ -473,7 +446,6 @@ impl VM {
                 return Err(RuntimeError::FunctionNotFound(member_name.to_string()));
             };
 
-            let (short_name, _) = Self::member_parts(member_name);
             let raw_receiver = self
                 .read_mutation_handle(&handle)
                 .unwrap_or_else(|| self.get_reg_value_in_frame(frame, source_reg).clone());
@@ -481,9 +453,14 @@ impl VM {
                 .resolve_value_ref(&raw_receiver)
                 .unwrap_or(func.clone());
 
+            //
+
             let resolved = match &resolved_receiver {
                 RuntimeValue::Aggregate(Some(type_name), _) => self
-                    .resolve_associated_member_value(type_name, member_name, short_name)
+                    .get_function_from_type_member(
+                        &TypeImplKey::Nominal(type_name.clone()),
+                        member_name,
+                    )
                     .map(|callee| {
                         self.bind_member_receiver_if_callable(
                             callee,
@@ -493,20 +470,13 @@ impl VM {
                         )
                     }),
                 RuntimeValue::Ref(owner) => self
-                    .resolve_associated_member_value(owner, member_name, short_name)
-                    .or_else(|| {
-                        let owner_short =
-                            ParserText::get_temp_name_suffix(owner).unwrap_or(owner.to_string());
-                        if &owner_short != owner {
-                            self.resolve_associated_member_value(
-                                &owner_short,
-                                member_name,
-                                short_name,
-                            )
-                        } else {
-                            None
-                        }
-                    }),
+                    .get_function_from_type_member(
+                        &TypeImplKey::Nominal(TypeKey {
+                            fully_qualified_path: owner.fully_qualified_path.clone(),
+                        }),
+                        member_name,
+                    )
+                    .or_else(|| None),
                 _ => None,
             };
 
@@ -516,15 +486,14 @@ impl VM {
         };
 
         let func = if let RuntimeValue::Function { name, .. } = &func
-            && let Some((owner, member)) = name.rsplit_once(".")
+            && let Some((_, member)) = name.name().as_str().rsplit_once(".")
             && let Some(first) = args.first()
             && let Ok(receiver) = self.resolve_value_ref(self.get_reg_value(*first))
-            && let Some(receiver_type) = receiver.impl_name()
+            && let Some(receiver_type) = receiver.impl_key()
         {
             if self.callee_expects_receiver(&func)
-                && !ParserText::temp_name_suffix_matches(&receiver_type, &owner)
                 && let Some(resolved) =
-                    self.resolve_associated_member_value(&receiver_type, member, Some(member))
+                    self.get_function_from_type_member(&receiver_type, &Ustr::from(member))
                 && resolved.is_callable()
             {
                 resolved
@@ -541,21 +510,13 @@ impl VM {
                     *callee,
                     receiver.as_ref().clone(),
                     args,
-                    block,
-                    ip,
                     dst.is_some(),
                 )?;
 
                 self.store_call_result(dst, value);
             }
             RuntimeValue::Function { name, captures } => {
-                let func = self.resolve_vm_function(
-                    name,
-                    CallSite {
-                        block: block.id.0 as usize,
-                        tag: ip,
-                    },
-                )?;
+                let func = self.resolve_function_by_name(&name)?;
 
                 let refreshed = self.refresh_captures(captures.as_ref());
                 let value = self.run_function_from_regs(
@@ -591,26 +552,15 @@ impl VM {
     }
 
     #[inline]
-    pub(crate) fn member_parts(name: &str) -> (Option<&str>, Option<usize>) {
-        let short_name = name.rsplit_once(".").map(|(_, short)| short);
-        let tuple_index = name.parse::<usize>().ok();
-        (short_name, tuple_index)
-    }
-
-    #[inline]
     pub(crate) fn bind_member_receiver_if_callable(
         &mut self,
         callee: RuntimeValue,
-        member_name: &str,
+        _member_name: &str,
         raw_receiver: &RuntimeValue,
         resolved_receiver: RuntimeValue,
     ) -> RuntimeValue {
         if !self.callee_expects_receiver(&callee) {
             return callee;
-        }
-
-        if ParserText::is_temp_name(&member_name) {
-            return callee.bind_if_callable(resolved_receiver);
         }
 
         let receiver = match raw_receiver {
@@ -627,10 +577,12 @@ impl VM {
     pub(crate) fn callee_expects_receiver(&mut self, callee: &RuntimeValue) -> bool {
         match callee {
             RuntimeValue::Function { name, .. } => {
-                if let Some(func) = self.resolve_function_by_name(name) {
+                if let Ok(func) = self.resolve_function_by_name(name) {
                     func.params
                         .first()
-                        .map(|first| first == "self" || first.ends_with(":self"))
+                        .map(|first| {
+                            *first.name() == "self" || first.name().as_str().ends_with(":self")
+                        })
                         .unwrap_or(true)
                 } else {
                     true

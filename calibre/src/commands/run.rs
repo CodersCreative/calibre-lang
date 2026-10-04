@@ -148,7 +148,7 @@ impl RunSource {
 
         engine = engine.with_type_check(self.type_check);
 
-        let mut artifacts = match if self.cache {
+        let artifacts = match if self.cache {
             engine.compile_cached_program_source(self.contents.clone(), self.readable)
         } else {
             engine.compile_source(self.contents.clone(), false)
@@ -238,7 +238,7 @@ impl RunSource {
 
         let vm_begin = start.elapsed();
 
-        let entry_name = std::mem::take(&mut artifacts.entry_name);
+        let entry_name = artifacts.entry_name.clone();
         let mut vm: VM = VM::new(artifacts.registry, artifacts.mappings, self.vm_config);
         vm.set_source_file_override(&self.path);
         vm.set_program_args(

@@ -4,11 +4,11 @@ const main := fn -> str!null => {
     print("val1: " & val1);
 
     let res2 : str!int = err("failed");
-    let val2 : int = try res2 => 0;
+    let val2 : int = try res2 => emit 0;
     print("val2: " & val2);
 
     let res3 : str!int = err("error message");
-    let val3 : int = try res3 => 100;
+    let val3 : int = try res3 => emit 100;
     print("val3: " & val3);
 
     let res4 : str!int = ok(100);

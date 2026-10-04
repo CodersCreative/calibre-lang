@@ -1,12 +1,15 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirConditional, MirDiscriminant,
-        MirExtern, MirFunction, MirReturn, MirScopeDecl, MirVarDecl,
+        MirExtern, MirFunction, MirReturn, MirScopeDecl, MirVarDecl, types::MirDataType,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::{FunctionParamDefault, resolve::ResolutionOptions},
+    symbols::{
+        FunctionParamDefault, TypeKey,
+        resolve::{Key, ResolutionOptions},
+    },
     tags::TagInfo,
     translate::MirLowering,
 };
@@ -202,8 +205,8 @@ impl MiddleEnvironment {
             matches!(
                 env.resolve_type_from_node(scope, node)
                     .as_ref()
-                    .map(|x| x.data_type.unwrap_all_refs()),
-                Some(ParserInnerType::Option(_))
+                    .map(|x| x.unwrap_all_refs()),
+                Some(MirDataType::Option(_))
             )
         };
 
@@ -272,7 +275,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         span: Span,
-        identifier: Option<Ustr>,
+        identifier: Option<TypeKey>,
         args: Vec<CallArg>,
         reverse_args: Vec<AstNode>,
     ) -> MiddleNode {
@@ -295,11 +298,12 @@ impl MiddleEnvironment {
     }
 
     pub(crate) fn wrap_generator_body(
+        &mut self,
         body: AstNode,
         elem_type: ParserDataType,
         span: Span,
     ) -> AstNode {
-        let next_name = ParserText::temp_name_with_suffix("gen_next", span);
+        let next_name = self.context.get_temp("gen_next");
         let rewritten = Self::rewrite_generator_returns(body);
 
         let next_body = match rewritten.node_type {
@@ -320,10 +324,7 @@ impl MiddleEnvironment {
             span,
             AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Immutable,
-                identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
-                    span,
-                    next_name.clone(),
-                )),
+                identifier: PotentialDollarIdentifier::new(span, next_name.clone()),
                 data_type: ParserDataType::function(
                     span,
                     vec![],
@@ -344,6 +345,7 @@ impl MiddleEnvironment {
                         body: Box::new(next_body),
                     }),
                 )),
+                declared: false,
             }),
         );
 
@@ -431,7 +433,7 @@ impl MirLowering for FunctionHeader {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         let generic_params: Vec<Ustr> = self
             .generics
             .0
@@ -442,6 +444,7 @@ impl MirLowering for FunctionHeader {
                     &g.identifier,
                     ResolutionOptions::default().with_dollar(),
                 )
+                .map(|x| x.unwrap_dollar())
             })
             .collect::<Result<Vec<Ustr>, MiddleErr>>()
             .ok()?;
@@ -454,30 +457,27 @@ impl MirLowering for FunctionHeader {
             .resolve_data_type(scope, &self.return_type, ResolutionOptions::typing())
             .ok()?;
 
-        Some(ParserDataType {
-            data_type: ParserInnerType::Function {
-                return_type: Box::new(return_type),
-                parameters: {
-                    let mut params = Vec::with_capacity(self.parameters.len());
+        Some(MirDataType::Function {
+            return_type: Box::new(return_type),
+            parameters: {
+                let mut params = Vec::with_capacity(self.parameters.len());
 
-                    for param in &self.parameters {
-                        let data_type = if let Some(x) = &param.1 {
-                            env.resolve_data_type(scope, x, ResolutionOptions::typing())
-                                .ok()?
-                        } else if let Some(node) = &param.2 {
-                            node.type_of(env, scope, span)?
-                        } else {
-                            return None;
-                        };
-                        params.push(data_type);
-                    }
+                for param in &self.parameters {
+                    let data_type = if let Some(x) = &param.1 {
+                        env.resolve_data_type(scope, x, ResolutionOptions::typing())
+                            .ok()?
+                    } else if let Some(node) = &param.2 {
+                        node.type_of(env, scope, span)?
+                    } else {
+                        return None;
+                    };
+                    params.push(data_type);
+                }
 
-                    env.scoping.pop_generic_params();
+                env.scoping.pop_generic_params();
 
-                    params
-                },
+                params
             },
-            span,
         })
     }
 }
@@ -490,24 +490,22 @@ impl MirLowering for AstExtern {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let ident = env.resolve(
-            scope,
-            &self.identifier,
-            ResolutionOptions::default().with_dollar(),
-        )?;
-
-        let new_name = Ustr::from(&ParserText::temp_name_with_suffix(ident.trim(), span).text);
+        let ident = env
+            .resolve(
+                scope,
+                &self.identifier,
+                ResolutionOptions::default().with_dollar(),
+            )?
+            .unwrap_dollar();
 
         let params = self
             .parameters
             .iter()
             .map(|ty| {
                 let ty = ty.clone().resolve_ffi();
-
                 env.resolve_data_type(scope, &ty, ResolutionOptions::typing())
-                    .unwrap_or(ty)
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, MiddleErr>>()?;
 
         let return_type = env.resolve_data_type(
             scope,
@@ -515,7 +513,7 @@ impl MirLowering for AstExtern {
             ResolutionOptions::typing(),
         )?;
 
-        let fn_type = ParserDataType::function(span, params.clone(), return_type.clone());
+        let fn_type = MirDataType::function(params.clone(), return_type.clone());
 
         let mut pure = false;
         let mut memo = false;
@@ -529,12 +527,17 @@ impl MirLowering for AstExtern {
             }
         }
 
-        env.register_variable(scope, ident, new_name, fn_type.clone(), VarType::Constant)?;
+        let var_key = if self.declared {
+            env.resolve(scope, ident, ResolutionOptions::idents())?
+                .unwrap_variable()
+        } else {
+            env.register_variable(scope, ident, fn_type.clone(), VarType::Constant)?
+        };
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: VarType::Constant,
-                identifier: new_name,
+                identifier: var_key,
                 value: Box::new(MiddleNode::new(
                     MiddleNodeType::ExternFunction(MirExtern {
                         abi: Ustr::from(&self.abi),
@@ -558,29 +561,26 @@ impl MirLowering for AstExtern {
         &self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType {
-            span,
-            data_type: ParserInnerType::NativeFunction {
-                return_type: Box::new(
-                    env.resolve_data_type(
-                        scope,
-                        &self.return_type.clone().resolve_ffi(),
-                        ResolutionOptions::typing(),
-                    )
-                    .ok()?,
-                ),
-                parameters: self
-                    .parameters
-                    .clone()
-                    .into_iter()
-                    .map(|x| {
-                        env.resolve_data_type(scope, &x.resolve_ffi(), ResolutionOptions::typing())
-                    })
-                    .collect::<Result<Vec<_>, MiddleErr>>()
-                    .ok()?,
-            },
+        _span: Span,
+    ) -> Option<MirDataType> {
+        Some(MirDataType::NativeFunction {
+            return_type: Box::new(
+                env.resolve_data_type(
+                    scope,
+                    &self.return_type.clone().resolve_ffi(),
+                    ResolutionOptions::typing(),
+                )
+                .ok()?,
+            ),
+            parameters: self
+                .parameters
+                .clone()
+                .into_iter()
+                .map(|x| {
+                    env.resolve_data_type(scope, &x.resolve_ffi(), ResolutionOptions::typing())
+                })
+                .collect::<Result<Vec<_>, MiddleErr>>()
+                .ok()?,
         })
     }
 }
@@ -615,14 +615,13 @@ impl MirLowering for AstFunction {
 
         for param in self.header.parameters {
             param_idents.push(param.0.clone());
-            let og_name = env.resolve(
-                new_scope,
-                &param.0,
-                ResolutionOptions::default().with_dollar(),
-            )?;
-
-            let new_name =
-                Ustr::from(&ParserText::temp_name_with_suffix(og_name.trim(), span).text);
+            let og_name = env
+                .resolve(
+                    new_scope,
+                    &param.0,
+                    ResolutionOptions::default().with_dollar(),
+                )?
+                .unwrap_dollar();
 
             let data_type = if let Some(x) = param.1 {
                 env.resolve_data_type(new_scope, &x, ResolutionOptions::typing())?
@@ -643,16 +642,16 @@ impl MirLowering for AstFunction {
                     )));
             };
 
-            env.register_variable(
+            let param_key = env.register_variable_with_temp_scope(
                 new_scope,
                 og_name,
-                new_name,
                 data_type.clone(),
                 VarType::Mutable,
+                true,
             )?;
 
             params.push((
-                new_name,
+                param_key,
                 data_type,
                 param
                     .2
@@ -661,20 +660,17 @@ impl MirLowering for AstFunction {
         }
 
         if needs_caller_context {
-            let caller_context_name =
-                Ustr::from(&ParserText::temp_name_with_suffix("caller_context", span).text);
-            let caller_context_type =
-                ParserDataType::new(span, ParserInnerType::Struct(String::from("ExecContext")));
+            let caller_context_type = env.resolve_to_data_type(new_scope, &"ExecContext")?;
 
-            env.register_variable(
+            let caller_key = env.register_variable_with_temp_scope(
                 new_scope,
                 Ustr::from("caller_context"),
-                caller_context_name,
                 caller_context_type.clone(),
                 VarType::Mutable,
+                true,
             )?;
 
-            params.push((caller_context_name, caller_context_type, None));
+            params.push((caller_key, caller_context_type, None));
         }
 
         let return_type = env.resolve_data_type(
@@ -725,7 +721,7 @@ impl MirLowering for AstFunction {
         }
 
         if let Some(elem_type) = return_type.clone().get_gen() {
-            body = MiddleEnvironment::wrap_generator_body(body, elem_type, span);
+            body = MiddleEnvironment::wrap_generator_body(env, body, elem_type.into(), span);
         }
 
         let body = body.lower(env, new_scope, span)?;
@@ -746,7 +742,7 @@ impl MirLowering for AstFunction {
                 scope_body.push(defer.lower(env, scope_id, span)?);
             }
 
-            if return_type.data_type != ParserInnerType::Null
+            if return_type != MirDataType::Null
                 && let Some(last_node) = last.take()
             {
                 if matches!(last_node.node_type, MiddleNodeType::Return { .. }) {
@@ -895,16 +891,6 @@ impl MirLowering for AstFunction {
             env.scoping.pop_generic_params();
         }
 
-        // TODO revisit this
-        for (name, _, _) in params.iter() {
-            if let Some(short) = ParserText::get_temp_name_suffix(name) {
-                env.scoping
-                    .scope_mut_or_err(new_scope)?
-                    .mappings
-                    .insert(Ustr::from(&short), *name);
-            }
-        }
-
         Ok(fn_node)
     }
 
@@ -913,7 +899,7 @@ impl MirLowering for AstFunction {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.header.type_of(env, scope, span)
     }
 }
@@ -930,19 +916,22 @@ impl MirLowering for AstCall {
         match self.caller.node_type.clone() {
             AstNodeType::FieldAccess(AstField { base, field }) => {
                 let field_name = env
-                    .resolve(scope, &field, ResolutionOptions::default().with_dollar())
-                    .unwrap_or(Ustr::from(field.text()));
+                    .resolve(scope, &field, ResolutionOptions::default().with_dollar())?
+                    .unwrap_dollar();
 
                 if let Some(ty) = base.type_of(env, scope, span)
                     && let Some(x) = env
                         .typing
-                        .find_impl_member(&ty, &field_name)
-                        .map(|x| x.symbol_name)
+                        .find_impl_member(&ty, field_name)
+                        .map(|x| x.symbol_name.clone())
                 {
                     self.args.insert(0, CallArg::Value(*base));
                     return AstCall {
                         string_fn: None,
-                        caller: Box::new(AstNode::identifier(self.caller.span, x)),
+                        caller: Box::new(AstNode::identifier(
+                            self.caller.span,
+                            env.context.convert_key_to_ustr(Key::VariableKey(x)),
+                        )),
                         ..self
                     }
                     .lower(env, scope, span);
@@ -957,7 +946,11 @@ impl MirLowering for AstCall {
                 {
                     return AstCall {
                         string_fn: None,
-                        caller: Box::new(AstNode::identifier(self.caller.span, symbol.identifier)),
+                        caller: Box::new(AstNode::identifier(
+                            self.caller.span,
+                            env.context
+                                .convert_key_to_ustr(Key::VariableKey(symbol.identifier)),
+                        )),
                         ..self
                     }
                     .lower(env, scope, span);
@@ -993,7 +986,7 @@ impl MirLowering for AstCall {
                     _ => {}
                 }
 
-                if let Ok(caller) =
+                if let Ok(Key::TypeKey(caller)) =
                     env.resolve(scope, &caller_ident.value, ResolutionOptions::typing())
                     && env.typing.objects.contains_key(&caller)
                 {
@@ -1012,10 +1005,10 @@ impl MirLowering for AstCall {
         let data_type = self
             .caller
             .type_of(env, scope, span)
-            .map(|x| x.unwrap_all_refs().data_type);
+            .map(|x| x.unwrap_all_refs().clone());
 
         if !env.context.type_check
-            && let Some(ParserInnerType::Function { parameters, .. }) = &data_type
+            && let Some(MirDataType::Function { parameters, .. }) = &data_type
         {
             let all_args: Vec<&AstNode> = self
                 .args
@@ -1041,34 +1034,29 @@ impl MirLowering for AstCall {
             }
         }
 
-        let caller_name = if let AstNodeType::Identifier(ident) = &self.caller.node_type {
-            env.resolve(
-                scope,
-                &ident.value,
-                ResolutionOptions::default().with_dollar(),
-            )?
-        } else {
-            Ustr::default()
-        };
+        if let AstNodeType::Identifier(ident) = &self.caller.node_type {
+            let caller_name = env
+                .resolve(scope, &ident.value, ResolutionOptions::idents())?
+                .unwrap_variable();
 
-        let needs_caller_context = if let Some(var) = env.symbols.variables.get(&caller_name) {
-            match var.data_type.clone().unwrap_all_refs().data_type {
-                ParserInnerType::Function {
-                    return_type: _,
-                    parameters,
-                } if !parameters.is_empty() => {
-                    parameters.last().unwrap().data_type
-                        == ParserInnerType::Struct(String::from("ExecContext"))
+            let needs_caller_context = if let Some(var) = env.symbols.variables.get(&caller_name) {
+                match var.data_type.unwrap_all_refs() {
+                    MirDataType::Function {
+                        return_type: _,
+                        parameters,
+                    } if !parameters.is_empty() => {
+                        matches!(parameters.last(), Some(MirDataType::Struct { identifier, .. }) if identifier.name() == "ExecContext")
+                    }
+                    _ => false,
                 }
-                _ => false,
-            }
-        } else {
-            false
-        };
+            } else {
+                false
+            };
 
-        if needs_caller_context && let Some(x) = env.get_caller_context(scope, span) {
-            self.reverse_args.push(x);
-        }
+            if needs_caller_context && let Some(x) = env.get_caller_context(scope, span) {
+                self.reverse_args.push(x);
+            }
+        };
 
         let caller = self.caller.lower(env, scope, span)?;
 
@@ -1078,7 +1066,7 @@ impl MirLowering for AstCall {
                     scope,
                     span,
                     &caller,
-                    &data_type,
+                    &data_type.map(ParserInnerType::from),
                     self.args.clone(),
                     self.reverse_args.clone(),
                 ) {
@@ -1097,11 +1085,12 @@ impl MirLowering for AstCall {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         if let AstNodeType::FieldAccess(AstField { base, field }) = &self.caller.node_type {
             let member_name = env
                 .resolve(scope, field, ResolutionOptions::default().with_dollar())
-                .unwrap_or(Ustr::from(field.text()));
+                .ok()?
+                .unwrap_dollar();
 
             if !member_name.is_empty() {
                 if let Some(ty) = &base.type_of(env, scope, span).or_else(|| {
@@ -1115,7 +1104,7 @@ impl MirLowering for AstCall {
                     return method_ty.apply_callable();
                 }
 
-                return Some(ParserDataType::new(base.span, ParserInnerType::Dynamic));
+                return Some(MirDataType::Dynamic);
             }
         }
 
@@ -1129,43 +1118,27 @@ impl MirLowering for AstCall {
                         let ty = arg.get_node().type_of(env, scope, span)?;
                         lst.push(ty);
                     }
-                    return Some(ParserDataType {
-                        data_type: ParserInnerType::Tuple(lst),
-                        span,
-                    });
+
+                    return Some(MirDataType::Tuple(lst));
                 }
                 "curry" if self.args.len() == 1 && self.reverse_args.is_empty() => {
                     return env.resolve_curried_type(scope, self.args[0].get_node());
                 }
                 "discriminant" => {
-                    return Some(ParserDataType {
-                        data_type: ParserInnerType::Int,
-                        span,
-                    });
+                    return Some(MirDataType::Int);
                 }
                 _ => {}
             }
 
             if let Ok(caller_ty) = env.resolve_to_data_type(scope, &caller.value) {
-                match &caller_ty.data_type {
-                    ParserInnerType::Struct(name)
-                        if env.typing.objects.contains_key(&Ustr::from(name)) =>
-                    {
-                        return Some(ParserDataType {
-                            data_type: ParserInnerType::Struct(name.clone()),
-                            span,
-                        });
-                    }
-                    ParserInnerType::StructWithGenerics {
+                match &caller_ty {
+                    MirDataType::Struct {
                         identifier,
                         generic_types,
-                    } if env.typing.objects.contains_key(&Ustr::from(identifier)) => {
-                        return Some(ParserDataType {
-                            data_type: ParserInnerType::StructWithGenerics {
-                                identifier: identifier.clone(),
-                                generic_types: generic_types.clone(),
-                            },
-                            span,
+                    } if env.typing.objects.contains_key(identifier) => {
+                        return Some(MirDataType::Struct {
+                            identifier: identifier.clone(),
+                            generic_types: generic_types.clone(),
                         });
                     }
                     _ => {}
@@ -1175,6 +1148,6 @@ impl MirLowering for AstCall {
 
         caller_type = caller_type.or_else(|| self.caller.type_of(env, scope, span));
 
-        caller_type?.data_type.apply_callable()
+        caller_type?.apply_callable()
     }
 }

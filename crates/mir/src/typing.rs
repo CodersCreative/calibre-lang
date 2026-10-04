@@ -1,82 +1,193 @@
 use crate::{
-    environment::MiddleEnvironment, scoping::ScopeId, symbols::resolve::ResolutionOptions,
+    ast::types::{MirDataType, unify::TypeImplKey},
+    environment::MiddleEnvironment,
+    scoping::ScopeId,
+    symbols::{TypeKey, VariableKey, resolve::ResolutionOptions},
 };
 use calibre_parser::{
     Location,
     ast::{
         ObjectMap, ObjectType,
-        idents::ParserText,
         nodes::{
             AstNode,
             types::{Overload, TypeDefType},
         },
-        types::{ParserDataType, ParserInnerType},
     },
 };
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use tracing::{debug, instrument, trace};
+use tracing::{instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Typing {
-    pub objects: UstrMap<MiddleObject>,
-    pub impls: UstrMap<MiddleImpl>,
-    pub trait_defs: UstrMap<MiddleTrait>,
+    pub objects: FxHashMap<TypeKey, MiddleObject>,
+    pub inherent_impls: FxHashMap<TypeImplKey, Vec<MiddleImpl>>,
+    pub trait_impls: FxHashMap<TypeKey, Vec<MiddleImpl>>,
+    pub trait_defs: FxHashMap<TypeKey, MiddleTrait>,
     pub generic_type_templates: UstrMap<(Vec<Ustr>, TypeDefType, Vec<Overload>)>,
 }
 
 impl Typing {
-    #[instrument(skip_all, fields(ty = %ty))]
-    pub fn find_impl_for_type(&self, ty: &Ustr) -> Option<&MiddleImpl> {
-        trace!("finding impl for type");
-        if let Some(x) = self.impls.get(ty) {
-            debug!("found impl by direct key");
-            Some(x)
-        } else {
-            debug!("no impl found for type");
-            None
+    pub fn all_impls(&self) -> impl Iterator<Item = &MiddleImpl> {
+        self.inherent_impls
+            .values()
+            .flatten()
+            .chain(self.trait_impls.values().flatten())
+    }
+
+    pub fn add_inherent_impl(&mut self, imp: MiddleImpl) {
+        let key = TypeImplKey::from(&imp.target);
+        self.inherent_impls.entry(key).or_default().push(imp);
+    }
+
+    pub fn add_trait_impl(&mut self, imp: MiddleImpl) {
+        if let Some(trait_key) = &imp.trait_key {
+            self.trait_impls
+                .entry(trait_key.clone())
+                .or_default()
+                .push(imp);
         }
     }
 
-    #[instrument(skip_all, fields(ty = %ty, member = %member.to_string()))]
+    #[instrument(skip_all, fields(ty = %ty))]
+    pub fn find_inherent_impl_for_type(&self, ty: &MirDataType) -> Option<&MiddleImpl> {
+        trace!("finding inherent impl for type");
+
+        let key = TypeImplKey::from(ty);
+        let candidates = self.inherent_impls.get(&key)?;
+        let mut best: Option<(usize, &MiddleImpl)> = None;
+        let mut bindings = FxHashMap::default();
+
+        for imp in candidates {
+            bindings.clear();
+            if imp.target.can_unify(ty, &imp.generic_params, &mut bindings) {
+                let score = imp.target.specificity(&imp.generic_params);
+                if best
+                    .as_ref()
+                    .is_none_or(|(best_score, _)| score > *best_score)
+                {
+                    best = Some((score, imp));
+                }
+            }
+        }
+        best.map(|(_, imp)| imp)
+    }
+
+    pub fn find_impl_for_type(&self, ty: &TypeKey) -> Option<&MiddleImpl> {
+        let target = MirDataType::object(ty.clone());
+        self.find_inherent_impl_for_type(&target)
+    }
+
+    #[instrument(skip_all, fields(ty = %ty, member = %member.as_ref()))]
     pub fn find_impl_member(
         &self,
-        ty: &ParserDataType,
-        member: &impl ToString,
+        ty: &MirDataType,
+        member: impl AsRef<str>,
     ) -> Option<&MiddleImplMember> {
-        let generic_params: Vec<Ustr> = match &ty.data_type {
-            ParserInnerType::StructWithGenerics { generic_types, .. } => {
-                generic_types.iter().collect()
+        let member_name = MiddleImpl::normalize_member_name(member);
+        let key = TypeImplKey::from(ty);
+
+        let mut best: Option<(usize, &MiddleImplMember)> = None;
+        let mut bindings = FxHashMap::default();
+
+        if let Some(candidates) = self.inherent_impls.get(&key) {
+            for imp in candidates {
+                bindings.clear();
+                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
+                    && let Some(m) = imp.get_member(member_name, &[])
+                {
+                    let score = imp.target.specificity(&imp.generic_params);
+                    if best
+                        .as_ref()
+                        .is_none_or(|(best_score, _)| score > *best_score)
+                    {
+                        best = Some((score, m));
+                    }
+                }
             }
-            ParserInnerType::Ptr(x) => vec![&**x],
-            ParserInnerType::List(x) => vec![&**x],
-            ParserInnerType::Gen(x) => vec![&**x],
-            _ => Vec::new(),
-        }
-        .into_iter()
-        .map(|x| Ustr::from(&x.impl_name()))
-        .collect();
 
-        let identifier = Ustr::from(&ty.impl_name());
-
-        if let Some(implementation) = self.find_impl_for_type(&identifier) {
-            return implementation.get_member(member, &generic_params);
+            if best.is_some() {
+                return best.map(|(_, m)| m);
+            }
         }
 
-        // TODO Remove, its the worst case scenario
-        self.impls.iter().find_map(|(name, implementation)| {
-            name.contains(identifier.as_str())
-                .then(|| implementation.get_member(member, &generic_params))
-                .flatten()
-        })
+        for impl_list in self.trait_impls.values() {
+            for imp in impl_list {
+                bindings.clear();
+                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
+                    && let Some(m) = imp.get_member(member_name, &[])
+                {
+                    let score = imp.target.specificity(&imp.generic_params);
+                    if best
+                        .as_ref()
+                        .is_none_or(|(best_score, _)| score > *best_score)
+                    {
+                        best = Some((score, m));
+                    }
+                }
+            }
+        }
+
+        best.map(|(_, m)| m)
+    }
+
+    pub fn find_impl_member_with_subst(
+        &self,
+        ty: &MirDataType,
+        member: impl AsRef<str>,
+    ) -> Option<(&MiddleImplMember, FxHashMap<String, MirDataType>)> {
+        let member_name = MiddleImpl::normalize_member_name(member);
+        let key = TypeImplKey::from(ty);
+
+        let mut best: Option<(usize, &MiddleImplMember, FxHashMap<String, MirDataType>)> = None;
+        let mut bindings = FxHashMap::default();
+
+        if let Some(candidates) = self.inherent_impls.get(&key) {
+            for imp in candidates {
+                bindings.clear();
+                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
+                    && let Some(m) = imp.get_member(member_name, &[])
+                {
+                    let score = imp.target.specificity(&imp.generic_params);
+                    if best
+                        .as_ref()
+                        .is_none_or(|(best_score, _, _)| score > *best_score)
+                    {
+                        best = Some((score, m, bindings.clone()));
+                    }
+                }
+            }
+            if let Some((_, m, b)) = best {
+                return Some((m, b));
+            }
+        }
+
+        for impl_list in self.trait_impls.values() {
+            for imp in impl_list {
+                bindings.clear();
+                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
+                    && let Some(m) = imp.get_member(member_name, &[])
+                {
+                    let score = imp.target.specificity(&imp.generic_params);
+                    if best
+                        .as_ref()
+                        .is_none_or(|(best_score, _, _)| score > *best_score)
+                    {
+                        best = Some((score, m, bindings.clone()));
+                    }
+                }
+            }
+        }
+
+        best.map(|(_, m, b)| (m, b))
     }
 
     #[instrument(skip_all, fields(root_trait = %root_trait))]
     pub fn collect_trait_default_members(
-        trait_defs: &UstrMap<MiddleTrait>,
-        root_trait: &Ustr,
+        trait_defs: &FxHashMap<TypeKey, MiddleTrait>,
+        root_trait: &TypeKey,
         provided: &UstrSet,
     ) -> Vec<(Ustr, MiddleTraitMember)> {
         let mut out = Vec::new();
@@ -108,12 +219,11 @@ impl Typing {
             for (name, member) in &def.members {
                 if member.default.is_none()
                     || provided.contains(name)
-                    || seen_members.contains(name)
+                    || !seen_members.insert(*name)
                 {
                     continue;
                 }
 
-                seen_members.insert(name);
                 out.push((*name, member.clone()));
             }
         }
@@ -122,70 +232,81 @@ impl Typing {
     }
 
     #[instrument(skip_all, fields(struct_name = %struct_name))]
-    pub fn find_object_for_struct_name(&self, struct_name: &Ustr) -> Option<&MiddleObject> {
+    pub fn find_object_for_struct_name(&self, struct_name: &TypeKey) -> Option<&MiddleObject> {
         trace!("finding object for struct name");
         self.objects.get(struct_name)
     }
 
     #[instrument(skip_all, fields(base = %base, name = %name))]
-    pub fn resolve_associated_type(
-        &self,
-        base: &ParserDataType,
-        name: &Ustr,
-    ) -> Option<ParserDataType> {
+    pub fn resolve_associated_type(&self, base: &MirDataType, name: &Ustr) -> Option<MirDataType> {
         trace!("resolving associated type");
 
-        if let ParserInnerType::Struct(trait_name) = &base.data_type
-            && let Some(trait_def) = self.trait_defs.get(&Ustr::from(trait_name))
-            && let Some(assoc_type) = trait_def.assoc_types.get(name)
+        if let MirDataType::Struct { identifier, .. } = &base
+            && let Some(trait_def) = self.trait_defs.get(identifier)
+            && let Some(assoc_type) = trait_def.type_members.get(name)
         {
             return Some(assoc_type.clone());
         }
 
-        if let Some(imp) = self.find_impl_for_type(&Ustr::from(&base.impl_name())) {
+        if let Some(imp) = self.find_inherent_impl_for_type(base) {
             if let Some(assoc_type) = imp.assoc_types.get(name) {
                 return Some(assoc_type.clone());
             }
 
-            for trait_name in imp.traits.iter() {
+            for trait_name in &imp.traits {
                 if let Some(trait_def) = self.trait_defs.get(trait_name)
-                    && let Some(assoc_type) = trait_def.assoc_types.get(name)
+                    && let Some(assoc_type) = trait_def.type_members.get(name)
                 {
                     return Some(assoc_type.clone());
                 }
             }
         }
+
+        let mut bindings = FxHashMap::default();
+        for impl_list in self.trait_impls.values() {
+            for imp in impl_list {
+                bindings.clear();
+                if imp
+                    .target
+                    .can_unify(base, &imp.generic_params, &mut bindings)
+                    && let Some(assoc_type) = imp.assoc_types.get(name)
+                {
+                    return Some(assoc_type.clone());
+                }
+            }
+        }
+
         None
     }
 
     #[instrument(skip_all, fields(name = %name))]
-    pub fn get_or_create_impl(&mut self, name: Ustr, location: Option<Location>) {
-        self.impls.entry(name).or_insert(MiddleImpl {
-            members: UstrMap::default(),
-            traits: Vec::new(),
-            assoc_types: UstrMap::default(),
-            location,
-        });
+    pub fn get_or_create_impl(&mut self, name: TypeKey, location: Option<Location>) {
+        let target = MirDataType::object(name);
+        let key = TypeImplKey::from(&target);
+        let list = self.inherent_impls.entry(key).or_default();
+        if !list.iter().any(|i| i.target == target) {
+            list.push(MiddleImpl::new_inherent(target, Vec::new(), location));
+        }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MiddleObject {
     pub object_type: MiddleTypeDefType,
-    pub variables: UstrMap<(Ustr, bool)>,
-    pub traits: Vec<Ustr>,
+    pub variables: UstrMap<(VariableKey, bool)>,
+    pub traits: Vec<TypeKey>,
     pub location: Option<Location>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MiddleImplMember {
-    pub symbol_name: Ustr,
+    pub symbol_name: VariableKey,
     pub generic_params: Vec<Ustr>,
     pub dependant: bool,
 }
 
 impl MiddleImplMember {
-    pub fn new(symbol_name: Ustr, generic_params: Vec<Ustr>, dependant: bool) -> Self {
+    pub fn new(symbol_name: VariableKey, generic_params: Vec<Ustr>, dependant: bool) -> Self {
         Self {
             symbol_name,
             generic_params,
@@ -196,24 +317,61 @@ impl MiddleImplMember {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MiddleImpl {
-    members: UstrMap<Vec<MiddleImplMember>>,
-    pub traits: Vec<Ustr>,
-    pub assoc_types: UstrMap<ParserDataType>,
+    pub target: MirDataType,
+    pub generic_params: Vec<Ustr>,
+    pub trait_key: Option<TypeKey>,
+    pub traits: Vec<TypeKey>,
+    pub members: UstrMap<Vec<MiddleImplMember>>,
+    pub assoc_types: UstrMap<MirDataType>,
     pub location: Option<Location>,
 }
 
 impl MiddleImpl {
-    fn normalize_member_name(name: &impl ToString) -> Ustr {
-        let name = ParserText::get_temp_name_suffix(name).unwrap_or(name.to_string());
-        Ustr::from(
-            &name
-                .rsplit_once('.')
-                .map(|x| x.1.to_string())
-                .unwrap_or(name),
-        )
+    pub fn new_inherent(
+        target: MirDataType,
+        generic_params: Vec<Ustr>,
+        location: Option<Location>,
+    ) -> Self {
+        Self {
+            target,
+            generic_params,
+            trait_key: None,
+            traits: Vec::new(),
+            members: UstrMap::default(),
+            assoc_types: UstrMap::default(),
+            location,
+        }
     }
 
-    pub fn insert_member(&mut self, name: &impl ToString, member: MiddleImplMember) {
+    pub fn new_trait(
+        trait_key: TypeKey,
+        target: MirDataType,
+        generic_params: Vec<Ustr>,
+        location: Option<Location>,
+    ) -> Self {
+        Self {
+            target,
+            generic_params,
+            trait_key: Some(trait_key.clone()),
+            traits: vec![trait_key],
+            members: UstrMap::default(),
+            assoc_types: UstrMap::default(),
+            location,
+        }
+    }
+
+    #[inline]
+    pub fn normalize_member_name(name: impl AsRef<str>) -> Ustr {
+        let name_str = name.as_ref();
+        let short_name = name_str
+            .rsplit_once("::")
+            .map(|x| x.1)
+            .or_else(|| name_str.rsplit_once('.').map(|x| x.1))
+            .unwrap_or(name_str);
+        Ustr::from(short_name)
+    }
+
+    pub fn insert_member(&mut self, name: impl AsRef<str>, member: MiddleImplMember) {
         let entry = self
             .members
             .entry(Self::normalize_member_name(name))
@@ -231,8 +389,8 @@ impl MiddleImpl {
 
     pub fn insert_member_placeholder(
         &mut self,
-        name: &impl ToString,
-        symbol_name: Ustr,
+        name: impl AsRef<str>,
+        symbol_name: VariableKey,
         generic_params: Vec<Ustr>,
     ) {
         let entry = self
@@ -247,30 +405,26 @@ impl MiddleImpl {
 
     pub fn get_member(
         &self,
-        name: &impl ToString,
+        name: impl AsRef<str>,
         generic_params: &[Ustr],
     ) -> Option<&MiddleImplMember> {
         let members = self.members.get(&Self::normalize_member_name(name))?;
 
-        if let Some(x) = members.iter().find(|x| x.generic_params == generic_params) {
-            Some(x)
-        } else if let Some(x) = members.iter().find(|x| x.generic_params.is_empty()) {
-            Some(x)
-        } else if let Some(x) = members
-            .iter()
-            .find(|x| x.generic_params.len() == generic_params.len())
+        if !generic_params.is_empty()
+            && let Some(x) = members.iter().find(|x| x.generic_params == generic_params)
         {
-            Some(x)
-        } else {
-            members.first()
+            return Some(x);
         }
+
+        members.first()
     }
 
     pub fn get_all_members(&self) -> Vec<(&Ustr, &MiddleImplMember)> {
-        let mut members = Vec::new();
+        let total_count: usize = self.members.values().map(|v| v.len()).sum();
+        let mut members = Vec::with_capacity(total_count);
 
-        for (name, member) in &self.members {
-            for value in member {
+        for (name, member_list) in &self.members {
+            for value in member_list {
                 members.push((name, value));
             }
         }
@@ -281,26 +435,26 @@ impl MiddleImpl {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MiddleTraitMember {
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
     pub default: Option<AstNode>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MiddleTrait {
-    pub implied_traits: Vec<Ustr>,
+    pub implied_traits: Vec<TypeKey>,
     pub members: UstrMap<MiddleTraitMember>,
-    pub assoc_types: UstrMap<ParserDataType>,
+    pub type_members: UstrMap<MirDataType>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum MiddleTypeDefType {
     Enum {
-        variants: Vec<(Ustr, Option<ParserDataType>)>,
+        variants: Vec<(Ustr, Option<MirDataType>)>,
         default_variant: Option<usize>,
         default_value: Option<Box<AstNode>>,
     },
-    Struct(ObjectMap<(ParserDataType, Option<Box<AstNode>>)>),
-    NewType(ParserDataType),
+    Struct(ObjectMap<(MirDataType, Option<Box<AstNode>>)>),
+    NewType(MirDataType),
     Trait,
 }
 
@@ -344,18 +498,17 @@ impl Display for MiddleTypeDefType {
                 if fields.0.is_empty() {
                     write!(f, "struct {{}}")
                 } else if is_tuple {
-                    let types: Vec<String> = fields
-                        .0
-                        .iter()
-                        .map(|(_, (data_type, default_val))| {
-                            if let Some(val) = default_val {
-                                format!("{} = {:?}", data_type, val)
-                            } else {
-                                format!("{}", data_type)
-                            }
-                        })
-                        .collect();
-                    write!(f, "({})", types.join(", "))
+                    write!(f, "(")?;
+                    for (i, (_, (data_type, default_val))) in fields.0.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", data_type)?;
+                        if let Some(val) = default_val {
+                            write!(f, " = {:?}", val)?;
+                        }
+                    }
+                    write!(f, ")")
                 } else {
                     writeln!(f, "struct {{")?;
                     for (name, (data_type, default_val)) in fields.0.iter() {
@@ -391,17 +544,22 @@ impl MiddleTypeDefType {
                 default_value,
             } => MiddleTypeDefType::Enum {
                 variants: {
-                    let mut lst = Vec::new();
+                    let mut lst = Vec::with_capacity(variants.len());
 
                     for (_, k, v) in variants {
-                        lst.push((
-                            env.resolve(scope, &k, ResolutionOptions::default().with_dollar())
-                                .unwrap_or_else(|_| Ustr::from(&k.to_string())),
-                            v.map(|v| {
-                                env.resolve_data_type(scope, &v, ResolutionOptions::typing())
-                                    .unwrap_or(v)
-                            }),
-                        ));
+                        let name = match env.resolve(
+                            scope,
+                            &k,
+                            ResolutionOptions::default().with_dollar(),
+                        ) {
+                            Ok(key) => key.unwrap_dollar(),
+                            Err(_) => Ustr::from(k.text()),
+                        };
+                        let ty = v.map(|v| {
+                            env.resolve_data_type(scope, &v, ResolutionOptions::typing())
+                                .unwrap_or_else(|_| MirDataType::from(v))
+                        });
+                        lst.push((name, ty));
                     }
                     lst
                 },
@@ -409,35 +567,33 @@ impl MiddleTypeDefType {
                 default_value,
             },
             TypeDefType::Struct { fields } => MiddleTypeDefType::Struct({
-                let mut map = Vec::new();
-
                 match fields {
                     ObjectType::Map(field_map) => {
+                        let mut map = Vec::with_capacity(field_map.len());
                         for (k, (_, t, v)) in field_map {
                             let resolved_type = env
                                 .resolve_data_type(scope, &t, ResolutionOptions::typing())
-                                .unwrap_or(t);
+                                .unwrap_or_else(|_| MirDataType::from(t));
                             map.push((k, (resolved_type, v.map(Box::new))));
                         }
+                        ObjectMap(map)
                     }
                     ObjectType::Tuple(types) => {
+                        let mut map = Vec::with_capacity(types.len());
                         for (_, t, v) in types {
                             let resolved_type = env
                                 .resolve_data_type(scope, &t, ResolutionOptions::typing())
-                                .unwrap_or(t);
-                            map.push((
-                                Ustr::from(&map.len().to_string()),
-                                (resolved_type, v.map(Box::new)),
-                            ));
+                                .unwrap_or_else(|_| MirDataType::from(t));
+                            let idx_str = map.len().to_string();
+                            map.push((Ustr::from(&idx_str), (resolved_type, v.map(Box::new))));
                         }
+                        ObjectMap(map)
                     }
                 }
-
-                ObjectMap(map)
             }),
             TypeDefType::NewType(x) => MiddleTypeDefType::NewType(
                 env.resolve_data_type(scope, x.as_ref(), ResolutionOptions::typing())
-                    .unwrap_or(*x),
+                    .unwrap_or_else(|_| MirDataType::from(*x)),
             ),
         }
     }

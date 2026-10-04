@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirBig, MirChar, MirEnum, MirFloat, MirInt,
-        MirRange, MirString,
+        MirRange, MirString, types::MirDataType,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -24,7 +24,6 @@ use calibre_parser::{
                 AstTuple,
             },
         },
-        types::{ParserDataType, ParserInnerType},
     },
 };
 use tracing::instrument;
@@ -38,22 +37,20 @@ impl MirLowering for AstStruct {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = env.resolve(scope, &self.identifier, ResolutionOptions::typing())?;
-        let obj = env.typing.objects.get(&identifier).cloned();
-
-        // TODO Handle generators a bit better, I'm just lazy rn
-        if obj.is_none()
-            && !identifier.contains("gen")
-            && !env
-                .tagging
-                .tag_info
-                .contains(&TagInfo::IgnoreInvalidTypeCheck)
+        let identifier = match env
+            .resolve_to_data_type(scope, &self.identifier)?
+            .unwrap_all_refs()
         {
-            return Err(MiddleErr::At(
-                span,
-                Box::new(MiddleErr::Object(identifier.to_string())),
-            ));
+            MirDataType::Struct { identifier, .. } => identifier.clone(),
+            _ => {
+                return Err(MiddleErr::At(
+                    span,
+                    Box::new(MiddleErr::Object("gen".to_string())),
+                ));
+            }
         };
+
+        let obj = env.typing.objects.get(&identifier).cloned();
 
         let value = match self.value {
             ObjectType::Map(x) => {
@@ -132,7 +129,7 @@ impl MirLowering for AstStruct {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         _span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         env.resolve_to_data_type(scope, &self.identifier).ok()
     }
 }
@@ -145,7 +142,9 @@ impl MirLowering for AstEnum {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = env.resolve(scope, &self.identifier, ResolutionOptions::typing())?;
+        let identifier = env
+            .resolve(scope, &self.identifier, ResolutionOptions::typing())?
+            .unwrap_typing();
 
         let raw_variant = self.value.to_string();
         let obj = env.typing.objects.get(&identifier);
@@ -197,7 +196,7 @@ impl MirLowering for AstEnum {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         _span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         env.resolve_to_data_type(scope, &self.identifier).ok()
     }
 }
@@ -223,14 +222,14 @@ impl MirLowering for AstTuple {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         let mut types = Vec::new();
 
         for value in &self.values {
             types.push(value.type_of(env, scope, span)?);
         }
 
-        Some(ParserDataType::new(span, ParserInnerType::Tuple(types)))
+        Some(MirDataType::Tuple(types))
     }
 }
 
@@ -257,7 +256,7 @@ impl MirLowering for AstRange {
                 return Err(env.context.err_at_span(
                     span,
                     MiddleErr::InvalidType {
-                        expected: Box::new(ParserDataType::new(span, ParserInnerType::Int)),
+                        expected: Box::new(MirDataType::Int),
                         found: Box::new(data_type),
                     },
                 ));
@@ -278,12 +277,9 @@ impl MirLowering for AstRange {
         &self,
         _env: &mut MiddleEnvironment,
         _scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType {
-            data_type: ParserInnerType::Range,
-            span,
-        })
+        _span: Span,
+    ) -> Option<MirDataType> {
+        Some(MirDataType::Range)
     }
 }
 
@@ -307,12 +303,9 @@ impl MirLowering for AstString {
         &self,
         _env: &mut MiddleEnvironment,
         _scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType {
-            data_type: ParserInnerType::Str,
-            span,
-        })
+        _span: Span,
+    ) -> Option<MirDataType> {
+        Some(MirDataType::Str)
     }
 }
 
@@ -341,15 +334,12 @@ impl MirLowering for AstInt {
         &self,
         _env: &mut MiddleEnvironment,
         _scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType {
-            data_type: match self.value.int_type {
-                IntLiteralType::Byte => ParserInnerType::Byte,
-                IntLiteralType::UInt => ParserInnerType::UInt,
-                IntLiteralType::Int => ParserInnerType::Int,
-            },
-            span,
+        _span: Span,
+    ) -> Option<MirDataType> {
+        Some(match self.value.int_type {
+            IntLiteralType::Byte => MirDataType::Byte,
+            IntLiteralType::UInt => MirDataType::UInt,
+            IntLiteralType::Int => MirDataType::Int,
         })
     }
 }
@@ -379,12 +369,9 @@ impl MirLowering for AstBig {
         &self,
         _env: &mut MiddleEnvironment,
         _scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType {
-            data_type: ParserInnerType::Big,
-            span,
-        })
+        _span: Span,
+    ) -> Option<MirDataType> {
+        Some(MirDataType::Big)
     }
 }
 
@@ -406,12 +393,9 @@ impl MirLowering for AstFloat {
         &self,
         _env: &mut MiddleEnvironment,
         _scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType {
-            data_type: ParserInnerType::Float,
-            span,
-        })
+        _span: Span,
+    ) -> Option<MirDataType> {
+        Some(MirDataType::Float)
     }
 }
 
@@ -433,11 +417,8 @@ impl MirLowering for AstChar {
         &self,
         _env: &mut MiddleEnvironment,
         _scope: ScopeId,
-        span: Span,
-    ) -> Option<ParserDataType> {
-        Some(ParserDataType {
-            data_type: ParserInnerType::Char,
-            span,
-        })
+        _span: Span,
+    ) -> Option<MirDataType> {
+        Some(MirDataType::Char)
     }
 }

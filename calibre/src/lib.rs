@@ -1,21 +1,17 @@
 use building::embedded::NativeBinding;
 use calibre_frontend::config::ProjectContext;
-use calibre_lir::environment::LirRegistry;
+use calibre_lir::{VariableKey, environment::LirRegistry};
 use calibre_mir::{
     ast::MiddleNode, errors::MiddleErr, manifest::Manifest, tags::context::PackageMetadata,
     testing::Testing,
 };
-use calibre_parser::{
-    ParserError,
-    ast::{idents::ParserText, nodes::AstNode},
-};
+use calibre_parser::{ParserError, ast::nodes::AstNode};
 use calibre_vm::{
     VM, config::VMConfig, conversion::VMRegistry, error::RuntimeError, value::RuntimeValue,
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, path::PathBuf, time::Duration};
 use thiserror::Error;
-use ustr::Ustr;
 pub mod building;
 
 #[cfg(all(feature = "wasm", target_family = "wasm"))]
@@ -114,10 +110,10 @@ pub struct CalibreArtifacts {
     pub mir: Option<Timed<MiddleNode>>,
     pub lir: Option<Timed<LirRegistry>>,
     pub registry: VMRegistry,
-    pub mappings: Vec<Ustr>,
-    pub entry_name: Ustr,
-    pub init_functions: Vec<(i32, Ustr)>,
-    pub fin_functions: Vec<(i32, Ustr)>,
+    pub mappings: Vec<VariableKey>,
+    pub entry_name: VariableKey,
+    pub init_functions: Vec<(i32, VariableKey)>,
+    pub fin_functions: Vec<(i32, VariableKey)>,
     pub testing: Testing,
 }
 
@@ -269,9 +265,9 @@ impl CalibreEngine {
 impl CalibreEngine {
     pub(crate) fn install_bindings(&self, vm: &mut VM) {
         for binding in &self.bindings {
-            let resolved = resolve_binding_name(vm, &binding.name);
-            vm.variables
-                .insert(Ustr::from(&resolved), binding.value.clone());
+            if let Some(resolved) = resolve_binding_name(vm, &binding.name) {
+                vm.variables.insert(resolved.clone(), binding.value.clone());
+            }
         }
     }
 
@@ -291,22 +287,16 @@ impl CalibreEngine {
     }
 }
 
-fn resolve_binding_name(vm: &VM, short_name: &str) -> String {
-    let candidates: Vec<&str> = vm
+fn resolve_binding_name<'a>(vm: &'a VM, short_name: &str) -> Option<&'a VariableKey> {
+    let candidates: Vec<&VariableKey> = vm
         .mappings
         .iter()
-        .filter_map(|full| {
-            if ParserText::temp_name_suffix_matches(full, &short_name) {
-                Some(full.as_str())
-            } else {
-                None
-            }
-        })
+        .filter(|full| full.name() == short_name)
         .collect();
 
-    if candidates.len() > 1 {
-        return candidates[0].to_string();
+    if !candidates.is_empty() {
+        return Some(candidates[0]);
     }
 
-    short_name.to_string()
+    None
 }

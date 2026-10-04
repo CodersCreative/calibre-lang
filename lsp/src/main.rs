@@ -20,7 +20,6 @@ use async_lsp::{ClientSocket, ErrorCode, LanguageServer, ResponseError};
 use calibre_mir::environment::MiddleEnvironment;
 use calibre_mir::errors::MiddleErr;
 use calibre_mir::typing::MiddleTypeDefType;
-use calibre_parser::ast::types::{ParserDataType, ParserInnerType};
 use calibre_parser::formatter::{Formatter, Tab};
 use calibre_parser::{CalibreError, Parser, ParserError, Span as CalSpan};
 use clap::Parser as ClapParser;

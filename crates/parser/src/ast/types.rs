@@ -1,5 +1,5 @@
 use crate::{
-    AlphaRenamable, AlphaRenameState, IdentifiersUsed, ParserError, Span,
+    AlphaRenamable, IdentifiersUsed, ParserError, Span, UstrAlphaRenameState,
     ast::{
         RefMutability,
         ffi::ParserFfiInnerType,
@@ -23,7 +23,7 @@ pub struct ParserDataType {
 }
 
 impl AlphaRenamable for ParserDataType {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+    fn rename(&mut self, state: &mut UstrAlphaRenameState) {
         self.data_type.rename(state);
     }
 }
@@ -64,35 +64,6 @@ impl ParserDataType {
 
     pub fn key(&self) -> ParserInnerType {
         self.data_type.key()
-    }
-
-    pub fn member_base_name_candidates(&self) -> Vec<String> {
-        let mut names = Vec::new();
-        let base = self.key();
-        let base_key = base.to_string();
-
-        names.push(base_key.clone());
-        if let Some(x) = ParserText::get_temp_name_suffix(&base_key) {
-            names.push(x);
-        }
-
-        match &base {
-            ParserInnerType::Struct(name) => {
-                names.push(name.clone());
-                if let Some(x) = ParserText::get_temp_name_suffix(name) {
-                    names.push(x);
-                }
-            }
-            ParserInnerType::StructWithGenerics { identifier, .. } => {
-                names.push(identifier.clone());
-                if let Some(x) = ParserText::get_temp_name_suffix(identifier) {
-                    names.push(x);
-                }
-            }
-            _ => {}
-        }
-
-        names
     }
 
     pub fn canonical_args_key(args: &[ParserDataType]) -> String {
@@ -200,6 +171,7 @@ pub enum ParserInnerType {
     Dynamic,
     DynamicTraits(Vec<String>),
     Tuple(Vec<ParserDataType>),
+    Paren(Box<ParserDataType>),
     List(Box<ParserDataType>),
     Gen(Box<ParserDataType>),
     Scope(Vec<ParserDataType>),
@@ -230,7 +202,7 @@ pub enum ParserInnerType {
 }
 
 impl AlphaRenamable for ParserInnerType {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+    fn rename(&mut self, state: &mut UstrAlphaRenameState) {
         match self {
             ParserInnerType::Auto(_)
             | ParserInnerType::Big
@@ -264,13 +236,15 @@ impl AlphaRenamable for ParserInnerType {
                     *item = state.mapped_str_or_original(item);
                 }
             }
-            ParserInnerType::List(x) => x.rename(state),
-            ParserInnerType::Option(x) => x.rename(state),
+            ParserInnerType::Paren(x)
+            | ParserInnerType::Ptr(x)
+            | ParserInnerType::List(x)
+            | ParserInnerType::Option(x) => x.rename(state),
             ParserInnerType::Result { ok, err } => {
                 ok.rename(state);
                 err.rename(state);
             }
-            ParserInnerType::Ptr(x) => x.rename(state),
+
             ParserInnerType::NativeFunction {
                 return_type,
                 parameters,
@@ -565,6 +539,10 @@ impl ParserInnerType {
         matches!(self, Self::List(_))
     }
 
+    pub fn is_gen(&self) -> bool {
+        matches!(self, Self::Gen(_))
+    }
+
     pub fn is_dyn_list(&self) -> bool {
         matches!(self, Self::List(x) if x.is_dyn() || x.is_dyn_trait() || x.is_dyn_list())
     }
@@ -589,13 +567,6 @@ impl ParserInnerType {
             || other == self
             || self.impl_name() == other.impl_name()
             || self.clone().resolve_ffi() == other.clone().resolve_ffi()
-    }
-
-    #[inline]
-    pub fn is_gen(&self) -> bool {
-        let short =
-            ParserText::get_temp_name_suffix(&self.impl_name()).unwrap_or_else(|| self.impl_name());
-        short == "gen" || short.starts_with("gen:<")
     }
 
     pub fn verify(self) -> Self {
@@ -691,66 +662,6 @@ impl ParserInnerType {
             _ => None,
         }
     }
-
-    pub fn matches(&self, other: &Self, generic_params: &[&str]) -> bool {
-        match (self, other) {
-            (ParserInnerType::Struct(a), _) if generic_params.contains(&a.as_str()) => true,
-            (ParserInnerType::Struct(a), ParserInnerType::Struct(b)) if a == b => true,
-            (
-                ParserInnerType::StructWithGenerics { identifier: a, .. },
-                ParserInnerType::Struct(b),
-            ) if b == a => true,
-            (
-                ParserInnerType::Struct(a),
-                ParserInnerType::StructWithGenerics { identifier: b, .. },
-            ) => a == b,
-            (
-                ParserInnerType::StructWithGenerics {
-                    identifier: a,
-                    generic_types: ag,
-                },
-                ParserInnerType::StructWithGenerics {
-                    identifier: b,
-                    generic_types: bg,
-                },
-            ) => {
-                if a != b || ag.len() != bg.len() {
-                    return false;
-                }
-                ag.iter()
-                    .zip(bg.iter())
-                    .all(|(x, y)| x.data_type.matches(&y.data_type, generic_params))
-            }
-            (ParserInnerType::List(a), ParserInnerType::List(b)) => {
-                a.data_type.matches(&b.data_type, generic_params)
-            }
-            (ParserInnerType::Option(a), ParserInnerType::Option(b)) => {
-                a.data_type.matches(&b.data_type, generic_params)
-            }
-            (
-                ParserInnerType::Result { ok: ao, err: ae },
-                ParserInnerType::Result { ok: bo, err: be },
-            ) => {
-                ao.data_type.matches(&bo.data_type, generic_params)
-                    && ae.data_type.matches(&be.data_type, generic_params)
-            }
-            (ParserInnerType::Ptr(a), ParserInnerType::Ptr(b)) => {
-                a.data_type.matches(&b.data_type, generic_params)
-            }
-            (ParserInnerType::Ref(a, _), ParserInnerType::Ref(b, _)) => {
-                a.data_type.matches(&b.data_type, generic_params)
-            }
-            (ParserInnerType::Tuple(a), ParserInnerType::Tuple(b)) => {
-                if a.len() != b.len() {
-                    return false;
-                }
-                a.iter()
-                    .zip(b.iter())
-                    .all(|(x, y)| x.data_type.matches(&y.data_type, generic_params))
-            }
-            (x, y) => x == y,
-        }
-    }
 }
 
 impl Display for ParserDataType {
@@ -787,6 +698,7 @@ impl Display for ParserInnerType {
                 write!(f, "{}", mutability.fmt_with_val(&typ.to_string()))
             }
             Self::Result { err, ok } => write!(f, "{}!{}", err, ok),
+            Self::Paren(x) => write!(f, "<{}>", x),
             Self::Option(x) => write!(f, "{}?", x),
             Self::Ptr(x) => write!(f, "ptr:<{}>", x),
             Self::Gen(x) => write!(f, "gen:<{}>", x),

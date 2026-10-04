@@ -13,7 +13,6 @@ impl BrainFuck {
 
 	const interpret := fn (self : &mut Self, s : str) => {
 		let mut c := 0;
-		let s : list:<char> = s.to_chars();
 		let mut i := 0;
 		
 		for i < len(s) => {
@@ -47,7 +46,7 @@ impl BrainFuck {
 				',' => {
 					self.ensure_cell();
 					let inp : str = std::console::input();
-					let inp : char = inp.to_chars()[0];
+					let inp : char = inp[0];
 					self.memory[self.pointer] := inp as! byte;
 				},
 				'[' => {

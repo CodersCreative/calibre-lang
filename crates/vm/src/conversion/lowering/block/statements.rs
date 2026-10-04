@@ -47,7 +47,7 @@ impl VMLowering for LirDeclare {
             env.map.insert(self.dest, target);
         } else {
             let reg = env.lower_node(*self.value, span);
-            let name = env.add_string(self.dest);
+            let name = env.add_variable(self.dest);
 
             env.emit(
                 VMInstruction::StoreVar(VMStoreVar {
@@ -93,7 +93,7 @@ fn lower_assignment<'a>(
     let dst = env.alloc_reg();
     match node.dest {
         LirLValue::Var(dest) => {
-            let name_idx = env.add_string(dest);
+            let name_idx = env.add_variable(dest);
             let reg = env.lower_node(*node.value, span);
             env.emit(
                 VMInstruction::StoreVar(VMStoreVar {
@@ -181,7 +181,7 @@ fn lower_assignment<'a>(
                                     span,
                                 );
                             } else {
-                                let idx = env.add_string(value);
+                                let idx = env.add_variable(value);
                                 env.emit(
                                     VMInstruction::LoadVarRef(VMLoadVarRef {
                                         dst: base_reg,

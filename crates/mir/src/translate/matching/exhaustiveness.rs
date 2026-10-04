@@ -1,14 +1,8 @@
 use crate::{
-    environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+    ast::types::MirDataType, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
     symbols::resolve::ResolutionOptions, typing::MiddleTypeDefType,
 };
-use calibre_parser::{
-    Span,
-    ast::{
-        nodes::matching::MatchArmType,
-        types::{ParserDataType, ParserInnerType},
-    },
-};
+use calibre_parser::{Span, ast::nodes::matching::MatchArmType};
 use ustr::{Ustr, UstrSet};
 
 #[derive(Debug, Clone)]
@@ -24,7 +18,7 @@ pub trait ExhaustivenessChecker {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         patterns: &[MatchArmType],
-        data_type: &ParserDataType,
+        data_type: &MirDataType,
     ) -> Result<ExhaustivenessReport, MiddleErr>;
 }
 
@@ -36,13 +30,12 @@ impl ExhaustivenessChecker for EnumExhaustivenessChecker {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         patterns: &[MatchArmType],
-        data_type: &ParserDataType,
+        data_type: &MirDataType,
     ) -> Result<ExhaustivenessReport, MiddleErr> {
-        let unwrapped_type = data_type.clone().unwrap_all_refs();
+        let unwrapped_type = data_type.unwrap_all_refs();
 
-        let enum_key = match &unwrapped_type.data_type {
-            ParserInnerType::Struct(name) => Ustr::from(name),
-            ParserInnerType::StructWithGenerics { identifier, .. } => Ustr::from(identifier),
+        let enum_key = match &unwrapped_type {
+            MirDataType::Struct { identifier, .. } => identifier,
             _ => {
                 return Ok(ExhaustivenessReport {
                     is_exhaustive: true,
@@ -52,7 +45,7 @@ impl ExhaustivenessChecker for EnumExhaustivenessChecker {
             }
         };
 
-        let enum_def = match env.typing.objects.get(&enum_key) {
+        let enum_def = match env.typing.objects.get(enum_key) {
             Some(obj) => obj,
             None => {
                 return Ok(ExhaustivenessReport {
@@ -80,11 +73,10 @@ impl ExhaustivenessChecker for EnumExhaustivenessChecker {
         for pattern in patterns {
             match pattern {
                 MatchArmType::Enum { value, .. } => {
-                    covered_variants.insert(env.resolve(
-                        scope,
-                        value,
-                        ResolutionOptions::default().with_dollar(),
-                    )?);
+                    covered_variants.insert(
+                        env.resolve(scope, value, ResolutionOptions::default().with_dollar())?
+                            .unwrap_dollar(),
+                    );
                 }
                 _ => {
                     // TODO deal with variants being matched within
@@ -130,7 +122,7 @@ impl ExhaustivenessCheckerDispatcher {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         patterns: &[MatchArmType],
-        data_type: &ParserDataType,
+        data_type: &MirDataType,
     ) -> Result<ExhaustivenessReport, MiddleErr> {
         let checker = EnumExhaustivenessChecker;
         checker.check(env, scope, patterns, data_type)

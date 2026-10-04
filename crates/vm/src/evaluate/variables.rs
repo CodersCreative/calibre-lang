@@ -20,7 +20,7 @@ impl VMEvaluation for VMDropVar {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let name = vm.local_string(block, self.name)?;
+        let name = vm.local_variable(block, self.name)?;
 
         if let Some(val) = vm.variables.remove(name) {
             vm.drop_runtime_value(val);
@@ -39,7 +39,7 @@ impl VMEvaluation for VMLoadVar {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let name = vm.local_string(block, self.name)?;
+        let name = vm.local_variable(block, self.name)?;
 
         if let Some(value) = vm.get_value(name) {
             vm.set_reg_value(self.dst, value);
@@ -58,7 +58,7 @@ impl VMEvaluation for VMMoveVar {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let name = vm.local_string(block, self.name)?;
+        let name = vm.local_variable(block, self.name)?;
 
         if let Some(value) = vm.remove_value(name) {
             vm.set_reg_value(self.dst, value);
@@ -77,9 +77,9 @@ impl VMEvaluation for VMStoreVar {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let name = vm.local_string(block, self.name)?;
+        let name = vm.local_variable(block, self.name)?;
         let stored = vm.resolve_value_ref(vm.get_reg_value(self.src))?;
-        let old = vm.variables.insert(*name, stored);
+        let old = vm.variables.insert(name.clone(), stored);
 
         if let Some(old) = old
             && let Some(dst) = &self.dst
@@ -100,7 +100,7 @@ impl VMEvaluation for VMLoadVarRef {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let name = vm.local_string(block, self.name)?;
+        let name = vm.local_variable(block, self.name)?;
 
         if let Some(RuntimeValue::RegRef { frame, reg }) = vm.variables.get(name) {
             vm.set_reg_value(
@@ -111,7 +111,7 @@ impl VMEvaluation for VMLoadVarRef {
                 },
             );
         } else {
-            vm.set_reg_value(self.dst, RuntimeValue::Ref(*name));
+            vm.set_reg_value(self.dst, RuntimeValue::Ref(name.clone()));
         }
 
         Ok(TerminateValue::None)

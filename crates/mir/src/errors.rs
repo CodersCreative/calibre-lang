@@ -10,6 +10,8 @@ use calibre_parser::{
 use std::path::PathBuf;
 use thiserror::Error;
 
+use crate::ast::types::MirDataType;
+
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum MiddleErr {
     #[error("{0}")]
@@ -38,6 +40,10 @@ pub enum MiddleErr {
     Scope(String),
     #[error("Unable to find variable : {0:?}")]
     Variable(String),
+    #[error("Unable to resolve field : {0}.{1}")]
+    FieldAccess(String, String),
+    #[error("Variable shadowing is not allowed at global scope: {0}")]
+    VariableShadowing(String),
     #[error("Unable to find macro arg : ${0}")]
     MacroArg(String),
     #[error("Unexpected macro arg type from : ${0}")]
@@ -54,33 +60,33 @@ pub enum MiddleErr {
     ReturnOutOfFunction,
     #[error("Attempted to use a value of type : {found}. Expected : {expected}")]
     InvalidType {
-        expected: Box<ParserDataType>,
-        found: Box<ParserDataType>,
+        expected: Box<MirDataType>,
+        found: Box<MirDataType>,
     },
     #[error(
         "Attempted to return a value of type : {found} from a function with return type : {expected}"
     )]
     InvalidReturnType {
-        expected: Box<ParserDataType>,
-        found: Box<ParserDataType>,
+        expected: Box<MirDataType>,
+        found: Box<MirDataType>,
     },
     #[error("Invalid binary operation: {operator} between types : {left} and {right}")]
     InvalidBinaryOperation {
         operator: BinaryOperator,
-        left: Box<ParserDataType>,
-        right: Box<ParserDataType>,
+        left: Box<MirDataType>,
+        right: Box<MirDataType>,
     },
     #[error("Invalid boolean operation: {operator} between types : {left} and {right}")]
     InvalidBooleanOperation {
         operator: BooleanOperator,
-        left: Box<ParserDataType>,
-        right: Box<ParserDataType>,
+        left: Box<MirDataType>,
+        right: Box<MirDataType>,
     },
     #[error("Invalid comparison operation: {operator} between types : {left} and {right}")]
     InvalidComparisonOperation {
         operator: ComparisonOperator,
-        left: Box<ParserDataType>,
-        right: Box<ParserDataType>,
+        left: Box<MirDataType>,
+        right: Box<MirDataType>,
     },
     #[error("Cannot perform enum style pattern matching on type : {0}")]
     CantMatch(Box<ParserDataType>),
@@ -232,54 +238,56 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::InvalidMember => "M026",
             Self::UnexpectedMacroArgType(_) => "M027",
             Self::PureFunctionNoReturnType => "M028",
-            // Type inference failures (codes M030-M049)
-            Self::CannotInferVariableType(_) => "M030",
-            Self::CannotInferReturnType(_) => "M031",
-            Self::CannotInferParameterType(_, _) => "M032",
-            Self::CannotInferStructFieldType(_, _) => "M033",
-            Self::CannotInferEnumVariantType(_, _) => "M034",
-            Self::CannotInferGenericType(_) => "M035",
-            Self::CannotInferFromExpression(_) => "M036",
-            Self::CannotInferLoopIteratorType => "M037",
-            Self::CannotInferClosureCaptureType(_) => "M038",
-            Self::CannotInferCurryTargetType => "M039",
-            Self::CannotInferDefaultParameterType(_) => "M040",
-            Self::CannotInferImplMethodType(_, _) => "M041",
-            Self::CannotInferTraitMethodType(_, _) => "M042",
-            Self::CannotInferMatchArmType(_) => "M043",
-            Self::CannotInferBinaryOpResultType(_) => "M044",
-            Self::CannotInferUnaryOpResultType(_) => "M045",
-            Self::CannotInferIndexAccessType => "M046",
-            Self::CannotInferMemberAccessType(_) => "M047",
-            Self::CannotInferCallReturnType(_) => "M048",
-            Self::CannotInferGenericTypeParameter(_) => "M049",
-            // Internal errors (codes M050-M069)
-            Self::InternalMissingFunction(_) => "M050",
-            Self::InternalMissingImpl(_) => "M051",
-            Self::InternalMissingType(_) => "M052",
-            Self::InternalInvalidScopeHierarchy(_, _) => "M053",
-            Self::InternalInvalidVariableState(_, _) => "M054",
-            Self::InternalInvalidFunctionState(_, _) => "M055",
-            Self::InternalInvalidTypeState(_, _) => "M056",
-            Self::InternalLoopResultMissing => "M057",
-            Self::InternalLoopBrokeMissing => "M058",
-            Self::InternalInvalidDefaultVariantIndex => "M059",
-            Self::InternalMissingDefaultVariant => "M060",
-            Self::InternalMissingReferenceMutability => "M061",
-            Self::InvalidIntegerLiteral(_) => "M062",
-            Self::InvalidListRepeatCount => "M063",
-            Self::InternalExpectedVariableInImpl => "M064",
-            Self::InternalImplBodyNotVariableDeclaration => "M065",
-            Self::InternalNoDollarResolutionAllowed => "M066",
-            Self::InternalBuilderOnlyForStructs => "M067",
-            Self::InternalCannotGenerateDefaultImpl => "M068",
-            Self::FileReadFailed { .. } => "M069",
-            Self::InternalInvalidParentFilename(_) => "M070",
-            Self::InternalInvalidParentDirectory(_) => "M071",
-            Self::InternalUnexpectedState { .. } => "M072",
+            Self::VariableShadowing(_) => "M029",
+            Self::FieldAccess(_, _) => "M029",
+            // Type inference failures (codes M050-M099)
+            Self::CannotInferVariableType(_) => "M050",
+            Self::CannotInferReturnType(_) => "M051",
+            Self::CannotInferParameterType(_, _) => "M052",
+            Self::CannotInferStructFieldType(_, _) => "M053",
+            Self::CannotInferEnumVariantType(_, _) => "M054",
+            Self::CannotInferGenericType(_) => "M055",
+            Self::CannotInferFromExpression(_) => "M056",
+            Self::CannotInferLoopIteratorType => "M057",
+            Self::CannotInferClosureCaptureType(_) => "M058",
+            Self::CannotInferCurryTargetType => "M059",
+            Self::CannotInferDefaultParameterType(_) => "M060",
+            Self::CannotInferImplMethodType(_, _) => "M061",
+            Self::CannotInferTraitMethodType(_, _) => "M062",
+            Self::CannotInferMatchArmType(_) => "M063",
+            Self::CannotInferBinaryOpResultType(_) => "M064",
+            Self::CannotInferUnaryOpResultType(_) => "M065",
+            Self::CannotInferIndexAccessType => "M066",
+            Self::CannotInferMemberAccessType(_) => "M067",
+            Self::CannotInferCallReturnType(_) => "M068",
+            Self::CannotInferGenericTypeParameter(_) => "M069",
+            // Internal errors (codes M0100-M149)
+            Self::InternalMissingFunction(_) => "M100",
+            Self::InternalMissingImpl(_) => "M101",
+            Self::InternalMissingType(_) => "M102",
+            Self::InternalInvalidScopeHierarchy(_, _) => "M103",
+            Self::InternalInvalidVariableState(_, _) => "M104",
+            Self::InternalInvalidFunctionState(_, _) => "M105",
+            Self::InternalInvalidTypeState(_, _) => "M106",
+            Self::InternalLoopResultMissing => "M107",
+            Self::InternalLoopBrokeMissing => "M108",
+            Self::InternalInvalidDefaultVariantIndex => "M109",
+            Self::InternalMissingDefaultVariant => "M110",
+            Self::InternalMissingReferenceMutability => "M111",
+            Self::InvalidIntegerLiteral(_) => "M112",
+            Self::InvalidListRepeatCount => "M113",
+            Self::InternalExpectedVariableInImpl => "M114",
+            Self::InternalImplBodyNotVariableDeclaration => "M115",
+            Self::InternalNoDollarResolutionAllowed => "M116",
+            Self::InternalBuilderOnlyForStructs => "M117",
+            Self::InternalCannotGenerateDefaultImpl => "M118",
+            Self::FileReadFailed { .. } => "M119",
+            Self::InternalInvalidParentFilename(_) => "M120",
+            Self::InternalInvalidParentDirectory(_) => "M121",
+            Self::InternalUnexpectedState { .. } => "M122",
             // Fallbacks
-            Self::InferImpossible => "M098",
-            Self::Internal(_) => "M099",
+            Self::InferImpossible => "M150",
+            Self::Internal(_) => "M151",
         }
     }
 
@@ -315,12 +323,18 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::Variable(var) => Some(format!(
                 "variable `{var}` not found - check spelling or scope"
             )),
+            Self::FieldAccess(var, _) => Some(format!(
+                "unable to resolve `{var}` to a variable or object - check spelling or scope"
+            )),
             Self::Overload(msg) => Some(format!("overload error: {msg}")),
             Self::Object(obj) => Some(format!(
                 "object `{obj}` not found - check spelling or imports"
             )),
             Self::MacroArg(x) => Some(format!(
                 "macro arg `{x}` not found - check spelling or imports"
+            )),
+            Self::VariableShadowing(_) => Some(String::from(
+                "variables outside of a block must be unique in a particular module",
             )),
             Self::UnexpectedMacroArgType(x) => {
                 Some(format!("macro arg `{x}` needs to be an identifier"))

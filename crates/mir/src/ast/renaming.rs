@@ -1,23 +1,29 @@
 use crate::{
-    MiddleNode, MiddleNodeType,
+    MiddleNode, MiddleNodeType, MirRenamable, MirRenameState,
     ast::{
         MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirBreak, MirCall,
         MirComparison, MirConditional, MirDeref, MirDrop, MirEnum, MirField, MirFunction,
         MirIdentifier, MirIndex, MirIs, MirList, MirLoop, MirMove, MirNeg, MirRange, MirRef,
         MirReturn, MirScopeDecl, MirVarDecl,
     },
+    scoping::FullyQualifiedPath,
+    symbols::{MiddleOverload, MiddleVariable, VariableKey},
+    typing::{
+        MiddleImpl, MiddleImplMember, MiddleObject, MiddleTrait, MiddleTraitMember,
+        MiddleTypeDefType,
+    },
 };
-use calibre_parser::{AlphaRenamable, AlphaRenameState};
+use std::sync::Arc;
 use ustr::Ustr;
 
-impl AlphaRenamable for MiddleNode {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+impl MirRenamable for MiddleNode {
+    fn rename(&mut self, state: &mut MirRenameState) {
         self.node_type.rename(state);
     }
 }
 
-impl AlphaRenamable for MiddleNodeType {
-    fn rename(&mut self, state: &mut AlphaRenameState) {
+impl MirRenamable for MiddleNodeType {
+    fn rename(&mut self, state: &mut MirRenameState) {
         match self {
             MiddleNodeType::Break(MirBreak {
                 label: _,
@@ -47,10 +53,10 @@ impl AlphaRenamable for MiddleNodeType {
             }) => value.rename(state),
             MiddleNodeType::DerefStatement(MirDeref { value }) => value.rename(state),
             MiddleNodeType::Drop(MirDrop { identifier }) => {
-                *identifier = state.mapped_name_or_original(*identifier);
+                *identifier = state.mapped_variable_or_original(identifier.clone());
             }
             MiddleNodeType::Move(MirMove { identifier }) => {
-                *identifier = state.mapped_name_or_original(*identifier);
+                *identifier = state.mapped_variable_or_original(identifier.clone());
             }
             MiddleNodeType::VariableDeclaration(MirVarDecl {
                 var_type: _,
@@ -58,15 +64,27 @@ impl AlphaRenamable for MiddleNodeType {
                 value,
                 data_type,
             }) => {
-                let new_name = if !state.dont_change_local {
-                    let name =
-                        Ustr::from(&format!("{}->{}", identifier, fastrand::u32(0..u32::MAX)));
-                    state.data.insert(*identifier, name);
-                    name
-                } else {
-                    *identifier
-                };
-                *identifier = new_name;
+                if !state.dont_change_local {
+                    let new_name = Ustr::from(&format!(
+                        "{}->{}",
+                        identifier.name(),
+                        fastrand::u32(0..u32::MAX)
+                    ));
+                    state.variables.insert(
+                        identifier.clone(),
+                        VariableKey {
+                            fully_qualified_path: FullyQualifiedPath::combine(
+                                identifier.fully_qualified_path.parent.clone(),
+                                new_name,
+                            ),
+                            shadow_counter: None,
+                        },
+                    );
+                    let mut new_path = (*identifier.fully_qualified_path).clone();
+                    new_path.name = Some(new_name);
+                    identifier.fully_qualified_path = Arc::new(new_path);
+                }
+
                 value.rename(state);
                 data_type.rename(state);
             }
@@ -75,7 +93,7 @@ impl AlphaRenamable for MiddleNodeType {
                 value: _,
                 data,
             }) => {
-                *identifier = state.mapped_name_or_original(*identifier);
+                *identifier = state.mapped_type_or_original(identifier.clone());
                 if let Some(d) = data {
                     d.rename(state);
                 }
@@ -102,15 +120,30 @@ impl AlphaRenamable for MiddleNodeType {
                 default_args_id: _,
             }) => {
                 for param in parameters {
-                    let new_name =
-                        Ustr::from(&format!("{}->{}", param.0, fastrand::u32(0..u32::MAX)));
-                    state.data.insert(param.0, new_name);
+                    let new_name = Ustr::from(&format!(
+                        "{}->{}",
+                        param.0.name(),
+                        fastrand::u32(0..u32::MAX)
+                    ));
+                    state.variables.insert(
+                        param.0.clone(),
+                        VariableKey {
+                            fully_qualified_path: FullyQualifiedPath::combine(
+                                param.0.fully_qualified_path.parent.clone(),
+                                new_name,
+                            ),
+                            shadow_counter: None,
+                        },
+                    );
 
-                    if let Some(x) = memo_params.iter_mut().find(|x| x == &&param.0) {
+                    if let Some(x) = memo_params.iter_mut().find(|x| *x == param.0.name()) {
                         *x = new_name;
                     }
 
-                    param.0 = new_name;
+                    let mut new_path = (*param.0.fully_qualified_path).clone();
+                    new_path.name = Some(new_name);
+                    param.0.fully_qualified_path = Arc::new(new_path);
+
                     if let Some(default_value) = &mut param.2 {
                         default_value.rename(state);
                     }
@@ -155,7 +188,7 @@ impl AlphaRenamable for MiddleNodeType {
                 }
             }
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
-                *identifier = state.mapped_name_or_original(*identifier);
+                *identifier = state.mapped_variable_or_original(identifier.clone());
             }
             MiddleNodeType::ListLiteral(MirList { data_type, values }) => {
                 for v in values {
@@ -200,8 +233,9 @@ impl AlphaRenamable for MiddleNodeType {
             }
             MiddleNodeType::AggregateExpression(MirAggregate { identifier, value }) => {
                 if let Some(id) = identifier {
-                    *identifier = Some(state.mapped_name_or_original(*id));
+                    *identifier = Some(state.mapped_type_or_original(id.clone()));
                 }
+
                 for (_, v) in &mut value.0 {
                     v.rename(state);
                 }
@@ -217,6 +251,111 @@ impl AlphaRenamable for MiddleNodeType {
                     otherwise.rename(state);
                 }
             }
+        }
+    }
+}
+
+impl MirRenamable for MiddleImplMember {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        self.symbol_name.rename(state);
+    }
+}
+
+impl MirRenamable for MiddleImpl {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        self.target.rename(state);
+
+        if let Some(tk) = &mut self.trait_key {
+            tk.rename(state);
+        }
+
+        for t in &mut self.traits {
+            t.rename(state);
+        }
+
+        for members in self.members.values_mut() {
+            for m in members {
+                m.rename(state);
+            }
+        }
+
+        for ty in self.assoc_types.values_mut() {
+            ty.rename(state);
+        }
+    }
+}
+
+impl MirRenamable for MiddleTraitMember {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        self.data_type.rename(state);
+    }
+}
+
+impl MirRenamable for MiddleTrait {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        for t in &mut self.implied_traits {
+            t.rename(state);
+        }
+
+        for member in self.members.values_mut() {
+            member.rename(state);
+        }
+
+        for assoc_type in self.type_members.values_mut() {
+            assoc_type.rename(state);
+        }
+    }
+}
+
+impl MirRenamable for MiddleTypeDefType {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        match self {
+            MiddleTypeDefType::Enum { variants, .. } => {
+                for (_, data_type) in variants {
+                    if let Some(dt) = data_type {
+                        dt.rename(state);
+                    }
+                }
+            }
+            MiddleTypeDefType::Struct(fields) => {
+                for (_, (data_type, _)) in &mut fields.0 {
+                    data_type.rename(state);
+                }
+            }
+            MiddleTypeDefType::NewType(dt) => {
+                dt.rename(state);
+            }
+            MiddleTypeDefType::Trait => {}
+        }
+    }
+}
+
+impl MirRenamable for MiddleObject {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        self.object_type.rename(state);
+
+        for (var_key, _) in self.variables.values_mut() {
+            var_key.rename(state);
+        }
+
+        for t in &mut self.traits {
+            t.rename(state);
+        }
+    }
+}
+
+impl MirRenamable for MiddleVariable {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        self.key.rename(state);
+        self.data_type.rename(state);
+    }
+}
+
+impl MirRenamable for MiddleOverload {
+    fn rename(&mut self, state: &mut MirRenameState) {
+        self.return_type.rename(state);
+        for p in &mut self.parameters {
+            p.rename(state);
         }
     }
 }

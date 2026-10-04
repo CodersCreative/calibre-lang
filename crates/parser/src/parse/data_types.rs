@@ -54,7 +54,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                             .collect::<Vec<_>>().padded_by(potential_new_line()).delimited_by(just(Token::Lesser), just(Token::Greater))
                     .map_with_span(|types, span| {
                         if types.len() == 1 {
-                            types.into_iter().next().unwrap()
+                            ParserDataType::new(span, ParserInnerType::Paren(Box::new(types.into_iter().next().unwrap())))
                         } else {
                             ParserDataType::new(span, ParserInnerType::Tuple(types))
                         }

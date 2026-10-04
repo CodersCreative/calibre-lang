@@ -37,7 +37,7 @@ impl ParserDataType {
         })
     }
 
-    pub fn natives() -> &'static FxHashMap<String, ParserDataType> {
+    pub fn natives_no_std() -> &'static FxHashMap<String, ParserDataType> {
         static NATIVES: OnceLock<FxHashMap<String, ParserDataType>> = OnceLock::new();
 
         NATIVES.get_or_init(|| {
@@ -47,7 +47,7 @@ impl ParserDataType {
                     vec![ParserInnerType::Int, ParserInnerType::Dynamic],
                     ParserInnerType::Null,
                 ),
-                ("console_input", Vec::new(), ParserInnerType::Str),
+                ("len", vec![ParserInnerType::Dynamic], ParserInnerType::UInt),
                 (
                     "ok",
                     vec![ParserInnerType::Dynamic],
@@ -74,6 +74,42 @@ impl ParserDataType {
                     vec![ParserInnerType::Dynamic],
                     ParserInnerType::Int,
                 ),
+                (
+                    "tuple",
+                    vec![ParserInnerType::List(Box::new(Self::native_type(
+                        ParserInnerType::Dynamic,
+                    )))],
+                    ParserInnerType::Dynamic,
+                ),
+                (
+                    "panic",
+                    vec![ParserInnerType::List(Box::new(Self::native_type(
+                        ParserInnerType::Dynamic,
+                    )))],
+                    ParserInnerType::Null,
+                ),
+            ];
+
+            lst.into_iter()
+                .map(|(name, parameters, return_type)| {
+                    (
+                        name.to_string(),
+                        Self::native_type(ParserInnerType::NativeFunction {
+                            parameters: parameters.into_iter().map(Self::native_type).collect(),
+                            return_type: Box::new(Self::native_type(return_type)),
+                        }),
+                    )
+                })
+                .collect()
+        })
+    }
+
+    pub fn natives() -> &'static FxHashMap<String, ParserDataType> {
+        static NATIVES: OnceLock<FxHashMap<String, ParserDataType>> = OnceLock::new();
+
+        NATIVES.get_or_init(|| {
+            let lst: Vec<(&str, Vec<ParserInnerType>, ParserInnerType)> = vec![
+                ("console_input", Vec::new(), ParserInnerType::Str),
                 #[cfg(feature = "native")]
                 ("libc.get_c_errno", vec![], ParserInnerType::Int),
                 #[cfg(feature = "native")]
@@ -94,15 +130,7 @@ impl ParserDataType {
                     vec![ParserInnerType::Int],
                     ParserInnerType::Null,
                 ),
-                ("len", vec![ParserInnerType::Dynamic], ParserInnerType::UInt),
                 ("wait", vec![ParserInnerType::Int], ParserInnerType::Null),
-                (
-                    "panic",
-                    vec![ParserInnerType::List(Box::new(Self::native_type(
-                        ParserInnerType::Dynamic,
-                    )))],
-                    ParserInnerType::Null,
-                ),
                 ("repr", vec![ParserInnerType::Dynamic], ParserInnerType::Str),
                 (
                     "display",
@@ -111,13 +139,6 @@ impl ParserDataType {
                 ),
                 ("assert", vec![ParserInnerType::Bool], ParserInnerType::Null),
                 ("gen_suspend", vec![], ParserInnerType::Dynamic),
-                (
-                    "tuple",
-                    vec![ParserInnerType::List(Box::new(Self::native_type(
-                        ParserInnerType::Dynamic,
-                    )))],
-                    ParserInnerType::Dynamic,
-                ),
                 ("trim", vec![ParserInnerType::Str], ParserInnerType::Str),
                 (
                     "str.split",
@@ -567,9 +588,8 @@ impl ParserDataType {
                     vec![ParserInnerType::Dynamic],
                     ParserInnerType::Result {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
-                        ok: Box::new(Self::native_type(ParserInnerType::Struct(String::from(
-                            "ProcessResult",
-                        )))),
+                        // ProcessResult
+                        ok: Box::new(Self::native_type(ParserInnerType::Dynamic)),
                     },
                 ),
                 (
@@ -736,19 +756,22 @@ impl ParserDataType {
                 (
                     "net.tcp_connect",
                     vec![ParserInnerType::Str, ParserInnerType::Int],
-                    ParserInnerType::Struct(String::from("TcpStream")),
+                    // TcpStream
+                    ParserInnerType::Dynamic,
                 ),
                 #[cfg(feature = "native")]
                 (
                     "net.tcp_listen",
                     vec![ParserInnerType::Str, ParserInnerType::Int],
-                    ParserInnerType::Struct(String::from("TcpListener")),
+                    // TcpListener
+                    ParserInnerType::Dynamic,
                 ),
                 #[cfg(feature = "native")]
                 (
                     "net.tcp_accept",
                     vec![ParserInnerType::Host],
-                    ParserInnerType::Struct(String::from("TcpStream")),
+                    // TcpStream
+                    ParserInnerType::Dynamic,
                 ),
                 #[cfg(feature = "native")]
                 (

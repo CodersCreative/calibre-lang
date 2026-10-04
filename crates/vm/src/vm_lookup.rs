@@ -1,16 +1,23 @@
 use super::*;
-use calibre_parser::ast::idents::ParserText;
+use calibre_lir::{TypeKey, VariableKey};
 use ustr::Ustr;
 
 #[derive(Debug, Clone)]
 pub(crate) enum VarName {
-    Var(Ustr),
-    Func(Ustr),
+    Var(VariableKey),
+    Func(VariableKey),
 }
 
 impl VM {
-    pub(crate) fn resolve_function_by_name(&self, name: &Ustr) -> Option<Arc<VMFunction>> {
-        self.registry.functions.get(name).cloned()
+    pub(crate) fn resolve_function_by_name(
+        &self,
+        name: &VariableKey,
+    ) -> Result<Arc<VMFunction>, RuntimeError> {
+        self.registry
+            .functions
+            .get(name)
+            .cloned()
+            .ok_or_else(|| RuntimeError::FunctionNotFound(name.to_string()))
     }
 
     pub(crate) fn resolve_library_candidates(name: &Ustr) -> Vec<String> {
@@ -74,19 +81,19 @@ impl VM {
     #[instrument(skip_all)]
     pub(crate) fn capture_values(
         &self,
-        captures: &[Ustr],
-        seen: &mut UstrSet,
-    ) -> Vec<(Ustr, RuntimeValue)> {
+        captures: &[VariableKey],
+        seen: &mut FxHashSet<VariableKey>,
+    ) -> Vec<(VariableKey, RuntimeValue)> {
         if captures.is_empty() {
             return Vec::new();
         }
 
         let mut out = Vec::with_capacity(captures.len());
-        let mut seen_names = UstrSet::default();
+        let mut seen_names = FxHashSet::default();
 
         for name in captures {
-            if seen_names.insert(*name) {
-                out.push((*name, self.capture_value(name, seen)));
+            if seen_names.insert(name.clone()) {
+                out.push((name.clone(), self.capture_value(name, seen)));
             }
         }
 
@@ -94,55 +101,43 @@ impl VM {
     }
 
     pub(crate) fn make_runtime_function(&self, func: &VMFunction) -> RuntimeValue {
-        let mut seen = UstrSet::default();
+        let mut seen = FxHashSet::default();
         self.make_runtime_function_inner(func, &mut seen)
     }
 
     pub(crate) fn make_runtime_function_inner(
         &self,
         func: &VMFunction,
-        seen: &mut UstrSet,
+        seen: &mut FxHashSet<VariableKey>,
     ) -> RuntimeValue {
-        let name = func.name;
-
-        if !seen.insert(name) || func.captures.is_empty() {
+        if !seen.insert(func.name.clone()) || func.captures.is_empty() {
             return RuntimeValue::Function {
-                name,
+                name: func.name.clone(),
                 captures: Arc::new(Vec::new()),
             };
         }
 
         RuntimeValue::Function {
-            name,
+            name: func.name.clone(),
             captures: Arc::new(self.capture_values(&func.captures, seen)),
         }
     }
 
-    #[inline]
-    pub(crate) fn is_gen_type_name(type_name: &str) -> bool {
-        let short =
-            ParserText::get_temp_name_suffix(&type_name).unwrap_or_else(|| type_name.to_string());
-        short == "gen" || short.starts_with("gen:<")
-    }
-
     pub(crate) fn resolve_aggregate_member_slot(
         &mut self,
-        type_name: &str,
+        type_name: &TypeKey,
         map: &GcMap,
         name: &str,
-        short_name: Option<&str>,
     ) -> Option<usize> {
         let _ = type_name;
-        map.0.0.iter().enumerate().find_map(|(idx, (field, _))| {
-            if field == name || short_name.is_some_and(|short| field == short) {
-                Some(idx)
-            } else {
-                None
-            }
-        })
+        map.0.0.iter().enumerate().find_map(
+            |(idx, (field, _))| {
+                if field == name { Some(idx) } else { None }
+            },
+        )
     }
 
-    pub(crate) fn resolve_var_name(&self, name: Ustr) -> Option<VarName> {
+    pub(crate) fn resolve_var_name(&self, name: VariableKey) -> Option<VarName> {
         if self.get_function_ref(&name).is_some() {
             Some(VarName::Func(name))
         } else if self.variables.contains_key(&name) {
@@ -171,5 +166,49 @@ impl VM {
     ) -> Result<&'a Ustr, RuntimeError> {
         let idx = self.checked_local_string_idx(block, idx)?;
         Ok(&block.local_strings[idx])
+    }
+
+    #[inline]
+    fn checked_local_variable_idx(&self, block: &VMBlock, idx: u16) -> Result<usize, RuntimeError> {
+        let idx = idx as usize;
+        if idx < block.local_variables.len() {
+            return Ok(idx);
+        }
+
+        Err(RuntimeError::InvalidBytecode(format!(
+            "missing variable {}",
+            idx
+        )))
+    }
+
+    pub(crate) fn local_variable<'a>(
+        &self,
+        block: &'a VMBlock,
+        idx: u16,
+    ) -> Result<&'a VariableKey, RuntimeError> {
+        let idx = self.checked_local_variable_idx(block, idx)?;
+        Ok(&block.local_variables[idx])
+    }
+
+    #[inline]
+    fn checked_local_type_idx(&self, block: &VMBlock, idx: u16) -> Result<usize, RuntimeError> {
+        let idx = idx as usize;
+        if idx < block.local_types.len() {
+            return Ok(idx);
+        }
+
+        Err(RuntimeError::InvalidBytecode(format!(
+            "missing type {}",
+            idx
+        )))
+    }
+
+    pub(crate) fn local_type<'a>(
+        &self,
+        block: &'a VMBlock,
+        idx: u16,
+    ) -> Result<&'a TypeKey, RuntimeError> {
+        let idx = self.checked_local_type_idx(block, idx)?;
+        Ok(&block.local_types[idx])
     }
 }

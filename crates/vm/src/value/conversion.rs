@@ -4,7 +4,7 @@ use crate::{
     value::{BIG_PRECISION, GcVec, RuntimeValue},
 };
 use astro_float::BigFloat;
-use calibre_parser::ast::types::ParserInnerType;
+use calibre_lir::MirDataType;
 use dumpster::sync::Gc;
 use std::sync::Arc;
 use ustr::Ustr;
@@ -13,225 +13,201 @@ impl RuntimeValue {
     pub fn convert(
         mut self,
         env: &mut VM,
-        data_type: &ParserInnerType,
+        data_type: &MirDataType,
     ) -> Result<RuntimeValue, RuntimeError> {
-        if let RuntimeValue::DynObject {
-            type_name, value, ..
-        } = &self
-            && type_name == &data_type.impl_name()
-        {
-            let resolved = env.resolve_value(value.as_ref().clone())?;
-            return Ok(resolved);
-        }
-
-        if matches!(data_type, ParserInnerType::Dynamic) {
+        if matches!(
+            data_type,
+            MirDataType::Dynamic | MirDataType::DynamicTraits(_)
+        ) {
             return Ok(self);
         }
 
         self = env.resolve_value(self)?;
 
-        if let ParserInnerType::DynamicTraits(traits) = data_type {
-            return env.wrap_dyn_object(self, traits.iter().map(|x| Ustr::from(x)).collect());
-        }
-
         match (self, data_type) {
-            (RuntimeValue::Big(x), ParserInnerType::Int) => {
+            (RuntimeValue::Big(x), MirDataType::Int) => {
                 Ok(RuntimeValue::Int((x.int().to_string()).parse::<i64>()?))
             }
-            (RuntimeValue::Big(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(!x.is_zero())),
-            (RuntimeValue::Big(x), ParserInnerType::UInt) => {
+            (RuntimeValue::Big(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(!x.is_zero())),
+            (RuntimeValue::Big(x), MirDataType::UInt) => {
                 Ok(RuntimeValue::UInt((x.int().to_string()).parse::<u64>()?))
             }
-            (RuntimeValue::Big(x), ParserInnerType::Byte) => {
+            (RuntimeValue::Big(x), MirDataType::Byte) => {
                 Ok(RuntimeValue::Byte((x.int().to_string()).parse::<u8>()?))
             }
-            (RuntimeValue::Big(x), ParserInnerType::Float) => {
+            (RuntimeValue::Big(x), MirDataType::Float) => {
                 Ok(RuntimeValue::Float((x.to_string()).parse::<f64>()?))
             }
-            (RuntimeValue::Big(x), ParserInnerType::Char) => Ok(RuntimeValue::Char(
+            (RuntimeValue::Big(x), MirDataType::Char) => Ok(RuntimeValue::Char(
                 (x.int().to_string()).parse::<u8>()? as char,
             )),
-            (RuntimeValue::Big(x), ParserInnerType::Str) => {
+            (RuntimeValue::Big(x), MirDataType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
 
-            (RuntimeValue::UInt(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
-            (RuntimeValue::UInt(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
-            (RuntimeValue::UInt(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x)),
-            (RuntimeValue::UInt(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
-            (RuntimeValue::UInt(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x as f64)),
-            (RuntimeValue::UInt(x), ParserInnerType::Char) => {
-                Ok(RuntimeValue::Char((x as u8) as char))
-            }
-            (RuntimeValue::UInt(x), ParserInnerType::Str) => {
+            (RuntimeValue::UInt(x), MirDataType::Int) => Ok(RuntimeValue::Int(x as i64)),
+            (RuntimeValue::UInt(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
+            (RuntimeValue::UInt(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x)),
+            (RuntimeValue::UInt(x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
+            (RuntimeValue::UInt(x), MirDataType::Float) => Ok(RuntimeValue::Float(x as f64)),
+            (RuntimeValue::UInt(x), MirDataType::Char) => Ok(RuntimeValue::Char((x as u8) as char)),
+            (RuntimeValue::UInt(x), MirDataType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
-            (RuntimeValue::UInt(x), ParserInnerType::Big) => {
+            (RuntimeValue::UInt(x), MirDataType::Big) => {
                 Ok(RuntimeValue::Big(BigFloat::from_u64(x, BIG_PRECISION)))
             }
-            (RuntimeValue::Int(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x)),
-            (RuntimeValue::Int(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
-            (RuntimeValue::Int(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
-            (RuntimeValue::Int(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
-            (RuntimeValue::Int(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x as f64)),
-            (RuntimeValue::Int(x), ParserInnerType::Char) => {
-                Ok(RuntimeValue::Char((x as u8) as char))
-            }
-            (RuntimeValue::Int(x), ParserInnerType::Str) => {
+            (RuntimeValue::Int(x), MirDataType::Int) => Ok(RuntimeValue::Int(x)),
+            (RuntimeValue::Int(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
+            (RuntimeValue::Int(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Int(x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
+            (RuntimeValue::Int(x), MirDataType::Float) => Ok(RuntimeValue::Float(x as f64)),
+            (RuntimeValue::Int(x), MirDataType::Char) => Ok(RuntimeValue::Char((x as u8) as char)),
+            (RuntimeValue::Int(x), MirDataType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
-            (RuntimeValue::Int(x), ParserInnerType::Big) => {
+            (RuntimeValue::Int(x), MirDataType::Big) => {
                 Ok(RuntimeValue::Big(BigFloat::from_i64(x, BIG_PRECISION)))
             }
-            (RuntimeValue::Float(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x)),
-            (RuntimeValue::Float(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
-            (RuntimeValue::Float(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0.0)),
-            (RuntimeValue::Float(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
-            (RuntimeValue::Float(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
-            (RuntimeValue::Float(x), ParserInnerType::Char) => {
+            (RuntimeValue::Float(x), MirDataType::Float) => Ok(RuntimeValue::Float(x)),
+            (RuntimeValue::Float(x), MirDataType::Int) => Ok(RuntimeValue::Int(x as i64)),
+            (RuntimeValue::Float(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0.0)),
+            (RuntimeValue::Float(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Float(x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
+            (RuntimeValue::Float(x), MirDataType::Char) => {
                 Ok(RuntimeValue::Char((x as u8) as char))
             }
-            (RuntimeValue::Float(x), ParserInnerType::Str) => {
+            (RuntimeValue::Float(x), MirDataType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
-            (RuntimeValue::Float(x), ParserInnerType::Big) => {
+            (RuntimeValue::Float(x), MirDataType::Big) => {
                 Ok(RuntimeValue::Big(BigFloat::from_f64(x, BIG_PRECISION)))
             }
-            (RuntimeValue::Range(from, to), ParserInnerType::Range) => {
+            (RuntimeValue::Range(from, to), MirDataType::Range) => {
                 Ok(RuntimeValue::Range(from, to))
             }
-            (RuntimeValue::Range(_, x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x)),
-            (RuntimeValue::Range(_, x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
-            (RuntimeValue::Range(_, x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
-            (RuntimeValue::Range(_, x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
-            (RuntimeValue::Range(_, x), ParserInnerType::Float) => {
-                Ok(RuntimeValue::Float(x as f64))
-            }
-            (RuntimeValue::Bool(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x)),
-            (RuntimeValue::Bool(x), ParserInnerType::Int) => {
+            (RuntimeValue::Range(_, x), MirDataType::Int) => Ok(RuntimeValue::Int(x)),
+            (RuntimeValue::Range(_, x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
+            (RuntimeValue::Range(_, x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Range(_, x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
+            (RuntimeValue::Range(_, x), MirDataType::Float) => Ok(RuntimeValue::Float(x as f64)),
+            (RuntimeValue::Bool(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x)),
+            (RuntimeValue::Bool(x), MirDataType::Int) => {
                 Ok(RuntimeValue::Int(if x { 1 } else { 0 }))
             }
-            (RuntimeValue::Bool(x), ParserInnerType::UInt) => {
+            (RuntimeValue::Bool(x), MirDataType::UInt) => {
                 Ok(RuntimeValue::UInt(if x { 1 } else { 0 }))
             }
-            (RuntimeValue::Bool(x), ParserInnerType::Byte) => {
+            (RuntimeValue::Bool(x), MirDataType::Byte) => {
                 Ok(RuntimeValue::Byte(if x { 1 } else { 0 }))
             }
-            (RuntimeValue::Bool(x), ParserInnerType::Big) => Ok(RuntimeValue::Big(
-                BigFloat::from_u8(if x { 1 } else { 0 }, BIG_PRECISION),
-            )),
-            (RuntimeValue::Bool(x), ParserInnerType::Float) => {
+            (RuntimeValue::Bool(x), MirDataType::Big) => Ok(RuntimeValue::Big(BigFloat::from_u8(
+                if x { 1 } else { 0 },
+                BIG_PRECISION,
+            ))),
+            (RuntimeValue::Bool(x), MirDataType::Float) => {
                 Ok(RuntimeValue::Float(if x { 1.0 } else { 0.0 }))
             }
-            (RuntimeValue::Bool(x), ParserInnerType::Str) => {
-                Ok(RuntimeValue::Str(Ustr::from(if x {
-                    "true"
-                } else {
-                    "false"
-                })))
-            }
-            (RuntimeValue::Char(x), ParserInnerType::Char) => Ok(RuntimeValue::Char(x)),
-            (RuntimeValue::Char(x), ParserInnerType::Bool) => {
-                Ok(RuntimeValue::Bool((x as u16) > 0))
-            }
-            (RuntimeValue::Char(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
-            (RuntimeValue::Char(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
-            (RuntimeValue::Char(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
-            (RuntimeValue::Char(x), ParserInnerType::Float) => {
+            (RuntimeValue::Bool(x), MirDataType::Str) => Ok(RuntimeValue::Str(Ustr::from(if x {
+                "true"
+            } else {
+                "false"
+            }))),
+            (RuntimeValue::Char(x), MirDataType::Char) => Ok(RuntimeValue::Char(x)),
+            (RuntimeValue::Char(x), MirDataType::Bool) => Ok(RuntimeValue::Bool((x as u16) > 0)),
+            (RuntimeValue::Char(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Char(x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
+            (RuntimeValue::Char(x), MirDataType::Int) => Ok(RuntimeValue::Int(x as i64)),
+            (RuntimeValue::Char(x), MirDataType::Float) => {
                 Ok(RuntimeValue::Float((x as u8) as f64))
             }
-            (RuntimeValue::Char(x), ParserInnerType::Big) => Ok(RuntimeValue::Big(
-                BigFloat::from_u16(x as u16, BIG_PRECISION),
-            )),
-            (RuntimeValue::Char(x), ParserInnerType::Str) => {
+            (RuntimeValue::Char(x), MirDataType::Big) => Ok(RuntimeValue::Big(BigFloat::from_u16(
+                x as u16,
+                BIG_PRECISION,
+            ))),
+            (RuntimeValue::Char(x), MirDataType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
-            (RuntimeValue::Str(x), ParserInnerType::Str) => Ok(RuntimeValue::Str(x)),
-            (RuntimeValue::Str(x), ParserInnerType::Float) => {
+            (RuntimeValue::Str(x), MirDataType::Str) => Ok(RuntimeValue::Str(x)),
+            (RuntimeValue::Str(x), MirDataType::Float) => {
                 Ok(RuntimeValue::Float(x.trim().parse()?))
             }
-            (RuntimeValue::Str(x), ParserInnerType::UInt) => {
-                Ok(RuntimeValue::UInt(x.trim().parse()?))
-            }
-            (RuntimeValue::Str(x), ParserInnerType::Byte) => {
-                Ok(RuntimeValue::Byte(x.trim().parse()?))
-            }
-            (RuntimeValue::Str(x), ParserInnerType::Int) => {
-                Ok(RuntimeValue::Int(x.trim().parse()?))
-            }
-            (RuntimeValue::Byte(x), ParserInnerType::Byte) => Ok(RuntimeValue::Byte(x)),
-            (RuntimeValue::Byte(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
-            (RuntimeValue::Byte(x), ParserInnerType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
-            (RuntimeValue::Byte(x), ParserInnerType::Int) => Ok(RuntimeValue::Int(x as i64)),
-            (RuntimeValue::Byte(x), ParserInnerType::Float) => Ok(RuntimeValue::Float(x as f64)),
-            (RuntimeValue::Byte(x), ParserInnerType::Char) => Ok(RuntimeValue::Char(x as char)),
-            (RuntimeValue::Byte(x), ParserInnerType::Big) => {
+            (RuntimeValue::Str(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x.trim().parse()?)),
+            (RuntimeValue::Str(x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x.trim().parse()?)),
+            (RuntimeValue::Str(x), MirDataType::Int) => Ok(RuntimeValue::Int(x.trim().parse()?)),
+            (RuntimeValue::Byte(x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x)),
+            (RuntimeValue::Byte(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
+            (RuntimeValue::Byte(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Byte(x), MirDataType::Int) => Ok(RuntimeValue::Int(x as i64)),
+            (RuntimeValue::Byte(x), MirDataType::Float) => Ok(RuntimeValue::Float(x as f64)),
+            (RuntimeValue::Byte(x), MirDataType::Char) => Ok(RuntimeValue::Char(x as char)),
+            (RuntimeValue::Byte(x), MirDataType::Big) => {
                 Ok(RuntimeValue::Big(BigFloat::from_u8(x, BIG_PRECISION)))
             }
-            (RuntimeValue::Byte(x), ParserInnerType::Str) => {
+            (RuntimeValue::Byte(x), MirDataType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
-            (RuntimeValue::Str(x), ParserInnerType::Char) => {
+            (RuntimeValue::Str(x), MirDataType::Char) => {
                 let ch = x.chars().next().ok_or_else(|| {
-                    RuntimeError::CantConvert(Box::new(RuntimeValue::Str(x)), ParserInnerType::Char)
+                    RuntimeError::CantConvert(Box::new(RuntimeValue::Str(x)), MirDataType::Char)
                 })?;
+
                 Ok(RuntimeValue::Char(ch))
             }
-            (RuntimeValue::Str(x), ParserInnerType::List(t))
-                if t.data_type == ParserInnerType::Str =>
-            {
+            (RuntimeValue::Str(x), MirDataType::List(t)) if **t == MirDataType::Str => {
                 Ok(RuntimeValue::List(Arc::new(GcVec::new(
                     x.chars()
                         .map(|x| RuntimeValue::Str(Ustr::from(&x.to_string())))
                         .collect::<Vec<RuntimeValue>>(),
                 ))))
             }
-            (RuntimeValue::Str(x), ParserInnerType::List(t))
-                if t.data_type == ParserInnerType::Char =>
-            {
+            (RuntimeValue::Str(x), MirDataType::List(t)) if **t == MirDataType::Char => {
                 Ok(RuntimeValue::List(Arc::new(GcVec::new(
                     x.chars()
                         .map(RuntimeValue::Char)
                         .collect::<Vec<RuntimeValue>>(),
                 ))))
             }
-            (RuntimeValue::Ptr(id), ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Ptr(id)),
-            (RuntimeValue::Ptr(x), ParserInnerType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
-            (RuntimeValue::Null, ParserInnerType::Ptr(_)) => Ok(RuntimeValue::Ptr(0)),
-            (value, ParserInnerType::Ptr(inner)) => {
-                let converted = if inner.data_type == ParserInnerType::Null {
+            (RuntimeValue::Ptr(id), MirDataType::Ptr(_)) => Ok(RuntimeValue::Ptr(id)),
+            (RuntimeValue::Ptr(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
+            (RuntimeValue::Null, MirDataType::Ptr(_)) => Ok(RuntimeValue::Ptr(0)),
+            (value, MirDataType::Ptr(inner)) => {
+                let converted = if **inner == MirDataType::Null {
                     value
                 } else {
-                    value.convert(env, &inner.data_type)?
+                    value.convert(env, inner)?
                 };
+
                 let id = env.get_ref_id();
                 env.ptr_heap.insert(id, converted);
                 Ok(RuntimeValue::Ptr(id))
             }
-            (RuntimeValue::Null, ParserInnerType::Null) => Ok(RuntimeValue::Null),
-            (RuntimeValue::Aggregate(Some(x), z), ParserInnerType::Struct(y)) if x == y => {
+            (RuntimeValue::Null, MirDataType::Null) => Ok(RuntimeValue::Null),
+            (RuntimeValue::Aggregate(Some(x), z), MirDataType::Struct { identifier: y, .. })
+                if x == *y =>
+            {
                 Ok(RuntimeValue::Aggregate(Some(x), z))
             }
-            (RuntimeValue::Enum(x, z, w), ParserInnerType::Struct(y)) if x == y => {
+            (RuntimeValue::Enum(x, z, w), MirDataType::Struct { identifier: y, .. }) if x == *y => {
                 Ok(RuntimeValue::Enum(x, z, w))
             }
-            (RuntimeValue::Aggregate(None, x), ParserInnerType::Tuple(_)) => {
+            (RuntimeValue::Aggregate(None, x), MirDataType::Tuple(_)) => {
                 Ok(RuntimeValue::Aggregate(None, x))
             }
-            (RuntimeValue::List(data), ParserInnerType::List(t)) => {
+            (RuntimeValue::List(data), MirDataType::List(t)) => {
                 let mut lst = Vec::new();
 
                 for d in data.as_ref().0.iter() {
-                    lst.push(RuntimeValue::from(d.clone()).convert(env, &t.data_type)?);
+                    lst.push(RuntimeValue::from(d.clone()).convert(env, t)?);
                 }
 
                 Ok(RuntimeValue::List(Arc::new(GcVec::new(lst))))
             }
-            (x, ParserInnerType::List(t)) => {
+            (x, MirDataType::List(t)) => {
                 let x = x.convert(env, t)?;
                 Ok(RuntimeValue::List(Arc::new(GcVec::new(vec![x]))))
             }
-            (RuntimeValue::Option(x), ParserInnerType::Option(t)) => {
+            (RuntimeValue::Option(x), MirDataType::Option(t)) => {
                 if let Some(x) = x {
                     let x = x.as_ref().clone().convert(env, t)?;
                     Ok(RuntimeValue::Option(Some(Gc::new(x))))
@@ -239,11 +215,11 @@ impl RuntimeValue {
                     Ok(RuntimeValue::Option(None))
                 }
             }
-            (x, ParserInnerType::Option(t)) => {
+            (x, MirDataType::Option(t)) => {
                 let x = x.convert(env, t)?;
                 Ok(RuntimeValue::Option(Some(Gc::new(x))))
             }
-            (RuntimeValue::Result(x), ParserInnerType::Result { ok, err }) => match x {
+            (RuntimeValue::Result(x), MirDataType::Result { ok, err }) => match x {
                 Ok(x) => {
                     let x = x.as_ref().clone().convert(env, ok)?;
                     Ok(RuntimeValue::Result(Ok(Gc::new(x))))
@@ -253,7 +229,7 @@ impl RuntimeValue {
                     Ok(RuntimeValue::Result(Err(Gc::new(x))))
                 }
             },
-            (x, ParserInnerType::Result { ok, err: _ }) => {
+            (x, MirDataType::Result { ok, err: _ }) => {
                 let x = x.convert(env, ok)?;
                 Ok(RuntimeValue::Result(Ok(Gc::new(x))))
             }
@@ -268,40 +244,5 @@ impl RuntimeValue {
             }
             (x, t) => Err(RuntimeError::CantConvert(Box::new(x), t.clone())),
         }
-    }
-}
-
-impl VM {
-    pub fn wrap_dyn_object(
-        &mut self,
-        value: RuntimeValue,
-        constraints: Vec<Ustr>,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        if constraints.is_empty() {
-            return Ok(value);
-        }
-        let (stored_value, probe_value) = match value {
-            RuntimeValue::DynObject { value, .. } => {
-                let inner = value.as_ref().clone();
-                (inner.clone(), inner)
-            }
-            other => {
-                let probe = self.resolve_value(other.clone())?;
-                (other, probe)
-            }
-        };
-
-        let (type_name, vtable) = self
-            .build_dyn_vtable_for_value(&probe_value, constraints.as_slice())
-            .ok_or_else(|| {
-                RuntimeError::InvalidBytecode("failed to build dyn vtable".to_string())
-            })?;
-
-        Ok(RuntimeValue::DynObject {
-            type_name,
-            constraints: Arc::new(constraints),
-            value: Gc::new(stored_value),
-            vtable: Arc::new(vtable),
-        })
     }
 }

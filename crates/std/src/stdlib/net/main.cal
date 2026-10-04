@@ -1,5 +1,13 @@
 import * from std::str;
 
+type ProcessResult := struct {
+	command : str,
+	status : int,
+	success : bool,
+	stdout : str,
+	stderr : str
+}
+
 type TcpStream := struct { inner : host };
 type TcpListener := struct { inner : host };
 
@@ -98,17 +106,17 @@ impl Http {
 	};
 
 	const get := fn (url : str) -> HttpResponse => {
-		let body := try http_request_try("GET", url, "") => http_request_raw("GET", url, "");
+		let body := try http_request_try("GET", url, "") => emit http_request_raw("GET", url, "");
 		return HttpResponse { status : 0, headers : list:<str>[], body };
 	};
 
 	const post := fn (url payload : str = "") -> HttpResponse => {
-		let body := try http_request_try("POST", url, payload) => http_request_raw("POST", url, payload);
+		let body := try http_request_try("POST", url, payload) => emit http_request_raw("POST", url, payload);
 		return HttpResponse { status : 0, headers : list:<str>[], body };
 	};
 
 	const request := fn (method url payload : str = "") -> HttpResponse => {
-		let body := try http_request_try(method, url, payload) => http_request_raw(method, url, payload);
+		let body := try http_request_try(method, url, payload) => emit http_request_raw(method, url, payload);
 		return HttpResponse { status : 0, headers : list:<str>[], body };
 	};
 };

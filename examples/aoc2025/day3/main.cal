@@ -53,7 +53,7 @@ const worker_part1 := fn (banks : list:<str>, start_idx step : int, out : Channe
 	let mut local := 0;
 	
 	for idx < len(banks) => {
-		local += handle_part1(try banks[idx] => "");
+		local += handle_part1(try banks[idx] => emit "");
 		idx += step;
 	};
 	
@@ -65,7 +65,7 @@ const worker_part2 := fn (banks : list:<str>, start_idx step : int, out : Channe
 	let mut local := 0;
 	
 	for idx < len(banks) => {
-		local += max_joltage_for_count_part2(try banks[idx] => "", 12);
+		local += max_joltage_for_count_part2(try banks[idx] => emit "", 12);
 		idx += step;
 	};
 	
@@ -73,8 +73,6 @@ const worker_part2 := fn (banks : list:<str>, start_idx step : int, out : Channe
 };
 
 const handle_part1 := fn (bank : str) -> int => {
-	let bank : list:<int> = bank.to_chars();
-	
 	let mut current := (try!! bank[0]) & try!! bank[1];
 	
 	for i in 1..(len(bank) - 1) => {
@@ -94,7 +92,6 @@ const handle_part1 := fn (bank : str) -> int => {
 };
 
 const max_joltage_for_count_part2 := fn (bank : str, count : int) -> int => {
-	let bank : list:<char> = trim(bank).to_chars();
 	let n := len(bank);
 	if count <= 0 => return 0;
 	if count >= n => return bank as! int;

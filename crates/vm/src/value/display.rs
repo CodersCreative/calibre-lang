@@ -3,7 +3,7 @@ use calibre_parser::ast::idents::ParserText;
 
 impl RuntimeValue {
     pub fn repr(&self, vm: &mut VM) -> String {
-        if let Ok(x) = vm.call_trait_for_type(self, "repr", Vec::new(), Some(0))
+        if let Ok(x) = vm.call_method_for_type(self, &Ustr::from("repr"), Vec::new(), Some(0))
             && !x.is_null()
         {
             return x.repr(vm);
@@ -48,25 +48,13 @@ impl RuntimeValue {
                         .join(", ")
                 )
             }
-            Self::Generator { type_name, .. } => format!(
-                "{} {{ ... }}",
-                ParserText::get_temp_name_suffix(type_name).unwrap_or_default()
-            ),
+            Self::Generator { type_name, .. } => format!("{} {{ ... }}", type_name.name()),
             Self::GeneratorSuspend(value) => format!("<gen-suspend {}>", value.repr(vm)),
             Self::Option(Some(x)) => format!("Some : {}", x.repr(vm)),
             Self::Result(Ok(x)) => format!("Ok : {}", x.repr(vm)),
             Self::Result(Err(x)) => format!("Err : {}", x.repr(vm)),
-            Self::Enum(x, y, Some(z)) => format!(
-                "{}[{}] : {}",
-                ParserText::get_temp_name_suffix(x).unwrap_or_default(),
-                y,
-                z.repr(vm)
-            ),
-            Self::Enum(x, y, _) => format!(
-                "{}[{}]",
-                ParserText::get_temp_name_suffix(x).unwrap_or_default(),
-                y
-            ),
+            Self::Enum(x, y, Some(z)) => format!("{}[{}] : {}", x.name(), y, z.repr(vm)),
+            Self::Enum(x, y, _) => format!("{}[{}]", x.name(), y),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
                     format!(
@@ -80,13 +68,14 @@ impl RuntimeValue {
                             .join(", ")
                     )
                 } else if data.as_ref().0.is_empty() {
-                    let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
-                        .unwrap_or_default();
+                    let name = x.as_ref().map(|k| k.name().as_str()).unwrap_or("tuple");
                     format!("{} {{}}", name)
                 } else {
-                    let mut txt =
-                        ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
-                            .unwrap_or_default();
+                    let mut txt = x
+                        .as_ref()
+                        .map(|k| k.name().as_str())
+                        .unwrap_or("tuple")
+                        .to_string();
                     txt.push_str(" {\n");
 
                     let fields = &data.as_ref().0.0;
@@ -126,14 +115,13 @@ impl RuntimeValue {
     }
 
     pub fn display(&self, vm: &mut VM) -> String {
-        if let Ok(x) = vm.call_trait_for_type(self, "display", Vec::new(), Some(0))
+        if let Ok(x) = vm.call_method_for_type(self, &Ustr::from("display"), Vec::new(), Some(0))
             && !x.is_null()
         {
             return x.display(vm);
         }
 
         match self {
-            Self::DynObject { value, .. } => value.display(vm),
             Self::Str(x) => format!("{}", x),
             Self::Char(x) => format!("{}", x),
             Self::Big(x) => format!("{}", x),
@@ -178,25 +166,13 @@ impl RuntimeValue {
                         .join(", ")
                 )
             }
-            Self::Generator { type_name, .. } => format!(
-                "{} {{ ... }}",
-                ParserText::get_temp_name_suffix(type_name).unwrap_or_default()
-            ),
+            Self::Generator { type_name, .. } => format!("{} {{ ... }}", type_name.name()),
             Self::GeneratorSuspend(value) => format!("<gen-suspend {}>", value.display(vm)),
             Self::Option(Some(x)) => format!("Some : {}", x.display(vm)),
             Self::Result(Ok(x)) => format!("Ok : {}", x.display(vm)),
             Self::Result(Err(x)) => format!("Err : {}", x.display(vm)),
-            Self::Enum(x, y, Some(z)) => format!(
-                "{}[{}] : {}",
-                ParserText::get_temp_name_suffix(x).unwrap_or_default(),
-                y,
-                z.display(vm)
-            ),
-            Self::Enum(x, y, _) => format!(
-                "{}[{}]",
-                ParserText::get_temp_name_suffix(x).unwrap_or_default(),
-                y
-            ),
+            Self::Enum(x, y, Some(z)) => format!("{}[{}] : {}", x.name(), y, z.display(vm)),
+            Self::Enum(x, y, _) => format!("{}[{}]", x.name(), y),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
                     format!(
@@ -210,13 +186,14 @@ impl RuntimeValue {
                             .join(", ")
                     )
                 } else if data.as_ref().0.is_empty() {
-                    let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
-                        .unwrap_or_default();
+                    let name = x.as_ref().map(|k| k.name().as_str()).unwrap_or("tuple");
                     format!("{} {{}}", name)
                 } else {
-                    let mut txt =
-                        ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
-                            .unwrap_or_default();
+                    let mut txt = x
+                        .as_ref()
+                        .map(|k| k.name().as_str())
+                        .unwrap_or("tuple")
+                        .to_string();
                     txt.push_str(" {\n");
 
                     let fields = &data.as_ref().0.0;
@@ -266,19 +243,8 @@ impl Display for RuntimeValue {
             Self::Byte(x) => write!(f, "{}b", x),
             Self::Ptr(x) => write!(f, "ptr -> {}", x),
             Self::Int(x) => write!(f, "{}", x),
-            Self::Enum(x, y, Some(z)) => write!(
-                f,
-                "{}[{}] : {}",
-                ParserText::get_temp_name_suffix(x).unwrap_or_default(),
-                y,
-                z.as_ref()
-            ),
-            Self::Enum(x, y, _) => write!(
-                f,
-                "{}[{}]",
-                ParserText::get_temp_name_suffix(x).unwrap_or_default(),
-                y
-            ),
+            Self::Enum(x, y, Some(z)) => write!(f, "{}[{}] : {}", x.name(), y, z.as_ref()),
+            Self::Enum(x, y, _) => write!(f, "{}[{}]", x.name(), y),
             Self::Range(from, to) => write!(f, "{}..{}", from, to),
             Self::Ref(x) => write!(f, "ref -> {}", x),
             Self::VarRef(id) => write!(f, "varref -> {}", id),
@@ -298,12 +264,10 @@ impl Display for RuntimeValue {
                             .join(", ")
                     )
                 } else if data.as_ref().0.is_empty() {
-                    let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
-                        .unwrap_or_default();
+                    let name = x.as_ref().map(|k| k.name().as_str()).unwrap_or("tuple");
                     write!(f, "{}{{}}", name)
                 } else {
-                    let name = ParserText::get_temp_name_suffix(&x.as_deref().unwrap_or("tuple"))
-                        .unwrap_or_default();
+                    let name = x.as_ref().map(|k| k.name().as_str()).unwrap_or("tuple");
                     let mut txt = format!("{}{{\n", name);
 
                     for val in data.as_ref().0.iter() {
@@ -348,28 +312,7 @@ impl Display for RuntimeValue {
             Self::Str(x) => write!(f, "{:?}", x),
             Self::Char(x) => write!(f, "{:?}", x),
             Self::Function { name, captures: _ } => write!(f, "fn {} ...", name),
-            Self::Generator { type_name: x, .. } => write!(
-                f,
-                "{}{{ ... }}",
-                ParserText::get_temp_name_suffix(x).unwrap_or_default()
-            ),
-            #[allow(clippy::to_string_in_format_args)]
-            Self::DynObject {
-                type_name,
-                constraints,
-                value,
-                ..
-            } => write!(
-                f,
-                "dyn:<{}> = {} is {}",
-                constraints
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                value.to_string(),
-                type_name
-            ),
+            Self::Generator { type_name: x, .. } => write!(f, "{}{{ ... }}", x.name()),
             Self::BoundMethod { .. } => write!(f, "<bound-method>"),
             Self::GeneratorSuspend(value) => write!(f, "<gen-suspend {}>", value),
         }

@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirCall},
+    ast::{MiddleNode, MiddleNodeType, MirCall, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -8,11 +8,7 @@ use crate::{
 };
 use calibre_parser::{
     Span,
-    ast::{
-        Operator,
-        nodes::AstNode,
-        types::{ParserDataType, ParserInnerType},
-    },
+    ast::{Operator, nodes::AstNode},
 };
 use tracing::instrument;
 
@@ -24,11 +20,10 @@ impl MiddleEnvironment {
         left: &AstNode,
         right: &AstNode,
         operator: Operator,
-        span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         self.get_operator_overload(scope, left, right, &operator)
             .map(|x| x.return_type.clone())
-            .or_else(|| Some(ParserDataType::new(span, ParserInnerType::Bool)))
+            .or(Some(MirDataType::Bool))
     }
 
     #[instrument(skip_all)]
@@ -50,16 +45,16 @@ impl MiddleEnvironment {
             let matches_overload = |overload: &MiddleOverload| {
                 overload.parameters.len() == 2
                     && overload.operator == operator
-                    && overload.parameters[0].data_type.matches(
-                        &left_ty.data_type,
+                    && overload.parameters[0].matches(
+                        &left_ty,
                         &overload
                             .generic_params
                             .iter()
                             .map(|x| x.as_str())
                             .collect::<Vec<_>>(),
                     )
-                    && overload.parameters[1].data_type.matches(
-                        &right_ty.data_type,
+                    && overload.parameters[1].matches(
+                        &right_ty,
                         &overload
                             .generic_params
                             .iter()
@@ -67,6 +62,7 @@ impl MiddleEnvironment {
                             .collect::<Vec<_>>(),
                     )
             };
+
             if let Some(overload) = self
                 .symbols
                 .overloads
@@ -96,7 +92,7 @@ impl MiddleEnvironment {
         scope: ScopeId,
         span: Span,
         value: AstNode,
-        target: ParserDataType,
+        target: &MirDataType,
     ) -> Result<Option<MiddleNode>, MiddleErr> {
         let Some(left_ty) = self.resolve_type_from_node(scope, &value) else {
             return Ok(None);
@@ -108,15 +104,15 @@ impl MiddleEnvironment {
             .filter(|x| matches!(x.operator, Operator::As))
             .filter(|x| x.parameters.len() == 1)
             .find(|x| {
-                if x.parameters[0].data_type.matches(
-                    &left_ty.data_type,
+                if x.parameters[0].matches(
+                    &left_ty,
                     &x.generic_params
                         .iter()
                         .map(|x| x.as_str())
                         .collect::<Vec<_>>(),
-                ) && let Some(t) = x.return_type.data_type.unwrap_one_result()
+                ) && let Some(t) = x.return_type.unwrap_one_result()
                     && t.matches(
-                        &target.data_type,
+                        target,
                         &x.generic_params
                             .iter()
                             .map(|x| x.as_str())
@@ -148,7 +144,7 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         value: AstNode,
-        target: ParserDataType,
+        target: &MirDataType,
     ) -> Result<bool, MiddleErr> {
         let Some(left_ty) = self.resolve_type_from_node(scope, &value) else {
             return Ok(false);
@@ -160,15 +156,15 @@ impl MiddleEnvironment {
             .filter(|x| matches!(x.operator, Operator::As))
             .filter(|x| x.parameters.len() == 1)
             .find(|x| {
-                if x.parameters[0].data_type.matches(
-                    &left_ty.data_type,
+                if x.parameters[0].matches(
+                    &left_ty,
                     &x.generic_params
                         .iter()
                         .map(|x| x.as_str())
                         .collect::<Vec<_>>(),
-                ) && let Some(t) = x.return_type.data_type.unwrap_one_result()
+                ) && let Some(t) = x.return_type.unwrap_one_result()
                     && t.matches(
-                        &target.data_type,
+                        target,
                         &x.generic_params
                             .iter()
                             .map(|x| x.as_str())
@@ -208,20 +204,20 @@ impl MiddleEnvironment {
             .filter(|x| matches!(x.operator, Operator::IndexAssign))
             .filter(|x| x.parameters.len() == 3)
             .find(|x| {
-                x.parameters[0].data_type.matches(
-                    &base_ty.data_type,
+                x.parameters[0].matches(
+                    &base_ty,
                     &x.generic_params
                         .iter()
                         .map(|x| x.as_str())
                         .collect::<Vec<_>>(),
-                ) && x.parameters[1].data_type.matches(
-                    &index_ty.data_type,
+                ) && x.parameters[1].matches(
+                    &index_ty,
                     &x.generic_params
                         .iter()
                         .map(|x| x.as_str())
                         .collect::<Vec<_>>(),
-                ) && x.parameters[2].data_type.matches(
-                    &value_ty.data_type,
+                ) && x.parameters[2].matches(
+                    &value_ty,
                     &x.generic_params
                         .iter()
                         .map(|x| x.as_str())
@@ -263,14 +259,14 @@ impl MiddleEnvironment {
             .iter()
             .filter(|x| x.parameters.len() == 2 && &x.operator == operator)
             .find(|x| {
-                x.parameters[0].data_type.matches(
-                    &left_ty.data_type,
+                x.parameters[0].matches(
+                    &left_ty,
                     &x.generic_params
                         .iter()
                         .map(|x| x.as_str())
                         .collect::<Vec<_>>(),
-                ) && x.parameters[1].data_type.matches(
-                    &right_ty.data_type,
+                ) && x.parameters[1].matches(
+                    &right_ty,
                     &x.generic_params
                         .iter()
                         .map(|x| x.as_str())

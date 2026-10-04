@@ -44,7 +44,10 @@ impl MiddleEnvironment {
                     *field,
                     (
                         Vec::new(),
-                        ParserDataType::new(span, ParserInnerType::Option(Box::new(ty.clone()))),
+                        ParserDataType::new(
+                            span,
+                            ParserInnerType::Option(Box::new(ty.clone().into())),
+                        ),
                         node.clone().map(|x| {
                             AstNode::call(
                                 span,
@@ -113,7 +116,7 @@ impl MiddleEnvironment {
                                     ),
                                     (
                                         PotentialDollarIdentifier::new(span, "value"),
-                                        Some(ty.clone()),
+                                        Some(ty.clone().into()),
                                         None,
                                     ),
                                 ],
@@ -134,6 +137,7 @@ impl MiddleEnvironment {
                             )])),
                         }),
                     )),
+                    declared: false,
                 }),
             );
             methods.push(setter);
@@ -227,6 +231,7 @@ impl MiddleEnvironment {
                                             ),
                                             Vec::new(),
                                         )),
+                                        declared: false,
                                     }),
                                 )
                             } else {
@@ -246,6 +251,7 @@ impl MiddleEnvironment {
                         ])),
                     }),
                 )),
+                declared: false,
             }),
         ));
 

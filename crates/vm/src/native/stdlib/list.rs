@@ -1,7 +1,6 @@
 use crate::{
     VM,
     error::RuntimeError,
-    evaluate::calling::CallSite,
     native::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null, resolve_int, resolve_list},
@@ -51,15 +50,7 @@ impl NativeFunction for ListSortBy {
                 return Ordering::Equal;
             }
             match env
-                .call_runtime_callable_at(
-                    comparator.clone(),
-                    vec![a.clone(), b.clone()],
-                    CallSite {
-                        block: usize::MAX,
-                        tag: u32::MAX.saturating_sub(2),
-                    },
-                    true,
-                )
+                .call_runtime_callable(comparator.clone(), vec![a.clone(), b.clone()], true)
                 .and_then(|x| compare_callback_result(env, x))
             {
                 Ok(ordering) => ordering,
@@ -104,15 +95,7 @@ impl NativeFunction for ListBinarySearchBy {
             let probe = RuntimeValue::from(list[mid].clone());
 
             let ordering = env
-                .call_runtime_callable_at(
-                    comparator.clone(),
-                    vec![probe, needle.clone()],
-                    CallSite {
-                        block: usize::MAX,
-                        tag: u32::MAX.saturating_sub(3),
-                    },
-                    true,
-                )
+                .call_runtime_callable(comparator.clone(), vec![probe, needle.clone()], true)
                 .and_then(|x| compare_callback_result(env, x))?;
 
             match ordering {

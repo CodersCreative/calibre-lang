@@ -118,6 +118,7 @@ impl MiddleEnvironment {
                         ]),
                     }),
                 )),
+                declared: false,
             }),
         )];
 
@@ -194,6 +195,7 @@ impl MiddleEnvironment {
                         ]),
                     }),
                 )),
+                declared: false,
             }),
         )];
 

@@ -27,7 +27,7 @@ impl VMEvaluation for VMAs {
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         let value = vm.get_reg_value(self.src).clone();
-        let conversion = value.convert(vm, &self.data_type.data_type);
+        let conversion = value.convert(vm, &self.data_type);
         let converted = match self.failure_mode {
             AsFailureMode::Panic => match conversion {
                 Ok(value) => value,
@@ -65,7 +65,7 @@ impl VMEvaluation for VMIs {
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         let resolved = vm.resolve_value(vm.get_reg_value(self.src).clone())?;
-        let out = vm.runtime_matches_type(&resolved, &self.data_type.data_type);
+        let out = vm.runtime_matches_type(&resolved, &self.data_type);
 
         vm.set_reg_value(self.dst, RuntimeValue::Bool(out));
         Ok(TerminateValue::None)

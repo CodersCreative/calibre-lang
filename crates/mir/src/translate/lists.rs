@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirListBuilder},
+    ast::{MiddleNode, MiddleNodeType, MirListBuilder, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -7,13 +7,7 @@ use crate::{
     tags::TagInfo,
     translate::MirLowering,
 };
-use calibre_parser::{
-    Span,
-    ast::{
-        nodes::lists::AstList,
-        types::{ParserDataType, ParserInnerType},
-    },
-};
+use calibre_parser::{Span, ast::nodes::lists::AstList};
 use tracing::instrument;
 
 impl MirLowering for AstList {
@@ -69,20 +63,16 @@ impl MirLowering for AstList {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-    ) -> Option<ParserDataType> {
+    ) -> Option<MirDataType> {
         if !self.data_type.is_auto() {
-            Some(ParserDataType {
-                data_type: ParserInnerType::List(Box::new(
-                    env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
-                        .ok()?,
-                )),
-                span,
-            })
+            Some(MirDataType::List(Box::new(
+                env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
+                    .ok()?,
+            )))
         } else if let Some(first) = self.values.first() {
-            Some(ParserDataType {
-                data_type: ParserInnerType::List(Box::new(first.type_of(env, scope, span)?)),
-                span,
-            })
+            Some(MirDataType::List(Box::new(
+                first.type_of(env, scope, span)?,
+            )))
         } else {
             None
         }

@@ -117,15 +117,39 @@ impl<'a> BlockLoweringCtx<'a> {
         idx
     }
 
+    pub(super) fn add_type(&mut self, text: TypeKey) -> u16 {
+        if let Some(idx) = self.type_map.get(&text).copied() {
+            return idx;
+        }
+
+        self.block.local_types.push(text.clone());
+        let idx = (self.block.local_types.len() - 1) as u16;
+        self.type_map.insert(text, idx);
+
+        idx
+    }
+
+    pub(super) fn add_variable(&mut self, text: VariableKey) -> u16 {
+        if let Some(idx) = self.vars_map.get(&text).copied() {
+            return idx;
+        }
+
+        self.block.local_variables.push(text.clone());
+        let idx = (self.block.local_variables.len() - 1) as u16;
+        self.vars_map.insert(text, idx);
+
+        idx
+    }
+
     pub(super) fn add_string(&mut self, text: Ustr) -> u16 {
         if let Some(idx) = self.string_map.get(&text).copied() {
             return idx;
         }
+
         self.block.local_strings.push(text);
         let idx = (self.block.local_strings.len() - 1) as u16;
-        if let Some(text) = self.block.local_strings.get(idx as usize) {
-            self.string_map.insert(*text, idx);
-        }
+        self.string_map.insert(text, idx);
+
         idx
     }
 

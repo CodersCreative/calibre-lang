@@ -5,12 +5,9 @@ use crate::{
     evaluate::instruction::VMEvaluation,
     value::{RuntimeValue, TerminateValue},
 };
-use calibre_lir::ast::BlockId;
-use calibre_parser::ast::idents::ParserText;
-use calibre_parser::ast::types::ParserInnerType;
+use calibre_lir::{MirDataType, VariableKey, ast::BlockId};
 use std::{path::PathBuf, sync::Arc};
 use tracing::{debug, instrument};
-use ustr::{Ustr, UstrMap};
 
 pub mod access;
 pub mod binary;
@@ -33,197 +30,20 @@ enum CaptureRestore {
 
 impl VM {
     #[inline]
-    fn push_owner_member_candidates(
-        candidates: &mut Vec<String>,
-        owner: &str,
-        member: &str,
-        short_member: Option<&str>,
-    ) {
-        candidates.push(format!("{owner}::{member}"));
-        candidates.push(format!("{owner}.{member}"));
-        if let Some(short) = short_member {
-            candidates.push(format!("{owner}::{short}"));
-            candidates.push(format!("{owner}.{short}"));
-        }
-    }
-
-    #[inline]
-    fn push_short_owner_member_candidates(
-        candidates: &mut Vec<String>,
-        owner: &str,
-        member: &str,
-        short_member: Option<&str>,
-    ) {
-        let short_owner =
-            ParserText::get_temp_name_suffix(&owner).unwrap_or_else(|| owner.to_string());
-        if short_owner != owner {
-            Self::push_owner_member_candidates(candidates, &short_owner, member, short_member);
-        }
-    }
-
-    fn resolve_first_candidate<I>(&mut self, candidates: I) -> Option<RuntimeValue>
-    where
-        I: IntoIterator<Item = String>,
-    {
-        for candidate in candidates {
-            if let Some(resolved) = self.get_value(&Ustr::from(&candidate)) {
-                if matches!(resolved, RuntimeValue::Null) {
-                    continue;
-                }
-                return Some(resolved);
-            }
-        }
-        None
-    }
-
-    #[inline]
-    fn build_member_candidates(
-        owner: &str,
-        member: &str,
-        short_member: Option<&str>,
-        include_member_as_is: bool,
-        mapped: Option<&str>,
-    ) -> Vec<String> {
-        let mut candidates = Vec::with_capacity(10);
-        if let Some(mapped) = mapped {
-            candidates.push(mapped.to_string());
-        }
-        if include_member_as_is && member.contains("::") {
-            candidates.push(member.to_string());
-        }
-        Self::push_owner_member_candidates(&mut candidates, owner, member, short_member);
-        Self::push_short_owner_member_candidates(&mut candidates, owner, member, short_member);
-        if owner.contains("Self::Item") {
-            let normalized = owner.replace("Self::Item", "T");
-            Self::push_owner_member_candidates(&mut candidates, &normalized, member, short_member);
-            Self::push_short_owner_member_candidates(
-                &mut candidates,
-                &normalized,
-                member,
-                short_member,
-            );
-        }
-
-        candidates
-    }
-
-    fn lookup_dyn_trait_table(&self, concrete: &str, trait_name: &str) -> Option<&UstrMap<Ustr>> {
-        for (imp_ty, traits) in self.registry.dyn_vtables.iter() {
-            if !ParserText::temp_name_suffix_matches(imp_ty, &concrete) {
-                continue;
-            }
-            for (imp_trait, table) in traits {
-                if ParserText::temp_name_suffix_matches(imp_trait, &trait_name) {
-                    return Some(table);
-                }
-            }
-        }
-        None
-    }
-
-    #[instrument(skip_all)]
-    pub(crate) fn build_dyn_vtable_for_value(
-        &self,
-        value: &RuntimeValue,
-        constraints: &[Ustr],
-    ) -> Option<(Ustr, UstrMap<Ustr>)> {
-        let concrete = value.impl_name()?;
-        if constraints.is_empty() {
-            return Some((concrete, UstrMap::default()));
-        }
-
-        let mut merged = UstrMap::default();
-        for tr in constraints {
-            let table = self.lookup_dyn_trait_table(&concrete, tr)?;
-            for (member, callee) in table {
-                merged.entry(*member).or_insert_with(|| *callee);
-            }
-        }
-        Some((concrete, merged))
-    }
-
-    pub(crate) fn resolve_dyn_method_callable(
-        &mut self,
-        type_name: &str,
-        member: &str,
-        mapped: Option<&str>,
-    ) -> Option<RuntimeValue> {
-        let candidates = Self::build_member_candidates(type_name, member, None, false, mapped);
-        self.resolve_first_candidate(candidates)
-    }
-
-    pub(crate) fn resolve_associated_member_value(
-        &mut self,
-        owner: &str,
-        member: &str,
-        short_member: Option<&str>,
-    ) -> Option<RuntimeValue> {
-        let candidates = Self::build_member_candidates(owner, member, short_member, true, None);
-        for candidate in candidates {
-            if let Some(resolved) = self.get_value(&Ustr::from(&candidate)) {
-                if matches!(resolved, RuntimeValue::Null) {
-                    continue;
-                }
-                return Some(resolved);
-            }
-        }
-
-        if !owner.contains(":<")
-            && let Some(found) = self.resolve_struct_like_member(owner, member, short_member)
-        {
-            return Some(found);
-        }
-
-        if !ParserText::is_temp_name(&owner) {
-            let std_owner = format!("std::{owner}");
-            let candidates =
-                Self::build_member_candidates(&std_owner, member, short_member, true, None);
-            for candidate in candidates {
-                if let Some(resolved) = self.get_value(&Ustr::from(&candidate)) {
-                    return Some(resolved);
-                }
-            }
-        }
-        None
-    }
-
-    fn resolve_struct_like_member(
-        &mut self,
-        owner: &str,
-        member: &str,
-        short_member: Option<&str>,
-    ) -> Option<RuntimeValue> {
-        let mut resolved: Option<Arc<VMFunction>> = None;
-
-        for func in self.registry.functions.values() {
-            if !func.name.contains(owner)
-                || !(func.name.ends_with(&format!(".{member}"))
-                    || short_member.is_some_and(|short| func.name.ends_with(&format!(".{short}"))))
-            {
-                continue;
-            }
-
-            if resolved.is_some() {
-                return None;
-            }
-
-            resolved = Some(Arc::clone(func));
-        }
-
-        resolved.map(|func| self.make_runtime_function(&func))
-    }
-
-    #[inline]
     fn install_captures(
         &mut self,
-        captures: &[(Ustr, RuntimeValue)],
-    ) -> Vec<(Ustr, CaptureRestore)> {
+        captures: &[(VariableKey, RuntimeValue)],
+    ) -> Vec<(VariableKey, CaptureRestore)> {
         if captures.is_empty() {
             return Vec::new();
         }
+
         let mut prev_vars = Vec::with_capacity(captures.len() * 2);
+
         let mut install_one =
-            |key: Ustr, value: &RuntimeValue, prev_vars: &mut Vec<(Ustr, CaptureRestore)>| {
+            |key: VariableKey,
+             value: &RuntimeValue,
+             prev_vars: &mut Vec<(VariableKey, CaptureRestore)>| {
                 if let RuntimeValue::Ref(target) = value
                     && target == &key
                 {
@@ -234,7 +54,7 @@ impl VM {
                 let old = self.variables.get(&key).cloned();
 
                 if let RuntimeValue::VarRef(id) = value {
-                    self.variables.bind_alias_by_id(key, *id);
+                    self.variables.bind_alias_by_id(key.clone(), *id);
                     prev_vars.push((
                         key,
                         if old.is_some() {
@@ -245,14 +65,14 @@ impl VM {
                     ));
                 } else {
                     prev_vars.push((
-                        key,
+                        key.clone(),
                         CaptureRestore::Value(self.variables.insert(key, value.clone())),
                     ));
                 }
             };
 
         for (name, value) in captures {
-            install_one(*name, value, &mut prev_vars);
+            install_one(name.clone(), value, &mut prev_vars);
         }
 
         prev_vars
@@ -264,7 +84,7 @@ impl VM {
     }
 
     #[inline]
-    fn restore_captures(&mut self, prev_vars: Vec<(Ustr, CaptureRestore)>) {
+    fn restore_captures(&mut self, prev_vars: Vec<(VariableKey, CaptureRestore)>) {
         for (name, old) in prev_vars {
             match old {
                 CaptureRestore::Value(Some(value)) => {
@@ -304,14 +124,14 @@ impl VM {
                 }
             }
             RuntimeValue::Ref(name) => {
-                if let Ok(resolved) = self.resolve_value(RuntimeValue::Ref(*name)) {
+                if let Ok(resolved) = self.resolve_value(RuntimeValue::Ref(name.clone())) {
                     if resolved.should_pass_by_reg_ref() {
-                        RuntimeValue::Ref(*name)
+                        RuntimeValue::Ref(name.clone())
                     } else {
                         resolved
                     }
                 } else {
-                    RuntimeValue::Ref(*name)
+                    RuntimeValue::Ref(name.clone())
                 }
             }
             RuntimeValue::VarRef(id) => {
@@ -338,62 +158,43 @@ impl VM {
             .collect()
     }
 
-    fn runtime_matches_type(&self, value: &RuntimeValue, target: &ParserInnerType) -> bool {
-        if let RuntimeValue::DynObject {
-            value: inner,
-            constraints,
-            ..
-        } = value
-        {
-            return match target {
-                ParserInnerType::Dynamic => true,
-                ParserInnerType::DynamicTraits(traits) => {
-                    traits.iter().all(|tr| constraints.iter().any(|x| x == tr))
-                }
-                _ => self.runtime_matches_type(inner.as_ref(), target),
-            };
-        }
-
+    fn runtime_matches_type(&self, value: &RuntimeValue, target: &MirDataType) -> bool {
         match target {
-            ParserInnerType::Dynamic => true,
-            ParserInnerType::DynamicTraits(traits) => match value {
-                RuntimeValue::DynObject { constraints, .. } => {
-                    traits.iter().all(|tr| constraints.iter().any(|x| x == tr))
+            MirDataType::Dynamic => true,
+            MirDataType::DynamicTraits(traits) => value.to_type().is_some_and(|data_type| {
+                for key in traits {
+                    if !self.registry.vtable.does_type_implement(&data_type, key) {
+                        return false;
+                    }
                 }
-                other => self
-                    .build_dyn_vtable_for_value(
-                        other,
-                        &traits.iter().map(|x| Ustr::from(x)).collect::<Vec<_>>(),
-                    )
-                    .is_some(),
-            },
-            ParserInnerType::Auto(_) => true,
-            ParserInnerType::Ref(inner, _) => self.runtime_matches_type(value, &inner.data_type),
-            ParserInnerType::Big => matches!(value, RuntimeValue::Big(_)),
-            ParserInnerType::Float => matches!(value, RuntimeValue::Float(_)),
-            ParserInnerType::Int => matches!(value, RuntimeValue::Int(_)),
-            ParserInnerType::UInt => matches!(value, RuntimeValue::UInt(_)),
-            ParserInnerType::Host => matches!(value, RuntimeValue::Host(_)),
-            ParserInnerType::Gen(_) => matches!(value, RuntimeValue::Generator { .. }),
-            ParserInnerType::Byte => matches!(value, RuntimeValue::Byte(_)),
-            ParserInnerType::Null => matches!(value, RuntimeValue::Null),
-            ParserInnerType::Bool => matches!(value, RuntimeValue::Bool(_)),
-            ParserInnerType::Str => matches!(value, RuntimeValue::Str(_)),
-            ParserInnerType::Char => matches!(value, RuntimeValue::Char(_)),
-            ParserInnerType::Range => matches!(value, RuntimeValue::Range(_, _)),
-            ParserInnerType::Ptr(_) => matches!(value, RuntimeValue::Ptr(_)),
-            ParserInnerType::List(inner) => {
+                true
+            }),
+            MirDataType::Ref(inner, _) => self.runtime_matches_type(value, inner),
+            MirDataType::Big => matches!(value, RuntimeValue::Big(_)),
+            MirDataType::Float => matches!(value, RuntimeValue::Float(_)),
+            MirDataType::Int => matches!(value, RuntimeValue::Int(_)),
+            MirDataType::UInt => matches!(value, RuntimeValue::UInt(_)),
+            MirDataType::Host => matches!(value, RuntimeValue::Host(_)),
+            MirDataType::Gen(_) => matches!(value, RuntimeValue::Generator { .. }),
+            MirDataType::Byte => matches!(value, RuntimeValue::Byte(_)),
+            MirDataType::Null => matches!(value, RuntimeValue::Null),
+            MirDataType::Bool => matches!(value, RuntimeValue::Bool(_)),
+            MirDataType::Str => matches!(value, RuntimeValue::Str(_)),
+            MirDataType::Char => matches!(value, RuntimeValue::Char(_)),
+            MirDataType::Range => matches!(value, RuntimeValue::Range(_, _)),
+            MirDataType::Ptr(_) => matches!(value, RuntimeValue::Ptr(_)),
+            MirDataType::List(inner) => {
                 if let RuntimeValue::List(items) = value {
                     items
                         .as_ref()
                         .0
                         .iter()
-                        .all(|item| self.runtime_matches_type(item, &inner.data_type))
+                        .all(|item| self.runtime_matches_type(item, inner))
                 } else {
                     false
                 }
             }
-            ParserInnerType::Tuple(types) => {
+            MirDataType::Tuple(types) => {
                 if let RuntimeValue::Aggregate(None, fields) = value {
                     if fields.as_ref().0.len() != types.len() {
                         return false;
@@ -404,28 +205,24 @@ impl VM {
                             .0
                             .iter()
                             .find(|(name, _)| name == &i.to_string())
-                            .map(|(_, v)| self.runtime_matches_type(v, &t.data_type))
+                            .map(|(_, v)| self.runtime_matches_type(v, t))
                             .unwrap_or(false)
                     })
                 } else {
                     false
                 }
             }
-            ParserInnerType::Option(inner) => match value {
-                RuntimeValue::Option(Some(v)) => {
-                    self.runtime_matches_type(v.as_ref(), &inner.data_type)
-                }
+            MirDataType::Option(inner) => match value {
+                RuntimeValue::Option(Some(v)) => self.runtime_matches_type(v.as_ref(), inner),
                 RuntimeValue::Option(None) => true,
                 _ => false,
             },
-            ParserInnerType::Result { ok, err } => match value {
-                RuntimeValue::Result(Ok(v)) => self.runtime_matches_type(v.as_ref(), &ok.data_type),
-                RuntimeValue::Result(Err(v)) => {
-                    self.runtime_matches_type(v.as_ref(), &err.data_type)
-                }
+            MirDataType::Result { ok, err } => match value {
+                RuntimeValue::Result(Ok(v)) => self.runtime_matches_type(v.as_ref(), ok),
+                RuntimeValue::Result(Err(v)) => self.runtime_matches_type(v.as_ref(), err),
                 _ => false,
             },
-            ParserInnerType::Function { .. } | ParserInnerType::NativeFunction { .. } => {
+            MirDataType::Function { .. } | MirDataType::NativeFunction { .. } => {
                 let val = matches!(
                     value,
                     RuntimeValue::Function { .. } | RuntimeValue::NativeFunction(_)
@@ -438,51 +235,21 @@ impl VM {
                 #[cfg(not(feature = "native"))]
                 val
             }
-            ParserInnerType::Struct(identifier)
-            | ParserInnerType::StructWithGenerics { identifier, .. } => match value {
+            MirDataType::Struct { identifier, .. } => match value {
                 RuntimeValue::Aggregate(Some(actual), _) | RuntimeValue::Enum(actual, _, _) => {
                     actual == identifier
                 }
-                RuntimeValue::Generator { type_name, .. } => identifier == type_name.as_str(),
+                RuntimeValue::Generator { type_name, .. } => {
+                    identifier.name() == type_name.name().as_str()
+                }
                 _ => false,
             },
-            ParserInnerType::Scope(_)
-            | ParserInnerType::DollarIdentifier(_)
-            | ParserInnerType::FfiType(_) => false,
         }
-    }
-
-    fn resolve_callable_cached(
-        &mut self,
-        name: Ustr,
-        callsite: (usize, usize, u32),
-    ) -> Option<Arc<VMFunction>> {
-        if let Some(cached) = self.caches.callsite.get(&callsite)
-            && cached.name == name
-        {
-            return Some(Arc::clone(cached));
-        }
-
-        if let Some(cached) = self.caches.call.get(&name) {
-            let resolved = Arc::clone(cached);
-            self.caches.callsite.insert(callsite, Arc::clone(&resolved));
-            return Some(resolved);
-        }
-
-        let found = self.resolve_function_by_name(&name);
-
-        if let Some(ref func) = found {
-            let cached = Arc::clone(func);
-            self.caches.call.insert(name, Arc::clone(&cached));
-            self.caches.callsite.insert(callsite, cached);
-        }
-
-        found
     }
 
     #[inline]
-    fn get_value(&self, name: &Ustr) -> Option<RuntimeValue> {
-        if let Some(native) = RuntimeValue::natives().get(name.as_str()) {
+    fn get_value(&self, name: &VariableKey) -> Option<RuntimeValue> {
+        if let Some(native) = RuntimeValue::natives().get(name.name().as_str()) {
             return Some(native.clone());
         }
 
@@ -496,7 +263,7 @@ impl VM {
     }
 
     #[inline]
-    fn remove_value(&mut self, name: &Ustr) -> Option<RuntimeValue> {
+    fn remove_value(&mut self, name: &VariableKey) -> Option<RuntimeValue> {
         if let Some(func) = self.get_function_ref(name) {
             return Some(self.make_runtime_function(func));
         }

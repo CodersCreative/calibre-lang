@@ -10,7 +10,7 @@ pub struct VMLoadVar {
 
 impl Display for VMLoadVar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "%r{} = LOAD {}", self.dst, self.name)
+        write!(f, "%r{} = LOAD %v{}", self.dst, self.name)
     }
 }
 
@@ -22,7 +22,7 @@ pub struct VMMoveVar {
 
 impl Display for VMMoveVar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "%r{} = MOVE {}", self.dst, self.name)
+        write!(f, "%r{} = MOVE %v{}", self.dst, self.name)
     }
 }
 
@@ -33,7 +33,7 @@ pub struct VMDropVar {
 
 impl Display for VMDropVar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DROP {}", self.name)
+        write!(f, "DROP %v{}", self.name)
     }
 }
 
@@ -47,8 +47,8 @@ pub struct VMStoreVar {
 impl Display for VMStoreVar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.dst {
-            Some(dst) => write!(f, "%r{} = STORE {} <- %r{}", dst, self.name, self.src),
-            _ => write!(f, "STORE {} <- %r{}", self.name, self.src),
+            Some(dst) => write!(f, "%r{} = STORE %v{} <- %r{}", dst, self.name, self.src),
+            _ => write!(f, "STORE %v{} <- %r{}", self.name, self.src),
         }
     }
 }
@@ -61,6 +61,6 @@ pub struct VMLoadVarRef {
 
 impl Display for VMLoadVarRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "%r{} = VARREF {}", self.dst, self.name)
+        write!(f, "%r{} = VARREF %v{}", self.dst, self.name)
     }
 }

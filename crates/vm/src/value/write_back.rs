@@ -49,7 +49,6 @@ impl RuntimeValue {
                     inner.as_ref().path_exists(rest)
                 }
                 RuntimeValue::Enum(_, _, Some(inner)) => inner.as_ref().path_exists(rest),
-                RuntimeValue::DynObject { value: inner, .. } => inner.as_ref().path_exists(rest),
                 _ => false,
             },
         }
@@ -97,7 +96,6 @@ impl RuntimeValue {
                     inner.as_ref().read_path(rest)
                 }
                 RuntimeValue::Enum(_, _, Some(inner)) => inner.as_ref().read_path(rest),
-                RuntimeValue::DynObject { value: inner, .. } => inner.as_ref().read_path(rest),
                 _ => None,
             },
         }
@@ -156,7 +154,6 @@ impl RuntimeValue {
                     Self::update_gc(inner, rest, op)
                 }
                 RuntimeValue::Enum(_, _, Some(inner)) => Self::update_gc(inner, rest, op),
-                RuntimeValue::DynObject { value: inner, .. } => Self::update_gc(inner, rest, op),
                 _ => None,
             },
         }

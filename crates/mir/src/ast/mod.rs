@@ -28,14 +28,21 @@ use calibre_parser::{
     },
 };
 use derive_builder::Builder;
+use rustc_hash::FxHashMap;
 use std::fmt::Display;
 use tracing::instrument;
-use ustr::{Ustr, UstrMap};
+use ustr::Ustr;
 
-use crate::{errors::MiddleErr, scoping::ScopeId};
+use crate::{
+    ast::types::MirDataType,
+    errors::MiddleErr,
+    scoping::ScopeId,
+    symbols::{TypeKey, VariableKey},
+};
 
 pub mod identifiers;
 pub mod renaming;
+pub mod types;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleNode {
@@ -50,11 +57,9 @@ impl MiddleNode {
     }
 
     #[inline(always)]
-    pub fn identifier(span: Span, text: impl ToString) -> Self {
+    pub fn identifier(span: Span, identifier: VariableKey) -> Self {
         Self::new(
-            MiddleNodeType::Identifier(MirIdentifier {
-                identifier: text.to_string().into(),
-            }),
+            MiddleNodeType::Identifier(MirIdentifier { identifier }),
             span,
         )
     }
@@ -62,9 +67,10 @@ impl MiddleNode {
     pub fn is_function(&self) -> bool {
         matches!(self.node_type, MiddleNodeType::FunctionDeclaration(_))
     }
+
     pub fn member_field(&self) -> Result<Ustr, MiddleErr> {
         Ok(match &self.node_type {
-            MiddleNodeType::Identifier(name) => name.identifier,
+            MiddleNodeType::Identifier(name) => *name.identifier.name(),
             MiddleNodeType::IntLiteral(MirInt {
                 value: ParsedIntLiteral { value, int_type },
             }) => match int_type {
@@ -80,6 +86,28 @@ impl MiddleNode {
     pub fn nodes(self) -> Box<[Self]> {
         match self.node_type {
             MiddleNodeType::ScopeDeclaration(MirScopeDecl { body: items, .. }) => items,
+            _ => Box::new([self]),
+        }
+    }
+
+    pub fn nodes_if_isnt_temp(self) -> Box<[Self]> {
+        match self.node_type {
+            MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                body: items,
+                is_temp: false,
+                ..
+            }) => items,
+            _ => Box::new([self]),
+        }
+    }
+
+    pub fn nodes_if_no_new_scope(self) -> Box<[Self]> {
+        match self.node_type {
+            MiddleNodeType::ScopeDeclaration(MirScopeDecl {
+                body: items,
+                create_new_scope: false,
+                ..
+            }) => items,
             _ => Box::new([self]),
         }
     }
@@ -145,7 +173,7 @@ impl MiddleNode {
     }
 
     #[instrument(skip_all)]
-    pub fn substitute(&mut self, repl: &UstrMap<MiddleNode>) {
+    pub fn substitute(&mut self, repl: &FxHashMap<VariableKey, MiddleNode>) {
         match &mut self.node_type {
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
                 if let Some(replacement) = repl.get(identifier) {
@@ -217,7 +245,7 @@ impl MiddleNode {
         }
     }
 
-    pub fn calls_self(&self, name: &Ustr) -> bool {
+    pub fn calls_self(&self, name: &VariableKey) -> bool {
         match &self.node_type {
             MiddleNodeType::Identifier(MirIdentifier { identifier }) => identifier == name,
             MiddleNodeType::CallExpression(MirCall { caller, args }) => {
@@ -288,12 +316,12 @@ pub struct MirRef {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirDrop {
-    pub identifier: Ustr,
+    pub identifier: VariableKey,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirMove {
-    pub identifier: Ustr,
+    pub identifier: VariableKey,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -308,7 +336,7 @@ pub struct MirDeref {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirIdentifier {
-    pub identifier: Ustr,
+    pub identifier: VariableKey,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -318,7 +346,7 @@ pub struct MirString {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirList {
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
     pub values: Box<[MiddleNode]>,
 }
 
@@ -371,14 +399,14 @@ pub struct MirNeg {
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirAs {
     pub value: Box<MiddleNode>,
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
     pub failure_mode: AsFailureMode,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirIs {
     pub value: Box<MiddleNode>,
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -443,13 +471,13 @@ pub struct MirAssignment {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirAggregate {
-    pub identifier: Option<Ustr>,
+    pub identifier: Option<TypeKey>,
     pub value: ObjectMap<MiddleNode>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirEnum {
-    pub identifier: Ustr,
+    pub identifier: TypeKey,
     pub value: Ustr,
     pub data: Option<Box<MiddleNode>>,
 }
@@ -457,9 +485,9 @@ pub struct MirEnum {
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirVarDecl {
     pub var_type: VarType,
-    pub identifier: Ustr,
+    pub identifier: VariableKey,
     pub value: Box<MiddleNode>,
-    pub data_type: ParserDataType,
+    pub data_type: MirDataType,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -474,9 +502,9 @@ pub struct MirScopeDecl {
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirFunction {
     #[allow(clippy::complexity)]
-    pub parameters: Box<[(Ustr, ParserDataType, Option<Box<MiddleNode>>)]>,
+    pub parameters: Box<[(VariableKey, MirDataType, Option<Box<MiddleNode>>)]>,
     pub body: Box<MiddleNode>,
-    pub return_type: ParserDataType,
+    pub return_type: MirDataType,
     pub scope_id: ScopeId,
     pub default_args_id: Option<usize>,
     pub memo_params: Box<[Ustr]>,
@@ -489,8 +517,8 @@ pub struct MirExtern {
     pub abi: Ustr,
     pub library: Ustr,
     pub symbol: Ustr,
-    pub parameters: Box<[ParserDataType]>,
-    pub return_type: ParserDataType,
+    pub parameters: Box<[MirDataType]>,
+    pub return_type: MirDataType,
     pub memo_params: Box<[Ustr]>,
     pub memo: bool,
     pub pure: bool,
@@ -631,7 +659,8 @@ impl From<MiddleNodeType> for AstNodeType {
                     var_type: value.var_type,
                     identifier: value.identifier.into(),
                     value: Box::new((*value.value).into()),
-                    data_type: value.data_type,
+                    data_type: value.data_type.into(),
+                    declared: false,
                 })
             }
             MiddleNodeType::EnumExpression(value) => AstNodeType::EnumExpression(AstEnum {
@@ -664,13 +693,13 @@ impl From<MiddleNodeType> for AstNodeType {
                             for param in value.parameters {
                                 lst.push((
                                     param.0.into(),
-                                    Some(param.1),
+                                    Some(param.1.into()),
                                     param.2.map(|x| Box::new((*x).into())),
                                 ));
                             }
                             lst
                         },
-                        return_type: value.return_type,
+                        return_type: value.return_type.into(),
                         param_destructures: Vec::new(),
                     },
                     body: Box::new((*value.body).into()),
@@ -680,10 +709,15 @@ impl From<MiddleNodeType> for AstNodeType {
                 AstNodeType::ExternFunctionDeclaration(AstExtern {
                     abi: value.abi.to_string(),
                     identifier: ParserText::from(value.symbol).into(),
-                    parameters: value.parameters.to_vec(),
-                    return_type: value.return_type,
+                    parameters: value
+                        .parameters
+                        .into_iter()
+                        .map(ParserDataType::from)
+                        .collect(),
+                    return_type: value.return_type.into(),
                     library: value.library.to_string(),
                     symbol: None,
+                    declared: false,
                 })
             }
             MiddleNodeType::AssignmentExpression(value) => {
@@ -697,12 +731,12 @@ impl From<MiddleNodeType> for AstNodeType {
             }),
             MiddleNodeType::AsExpression(value) => AstNodeType::AsExpression(AstAs {
                 value: Box::new((*value.value).into()),
-                data_type: value.data_type,
+                data_type: value.data_type.into(),
                 failure_mode: value.failure_mode,
             }),
             MiddleNodeType::IsExpression(value) => AstNodeType::IsExpression(AstIs {
                 value: Box::new((*value.value).into()),
-                data_type: value.data_type,
+                data_type: value.data_type.into(),
             }),
             MiddleNodeType::Conditional(value) => AstNodeType::IfStatement(AstIf {
                 comparison: Box::new(IfComparisonType::If((*value.comparison).into())),
@@ -733,7 +767,7 @@ impl From<MiddleNodeType> for AstNodeType {
                 value: ParserText::from(value.value),
             }),
             MiddleNodeType::ListLiteral(value) => AstNodeType::ListLiteral(AstList {
-                data_type: value.data_type,
+                data_type: value.data_type.into(),
                 values: {
                     let mut lst = Vec::new();
 
@@ -815,16 +849,18 @@ impl From<MiddleNodeType> for AstNodeType {
                 } else {
                     value.value.contains_key("0")
                 };
+
                 if is_tuple {
                     let caller_span = Span::default();
 
+                    // TODO Fix invalid conversion of FQP Ident to str
                     AstNodeType::CallExpression(AstCall {
                         string_fn: None,
                         generic_types: Vec::new(),
                         caller: Box::new(AstNode::identifier(
                             caller_span,
                             if let Some(identifier) = value.identifier {
-                                identifier.to_string()
+                                identifier.name().to_string()
                             } else {
                                 String::from("tuple")
                             },
@@ -844,12 +880,13 @@ impl From<MiddleNodeType> for AstNodeType {
                         reverse_args: Vec::new(),
                     })
                 } else {
+                    // TODO Fix invalid conversion of FQP Ident to str
                     AstNodeType::StructLiteral(AstStruct {
                         identifier: PotentialGenericTypeIdentifier::new(
                             Span::default(),
                             value
                                 .identifier
-                                .map(|x| x.to_string())
+                                .map(|x| x.name().to_string())
                                 .unwrap_or_else(|| "map".to_string()),
                         ),
                         value: ObjectType::Map(

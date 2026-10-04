@@ -1,13 +1,13 @@
 use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    scoping::{FullyQualifiedPath, MiddleScope, ScopeId, Scoping},
+    scoping::{FullyQualifiedPath, MiddleScope, ScopeId},
+    symbols::resolve::{Key, ResolutionOptions},
     translate::MirLowering,
 };
 use calibre_parser::{
     Parser,
     ast::{
-        idents::ParserText,
         nodes::{AstNodeType, VarType, scopes::AstScopeDef},
         types::ParserDataType,
     },
@@ -17,16 +17,20 @@ use std::{path::PathBuf, sync::Arc};
 use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
-impl Scoping {
+impl MiddleEnvironment {
     pub fn new_root_scope_no_std(
         &mut self,
         parent: Option<ScopeId>,
         path: PathBuf,
         namespace: Option<&Ustr>,
     ) -> ScopeId {
-        let scope = self.add_scope(
+        let scope = self.scoping.add_scope(
             MiddleScope {
-                fully_qualified_path: Arc::new(FullyQualifiedPath::get(self, parent, namespace)),
+                fully_qualified_path: Arc::new(FullyQualifiedPath::get(
+                    &self.scoping,
+                    parent,
+                    namespace,
+                )),
                 macros: UstrMap::default(),
                 macro_args: UstrMap::default(),
                 namespace: namespace.cloned().unwrap_or_default(),
@@ -40,11 +44,12 @@ impl Scoping {
             parent,
         );
 
-        self.new_scope(Some(scope), path, Some(&Ustr::from("root")))
-    }
-}
+        self.setup_global(scope, true);
 
-impl MiddleEnvironment {
+        self.scoping
+            .new_scope(Some(scope), path, Some(&Ustr::from("root")))
+    }
+
     #[instrument(skip_all)]
     pub fn new_root_scope_with_std(
         &mut self,
@@ -74,7 +79,7 @@ impl MiddleEnvironment {
             parent,
         );
 
-        self.setup_global(scope);
+        self.setup_global(scope, false);
         self.context.stdlib_nodes.clear();
         let mut parser = Parser::default();
 
@@ -134,23 +139,46 @@ impl MiddleEnvironment {
     }
 
     #[instrument(skip_all)]
-    pub fn setup_global(&mut self, scope: ScopeId) {
-        let mut funcs = ParserDataType::natives()
-            .iter()
-            .filter(|x| !x.0.contains("."))
-            .collect();
-
-        let mut vars: Vec<(&String, &ParserDataType)> =
-            ParserDataType::constants().iter().collect();
-        vars.append(&mut funcs);
+    pub fn setup_global(&mut self, scope: ScopeId, no_std: bool) {
+        let vars = if no_std {
+            ParserDataType::constants()
+                .iter()
+                .chain(ParserDataType::natives_no_std().iter())
+                .filter(|x| !x.0.contains("."))
+                .collect::<Vec<_>>()
+        } else {
+            ParserDataType::natives()
+                .iter()
+                .chain(ParserDataType::constants().iter())
+                .chain(ParserDataType::natives_no_std().iter())
+                .filter(|x| !x.0.contains("."))
+                .collect::<Vec<_>>()
+        };
 
         for (name, var) in vars {
-            let name = Ustr::from(name);
-            let new_name = Ustr::from(&ParserText::temp_name_with_suffix(name, var.span).text);
+            let original_name = Ustr::from(name);
 
-            let _ = self.register_variable(scope, name, new_name, var.clone(), VarType::Constant);
+            let name = match self
+                .resolve_data_type(scope, var, ResolutionOptions::typing())
+                .and_then(|data_type| {
+                    self.register_variable_with_temp_scope(
+                        scope,
+                        original_name,
+                        data_type,
+                        VarType::Constant,
+                        false,
+                    )
+                }) {
+                Ok(x) => x,
+                Err(e) => {
+                    self.context.errors.push(e);
+                    continue;
+                }
+            };
 
-            self.symbols.native_mappings.insert(name, new_name);
+            self.symbols
+                .native_mappings
+                .insert(original_name, Key::VariableKey(name));
         }
     }
 
@@ -251,11 +279,12 @@ impl MiddleEnvironment {
 
         let funcs: Vec<(&String, &ParserDataType)> = ParserDataType::natives()
             .iter()
+            .chain(ParserDataType::natives_no_std().iter())
             .filter(|x| x.0.contains(&format!("{}.", name)))
             .collect();
 
         for (original_name, var) in funcs {
-            let short_name = Ustr::from(
+            let name = Ustr::from(
                 original_name
                     .rsplit_once(".")
                     .map(|x| x.1)
@@ -263,13 +292,27 @@ impl MiddleEnvironment {
                     .trim(),
             );
 
-            let name = Ustr::from(&ParserText::temp_name_with_suffix(short_name, var.span).text);
-
-            let _ = self.register_variable(scope, short_name, name, var.clone(), VarType::Constant);
+            let name = match self
+                .resolve_data_type(scope, var, ResolutionOptions::typing())
+                .and_then(|data_type| {
+                    self.register_variable_with_temp_scope(
+                        scope,
+                        name,
+                        data_type,
+                        VarType::Constant,
+                        false,
+                    )
+                }) {
+                Ok(x) => x,
+                Err(e) => {
+                    self.context.errors.push(e);
+                    continue;
+                }
+            };
 
             self.symbols
                 .native_mappings
-                .insert(Ustr::from(original_name), name);
+                .insert(Ustr::from(original_name), Key::VariableKey(name));
         }
 
         if load_source {
