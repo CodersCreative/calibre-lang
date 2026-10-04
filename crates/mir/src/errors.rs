@@ -323,7 +323,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::Variable(var) => Some(format!(
                 "variable `{var}` not found - check spelling or scope"
             )),
-            Self::FieldAccess(var, field) => Some(format!(
+            Self::FieldAccess(var, _) => Some(format!(
                 "unable to resolve `{var}` to a variable or object - check spelling or scope"
             )),
             Self::Overload(msg) => Some(format!("overload error: {msg}")),

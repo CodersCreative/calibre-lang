@@ -588,9 +588,8 @@ impl ParserDataType {
                     vec![ParserInnerType::Dynamic],
                     ParserInnerType::Result {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
-                        ok: Box::new(Self::native_type(ParserInnerType::Struct(String::from(
-                            "ProcessResult",
-                        )))),
+                        // ProcessResult
+                        ok: Box::new(Self::native_type(ParserInnerType::Dynamic)),
                     },
                 ),
                 (
@@ -757,19 +756,22 @@ impl ParserDataType {
                 (
                     "net.tcp_connect",
                     vec![ParserInnerType::Str, ParserInnerType::Int],
-                    ParserInnerType::Struct(String::from("TcpStream")),
+                    // TcpStream
+                    ParserInnerType::Dynamic,
                 ),
                 #[cfg(feature = "native")]
                 (
                     "net.tcp_listen",
                     vec![ParserInnerType::Str, ParserInnerType::Int],
-                    ParserInnerType::Struct(String::from("TcpListener")),
+                    // TcpListener
+                    ParserInnerType::Dynamic,
                 ),
                 #[cfg(feature = "native")]
                 (
                     "net.tcp_accept",
                     vec![ParserInnerType::Host],
-                    ParserInnerType::Struct(String::from("TcpStream")),
+                    // TcpStream
+                    ParserInnerType::Dynamic,
                 ),
                 #[cfg(feature = "native")]
                 (

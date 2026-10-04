@@ -7,6 +7,8 @@ impl Point {
         return Point {x, y}
 }
 
+type ListIter:<T> := struct { data : list:<T>, index : int };
+
 type Identity:<T> := struct {value : T};
 
 const main := fn => {
@@ -25,6 +27,11 @@ const main := fn => {
 
     console_output(1, Identity {value : 90} & "\n");
 
+    let mut iter := ListIter:<int> {
+        data : list:<int>[10, 30],
+        index : 0
+    };
+    
     for element in lst =>
         console_output(1, element & "\n");
 

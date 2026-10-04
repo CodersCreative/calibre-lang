@@ -294,8 +294,12 @@ impl MirLowering for AstDeclaration {
             Some(env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?)
         };
 
-        let data_type =
-            env.compare_types(data_type, node_ty, Some(&TagInfo::IgnoreInvalidLet), span)?;
+        let data_type = env.compare_types(
+            data_type,
+            node_ty.clone(),
+            Some(&TagInfo::IgnoreInvalidLet),
+            span,
+        )?;
 
         let var_key = if let AstNodeType::FunctionDeclaration(func) = &self.value.node_type {
             let key = if self.declared {

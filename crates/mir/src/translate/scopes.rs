@@ -12,7 +12,6 @@ use calibre_parser::{
         idents::PotentialDollarIdentifier,
         nodes::{
             AstNode, AstNodeType,
-            declaration::AstDeclaration,
             flow::AstBreak,
             loops::{AstLoop, LoopType},
             scopes::{AstScopeAlias, AstScopeDef},

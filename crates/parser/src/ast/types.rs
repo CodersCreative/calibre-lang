@@ -171,6 +171,7 @@ pub enum ParserInnerType {
     Dynamic,
     DynamicTraits(Vec<String>),
     Tuple(Vec<ParserDataType>),
+    Paren(Box<ParserDataType>),
     List(Box<ParserDataType>),
     Gen(Box<ParserDataType>),
     Scope(Vec<ParserDataType>),
@@ -235,13 +236,15 @@ impl AlphaRenamable for ParserInnerType {
                     *item = state.mapped_str_or_original(item);
                 }
             }
-            ParserInnerType::List(x) => x.rename(state),
-            ParserInnerType::Option(x) => x.rename(state),
+            ParserInnerType::Paren(x)
+            | ParserInnerType::Ptr(x)
+            | ParserInnerType::List(x)
+            | ParserInnerType::Option(x) => x.rename(state),
             ParserInnerType::Result { ok, err } => {
                 ok.rename(state);
                 err.rename(state);
             }
-            ParserInnerType::Ptr(x) => x.rename(state),
+
             ParserInnerType::NativeFunction {
                 return_type,
                 parameters,
@@ -695,6 +698,7 @@ impl Display for ParserInnerType {
                 write!(f, "{}", mutability.fmt_with_val(&typ.to_string()))
             }
             Self::Result { err, ok } => write!(f, "{}!{}", err, ok),
+            Self::Paren(x) => write!(f, "<{}>", x),
             Self::Option(x) => write!(f, "{}?", x),
             Self::Ptr(x) => write!(f, "ptr:<{}>", x),
             Self::Gen(x) => write!(f, "gen:<{}>", x),

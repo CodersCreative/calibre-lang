@@ -1,7 +1,7 @@
 use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    scoping::{FullyQualifiedPath, MiddleScope, ScopeId, Scoping},
+    scoping::{FullyQualifiedPath, MiddleScope, ScopeId},
     symbols::resolve::{Key, ResolutionOptions},
     translate::MirLowering,
 };

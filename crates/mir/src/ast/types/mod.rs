@@ -555,7 +555,8 @@ impl MirDataType {
         }
     }
 
-    #[deprecated(note = "If an impl is required use TypeImplKey::from")]
+    // TODO Try and replace all instances of :
+    // #[deprecated(note = "If an impl is required use TypeImplKey::from")]
     pub fn impl_name(&self) -> String {
         match self.key() {
             MirDataType::Struct { identifier, .. } => identifier.name().to_string(),
@@ -613,18 +614,38 @@ impl MirDataType {
     }
 
     pub fn loose_eq(&self, other: &Self) -> bool {
-        other.is_tuple()
-            || other.is_host()
+        let result = other.is_host()
             || other.is_dyn()
             || other.is_dyn_list()
             || other.is_dyn_trait()
-            || self.is_tuple()
             || self.is_host()
             || self.is_dyn()
             || self.is_dyn_list()
             || self.is_dyn_trait()
-            || other == self
-            || self.impl_name() == other.impl_name()
+            || other == self;
+
+        if result {
+            return true;
+        }
+
+        match (self, other) {
+            (MirDataType::List(a), MirDataType::List(b)) => a.loose_eq(b),
+            (MirDataType::Option(a), MirDataType::Option(b)) => a.loose_eq(b),
+            (MirDataType::Result { ok: ao, err: ae }, MirDataType::Result { ok: bo, err: be }) => {
+                ao.loose_eq(bo) && ae.loose_eq(be)
+            }
+            (MirDataType::Ptr(a), MirDataType::Ptr(b)) => a.loose_eq(b),
+            (MirDataType::Ref(a, _), MirDataType::Ref(b, _)) => a.loose_eq(b),
+            (MirDataType::Ref(a, _), b) => a.loose_eq(b),
+            (a, MirDataType::Ref(b, _)) => a.loose_eq(b),
+            (MirDataType::Tuple(a), MirDataType::Tuple(b)) => {
+                if a.len() != b.len() {
+                    return false;
+                }
+                a.iter().zip(b.iter()).all(|(x, y)| x.loose_eq(y))
+            }
+            _ => false,
+        }
     }
 
     pub fn contains_auto(&self) -> bool {

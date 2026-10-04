@@ -626,15 +626,8 @@ impl MiddleEnvironment {
                     .resolve(scope, x, ResolutionOptions::default().with_dollar())?
                     .unwrap_dollar();
 
-                let parser_ty = match ParserInnerType::from_str(&resolved)
-                    .unwrap_or(ParserInnerType::Struct(resolved.to_string()))
-                {
-                    ParserInnerType::Struct(x) => ParserInnerType::Struct(
-                        self.resolve(scope, &x, ResolutionOptions::typing())?
-                            .to_string(),
-                    ),
-                    x => x,
-                };
+                let parser_ty = ParserInnerType::from_str(&resolved)
+                    .unwrap_or(ParserInnerType::Struct(resolved.to_string()));
                 self.resolve_data_type(scope, &parser_ty, ResolutionOptions::typing())
             }
             IdentifierType::Ustr(x) => {
@@ -642,15 +635,9 @@ impl MiddleEnvironment {
                     .resolve(scope, x, ResolutionOptions::default().with_dollar())?
                     .unwrap_dollar();
 
-                let parser_ty = match ParserInnerType::from_str(&resolved)
-                    .unwrap_or(ParserInnerType::Struct(resolved.to_string()))
-                {
-                    ParserInnerType::Struct(x) => ParserInnerType::Struct(
-                        self.resolve(scope, &x, ResolutionOptions::typing())?
-                            .to_string(),
-                    ),
-                    x => x,
-                };
+                let parser_ty = ParserInnerType::from_str(&resolved)
+                    .unwrap_or(ParserInnerType::Struct(resolved.to_string()));
+
                 self.resolve_data_type(scope, &parser_ty, ResolutionOptions::typing())
             }
             IdentifierType::Generic(PotentialGenericTypeIdentifier::Identifier(x))
@@ -659,15 +646,9 @@ impl MiddleEnvironment {
                     .resolve(scope, x, ResolutionOptions::default().with_dollar())?
                     .unwrap_dollar();
 
-                let parser_ty = match ParserInnerType::from_str(&resolved)
-                    .unwrap_or(ParserInnerType::Struct(resolved.to_string()))
-                {
-                    ParserInnerType::Struct(x) => ParserInnerType::Struct(
-                        self.resolve(scope, &x, ResolutionOptions::typing())?
-                            .to_string(),
-                    ),
-                    x => x,
-                };
+                let parser_ty = ParserInnerType::from_str(&resolved)
+                    .unwrap_or(ParserInnerType::Struct(resolved.to_string()));
+
                 self.resolve_data_type(scope, &parser_ty, ResolutionOptions::typing())
             }
             IdentifierType::Generic(PotentialGenericTypeIdentifier::Generic {
@@ -679,22 +660,14 @@ impl MiddleEnvironment {
                     .map(|x| self.resolve_data_type(scope, x, ResolutionOptions::typing()))
                     .collect::<Result<Vec<_>, _>>()?;
 
-                let resolved = self.resolve(
-                    scope,
-                    identifier,
-                    ResolutionOptions::default().with_dollar(),
-                )?;
+                let name_str = self
+                    .resolve(
+                        scope,
+                        identifier,
+                        ResolutionOptions::default().with_dollar(),
+                    )?
+                    .unwrap_dollar();
 
-                let type_key = match resolved {
-                    Key::TypeKey(k) => k,
-                    Key::VariableKey(_) => {
-                        return Err(self
-                            .context
-                            .err_at_current(MiddleErr::Object(resolved.to_string())));
-                    }
-                };
-
-                let name_str = type_key.name().as_str();
                 if name_str == "ptr" && resolved_gens.len() == 1 {
                     return Ok(MirDataType::Ptr(Box::new(
                         resolved_gens.into_iter().next().unwrap(),
@@ -711,8 +684,12 @@ impl MiddleEnvironment {
                     )));
                 }
 
+                let resolved = self
+                    .resolve(scope, name_str, ResolutionOptions::typing())?
+                    .unwrap_typing();
+
                 Ok(MirDataType::Struct {
-                    identifier: type_key,
+                    identifier: resolved,
                     generic_types: resolved_gens,
                 })
             }
@@ -777,6 +754,25 @@ impl MiddleEnvironment {
 
                 MirDataType::Tuple(lst)
             }
+            ParserInnerType::NativeFunction {
+                return_type,
+                parameters,
+            } => MirDataType::NativeFunction {
+                return_type: Box::new(self.resolve_data_type(
+                    scope,
+                    return_type.as_ref(),
+                    options,
+                )?),
+                parameters: {
+                    let mut params = Vec::new();
+
+                    for param in parameters {
+                        params.push(self.resolve_data_type(scope, param, options)?);
+                    }
+
+                    params
+                },
+            },
             ParserInnerType::Function {
                 return_type,
                 parameters,
@@ -800,6 +796,7 @@ impl MiddleEnvironment {
                 Box::new(self.resolve_data_type(scope, d_type.as_ref(), options)?),
                 *mutability,
             ),
+            ParserInnerType::Paren(x) => self.resolve_data_type(scope, x.as_ref(), options)?,
             ParserInnerType::List(x) => MirDataType::List(Box::new(self.resolve_data_type(
                 scope,
                 x.as_ref(),

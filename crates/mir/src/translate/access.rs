@@ -95,7 +95,10 @@ impl MirLowering for AstField {
         Ok(MiddleNode::new(
             MiddleNodeType::FieldAccess(MirField {
                 base: Box::new(self.base.clone().lower(env, scope, span).map_err(|_| {
-                    env.context.err_at_span(span, MiddleErr::FieldAccess(self.base.to_string(), field_name.to_string()))
+                    env.context.err_at_span(
+                        span,
+                        MiddleErr::FieldAccess(self.base.to_string(), field_name.to_string()),
+                    )
                 })?),
                 field: field_name,
             }),

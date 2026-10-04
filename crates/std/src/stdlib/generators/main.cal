@@ -1,4 +1,4 @@
-const suspend := fn <T> (value : T) -> T => return try gen_suspend(value) => emit value;
+const suspend := fn <T> (value : T) -> T => return gen_suspend(value);
 
 impl<T> Iter for gen:<T> {
 	type Item := T;

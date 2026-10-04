@@ -17,7 +17,11 @@ use calibre_parser::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, fmt::Display, rc::Rc, sync::Arc};
+use std::{
+    fmt::{Debug, Display},
+    rc::Rc,
+    sync::Arc,
+};
 use ustr::{Ustr, UstrMap};
 
 pub mod node;

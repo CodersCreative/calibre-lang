@@ -1,5 +1,13 @@
 import * from std::str;
 
+type ProcessResult := struct {
+	command : str,
+	status : int,
+	success : bool,
+	stdout : str,
+	stderr : str
+}
+
 type TcpStream := struct { inner : host };
 type TcpListener := struct { inner : host };
 

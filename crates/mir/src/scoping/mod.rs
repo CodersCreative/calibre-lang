@@ -5,7 +5,7 @@ use calibre_parser::{
 };
 use indextree::{Arena, Node, NodeId};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, path::PathBuf, sync::Arc};
+use std::{fmt::Display, hash::Hash, path::PathBuf, sync::Arc};
 use ustr::{Ustr, UstrMap, UstrSet};
 
 pub mod resolve;
@@ -432,6 +432,14 @@ impl Display for FullyQualifiedPath {
             }
             (Some(name), _) => {
                 write!(f, "{}", name)
+            }
+            (_, Some(parent)) => {
+                let parent = parent.to_string();
+                if parent.is_empty() {
+                    write!(f, "")
+                } else {
+                    write!(f, "{}", parent)
+                }
             }
             _ => write!(f, ""),
         }

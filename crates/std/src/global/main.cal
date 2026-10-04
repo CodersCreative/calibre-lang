@@ -45,7 +45,7 @@ const range := fn (start end : mut int, step : int = 1, inclusive : bool = false
 const fmt := fn (splits : list:<str>, inputs : list:<dyn>) -> str => {
 	let mut txt : str = "";
 	
-	for i in 0..len(splits) => {
+	for i in len(splits) => {
 		txt &= try!! splits[i];
 		if i < len(inputs) => txt &= try!! inputs[i];
 	};

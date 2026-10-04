@@ -205,6 +205,11 @@ impl MiddleEnvironment {
             },
         );
 
+        self.scoping
+            .scope_mut_or_err(scope)?
+            .mappings
+            .insert(name, key.clone());
+
         Ok(key)
     }
 

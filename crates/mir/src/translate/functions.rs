@@ -891,16 +891,6 @@ impl MirLowering for AstFunction {
             env.scoping.pop_generic_params();
         }
 
-        // TODO revisit this
-        /*for (name, _, _) in params.iter() {
-            if let Some(short) = ParserText::get_temp_name_suffix(name) {
-                env.scoping
-                    .scope_mut_or_err(new_scope)?
-                    .mappings
-                    .insert(Ustr::from(&short), *name);
-            }
-        }*/
-
         Ok(fn_node)
     }
 
