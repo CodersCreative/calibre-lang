@@ -35,42 +35,6 @@ impl FunctionLowering {
             changed = false;
             iterations += 1;
 
-            let mut var_latest_reg: FxHashMap<u16, Reg> = FxHashMap::default();
-            for block in blocks.iter_mut().flatten() {
-                var_latest_reg.clear();
-
-                for instr in &mut block.instructions {
-                    match instr {
-                        VMInstruction::StoreVar(VMStoreVar { dst, name, src }) => {
-                            var_latest_reg.insert(*name, dst.unwrap_or(*src));
-                        }
-                        VMInstruction::LoadVar(VMLoadVar { dst, name }) => {
-                            if let Some(&reg) = var_latest_reg.get(name) {
-                                *instr = VMInstruction::Copy(VMCopy {
-                                    dst: *dst,
-                                    src: reg,
-                                });
-                                changed = true;
-                            } else {
-                                var_latest_reg.insert(*name, *dst);
-                            }
-                        }
-                        VMInstruction::MoveVar(VMMoveVar { name, .. })
-                        | VMInstruction::DropVar(VMDropVar { name, .. }) => {
-                            var_latest_reg.remove(name);
-                            if instr.has_side_effects() {
-                                var_latest_reg.clear();
-                            }
-                        }
-                        _ => {
-                            if instr.has_side_effects() {
-                                var_latest_reg.clear();
-                            }
-                        }
-                    }
-                }
-            }
-
             // Get jump onlys
             block_subst.clear();
             for block in blocks.iter().flatten() {
@@ -240,47 +204,6 @@ impl FunctionLowering {
                                 src: *copy_src,
                             });
                             remove_current = false;
-                            remove_next = true;
-                        }
-
-                        // StoreVar + LoadVar -> StoreVar
-                        if !remove_next
-                            && let VMInstruction::StoreVar(VMStoreVar {
-                                dst: store_dst,
-                                name: store_name,
-                                src: store_src,
-                            }) = &instr
-                            && let VMInstruction::LoadVar(VMLoadVar {
-                                dst: load_dst,
-                                name: load_name,
-                            }) = next_instr
-                            && store_name == load_name
-                            && store_dst.is_none()
-                        {
-                            instr = VMInstruction::StoreVar(VMStoreVar {
-                                dst: Some(*load_dst),
-                                name: *store_name,
-                                src: *store_src,
-                            });
-                            remove_current = false;
-                            remove_next = true;
-                        }
-
-                        // LoadVar + StoreVar -> LoadVar
-                        if !remove_next
-                            && let VMInstruction::LoadVar(VMLoadVar {
-                                dst: load_dst,
-                                name: load_name,
-                            }) = &instr
-                            && let VMInstruction::StoreVar(VMStoreVar {
-                                dst: store_dst,
-                                name: store_name,
-                                src: store_src,
-                            }) = next_instr
-                            && load_name == store_name
-                            && load_dst == store_src
-                            && store_dst.is_none()
-                        {
                             remove_next = true;
                         }
                     }

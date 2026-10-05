@@ -1,4 +1,5 @@
 hyperfine \
+  "calibre run test_gen.cal" \
   "calibre run test_ffi.cal" \
   "calibre run --no-cache test_ffi.cal" \
   "calibre run --no-type-check test_ffi.cal" \
@@ -19,6 +20,8 @@ hyperfine \
   "calibre run --no-cache test_none.cal" \
   "calibre run --no-type-check test_none.cal" \
   "calibre run --no-type-check --no-cache test_none.cal" \
+  "python test_gen.py" \
+  "rustpython test_gen.py" \
   "python test.py" \
   "rustpython test_none.py" \
   "python test_none.py" \

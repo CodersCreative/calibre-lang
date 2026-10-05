@@ -1,0 +1,25 @@
+const fib := fn() -> gen:<int> => {
+	let mut a := 0;
+	let mut b := 1;
+
+	for => {
+		return a;
+		let temp := a;
+		a := b;
+		b := temp + a;
+	}
+}
+
+const main := fn => {
+	let fib := fib().take(31);
+	for let .Some : i <- fib.next() => {
+		print(i);
+	}
+};
+
+@bench test "fib" => main();
+
+test "fib_10" => {
+	let value := fib().skip(9);
+	assert(value.next() = 55, "Fib 10 did not equal 55 as expected")
+};
