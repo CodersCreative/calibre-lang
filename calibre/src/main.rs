@@ -115,6 +115,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 no_type_check,
                 readable,
                 time,
+                profile,
+                profile_output,
             }) => {
                 RunBuilder::default()
                     .paths(paths)
@@ -127,6 +129,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .type_check(!no_type_check)
                     .readable(readable)
                     .time(time)
+                    .profiling_enabled(profile)
+                    .profiling_output(profile_output)
                     .build()?
                     .execute()
                     .await

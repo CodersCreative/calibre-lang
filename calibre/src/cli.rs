@@ -79,6 +79,10 @@ pub enum Commands {
         no_type_check: bool,
         #[arg(long, default_value_t = false)]
         readable: bool,
+        #[arg(long, default_value_t = false)]
+        profile: bool,
+        #[arg(long)]
+        profile_output: Option<PathBuf>,
         #[arg(last = true)]
         program_args: Vec<String>,
     },

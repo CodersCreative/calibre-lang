@@ -20,6 +20,7 @@ The project is actively evolving, but it already supports a broad set of languag
 
 ### Variables and Mutability
 
+- `const` creates constants
 - `let` creates immutable bindings
 - `let mut` creates mutable bindings
 - tuple and struct destructuring declarations are supported
@@ -27,7 +28,7 @@ The project is actively evolving, but it already supports a broad set of languag
 ```cal
 let x := 10;
 let mut y := 20;
-let mut a, mut b := 1, 2;
+let (mut a, mut b) := 1, 2;
 ```
 
 ### Functions
@@ -71,21 +72,6 @@ const inspect := fn (v : MaybeInt) => {
 };
 ```
 
-### Traits and Impl
-
-```cal
-trait Person {
-  const name : fn (&Self) -> str;
-  const greeting := fn (self : &Self) -> str => "Hello " & self.name();
-};
-
-type User = struct { name : str };
-
-impl Person for User {
-  const name := fn (self : &User) -> str => self.name;
-};
-```
-
 ### Control Flow
 
 Calibre currently supports:
@@ -99,7 +85,7 @@ Calibre currently supports:
 for i in 0..10 => {
   if i % 2 = 0 => continue;
   print(i);
-};
+} until i > 8;
 ```
 
 ### Generators and Collection-style Pipelines
@@ -194,7 +180,6 @@ cargo run -p calibre-lsp
 The `examples/` directory contains practical programs for current language/runtime features, including:
 
 - `examples/showcase/main.cal` (general language surface)
-- `examples/traits.cal` (traits/impl)
 - `examples/generators.cal` (generators/pipelines)
 - `examples/async.cal` (channels, mutexes, spawn/select)
 - `examples/hashmap.cal` (collections)

@@ -90,11 +90,14 @@ impl VM {
                     let cache = Arc::clone(
                         self.caches
                             .memo
-                            .entry(name)
+                            .entry(name.clone())
                             .or_insert_with(|| Arc::new(Mutex::new(FxHashMap::default()))),
                     );
 
                     if let Some(value) = cache.lock().unwrap().get(&key) {
+                        if let Some(profiler) = self.profiler.as_ref() {
+                            profiler.record_memoization_hit(self.get_current_task_id(), name);
+                        }
                         return Ok(value.clone());
                     }
 

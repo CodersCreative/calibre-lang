@@ -26,6 +26,8 @@ pub struct Run {
     type_check: bool,
     readable: bool,
     time: bool,
+    profiling_enabled: bool,
+    profiling_output: Option<PathBuf>,
 }
 
 impl Run {
@@ -76,6 +78,8 @@ impl Run {
             run.type_check(self.type_check);
             run.readable(self.readable);
             run.time(self.time);
+            run.profiling_enabled(self.profiling_enabled);
+            run.profiling_output(self.profiling_output.clone());
 
             let run = run.build()?;
 
@@ -118,6 +122,8 @@ struct RunSource {
     type_check: bool,
     readable: bool,
     time: bool,
+    profiling_enabled: bool,
+    profiling_output: Option<PathBuf>,
     included: Vec<PackagedProgramBlob>,
 }
 
@@ -239,7 +245,11 @@ impl RunSource {
         let vm_begin = start.elapsed();
 
         let entry_name = artifacts.entry_name.clone();
-        let mut vm: VM = VM::new(artifacts.registry, artifacts.mappings, self.vm_config);
+        let mut vm_config = self.vm_config;
+        vm_config.profiling_enabled = self.profiling_enabled;
+        vm_config.profiling_output = self.profiling_output.clone();
+
+        let mut vm: VM = VM::new(artifacts.registry, artifacts.mappings, vm_config);
         vm.set_source_file_override(&self.path);
         vm.set_program_args(
             self.program_args
@@ -308,6 +318,12 @@ impl RunSource {
                 (start.elapsed() - vm_begin).as_millis()
             );
             println!("Finished - elapsed {}ms", start.elapsed().as_millis());
+        }
+
+        if self.profiling_enabled && let Some(folded_stacks) = vm.export_folded_stacks() {
+            let output_path = self.profiling_output.unwrap_or_else(|| PathBuf::from("calibre.folded"));
+            fs::write(&output_path, folded_stacks).await.map_err(|e| format!("Failed to write profiling output: {}", e))?;
+            println!("Profiling data written to {}", output_path.display());
         }
 
         Ok(())

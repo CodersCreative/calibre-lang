@@ -121,6 +121,8 @@ impl SchedulerHandle {
             }
         };
 
+        let task_id = base_vm.profiler.as_ref().map(|p| p.generate_task_id());
+
         let mut vm = {
             let mut pool = self.inner.vm_pool.lock().unwrap();
             if let Some(mut pooled_vm) = pool.pop_front() {
@@ -135,6 +137,10 @@ impl SchedulerHandle {
                 )
             }
         };
+
+        if let Some(task_id) = task_id {
+            vm.set_current_task_id(task_id);
+        }
 
         for id in 0..vm.variables.slot_len() {
             if let Some(value) = vm.variables.get_by_id(id)

@@ -1,23 +1,15 @@
 use crate::{
-    config::VMConfig,
-    conversion::{Reg, VMBlock, VMFunction, VMRegistry},
-    error::RuntimeError,
-    native::NativeFunction,
-    value::{GcMap, RuntimeValue, hashable::HashKey, spawn::WaitGroupInner},
-    variables::VariableStore,
+    config::VMConfig, conversion::{Reg, VMBlock, VMFunction, VMRegistry}, error::RuntimeError, native::NativeFunction, profiler::CallTreeProfiler, value::{GcMap, RuntimeValue, hashable::HashKey, spawn::WaitGroupInner}, variables::VariableStore,
 };
 use astro_float::Consts;
 use calibre_lir::{VariableKey, ast::BlockId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
-use std::sync::OnceLock;
+use std::sync::{atomic::{AtomicBool,  Ordering}, OnceLock};
 use std::{
     fmt::Debug,
     path::Path,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::Arc,
 };
 use tracing::instrument;
 use ustr::Ustr;
@@ -38,6 +30,7 @@ pub mod scheduler;
 pub mod serialization;
 pub mod value;
 pub mod variables;
+pub mod profiler;
 mod vm_lookup;
 
 #[derive(Debug, Clone)]
@@ -69,6 +62,7 @@ pub struct VMFrame {
     pub mutation_handles: Vec<Option<Arc<MutationHandle>>>,
     pub func_ptr: usize,
     pub func_name: Option<VariableKey>,
+    profiler_call_id: Option<u64>,
 }
 
 impl VMFrame {
@@ -135,6 +129,8 @@ pub struct VM {
     pub captured_output: Vec<Ustr>,
     pub input_buffer: Vec<Ustr>,
     pub big_consts: Consts,
+    profiler: Option<CallTreeProfiler>,
+    current_task_id: u64,
 }
 
 impl Clone for VM {
@@ -161,6 +157,8 @@ impl Clone for VM {
             input_buffer: self.input_buffer.clone(),
             big_consts: Consts::new().unwrap(),
             in_global: self.in_global,
+            profiler: self.profiler.clone(),
+            current_task_id: self.current_task_id,
         }
     }
 }
@@ -208,6 +206,15 @@ impl VM {
         config: VMConfig,
         install_builtins: bool,
     ) -> Self {
+        let profiler = if config.profiling_enabled {
+            let profiler = CallTreeProfiler::default();
+            Some(profiler)
+        } else {
+            None
+        };
+
+        let current_task_id = profiler.as_ref().map(|p| p.generate_task_id()).unwrap_or(0);
+
         let mut vm = Self {
             registry,
             mappings,
@@ -232,6 +239,8 @@ impl VM {
             captured_output: Vec::new(),
             input_buffer: Vec::new(),
             big_consts: Consts::new().unwrap(),
+            profiler,
+            current_task_id,
         };
 
         if let Some(interval) = vm.config.gc_interval {
@@ -281,6 +290,18 @@ impl VM {
         config: VMConfig,
     ) -> Self {
         Self::from_shared_parts(registry, mappings, config, true)
+    }
+
+    pub fn get_current_task_id(&self) -> u64 {
+        self.current_task_id
+    }
+
+    pub fn set_current_task_id(&mut self, task_id: u64) {
+        self.current_task_id = task_id;
+    }
+
+    pub fn export_folded_stacks(&self) -> Option<String> {
+        self.profiler.as_ref().map(|p| p.export())
     }
 
     #[instrument(skip_all)]
@@ -357,12 +378,19 @@ impl VM {
 
         self.reg_top = new_top;
 
+        let profiler_call_id = if let Some(profiler) = &self.profiler&& !self.in_global && let Some(name) = &func_name {
+            Some(profiler.record_function_enter(self.current_task_id, name.clone()))
+        } else {
+            None
+        };
+
         if let Some(mut frame) = self.frame_pool.pop() {
             frame.reg_start = start;
             frame.reg_count = reg_count;
             frame.clear_mutation_handles(reg_count);
             frame.func_ptr = func_ptr;
             frame.func_name = func_name;
+            frame.profiler_call_id = profiler_call_id;
             self.frames.push(frame);
         } else {
             self.frames.push(VMFrame {
@@ -371,6 +399,7 @@ impl VM {
                 mutation_handles: vec![None; reg_count],
                 func_ptr,
                 func_name,
+                profiler_call_id,
             });
         }
     }
@@ -378,6 +407,11 @@ impl VM {
     fn pop_frame(&mut self) {
         if let Some(frame) = self.frames.pop() {
             self.reg_top = frame.reg_start;
+            
+            if let Some(profiler) = &self.profiler && let Some(call_id) = frame.profiler_call_id {
+                profiler.record_function_exit(self.current_task_id, call_id);
+            }
+
             self.frame_pool.push(frame);
         }
     }

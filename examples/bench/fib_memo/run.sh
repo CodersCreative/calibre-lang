@@ -22,8 +22,10 @@ hyperfine \
   "calibre run --no-type-check --no-cache test_none.cal" \
   "python test_gen.py" \
   "rustpython test_gen.py" \
+  "edge run test_gen_edge.py" \
   "python test.py" \
   "rustpython test_none.py" \
+  "edge run test_none.py" \
   "python test_none.py" \
   "rhai-run test.rhai" \
   "lua test.lua" \
