@@ -7,6 +7,7 @@ impl gen:<T> {
 		return value;
 	};
 
+	@pure
 	const collect := fn (self : Self) -> list:<T> => {
 		let mut out := list:<T>[];
 		
@@ -22,6 +23,7 @@ impl gen:<T> {
 		return out;
 	};
 
+	@pure
 	const map := fn<U>(self : Self, op : fn(T) -> U) -> gen:<U> => {
 		for => {
 			let v : T? = self.next();
@@ -33,6 +35,7 @@ impl gen:<T> {
 		};
 	}
 
+	@pure
 	const filter := fn(self : Self, pred : fn(T) -> bool) -> gen:<T> => {
 		for => {
 			let v : T? = self.next();
@@ -44,6 +47,7 @@ impl gen:<T> {
 		};
 	}
 
+	// Technically pure if op is pure but 9 times out of 10 op wont be pure
 	const for_each := fn(self : Self, op : fn(T)) => {
 		for => {
 			let v : T? = self.next();
@@ -55,6 +59,7 @@ impl gen:<T> {
 		};
 	}
 
+	@pure
 	const fold := fn<U>(self : Self, init : U, op : fn (U, T) -> U) -> U => {
 		let mut acc := init;
 		
@@ -70,6 +75,7 @@ impl gen:<T> {
 		return acc;
 	}
 
+	@pure
 	const any := fn(self : Self, pred : fn (T) -> bool) -> bool => {
 		for => {
 			let v : T? = self.next();
@@ -83,6 +89,7 @@ impl gen:<T> {
 		return false;
 	}
 
+	@pure
 	const all := fn (self : Self, pred : fn (T) -> bool) -> bool => {
 		for => {
 			let v : T? = self.next();
@@ -96,7 +103,7 @@ impl gen:<T> {
 		return true;
 	};
 
-
+	@pure
 	const find := fn (self : Self, pred : fn (T) -> bool) -> T? => {
 		for => {
 			let v : T? = self.next();
@@ -110,6 +117,7 @@ impl gen:<T> {
 		return none;
 	};
 
+	@pure
 	const count := fn (self : Self) -> uint => {
 		let mut n := 0u;
 		
@@ -125,6 +133,7 @@ impl gen:<T> {
 		return n;
 	};
 
+	@pure
 	const take := fn (self : Self, n : int) -> gen:<T> => {
 		let mut i := 0;
 		
@@ -139,6 +148,7 @@ impl gen:<T> {
 		};
 	};
 
+	@pure
 	const skip := fn (self : Self, n : int) -> gen:<T> => {
 		let mut i := 0;
 		
@@ -163,7 +173,7 @@ impl gen:<T> {
 		};
 	};
 
-
+	@pure
 	const enumerate := fn (self : Self) -> gen:<<int, T>> => {
 		let mut i := 0;
 	
@@ -177,7 +187,7 @@ impl gen:<T> {
 		};
 	};
 
-
+	@pure
 	const step_by := fn (self : Self, step : int) -> gen:<T> => {
 		if step <= 1 => return self;
 		

@@ -4,32 +4,41 @@
 };
 
 impl<T> list:<T> {
+	@pure
 	const len := fn (self : list:<T>) -> uint => return len(self);
 
+	@pure
 	const is_empty := fn (self : list:<T>) -> bool => return len(self) = 0u;
 
+	@pure
 	const first := fn (self : list:<T>) -> T? => return self[0];
 
+	@pure
 	const last := fn (self : list:<T>) -> T? => {
 		return self[-1];
 	};
 
+	@pure
 	const get := fn (self : list:<T>, idx : int) -> T? => {
 		if (idx < 0) || (idx >= len(self)) => return none else => return self[idx];
 	};
 
+	@pure
 	const clone := fn (self : list:<T>) -> list:<T> => return list:<T>[(try!! self[i]) for i in 0..len(self)];
 
+	@pure
 	const contains := fn (self : list:<T>, needle : T) -> bool => {
 		for i in 0..len(self) => if (try!! self[i]) = needle => return true;
 		return false;
 	};
 
+	@pure
 	const index_of := fn (self : list:<T>, needle : T) -> int => {
 		for i in 0..len(self) => if (try!! self[i]) = needle => return i;
 		return -1;
 	};
 
+	@pure
 	const last_index_of := fn (self : list:<T>, needle : T) -> int => {
 		let mut i := (len(self) as! int) - 1;
 		
@@ -42,29 +51,20 @@ impl<T> list:<T> {
 		return -1;
 	};
 
+	@pure
 	const count := fn (self : list:<T>, needle : T) -> uint => {
 		let mut n := 0u;
 		for i in 0..len(self) => if (try!! self[i]) = needle => n += 1u;
 		return n;
 	};
 
+	@pure
 	const split_at := fn (self : list:<T>, idx : int) -> <list:<T>, list:<T>> => {
 		let cut := if idx < 0 => emit 0 else => emit if idx > len(self) => emit len(self) else => emit idx;
 		return tuple(try self[0..cut] => emit list:<T>[], try self[cut..len(self)] => emit list:<T>[]);
 	};
 
-	const take := fn (self : list:<T>, n : int) -> list:<T> => {
-		let end := if n < 0 => emit 0 else => emit n;
-		
-		return try self[0..end] => emit list:<T>[];
-	};
-
-	const skip := fn (self : list:<T>, n : int) -> list:<T> => {
-		let start := if n < 0 => emit 0 else => emit n;
-		
-		return try self[start..len(self)] => emit list:<T>[];
-	};
-
+	@pure
 	const reverse := fn (self : list:<T>) -> list:<T> => {
 		let mut out := list:<T>[];
 		
@@ -106,15 +106,19 @@ impl<T> list:<T> {
 		for i in 0..len(other) => self <<= try!! other[i];
 	};
 
+	@pure
 	const concat := fn (self other : list:<T>) -> list:<T> => {
 		for i in 0..len(other) => self <<= try!! other[i];
 		return self;
 	};
 
+	@pure
 	const sort := fn (self : list:<T>, compare : fn (T, T) -> int) -> list:<T> => return sort_by(self, compare);
 
+	@pure
 	const binary_search := fn (self : list:<T>, needle : T, compare : fn (T, T) -> int) -> int? => return binary_search_by(self, needle, compare);
 
+	@pure
 	const join := fn (self : list:<str>, sep : str = "") -> str => {
 		let mut out := "";
 		
@@ -127,6 +131,7 @@ impl<T> list:<T> {
 	};
 };
 
+@pure
 impl list:<int> {
 	const sum := fn (self : list:<int>) -> int => {
 		let mut acc := 0;
@@ -149,6 +154,7 @@ impl list:<int> {
 	};
 };
 
+@pure
 impl list:<uint> {
 	const sum := fn (self : list:<uint>) -> uint => {
 		let mut acc := 0u;
@@ -171,6 +177,7 @@ impl list:<uint> {
 	};
 };
 
+@pure
 impl list:<float> {
 	const sum := fn (self : list:<float>) -> float => {
 		let mut acc := 0f;

@@ -52,6 +52,7 @@ impl TcpListener {
 	const accept := fn (self : &TcpListener) -> TcpStream => return TcpStream { inner : tcp_accept(self.inner) };
 };
 
+@pure
 const strip_prefix := fn (s prefix : str) -> str => {
 	let parts := split(s, prefix);
 	if len(parts) <= 1 => s;
@@ -67,8 +68,10 @@ const strip_prefix := fn (s prefix : str) -> str => {
 	return out;
 };
 
+@pure
 const default_port := fn (scheme : str) -> int => if scheme = "https" => return 443 else => return 80;
 
+@pure
 const normalize_host := fn (host : str) -> str => {
 	let mut out := host;
 	if starts_with(out, "https://") => out = strip_prefix(out, "https://");
@@ -76,11 +79,13 @@ const normalize_host := fn (host : str) -> str => {
 	return out;
 };
 
+@pure
 const infer_scheme :=
 	fn (host : str, port : int) -> str => {
 		if starts_with(host, "https://") => return "https" else => if starts_with(host, "http://") => return "http" else => if port = 443 => return "https" else => return "http";
 	};
 
+@pure
 const build_url := fn (scheme host : str, port : int, path : str) -> str => {
 	let mut url := scheme & "://" & host;
 	if port != default_port(scheme) => url &= ":" & port;
@@ -90,6 +95,7 @@ const build_url := fn (scheme host : str, port : int, path : str) -> str => {
 };
 
 impl Http {
+	@pure
 	const client := fn (host : str, port : int = 0) -> HttpClient => {
 		let scheme := infer_scheme(host, port);
 		let resolved_port := if port <= 0 => emit default_port(scheme) else => emit port;
@@ -98,6 +104,7 @@ impl Http {
 		return client;
 	};
 
+	@pure
 	const with_scheme := fn (host : str, port : int = 0, scheme : str) -> HttpClient => {
 		let resolved_port := if port <= 0 => emit default_port(scheme) else => emit port;
 		
@@ -157,6 +164,8 @@ impl HttpClient {
 	const post := fn (self : HttpClient, path body : str = "") -> HttpResponse => return self.request("POST", path, body);
 };
 
+@pure
 const http := fn (host : str, port : int = 0) -> HttpClient => return Http.client(host, port);
+
 const connect := fn (host : str, port : int = 80) -> TcpStream => return Tcp.connect(host, port);
 const listen := fn (host : str, port : int = 8080) -> TcpListener => return Tcp.listen(host, port);

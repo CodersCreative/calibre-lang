@@ -2,8 +2,10 @@ type Args := struct { };
 type Vars := struct { };
 
 impl Args {
+	@pure
 	const nth := fn (idx : uint) -> str? => return get(idx);
 
+	@pure
 	const all := fn -> list:<str> => {
 		let mut out : list:<str> = list:<str>[];
 		
@@ -23,6 +25,7 @@ impl Args {
 		return out;
 	};
 
+	@pure
 	const count := fn -> uint => {
 		let mut idx := 0u;
 		
@@ -36,8 +39,10 @@ impl Args {
 		return idx;
 	};
 
+	@pure
 	const first := fn -> str? => return get(0u);
 
+	@pure
 	const is_empty := fn -> bool => return Args.count() = 0u;
 };
 

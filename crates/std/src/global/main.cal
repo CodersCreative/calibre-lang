@@ -16,6 +16,7 @@ const print := fn (msg : list:<str>) => {
 	return console_output(1, txt & "\n");
 };
 
+@pure
 const range := fn (start end : mut int, step : int = 1, inclusive : bool = false) -> gen:<int> => {
 	if (start != INT_MIN) && (end = INT_MIN) => {
 		end := start;
@@ -33,6 +34,7 @@ const range := fn (start end : mut int, step : int = 1, inclusive : bool = false
 	
 };
 
+@pure
 const fmt := fn (splits : list:<str>, inputs : list:<str>) -> str => {
 	let mut txt : str = "";
 	

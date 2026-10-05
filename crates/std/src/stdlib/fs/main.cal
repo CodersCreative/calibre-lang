@@ -6,8 +6,10 @@ type Metadata := struct { inner : host };
 type Dir := struct { path : Path };
 
 impl Path {
+	@pure
 	const new := fn (path : str) -> Path => return Path { inner : path_new(path) };
 
+	@pure
 	const as_str := fn (self : &Path) -> str => return path_as_str(self.inner);
 
 	const exists := fn (self : &Path) -> bool => return path_exists(self.inner);
@@ -23,27 +25,34 @@ impl Path {
 		};
 	};
 
+	@pure
 	const parent := fn (self : &Path) -> Path? => {
 		let p : str = try path_parent(self.inner);
 		return some(Path.new(p));
 	};
 
+	@pure
 	const file_name := fn (self : &Path) -> str? => {
 		return path_file_name(self.inner);
 	};
 
+	@pure
 	const extension := fn (self : &Path) -> str? => {
 		return path_extension(self.inner);
 	};
 
+	@pure
 	const stem := fn (self : &Path) -> str? => {
 		return path_stem(self.inner);
 	};
 
+	@pure
 	const join := fn (self : &Path, other : str) => path_join(self.inner, other);
 
+	@pure
 	const with_extension := fn (self : &Path, extension : str) -> Path => return Path { inner : path_with_extension(self.inner, extension) };
 
+	@pure
 	const with_file_name := fn (self : &Path, file_name : str) -> Path => return Path { inner : path_with_file_name(self.inner, file_name) };
 
 	const read_dir := fn (self : &Path) -> str!list:<DirEntry> => {
@@ -148,21 +157,28 @@ impl DirEntry {
 };
 
 impl FileType {
+	@pure
 	const is_file := fn (self : &FileType) -> bool => return filetype_is_file(self.inner);
 
+	@pure
 	const is_dir := fn (self : &FileType) -> bool => return filetype_is_dir(self.inner);
 
+	@pure
 	const is_symlink := fn (self : &FileType) -> bool => return filetype_is_symlink(self.inner);
 };
 
 impl Metadata {
+	@pure
 	const is_file := fn (self : &Metadata) -> bool => return metadata_is_file(self.inner);
-
+	
+	@pure
 	const is_dir := fn (self : &Metadata) -> bool => return metadata_is_dir(self.inner);
 
+	@pure
 	const len := fn (self : &Metadata) -> uint => return metadata_len(self.inner);
 
 	// TODO Make a DateTime struct
+	@pure
 	const modified := fn (self : &Metadata) -> str!int => {
 		match metadata_modified(self.inner) {
 			.Ok : time => return ok(time),
@@ -170,6 +186,7 @@ impl Metadata {
 		};
 	};
 
+	@pure
 	const created := fn (self : &Metadata) -> str!int => {
 		match metadata_created(self.inner) {
 			.Ok : time => return ok(time),
@@ -177,6 +194,7 @@ impl Metadata {
 		};
 	};
 
+	@pure
 	const accessed := fn (self : &Metadata) -> str!int => {
 		match metadata_accessed(self.inner) {
 			.Ok : time => return ok(time),
@@ -184,12 +202,15 @@ impl Metadata {
 		};
 	};
 
+	@pure
 	const is_readonly := fn (self : &Metadata) -> bool => return metadata_is_readonly(self.inner);
 };
 
 impl Dir {
+	@pure
 	const new := fn (path : str) -> Dir => return Dir { path : Path.new(path) };
-
+	
+	@pure
 	const new_path := fn (path : Path) -> Dir => return Dir { path };
 
 	const exists := fn (self : &Dir) -> bool => return self.path.exists();

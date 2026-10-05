@@ -3,6 +3,7 @@ const TAU := 6.283185307179586;
 const E := 2.718281828459045;
 const EPSILON := 0.000000001;
 
+@pure
 impl int {
 	const min := fn (a b : int) -> int => if a < b => return a else => return b;
 
@@ -82,6 +83,7 @@ impl int {
 	};
 };
 
+@pure
 impl uint {
 	const min := fn (a b : uint) -> uint => if a < b => return a else => return b;
 
@@ -153,6 +155,7 @@ impl uint {
 	};
 };
 
+@pure
 impl float {
 	const min := fn (a b : float) -> float => if a < b => return a else => return b;
 

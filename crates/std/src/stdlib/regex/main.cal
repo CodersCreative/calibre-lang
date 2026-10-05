@@ -1,3 +1,4 @@
+@pure
 const find_or := fn (pattern text default : str = "") -> str => {
 	let v := find(pattern, text);
 	if v = none => return default else => return v.next;

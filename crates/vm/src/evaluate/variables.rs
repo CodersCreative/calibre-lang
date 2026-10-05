@@ -78,7 +78,7 @@ impl VMEvaluation for VMStoreVar {
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         let name = vm.local_variable(block, self.name)?;
-        let stored = vm.resolve_value_ref(vm.get_reg_value(self.src))?;
+        let stored = vm.get_reg_value(self.src).clone();
         let old = vm.variables.insert(name.clone(), stored);
 
         if let Some(old) = old

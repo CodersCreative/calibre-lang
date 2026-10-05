@@ -9,6 +9,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
+        RefMutability,
         idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType, VarType,
@@ -29,6 +30,15 @@ impl MirLowering for AstRef {
         scope: ScopeId,
         span: Span,
     ) -> Result<MiddleNode, MiddleErr> {
+        if self.mutability == RefMutability::MutRef
+            && env.check_if_mutable(scope, &self.value).is_some_and(|x| !x)
+        {
+            return Err(env.context.err_at_span(
+                self.value.span,
+                MiddleErr::InvalidMutation(self.value.to_string()),
+            ));
+        }
+
         Ok(MiddleNode {
             node_type: MiddleNodeType::RefStatement(MirRef {
                 mutability: self.mutability,

@@ -5,6 +5,7 @@ impl ErrNo {
 		return ErrNo { code : get_c_errno() };
 	};
 
+	@pure
 	const description := fn (self : &Self) -> str => {
 		return get_c_errno_description(self.code);
 	};
@@ -13,5 +14,6 @@ impl ErrNo {
 		set_c_errno(self.code);
 	};
 
+	@pure
 	const display := fn (self : &Self) -> str => self.description();
 };

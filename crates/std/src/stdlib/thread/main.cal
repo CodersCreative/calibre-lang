@@ -2,16 +2,22 @@
 type Duration := struct { ms : int };
 
 impl Duration {
+	@pure
 	const from_ms := fn (ms : int) -> Duration => return Duration { ms };
 
+	@pure
 	const from_s := fn (secs : int) -> Duration => return Duration { ms : secs * 1000 };
 
+	@pure
 	const from_us := fn (us : int) -> Duration => return Duration { ms : us / 1000 };
 
+	@pure
 	const as_ms := fn (self : Duration) -> int => return self.ms;
 
+	@pure
 	const as_s := fn (self : Duration) -> int => return self.ms / 1000;
 
+	@pure
 	const is_zero := fn (self : Duration) -> bool => return self.ms <= 0;
 
 	const sleep := fn (self : Duration) => wait(self.ms);

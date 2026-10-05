@@ -251,9 +251,7 @@ impl VM {
             return Some(self.make_runtime_function(func));
         }
 
-        self.variables
-            .get(name)
-            .and_then(|var| self.resolve_value_ref(var).ok())
+        self.variables.get(name).cloned()
     }
 
     #[inline]
@@ -262,9 +260,7 @@ impl VM {
             return Some(self.make_runtime_function(func));
         }
 
-        self.variables
-            .remove(name)
-            .and_then(|var| self.resolve_value(var).ok())
+        self.variables.remove(name)
     }
 
     pub fn run(

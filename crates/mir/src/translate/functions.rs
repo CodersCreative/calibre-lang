@@ -47,16 +47,11 @@ impl<'a> NodeVisitor for GeneratorReturnsRewriter<'a> {
     fn visit(&mut self, node: AstNode) -> AstNode {
         let span = node.span;
         match node.node_type {
-            AstNodeType::Return(AstReturn { value: Some(value) })
-              
-                     =>
-            {
-                AstNode::call(
-                    span,
-                    AstNode::identifier(span, "gen_suspend"),
-                    vec![CallArg::Value(*value)],
-                )
-            }
+            AstNodeType::Return(AstReturn { value: Some(value) }) => AstNode::call(
+                span,
+                AstNode::identifier(span, "gen_suspend"),
+                vec![CallArg::Value(*value)],
+            ),
             AstNodeType::Return(AstReturn { value: None }) => AstNode::new(
                 span,
                 AstNodeType::Return(AstReturn {

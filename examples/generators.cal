@@ -42,4 +42,9 @@ const main := fn => {
 	print("mapped : ");
 	let mapped := fn(x + 1 for x in 0..5).map(fn (x : int) -> int => return x * 10).collect();
 	print([mapped]);
+
+	let mut ten := 10;
+	let mut tenny := ten.&mut;
+	tenny.* := 16;
+	print(ten);
 };

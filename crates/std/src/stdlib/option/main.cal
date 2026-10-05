@@ -1,19 +1,23 @@
 impl<T> option:<T> {
+	@pure
 	const is_some := fn (self : T?) -> bool => match self {
 		.Some : _ => return true,
 		.None => return false
 	};
 
+	@pure
 	const is_none := fn (self : T?) -> bool => match self {
 		.Some : _ => return false,
 		.None => return true
 	};
 	
+	@pure
 	const map := fn <U> (self : T?, op : fn (T) -> U) -> U? => match self {
 		.Some : v => return some(op(v)),
 		.None => return none
 	};
 
+	@pure
 	const and_then := fn <U> (self : T?, op : fn (T) -> U?) -> U? => match self {
 		.Some : v => return op(v),
 		.None => return none

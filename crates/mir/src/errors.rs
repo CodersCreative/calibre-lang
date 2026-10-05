@@ -42,6 +42,8 @@ pub enum MiddleErr {
     Variable(String),
     #[error("Unable to resolve field : {0}.{1}")]
     FieldAccess(String, String),
+    #[error("Invalid Mutation : {0}")]
+    InvalidMutation(String),
     #[error("Variable shadowing is not allowed at global scope: {0}")]
     VariableShadowing(String),
     #[error("Unable to find macro arg : ${0}")]
@@ -240,6 +242,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::PureFunctionNoReturnType => "M028",
             Self::VariableShadowing(_) => "M029",
             Self::FieldAccess(_, _) => "M029",
+            Self::InvalidMutation { .. } => "M030",
             // Type inference failures (codes M050-M099)
             Self::CannotInferVariableType(_) => "M050",
             Self::CannotInferReturnType(_) => "M051",
@@ -325,6 +328,9 @@ impl calibre_parser::CalibreError for MiddleErr {
             )),
             Self::FieldAccess(var, _) => Some(format!(
                 "unable to resolve `{var}` to a variable or object - check spelling or scope"
+            )),
+            Self::InvalidMutation(var) => Some(format!(
+                "tried to mutate `{var}` but it was last defined as an immutable variable"
             )),
             Self::Overload(msg) => Some(format!("overload error: {msg}")),
             Self::Object(obj) => Some(format!(

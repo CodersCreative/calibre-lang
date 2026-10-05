@@ -1,3 +1,4 @@
+@pure
 @overload("as") fn (self : range) -> gen:<int> => {
 	let end := len(self.range);
 	let start := min_or_zero(self.range);
@@ -7,23 +8,30 @@
 } 
 
 impl range {
+	@pure
 	const len := fn (self : range) -> uint => return len(self);
 
+	@pure
 	const start := fn (self : range) -> int => return min_or_zero(self);
 
+	@pure
 	const end := fn (self : range) -> uint => return len(self);
 
+	@pure
 	const is_empty := fn (self : range) -> bool => return len(self) = min_or_zero(self);
 
+	@pure
 	const contains := fn (self : range, value : int) -> bool => {
 		let s : int = min_or_zero(self);
 		let e : int = len(self) as! int;
 		return (value >= s) && (value < e);
 	};
 
+	@pure
 	const to_list := fn (self : range) -> list:<int> =>
 		return list:<int>[i for i in self];
 
+	@pure
 	const sum := fn (self : range) -> int => {
 		let mut acc := 0;
 		

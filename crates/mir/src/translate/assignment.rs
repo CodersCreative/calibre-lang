@@ -3,6 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
+    symbols::resolve::ResolutionOptions,
     tags::TagInfo,
     translate::MirLowering,
 };
@@ -16,12 +17,39 @@ use calibre_parser::{
             assignment::{AstAssignDestructure, AstAssignment},
             conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType},
             declaration::AstDeclaration,
-            memory::AstDeref,
+            memory::{AstDeref, AstRef},
         },
         types::ParserDataType,
     },
 };
 use tracing::instrument;
+
+impl MiddleEnvironment {
+    pub fn check_if_mutable(&self, scope: ScopeId, node: &AstNode) -> Option<bool> {
+        match &node.node_type {
+            AstNodeType::Identifier(x) => {
+                let ident = self
+                    .resolve(scope, &x.value, ResolutionOptions::idents())
+                    .ok()?
+                    .unwrap_variable();
+                Some(self.symbols.variables.get(&ident)?.var_type == VarType::Mutable)
+            }
+            AstNodeType::Ternary(x) => self.check_if_mutable(scope, &x.then).and_then(|_| {
+                x.otherwise
+                    .as_ref()
+                    .and_then(|y| self.check_if_mutable(scope, y))
+            }),
+            AstNodeType::DerefStatement(AstDeref { value })
+            | AstNodeType::RefStatement(AstRef { value, .. }) => {
+                self.check_if_mutable(scope, value)
+            }
+            AstNodeType::FieldAccess(AstField { base, .. })
+            | AstNodeType::IndexAccess(AstIndex { base, .. })
+            | AstNodeType::ScopeAccess(AstScope { base, .. }) => self.check_if_mutable(scope, base),
+            _ => None,
+        }
+    }
+}
 
 impl MirLowering for AstAssignment {
     #[instrument(skip_all)]
@@ -43,7 +71,17 @@ impl MirLowering for AstAssignment {
             )?;
         }
 
-        match self.identifier.node_type.clone() {
+        if env
+            .check_if_mutable(scope, &self.identifier)
+            .is_some_and(|x| !x)
+        {
+            return Err(env.context.err_at_span(
+                self.identifier.span,
+                MiddleErr::InvalidMutation(self.identifier.to_string()),
+            ));
+        }
+
+        match self.identifier.node_type {
             AstNodeType::Ternary(AstTernary {
                 comparison,
                 then,

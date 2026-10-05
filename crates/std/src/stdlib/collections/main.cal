@@ -1,13 +1,16 @@
 type HashMap:<K, V> := struct { inner : host };
 
+@pure
 @overload("[]") fn<K, V>(self : &HashMap:<K, V>, key : K) -> V? => return self.get(key);
 
 @overload("[]=") fn<K, V>(self : &mut HashMap:<K, V>, key : K, value : V) => {
 	self.set(key, value);
 }
 
+@pure
 @overload("in") fn<K, V>(key : K, map : HashMap:<K, V>) -> bool => return map.contains(key);
 
+@pure
 @overload("as") fn<K, V>(self : HashMap:<K, V>) -> gen:<<K, V>> => {
 	for i in len(self) => 
 		return try!! self[i];
@@ -15,8 +18,10 @@ type HashMap:<K, V> := struct { inner : host };
 
 type HashSet:<T> := struct { inner : host };
 
+@pure
 @overload("in") fn<T>(value : T, set : HashSet:<T>) -> bool => return set.contains(value);
 
+@pure
 @overload("as") fn<T>(self : &HashSet:<T>) -> gen:<&T> => {
 	let values : list:<&T> = self.values()
 	return values as! gen:<&T>
@@ -24,24 +29,32 @@ type HashSet:<T> := struct { inner : host };
 
 
 impl<K, V> HashMap:<K, V> {
+	@pure
 	const new := fn (entries : list:<<K, V>>) -> HashMap:<K, V> => return HashMap:<K, V> { inner : hashmap_new(entries) };
 
 	const set := fn (self : &mut HashMap:<K, V>, key : K, value : V) => hashmap_set(self.inner, key, value);
 
+	@pure
 	const get := fn (self : &HashMap:<K, V>, key : K) -> &V? => return hashmap_get(self.inner, key);
 
 	const remove := fn (self : &mut HashMap:<K, V>, key : K) -> V? => return hashmap_remove(self.inner, key);
 
+	@pure
 	const contains := fn (self : &HashMap:<K, V>, key : K) -> bool => return hashmap_contains(self.inner, key);
 
+	@pure
 	const len := fn (self : &HashMap:<K, V>) -> int => return hashmap_len(self.inner);
 
+	@pure
 	const is_empty := fn (self : &HashMap:<K, V>) -> bool => return self.len() = 0;
 
+	@pure
 	const keys := fn (self : &HashMap:<K, V>) -> list:<&K> => return hashmap_keys(self.inner);
 
+	@pure
 	const values := fn (self : &HashMap:<K, V>) -> list:<&V> => return hashmap_values(self.inner);
 
+	@pure
 	const entries := fn (self : &HashMap:<K, V>) -> list:<<&K, &V>> => return hashmap_entries(self.inner);
 
 	const clear := fn (self : &mut HashMap:<K, V>) => hashmap_clear(self.inner);
@@ -55,18 +68,23 @@ impl<K, V> HashMap:<K, V> {
 };
 
 impl<T> HashSet:<T> {
+	@pure
 	const new := fn (entries : list:<T>) -> HashSet:<T> => return HashSet:<T> { inner : hashset_new(entries) };
 
 	const add := fn (self : &mut HashSet:<T>, value : T) -> bool => return hashset_add(self.inner, value);
 
 	const remove := fn (self : &mut HashSet:<T>, value : T) -> bool => return hashset_remove(self.inner, value);
 
+	@pure
 	const contains := fn (self : &HashSet:<T>, value : T) -> bool => return hashset_contains(self.inner, value);
 
+	@pure
 	const len := fn (self : &HashSet:<T>) -> int => return hashset_len(self.inner);
 
+	@pure
 	const is_empty := fn (self : &HashSet:<T>) -> bool => return self.len() = 0;
 
+	@pure
 	const values := fn (self : &HashSet:<T>) -> list:<&T> => return hashset_values(self.inner);
 
 	const clear := fn (self : &mut HashSet:<T>) => hashset_clear(self.inner);
