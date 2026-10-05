@@ -1,4 +1,3 @@
-use crate::Span;
 use crate::ast::RefMutability;
 use crate::ast::idents::{ParserText, PotentialDollarIdentifier};
 use crate::ast::nodes::access::{AstField, AstIdentifier, AstIndex, AstScope};
@@ -26,10 +25,17 @@ use crate::{
     parse::AstParserErr,
 };
 use chumsky::input::ValueInput;
-use chumsky::pratt::{infix, left, postfix, prefix};
+use chumsky::pratt::{infix, left, postfix, prefix, right};
 use chumsky::primitive::{choice, just};
 use chumsky::span::SimpleSpan;
 use chumsky::{Parser, select};
+
+#[derive(Clone, Copy)]
+enum Assignment {
+    Plain,
+    Binary(BinaryOperator),
+    Boolean(BooleanOperator),
+}
 
 pub struct PrattParser;
 
@@ -41,30 +47,16 @@ impl<'a> PrattParser {
             left: AstNode,
             operator: BinaryOperator,
             right: AstNode,
-            assign: bool,
             span: SimpleSpan,
         ) -> AstNode {
-            let span: Span = span.into();
-            let value = AstNode::new(
-                span,
+            AstNode::new(
+                span.into(),
                 AstNodeType::BinaryExpression(AstBinary {
-                    left: Box::new(left.clone()),
+                    left: Box::new(left),
                     right: Box::new(right),
                     operator,
                 }),
-            );
-
-            if assign {
-                AstNode::new(
-                    span,
-                    AstNodeType::AssignmentExpression(AstAssignment {
-                        identifier: Box::new(left),
-                        value: Box::new(value),
-                    }),
-                )
-            } else {
-                value
-            }
+            )
         }
 
         fn fold_comparison(
@@ -87,39 +79,41 @@ impl<'a> PrattParser {
             left: AstNode,
             operator: BooleanOperator,
             right: AstNode,
-            assign: bool,
             span: SimpleSpan,
         ) -> AstNode {
-            let span: Span = span.into();
-            let value = AstNode::new(
-                span,
+            AstNode::new(
+                span.into(),
                 AstNodeType::BooleanExpression(AstBoolean {
-                    left: Box::new(left.clone()),
+                    left: Box::new(left),
                     right: Box::new(right),
                     operator,
                 }),
-            );
-
-            if assign {
-                AstNode::new(
-                    span,
-                    AstNodeType::AssignmentExpression(AstAssignment {
-                        identifier: Box::new(left),
-                        value: Box::new(value),
-                    }),
-                )
-            } else {
-                value
-            }
+            )
         }
 
-        let assignment = just(Token::Walrus);
+        let assignment = choice((
+            just(Token::Walrus).map(|_| Assignment::Plain),
+            select! {
+                Token::AddEq => Assignment::Binary(BinaryOperator::Add),
+                Token::SubEq => Assignment::Binary(BinaryOperator::Sub),
+                Token::MulEq => Assignment::Binary(BinaryOperator::Mul),
+                Token::DivEq => Assignment::Binary(BinaryOperator::Div),
+                Token::ModEq => Assignment::Binary(BinaryOperator::Mod),
+                Token::PowEq => Assignment::Binary(BinaryOperator::Pow),
+                Token::ShlEq => Assignment::Binary(BinaryOperator::Shl),
+                Token::ShrEq => Assignment::Binary(BinaryOperator::Shr),
+                Token::BitAndEq => Assignment::Binary(BinaryOperator::BitAnd),
+                Token::BitXorEq => Assignment::Binary(BinaryOperator::BitXor),
+                Token::BitOrEq => Assignment::Binary(BinaryOperator::BitOr),
+                Token::AndEq => Assignment::Boolean(BooleanOperator::And),
+                Token::OrEq => Assignment::Boolean(BooleanOperator::Or),
+            },
+        ))
+        .padded_by(potential_new_line());
 
         let boolean = select! {
-            Token::And => (BooleanOperator::And, false),
-            Token::AndEq => (BooleanOperator::And, true),
-            Token::Or => (BooleanOperator::Or, false),
-            Token::OrEq => (BooleanOperator::Or, true),
+            Token::And => BooleanOperator::And,
+            Token::Or => BooleanOperator::Or,
         }
         .padded_by(potential_new_line());
 
@@ -134,49 +128,38 @@ impl<'a> PrattParser {
         .padded_by(potential_new_line());
 
         let bitwise = select! {
-            Token::BitAnd => (BinaryOperator::BitAnd, false),
-            Token::BitAndEq => (BinaryOperator::BitAnd, true),
-            Token::BitXor => (BinaryOperator::BitXor, false),
-            Token::BitXorEq => (BinaryOperator::BitXor, true),
-            Token::BitOr => (BinaryOperator::BitOr, false),
-            Token::BitOrEq => (BinaryOperator::BitOr, true),
+            Token::BitAnd => BinaryOperator::BitAnd,
+            Token::BitXor => BinaryOperator::BitXor,
+            Token::BitOr => BinaryOperator::BitOr,
         }
         .padded_by(potential_new_line());
 
         let shift = choice((
-            just(Token::ShlEq).map(|_| (BinaryOperator::Shl, true)),
-            just(Token::ShrEq).map(|_| (BinaryOperator::Shr, true)),
             just(Token::Lesser)
                 .ignore_then(just(Token::Lesser))
-                .map(|_| (BinaryOperator::Shl, false)),
+                .map(|_| BinaryOperator::Shl),
             just(Token::Greater)
                 .ignore_then(just(Token::Greater))
-                .map(|_| (BinaryOperator::Shr, false)),
-        ));
+                .map(|_| BinaryOperator::Shr),
+        ))
+        .padded_by(potential_new_line());
 
         let add = select! {
-            Token::Sub => (BinaryOperator::Sub, false),
-            Token::SubEq => (BinaryOperator::Sub, true),
-            Token::Add => (BinaryOperator::Add, false),
-            Token::AddEq => (BinaryOperator::Add, true),
+            Token::Sub => BinaryOperator::Sub,
+            Token::Add => BinaryOperator::Add,
         }
         .padded_by(potential_new_line());
 
         let mul = select! {
-            Token::Mul => (BinaryOperator::Mul, false),
-            Token::MulEq => (BinaryOperator::Mul, true),
-            Token::Div => (BinaryOperator::Div, false),
-            Token::DivEq => (BinaryOperator::Div, true),
-            Token::Mod => (BinaryOperator::Mod, false),
-            Token::ModEq => (BinaryOperator::Mod, true),
+            Token::Mul => BinaryOperator::Mul,
+            Token::Div => BinaryOperator::Div,
+            Token::Mod => BinaryOperator::Mod,
         }
         .padded_by(potential_new_line());
 
-        let pow = select! {
-            Token::Pow => (BinaryOperator::Pow, false),
-            Token::PowEq => (BinaryOperator::Pow, true),
-        }
-        .padded_by(potential_new_line());
+        let pow = just(Token::Pow)
+            .map(|_| BinaryOperator::Pow)
+            .padded_by(potential_new_line());
 
         let range = select! {
             Token::Range => false,
@@ -321,8 +304,8 @@ impl<'a> PrattParser {
                     }
                 }),
                 // 80
-                infix(left(80), pow, |l, (op, assignment), r, sp| {
-                    fold_binary(l, op, r, assignment, sp.span())
+                infix(left(80), pow, |l, op, r, sp| {
+                    fold_binary(l, op, r, sp.span())
                 }),
                 // 70
                 postfix(70, conversion, |value, (failure_mode, data_type), sp| {
@@ -347,20 +330,20 @@ impl<'a> PrattParser {
                     )
                 }),
                 // 60
-                infix(left(60), mul, |l, (op, assignment), r, sp| {
-                    fold_binary(l, op, r, assignment, sp.span())
+                infix(left(60), mul, |l, op, r, sp| {
+                    fold_binary(l, op, r, sp.span())
                 }),
                 // 50
-                infix(left(50), add, |l, (op, assignment), r, sp| {
-                    fold_binary(l, op, r, assignment, sp.span())
+                infix(left(50), add, |l, op, r, sp| {
+                    fold_binary(l, op, r, sp.span())
                 }),
                 // 40
-                infix(left(40), shift, |l, (op, assignment), r, sp| {
-                    fold_binary(l, op, r, assignment, sp.span())
+                infix(left(40), shift, |l, op, r, sp| {
+                    fold_binary(l, op, r, sp.span())
                 }),
                 // 30
-                infix(left(30), bitwise, |l, (op, assignment), r, sp| {
-                    fold_binary(l, op, r, assignment, sp.span())
+                infix(left(30), bitwise, |l, op, r, sp| {
+                    fold_binary(l, op, r, sp.span())
                 }),
                 // 25
                 infix(left(25), range, |l, inclusive, r, sp| {
@@ -399,21 +382,31 @@ impl<'a> PrattParser {
                     |base, value, extra| AstTernary::fold_postfix(base, value, extra.span()),
                 ),
                 // 10
-                infix(left(10), boolean, |l, (op, assignment), r, sp| {
-                    fold_boolean(l, op, r, assignment, sp.span())
+                infix(left(10), boolean, |l, op, r, sp| {
+                    fold_boolean(l, op, r, sp.span())
                 }),
                 // 5
                 postfix(5, AstPipe::operator(data.clone()), |base, value, extra| {
                     AstPipe::fold_postfix(base, value, extra.span())
                 }),
                 // 0
-                infix(left(0), assignment, |left, _, right, sp| {
+                infix(right(0), assignment, |left: AstNode, op, right, sp| {
                     let span: SimpleSpan = sp.span();
+                    let value = match op {
+                        Assignment::Plain => right,
+                        Assignment::Binary(operator) => {
+                            fold_binary(left.clone(), operator, right, span)
+                        }
+                        Assignment::Boolean(operator) => {
+                            fold_boolean(left.clone(), operator, right, span)
+                        }
+                    };
+
                     AstNode::new(
                         span.into(),
                         AstNodeType::AssignmentExpression(AstAssignment {
                             identifier: Box::new(left),
-                            value: Box::new(right),
+                            value: Box::new(value),
                         }),
                     )
                 }),
