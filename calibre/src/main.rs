@@ -129,8 +129,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .type_check(!no_type_check)
                     .readable(readable)
                     .time(time)
-                    .profiling_enabled(profile)
+                    .profiling(profile)
                     .profiling_output(profile_output)
+                    .backtrace(args.backtrace)
                     .build()?
                     .execute()
                     .await
@@ -143,6 +144,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 verbose,
                 tests,
                 suites,
+                profile,
+                profile_output,
             }) => {
                 TestingBuilder::default()
                     .wanted(&tests)
@@ -151,6 +154,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .example(example)
                     .recursive(recursive)
                     .verbose(verbose)
+                    .profiling(profile)
+                    .profiling_output(profile_output)
                     .build()?
                     .execute()
                     .await
@@ -167,6 +172,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 benchmarks,
                 suites,
                 no_type_check,
+                profile,
+                profile_output,
             }) => {
                 BenchmarksBuilder::default()
                     .wanted(&benchmarks)
@@ -180,6 +187,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .time_limit_ms(time_limit_ms)
                     .verbose(verbose)
                     .type_check(!no_type_check)
+                    .profiling(profile)
+                    .profiling_output(profile_output)
                     .build()?
                     .execute()
                     .await

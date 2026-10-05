@@ -26,8 +26,9 @@ pub struct Run {
     type_check: bool,
     readable: bool,
     time: bool,
-    profiling_enabled: bool,
+    profiling: bool,
     profiling_output: Option<PathBuf>,
+    backtrace: bool,
 }
 
 impl Run {
@@ -78,8 +79,9 @@ impl Run {
             run.type_check(self.type_check);
             run.readable(self.readable);
             run.time(self.time);
-            run.profiling_enabled(self.profiling_enabled);
+            run.profiling(self.profiling);
             run.profiling_output(self.profiling_output.clone());
+            run.backtrace(self.backtrace);
 
             let run = run.build()?;
 
@@ -122,8 +124,9 @@ struct RunSource {
     type_check: bool,
     readable: bool,
     time: bool,
-    profiling_enabled: bool,
+    profiling: bool,
     profiling_output: Option<PathBuf>,
+    backtrace: bool,
     included: Vec<PackagedProgramBlob>,
 }
 
@@ -246,8 +249,9 @@ impl RunSource {
 
         let entry_name = artifacts.entry_name.clone();
         let mut vm_config = self.vm_config;
-        vm_config.profiling_enabled = self.profiling_enabled;
+        vm_config.profiling = self.profiling;
         vm_config.profiling_output = self.profiling_output.clone();
+        vm_config.backtrace = self.backtrace;
 
         let mut vm: VM = VM::new(artifacts.registry, artifacts.mappings, vm_config);
         vm.set_source_file_override(&self.path);
@@ -276,6 +280,9 @@ impl RunSource {
         for (_, func_name) in artifacts.init_functions {
             if let Some(init_func) = vm.registry.functions.get(&func_name).cloned() {
                 if let Err(err) = vm.run(init_func.as_ref(), Vec::new()) {
+                    if self.backtrace {
+                        eprintln!("{}", vm.format_backtrace());
+                    }
                     calibre_frontend::diagnostics::emit_calibre_error(
                         &self.path,
                         &self.contents,
@@ -289,6 +296,9 @@ impl RunSource {
         }
 
         if !ran {
+            if self.backtrace {
+                eprintln!("{}", vm.format_backtrace());
+            }
             calibre_frontend::diagnostics::emit_error(
                 &self.path,
                 &self.contents,
@@ -302,6 +312,9 @@ impl RunSource {
             if let Some(fin_func) = vm.registry.functions.get(&func_name).cloned()
                 && let Err(err) = vm.run(fin_func.as_ref(), Vec::new())
             {
+                if self.backtrace {
+                    eprintln!("{}", vm.format_backtrace());
+                }
                 calibre_frontend::diagnostics::emit_calibre_error(
                     &self.path,
                     &self.contents,
@@ -320,9 +333,15 @@ impl RunSource {
             println!("Finished - elapsed {}ms", start.elapsed().as_millis());
         }
 
-        if self.profiling_enabled && let Some(folded_stacks) = vm.export_folded_stacks() {
-            let output_path = self.profiling_output.unwrap_or_else(|| PathBuf::from("calibre.folded"));
-            fs::write(&output_path, folded_stacks).await.map_err(|e| format!("Failed to write profiling output: {}", e))?;
+        if self.profiling
+            && let Some(folded_stacks) = vm.export_folded_stacks()
+        {
+            let output_path = self
+                .profiling_output
+                .unwrap_or_else(|| PathBuf::from("calibre.folded"));
+            fs::write(&output_path, folded_stacks)
+                .await
+                .map_err(|e| format!("Failed to write profiling output: {}", e))?;
             println!("Profiling data written to {}", output_path.display());
         }
 

@@ -1,16 +1,21 @@
 use crate::{
-    config::VMConfig, conversion::{Reg, VMBlock, VMFunction, VMRegistry}, error::RuntimeError, native::NativeFunction, profiler::CallTreeProfiler, value::{GcMap, RuntimeValue, hashable::HashKey, spawn::WaitGroupInner}, variables::VariableStore,
+    config::VMConfig,
+    conversion::{Reg, VMBlock, VMFunction, VMRegistry},
+    error::RuntimeError,
+    native::NativeFunction,
+    profiler::CallTreeProfiler,
+    value::{GcMap, RuntimeValue, hashable::HashKey, spawn::WaitGroupInner},
+    variables::VariableStore,
 };
 use astro_float::Consts;
 use calibre_lir::{VariableKey, ast::BlockId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
-use std::sync::{atomic::{AtomicBool,  Ordering}, OnceLock};
-use std::{
-    fmt::Debug,
-    path::Path,
-    sync::Arc,
+use std::sync::{
+    OnceLock,
+    atomic::{AtomicBool, Ordering},
 };
+use std::{fmt::Debug, path::Path, sync::Arc};
 use tracing::instrument;
 use ustr::Ustr;
 use wasm_sync::Mutex;
@@ -26,11 +31,11 @@ pub mod conversion;
 pub mod error;
 pub mod evaluate;
 pub mod native;
+pub mod profiler;
 pub mod scheduler;
 pub mod serialization;
 pub mod value;
 pub mod variables;
-pub mod profiler;
 mod vm_lookup;
 
 #[derive(Debug, Clone)]
@@ -206,7 +211,7 @@ impl VM {
         config: VMConfig,
         install_builtins: bool,
     ) -> Self {
-        let profiler = if config.profiling_enabled {
+        let profiler = if config.profiling {
             let profiler = CallTreeProfiler::default();
             Some(profiler)
         } else {
@@ -378,7 +383,10 @@ impl VM {
 
         self.reg_top = new_top;
 
-        let profiler_call_id = if let Some(profiler) = &self.profiler&& !self.in_global && let Some(name) = &func_name {
+        let profiler_call_id = if let Some(profiler) = &self.profiler
+            && !self.in_global
+            && let Some(name) = &func_name
+        {
             Some(profiler.record_function_enter(self.current_task_id, name.clone()))
         } else {
             None
@@ -407,8 +415,10 @@ impl VM {
     fn pop_frame(&mut self) {
         if let Some(frame) = self.frames.pop() {
             self.reg_top = frame.reg_start;
-            
-            if let Some(profiler) = &self.profiler && let Some(call_id) = frame.profiler_call_id {
+
+            if let Some(profiler) = &self.profiler
+                && let Some(call_id) = frame.profiler_call_id
+            {
                 profiler.record_function_exit(self.current_task_id, call_id);
             }
 

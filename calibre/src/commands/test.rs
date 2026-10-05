@@ -5,6 +5,7 @@ use calibre_frontend::config::ProjectContext;
 use calibre_vm::config::VMConfig;
 use derive_builder::Builder;
 use std::error::Error;
+use std::path::PathBuf;
 use tracing::instrument;
 
 #[derive(Builder, Debug)]
@@ -15,6 +16,9 @@ pub struct Testing<'a> {
     example: Option<String>,
     recursive: bool,
     verbose: bool,
+    profiling: bool,
+    profiling_output: Option<PathBuf>,
+    backtrace: bool,
 }
 
 impl<'a> Testing<'a> {
@@ -22,7 +26,10 @@ impl<'a> Testing<'a> {
     pub async fn execute(self) -> Result<(), Box<dyn Error>> {
         let cwd = std::env::current_dir()?;
         let project = ProjectContext::load(&cwd).map_err(|e| format!("config error: {e}"))?;
-        let vm_config = project.as_ref().map(VMConfig::from).unwrap_or_default();
+        let mut vm_config = project.as_ref().map(VMConfig::from).unwrap_or_default();
+        vm_config.profiling = self.profiling;
+        vm_config.backtrace = self.backtrace;
+        vm_config.profiling_output = self.profiling_output.clone();
 
         let cases = RunSuiteBuilder::default()
             .compile_mode(CompileMode::Test)
@@ -63,8 +70,36 @@ impl<'a> Testing<'a> {
                 continue;
             }
 
+            let mut test_vm_config = vm_config.clone();
+            let profile_output_path =
+                if self.profiling {
+                    // TODO Make it so that it wont override if theres multiple tests
+                    let safe_name = test
+                        .name
+                        .chars()
+                        .map(|c| {
+                            if c.is_alphanumeric() || c == '_' {
+                                c
+                            } else {
+                                '_'
+                            }
+                        })
+                        .collect::<String>();
+                    Some(self.profiling_output.clone().unwrap_or_else(|| {
+                        PathBuf::from(format!("calibre_test_{}.folded", safe_name))
+                    }))
+                } else {
+                    None
+                };
+
+            if let Some(ref path) = profile_output_path {
+                test_vm_config.profiling_output = Some(path.clone());
+            }
+
+            test_vm_config.backtrace = false;
+
             let run_result = run_named_function_once(
-                &vm_config,
+                &test_vm_config,
                 registry,
                 mappings,
                 &test.function_name,

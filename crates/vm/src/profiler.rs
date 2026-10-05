@@ -1,14 +1,59 @@
+use crate::VM;
+use calibre_lir::VariableKey;
+use rustc_hash::FxHashMap;
 use std::{
     fmt::Write,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc,
+        atomic::{AtomicU64, Ordering},
     },
     time::Instant,
 };
-use calibre_lir::VariableKey;
-use rustc_hash::FxHashMap;
 use wasm_sync::Mutex;
+
+#[derive(Debug, Clone)]
+pub struct BacktraceFrame {
+    pub function_name: String,
+    pub file_path: Option<String>,
+}
+
+impl VM {
+    pub fn capture_backtrace(&self) -> Vec<BacktraceFrame> {
+        let mut frames = Vec::new();
+
+        for frame in self.frames.iter().rev() {
+            if let Some(func_name) = &frame.func_name {
+                let file_path = self.source_file_override.as_ref().map(|u| u.to_string());
+
+                frames.push(BacktraceFrame {
+                    function_name: func_name.name().to_string(),
+                    file_path,
+                });
+            }
+        }
+
+        frames
+    }
+
+    pub fn format_backtrace(&self) -> String {
+        let frames = self.capture_backtrace();
+        if frames.is_empty() {
+            return String::new();
+        }
+
+        let mut output = String::new();
+        output.push_str("backtrace:\n");
+
+        for (i, frame) in frames.iter().enumerate() {
+            output.push_str(&format!("\t{}: {}\n", i, frame.function_name));
+            if let Some(ref path) = frame.file_path {
+                output.push_str(&format!("\t\tat {}\n", path));
+            }
+        }
+
+        output
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum CallEventType {
@@ -65,11 +110,14 @@ impl CallTreeProfiler {
 
     pub fn record_function_enter(&self, task_id: u64, function_name: VariableKey) -> u64 {
         let mut state = self.state.lock().unwrap();
-        
+
         let call_id = state.next_call_id;
         state.next_call_id += 1;
 
-        let parent_call_id = state.call_stack.get(&task_id).and_then(|s| s.last().copied());
+        let parent_call_id = state
+            .call_stack
+            .get(&task_id)
+            .and_then(|s| s.last().copied());
         state.call_stack.entry(task_id).or_default().push(call_id);
 
         state.events.push(CallEvent {
@@ -107,11 +155,14 @@ impl CallTreeProfiler {
 
     pub fn record_memoization_hit(&self, task_id: u64, function_name: VariableKey) {
         let mut state = self.state.lock().unwrap();
-        
+
         let call_id = state.next_call_id;
         state.next_call_id += 1;
 
-        let parent_call_id = state.call_stack.get(&task_id).and_then(|s| s.last().copied());
+        let parent_call_id = state
+            .call_stack
+            .get(&task_id)
+            .and_then(|s| s.last().copied());
 
         state.events.push(CallEvent {
             task_id,
@@ -160,9 +211,14 @@ impl CallTreeProfiler {
                     let name_str = event
                         .function_name
                         .as_ref()
-                        .map(|x| if matches!(event.event_type, CallEventType::FunctionEnter) { 
-                            x.to_string() 
-                        } else {is_memo = true; format!("{x} (memo)")})
+                        .map(|x| {
+                            if matches!(event.event_type, CallEventType::FunctionEnter) {
+                                x.to_string()
+                            } else {
+                                is_memo = true;
+                                format!("{x} (memo)")
+                            }
+                        })
                         .unwrap_or_default();
 
                     let mut to_push = None;
@@ -187,7 +243,7 @@ impl CallTreeProfiler {
                     }
 
                     call_to_node[event.call_id as usize] = node_id;
-                    
+
                     if is_memo {
                         nodes[node_id].duration += 1;
                     } else {

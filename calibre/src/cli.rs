@@ -10,6 +10,8 @@ pub struct Args {
     pub log: String,
     #[arg(long)]
     pub log_file: Option<PathBuf>,
+    #[arg(long, default_value_t = false)]
+    pub backtrace: bool,
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -99,6 +101,10 @@ pub enum Commands {
         tests: Vec<String>,
         #[arg(long)]
         suites: Vec<String>,
+        #[arg(long, default_value_t = false)]
+        profile: bool,
+        #[arg(long)]
+        profile_output: Option<PathBuf>,
     },
     Bench {
         path: Option<String>,
@@ -122,6 +128,10 @@ pub enum Commands {
         suites: Vec<String>,
         #[arg(long, default_value_t = false)]
         no_type_check: bool,
+        #[arg(long, default_value_t = false)]
+        profile: bool,
+        #[arg(long)]
+        profile_output: Option<PathBuf>,
     },
     Package {
         paths: Vec<String>,

@@ -108,8 +108,9 @@ pub struct VmConfigToml {
     pub gc_interval: Option<u64>,
     pub async_max_per_thread: Option<usize>,
     pub async_quantum: Option<usize>,
-    pub profiling_enabled: Option<bool>,
+    pub profiling: Option<bool>,
     pub profiling_output: Option<String>,
+    pub backtrace: Option<bool>,
 }
 
 impl From<VmConfigToml> for VMConfig {
@@ -118,8 +119,9 @@ impl From<VmConfigToml> for VMConfig {
             gc_interval: value.gc_interval,
             async_max_per_thread: value.async_max_per_thread,
             async_quantum: value.async_quantum,
-            profiling_enabled: value.profiling_enabled.unwrap_or(false),
+            profiling: value.profiling.unwrap_or(false),
             profiling_output: value.profiling_output.map(|s| s.into()),
+            backtrace: value.backtrace.unwrap_or(false),
         }
     }
 }

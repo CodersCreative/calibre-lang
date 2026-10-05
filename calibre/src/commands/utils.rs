@@ -2,7 +2,7 @@ use calibre_frontend::config::ProjectContext;
 use calibre_lir::VariableKey;
 use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::{config::VMConfig, conversion::VMRegistry};
-use std::{error::Error, path::PathBuf, process::Command, time::Duration};
+use std::{error::Error, fs, path::PathBuf, process::Command, time::Duration};
 use tracing::instrument;
 use ustr::Ustr;
 
@@ -94,12 +94,26 @@ pub fn run_named_function_once(
         return Err(("missing function".to_string(), Vec::new()));
     };
     let start = std::time::Instant::now();
-    match vm.run(func.as_ref(), Vec::new()) {
+    let result = vm.run(func.as_ref(), Vec::new());
+
+    if result.is_ok()
+        && vm_config.profiling
+        && let Some(folded_stacks) = vm.export_folded_stacks()
+        && let Some(ref output_path) = vm_config.profiling_output
+    {
+        let _ = fs::write(output_path, folded_stacks);
+    }
+
+    match result {
         Ok(_) => Ok((start.elapsed(), vm.take_captured_output())),
-        Err(e) => Err((
-            runtime_error_message(e.innermost().2),
-            vm.take_captured_output(),
-        )),
+        Err(e) => {
+            let mut msg = runtime_error_message(e.innermost().2);
+            if vm_config.backtrace {
+                msg.push('\n');
+                msg.push_str(&vm.format_backtrace());
+            }
+            Err((msg, vm.take_captured_output()))
+        }
     }
 }
 

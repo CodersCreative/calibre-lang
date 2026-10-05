@@ -5,6 +5,7 @@ use calibre_frontend::config::ProjectContext;
 use calibre_vm::config::VMConfig;
 use derive_builder::Builder;
 use std::error::Error;
+use std::path::PathBuf;
 use std::time::Duration;
 use tracing::instrument;
 
@@ -21,6 +22,9 @@ pub struct Benchmarks<'a> {
     time_limit_ms: u64,
     verbose: bool,
     type_check: bool,
+    profiling: bool,
+    profiling_output: Option<PathBuf>,
+    backtrace: bool,
 }
 
 impl<'a> Benchmarks<'a> {
@@ -28,7 +32,10 @@ impl<'a> Benchmarks<'a> {
     pub async fn execute(self) -> Result<(), Box<dyn Error>> {
         let cwd = std::env::current_dir()?;
         let project = ProjectContext::load(&cwd).map_err(|e| format!("config error: {e}"))?;
-        let vm_config = project.as_ref().map(VMConfig::from).unwrap_or_default();
+        let mut vm_config = project.as_ref().map(VMConfig::from).unwrap_or_default();
+        vm_config.profiling = self.profiling;
+        vm_config.backtrace = self.backtrace;
+        vm_config.profiling_output = self.profiling_output.clone();
 
         let benches = RunSuiteBuilder::default()
             .compile_mode(CompileMode::Bench)
@@ -73,10 +80,35 @@ impl<'a> Benchmarks<'a> {
                 continue;
             }
 
+            let mut bench_vm_config = vm_config.clone();
+            let profile_output_path = if self.profiling {
+                // TODO Make it so that it wont override if theres multiple benches
+                let safe_name = test
+                    .name
+                    .chars()
+                    .map(|c| {
+                        if c.is_alphanumeric() || c == '_' {
+                            c
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect::<String>();
+                Some(self.profiling_output.clone().unwrap_or_else(|| {
+                    PathBuf::from(format!("calibre_bench_{}.folded", safe_name))
+                }))
+            } else {
+                None
+            };
+
+            if let Some(ref path) = profile_output_path {
+                bench_vm_config.profiling_output = Some(path.clone());
+            }
+
             let mut warmup_failed = None;
             for _ in 0..self.warmup {
                 let warmup_result = run_named_function_once(
-                    &vm_config,
+                    &bench_vm_config,
                     registry.clone(),
                     mappings.clone(),
                     &test.function_name,
@@ -100,7 +132,7 @@ impl<'a> Benchmarks<'a> {
 
             for _ in 0..self.max_runs.max(1) {
                 let run_result = run_named_function_once(
-                    &vm_config,
+                    &bench_vm_config,
                     registry.clone(),
                     mappings.clone(),
                     &test.function_name,
