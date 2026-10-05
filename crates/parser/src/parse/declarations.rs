@@ -7,17 +7,20 @@ use crate::parse::StatementData;
 use crate::parse::potential_new_line;
 use crate::{
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr},
 };
 use chumsky::Parser;
 use chumsky::error::Rich;
+use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 
-impl<'a> AstParser<'a> for AstAssignDestructure {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for AstAssignDestructure
+{
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         DestructurePattern::parser(data.clone())
             .then_ignore(just(Token::Walrus).padded_by(potential_new_line()))
             .then(data.node.clone())
@@ -28,10 +31,12 @@ impl<'a> AstParser<'a> for AstAssignDestructure {
     }
 }
 
-impl<'a> AstParser<'a> for AstDeclaration {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for AstDeclaration
+{
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         choice((
             just(Token::Let).map(|_| VarType::Immutable),
             just(Token::Const).map(|_| VarType::Constant),
@@ -79,11 +84,13 @@ impl<'a> AstParser<'a> for AstDeclaration {
     }
 }
 
-impl<'a> AstParser<'a> for AstDeclareDestructure {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for AstDeclareDestructure
+{
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Let)
             .ignore_then(DestructurePattern::parser(data.clone()))
             .then_ignore(just(Token::Walrus).padded_by(potential_new_line()))

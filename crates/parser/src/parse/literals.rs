@@ -10,19 +10,17 @@ use crate::{
         },
     },
     lexer::Token,
-    parse::{
-        AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream, potential_new_line,
-    },
+    parse::{AstParser, AstParserErr, MapWithSpanExt, StatementData, potential_new_line},
 };
-use chumsky::prelude::*;
 use chumsky::{Parser, select};
+use chumsky::{input::ValueInput, prelude::*};
 use ustr::Ustr;
 
-impl<'a> AstParser<'a> for AstFloat {
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstFloat {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         select! {
             Token::FloatLiteral(x) => x
         }
@@ -38,11 +36,11 @@ impl<'a> AstParser<'a> for AstFloat {
     }
 }
 
-impl<'a> AstParser<'a> for AstBig {
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstBig {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         select! {
             Token::BigLiteral(x) => x
         }
@@ -53,11 +51,11 @@ impl<'a> AstParser<'a> for AstBig {
     }
 }
 
-impl<'a> AstParser<'a> for AstInt {
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstInt {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         select! {
             Token::IntLiteral(x) => x
         }
@@ -68,11 +66,11 @@ impl<'a> AstParser<'a> for AstInt {
     }
 }
 
-impl<'a> AstParser<'a> for AstChar {
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstChar {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         select! {
             Token::CharLiteral(x) => AstChar {
                 value: ParserText::decode_literal(x).chars().next().unwrap_or_default(),
@@ -81,11 +79,11 @@ impl<'a> AstParser<'a> for AstChar {
     }
 }
 
-impl<'a> AstParser<'a> for AstString {
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstString {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         select! {
             Token::StringLiteral(x) => x
         }
@@ -98,11 +96,11 @@ impl<'a> AstParser<'a> for AstString {
     }
 }
 
-impl<'a> AstParser<'a> for AstTuple {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstTuple {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         data.node
             .clone()
             .separated_by(just(Token::Comma).padded_by(potential_new_line()))
@@ -114,10 +112,10 @@ impl<'a> AstParser<'a> for AstTuple {
     }
 }
 
-impl<'a> AstParser<'a> for AstStruct {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstStruct {
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         data.generic_ident
             .clone()
             .then(
@@ -142,11 +140,11 @@ impl<'a> AstParser<'a> for AstStruct {
     }
 }
 
-impl<'a> AstParser<'a> for AstDataType {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstDataType {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Type)
             .then(just(Token::Colon))
             .ignore_then(data.data_type.clone())

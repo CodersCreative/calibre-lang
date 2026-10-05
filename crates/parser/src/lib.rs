@@ -3,7 +3,10 @@ use crate::{
     lexer::Token,
     parse::parse_program_with_source,
 };
-use chumsky::span::SimpleSpan;
+use chumsky::{
+    input::{Input, Stream},
+    span::SimpleSpan,
+};
 use logos::Logos;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -213,15 +216,18 @@ fn empty_scope_node() -> AstNode {
 }
 
 impl Parser {
-    pub fn lex<'a>(&self, source: &'a str) -> Result<Vec<Token<'a>>, Vec<ParserError>> {
+    pub fn lex<'a>(
+        &self,
+        source: &'a str,
+    ) -> Result<Vec<(Token<'a>, SimpleSpan)>, Vec<ParserError>> {
         let mut tokens = Vec::new();
         let mut lex_errors = Vec::new();
 
         for result in Token::lexer(source).spanned() {
             match result {
-                (Ok(token), _) => {
+                (Ok(token), span) => {
                     if !matches!(token, Token::LineComment(_) | Token::BlockComment(_)) {
-                        tokens.push(token);
+                        tokens.push((token, span.into()));
                     }
                 }
                 (Err(_), span) => {
@@ -247,8 +253,14 @@ impl Parser {
     #[instrument(skip_all, fields(bytes = source.len(), path = ?self.source_path))]
     pub fn produce_ast(&mut self, source: &str) -> AstNode {
         debug!(lines = source.lines().count(), "starting parse");
+
+        let len = source.len();
         match self.lex(source).and_then(|x| {
-            parse_program_with_source(&x, self.source_path.as_deref()).map_err(|errors| {
+            parse_program_with_source(
+                Stream::from_iter(x.into_iter()).map((0..len).into(), |(t, s): (_, _)| (t, s)),
+                self.source_path.as_deref(),
+            )
+            .map_err(|errors| {
                 let spans = Token::lexer(source)
                     .spanned()
                     .filter_map(|(token, span)| {

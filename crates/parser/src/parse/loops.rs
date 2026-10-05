@@ -5,18 +5,19 @@ use crate::ast::types::ParserDataType;
 use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
 use crate::{
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr},
 };
+use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
 use super::matching::parse_pattern_list;
 
-impl<'a> AstParser<'a> for LoopType {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for LoopType {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         choice((
             // loop
             just(Token::FatArrow).rewind().map(|_| LoopType::Loop),
@@ -48,11 +49,11 @@ impl<'a> AstParser<'a> for LoopType {
     }
 }
 
-impl<'a> AstParser<'a> for AstLoop {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstLoop {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         let label = just(Token::At)
             .ignore_then(data.dollar_ident.clone())
             .or_not();
@@ -73,10 +74,10 @@ impl<'a> AstParser<'a> for AstLoop {
     }
 }
 
-impl<'a> AstParser<'a> for AstIter {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstIter {
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         let data_type = choice((
             select! { Token::Identifier(x) if x == "list" => () }.ignore_then(
                 data.data_type

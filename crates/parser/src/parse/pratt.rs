@@ -14,15 +14,18 @@ use crate::ast::nodes::literals::AstRange;
 use crate::ast::nodes::memory::{AstDeref, AstRef};
 use crate::ast::nodes::unary::{AstNeg, AstNot};
 use crate::ast::nodes::{AstNode, AstNodeType};
-use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, potential_new_line};
+use crate::parse::{
+    AstPrattParser, AstPrattParserFoldable, MapWithSpanExt, PrattData, potential_new_line,
+};
 use crate::{
     ast::{
         binary::BinaryOperator,
         comparison::{BooleanOperator, ComparisonOperator},
     },
     lexer::Token,
-    parse::{AstParserErr, TokenStream},
+    parse::AstParserErr,
 };
+use chumsky::input::ValueInput;
 use chumsky::pratt::{infix, left, postfix, prefix};
 use chumsky::primitive::{choice, just};
 use chumsky::span::SimpleSpan;
@@ -31,9 +34,9 @@ use chumsky::{Parser, select};
 pub struct PrattParser;
 
 impl<'a> PrattParser {
-    pub fn parse(
-        data: PrattData<'a>,
-    ) -> impl Parser<'a, TokenStream<'a>, AstNode, AstParserErr<'a>> {
+    pub fn parse<I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>>(
+        data: PrattData<'a, I>,
+    ) -> impl Parser<'a, I, AstNode, AstParserErr<'a>> {
         fn fold_binary(
             left: AstNode,
             operator: BinaryOperator,
@@ -286,7 +289,8 @@ impl<'a> PrattParser {
                     },
                 ),
                 postfix(90, AstCall::operator(data.clone()), |base, value, extra| {
-                    AstCall::fold_postfix(base, value, extra.span())
+                    let span: SimpleSpan = extra.span();
+                    AstCall::fold_postfix(base, value, span)
                 }),
                 postfix(90, index, |base, index, sp| {
                     let span: SimpleSpan = sp.span();

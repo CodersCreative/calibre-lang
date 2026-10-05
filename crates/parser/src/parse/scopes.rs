@@ -3,16 +3,17 @@ use crate::parse::{PrattData, StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr},
 };
 use chumsky::Parser;
+use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 
-impl<'a> AstParser<'a> for AstScopeDef {
-    type Data = PrattData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstScopeDef {
+    type Data = PrattData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         let body = choice((
             data.stmt
                 .clone()
@@ -82,11 +83,13 @@ impl<'a> AstParser<'a> for AstScopeDef {
     }
 }
 
-impl<'a> AstParser<'a> for AstScopeAlias {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for AstScopeAlias
+{
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         let args = just(Token::Dollar)
             .ignore_then(data.dollar_ident.clone())
             .then(just(Token::Colon).ignore_then(data.node.clone()).or_not())

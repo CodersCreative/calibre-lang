@@ -28,9 +28,9 @@ use crate::{
     lexer::Token,
     parse::pratt::PrattParser,
 };
-use chumsky::prelude::*;
 use chumsky::span::Span as ChumskySpan;
 use chumsky::{error::Rich, extra::ParserExtra};
+use chumsky::{input::ValueInput, prelude::*};
 use std::path::Path;
 use tracing::instrument;
 
@@ -54,45 +54,63 @@ pub mod spawn;
 pub mod types;
 
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
-pub type TokenStream<'a> = &'a [Token<'a>];
 
 // So I'm gonna need to make this basically just become a cache of commonly used items aswell
 // Otherwise it uses way too much memory
-#[derive(Clone)]
-pub struct StatementData<'a> {
-    pub node: Recursive<
-        dyn Parser<'a, TokenStream<'a>, AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>> + 'a,
-    >,
-    pub data_type: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
-    pub dollar_ident: Boxed<'a, 'a, TokenStream<'a>, PotentialDollarIdentifier, AstParserErr<'a>>,
-    pub generic_ident:
-        Boxed<'a, 'a, TokenStream<'a>, PotentialGenericTypeIdentifier, AstParserErr<'a>>,
-    pub scope: Boxed<'a, 'a, TokenStream<'a>, AstNode, AstParserErr<'a>>,
+pub struct StatementData<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> {
+    pub node: Recursive<dyn Parser<'a, I, AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>> + 'a>,
+    pub data_type: Boxed<'a, 'a, I, ParserDataType, AstParserErr<'a>>,
+    pub dollar_ident: Boxed<'a, 'a, I, PotentialDollarIdentifier, AstParserErr<'a>>,
+    pub generic_ident: Boxed<'a, 'a, I, PotentialGenericTypeIdentifier, AstParserErr<'a>>,
+    pub scope: Boxed<'a, 'a, I, AstNode, AstParserErr<'a>>,
 }
 
-#[derive(Clone)]
-pub struct PrattData<'a> {
-    pub stmt: Recursive<
-        dyn Parser<'a, TokenStream<'a>, AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>> + 'a,
-    >,
-    pub data_type: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
-    pub dollar_ident: Boxed<'a, 'a, TokenStream<'a>, PotentialDollarIdentifier, AstParserErr<'a>>,
-    pub generic_ident:
-        Boxed<'a, 'a, TokenStream<'a>, PotentialGenericTypeIdentifier, AstParserErr<'a>>,
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> Clone for StatementData<'a, I> {
+    fn clone(&self) -> Self {
+        Self {
+            node: self.node.clone(),
+            data_type: self.data_type.clone(),
+            dollar_ident: self.dollar_ident.clone(),
+            generic_ident: self.generic_ident.clone(),
+            scope: self.scope.clone(),
+        }
+    }
 }
 
-pub trait AstParser<'a>: Sized {
+pub struct PrattData<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> {
+    pub stmt: Recursive<dyn Parser<'a, I, AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>> + 'a>,
+    pub data_type: Boxed<'a, 'a, I, ParserDataType, AstParserErr<'a>>,
+    pub dollar_ident: Boxed<'a, 'a, I, PotentialDollarIdentifier, AstParserErr<'a>>,
+    pub generic_ident: Boxed<'a, 'a, I, PotentialGenericTypeIdentifier, AstParserErr<'a>>,
+}
+
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> Clone for PrattData<'a, I> {
+    fn clone(&self) -> Self {
+        Self {
+            stmt: self.stmt.clone(),
+            data_type: self.data_type.clone(),
+            dollar_ident: self.dollar_ident.clone(),
+            generic_ident: self.generic_ident.clone(),
+        }
+    }
+}
+
+pub trait AstParser<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>>: Sized {
     type Data;
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>>;
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>>;
 }
 
-pub trait AstPrattParser<'a>: Sized {
+pub trait AstPrattParser<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>>:
+    Sized
+{
     type Data;
     type Value;
 
-    fn operator(
-        data: Self::Data,
-    ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>>;
+    fn operator(data: Self::Data) -> impl Parser<'a, I, Self::Value, AstParserErr<'a>>;
+}
+
+pub trait AstPrattParserFoldable {
+    type Value;
 
     fn fold_postfix(_base: AstNode, _value: Self::Value, _sp: SimpleSpan) -> AstNode {
         unimplemented!()
@@ -151,12 +169,15 @@ where
 {
 }
 
-pub fn potential_new_line<'a>() -> impl Parser<'a, TokenStream<'a>, (), AstParserErr<'a>> {
+pub fn potential_new_line<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>>()
+-> impl Parser<'a, I, (), AstParserErr<'a>> {
     just(Token::NewLine).repeated().ignored()
 }
 
 impl<'a> AstNode {
-    fn parser(data: &StatementData<'a>) -> Boxed<'a, 'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser<I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>>(
+        data: &StatementData<'a, I>,
+    ) -> Boxed<'a, 'a, I, Self, AstParserErr<'a>> {
         let fn_start = just(Token::Fn).rewind().ignore_then(choice((
             AstFnMatch::parser(data.clone()).map(AstNodeType::FnMatchDeclaration),
             AstFunction::parser(data.clone()).map(AstNodeType::FunctionDeclaration),
@@ -269,8 +290,8 @@ impl<'a> AstNode {
 }
 
 #[instrument(skip_all, fields(path = ?source_path))]
-pub fn parse_program_with_source<'a>(
-    tokens: TokenStream<'a>,
+pub fn parse_program_with_source<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>>(
+    tokens: I,
     source_path: Option<&Path>,
 ) -> Result<AstNode, Vec<ParserError>> {
     let parser = recursive(|stmt| {

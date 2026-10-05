@@ -140,8 +140,8 @@ impl TestHarness {
 
         let actual_lines: Vec<&str> = actual_tokens
             .iter()
-            .filter(|x| !matches!(x, Token::LineComment(_) | Token::BlockComment(_)))
-            .map(|token| token.variant_name())
+            .filter(|x| !matches!(x.0, Token::LineComment(_) | Token::BlockComment(_)))
+            .map(|token| token.0.variant_name())
             .collect();
 
         if expected_lines != actual_lines {

@@ -3,16 +3,17 @@ use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
 use crate::{
     ast::types::ParserDataType,
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr},
 };
+use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
-impl<'a> AstParser<'a> for AstList {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstList {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         let data_type = choice((
             select! { Token::Identifier(x) if x == "list" => () }.ignore_then(
                 data.data_type

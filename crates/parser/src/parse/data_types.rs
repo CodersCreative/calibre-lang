@@ -6,21 +6,21 @@ use crate::{
         types::{GenericType, GenericTypes, ParserDataType, ParserInnerType},
     },
     lexer::Token,
-    parse::{
-        AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream, potential_new_line,
-    },
+    parse::{AstParser, AstParserErr, MapWithSpanExt, StatementData, potential_new_line},
 };
-use chumsky::error::Rich;
 use chumsky::pratt::{infix, left, postfix, prefix};
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
+use chumsky::{error::Rich, input::ValueInput};
 use std::str::FromStr;
 
-impl<'a> AstParser<'a> for ParserFfiInnerType {
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for ParserFfiInnerType
+{
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::At)
             .ignore_then(select! { Token::Identifier(x) => x })
             .try_map(|name, span| {
@@ -30,23 +30,27 @@ impl<'a> AstParser<'a> for ParserFfiInnerType {
     }
 }
 
-impl<'a> AstParser<'a> for ParserFfiDataType {
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for ParserFfiDataType
+{
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         ParserFfiInnerType::parser(())
             .map_with_span(|data_type, span| ParserFfiDataType::new(span, data_type))
     }
 }
 
-impl<'a> AstParser<'a> for ParserDataType {
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for ParserDataType
+{
     type Data = ();
 
-    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         recursive(
             |ty: chumsky::recursive::Recursive<
-                dyn chumsky::Parser<'_, TokenStream<'a>, ParserDataType, AstParserErr<'a>>,
+                dyn chumsky::Parser<'_, I, ParserDataType, AstParserErr<'a>>,
             >| {
                 let tuple_parser = ty.clone()
                             .separated_by(just(Token::Comma).padded_by(potential_new_line()))
@@ -61,7 +65,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
-                let ffi_parser: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>> = ParserFfiInnerType::parser(())
+                let ffi_parser: Boxed<'a, 'a, I, ParserDataType, AstParserErr<'a>> = ParserFfiInnerType::parser(())
                     .map_with_span(|ffi, span| {
                         ParserDataType::new(span, ParserInnerType::FfiType(ffi))
                     })
@@ -119,7 +123,7 @@ impl<'a> AstParser<'a> for ParserDataType {
                     })
                     .boxed();
 
-                let struct_parser: Boxed<'a, 'a, TokenStream<'a>, ParserDataType, AstParserErr<'a>> = select! { Token::Identifier(x) => x, Token::Dyn => "dyn" }
+                let struct_parser: Boxed<'a, 'a, I, ParserDataType, AstParserErr<'a>> = select! { Token::Identifier(x) => x, Token::Dyn => "dyn" }
                     .then(
                                 ty.clone()
                                     .separated_by(just(Token::Comma).padded_by(potential_new_line()))
@@ -288,11 +292,13 @@ impl<'a> AstParser<'a> for ParserDataType {
     }
 }
 
-impl<'a> AstParser<'a> for GenericTypes {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for GenericTypes
+{
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         GenericType::parser(data)
             .separated_by(just(Token::Comma).padded_by(potential_new_line()))
             .allow_trailing()
@@ -304,11 +310,11 @@ impl<'a> AstParser<'a> for GenericTypes {
     }
 }
 
-impl<'a> AstParser<'a> for GenericType {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for GenericType {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         data.dollar_ident
             .clone()
             .then(

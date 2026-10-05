@@ -2,20 +2,26 @@ use super::matching::parse_pattern_list;
 use crate::ast::nodes::AstNodeType;
 use crate::ast::nodes::assignment::AstAssignment;
 use crate::ast::nodes::conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType};
-use crate::parse::{AstPrattParser, MapWithSpanExt, PrattData, StatementData, potential_new_line};
+use crate::parse::{
+    AstPrattParser, AstPrattParserFoldable, MapWithSpanExt, PrattData, StatementData,
+    potential_new_line,
+};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr},
 };
 use chumsky::Parser;
+use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 
-impl<'a> AstParser<'a> for IfComparisonType {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for IfComparisonType
+{
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         choice((
             // let ... <- ...
             just(Token::Let)
@@ -32,10 +38,10 @@ impl<'a> AstParser<'a> for IfComparisonType {
     }
 }
 
-impl<'a> AstParser<'a> for AstIf {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstIf {
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         recursive(|if_parser| {
             let else_block = choice((
                 if_parser.clone().map_with_span(|value, span| {
@@ -58,13 +64,13 @@ impl<'a> AstParser<'a> for AstIf {
     }
 }
 
-impl<'a> AstPrattParser<'a> for AstTernary {
-    type Data = PrattData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstPrattParser<'a, I>
+    for AstTernary
+{
+    type Data = PrattData<'a, I>;
     type Value = (TernaryType, AstNode, Option<AstNode>);
 
-    fn operator(
-        data: Self::Data,
-    ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>> {
+    fn operator(data: Self::Data) -> impl Parser<'a, I, Self::Value, AstParserErr<'a>> {
         choice((
             just(Token::If).ignore_then(
                 data.stmt
@@ -97,6 +103,10 @@ impl<'a> AstPrattParser<'a> for AstTernary {
             ),
         ))
     }
+}
+
+impl AstPrattParserFoldable for AstTernary {
+    type Value = (TernaryType, AstNode, Option<AstNode>);
 
     fn fold_postfix(base: AstNode, value: Self::Value, sp: SimpleSpan) -> AstNode {
         let ternary = AstNode::new(

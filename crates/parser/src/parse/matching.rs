@@ -14,16 +14,17 @@ use crate::parse::potential_new_line;
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr},
 };
+use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
-impl<'a> AstParser<'a> for VarType {
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for VarType {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         choice((
             just(Token::Mut).map(|_| VarType::Mutable),
             just(Token::Const).map(|_| VarType::Constant),
@@ -34,10 +35,12 @@ impl<'a> AstParser<'a> for VarType {
     }
 }
 
-impl<'a> AstParser<'a> for DestructurePattern {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for DestructurePattern
+{
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         choice((
             // tuple
             choice((
@@ -97,11 +100,13 @@ impl<'a> AstParser<'a> for DestructurePattern {
     }
 }
 
-impl<'a> AstParser<'a> for MatchStringPatternPart {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for MatchStringPatternPart
+{
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         choice((
             // string
             select! { Token::StringLiteral(s) => s }.map_with_span(|s, span| {
@@ -121,10 +126,12 @@ impl<'a> AstParser<'a> for MatchStringPatternPart {
     }
 }
 
-impl<'a> AstParser<'a> for MatchTupleItem {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for MatchTupleItem
+{
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         recursive(|tuple_item| {
             choice((
                 // rest
@@ -264,10 +271,12 @@ impl<'a> AstParser<'a> for MatchTupleItem {
     }
 }
 
-impl<'a> AstParser<'a> for MatchStructFieldPattern {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for MatchStructFieldPattern
+{
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         select! { Token::Identifier(field) => field }
             .map_with_span(|field, span| (field, span))
             .then(
@@ -343,10 +352,12 @@ impl<'a> AstParser<'a> for MatchStructFieldPattern {
     }
 }
 
-impl<'a> AstParser<'a> for MatchArmType {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for MatchArmType
+{
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         recursive(|arm_type| {
             choice((
                 // wildcard
@@ -464,9 +475,9 @@ impl<'a> AstParser<'a> for MatchArmType {
     }
 }
 
-pub fn parse_pattern_list<'a>(
-    data: StatementData<'a>,
-) -> impl Parser<'a, TokenStream<'a>, (Vec<MatchArmType>, Vec<AstNode>), AstParserErr<'a>> {
+pub fn parse_pattern_list<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>>(
+    data: StatementData<'a, I>,
+) -> impl Parser<'a, I, (Vec<MatchArmType>, Vec<AstNode>), AstParserErr<'a>> {
     MatchArmType::parser(data.clone())
         .then(
             just(Token::BitOr)
@@ -481,10 +492,10 @@ pub fn parse_pattern_list<'a>(
         })
 }
 
-impl<'a> AstParser<'a> for MatchBody {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for MatchBody {
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         let match_arm = MatchArmType::parser(data.clone())
             .padded_by(potential_new_line())
             .then(
@@ -619,11 +630,11 @@ impl<'a> AstParser<'a> for MatchBody {
     }
 }
 
-impl<'a> AstParser<'a> for AstMatch {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstMatch {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Match)
             .ignore_then(
                 data.node
@@ -641,11 +652,11 @@ impl<'a> AstParser<'a> for AstMatch {
     }
 }
 
-impl<'a> AstParser<'a> for AstFnMatch {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstFnMatch {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Fn)
             .ignore_then(just(Token::Match))
             .ignore_then(GenericTypes::parser(data.clone()).or_not())

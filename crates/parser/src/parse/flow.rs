@@ -3,20 +3,23 @@ use crate::ast::nodes::flow::{
     AstBreak, AstContinue, AstDefer, AstEmit, AstPipe, AstReturn, AstTry, PipeSegment, TryCatch,
     TryType,
 };
-use crate::parse::{AstPrattParser, PrattData, StatementData, potential_new_line};
+use crate::parse::{
+    AstPrattParser, AstPrattParserFoldable, PrattData, StatementData, potential_new_line,
+};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr},
 };
 use chumsky::Parser;
+use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 
-impl<'a> AstParser<'a> for AstEmit {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstEmit {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Emit).ignore_then(choice((
             data.node
                 .clone()
@@ -37,11 +40,11 @@ impl<'a> AstParser<'a> for AstEmit {
     }
 }
 
-impl<'a> AstParser<'a> for AstBreak {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstBreak {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Break)
             .ignore_then(
                 just(Token::At)
@@ -56,11 +59,11 @@ impl<'a> AstParser<'a> for AstBreak {
     }
 }
 
-impl<'a> AstParser<'a> for AstContinue {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstContinue {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Continue)
             .ignore_then(
                 just(Token::At)
@@ -71,11 +74,11 @@ impl<'a> AstParser<'a> for AstContinue {
     }
 }
 
-impl<'a> AstParser<'a> for AstReturn {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstReturn {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Return)
             .ignore_then(data.node.clone().or_not())
             .map(|value| AstReturn {
@@ -84,11 +87,11 @@ impl<'a> AstParser<'a> for AstReturn {
     }
 }
 
-impl<'a> AstParser<'a> for AstDefer {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstDefer {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Defer)
             .ignore_then(
                 just(Token::Return)
@@ -104,11 +107,11 @@ impl<'a> AstParser<'a> for AstDefer {
     }
 }
 
-impl<'a> AstParser<'a> for TryCatch {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for TryCatch {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         choice((
             just(Token::Colon)
                 .ignore_then(data.dollar_ident.clone())
@@ -125,11 +128,11 @@ impl<'a> AstParser<'a> for TryCatch {
     }
 }
 
-impl<'a> AstParser<'a> for AstTry {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstTry {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         choice((
             just(Token::Try)
                 .ignore_then(data.node.clone())
@@ -166,13 +169,13 @@ impl<'a> AstParser<'a> for AstTry {
     }
 }
 
-impl<'a> AstPrattParser<'a> for AstPipe {
-    type Data = PrattData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstPrattParser<'a, I>
+    for AstPipe
+{
+    type Data = PrattData<'a, I>;
     type Value = Vec<PipeSegment>;
 
-    fn operator(
-        data: Self::Data,
-    ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>> {
+    fn operator(data: Self::Data) -> impl Parser<'a, I, Self::Value, AstParserErr<'a>> {
         choice((
             just(Token::Pipe)
                 .padded_by(potential_new_line())
@@ -189,6 +192,10 @@ impl<'a> AstPrattParser<'a> for AstPipe {
         .at_least(1)
         .collect::<Vec<_>>()
     }
+}
+
+impl AstPrattParserFoldable for AstPipe {
+    type Value = Vec<PipeSegment>;
 
     fn fold_postfix(base: AstNode, value: Self::Value, sp: SimpleSpan) -> AstNode {
         let span = sp.into();

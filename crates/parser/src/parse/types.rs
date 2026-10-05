@@ -7,16 +7,17 @@ use crate::parse::StatementData;
 use crate::parse::potential_new_line;
 use crate::{
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr},
 };
+use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
 use ustr::Ustr;
 
-impl<'a> AstParser<'a> for TypeDefType {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for TypeDefType {
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         let struct_named_fields = StandaloneTag::parser(data.clone())
             .padded_by(potential_new_line())
             .repeated()
@@ -145,11 +146,11 @@ impl<'a> AstParser<'a> for TypeDefType {
     }
 }
 
-impl<'a> AstParser<'a> for AstImpl {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstImpl {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Impl)
             .ignore_then(GenericTypes::parser(data.clone()))
             .then(data.data_type.clone())
@@ -170,10 +171,10 @@ impl<'a> AstParser<'a> for AstImpl {
     }
 }
 
-impl<'a> AstParser<'a> for AstType {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstType {
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Type)
             .ignore_then(data.generic_ident.clone())
             .then_ignore(just(Token::Walrus).padded_by(potential_new_line()))

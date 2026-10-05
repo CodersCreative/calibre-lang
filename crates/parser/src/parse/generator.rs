@@ -3,15 +3,18 @@ use crate::ast::nodes::loops::LoopType;
 use crate::parse::{StatementData, potential_new_line};
 use crate::{
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr},
 };
 use chumsky::Parser;
+use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 
-impl<'a> AstParser<'a> for AstGenerator {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for AstGenerator
+{
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Fn)
             .ignore_then(
                 data.node

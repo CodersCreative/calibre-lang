@@ -4,16 +4,17 @@ use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr},
 };
+use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
-impl<'a> AstParser<'a> for SelectArm {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for SelectArm {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         choice((
             select! { Token::Identifier(x) if x == "_" => () }
                 .ignore_then(data.scope.clone())
@@ -46,11 +47,11 @@ impl<'a> AstParser<'a> for SelectArm {
     }
 }
 
-impl<'a> AstParser<'a> for AstSelect {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstSelect {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         select! { Token::Select => () }
             .ignore_then(
                 SelectArm::parser(data)
@@ -64,11 +65,11 @@ impl<'a> AstParser<'a> for AstSelect {
     }
 }
 
-impl<'a> AstParser<'a> for AstSpawn {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstSpawn {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         select! {
             Token::AutoSpawn => true,
             Token::Spawn => false

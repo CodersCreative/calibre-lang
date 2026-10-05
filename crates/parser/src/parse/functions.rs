@@ -12,6 +12,7 @@ use crate::ast::types::GenericTypes;
 use crate::ast::types::ParserDataType;
 use crate::ast::types::ParserInnerType;
 use crate::parse::AstPrattParser;
+use crate::parse::AstPrattParserFoldable;
 use crate::parse::MapWithSpanExt;
 use crate::parse::PrattData;
 use crate::parse::StatementData;
@@ -21,17 +22,19 @@ use crate::{
     ast::nodes::AstNode,
     ast::nodes::AstNodeType,
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr},
 };
 use chumsky::Parser;
+use chumsky::input::Stream;
+use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 use chumsky::select;
 
-impl<'a> AstParser<'a> for CallArg {
-    type Data = PrattData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for CallArg {
+    type Data = PrattData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         choice((
             data.dollar_ident
                 .clone()
@@ -60,11 +63,13 @@ enum FnParamGroup {
     },
 }
 
-impl<'a> AstParser<'a> for FnParamGroup {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for FnParamGroup
+{
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         let normal = just(Token::Mut)
             .or_not()
             .ignore_then(data.dollar_ident.clone())
@@ -114,10 +119,12 @@ impl<'a> AstParser<'a> for FnParamGroup {
     }
 }
 
-impl<'a> AstParser<'a> for FunctionHeader {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for FunctionHeader
+{
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         let fn_param_groups = FnParamGroup::parser(data.clone())
             .separated_by(just(Token::Comma).padded_by(potential_new_line()))
             .allow_trailing()
@@ -176,11 +183,11 @@ impl<'a> AstParser<'a> for FunctionHeader {
     }
 }
 
-impl<'a> AstParser<'a> for AstFunction {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstFunction {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Fn)
             .ignore_then(FunctionHeader::parser(data.clone()))
             .then(data.scope)
@@ -191,10 +198,10 @@ impl<'a> AstParser<'a> for AstFunction {
     }
 }
 
-impl<'a> AstParser<'a> for AstExtern {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstExtern {
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Extern)
             .ignore_then(select! { Token::StringLiteral(abi) => ParserText::decode_literal(abi) })
             .then_ignore(just(Token::Const))
@@ -238,11 +245,11 @@ impl<'a> AstParser<'a> for AstExtern {
     }
 }
 
-impl<'a> AstParser<'a> for AstCurry {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstCurry {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Curry)
             .ignore_then(data.node.clone())
             .map(|value| AstCurry {
@@ -282,6 +289,7 @@ pub fn template_call_parts(
 
     for expression in expressions {
         let expression = expression.trim();
+        let len = expression.len();
         if expression.is_empty() {
             return Err("expected expression inside template".into());
         }
@@ -295,7 +303,11 @@ pub fn template_call_parts(
                 .unwrap_or_else(|| "failed to lex template".into())
         })?;
 
-        let parsed = super::parse_program_with_source(&tokens, None).map_err(|errors| {
+        let parsed = super::parse_program_with_source(
+            Stream::from_iter(tokens.into_iter()).map((0..len).into(), |(t, s): (_, _)| (t, s)),
+            None,
+        )
+        .map_err(|errors| {
             errors
                 .into_iter()
                 .next()
@@ -393,16 +405,16 @@ fn split_template(input: &str) -> Result<(Vec<String>, Vec<String>), String> {
     Ok((texts, expressions))
 }
 
-impl<'a> AstPrattParser<'a> for AstCall {
-    type Data = PrattData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstPrattParser<'a, I>
+    for AstCall
+{
+    type Data = PrattData<'a, I>;
     type Value = (
         (Option<Vec<ParserDataType>>, (ParserText, Vec<CallArg>)),
         Vec<AstNode>,
     );
 
-    fn operator(
-        data: Self::Data,
-    ) -> impl Parser<'a, TokenStream<'a>, Self::Value, AstParserErr<'a>> {
+    fn operator(data: Self::Data) -> impl Parser<'a, I, Self::Value, AstParserErr<'a>> {
         let call_args = choice((
             CallArg::parser(data.clone())
                 .separated_by(just(Token::Comma).padded_by(potential_new_line()))
@@ -441,6 +453,13 @@ impl<'a> AstPrattParser<'a> for AstCall {
             .then(call_args)
             .then(reverse_args)
     }
+}
+
+impl AstPrattParserFoldable for AstCall {
+    type Value = (
+        (Option<Vec<ParserDataType>>, (ParserText, Vec<CallArg>)),
+        Vec<AstNode>,
+    );
 
     fn fold_postfix(base: AstNode, value: Self::Value, span: SimpleSpan) -> AstNode {
         AstNode::new(

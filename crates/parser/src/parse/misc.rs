@@ -3,16 +3,17 @@ use crate::ast::nodes::misc::{AstImport, AstParen, AstTag, AstTest, StandaloneTa
 use crate::parse::{MapWithSpanExt, StatementData, potential_new_line};
 use crate::{
     lexer::Token,
-    parse::{AstParser, AstParserErr, TokenStream},
+    parse::{AstParser, AstParserErr},
 };
+use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 use chumsky::{Parser, select};
 
-impl<'a> AstParser<'a> for AstParen {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstParen {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         data.node
             .clone()
             .padded_by(potential_new_line())
@@ -23,11 +24,11 @@ impl<'a> AstParser<'a> for AstParen {
     }
 }
 
-impl<'a> AstParser<'a> for AstTest {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstTest {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Test)
             .ignore_then(select! { Token::StringLiteral(x) => ParserText::decode_literal(x) })
             .then(data.scope.clone())
@@ -38,10 +39,10 @@ impl<'a> AstParser<'a> for AstTest {
     }
 }
 
-impl<'a> AstParser<'a> for AstImport {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstImport {
+    type Data = StatementData<'a, I>;
 
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         select! { Token::Import => () }
             .ignore_then(choice((
                 // import ... from module::path
@@ -88,11 +89,13 @@ impl<'a> AstParser<'a> for AstImport {
     }
 }
 
-impl<'a> AstParser<'a> for StandaloneTag {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for StandaloneTag
+{
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::At)
             .ignore_then(ParserText::parser(()))
             .then(
@@ -113,11 +116,11 @@ impl<'a> AstParser<'a> for StandaloneTag {
     }
 }
 
-impl<'a> AstParser<'a> for AstTag {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstTag {
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::At)
             .ignore_then(ParserText::parser(()))
             .then(

@@ -5,18 +5,16 @@ use crate::{
         types::ParserDataType,
     },
     lexer::Token,
-    parse::{
-        AstParser, AstParserErr, MapWithSpanExt, StatementData, TokenStream, potential_new_line,
-    },
+    parse::{AstParser, AstParserErr, MapWithSpanExt, StatementData, potential_new_line},
 };
-use chumsky::prelude::*;
 use chumsky::{Parser, select};
+use chumsky::{input::ValueInput, prelude::*};
 
-impl<'a> AstParser<'a> for ParserText {
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for ParserText {
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         select! {
             Token::Identifier(x) => x
         }
@@ -24,11 +22,13 @@ impl<'a> AstParser<'a> for ParserText {
     }
 }
 
-impl<'a> AstParser<'a> for PotentialDollarIdentifier {
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for PotentialDollarIdentifier
+{
     type Data = ();
 
     #[inline(always)]
-    fn parser(_data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(_data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         just(Token::Dollar)
             .ignore_then(ParserText::parser(()).or_not())
             .map_with_span(|ident, span| {
@@ -43,11 +43,13 @@ impl<'a> AstParser<'a> for PotentialDollarIdentifier {
 }
 
 // This is one of the few places where I will allow ParserDataType::parser and PotentialDollarIdentifier::parser to be used directly
-impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for PotentialGenericTypeIdentifier
+{
     type Data = ();
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         PotentialDollarIdentifier::parser(data)
             .then(
                 ParserDataType::parser(data)
@@ -73,11 +75,13 @@ impl<'a> AstParser<'a> for PotentialGenericTypeIdentifier {
     }
 }
 
-impl<'a> AstParser<'a> for AstIdentifier {
-    type Data = StatementData<'a>;
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
+    for AstIdentifier
+{
+    type Data = StatementData<'a, I>;
 
     #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, TokenStream<'a>, Self, AstParserErr<'a>> {
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         data.generic_ident
             .clone()
             .map(|value| AstIdentifier { value })
