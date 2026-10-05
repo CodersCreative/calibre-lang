@@ -1,8 +1,8 @@
 const sum_index := fn (n : int) -> int => {
-	let xs := list:<int>[i for i in 0..n];
+	let xs := list:<int>[i for i in n];
 	let mut acc : int = 0;
 	
-	for i in 0..n => acc += try!! xs[i];
+	for i in n => acc += try!! xs[i];
 	
 	return acc;
 };

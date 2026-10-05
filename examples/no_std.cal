@@ -36,7 +36,7 @@ const main := fn => {
         console_output(1, element & "\n");
 
     // TODO Fix variable shadowing
-    for i in 0..4 =>
+    for i in 2..4 =>
         console_output(1, i & " ");
 
     console_output(1, "\n");

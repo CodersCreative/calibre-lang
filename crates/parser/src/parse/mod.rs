@@ -55,14 +55,17 @@ pub mod types;
 
 pub type AstParserErr<'a> = extra::Err<Rich<'a, Token<'a>>>;
 
-// So I'm gonna need to make this basically just become a cache of commonly used items aswell
-// Otherwise it uses way too much memory
 pub struct StatementData<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> {
     pub node: Recursive<dyn Parser<'a, I, AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>> + 'a>,
     pub data_type: Boxed<'a, 'a, I, ParserDataType, AstParserErr<'a>>,
     pub dollar_ident: Boxed<'a, 'a, I, PotentialDollarIdentifier, AstParserErr<'a>>,
     pub generic_ident: Boxed<'a, 'a, I, PotentialGenericTypeIdentifier, AstParserErr<'a>>,
     pub scope: Boxed<'a, 'a, I, AstNode, AstParserErr<'a>>,
+}
+
+pub struct ScopeData<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> {
+    pub node: Recursive<dyn Parser<'a, I, AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>> + 'a>,
+    pub dollar_ident: Boxed<'a, 'a, I, PotentialDollarIdentifier, AstParserErr<'a>>,
 }
 
 impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> Clone for StatementData<'a, I> {
@@ -78,7 +81,8 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> Clone for Stat
 }
 
 pub struct PrattData<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> {
-    pub stmt: Recursive<dyn Parser<'a, I, AstNode, extra::Full<Rich<'a, Token<'a>>, (), ()>> + 'a>,
+    pub stmt: Boxed<'a, 'a, I, AstNode, AstParserErr<'a>>,
+    pub atom: Boxed<'a, 'a, I, AstNode, AstParserErr<'a>>,
     pub data_type: Boxed<'a, 'a, I, ParserDataType, AstParserErr<'a>>,
     pub dollar_ident: Boxed<'a, 'a, I, PotentialDollarIdentifier, AstParserErr<'a>>,
     pub generic_ident: Boxed<'a, 'a, I, PotentialGenericTypeIdentifier, AstParserErr<'a>>,
@@ -88,6 +92,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> Clone for Prat
     fn clone(&self) -> Self {
         Self {
             stmt: self.stmt.clone(),
+            atom: self.atom.clone(),
             data_type: self.data_type.clone(),
             dollar_ident: self.dollar_ident.clone(),
             generic_ident: self.generic_ident.clone(),
@@ -175,7 +180,7 @@ pub fn potential_new_line<'a, I: ValueInput<'a, Token = Token<'a>, Span = Simple
 }
 
 impl<'a> AstNode {
-    fn parser<I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>>(
+    pub fn atom_parser<I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>>(
         data: &StatementData<'a, I>,
     ) -> Boxed<'a, 'a, I, Self, AstParserErr<'a>> {
         let fn_start = just(Token::Fn).rewind().ignore_then(choice((
@@ -196,7 +201,11 @@ impl<'a> AstNode {
             AstTuple::parser(data.clone()).map(AstNodeType::TupleLiteral),
         )));
 
-        let literal = select! {Token::StringLiteral(_) | Token::IntLiteral(_) | Token::BigLiteral(_) | Token::FloatLiteral(_) | Token::CharLiteral(_) => ()}.rewind().ignore_then(choice((
+        let literal = select! {
+            Token::StringLiteral(_) | Token::IntLiteral(_) | Token::BigLiteral(_) | Token::FloatLiteral(_) | Token::CharLiteral(_) => ()
+        }
+        .rewind()
+        .ignore_then(choice((
             AstString::parser(()).map(AstNodeType::StringLiteral),
             AstInt::parser(()).map(AstNodeType::IntLiteral),
             AstBig::parser(()).map(AstNodeType::BigLiteral),
@@ -212,18 +221,40 @@ impl<'a> AstNode {
                     AstIter::parser(data.clone()).map(AstNodeType::IterExpression),
                 )));
 
-        let spawn = select! {Token::Spawn | Token::AutoSpawn | Token::Select => ()}
-            .rewind()
-            .ignore_then(choice((
-                AstSpawn::parser(data.clone()).map(AstNodeType::Spawn),
-                AstSelect::parser(data.clone()).map(AstNodeType::SelectStatement),
-            )));
-
         let memory = select! {Token::Identifier(x) if x == "drop" => (), Token::Move => ()}
             .rewind()
             .ignore_then(choice((
                 AstDrop::parser(data.clone()).map(AstNodeType::Drop),
                 AstMove::parser(data.clone()).map(AstNodeType::MoveExpression),
+            )));
+
+        choice((
+            list_start,
+            ident_start,
+            paren_start,
+            literal,
+            fn_start,
+            data.scope.clone().map(|x| x.node_type),
+            AstIf::parser(data.clone()).map(AstNodeType::IfStatement),
+            AstMatch::parser(data.clone()).map(AstNodeType::MatchStatement),
+            AstTry::parser(data.clone()).map(AstNodeType::Try),
+            AstCurry::parser(data.clone()).map(AstNodeType::CurryExpression),
+            memory,
+            AstLoop::parser(data.clone()).map(AstNodeType::LoopDeclaration),
+            just(Token::Null).map(|_| AstNodeType::Null),
+        ))
+        .map_with_span(|node_type, span| Self { node_type, span })
+        .boxed()
+    }
+
+    pub fn statement_parser<I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>>(
+        data: &StatementData<'a, I>,
+    ) -> Boxed<'a, 'a, I, Self, AstParserErr<'a>> {
+        let spawn = select! {Token::Spawn | Token::AutoSpawn | Token::Select => ()}
+            .rewind()
+            .ignore_then(choice((
+                AstSpawn::parser(data.clone()).map(AstNodeType::Spawn),
+                AstSelect::parser(data.clone()).map(AstNodeType::SelectStatement),
             )));
 
         let declarations = select! {Token::Let => (), Token::Const => ()}
@@ -249,40 +280,18 @@ impl<'a> AstNode {
         )));
 
         choice((
-            // Flow
             AstBreak::parser(data.clone()).map(AstNodeType::Break),
             AstEmit::parser(data.clone()).map(AstNodeType::Emit),
             AstContinue::parser(data.clone()).map(AstNodeType::Continue),
             AstDefer::parser(data.clone()).map(AstNodeType::Defer),
             AstReturn::parser(data.clone()).map(AstNodeType::Return),
-            AstTry::parser(data.clone()).map(AstNodeType::Try),
-            list_start,
-            ident_start,
-            paren_start,
-            literal,
-            fn_start,
             spawn,
-            memory,
             declarations,
             misc,
             type_start,
-            // Conditionals
-            AstIf::parser(data.clone()).map(AstNodeType::IfStatement),
-            // Functions
             AstExtern::parser(data.clone()).map(AstNodeType::ExternFunctionDeclaration),
-            AstCurry::parser(data.clone()).map(AstNodeType::CurryExpression),
-            // Null
-            just(Token::Null).map(|_| AstNodeType::Null),
-            // Matching
-            AstMatch::parser(data.clone()).map(AstNodeType::MatchStatement),
-            // Assignment
             AstAssignDestructure::parser(data.clone()).map(AstNodeType::DestructureAssignment),
-            // Types
             AstImpl::parser(data.clone()).map(AstNodeType::ImplDeclaration),
-            // Loops
-            AstLoop::parser(data.clone()).map(AstNodeType::LoopDeclaration),
-            // Scopes
-            data.scope.clone().map(|x| x.node_type), // Misc
         ))
         .map_with_span(|node_type, span| Self { node_type, span })
         .boxed()
@@ -298,27 +307,38 @@ pub fn parse_program_with_source<'a, I: ValueInput<'a, Token = Token<'a>, Span =
         let generic_ident = PotentialGenericTypeIdentifier::parser(()).boxed();
         let dollar_ident = PotentialDollarIdentifier::parser(()).boxed();
         let data_type = ParserDataType::parser(()).boxed();
-        let data = PrattData {
-            stmt,
+
+        let scope_data = ScopeData {
+            node: stmt.clone(),
+            dollar_ident: dollar_ident.clone(),
+        };
+
+        let scope = AstScopeDef::parser(scope_data)
+            .map_with_span(|body, span| AstNode::new(span, AstNodeType::from(body)))
+            .boxed();
+
+        let stmt_data = StatementData {
+            node: stmt.clone(),
+            data_type: data_type.clone(),
+            dollar_ident: dollar_ident.clone(),
+            generic_ident: generic_ident.clone(),
+            scope: scope.clone(),
+        };
+
+        let atom = AstNode::atom_parser(&stmt_data);
+        let statement_node = AstNode::statement_parser(&stmt_data);
+
+        let pratt_data = PrattData {
+            stmt: stmt.boxed(),
+            atom,
             data_type,
             dollar_ident,
             generic_ident,
         };
 
-        let pratt = PrattParser::parse(data.clone()).memoized().boxed();
-        let scope = AstScopeDef::parser(data.clone())
-            .map_with_span(|body, span| AstNode::new(span, AstNodeType::from(body)))
-            .boxed();
+        let pratt_expr = PrattParser::parse(pratt_data).boxed();
 
-        let data = StatementData {
-            node: data.stmt,
-            data_type: data.data_type,
-            dollar_ident: data.dollar_ident,
-            generic_ident: data.generic_ident,
-            scope: scope.clone(),
-        };
-
-        choice((pratt, AstNode::parser(&data), scope))
+        choice((pratt_expr, statement_node)).boxed()
     })
     .padded_by(potential_new_line())
     .repeated()

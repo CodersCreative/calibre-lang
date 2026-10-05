@@ -24,17 +24,17 @@ impl<T> list:<T> {
 	};
 
 	@pure
-	const clone := fn (self : list:<T>) -> list:<T> => return list:<T>[(try!! self[i]) for i in 0..len(self)];
+	const clone := fn (self : list:<T>) -> list:<T> => return list:<T>[(try!! self[i]) for i in len(self)];
 
 	@pure
 	const contains := fn (self : list:<T>, needle : T) -> bool => {
-		for i in 0..len(self) => if (try!! self[i]) = needle => return true;
+		for i in len(self) => if (try!! self[i]) = needle => return true;
 		return false;
 	};
 
 	@pure
 	const index_of := fn (self : list:<T>, needle : T) -> int => {
-		for i in 0..len(self) => if (try!! self[i]) = needle => return i;
+		for i in len(self) => if (try!! self[i]) = needle => return i;
 		return -1;
 	};
 
@@ -54,7 +54,7 @@ impl<T> list:<T> {
 	@pure
 	const count := fn (self : list:<T>, needle : T) -> uint => {
 		let mut n := 0u;
-		for i in 0..len(self) => if (try!! self[i]) = needle => n += 1u;
+		for i in len(self) => if (try!! self[i]) = needle => n += 1u;
 		return n;
 	};
 
@@ -103,12 +103,12 @@ impl<T> list:<T> {
 	};
 
 	const extend := fn (self : &mut list:<T>, other : list:<T>) => {
-		for i in 0..len(other) => self <<= try!! other[i];
+		for i in len(other) => self <<= try!! other[i];
 	};
 
 	@pure
 	const concat := fn (self other : list:<T>) -> list:<T> => {
-		for i in 0..len(other) => self <<= try!! other[i];
+		for i in len(other) => self <<= try!! other[i];
 		return self;
 	};
 
@@ -122,7 +122,7 @@ impl<T> list:<T> {
 	const join := fn (self : list:<str>, sep : str = "") -> str => {
 		let mut out := "";
 		
-		for i in 0..len(self) => {
+		for i in len(self) => {
 			if i > 0 => out &= sep;
 			out &= try!! self[i];
 		};
@@ -135,7 +135,7 @@ impl<T> list:<T> {
 impl list:<int> {
 	const sum := fn (self : list:<int>) -> int => {
 		let mut acc := 0;
-		for i in 0..len(self) => acc += try!! self[i];
+		for i in len(self) => acc += try!! self[i];
 		return acc;
 	};
 
@@ -158,7 +158,7 @@ impl list:<int> {
 impl list:<uint> {
 	const sum := fn (self : list:<uint>) -> uint => {
 		let mut acc := 0u;
-		for i in 0..len(self) => acc += try!! self[i];
+		for i in len(self) => acc += try!! self[i];
 		return acc;
 	};
 
@@ -181,7 +181,7 @@ impl list:<uint> {
 impl list:<float> {
 	const sum := fn (self : list:<float>) -> float => {
 		let mut acc := 0f;
-		for i in 0..len(self) => acc += try!! self[i];
+		for i in len(self) => acc += try!! self[i];
 		return acc;
 	};
 
@@ -202,7 +202,7 @@ impl list:<float> {
 	const mean := fn (values : list:<float>) -> float => {
 		if len(values) = 0u => return 0f;
 		let mut acc := 0f;
-		for i in 0..len(values) => acc += try!! values[i];
+		for i in len(values) => acc += try!! values[i];
 		return acc / (try len(values) as float => emit 1f);
 	};
 
@@ -212,7 +212,7 @@ impl list:<float> {
 		let m := values.mean();
 		let mut acc := 0f;
 		
-		for i in 0..n => {
+		for i in n => {
 			let d := (try!! values[i]) - m;
 			acc += (d * d);
 		};
@@ -226,7 +226,7 @@ impl list:<float> {
 		let n := len(values);
 		if n = 0 => return 0f;
 		
-		let mut tmp := list:<float>[(try!! values[i]) for i in 0..n];
+		let mut tmp := list:<float>[(try!! values[i]) for i in n];
 		
 		let mut i := 0;
 		

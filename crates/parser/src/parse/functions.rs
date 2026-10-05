@@ -304,7 +304,7 @@ pub fn template_call_parts(
         })?;
 
         let parsed = super::parse_program_with_source(
-            Stream::from_iter(tokens.into_iter()).map((0..len).into(), |(t, s): (_, _)| (t, s)),
+            Stream::from_iter(tokens).map((0..len).into(), |(t, s): (_, _)| (t, s)),
             None,
         )
         .map_err(|errors| {

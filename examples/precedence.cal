@@ -1,0 +1,4 @@
+const main := fn => {
+    let x := 10;
+    print(x % 2 = 0)
+}

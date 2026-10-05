@@ -60,7 +60,7 @@ impl<K, V> HashMap:<K, V> {
 	const clear := fn (self : &mut HashMap:<K, V>) => hashmap_clear(self.inner);
 
 	const set_all := fn (self : &mut HashMap:<K, V>, entries : list:<<K, V>>) => {
-		for i in 0..len(entries) => {
+		for i in len(entries) => {
 			let pair := try!! entries[i];
 			self.set(pair.0, pair.1);
 		};

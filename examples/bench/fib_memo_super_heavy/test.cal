@@ -10,7 +10,7 @@ const fib := fn (n : int) -> big => {
 };
 
 const main := fn => {
-	for i in 0..=1000 => {
+	for i in 1000 => {
 		print(fib(i));
 	}
 };

@@ -57,7 +57,7 @@ impl Path {
 
 	const read_dir := fn (self : &Path) -> str!list:<DirEntry> => {
 		let entries : list:<host> = try path_read_dir(self.inner);
-		return ok(list:<DirEntry>[DirEntry { inner : try entries[i] => null } for i in 0..len(entries)]);
+		return ok(list:<DirEntry>[DirEntry { inner : try entries[i] => null } for i in len(entries)]);
 	};
 };
 

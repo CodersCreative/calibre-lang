@@ -18,7 +18,7 @@ const find_values := fn(data_array : &list:<int?>) -> uint => {
     number := input("Enter number : ") as int;
   }
 
-  if !((try!! number) in 0..=100) => {
+  if !((try!! number) in 100) => {
     print("Number : " & (try!! number) & " is not between 0 and 101. Try again...");
     return find_values(data_array);
   }

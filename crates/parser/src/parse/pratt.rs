@@ -218,7 +218,7 @@ impl<'a> PrattParser {
                 Token::BitAnd => Some(RefMutability::Ref),
             });
 
-        data.stmt
+        data.atom
             .clone()
             .pratt((
                 // 90
@@ -363,7 +363,7 @@ impl<'a> PrattParser {
                     fold_binary(l, op, r, assignment, sp.span())
                 }),
                 // 25
-                infix(left(20), range, |l, inclusive, r, sp| {
+                infix(left(25), range, |l, inclusive, r, sp| {
                     let span: SimpleSpan = sp.span();
                     AstNode::new(
                         span.into(),

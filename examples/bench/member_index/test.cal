@@ -1,10 +1,10 @@
 type Pair := struct { a b : int };
 
 const sum_pairs := fn (n : int) -> int => {
-	let pairs := list:<Pair>[Pair { a : i, b : i + 1 } for i in 0..n];
+	let pairs := list:<Pair>[Pair { a : i, b : i + 1 } for i in n];
 	let mut acc : int = 0;
 	
-	for i in 0..n => {
+	for i in n => {
 		let p : &Pair = (try!! pairs[i]).&;
 		acc += p.a + p.b;
 	};

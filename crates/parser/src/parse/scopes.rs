@@ -1,5 +1,5 @@
 use crate::ast::nodes::scopes::{AstScopeAlias, AstScopeDef, NamedScope};
-use crate::parse::{PrattData, StatementData, potential_new_line};
+use crate::parse::{ScopeData, StatementData, potential_new_line};
 use crate::{
     ast::nodes::AstNode,
     lexer::Token,
@@ -10,12 +10,12 @@ use chumsky::input::ValueInput;
 use chumsky::prelude::*;
 
 impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstScopeDef {
-    type Data = PrattData<'a, I>;
+    type Data = ScopeData<'a, I>;
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         let body = choice((
-            data.stmt
+            data.node
                 .clone()
                 .padded_by(potential_new_line())
                 .repeated()
@@ -26,7 +26,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                     just(Token::RightBracket).ignore_then(just(Token::RightBracket)),
                 )
                 .map(|items| (Some(items), Some(false))),
-            data.stmt
+            data.node
                 .clone()
                 .padded_by(potential_new_line())
                 .repeated()
@@ -35,7 +35,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                 .delimited_by(just(Token::LeftBracket), just(Token::RightBracket))
                 .map(|items| (Some(items), Some(true))),
             // Im going to make node by itself produce a scope so that no scope is now an explicit action
-            data.stmt
+            data.node
                 .clone()
                 .padded_by(potential_new_line())
                 .map(|body| (Some(vec![body]), Some(true))),
@@ -48,7 +48,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
             .then(
                 just(Token::Dollar)
                     .ignore_then(data.dollar_ident.clone())
-                    .then(just(Token::Colon).ignore_then(data.stmt.clone()).or_not())
+                    .then(just(Token::Colon).ignore_then(data.node.clone()).or_not())
                     .map(|(ident, value)| (ident, value))
                     .separated_by(just(Token::Comma).padded_by(potential_new_line()))
                     .allow_trailing()
