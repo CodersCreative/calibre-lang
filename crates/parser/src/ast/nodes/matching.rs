@@ -132,6 +132,10 @@ impl MatchArmType {
         }
     }
 
+    pub fn is_wildcard(&self) -> bool {
+        matches!(self, MatchArmType::Wildcard(_))
+    }
+
     fn first_span_from_tuple_items(items: &[MatchTupleItem]) -> Option<&Span> {
         for item in items {
             match item {

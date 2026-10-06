@@ -28,7 +28,7 @@ use calibre_parser::{
     },
 };
 use tracing::instrument;
-use ustr::Ustr;
+use ustr::{Ustr, UstrSet};
 
 // TODO Try to get literal coercion working
 
@@ -71,6 +71,19 @@ impl MirLowering for AstStruct {
             ObjectType::Map(x) => {
                 let mut map = Vec::new();
 
+                if let Some(obj) = &obj
+                    && let MiddleTypeDefType::Struct(fields) = &obj.object_type
+                    && let Some(x) = fields
+                        .iter()
+                        .find(|field| !x.iter().any(|x| x.0 == field.0))
+                {
+                    return Err(env
+                        .context
+                        .err_at_span(span, MiddleErr::MissingStructField(x.0.to_string())));
+                }
+
+                let mut field_hashmap: UstrSet = UstrSet::default();
+
                 for itm in x {
                     let span = itm.1.span;
                     let mut data_type = None;
@@ -79,15 +92,34 @@ impl MirLowering for AstStruct {
                         let node_ty = itm.1.type_of(env, scope, span);
                         if let Some(obj) = &obj
                             && let MiddleTypeDefType::Struct(fields) = &obj.object_type
-                            && let Some((_, (expected_ty, _))) =
-                                fields.0.iter().find(|(name, _)| name == &itm.0)
                         {
-                            data_type = Some(env.compare_types(
-                                Some(expected_ty.clone()),
-                                node_ty,
-                                Some(&TagInfo::IgnoreInvalidTypeCheck),
-                                span,
-                            )?);
+                            if let Some((_, (expected_ty, _))) =
+                                fields.0.iter().find(|(name, _)| name == &itm.0)
+                            {
+                                data_type = Some(env.compare_types(
+                                    Some(expected_ty.clone()),
+                                    node_ty,
+                                    Some(&TagInfo::IgnoreInvalidTypeCheck),
+                                    span,
+                                )?);
+
+                                if !field_hashmap.insert(itm.0) {
+                                    return Err(env.context.err_at_span(span, MiddleErr::StructFieldMultiple(itm.0.to_string())));
+                                }
+                            } else {
+                                return Err(env.context.err_at_span(
+                                    span,
+                                    MiddleErr::InvalidStructField {
+                                        field: itm.0.to_string(),
+                                        available: fields
+                                            .0
+                                            .iter()
+                                            .map(|x| x.0.to_string())
+                                            .collect(),
+                                        data_type: identifier.name().to_string(),
+                                    },
+                                ));
+                            }
                         }
                     }
 

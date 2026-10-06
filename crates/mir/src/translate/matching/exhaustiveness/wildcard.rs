@@ -49,6 +49,10 @@ impl WildcardChecker {
         patterns.iter().any(Self::has_wildcard)
     }
 
+    pub fn has_full_wildcard_in_patterns(patterns: &[MatchArmType]) -> bool {
+        patterns.iter().any(MatchArmType::is_wildcard)
+    }
+
     pub fn find_wildcard_index(patterns: &[MatchArmType]) -> Option<usize> {
         patterns.iter().position(Self::has_wildcard)
     }

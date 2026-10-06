@@ -110,8 +110,7 @@ impl ExhaustivenessCheckerDispatcher {
 
         let mut report = checker.check(env, scope, patterns, data_type)?;
 
-        // TODO Implement better unreachability analysis
-        if let Some(wildcard_idx) = WildcardChecker::find_wildcard_index(patterns) {
+        if let Some(wildcard_idx) = patterns.iter().position(MatchArmType::is_wildcard) {
             for idx in (wildcard_idx + 1)..patterns.len() {
                 report.unreachable_patterns.push(idx);
             }

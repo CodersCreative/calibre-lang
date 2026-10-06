@@ -67,6 +67,16 @@ pub enum MiddleErr {
         expected: Box<MirDataType>,
         found: Box<MirDataType>,
     },
+    #[error("Attempted to define struct field : {0:?} multiple times")]
+    StructFieldMultiple(String),
+    #[error("Struct field : {field:?} doesnt exist in type : {data_type:?}")]
+    InvalidStructField {
+        field: String,
+        available: Vec<String>,
+        data_type: String,
+    },
+    #[error("Missing struct field : {0:?}")]
+    MissingStructField(String),
     #[error(
         "Attempted to return a value of type : {found} from a function with return type : {expected}"
     )]
@@ -248,8 +258,11 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::PureFunctionNoReturnType => "M028",
             Self::VariableShadowing(_) => "M029",
             Self::FieldAccess(_, _) => "M030",
-            Self::InvalidMutation { .. } => "M031",
-            Self::VariableMoved { .. } => "M032",
+            Self::StructFieldMultiple { .. } => "M031",
+            Self::InvalidStructField { .. } => "M032",
+            Self::MissingStructField { .. } => "M033",
+            Self::InvalidMutation { .. } => "M034",
+            Self::VariableMoved { .. } => "M035",
             // Type inference failures (codes M050-M099)
             Self::CannotInferVariableType(_) => "M050",
             Self::CannotInferReturnType(_) => "M051",
@@ -317,6 +330,18 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::ExpectedFunctions => {
                 Some("only function declarations are valid in this section".to_string())
             }
+            Self::StructFieldMultiple(field) => Some(format!(
+                "field `{field}` defined multiple times - check spelling or scope"
+            )),
+            Self::MissingStructField(field) => {
+                Some(format!("add `{field} : <value>` to your struct literal"))
+            }
+            Self::InvalidStructField {
+                field, available, ..
+            } => Some(format!(
+                "field `{field}` not found - available fields are : {}",
+                available.join(", ")
+            )),
             Self::InvalidIndex(idx) => {
                 Some(format!("index {idx} is out of bounds - check list length"))
             }
