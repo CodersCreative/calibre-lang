@@ -535,6 +535,7 @@ impl MiddleEnvironment {
                 }),
                 shadow_counter: None,
             };
+
             return Ok(KeyOrAstNode::Key(Key::VariableKey(var_key)));
         }
 

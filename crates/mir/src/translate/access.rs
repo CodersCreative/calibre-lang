@@ -308,7 +308,15 @@ impl MirLowering for AstIdentifier {
         Ok(MiddleNode::identifier(
             span,
             match env.resolve_potential_node(scope, &self.value, ResolutionOptions::idents())? {
-                KeyOrAstNode::Key(x) => x.unwrap_variable(),
+                KeyOrAstNode::Key(x) => {
+                    let key = x.unwrap_variable();
+
+                    env.scoping
+                        .is_variable_moved(scope, &key)
+                        .map_err(|e| env.context.err_at_span(span, e))?;
+
+                    key
+                }
                 KeyOrAstNode::Node(x) => return x.lower(env, scope, span, data_type),
             },
         ))

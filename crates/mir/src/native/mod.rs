@@ -13,6 +13,7 @@ use calibre_parser::{
     },
 };
 use calibre_std::{get_globals_path, get_stdlib_file, get_stdlib_module_path, get_stdlib_path};
+use rustc_hash::FxHashSet;
 use std::{path::PathBuf, sync::Arc};
 use tracing::instrument;
 use ustr::{Ustr, UstrMap};
@@ -38,6 +39,7 @@ impl MiddleEnvironment {
                 mappings: UstrMap::default(),
                 type_mappings: UstrMap::default(),
                 children: UstrMap::default(),
+                moved: FxHashSet::default(),
                 defers: Vec::new(),
                 built: false,
             },
@@ -67,6 +69,7 @@ impl MiddleEnvironment {
                     namespace,
                 )),
                 macros: UstrMap::default(),
+                moved: FxHashSet::default(),
                 macro_args: UstrMap::default(),
                 namespace: namespace.cloned().unwrap_or_default(),
                 path: path.clone(),

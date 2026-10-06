@@ -236,6 +236,7 @@ impl<'a> AstNode {
 
         choice((
             list_start,
+            memory,
             ident_start,
             dot_start,
             paren_start,
@@ -246,7 +247,6 @@ impl<'a> AstNode {
             AstMatch::parser(data.clone()).map(AstNodeType::MatchStatement),
             AstTry::parser(data.clone()).map(AstNodeType::Try),
             AstCurry::parser(data.clone()).map(AstNodeType::CurryExpression),
-            memory,
             AstLoop::parser(data.clone()).map(AstNodeType::LoopDeclaration),
             just(Token::Null).map(|_| AstNodeType::Null),
         ))

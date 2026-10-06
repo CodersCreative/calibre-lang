@@ -536,7 +536,7 @@ impl Formatter {
                 if let Some(end) = last_end {
                     let gap = node.span.from.abs_diff(end);
 
-                    if gap > 10 {
+                    if gap > 100 {
                         lines.push(format!("\n{}\n", formatted));
                     } else {
                         lines.push(format!("{}\n", formatted));

@@ -40,6 +40,8 @@ pub enum MiddleErr {
     Scope(String),
     #[error("Unable to find variable : {0:?}")]
     Variable(String),
+    #[error("Variable has been moved or dropped : {0:?}")]
+    VariableMoved(String),
     #[error("Unable to resolve field : {0}.{1}")]
     FieldAccess(String, String),
     #[error("Invalid Mutation : {0}")]
@@ -245,8 +247,9 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::UnexpectedMacroArgType(_) => "M027",
             Self::PureFunctionNoReturnType => "M028",
             Self::VariableShadowing(_) => "M029",
-            Self::FieldAccess(_, _) => "M029",
-            Self::InvalidMutation { .. } => "M030",
+            Self::FieldAccess(_, _) => "M030",
+            Self::InvalidMutation { .. } => "M031",
+            Self::VariableMoved { .. } => "M032",
             // Type inference failures (codes M050-M099)
             Self::CannotInferVariableType(_) => "M050",
             Self::CannotInferReturnType(_) => "M051",
@@ -331,6 +334,9 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::Scope(scope) => Some(format!("scope `{scope}` not found - check module path")),
             Self::Variable(var) => Some(format!(
                 "variable `{var}` not found - check spelling or scope"
+            )),
+            Self::VariableMoved(var) => Some(format!(
+                "variable `{var}` has been moved or dropped - remove the `move` keyword to clone instead or remove the `drop`"
             )),
             Self::FieldAccess(var, _) => Some(format!(
                 "unable to resolve `{var}` to a variable or object - check spelling or scope"

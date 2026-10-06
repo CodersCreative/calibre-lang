@@ -178,6 +178,7 @@ impl Scoping {
                 children: scope.children.clone(),
                 path: Default::default(),
                 defers: Default::default(),
+                moved: Default::default(),
                 built: true,
             };
 

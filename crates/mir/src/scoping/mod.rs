@@ -4,6 +4,7 @@ use calibre_parser::{
     ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
 };
 use indextree::{Arena, Node, NodeId};
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Debug, Display},
@@ -26,6 +27,21 @@ pub struct Scoping {
 }
 
 impl Scoping {
+    pub fn is_variable_moved(
+        &self,
+        scope: ScopeId,
+        variable: &VariableKey,
+    ) -> Result<(), MiddleErr> {
+        if scope.ancestors(&self.scopes).into_iter().any(|scope| {
+            self.scope_or_err(scope)
+                .is_ok_and(|x| x.moved.contains(variable))
+        }) {
+            Err(MiddleErr::VariableMoved(variable.name().to_string()))
+        } else {
+            Ok(())
+        }
+    }
+
     #[inline(always)]
     pub fn scope_or_err(&self, scope: ScopeId) -> Result<&MiddleScope, MiddleErr> {
         self.scopes
@@ -169,6 +185,7 @@ impl Scoping {
                 mappings: UstrMap::default(),
                 type_mappings: UstrMap::default(),
                 children: UstrMap::default(),
+                moved: FxHashSet::default(),
                 defers: Vec::new(),
                 path,
                 built: false,
@@ -470,6 +487,7 @@ pub struct MiddleScope {
     pub path: PathBuf,
     pub defers: Vec<AstNode>,
     pub built: bool,
+    pub moved: FxHashSet<VariableKey>,
 }
 
 impl MiddleScope {

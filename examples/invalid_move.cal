@@ -1,0 +1,17 @@
+const main := fn => {
+    let x := 1000;
+
+    if true => {
+        // Errors should not show for this branch
+        let y := x;
+        let x := x;
+    } else if false => {
+        let y := move x;
+        let z := x;
+    } else => {
+        drop x;
+        let z := x;
+    }
+	
+    console_output(1, "Hello, World!");
+};

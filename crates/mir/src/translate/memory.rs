@@ -122,14 +122,25 @@ impl MirLowering for AstMove {
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         match self.value.node_type {
-            AstNodeType::Identifier(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::Move(MirMove {
-                    identifier: env
-                        .resolve(scope, &x.value, ResolutionOptions::idents())?
-                        .unwrap_variable(),
-                }),
-                span,
-            }),
+            AstNodeType::Identifier(x) => {
+                let identifier = env
+                    .resolve(scope, &x.value, ResolutionOptions::idents())?
+                    .unwrap_variable();
+
+                env.scoping
+                    .is_variable_moved(scope, &identifier)
+                    .map_err(|e| env.context.err_at_span(span, e))?;
+
+                let _ = env
+                    .scoping
+                    .scope_mut_or_err(scope)
+                    .map(|x| x.moved.insert(identifier.clone()));
+
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::Move(MirMove { identifier }),
+                    span,
+                })
+            }
             AstNodeType::FieldAccess(AstField { base, field }) => {
                 let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("move"));
 
@@ -263,9 +274,22 @@ impl MirLowering for AstDrop {
     ) -> Result<MiddleNode, MiddleErr> {
         Ok(MiddleNode {
             node_type: MiddleNodeType::Drop(MirDrop {
-                identifier: env
-                    .resolve(scope, &self.value, ResolutionOptions::idents())?
-                    .unwrap_variable(),
+                identifier: {
+                    let identifier = env
+                        .resolve(scope, &self.value, ResolutionOptions::idents())?
+                        .unwrap_variable();
+
+                    env.scoping
+                        .is_variable_moved(scope, &identifier)
+                        .map_err(|e| env.context.err_at_span(span, e))?;
+
+                    let _ = env
+                        .scoping
+                        .scope_mut_or_err(scope)
+                        .map(|x| x.moved.insert(identifier.clone()));
+
+                    identifier
+                },
             }),
             span,
         })
