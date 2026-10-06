@@ -76,7 +76,7 @@ impl MirLowering for AstField {
                 return AstNode::new(
                     span,
                     AstNodeType::EnumExpression(AstEnum {
-                        identifier: ident.value.clone(),
+                        identifier: Some(ident.value.clone()),
                         value: PotentialDollarIdentifier::new(span, field_name),
                         data: None,
                     }),

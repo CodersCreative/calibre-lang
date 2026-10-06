@@ -17,7 +17,8 @@ use calibre_parser::{
         ObjectMap, ObjectType,
         idents::{IntLiteralType, ParsedIntLiteral},
         nodes::{
-            AstNode,
+            AstNode, AstNodeType,
+            binary::{AsFailureMode, AstAs},
             functions::CallArg,
             literals::{
                 AstBig, AstChar, AstEnum, AstFloat, AstInt, AstRange, AstString, AstStruct,
@@ -29,15 +30,7 @@ use calibre_parser::{
 use tracing::instrument;
 use ustr::Ustr;
 
-// TODO Eventuall allow . syntax for automatic creation of structs and enums:
-/* For example:
-.{
-    field1 : ...,
-    field2 : ...
-}
-and
-.EnumVariant : ...
-*/
+// TODO Try to get literal coercion working
 
 impl MirLowering for AstStruct {
     #[instrument(skip_all)]
@@ -46,18 +39,29 @@ impl MirLowering for AstStruct {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-        _data_type: Option<MirDataType>,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = match env
-            .resolve_to_data_type(scope, &self.identifier)?
-            .unwrap_all_refs()
-        {
-            MirDataType::Struct { identifier, .. } => identifier.clone(),
-            _ => {
-                return Err(MiddleErr::At(
-                    span,
-                    Box::new(MiddleErr::Object("gen".to_string())),
-                ));
+        let identifier = if let Some(ident) = self.identifier {
+            match env.resolve_to_data_type(scope, &ident)?.unwrap_all_refs() {
+                MirDataType::Struct { identifier, .. } => identifier.clone(),
+                _ => {
+                    return Err(MiddleErr::At(
+                        span,
+                        Box::new(MiddleErr::Object("gen".to_string())),
+                    ));
+                }
+            }
+        } else {
+            match data_type {
+                Some(MirDataType::Struct { identifier, .. }) => identifier.clone(),
+                _ => {
+                    return Err(MiddleErr::At(
+                        span,
+                        Box::new(MiddleErr::CannotInferFromExpression(
+                            "struct type inference".to_string(),
+                        )),
+                    ));
+                }
             }
         };
 
@@ -71,7 +75,7 @@ impl MirLowering for AstStruct {
                     let span = itm.1.span;
                     let mut data_type = None;
 
-                    if !env.context.type_check {
+                    if env.context.type_check {
                         let node_ty = itm.1.type_of(env, scope, span);
                         if let Some(obj) = &obj
                             && let MiddleTypeDefType::Struct(fields) = &obj.object_type
@@ -99,7 +103,7 @@ impl MirLowering for AstStruct {
                     let span = itm.span;
                     let mut data_type = None;
 
-                    if !env.context.type_check {
+                    if env.context.type_check {
                         let node_ty = itm.type_of(env, scope, span);
                         if let Some(obj) = &obj
                             && let MiddleTypeDefType::Struct(fields) = &obj.object_type
@@ -143,7 +147,9 @@ impl MirLowering for AstStruct {
         scope: ScopeId,
         _span: Span,
     ) -> Option<MirDataType> {
-        env.resolve_to_data_type(scope, &self.identifier).ok()
+        self.identifier
+            .as_ref()
+            .and_then(|ident| env.resolve_to_data_type(scope, ident).ok())
     }
 }
 
@@ -154,13 +160,95 @@ impl MirLowering for AstEnum {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-        _data_type: Option<MirDataType>,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier = env
-            .resolve(scope, &self.identifier, ResolutionOptions::typing())?
-            .unwrap_typing();
+        let variant = env
+            .resolve(
+                scope,
+                &self.value,
+                ResolutionOptions::default().with_dollar(),
+            )?
+            .unwrap_dollar();
 
-        let raw_variant = self.value.to_string();
+        if self.identifier.is_none() {
+            let expected_type = data_type.as_ref().map(|t| t.unwrap_all_refs());
+
+            match (variant.as_str(), expected_type) {
+                ("Ok", Some(MirDataType::Result { .. })) => {
+                    if let Some(data) = self.data {
+                        return AstNode::call(
+                            span,
+                            AstNode::identifier(span, "ok"),
+                            vec![CallArg::Value(*data)],
+                        )
+                        .lower(env, scope, span, data_type);
+                    } else {
+                        return Err(MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::CannotInferFromExpression(
+                                "ok variant requires a value".to_string(),
+                            )),
+                        ));
+                    }
+                }
+                ("Err", Some(MirDataType::Result { .. })) => {
+                    if let Some(data) = self.data {
+                        return AstNode::call(
+                            span,
+                            AstNode::identifier(span, "err"),
+                            vec![CallArg::Value(*data)],
+                        )
+                        .lower(env, scope, span, data_type);
+                    } else {
+                        return Err(MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::CannotInferFromExpression(
+                                "err variant requires a value".to_string(),
+                            )),
+                        ));
+                    }
+                }
+                ("Some", Some(MirDataType::Option(_))) => {
+                    if let Some(data) = self.data {
+                        return AstNode::call(
+                            span,
+                            AstNode::identifier(span, "some"),
+                            vec![CallArg::Value(*data)],
+                        )
+                        .lower(env, scope, span, data_type);
+                    } else {
+                        return Err(MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::CannotInferFromExpression(
+                                "some variant requires a value".to_string(),
+                            )),
+                        ));
+                    }
+                }
+                ("None", Some(MirDataType::Option(_))) => {
+                    return AstNode::none(span).lower(env, scope, span, data_type);
+                }
+                _ => {}
+            }
+        }
+
+        let identifier = if let Some(ident) = self.identifier {
+            env.resolve(scope, &ident, ResolutionOptions::typing())?
+                .unwrap_typing()
+        } else {
+            match data_type {
+                Some(MirDataType::Struct { identifier, .. }) => identifier.clone(),
+                _ => {
+                    return Err(MiddleErr::At(
+                        span,
+                        Box::new(MiddleErr::CannotInferFromExpression(
+                            "enum type inference".to_string(),
+                        )),
+                    ));
+                }
+            }
+        };
+
         let obj = env.typing.objects.get(&identifier);
 
         let (value, variant_data_type) = if let Some(obj) = obj
@@ -168,11 +256,11 @@ impl MirLowering for AstEnum {
         {
             variants
                 .iter()
-                .find(|(name, _)| name.eq_ignore_ascii_case(&raw_variant))
+                .find(|(name, _)| name.eq_ignore_ascii_case(&variant))
                 .map(|(name, x)| (name, x.clone()))
                 .ok_or(MiddleErr::At(
                     span,
-                    Box::new(MiddleErr::EnumVariant(raw_variant.clone())),
+                    Box::new(MiddleErr::EnumVariant(variant.to_string())),
                 ))?
         } else {
             return Err(MiddleErr::At(
@@ -183,11 +271,11 @@ impl MirLowering for AstEnum {
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::EnumExpression(MirEnum {
-                identifier,
+                identifier: Some(identifier),
                 value: *value,
                 data: if let Some(data) = self.data {
                     let mut data_type = None;
-                    if !env.context.type_check {
+                    if env.context.type_check {
                         let node_ty = data.type_of(env, scope, span);
                         data_type = Some(env.compare_types(
                             node_ty,
@@ -210,9 +298,40 @@ impl MirLowering for AstEnum {
         &self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
-        _span: Span,
+        span: Span,
     ) -> Option<MirDataType> {
-        env.resolve_to_data_type(scope, &self.identifier).ok()
+        if let Some(x) = self
+            .identifier
+            .as_ref()
+            .and_then(|ident| env.resolve_to_data_type(scope, ident).ok())
+        {
+            Some(x)
+        } else {
+            let variant = env
+                .resolve(
+                    scope,
+                    &self.value,
+                    ResolutionOptions::default().with_dollar(),
+                )
+                .ok()?
+                .unwrap_dollar();
+
+            match variant.as_str() {
+                "Some" => Some(MirDataType::Option(Box::new(
+                    self.data.as_ref()?.type_of(env, scope, span)?,
+                ))),
+                "None" => Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
+                "Ok" => Some(MirDataType::Result {
+                    ok: Box::new(self.data.as_ref()?.type_of(env, scope, span)?),
+                    err: Box::new(MirDataType::Dynamic),
+                }),
+                "Err" => Some(MirDataType::Result {
+                    ok: Box::new(MirDataType::Dynamic),
+                    err: Box::new(self.data.as_ref()?.type_of(env, scope, span)?),
+                }),
+                _ => None,
+            }
+        }
     }
 }
 
@@ -225,12 +344,23 @@ impl MirLowering for AstTuple {
         span: Span,
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        AstNode::call(
-            span,
-            AstNode::identifier(span, "tuple"),
-            self.values.into_iter().map(CallArg::Value).collect(),
-        )
-        .lower(env, scope, span, data_type)
+        if let Some(data_type) = data_type.clone()
+            && !matches!(data_type, MirDataType::Tuple(_))
+        {
+            AstAs {
+                value: Box::new(AstNode::new(span, AstNodeType::TupleLiteral(self))),
+                failure_mode: AsFailureMode::Panic,
+                data_type: data_type.into(),
+            }
+            .lower(env, scope, span, None)
+        } else {
+            AstNode::call(
+                span,
+                AstNode::identifier(span, "tuple"),
+                self.values.into_iter().map(CallArg::Value).collect(),
+            )
+            .lower(env, scope, span, data_type)
+        }
     }
 
     fn type_of(
@@ -256,25 +386,31 @@ impl MirLowering for AstRange {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-        _data_type: Option<MirDataType>,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        if !env.context.type_check {
+        if let Some(data_type) = data_type
+            && !matches!(data_type, MirDataType::Range)
+        {
+            return AstAs {
+                value: Box::new(AstNode::new(span, AstNodeType::RangeDeclaration(self))),
+                failure_mode: AsFailureMode::Panic,
+                data_type: data_type.into(),
+            }
+            .lower(env, scope, span, None);
+        }
+
+        if env.context.type_check {
             let from_type = self.from.type_of(env, scope, span);
             let to_type = self.to.type_of(env, scope, span);
 
-            let data_type = env.compare_types(
-                from_type,
-                to_type,
-                Some(&TagInfo::IgnoreInvalidTypeCheck),
-                span,
-            )?;
-
-            if !data_type.clone().is_int() {
+            if !(from_type.as_ref().is_none_or(|x| x.is_int())
+                && to_type.as_ref().is_none_or(|x| x.is_int()))
+            {
                 return Err(env.context.err_at_span(
                     span,
                     MiddleErr::InvalidType {
                         expected: Box::new(MirDataType::Int),
-                        found: Box::new(data_type),
+                        found: Box::new(from_type.or(to_type).unwrap()),
                     },
                 ));
             }
@@ -310,17 +446,28 @@ impl MirLowering for AstString {
     #[instrument(skip_all)]
     fn lower(
         self,
-        _env: &mut MiddleEnvironment,
-        _scope: ScopeId,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
         span: Span,
-        _data_type: Option<MirDataType>,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::StringLiteral(MirString {
-                value: Ustr::from(&self.value.text),
-            }),
-            span,
-        })
+        if let Some(data_type) = data_type
+            && !matches!(data_type, MirDataType::Str)
+        {
+            AstAs {
+                value: Box::new(AstNode::new(span, AstNodeType::StringLiteral(self))),
+                failure_mode: AsFailureMode::Panic,
+                data_type: data_type.into(),
+            }
+            .lower(env, scope, span, None)
+        } else {
+            Ok(MiddleNode {
+                node_type: MiddleNodeType::StringLiteral(MirString {
+                    value: Ustr::from(&self.value.text),
+                }),
+                span,
+            })
+        }
     }
 
     fn type_of(
@@ -337,22 +484,33 @@ impl MirLowering for AstInt {
     #[instrument(skip_all)]
     fn lower(
         self,
-        _env: &mut MiddleEnvironment,
-        _scope: ScopeId,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
         span: Span,
-        _data_type: Option<MirDataType>,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::IntLiteral(MirInt {
-                value: ParsedIntLiteral::parse(self.value.clone()).ok_or_else(|| {
-                    MiddleErr::At(
-                        span,
-                        Box::new(MiddleErr::InvalidIntegerLiteral(self.value.to_string())),
-                    )
-                })?,
-            }),
-            span,
-        })
+        if let Some(data_type) = data_type
+            && !matches!(data_type, MirDataType::Int)
+        {
+            AstAs {
+                value: Box::new(AstNode::new(span, AstNodeType::IntLiteral(self))),
+                failure_mode: AsFailureMode::Panic,
+                data_type: data_type.into(),
+            }
+            .lower(env, scope, span, None)
+        } else {
+            Ok(MiddleNode {
+                node_type: MiddleNodeType::IntLiteral(MirInt {
+                    value: ParsedIntLiteral::parse(self.value.clone()).ok_or_else(|| {
+                        MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::InvalidIntegerLiteral(self.value.to_string())),
+                        )
+                    })?,
+                }),
+                span,
+            })
+        }
     }
 
     fn type_of(
@@ -373,22 +531,33 @@ impl MirLowering for AstBig {
     #[instrument(skip_all)]
     fn lower(
         self,
-        _env: &mut MiddleEnvironment,
-        _scope: ScopeId,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
         span: Span,
-        _data_type: Option<MirDataType>,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::BigLiteral(MirBig {
-                value: self
-                    .value
-                    .text
-                    .strip_suffix('g')
-                    .map(Ustr::from)
-                    .unwrap_or(Ustr::from(&self.value.text)),
-            }),
-            span,
-        })
+        if let Some(data_type) = data_type
+            && !matches!(data_type, MirDataType::Big)
+        {
+            AstAs {
+                value: Box::new(AstNode::new(span, AstNodeType::BigLiteral(self))),
+                failure_mode: AsFailureMode::Panic,
+                data_type: data_type.into(),
+            }
+            .lower(env, scope, span, None)
+        } else {
+            Ok(MiddleNode {
+                node_type: MiddleNodeType::BigLiteral(MirBig {
+                    value: self
+                        .value
+                        .text
+                        .strip_suffix('g')
+                        .map(Ustr::from)
+                        .unwrap_or(Ustr::from(&self.value.text)),
+                }),
+                span,
+            })
+        }
     }
 
     fn type_of(
@@ -405,15 +574,26 @@ impl MirLowering for AstFloat {
     #[instrument(skip_all)]
     fn lower(
         self,
-        _env: &mut MiddleEnvironment,
-        _scope: ScopeId,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
         span: Span,
-        _data_type: Option<MirDataType>,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::FloatLiteral(MirFloat { value: self.value }),
-            span,
-        })
+        if let Some(data_type) = data_type
+            && !matches!(data_type, MirDataType::Float)
+        {
+            AstAs {
+                value: Box::new(AstNode::new(span, AstNodeType::FloatLiteral(self))),
+                failure_mode: AsFailureMode::Panic,
+                data_type: data_type.into(),
+            }
+            .lower(env, scope, span, None)
+        } else {
+            Ok(MiddleNode {
+                node_type: MiddleNodeType::FloatLiteral(MirFloat { value: self.value }),
+                span,
+            })
+        }
     }
 
     fn type_of(
@@ -430,15 +610,26 @@ impl MirLowering for AstChar {
     #[instrument(skip_all)]
     fn lower(
         self,
-        _env: &mut MiddleEnvironment,
-        _scope: ScopeId,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
         span: Span,
-        _data_type: Option<MirDataType>,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::CharLiteral(MirChar { value: self.value }),
-            span,
-        })
+        if let Some(data_type) = data_type
+            && !matches!(data_type, MirDataType::Char)
+        {
+            AstAs {
+                value: Box::new(AstNode::new(span, AstNodeType::CharLiteral(self))),
+                failure_mode: AsFailureMode::Panic,
+                data_type: data_type.into(),
+            }
+            .lower(env, scope, span, None)
+        } else {
+            Ok(MiddleNode {
+                node_type: MiddleNodeType::CharLiteral(MirChar { value: self.value }),
+                span,
+            })
+        }
     }
 
     fn type_of(

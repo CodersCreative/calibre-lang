@@ -10,13 +10,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstStruct {
-    pub identifier: PotentialGenericTypeIdentifier,
+    pub identifier: Option<PotentialGenericTypeIdentifier>,
     pub value: ObjectType<AstNode>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstEnum {
-    pub identifier: PotentialGenericTypeIdentifier,
+    pub identifier: Option<PotentialGenericTypeIdentifier>,
     pub value: PotentialDollarIdentifier,
     pub data: Option<Box<AstNode>>,
 }

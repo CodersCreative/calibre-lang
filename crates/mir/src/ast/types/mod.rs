@@ -432,14 +432,14 @@ impl MirDataType {
         }
     }
 
-    pub fn is_int(self) -> bool {
+    pub fn is_int(&self) -> bool {
         matches!(
             self.unwrap_all_refs(),
             MirDataType::Int | MirDataType::UInt | MirDataType::Byte
         )
     }
 
-    pub fn is_native(self) -> bool {
+    pub fn is_native(&self) -> bool {
         !matches!(self.unwrap_all_refs(), MirDataType::Struct { .. })
     }
 
@@ -505,6 +505,13 @@ impl MirDataType {
         match self {
             MirDataType::Result { ok, err: _ } => Some(ok),
             _ => None,
+        }
+    }
+
+    pub fn unwrap_one_option(self) -> MirDataType {
+        match self {
+            MirDataType::Option(x) => *x,
+            x => x,
         }
     }
 
@@ -580,6 +587,8 @@ impl MirDataType {
     }
 
     pub fn loose_eq(&self, other: &Self) -> bool {
+        const USUAL_GENERICS: [&str; 3] = ["K", "V", "T"];
+
         let result = other.is_host()
             || other.is_dyn()
             || other.is_dyn_list()
@@ -593,6 +602,21 @@ impl MirDataType {
         }
 
         match (self, other) {
+            (
+                MirDataType::Struct { identifier: x, .. },
+                MirDataType::Struct { identifier: y, .. },
+            ) => {
+                // God I need to remove this eventually
+                x.name() == y.name()
+                    || USUAL_GENERICS.contains(&x.name().as_str())
+                    || USUAL_GENERICS.contains(&y.name().as_str())
+            }
+            (MirDataType::Struct { identifier: x, .. }, _) => {
+                USUAL_GENERICS.contains(&x.name().as_str())
+            }
+            (_, MirDataType::Struct { identifier: x, .. }) => {
+                USUAL_GENERICS.contains(&x.name().as_str())
+            }
             (MirDataType::List(a), MirDataType::List(b)) => a.loose_eq(b),
             (MirDataType::Option(a), MirDataType::Option(b)) => a.loose_eq(b),
             (MirDataType::Result { ok: ao, err: ae }, MirDataType::Result { ok: bo, err: be }) => {
@@ -607,6 +631,28 @@ impl MirDataType {
                     return false;
                 }
                 a.iter().zip(b.iter()).all(|(x, y)| x.loose_eq(y))
+            }
+            (
+                MirDataType::Function {
+                    return_type: rx,
+                    parameters: px,
+                }
+                | MirDataType::NativeFunction {
+                    return_type: rx,
+                    parameters: px,
+                },
+                MirDataType::Function {
+                    return_type: ry,
+                    parameters: py,
+                }
+                | MirDataType::NativeFunction {
+                    return_type: ry,
+                    parameters: py,
+                },
+            ) => {
+                rx.loose_eq(ry)
+                    && px.len() == py.len()
+                    && px.iter().zip(py.iter()).all(|(x, y)| x.loose_eq(y))
             }
             _ => false,
         }

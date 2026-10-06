@@ -23,12 +23,21 @@ impl AstFormatting for AstStruct {
         let txt = match &self.value {
             ObjectType::Map(map) => {
                 if map.is_empty() {
-                    return format!("{} {{}}", self.identifier);
+                    return format!(
+                        "{}{{}}",
+                        match &self.identifier {
+                            Some(x) => format!("{x} "),
+                            _ => String::from("."),
+                        }
+                    );
                 }
 
                 format!(
-                    "{} {{ {} }}",
-                    self.identifier,
+                    "{}{{ {} }}",
+                    match &self.identifier {
+                        Some(x) => format!("{x} "),
+                        _ => String::from("."),
+                    },
                     map.iter()
                         .map(|(key, value)| {
                             if let AstNodeType::Identifier(x) = &value.node_type
@@ -45,8 +54,11 @@ impl AstFormatting for AstStruct {
             }
             ObjectType::Tuple(lst) => {
                 format!(
-                    "{} ({})",
-                    self.identifier,
+                    "{}({})",
+                    match &self.identifier {
+                        Some(x) => format!("{x} "),
+                        _ => String::from("."),
+                    },
                     lst.iter()
                         .map(|x| x.format(formatter))
                         .collect::<Vec<_>>()
@@ -111,11 +123,21 @@ impl AstFormatting for AstStruct {
                     .collect::<Vec<_>>()
                     .join(", ");
 
-                Some(format!("{} {{\n{}\n}}", self.identifier, txt))
+                Some(format!(
+                    "{}{{\n{}\n}}",
+                    match &self.identifier {
+                        Some(x) => format!("{x} "),
+                        _ => String::from("."),
+                    },
+                    txt
+                ))
             }
             ObjectType::Tuple(lst) => Some(format!(
-                "{} (\n{}\n)",
-                self.identifier,
+                "{}(\n{}\n)",
+                match &self.identifier {
+                    Some(x) => format!("{x} "),
+                    _ => String::from("."),
+                },
                 lst.iter()
                     .map(|value| {
                         let leading = formatter.get_potential_comment(&value.span);
@@ -141,24 +163,43 @@ impl AstFormatting for AstEnum {
     fn narrow_format(&self, _formatter: &mut Formatter) -> String {
         match &self.data {
             Some(data) => {
-                format!("{}.{} : {}", self.identifier, self.value, data)
+                format!(
+                    "{}.{} : {}",
+                    self.identifier
+                        .as_ref()
+                        .map(|x| x.to_string())
+                        .unwrap_or(String::from(".")),
+                    self.value,
+                    data
+                )
             }
             _ => {
-                format!("{}.{}", self.identifier, self.value)
+                format!(
+                    "{}.{}",
+                    self.identifier
+                        .as_ref()
+                        .map(|x| x.to_string())
+                        .unwrap_or(String::from(".")),
+                    self.value
+                )
             }
         }
     }
 
     fn wide_format(&self, formatter: &mut Formatter) -> Option<String> {
-        let txt =
-            formatter.fmt_txt_with_tab(&format!("{}\n.{}", self.identifier, self.value), 1, false);
+        if let Some(identifier) = &self.identifier {
+            let txt =
+                formatter.fmt_txt_with_tab(&format!("{}\n.{}", identifier, self.value), 1, false);
 
-        Some(match &self.data {
-            Some(data) => {
-                format!("{} : {}", txt, data.format(formatter))
-            }
-            _ => txt,
-        })
+            Some(match &self.data {
+                Some(data) => {
+                    format!("{} : {}", txt, data.format(formatter))
+                }
+                _ => txt,
+            })
+        } else {
+            None
+        }
     }
 }
 

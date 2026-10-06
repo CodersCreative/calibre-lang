@@ -1,4 +1,33 @@
+type Vector2 := struct {
+    x y : int
+};
+
+type Vector3 := struct(float, float, float);
+
+type Language := enum {
+	// Enums can have hasmap type data structuress.
+	FRENCH : float,
+	// Enums can have tuple type data structuress.
+	ENGLISH : int,
+	SPANISH,
+	ARABIC : <Language, Language>
+};
+
+
 const main := fn => {
     let lst : list:<int> = [];
-    print([lst as! str]); 
+    print([lst as! str]);
+    let vec2 : Vector2 = .{
+        x : 100,
+        y : 4
+    };
+    print(vec2);
+    let vec3 : Vector3 = .(40.0, 10.3, 30.2);
+    print(vec3);
+    let res : str!int = .Ok : 100;
+    print(res);
+    let mut lang : Language = .SPANISH;
+    print(lang);
+    lang := .ENGLISH : 1;
+    print(lang)
 }

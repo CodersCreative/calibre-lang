@@ -128,7 +128,8 @@ impl LirLowering for MirAggregate {
 impl LirLowering for MirEnum {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         LirNodeType::Enum(LirEnum {
-            variant: if let Some(obj) = env.env.typing.objects.get(&self.identifier)
+            variant: if let Some(ident) = &self.identifier
+                && let Some(obj) = env.env.typing.objects.get(ident)
                 && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
             {
                 variants

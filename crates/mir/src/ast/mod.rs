@@ -480,7 +480,7 @@ pub struct MirAggregate {
 
 #[derive(Clone, Debug, PartialEq, Builder)]
 pub struct MirEnum {
-    pub identifier: TypeKey,
+    pub identifier: Option<TypeKey>,
     pub value: Ustr,
     pub data: Option<Box<MiddleNode>>,
 }
@@ -667,7 +667,9 @@ impl From<MiddleNodeType> for AstNodeType {
                 })
             }
             MiddleNodeType::EnumExpression(value) => AstNodeType::EnumExpression(AstEnum {
-                identifier: value.identifier.into(),
+                identifier: value.identifier.map(|ident| {
+                    PotentialGenericTypeIdentifier::new(Span::default(), ident.name())
+                }),
                 value: value.value.into(),
                 data: value.data.map(|data| Box::new((*data).into())),
             }),
@@ -885,13 +887,13 @@ impl From<MiddleNodeType> for AstNodeType {
                 } else {
                     // TODO Fix invalid conversion of FQP Ident to str
                     AstNodeType::StructLiteral(AstStruct {
-                        identifier: PotentialGenericTypeIdentifier::new(
+                        identifier: Some(PotentialGenericTypeIdentifier::new(
                             Span::default(),
                             value
                                 .identifier
                                 .map(|x| x.name().to_string())
                                 .unwrap_or_else(|| "map".to_string()),
-                        ),
+                        )),
                         value: ObjectType::Map(
                             value
                                 .value

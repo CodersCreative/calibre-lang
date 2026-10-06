@@ -13,7 +13,8 @@ use crate::{
             generator::AstGenerator,
             lists::AstList,
             literals::{
-                AstBig, AstChar, AstDataType, AstFloat, AstInt, AstString, AstStruct, AstTuple,
+                AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstString, AstStruct,
+                AstTuple,
             },
             loops::{AstIter, AstLoop},
             matching::{AstFnMatch, AstMatch},
@@ -228,9 +229,15 @@ impl<'a> AstNode {
                 AstMove::parser(data.clone()).map(AstNodeType::MoveExpression),
             )));
 
+        let dot_start = just(Token::Dot).rewind().ignore_then(choice((
+            AstStruct::parser(data.clone()).map(AstNodeType::StructLiteral),
+            AstEnum::parser(data.clone()).map(AstNodeType::EnumExpression),
+        )));
+
         choice((
             list_start,
             ident_start,
+            dot_start,
             paren_start,
             literal,
             fn_start,

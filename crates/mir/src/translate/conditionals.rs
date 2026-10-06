@@ -31,12 +31,11 @@ impl MirLowering for AstIf {
             let otherwise_type = self
                 .otherwise
                 .as_ref()
-                .and_then(|x| x.type_of(env, scope, span))
-                .unwrap_or(MirDataType::Null);
+                .and_then(|x| x.type_of(env, scope, span));
 
             env.compare_types_ref(
                 then_type.as_ref(),
-                Some(&otherwise_type),
+                otherwise_type.as_ref(),
                 Some(&TagInfo::IgnoreInvalidTypeCheck),
                 span,
             )?;
@@ -111,10 +110,11 @@ impl MirLowering for AstIf {
                 (Some(a), Some(b)) if a.loose_eq(&b) => Some(a),
                 (Some(a), Some(b)) if a.is_null() => Some(b),
                 (Some(a), Some(b)) if b.is_null() => Some(a),
-                _ => Some(MirDataType::Null),
+                (Some(a), _) | (_, Some(a)) => Some(a),
+                _ => None,
             }
         } else {
-            Some(MirDataType::Null)
+            self.then.type_of(env, scope, span)
         }
     }
 }
@@ -133,20 +133,6 @@ impl MirLowering for AstTernary {
                 let otherwise = self
                     .otherwise
                     .expect("Otherwise with TernaryType::Normal should be Some");
-
-                if !env.context.type_check {
-                    let then_type = self.then.type_of(env, scope, self.then.span);
-                    let otherwise_type = otherwise.type_of(env, scope, otherwise.span);
-
-                    if !then_type.as_ref().is_some_and(|x| x.is_null()) {
-                        env.compare_types_ref(
-                            then_type.as_ref(),
-                            otherwise_type.as_ref(),
-                            Some(&TagInfo::IgnoreInvalidTypeCheck),
-                            span,
-                        )?;
-                    }
-                }
 
                 AstNode {
                     node_type: AstNodeType::IfStatement(AstIf {

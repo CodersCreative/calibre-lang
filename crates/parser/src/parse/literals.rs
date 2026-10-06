@@ -1,11 +1,12 @@
 use crate::{
     ast::{
         ObjectType,
-        idents::{ParsedIntLiteral, ParserText},
+        idents::{ParsedIntLiteral, ParserText, PotentialDollarIdentifier},
         nodes::{
             AstNode,
             literals::{
-                AstBig, AstChar, AstDataType, AstFloat, AstInt, AstString, AstStruct, AstTuple,
+                AstBig, AstChar, AstDataType, AstEnum, AstFloat, AstInt, AstString, AstStruct,
+                AstTuple,
             },
         },
     },
@@ -116,8 +117,25 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
     type Data = StatementData<'a, I>;
 
     fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
-        data.generic_ident
-            .clone()
+        choice((
+            just(Token::Dot)
+                .ignore_then(
+                    data.node
+                        .clone()
+                        .separated_by(just(Token::Comma).padded_by(potential_new_line()))
+                        .allow_trailing()
+                        .collect::<Vec<_>>()
+                        .padded_by(potential_new_line())
+                        .delimited_by(just(Token::LeftParen), just(Token::RightParen)),
+                )
+                .map(|fields| AstStruct {
+                    identifier: None,
+                    value: ObjectType::Tuple(fields),
+                }),
+            choice((
+                data.generic_ident.clone().map(Some),
+                just(Token::Dot).to(None),
+            ))
             .then(
                 select! { Token::Identifier(x) => x }
                     .then(just(Token::Colon).ignore_then(data.node.clone()).or_not())
@@ -136,6 +154,38 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
             .map(|(identifier, fields)| AstStruct {
                 identifier,
                 value: ObjectType::Map(fields),
+            }),
+        ))
+    }
+}
+
+impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for AstEnum {
+    type Data = StatementData<'a, I>;
+
+    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
+        just(Token::Dot)
+            .ignore_then(
+                data.dollar_ident
+                    .clone()
+                    .or(select! { Token::IntLiteral(value) => value }.map_with_span(
+                        |value, span| {
+                            PotentialDollarIdentifier::Identifier(ParserText::new(
+                                span,
+                                value.to_string(),
+                            ))
+                        },
+                    ))
+                    .then(
+                        just(Token::Colon)
+                            .padded_by(potential_new_line())
+                            .ignore_then(data.node.clone().or_not())
+                            .or_not(),
+                    ),
+            )
+            .map(|(value, fields)| AstEnum {
+                identifier: None,
+                value,
+                data: fields.flatten().map(Box::new),
             })
     }
 }

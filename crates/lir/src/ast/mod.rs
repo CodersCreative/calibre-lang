@@ -174,7 +174,7 @@ pub struct LirMember {
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirEnum {
-    pub name: TypeKey,
+    pub name: Option<TypeKey>,
     pub variant: u32,
     pub payload: Option<Box<LirNodeType>>,
 }
@@ -431,7 +431,9 @@ impl Display for LirNodeType {
                     payload,
                 }) => format!(
                     "{}.{}{}",
-                    name,
+                    name.as_ref()
+                        .map(|n| n.to_string())
+                        .unwrap_or_else(|| "?".to_string()),
                     variant,
                     match payload {
                         Some(x) => format!(" : {}", x),

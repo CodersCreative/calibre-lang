@@ -93,7 +93,9 @@ impl MirRenamable for MiddleNodeType {
                 value: _,
                 data,
             }) => {
-                *identifier = state.mapped_type_or_original(identifier.clone());
+                if let Some(ident) = identifier {
+                    *identifier = Some(state.mapped_type_or_original(ident.clone()));
+                }
                 if let Some(d) = data {
                     d.rename(state);
                 }

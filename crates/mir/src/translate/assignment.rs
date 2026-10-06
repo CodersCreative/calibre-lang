@@ -62,18 +62,24 @@ impl MirLowering for AstAssignment {
         span: Span,
         mut data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        if !env.context.type_check {
+        let identifier_is_index = matches!(self.identifier.node_type, AstNodeType::IndexAccess(_));
+        if env.context.type_check {
             let identifier_type = self
                 .identifier
                 .type_of(env, scope, self.identifier.span)
                 .or(data_type.clone());
+
             let value_type = self
                 .value
                 .type_of(env, scope, self.value.span)
                 .or(data_type.clone());
 
             data_type = Some(env.compare_types(
-                identifier_type,
+                if identifier_is_index {
+                    identifier_type.map(|x| x.unwrap_one_option())
+                } else {
+                    identifier_type
+                },
                 value_type,
                 Some(&TagInfo::IgnoreInvalidTypeCheck),
                 span,

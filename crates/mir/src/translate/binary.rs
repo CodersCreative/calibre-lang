@@ -521,10 +521,7 @@ impl MirLowering for AstIs {
             env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?;
         Ok(MiddleNode {
             node_type: MiddleNodeType::IsExpression(MirIs {
-                value: Box::new(
-                    self.value
-                        .lower(env, scope, span, Some(data_type.clone()))?,
-                ),
+                value: Box::new(self.value.lower(env, scope, span, None)?),
                 data_type,
             }),
             span,

@@ -126,10 +126,10 @@ impl MiddleEnvironment {
                                 AstNode::new(
                                     span,
                                     AstNodeType::StructLiteral(AstStruct {
-                                        identifier: PotentialGenericTypeIdentifier::new(
+                                        identifier: Some(PotentialGenericTypeIdentifier::new(
                                             span,
                                             &builder_name,
-                                        ),
+                                        )),
                                         value: ObjectType::Map(setter_fields),
                                     }),
                                 ),
@@ -242,7 +242,10 @@ impl MiddleEnvironment {
                                 vec![CallArg::Value(AstNode::new(
                                     span,
                                     AstNodeType::StructLiteral(AstStruct {
-                                        identifier: identifier.clone().into(),
+                                        identifier: Some(PotentialGenericTypeIdentifier::new(
+                                            span,
+                                            &identifier.text,
+                                        )),
                                         value: ObjectType::Map(built_fields),
                                     }),
                                 ))],

@@ -131,7 +131,9 @@ impl MirRenamable for LirNodeType {
                 variant: _,
                 payload,
             }) => {
-                *name = state.mapped_type_or_original(name.clone());
+                if let Some(n) = name {
+                    *name = Some(state.mapped_type_or_original(n.clone()));
+                }
                 if let Some(p) = payload {
                     p.rename(state);
                 }

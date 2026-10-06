@@ -2,7 +2,9 @@ use crate::environment::MiddleEnvironment;
 use crate::scoping::ScopeId;
 use crate::translate::MirLowering;
 use crate::{ast::MiddleNode, errors::MiddleErr, typing::MiddleTypeDefType};
-use calibre_parser::ast::idents::{ParserText, PotentialDollarIdentifier};
+use calibre_parser::ast::idents::{
+    ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
+};
 use calibre_parser::ast::nodes::declaration::AstDeclaration;
 use calibre_parser::ast::nodes::functions::{AstFunction, FunctionHeader};
 use calibre_parser::ast::nodes::types::AstImpl;
@@ -57,7 +59,12 @@ impl MiddleEnvironment {
                                             AstNode::ret(AstNode::new(
                                                 span,
                                                 AstNodeType::EnumExpression(AstEnum {
-                                                    identifier: identifier.clone().into(),
+                                                    identifier: Some(
+                                                        PotentialGenericTypeIdentifier::new(
+                                                            span,
+                                                            &identifier.text,
+                                                        ),
+                                                    ),
                                                     value: (*default_variant_name).into(),
                                                     data: default_value.clone(),
                                                 }),
@@ -128,7 +135,10 @@ impl MiddleEnvironment {
                                     AstNode::new(
                                         span,
                                         AstNodeType::StructLiteral(AstStruct {
-                                            identifier: identifier.clone().into(),
+                                            identifier: Some(PotentialGenericTypeIdentifier::new(
+                                                span,
+                                                &identifier.text,
+                                            )),
                                             value: ObjectType::Map(fields),
                                         }),
                                     ),

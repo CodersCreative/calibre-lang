@@ -408,13 +408,13 @@ impl MiddleEnvironment {
         let gen_value = AstNode::new(
             span,
             AstNodeType::StructLiteral(AstStruct {
-                identifier: PotentialGenericTypeIdentifier::Generic {
+                identifier: Some(PotentialGenericTypeIdentifier::Generic {
                     identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
                         span,
                         String::from("gen"),
                     )),
                     generic_types: vec![elem_type],
-                },
+                }),
                 value: ObjectType::Map(vec![
                     (Ustr::from("data"), AstNode::identifier(span, &next_name)),
                     (Ustr::from("index"), AstNode::int(span, 0)),
@@ -453,7 +453,7 @@ impl MiddleEnvironment {
         Some(AstNode::new(
             span,
             AstNodeType::StructLiteral(AstStruct {
-                identifier: PotentialGenericTypeIdentifier::new(span, "ExecContext"),
+                identifier: Some(PotentialGenericTypeIdentifier::new(span, "ExecContext")),
                 value: ObjectType::Map(vec![
                     (Ustr::from("function_name"), value(current_function_name)),
                     (Ustr::from("module_name"), value(module_name)),
@@ -1082,7 +1082,8 @@ impl MirLowering for AstCall {
             .map(|x| x.unwrap_all_refs().clone());
 
         if !env.context.type_check
-            && let Some(MirDataType::Function { parameters, .. }) = &data_type
+            && let Some(MirDataType::Function { parameters, .. })
+            | Some(MirDataType::NativeFunction { parameters, .. }) = &data_type
         {
             let all_args: Vec<&AstNode> = self
                 .args

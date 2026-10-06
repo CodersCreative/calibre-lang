@@ -106,7 +106,7 @@ impl MiddleEnvironment {
                 value: Box::new(AstNode::new(
                     span,
                     AstNodeType::StructLiteral(AstStruct {
-                        identifier: PotentialGenericTypeIdentifier::new(span, "Package"),
+                        identifier: Some(PotentialGenericTypeIdentifier::new(span, "Package")),
                         value: ObjectType::Map(vec![
                             (Ustr::from("name"), value(meta.name)),
                             (Ustr::from("version"), value(meta.version)),
@@ -179,7 +179,7 @@ impl MiddleEnvironment {
                 value: Box::new(AstNode::new(
                     span,
                     AstNodeType::StructLiteral(AstStruct {
-                        identifier: PotentialGenericTypeIdentifier::new(span, "ExecContext"),
+                        identifier: Some(PotentialGenericTypeIdentifier::new(span, "ExecContext")),
                         value: ObjectType::Map(vec![
                             (Ustr::from("function_name"), value(function_name)),
                             (Ustr::from("module_name"), value(scope_ref.namespace)),

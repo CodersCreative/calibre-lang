@@ -52,13 +52,14 @@ impl MirLowering for AstEmit {
                 } else {
                     (right, left)
                 };
-                if !env.context.type_check {
+
+                if env.context.type_check {
                     let channel_ty = channel.type_of(env, scope, span);
                     let expected = env.resolve_to_data_type(scope, &"Channel").ok();
 
                     env.compare_types_ref(
                         expected.as_ref(),
-                        channel_ty.as_ref(),
+                        channel_ty.as_ref().map(|x| x.unwrap_all_refs()),
                         Some(&TagInfo::IgnoreInvalidTypeCheck),
                         span,
                     )?;
@@ -82,12 +83,12 @@ impl MirLowering for AstEmit {
 
     fn type_of(
         &self,
-        _env: &mut MiddleEnvironment,
-        _scope: ScopeId,
-        _span: Span,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
     ) -> Option<MirDataType> {
         match self {
-            AstEmit::Scope(_) => None,
+            AstEmit::Scope(x) => x.type_of(env, scope, span),
             _ => Some(MirDataType::Bool),
         }
     }

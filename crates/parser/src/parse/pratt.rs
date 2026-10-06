@@ -245,7 +245,7 @@ impl<'a> PrattParser {
                             return AstNode::new(
                                 span.into(),
                                 AstNodeType::EnumExpression(AstEnum {
-                                    identifier: identifier.clone(),
+                                    identifier: Some(identifier.clone()),
                                     value: field,
                                     data: data.map(Box::new),
                                 }),

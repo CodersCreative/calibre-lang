@@ -128,7 +128,7 @@ impl VMLowering for LirEnum {
     #[inline(always)]
     fn lower_to<'a>(self, env: &mut BlockLoweringCtx<'a>, target: Reg, span: Span) {
         let payload = self.payload.map(|v| env.lower_node(*v, span));
-        let name = env.add_type(self.name);
+        let name = env.add_type(self.name.expect("enum name should be resolved by MIR"));
         env.emit(
             VMInstruction::Enum(VMEnum {
                 dst: target,
