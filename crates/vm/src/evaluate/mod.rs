@@ -160,6 +160,7 @@ impl VM {
 
     fn runtime_matches_type(&self, value: &RuntimeValue, target: &MirDataType) -> bool {
         match target {
+            MirDataType::Never => false,
             MirDataType::Dynamic => true,
             MirDataType::Ref(inner, _) => self.runtime_matches_type(value, inner),
             MirDataType::Big => matches!(value, RuntimeValue::Big(_)),

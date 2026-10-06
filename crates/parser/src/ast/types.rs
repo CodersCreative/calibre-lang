@@ -169,6 +169,7 @@ pub enum ParserInnerType {
     Char,
     Host,
     Dynamic,
+    Never,
     Tuple(Vec<ParserDataType>),
     Paren(Box<ParserDataType>),
     List(Box<ParserDataType>),
@@ -203,6 +204,7 @@ impl AlphaRenamable for ParserInnerType {
     fn rename(&mut self, state: &mut UstrAlphaRenameState) {
         match self {
             ParserInnerType::Auto(_)
+            | ParserInnerType::Never
             | ParserInnerType::Big
             | ParserInnerType::Byte
             | ParserInnerType::Bool
@@ -313,10 +315,6 @@ impl ParserDataType {
             data_type: self.data_type.unwrap_all_refs().clone(),
             span: self.span,
         }
-    }
-
-    pub fn contains_auto(&self) -> bool {
-        self.data_type.contains_auto()
     }
 
     pub fn unwrap_one_result(&self) -> Option<&Self> {
@@ -433,6 +431,7 @@ impl FromStr for ParserInnerType {
             "str" => Self::Str,
             "char" => Self::Char,
             "dyn" => Self::Dynamic,
+            "never" => Self::Never,
             "option" => Self::Option(Box::new(ParserDataType::auto(Span::default()))),
             "result" => Self::Result {
                 ok: Box::new(ParserDataType::auto(Span::default())),
@@ -512,6 +511,10 @@ impl ParserInnerType {
         matches!(self, Self::Ref(_, _))
     }
 
+    pub fn is_never(&self) -> bool {
+        matches!(self, Self::Never)
+    }
+
     pub fn is_bool(&self) -> bool {
         matches!(self, Self::Bool)
     }
@@ -543,10 +546,12 @@ impl ParserInnerType {
     pub fn loose_eq(&self, other: &Self) -> bool {
         other.is_auto()
             || other.is_tuple()
+            || other.is_never()
             || other.is_host()
             || other.is_dyn()
             || other.is_dyn_list()
             || self.is_auto()
+            || self.is_never()
             || self.is_tuple()
             || self.is_host()
             || self.is_dyn()
@@ -569,28 +574,6 @@ impl ParserInnerType {
             Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.verify()).collect()),
             Self::Struct(x) => Self::from_str(&x).unwrap_or(Self::Struct(x)),
             ty => ty,
-        }
-    }
-
-    pub fn contains_auto(&self) -> bool {
-        match self {
-            ParserInnerType::Auto(_) => true,
-            ParserInnerType::Tuple(xs) => xs.iter().any(|x| x.contains_auto()),
-            ParserInnerType::List(x) => x.contains_auto(),
-            ParserInnerType::Ptr(x) => x.contains_auto(),
-            ParserInnerType::Option(x) => x.contains_auto(),
-            ParserInnerType::Result { ok, err } => ok.contains_auto() || err.contains_auto(),
-            ParserInnerType::Function {
-                return_type,
-                parameters,
-                ..
-            } => return_type.contains_auto() || parameters.iter().any(|x| x.contains_auto()),
-            ParserInnerType::Ref(x, _) => x.contains_auto(),
-            ParserInnerType::StructWithGenerics { generic_types, .. } => {
-                generic_types.iter().any(|x| x.contains_auto())
-            }
-            ParserInnerType::Scope(x) => x.iter().any(|x| x.contains_auto()),
-            _ => false,
         }
     }
 
@@ -644,6 +627,7 @@ impl Display for ParserDataType {
 impl Display for ParserInnerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Never => write!(f, "never"),
             Self::Float => write!(f, "float"),
             Self::Int => write!(f, "int"),
             Self::Big => write!(f, "big"),

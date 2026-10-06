@@ -26,7 +26,7 @@ impl MirLowering for AstIf {
         span: Span,
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        if !env.context.type_check {
+        if !env.context.type_check && data_type.is_some() {
             let then_type = self.then.type_of(env, scope, span);
             let otherwise_type = self
                 .otherwise

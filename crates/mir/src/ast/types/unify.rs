@@ -186,7 +186,8 @@ impl MirDataType {
         }
 
         match self {
-            MirDataType::Int
+            MirDataType::Never
+            | MirDataType::Int
             | MirDataType::UInt
             | MirDataType::Byte
             | MirDataType::Float

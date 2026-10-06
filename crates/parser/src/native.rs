@@ -86,7 +86,7 @@ impl ParserDataType {
                     vec![ParserInnerType::List(Box::new(Self::native_type(
                         ParserInnerType::Dynamic,
                     )))],
-                    ParserInnerType::Null,
+                    ParserInnerType::Never,
                 ),
             ];
 

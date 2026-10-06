@@ -123,6 +123,7 @@ impl MirTypeKeysUsed for MirDataType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum MirDataType {
+    Never,
     Float,
     UInt,
     Byte,
@@ -192,6 +193,7 @@ impl From<MirDataType> for ParserDataType {
 impl From<MirDataType> for ParserInnerType {
     fn from(value: MirDataType) -> Self {
         match value {
+            MirDataType::Never => ParserInnerType::Never,
             MirDataType::Big => ParserInnerType::Big,
             MirDataType::Bool => ParserInnerType::Bool,
             MirDataType::Byte => ParserInnerType::Byte,
@@ -354,6 +356,7 @@ impl MirRenamable for MirDataType {
             | MirDataType::Int
             | MirDataType::Null
             | MirDataType::Range
+            | MirDataType::Never
             | MirDataType::UInt
             | MirDataType::Str
             | MirDataType::Dynamic => {}
@@ -691,6 +694,7 @@ impl MirDataType {
 
     pub fn matches(&self, other: &Self, _generic_params: &[&str]) -> bool {
         match (self, other) {
+            (MirDataType::Never, _) | (_, MirDataType::Never) => true,
             (
                 MirDataType::Struct {
                     identifier: a,
