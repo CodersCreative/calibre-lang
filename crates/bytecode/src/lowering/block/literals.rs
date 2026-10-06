@@ -6,7 +6,7 @@ Aggregate,
 Enum
 */
 
-use crate::conversion::{
+use crate::{
     AggregateLayout, Reg, VMLiteral,
     instructions::{
         VMInstruction,
@@ -42,7 +42,7 @@ impl VMLowering for LirLiteral {
             return;
         }
 
-        let lit = VMLiteral::from_lir_literal(self, env.big_consts);
+        let lit = VMLiteral::from(self);
         let lit = env.add_literal(lit);
 
         env.emit(

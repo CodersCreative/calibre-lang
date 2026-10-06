@@ -1,15 +1,15 @@
 use crate::{
     VM,
-    conversion::{
-        VMBlock,
-        instructions::binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
-    },
     error::RuntimeError,
     evaluate::instruction::VMEvaluation,
     value::{
         RuntimeValue, TerminateValue,
         operation::{binary, boolean, comparison},
     },
+};
+use calibre_bytecode::{
+    VMBlock,
+    instructions::binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
 };
 use calibre_lir::ast::BlockId;
 use calibre_parser::ast::{comparison::BooleanOperator, nodes::binary::AsFailureMode};

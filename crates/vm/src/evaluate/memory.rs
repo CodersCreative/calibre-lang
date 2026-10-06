@@ -1,12 +1,12 @@
 use crate::{
     VM,
-    conversion::{
-        VMBlock,
-        instructions::memory::{VMDeref, VMRef, VMSetRef},
-    },
     error::RuntimeError,
     evaluate::{instruction::VMEvaluation, write_back::Propagation},
     value::{RuntimeValue, TerminateValue},
+};
+use calibre_bytecode::{
+    VMBlock,
+    instructions::memory::{VMDeref, VMRef, VMSetRef},
 };
 use calibre_lir::{FullyQualifiedPath, VariableKey, ast::BlockId};
 use tracing::instrument;

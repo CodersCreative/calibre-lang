@@ -1,12 +1,16 @@
 use super::ssa::SSABuilder;
-use super::*;
-use crate::conversion::instructions::{VMInstruction, literals::VMLoadLiteral, registers::VMCopy};
+use crate::{
+    EdgeCopy, Reg, VMBlock, VMFunction, VMLiteral,
+    instructions::{VMInstruction, literals::VMLoadLiteral, registers::VMCopy},
+    lowering::BlockLoweringCtx,
+};
 use calibre_lir::{
     MirDataType, VariableKey,
-    ast::{LirDeclare, LirLValue},
+    ast::{BlockId, LirBlock, LirDeclare, LirLValue, LirNodeType, LirTerminator},
+    environment::LirFunction,
 };
 use calibre_parser::Span;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use tracing::{debug, instrument};
 use ustr::UstrMap;
 
@@ -75,7 +79,6 @@ pub(crate) struct FunctionLowering {
     ret_reg: Reg,
     is_global: bool,
     referenced_variables: FxHashSet<VariableKey>,
-    big_consts: Consts,
 }
 
 impl FunctionLowering {
@@ -225,7 +228,6 @@ impl FunctionLowering {
             ret_reg,
             is_global,
             referenced_variables,
-            big_consts: Consts::new().unwrap(),
         }
     }
 
@@ -278,7 +280,6 @@ impl FunctionLowering {
                     type_map: FxHashMap::default(),
                     string_literals: UstrMap::default(),
                     current_fn_name: self.func.name.clone(),
-                    big_consts: &mut self.big_consts,
                 };
 
                 if block.id == self.entry {

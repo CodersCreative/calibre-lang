@@ -1,10 +1,10 @@
 use super::{super::VM, write_back::Propagation};
 use crate::{
     VarName,
-    conversion::{Reg, VMBlock, VMFunction},
     error::RuntimeError,
-    value::{RuntimeValue, TerminateValue},
+    value::{RuntimeValue, TerminateValue, hashable::HashKey},
 };
+use calibre_bytecode::{Reg, VMBlock, VMFunction};
 use calibre_lir::{VariableKey, ast::BlockId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
@@ -85,7 +85,7 @@ impl VM {
 
                 let refreshed = self.refresh_captures(captures.as_ref());
                 if func.memo
-                    && let Some(key) = func.memo_key(&args)
+                    && let Some(key) = HashKey::memo_key(&func, &args)
                 {
                     let cache = Arc::clone(
                         self.caches

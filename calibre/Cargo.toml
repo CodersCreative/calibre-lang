@@ -37,9 +37,9 @@ rustflags = [
 
 [features]
 default = ["cli"]
-native = ["calibre-frontend/native", "calibre-vm/native", "calibre-mir/native", "calibre-parser/native"]
+native = ["calibre-frontend/native", "calibre-vm/native", "calibre-mir/native", "calibre-lir/native", "calibre-bytecode/native", "calibre-parser/native"]
 cli = ["clap", "rustyline", "smol", "tracing-flame", "tracing-appender", "tracing-subscriber", "native"]
-wasm = ["wasm-bindgen", "js-sys", "getrandom/js", "calibre-parser/wasm", "calibre-mir/wasm", "calibre-vm/wasm", "calibre-frontend/wasm"]
+wasm = ["wasm-bindgen", "js-sys", "getrandom/js", "calibre-parser/wasm", "calibre-mir/wasm", "calibre-lir/native", "calibre-bytecode/native", "calibre-vm/wasm", "calibre-frontend/wasm"]
 python = ["pyo3", "native"]
 ffi = ["cbindgen", "native"]
 
@@ -49,6 +49,7 @@ calibre-parser = { workspace = true }
 calibre-frontend = { workspace = true }
 calibre-mir = { workspace = true }
 calibre-lir = { workspace = true }
+calibre-bytecode = { workspace = true }
 calibre-vm = { workspace = true }
 calibre-std = { workspace = true }
 serde = { workspace = true }

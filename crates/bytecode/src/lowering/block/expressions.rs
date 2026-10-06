@@ -7,7 +7,7 @@ As,
 Is
 */
 
-use crate::conversion::{
+use crate::{
     Reg,
     instructions::{
         VMInstruction,

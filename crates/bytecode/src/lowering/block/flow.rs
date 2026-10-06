@@ -4,7 +4,7 @@ Range,
 Closure
 */
 
-use crate::conversion::{
+use crate::{
     Reg, VMLiteral,
     instructions::{
         VMInstruction,

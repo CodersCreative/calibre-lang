@@ -5,7 +5,7 @@ Extern,
 Assign
 */
 
-use crate::conversion::{
+use crate::{
     Reg, VMLiteral,
     instructions::{
         VMInstruction,

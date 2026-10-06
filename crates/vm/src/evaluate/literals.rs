@@ -1,13 +1,13 @@
 use crate::{
     VM,
-    conversion::{
-        VMBlock, VMLiteral,
-        instructions::literals::{VMAggregate, VMEnum, VMList, VMLoadLiteral, VMRange},
-    },
     error::RuntimeError,
     evaluate::instruction::VMEvaluation,
     native::stdlib::generator::GeneratorState,
     value::{GcMap, GcVec, RuntimeValue, TerminateValue},
+};
+use calibre_bytecode::{
+    VMBlock, VMLiteral,
+    instructions::literals::{VMAggregate, VMEnum, VMList, VMLoadLiteral, VMRange},
 };
 use calibre_lir::{TypeImplKey, VariableKey, ast::BlockId};
 use calibre_parser::ast::ObjectMap;
@@ -101,7 +101,8 @@ impl VMEvaluation for VMLoadLiteral {
             #[cfg(all(feature = "wasm", not(feature = "native")))]
             VMLiteral::ExternFunction { .. } => {}
             other => {
-                vm.set_reg_value(self.dst, RuntimeValue::from(other));
+                let literal = RuntimeValue::from_vm_literal(other, &mut vm.big_consts);
+                vm.set_reg_value(self.dst, literal);
             }
         }
 

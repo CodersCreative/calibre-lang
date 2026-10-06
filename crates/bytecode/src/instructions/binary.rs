@@ -1,4 +1,4 @@
-use crate::conversion::Reg;
+use crate::Reg;
 use calibre_lir::MirDataType;
 use calibre_parser::ast::{
     binary::BinaryOperator,

@@ -1,10 +1,10 @@
 use crate::{
     VM,
-    conversion::{EdgeCopy, VMBlock, VMFunction, VMGlobal},
     error::RuntimeError,
     evaluate::instruction::VMEvaluation,
     value::{RuntimeValue, TerminateValue},
 };
+use calibre_bytecode::{EdgeCopy, VMBlock, VMFunction, VMGlobal};
 use calibre_lir::{MirDataType, VariableKey, ast::BlockId};
 use std::{path::PathBuf, sync::Arc};
 use tracing::{debug, instrument};

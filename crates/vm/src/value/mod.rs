@@ -2,14 +2,14 @@
 use crate::value::ffi::ExternFunction;
 use crate::{
     VM,
-    conversion::{Reg, VMLiteral},
     native::{NativeFunction, stdlib::generator::GeneratorState},
     value::{
         hashable::{RuntimeHashMap, RuntimeHashSet},
         spawn::{ChannelInner, MutexGuardInner, MutexInner, WaitGroupInner},
     },
 };
-use astro_float::{BigFloat, RoundingMode};
+use astro_float::{BigFloat, Consts, RoundingMode};
+use calibre_bytecode::{Reg, VMLiteral};
 use calibre_lir::{MirDataType, TypeImplKey, TypeKey, VariableKey, ast::BlockId};
 use calibre_parser::ast::ObjectMap;
 use dumpster::sync::Gc;
@@ -396,13 +396,17 @@ impl RuntimeValue {
             _ => None,
         }
     }
-}
 
-impl From<VMLiteral> for RuntimeValue {
-    fn from(value: VMLiteral) -> Self {
+    pub fn from_vm_literal(value: VMLiteral, cc: &mut Consts) -> Self {
         match value {
             VMLiteral::Bool(x) => Self::Bool(x),
-            VMLiteral::Big(x) => Self::Big(x),
+            VMLiteral::Big(x) => Self::Big(BigFloat::parse(
+                &x,
+                astro_float::Radix::Dec,
+                BIG_PRECISION,
+                BIG_ROUNDING,
+                cc,
+            )),
             VMLiteral::Int(x) => Self::Int(x),
             VMLiteral::UInt(x) => Self::UInt(x),
             VMLiteral::Byte(x) => Self::Byte(x),

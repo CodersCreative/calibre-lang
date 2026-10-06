@@ -1,4 +1,4 @@
-use crate::conversion::{
+use crate::{
     Reg,
     instructions::{
         access::{VMDiscriminant, VMIndex, VMLoadMember, VMSetIndex, VMSetMember},

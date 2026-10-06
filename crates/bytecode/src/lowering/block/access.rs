@@ -8,7 +8,7 @@ Ref,
 RefLoad
 */
 
-use crate::conversion::{
+use crate::{
     Reg,
     instructions::{
         VMInstruction,

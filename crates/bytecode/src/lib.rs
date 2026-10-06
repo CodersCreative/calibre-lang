@@ -1,12 +1,8 @@
-use crate::{
-    conversion::instructions::{
-        VMInstruction,
-        registers::VMCopy,
-        variables::{VMDropVar, VMLoadVar, VMLoadVarRef, VMMoveVar, VMStoreVar},
-    },
-    value::{BIG_PRECISION, BIG_ROUNDING, RuntimeValue, hashable::HashKey},
+use crate::instructions::{
+    VMInstruction,
+    registers::VMCopy,
+    variables::{VMDropVar, VMLoadVar, VMLoadVarRef, VMMoveVar, VMStoreVar},
 };
-use astro_float::{BigFloat, Consts};
 use calibre_lir::{
     Key, MirDataType, TypeKey, VariableKey,
     ast::{BlockId, LirLiteral},
@@ -19,6 +15,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, sync::Arc};
 use ustr::{Ustr, UstrMap};
+
+pub mod instructions;
+pub mod lowering;
+pub mod serialization;
 
 pub type Reg = u16;
 
@@ -199,14 +199,6 @@ impl VMFunction {
         self.renamed = declared;
         self
     }
-
-    pub fn memo_key(&self, args: &[RuntimeValue]) -> Option<Vec<HashKey>> {
-        args.iter()
-            .enumerate()
-            .filter(|(index, _)| self.memo_params == 0 || self.memo_params & (1 << index) != 0)
-            .map(|(_, arg)| HashKey::try_from(arg.clone()).ok())
-            .collect()
-    }
 }
 
 impl Display for VMFunction {
@@ -331,7 +323,7 @@ pub struct AggregateLayout {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VMLiteral {
     Bool(bool),
-    Big(BigFloat),
+    Big(Ustr),
     Int(i64),
     UInt(u64),
     Byte(u8),
@@ -392,8 +384,8 @@ impl Display for VMLiteral {
     }
 }
 
-impl VMLiteral {
-    pub fn from_lir_literal(value: LirLiteral, cc: &mut Consts) -> Self {
+impl From<LirLiteral> for VMLiteral {
+    fn from(value: LirLiteral) -> Self {
         match value {
             LirLiteral::Bool(x) => Self::Bool(x),
             LirLiteral::Int(x) => Self::Int(x),
@@ -402,13 +394,7 @@ impl VMLiteral {
             LirLiteral::Float(x) => Self::Float(x),
             LirLiteral::Char(x) => Self::Char(x),
             LirLiteral::String(x) => Self::String(x),
-            LirLiteral::Big(x) => Self::Big(BigFloat::parse(
-                &x,
-                astro_float::Radix::Dec,
-                BIG_PRECISION,
-                BIG_ROUNDING,
-                cc,
-            )),
+            LirLiteral::Big(x) => Self::Big(x),
             LirLiteral::Null => Self::Null,
         }
     }

@@ -1,9 +1,5 @@
 use crate::{
     MutationHandle, PathSegment, VM,
-    conversion::{
-        VMBlock,
-        instructions::access::{VMDiscriminant, VMIndex, VMLoadMember, VMSetIndex, VMSetMember},
-    },
     error::RuntimeError,
     evaluate::{
         instruction::{VMEvaluation, resolve_index, resolve_slice_range},
@@ -11,6 +7,10 @@ use crate::{
     },
     native::stdlib::generator::GeneratorResumeFn,
     value::{GcMap, GcVec, RuntimeValue, TerminateValue, hashable::HashKey},
+};
+use calibre_bytecode::{
+    VMBlock,
+    instructions::access::{VMDiscriminant, VMIndex, VMLoadMember, VMSetIndex, VMSetMember},
 };
 use calibre_lir::{FullyQualifiedPath, TypeImplKey, TypeKey, ast::BlockId};
 use dumpster::sync::Gc;

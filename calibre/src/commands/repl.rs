@@ -1,7 +1,8 @@
 use crate::commands::utils::{is_persistent_decl, is_repl_file};
+use calibre_bytecode::VMRegistry;
 use calibre_lir::{VariableKey, environment::LirEnvironment};
 use calibre_mir::{environment::MiddleEnvironment, errors::MiddleErr};
-use calibre_vm::{VM, config::VMConfig, conversion::VMRegistry, value::RuntimeValue};
+use calibre_vm::{VM, config::VMConfig, value::RuntimeValue};
 use derive_builder::Builder;
 use rustyline::DefaultEditor;
 use rustyline::error::ReadlineError;

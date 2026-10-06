@@ -7,6 +7,7 @@ use crate::{
     error::RuntimeError,
     value::{GcVec, Host, RuntimeValue, ValueSlot},
 };
+use calibre_bytecode::VMFunction;
 use calibre_lir::{FullyQualifiedPath, TypeKey, VariableKey};
 use calibre_parser::ast::{ObjectMap, types::ParserInnerType};
 use dumpster::sync::Gc;
@@ -31,6 +32,16 @@ pub enum HashKey {
     Result(Box<HashKey>, bool),
     Function(VariableKey, Option<Vec<HashKey>>),
     Host(Host),
+}
+
+impl HashKey {
+    pub fn memo_key(func: &Arc<VMFunction>, args: &[RuntimeValue]) -> Option<Vec<HashKey>> {
+        args.iter()
+            .enumerate()
+            .filter(|(index, _)| func.memo_params == 0 || func.memo_params & (1 << index) != 0)
+            .map(|(_, arg)| HashKey::try_from(arg.clone()).ok())
+            .collect()
+    }
 }
 
 impl Hash for HashKey {

@@ -1,4 +1,4 @@
-use super::super::ir::{PhiNode, Reg};
+use crate::{PhiNode, Reg};
 use calibre_lir::{
     MirDataType, VariableKey,
     ast::{BlockId, LirBlock, LirTerminator},

@@ -1,7 +1,8 @@
+use calibre_bytecode::VMRegistry;
 use calibre_frontend::config::ProjectContext;
 use calibre_lir::VariableKey;
 use calibre_mir::tags::context::PackageMetadata;
-use calibre_vm::{config::VMConfig, conversion::VMRegistry};
+use calibre_vm::config::VMConfig;
 use std::{error::Error, fs, path::PathBuf, process::Command, time::Duration};
 use tracing::instrument;
 use ustr::Ustr;

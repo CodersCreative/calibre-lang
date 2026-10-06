@@ -1,12 +1,12 @@
 use crate::{
     VM,
-    conversion::{
-        VMBlock,
-        instructions::termination::{VMBranch, VMJump, VMReturn},
-    },
     error::RuntimeError,
     evaluate::instruction::VMEvaluation,
     value::{RuntimeValue, TerminateValue},
+};
+use calibre_bytecode::{
+    VMBlock,
+    instructions::termination::{VMBranch, VMJump, VMReturn},
 };
 use calibre_lir::ast::BlockId;
 use tracing::instrument;

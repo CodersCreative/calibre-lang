@@ -1,8 +1,6 @@
 use super::super::VM;
-use crate::{
-    MutationHandle, PathSegment, RootBinding, conversion::Reg, error::RuntimeError,
-    value::RuntimeValue,
-};
+use crate::{MutationHandle, PathSegment, RootBinding, error::RuntimeError, value::RuntimeValue};
+use calibre_bytecode::Reg;
 use smallvec::SmallVec;
 use std::sync::Arc;
 use tracing::{instrument, trace};

@@ -402,6 +402,7 @@ version = "0.0.1"
 dependencies = [
  "bincode-next",
  "blake3",
+ "calibre-bytecode",
  "calibre-frontend",
  "calibre-lir",
  "calibre-mir",
@@ -431,6 +432,20 @@ dependencies = [
  "wasm-bindgen",
  "wasm_sync",
  "wasm_thread",
+]
+
+[[package]]
+name = "calibre-bytecode"
+version = "0.0.1"
+dependencies = [
+ "calibre-lir",
+ "calibre-parser",
+ "fastrand",
+ "indextree",
+ "rustc-hash",
+ "serde",
+ "tracing",
+ "ustr",
 ]
 
 [[package]]
@@ -551,6 +566,7 @@ version = "0.0.1"
 dependencies = [
  "astro-float",
  "blake3",
+ "calibre-bytecode",
  "calibre-lir",
  "calibre-parser",
  "dumpster",

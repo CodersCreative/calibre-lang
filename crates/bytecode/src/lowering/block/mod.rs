@@ -1,8 +1,11 @@
 use super::*;
-use crate::conversion::instructions::{
-    VMInstruction,
-    registers::VMCopy,
-    termination::{VMBranch, VMJump, VMReturn},
+use crate::{
+    VMLiteral,
+    instructions::{
+        VMInstruction,
+        registers::VMCopy,
+        termination::{VMBranch, VMJump, VMReturn},
+    },
 };
 use tracing::{instrument, trace};
 

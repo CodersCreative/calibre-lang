@@ -1,4 +1,4 @@
-use crate::conversion::{
+use crate::{
     Reg, VMBlock,
     instructions::{
         VMInstruction::{self},

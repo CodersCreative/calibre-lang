@@ -13,13 +13,14 @@ use calibre::{
     CalibreEngine, CalibreError, CompileMode, PackagedProgramBlob,
     building::standalone::CalibreStandalone,
 };
+use calibre_bytecode::VMRegistry;
 use calibre_frontend::{
     config::ProjectContext,
     paths::{collect_cal_sources, collect_project_sources, resolve_run_targets},
 };
 use calibre_lir::VariableKey;
 use calibre_mir::testing::{Test, TestOrBench};
-use calibre_vm::{config::VMConfig, conversion::VMRegistry};
+use calibre_vm::config::VMConfig;
 use derive_builder::Builder;
 use smol::fs;
 use std::error::Error;

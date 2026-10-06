@@ -1,0 +1,27 @@
+[package]
+name = "calibre-bytecode"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+authors.workspace = true
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+license.workspace = true
+
+[dependencies]
+tracing = { workspace = true }
+calibre-lir = { workspace = true }
+calibre-parser = { workspace = true }
+fastrand = { workspace = true }
+rustc-hash = { workspace = true }
+serde = { workspace = true }
+indextree = { workspace = true }
+ustr = { workspace = true }
+
+[features]
+default = ["native"]
+native = [ "calibre-parser/native", "calibre-lir/native"]
+wasm = ["calibre-parser/wasm", "calibre-lir/wasm"]

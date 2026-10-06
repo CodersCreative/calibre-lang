@@ -1,11 +1,12 @@
 use crate::{CalibreArtifacts, CalibreEngine, CalibreError, RunResult, Timed};
+use calibre_bytecode::VMRegistry;
 use calibre_lir::VariableKey;
 use calibre_lir::environment::LirEnvironment;
 use calibre_mir::symbols::resolve::ResolutionOptions;
 use calibre_mir::{environment::MiddleEnvironment, errors::MiddleErr, testing::Testing};
 use calibre_parser::Parser;
 use calibre_std::STD_DIR;
-use calibre_vm::{VM, conversion::VMRegistry};
+use calibre_vm::VM;
 use include_dir;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

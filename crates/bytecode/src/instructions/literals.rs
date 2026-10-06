@@ -1,4 +1,4 @@
-use crate::conversion::Reg;
+use crate::Reg;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 

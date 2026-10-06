@@ -1,6 +1,5 @@
 use crate::{
     config::VMConfig,
-    conversion::{Reg, VMBlock, VMFunction, VMRegistry},
     error::RuntimeError,
     native::NativeFunction,
     profiler::CallTreeProfiler,
@@ -8,6 +7,7 @@ use crate::{
     variables::VariableStore,
 };
 use astro_float::Consts;
+use calibre_bytecode::{Reg, VMBlock, VMFunction, VMRegistry};
 use calibre_lir::{VariableKey, ast::BlockId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
@@ -27,13 +27,11 @@ static EMPTY_FRAME: OnceLock<VMFrame> = OnceLock::new();
 static EMPTY_CAPTURES: OnceLock<Arc<Vec<(VariableKey, RuntimeValue)>>> = OnceLock::new();
 
 pub mod config;
-pub mod conversion;
 pub mod error;
 pub mod evaluate;
 pub mod native;
 pub mod profiler;
 pub mod scheduler;
-pub mod serialization;
 pub mod value;
 pub mod variables;
 mod vm_lookup;

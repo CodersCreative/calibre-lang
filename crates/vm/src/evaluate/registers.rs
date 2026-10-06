@@ -1,12 +1,12 @@
 use crate::{
     VM,
-    conversion::{
-        VMBlock,
-        instructions::registers::{VMCopy, VMLoadRegRef},
-    },
     error::RuntimeError,
     evaluate::instruction::VMEvaluation,
     value::{RuntimeValue, TerminateValue},
+};
+use calibre_bytecode::{
+    VMBlock,
+    instructions::registers::{VMCopy, VMLoadRegRef},
 };
 use calibre_lir::ast::BlockId;
 use tracing::instrument;
@@ -47,10 +47,8 @@ impl VMEvaluation for VMCopy {
         self.run_inner(vm);
         Ok(TerminateValue::None)
     }
-}
 
-impl VMCopy {
-    pub fn run_inner(&self, vm: &mut VM) {
+    fn run_inner(&self, vm: &mut VM) {
         if self.src == self.dst {
             return;
         }

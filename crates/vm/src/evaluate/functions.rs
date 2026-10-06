@@ -1,12 +1,12 @@
 use crate::{
     VM,
-    conversion::{
-        VMBlock, VMFunction,
-        instructions::functions::{VMCall, VMCallSelf, VMSpawn},
-    },
     error::RuntimeError,
     evaluate::{calling::RegisterCall, instruction::VMEvaluation},
     value::{RuntimeValue, TerminateValue, hashable::HashKey, spawn::WaitGroupInner},
+};
+use calibre_bytecode::{
+    VMBlock, VMFunction,
+    instructions::functions::{VMCall, VMCallSelf, VMSpawn},
 };
 use calibre_lir::{VariableKey, ast::BlockId};
 use rustc_hash::FxHashMap;

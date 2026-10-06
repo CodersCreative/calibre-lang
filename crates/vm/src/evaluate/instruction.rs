@@ -1,9 +1,5 @@
-use crate::{
-    VM,
-    conversion::{VMBlock, instructions::VMInstruction},
-    error::RuntimeError,
-    value::TerminateValue,
-};
+use crate::{VM, error::RuntimeError, value::TerminateValue};
+use calibre_bytecode::{VMBlock, instructions::VMInstruction};
 use calibre_lir::ast::BlockId;
 
 pub trait VMEvaluation {
@@ -14,6 +10,10 @@ pub trait VMEvaluation {
         ip: u32,
         prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError>;
+
+    fn run_inner(&self, _vm: &mut VM) {
+        unimplemented!()
+    }
 }
 
 impl VMEvaluation for VMInstruction {

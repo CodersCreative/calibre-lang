@@ -1,4 +1,5 @@
 use building::embedded::NativeBinding;
+use calibre_bytecode::VMRegistry;
 use calibre_frontend::config::ProjectContext;
 use calibre_lir::{VariableKey, environment::LirRegistry};
 use calibre_mir::{
@@ -6,9 +7,7 @@ use calibre_mir::{
     testing::Testing,
 };
 use calibre_parser::{ParserError, ast::nodes::AstNode};
-use calibre_vm::{
-    VM, config::VMConfig, conversion::VMRegistry, error::RuntimeError, value::RuntimeValue,
-};
+use calibre_vm::{VM, config::VMConfig, error::RuntimeError, value::RuntimeValue};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, path::PathBuf, time::Duration};
 use thiserror::Error;

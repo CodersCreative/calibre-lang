@@ -5,7 +5,7 @@ members = [
     "lsp",
     "crates/parser",
     "fmt", "crates/mir", "crates/std", "crates/lir", "crates/vm",
-    "crates/frontend",
+    "crates/frontend", "crates/bytecode",
 ]
 
 [workspace.package]
@@ -24,6 +24,7 @@ license = "MIT"
 # Internal packages
 calibre-mir = { path="./crates/mir", default-features = false }
 calibre-lir = { path="./crates/lir", default-features = false }
+calibre-bytecode = { path="./crates/bytecode", default-features = false }
 calibre-vm = { path="./crates/vm", default-features = false }
 calibre-frontend = { path="./crates/frontend", default-features = false }
 calibre-parser = { path="./crates/parser", default-features = false }

@@ -1,9 +1,7 @@
-use super::ir::*;
-use astro_float::Consts;
+use crate::{Reg, VMBlock};
 use calibre_lir::{
     TypeKey, VariableKey,
-    ast::{BlockId, LirBlock, LirNode, LirNodeType, LirTerminator},
-    environment::LirFunction,
+    ast::{LirNode, LirNodeType, LirTerminator},
 };
 use calibre_parser::Span;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -32,5 +30,4 @@ struct BlockLoweringCtx<'a> {
     char_literals: FxHashMap<char, u16>,
     string_literals: UstrMap<u16>,
     current_fn_name: VariableKey,
-    big_consts: &'a mut Consts,
 }
