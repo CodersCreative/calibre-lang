@@ -153,6 +153,10 @@ pub enum MiddleErr {
     CannotInferCallReturnType(String),
     #[error("Cannot infer generic type parameter: {0}")]
     CannotInferGenericTypeParameter(String),
+    #[error("Non-exhaustive patterns: missing patterns {missing_patterns:?}")]
+    NonExhaustiveMatch { missing_patterns: Vec<String> },
+    #[error("Unreachable match arm at index {arm_index}")]
+    UnreachableMatchArm { arm_index: usize },
     // Internal errors (codes 230-259)
     #[error("Internal error: missing function {0}")]
     InternalMissingFunction(String),
@@ -264,6 +268,8 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::CannotInferMemberAccessType(_) => "M067",
             Self::CannotInferCallReturnType(_) => "M068",
             Self::CannotInferGenericTypeParameter(_) => "M069",
+            Self::NonExhaustiveMatch { .. } => "M070",
+            Self::UnreachableMatchArm { .. } => "M071",
             // Internal errors (codes M0100-M149)
             Self::InternalMissingFunction(_) => "M100",
             Self::InternalMissingImpl(_) => "M101",
@@ -378,6 +384,14 @@ impl calibre_parser::CalibreError for MiddleErr {
             )),
             Self::CantMatch(ty) => Some(format!(
                 "cannot perform enum pattern matching on type `{ty}`"
+            )),
+            Self::NonExhaustiveMatch { missing_patterns } => Some(format!(
+                "add {} patterns or add a `_` pattern",
+                missing_patterns.join(", ")
+            )),
+            Self::UnreachableMatchArm { arm_index } => Some(format!(
+                "remove the unreachable pattern at index {} or reorder patterns",
+                arm_index
             )),
             Self::ParserErrors { .. } => None,
             Self::InFile { .. } => None,

@@ -137,7 +137,9 @@ impl MirLowering for AstMatch {
         span: Span,
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
+        let mut value_type = None;
         let (decl, value) = if let Some(value) = self.value {
+            value_type = value.type_of(env, scope, span);
             let tmp_name = env.context.get_temp("match_ident");
             (
                 Some(AstNode::new(
@@ -155,6 +157,18 @@ impl MirLowering for AstMatch {
         } else {
             (None, None)
         };
+
+        if let Some(ref _value_node) = value {
+            if let Some(matched_type) = value_type {
+                let patterns: Vec<MatchArmType> =
+                    self.body.values.iter().map(|(p, _, _)| p.clone()).collect();
+                let report =
+                    ExhaustivenessCheckerDispatcher::check(env, scope, &patterns, &matched_type)?;
+                ExhaustivenessCheckerDispatcher::add_errors(env, &report, span);
+            }
+        } else {
+            // TODO match without value exhaustiveness checking
+        }
 
         let mut ifs: Vec<AstNode> = Vec::new();
 

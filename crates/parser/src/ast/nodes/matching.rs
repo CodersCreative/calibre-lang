@@ -73,6 +73,16 @@ pub enum MatchStructFieldPattern {
     },
 }
 
+impl MatchStructFieldPattern {
+    pub fn field_name(&self) -> Option<&String> {
+        match self {
+            MatchStructFieldPattern::Value { field, .. } => Some(field),
+            MatchStructFieldPattern::AlternativeValues { field, .. } => Some(field),
+            MatchStructFieldPattern::Binding { field, .. } => Some(field),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum MatchStringPatternPart {
     Literal(ParserText),

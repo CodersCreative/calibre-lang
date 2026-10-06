@@ -443,6 +443,17 @@ impl MirDataType {
         !matches!(self.unwrap_all_refs(), MirDataType::Struct { .. })
     }
 
+    pub fn is_infinite(&self) -> bool {
+        matches!(
+            self.unwrap_all_refs(),
+            MirDataType::Int
+                | MirDataType::Str
+                | MirDataType::Float
+                | MirDataType::List(_)
+                | MirDataType::Dynamic
+        )
+    }
+
     pub fn default_node(&self, span: Span) -> Option<AstNode> {
         match self {
             MirDataType::Int => Some(AstNode::int(span, 0)),
