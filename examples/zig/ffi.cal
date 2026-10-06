@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Unable to load library
+// TODO Fix - FAILING - Unable to find extern variables
 extern "zig" const zig_add := fn(@i32, @i32) -> @i32 from "./libffi.so" as "zig_add";
 extern "zig" const zig_dot := fn(Point) -> @i64 from "./libffi.so" as "zig_dot";
 extern "zig" const zig_sum_bytes := fn(ptr:<@u8>, @usize) -> @i64 from "./libffi.so" as "zig_sum_bytes";
@@ -10,8 +10,7 @@ const main := fn => {
 	print(value);
 	
 	let pt := Point { x : 6, y : 7 };
-	let dot := zig_dot(pt);
-	print(dot);
+	let dot : fn(Point) -> int = zig_dot(pt);
 	
 	let nums := [
 		1,

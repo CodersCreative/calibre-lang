@@ -124,9 +124,17 @@ impl MiddleEnvironment {
                 .min(args.len());
             let mut lst = Vec::with_capacity(params.len());
 
-            for arg in args.drain(..normal_count) {
+            for (i, arg) in args.drain(..normal_count).enumerate() {
                 let node: AstNode = arg.into();
-                lst.push(node.lower_or_empty(self, scope, span));
+                lst.push(
+                    node.lower_or_empty(
+                        self,
+                        scope,
+                        span,
+                        self.resolve_data_type(scope, &params[i], ResolutionOptions::typing())
+                            .ok(),
+                    ),
+                );
             }
 
             let list_inner_type = params
@@ -156,7 +164,7 @@ impl MiddleEnvironment {
                                 span,
                                 AstNodeType::AsExpression(AstAs {
                                     value: Box::new(arg),
-                                    data_type: list_inner_type,
+                                    data_type: list_inner_type.clone(),
                                     failure_mode: AsFailureMode::Panic,
                                 }),
                             )],
@@ -185,10 +193,19 @@ impl MiddleEnvironment {
                 )
             };
 
-            lst.push(list_arg.lower_or_empty(self, scope, span));
+            lst.push(
+                list_arg.lower_or_empty(
+                    self,
+                    scope,
+                    span,
+                    self.resolve_data_type(scope, &list_inner_type, ResolutionOptions::typing())
+                        .ok(),
+                ),
+            );
 
             for arg in reverse_args {
-                lst.push(arg.lower_or_empty(self, scope, span));
+                // TODO Find a way to pass in the desired param type
+                lst.push(arg.lower_or_empty(self, scope, span, None));
             }
 
             return Some(lst.into_boxed_slice());
@@ -272,6 +289,7 @@ impl MiddleEnvironment {
                     }
                 };
 
+                // TODO Find a way to pass in the desired param type
                 if wrap_some {
                     Some(
                         AstNode::call(
@@ -279,10 +297,10 @@ impl MiddleEnvironment {
                             AstNode::identifier(span, "some"),
                             vec![CallArg::Value(node)],
                         )
-                        .lower_or_empty(self, scope, span),
+                        .lower_or_empty(self, scope, span, None),
                     )
                 } else {
-                    Some(node.lower_or_empty(self, scope, span))
+                    Some(node.lower_or_empty(self, scope, span, None))
                 }
             })
             .collect::<Option<Box<[_]>>>()
@@ -295,6 +313,7 @@ impl MiddleEnvironment {
         nodes
     }
 
+    // TODO Find a way to pass in the desired param type
     #[inline]
     fn aggregate_from_call_nodes(
         &mut self,
@@ -307,7 +326,7 @@ impl MiddleEnvironment {
         let value = Self::collect_call_nodes(args, reverse_args)
             .into_iter()
             .enumerate()
-            .map(|(i, arg)| (i.to_string(), arg.lower_or_empty(self, scope, span)))
+            .map(|(i, arg)| (i.to_string(), arg.lower_or_empty(self, scope, span, None)))
             .collect::<Vec<_>>()
             .into();
 
@@ -461,6 +480,7 @@ impl MirLowering for FunctionHeader {
         _env: &mut MiddleEnvironment,
         _scope: ScopeId,
         _span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         unreachable!()
     }
@@ -526,6 +546,7 @@ impl MirLowering for AstExtern {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let ident = env
             .resolve(
@@ -629,6 +650,7 @@ impl MirLowering for AstFunction {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let default_params = FunctionParamDefault::get(env, scope, &self.header);
         let mut params = Vec::with_capacity(self.header.parameters.len());
@@ -650,7 +672,7 @@ impl MirLowering for AstFunction {
 
         let needs_caller_context = env.tagging.tag_info.contains(&TagInfo::CallerContext);
 
-        for param in self.header.parameters {
+        for (i, param) in self.header.parameters.into_iter().enumerate() {
             param_idents.push(param.0.clone());
             let og_name = env
                 .resolve(
@@ -660,8 +682,14 @@ impl MirLowering for AstFunction {
                 )?
                 .unwrap_dollar();
 
-            let data_type = if let Some(x) = param.1 {
+            let data_type = if let Some(x) = param.1
+                && !x.is_auto()
+            {
                 env.resolve_data_type(new_scope, &x, ResolutionOptions::typing())?
+            } else if let Some(MirDataType::Function { parameters, .. }) = &data_type
+                && let Some(x) = parameters.get(i).cloned()
+            {
+                x
             } else if let Some(node) = &param.2 {
                 node.type_of(env, new_scope, span).ok_or_else(|| {
                     env.context
@@ -689,10 +717,10 @@ impl MirLowering for AstFunction {
 
             params.push((
                 param_key,
-                data_type,
+                data_type.clone(),
                 param
                     .2
-                    .map(|x| Box::new(x.lower_or_empty(env, new_scope, span))),
+                    .map(|x| Box::new(x.lower_or_empty(env, new_scope, span, Some(data_type)))),
             ));
         }
 
@@ -710,11 +738,17 @@ impl MirLowering for AstFunction {
             params.push((caller_key, caller_context_type, None));
         }
 
-        let return_type = env.resolve_data_type(
-            new_scope,
-            &self.header.return_type,
-            ResolutionOptions::typing(),
-        )?;
+        let return_type = if self.header.return_type.is_null()
+            && let Some(MirDataType::Function { return_type, .. }) = &data_type
+        {
+            *return_type.clone()
+        } else {
+            env.resolve_data_type(
+                new_scope,
+                &self.header.return_type,
+                ResolutionOptions::typing(),
+            )?
+        };
 
         env.scoping.return_type_stack.push(return_type.key());
 
@@ -761,7 +795,7 @@ impl MirLowering for AstFunction {
             body = MiddleEnvironment::wrap_generator_body(env, scope, body, elem_type, span);
         }
 
-        let body = body.lower(env, new_scope, span)?;
+        let body = body.lower(env, new_scope, span, None)?;
         let mut func_defers = Vec::new();
         func_defers.append(&mut env.symbols.function_defers);
 
@@ -776,7 +810,7 @@ impl MirLowering for AstFunction {
             let mut scope_body = scope_body.into_vec();
             let mut last = scope_body.pop();
             for defer in func_defers {
-                scope_body.push(defer.lower(env, scope_id, span)?);
+                scope_body.push(defer.lower(env, scope_id, span, None)?);
             }
 
             if return_type != MirDataType::Null
@@ -943,12 +977,15 @@ impl MirLowering for AstFunction {
 
 impl MirLowering for AstCall {
     // TODO Deal with generics
+    // TODO Come up with a caller type to help with type inference
     #[instrument(skip_all)]
+    #[allow(clippy::only_used_in_recursion)]
     fn lower(
         mut self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         match self.caller.node_type.clone() {
             AstNodeType::FieldAccess(AstField { base, field }) => {
@@ -971,14 +1008,14 @@ impl MirLowering for AstCall {
                         )),
                         ..self
                     }
-                    .lower(env, scope, span);
+                    .lower(env, scope, span, data_type);
                 }
 
                 if let Ok(resolved) = (AstField {
                     base: base.clone(),
                     field: field.clone(),
                 }
-                .lower(env, scope, span))
+                .lower(env, scope, span, None))
                     && let MiddleNodeType::Identifier(symbol) = resolved.node_type
                 {
                     return AstCall {
@@ -990,7 +1027,7 @@ impl MirLowering for AstCall {
                         )),
                         ..self
                     }
-                    .lower(env, scope, span);
+                    .lower(env, scope, span, data_type);
                 }
             }
             AstNodeType::Identifier(caller_ident) => {
@@ -1000,7 +1037,7 @@ impl MirLowering for AstCall {
                             MiddleNodeType::Discriminant(MirDiscriminant {
                                 value: Box::new(
                                     AstNode::from(self.args.pop().unwrap())
-                                        .lower(env, scope, span)?,
+                                        .lower(env, scope, span, None)?,
                                 ),
                             }),
                             span,
@@ -1018,7 +1055,7 @@ impl MirLowering for AstCall {
                     "curry" if self.args.len() == 1 && self.reverse_args.is_empty() => {
                         let rewritten =
                             env.rewrite_curry_call(scope, span, self.args.pop().unwrap().into())?;
-                        return rewritten.lower(env, scope, span);
+                        return rewritten.lower(env, scope, span, None);
                     }
                     _ => {}
                 }
@@ -1095,7 +1132,7 @@ impl MirLowering for AstCall {
             }
         };
 
-        let caller = self.caller.lower(env, scope, span)?;
+        let caller = self.caller.lower(env, scope, span, None)?;
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::CallExpression(MirCall {

@@ -342,6 +342,10 @@ impl AstNode {
         )
     }
 
+    pub fn is_emit(&self) -> bool {
+        matches!(&self.node_type, AstNodeType::Emit(_))
+    }
+
     #[inline]
     pub fn unwrap_or(span: Span, value: AstNode, default: AstNode) -> AstNode {
         AstNode {

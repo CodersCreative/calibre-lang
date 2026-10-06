@@ -181,7 +181,7 @@ impl MiddleEnvironment {
 
                 debug!("evaluating build scope");
                 let span = program.span;
-                let node = program.lower_or_empty(self, scope, span);
+                let node = program.lower_or_empty(self, scope, span, None);
                 self.scoping.scope_mut_or_err(scope)?.built = true;
                 Some(node)
             }
@@ -230,7 +230,7 @@ impl MiddleEnvironment {
 
         debug!("evaluating imported scope");
         let span = program.span;
-        let node = program.lower_or_empty(self, scope, span);
+        let node = program.lower_or_empty(self, scope, span, None);
         self.scoping.scope_mut_or_err(scope)?.built = true;
 
         let node = match (node.node_type.clone(), build_node) {

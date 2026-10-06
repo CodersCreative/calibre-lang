@@ -25,6 +25,7 @@ use ustr::Ustr;
 
 impl MiddleEnvironment {
     #[inline]
+    // TODO Find a way to pass in param types
     pub(crate) fn lower_call_args(
         &mut self,
         scope: ScopeId,
@@ -36,7 +37,7 @@ impl MiddleEnvironment {
             .chain(reverse_args)
             .map(|arg| {
                 let span = arg.span;
-                arg.lower_or_empty(self, scope, span)
+                arg.lower_or_empty(self, scope, span, None)
             })
             .collect()
     }
@@ -49,6 +50,7 @@ impl MirLowering for AstField {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let field_name = env
             .resolve(
@@ -79,7 +81,7 @@ impl MirLowering for AstField {
                         data: None,
                     }),
                 )
-                .lower(env, scope, span);
+                .lower(env, scope, span, data_type);
             }
         }
 
@@ -94,12 +96,20 @@ impl MirLowering for AstField {
 
         Ok(MiddleNode::new(
             MiddleNodeType::FieldAccess(MirField {
-                base: Box::new(self.base.clone().lower(env, scope, span).map_err(|_| {
-                    env.context.err_at_span(
-                        span,
-                        MiddleErr::FieldAccess(self.base.to_string(), field_name.to_string()),
-                    )
-                })?),
+                base: Box::new(
+                    self.base
+                        .clone()
+                        .lower(env, scope, span, None)
+                        .map_err(|_| {
+                            env.context.err_at_span(
+                                span,
+                                MiddleErr::FieldAccess(
+                                    self.base.to_string(),
+                                    field_name.to_string(),
+                                ),
+                            )
+                        })?,
+                ),
                 field: field_name,
             }),
             span,
@@ -153,6 +163,7 @@ impl MirLowering for AstScope {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut module_path = Vec::new();
         if self.base.scope_access_path(&mut module_path)
@@ -168,7 +179,7 @@ impl MirLowering for AstScope {
                 )?
                 .unwrap_dollar();
 
-            return AstNode::identifier(span, resolved).lower(env, new_scope, span);
+            return AstNode::identifier(span, resolved).lower(env, new_scope, span, data_type);
         }
 
         Err(MiddleErr::Scope(format!(
@@ -212,21 +223,24 @@ impl MirLowering for AstIndex {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if let Some(overloaded) = env.handle_operator_overloads(
             scope,
             span,
             *self.base.clone(),
             *self.index.clone(),
+            data_type.as_ref(),
             Operator::Index,
         )? {
             return Ok(overloaded);
         }
 
+        // TODO Find a way to get a type to pass into index
         Ok(MiddleNode::new(
             MiddleNodeType::IndexAccess(MirIndex {
-                base: Box::new(self.base.lower_or_empty(env, scope, span)),
-                index: Box::new(self.index.lower_or_empty(env, scope, span)),
+                base: Box::new(self.base.lower_or_empty(env, scope, span, None)),
+                index: Box::new(self.index.lower_or_empty(env, scope, span, None)),
             }),
             span,
         ))
@@ -288,12 +302,13 @@ impl MirLowering for AstIdentifier {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         Ok(MiddleNode::identifier(
             span,
             match env.resolve_potential_node(scope, &self.value, ResolutionOptions::idents())? {
                 KeyOrAstNode::Key(x) => x.unwrap_variable(),
-                KeyOrAstNode::Node(x) => return x.lower(env, scope, span),
+                KeyOrAstNode::Node(x) => return x.lower(env, scope, span, data_type),
             },
         ))
     }

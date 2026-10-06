@@ -1,0 +1,4 @@
+const main := fn => {
+    let lst : list:<int> = [];
+    print([lst as! str]); 
+}

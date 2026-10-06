@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirVarDecl},
+    ast::{MiddleNode, MiddleNodeType, MirVarDecl, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -235,6 +235,7 @@ impl MirLowering for AstDeclaration {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let identifier = env
             .resolve(
@@ -330,7 +331,9 @@ impl MirLowering for AstDeclaration {
             None
         };
 
-        let value = self.value.lower_or_empty(env, scope, span);
+        let value = self
+            .value
+            .lower_or_empty(env, scope, span, Some(data_type.clone()));
 
         let var_key = if let Some(var_key) = var_key {
             var_key
@@ -362,6 +365,7 @@ impl MirLowering for AstDeclareDestructure {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("destructure"));
 
@@ -387,6 +391,6 @@ impl MirLowering for AstDeclareDestructure {
             create_new_scope: Some(false),
             define: false,
         }
-        .lower(env, scope, span)
+        .lower(env, scope, span, None)
     }
 }

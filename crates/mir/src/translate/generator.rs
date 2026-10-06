@@ -31,6 +31,7 @@ impl MirLowering for AstGenerator {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let map_type = self.map.type_of(env, scope, span).map(|x| {
             ParserDataType::new(
@@ -88,22 +89,25 @@ impl MirLowering for AstGenerator {
             }),
         );
 
+        let data_type = self
+            .data_type
+            .or_else(|| data_type.map(|x| x.into()))
+            .or(map_type)
+            .unwrap_or(ParserDataType::new(
+                span,
+                ParserInnerType::StructWithGenerics {
+                    identifier: String::from("gen"),
+                    generic_types: vec![ParserDataType::new(span, ParserInnerType::Dynamic)],
+                },
+            ));
+
         AstNode::call(
             span,
             AstNode::new(
                 span,
                 AstNodeType::FunctionDeclaration(AstFunction {
                     header: FunctionHeader {
-                        return_type: self.data_type.or(map_type).unwrap_or(ParserDataType::new(
-                            span,
-                            ParserInnerType::StructWithGenerics {
-                                identifier: String::from("gen"),
-                                generic_types: vec![ParserDataType::new(
-                                    span,
-                                    ParserInnerType::Dynamic,
-                                )],
-                            },
-                        )),
+                        return_type: data_type.clone(),
                         ..Default::default()
                     },
                     body: Box::new(AstNode::new_temp_scope(vec![loop_node])),
@@ -111,7 +115,13 @@ impl MirLowering for AstGenerator {
             ),
             Vec::new(),
         )
-        .lower(env, scope, span)
+        .lower(
+            env,
+            scope,
+            span,
+            env.resolve_data_type(scope, &data_type, ResolutionOptions::typing())
+                .ok(),
+        )
     }
 
     fn type_of(

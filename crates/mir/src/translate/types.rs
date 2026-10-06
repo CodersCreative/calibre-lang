@@ -40,6 +40,7 @@ impl MirLowering for AstType {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut has_default = false;
         let mut has_builder = false;
@@ -429,6 +430,7 @@ impl MirLowering for AstImpl {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let generic_state = GenericParamState::setup(env, scope, &self.generics)?;
         let generic_params = &generic_state.params;
@@ -547,7 +549,7 @@ impl MirLowering for AstImpl {
                     Err(e) => return Some(Err(e)),
                 };
 
-                let dec = processed.node.lower_or_empty(env, scope, span);
+                let dec = processed.node.lower_or_empty(env, scope, span, None);
 
                 let new_name = match &dec.node_type {
                     MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => {

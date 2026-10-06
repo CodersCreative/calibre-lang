@@ -3,7 +3,7 @@ use crate::{
     ast::{MiddleNode, types::MirDataType},
     environment::MiddleEnvironment,
     scoping::{FullyQualifiedPath, ScopeId},
-    symbols::resolve::Key,
+    symbols::resolve::{Key, ResolutionOptions},
     translate::MirLowering,
 };
 use calibre_parser::{
@@ -60,7 +60,15 @@ impl FunctionParamDefault {
                     .clone()
                     .map(|node| {
                         let span = node.span;
-                        Box::new(node.lower_or_empty(env, scope, span))
+                        Box::new(node.lower_or_empty(
+                            env,
+                            scope,
+                            span,
+                            declared_ty.as_ref().and_then(|x| {
+                                env.resolve_data_type(scope, x, ResolutionOptions::typing())
+                                    .ok()
+                            }),
+                        ))
                     })
                     .map(|x| *x),
                 implicit_none: default.is_none()
@@ -179,4 +187,13 @@ pub struct MiddleOverload {
     pub return_type: MirDataType,
     pub func: AstNode,
     pub generic_params: Vec<Ustr>,
+}
+
+impl From<&MiddleOverload> for MirDataType {
+    fn from(value: &MiddleOverload) -> Self {
+        Self::Function {
+            return_type: Box::new(value.return_type.clone()),
+            parameters: value.parameters.clone(),
+        }
+    }
 }

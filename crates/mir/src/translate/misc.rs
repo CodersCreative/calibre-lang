@@ -29,8 +29,9 @@ impl MirLowering for AstParen {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        self.value.lower(env, scope, span)
+        self.value.lower(env, scope, span, data_type)
     }
 
     fn type_of(
@@ -50,6 +51,7 @@ impl MirLowering for AstTag {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if let Some(handler) = env
             .tagging
@@ -58,10 +60,10 @@ impl MirLowering for AstTag {
             .cloned()
         {
             let handler_fn = handler.handler.lock().unwrap();
-            handler_fn(env, scope, *self.node, self.tag, self.arguments)
+            handler_fn(env, scope, *self.node, data_type, self.arguments)
         } else {
             env.context.push_error(MiddleErr::InvalidTag(self.tag.text));
-            self.node.lower(env, scope, span)
+            self.node.lower(env, scope, span, data_type)
         }
     }
 
@@ -82,6 +84,7 @@ impl MirLowering for AstTest {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let func_identifier = env.get_new_variable_key(
             scope,
@@ -121,7 +124,7 @@ impl MirLowering for AstTest {
                 declared: true,
             }),
         )
-        .lower(env, scope, span)
+        .lower(env, scope, span, None)
     }
 }
 
@@ -132,6 +135,7 @@ impl MirLowering for AstImport {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let values: Vec<Ustr> = self
             .values

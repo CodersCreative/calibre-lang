@@ -101,7 +101,7 @@ impl MiddleEnvironment {
 
             let error_count_before = self.context.errors.len();
             let span = program.span;
-            let middle = program.lower_or_empty(self, scope, span);
+            let middle = program.lower_or_empty(self, scope, span, None);
 
             if self.context.errors.len() > error_count_before {
                 let new_errors: Vec<_> = self.context.errors.drain(error_count_before..).collect();
@@ -211,7 +211,7 @@ impl MiddleEnvironment {
 
                 let error_count_before = self.context.errors.len();
                 let span = program.span;
-                let middle = program.lower_or_empty(self, scope, span);
+                let middle = program.lower_or_empty(self, scope, span, None);
 
                 self.context.stdlib_nodes.push(middle);
 
@@ -341,7 +341,7 @@ impl MiddleEnvironment {
 
                 let error_count_before = self.context.errors.len();
                 let span = program.span;
-                let middle = program.lower_or_empty(self, scope, span);
+                let middle = program.lower_or_empty(self, scope, span, None);
 
                 self.context.stdlib_nodes.push(middle);
                 if let Ok(x) = self.scoping.scope_mut_or_err(scope) {

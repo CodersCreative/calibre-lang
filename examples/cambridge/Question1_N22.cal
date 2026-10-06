@@ -1,3 +1,4 @@
+// TODO Fix - FAILING - Type Inference
 // From 9618 w22 qp 22
 
 import input from std::console;
@@ -62,5 +63,5 @@ const bubble_sort := fn(data_array : &mut list:<int?>) => {
 
   } until !swapped;
 
-  print([data_array]);
+  print([data_array as! str]);
 }

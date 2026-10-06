@@ -39,6 +39,7 @@ impl MirLowering for AstEmit {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         match self {
             AstEmit::Channel {
@@ -68,11 +69,11 @@ impl MirLowering for AstEmit {
                     AstNode::member(span, *channel, "send"),
                     vec![CallArg::Value(*value)],
                 )
-                .lower(env, scope, span)
+                .lower(env, scope, span, Some(MirDataType::Bool))
             }
             AstEmit::Scope(value) => Ok(MiddleNode::new(
                 MiddleNodeType::Emit(MirEmit {
-                    value: Box::new(value.lower(env, scope, span)?),
+                    value: Box::new(value.lower(env, scope, span, data_type)?),
                 }),
                 span,
             )),
@@ -100,6 +101,7 @@ impl MirLowering for AstBreak {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         Ok(MiddleNode {
             node_type: {
@@ -111,7 +113,7 @@ impl MirLowering for AstBreak {
                         .map(|x| x.unwrap_dollar())
                 });
 
-                let (result_target, broke_target, target_scope) = {
+                let (result_target, broke_target, target_scope, data_type) = {
                     let target_ctx = if self.label.is_some() {
                         env.scoping.loop_stack.iter().rev().find(|ctx| {
                             label_text
@@ -125,11 +127,14 @@ impl MirLowering for AstBreak {
                         target_ctx.and_then(|ctx| ctx.result_target),
                         target_ctx.and_then(|ctx| ctx.broke_target),
                         target_ctx.map(|ctx| ctx.scope_id),
+                        target_ctx.and_then(|ctx| ctx.data_type.clone()),
                     )
                 };
 
                 let has_break_value = self.value.is_some();
-                let value_node = self.value.map(|v| v.lower_or_empty(env, scope, span));
+                let value_node = self
+                    .value
+                    .map(|v| v.lower_or_empty(env, scope, span, data_type));
 
                 if has_break_value && let Some(result_target) = result_target {
                     lst.push(
@@ -140,7 +145,7 @@ impl MirLowering for AstBreak {
                                 value: Box::new(AstNode::null(span)),
                             }),
                         )
-                        .lower_or_empty(env, scope, span),
+                        .lower_or_empty(env, scope, span, None),
                     );
                 } else if let Some(val) = value_node {
                     lst.push(val);
@@ -155,7 +160,12 @@ impl MirLowering for AstBreak {
                                 value: Box::new(AstNode::int(span, "1")),
                             }),
                         )
-                        .lower_or_empty(env, scope, span),
+                        .lower_or_empty(
+                            env,
+                            scope,
+                            span,
+                            Some(MirDataType::Int),
+                        ),
                     );
                 }
 
@@ -163,11 +173,11 @@ impl MirLowering for AstBreak {
                     let chain_defers = env.scoping.collect_defers_until(scope, Some(target_scope));
 
                     for x in chain_defers {
-                        lst.push(x.lower_or_empty(env, scope, span));
+                        lst.push(x.lower_or_empty(env, scope, span, None));
                     }
                 } else if let Ok(s) = env.scoping.scope_or_err(scope) {
                     for x in s.defers.clone() {
-                        lst.push(x.lower_or_empty(env, scope, span));
+                        lst.push(x.lower_or_empty(env, scope, span, None));
                     }
                 }
 
@@ -205,6 +215,7 @@ impl MirLowering for AstDefer {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if self.function {
             env.symbols.function_defers.push(*self.value);
@@ -227,6 +238,7 @@ impl MirLowering for AstTry {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let resolved_type = self.value.type_of(env, scope, span);
 
@@ -342,10 +354,10 @@ impl MirLowering for AstTry {
                 }),
                 span,
             }
-            .lower(env, scope, span),
+            .lower(env, scope, span, data_type),
             TryType::Option => {
                 if is_option {
-                    self.value.lower(env, scope, span)
+                    self.value.lower(env, scope, span, data_type)
                 } else {
                     let ok_name = env.context.get_temp("anon_ok_value");
 
@@ -375,7 +387,7 @@ impl MirLowering for AstTry {
                         }),
                         span,
                     }
-                    .lower(env, scope, span)
+                    .lower(env, scope, span, data_type)
                 }
             }
             TryType::Result => {
@@ -415,7 +427,7 @@ impl MirLowering for AstTry {
                         }),
                         span,
                     }
-                    .lower(env, scope, span)
+                    .lower(env, scope, span, data_type)
                 } else {
                     let ok_arm_ok = enum_arm(
                         "Ok",
@@ -452,7 +464,7 @@ impl MirLowering for AstTry {
                         }),
                         span,
                     }
-                    .lower(env, scope, span)
+                    .lower(env, scope, span, data_type)
                 }
             }
             TryType::Panic => {
@@ -525,7 +537,7 @@ impl MirLowering for AstTry {
                     }),
                     span,
                 }
-                .lower(env, scope, span)
+                .lower(env, scope, span, data_type)
             }
         }
     }
@@ -574,6 +586,7 @@ impl MirLowering for AstContinue {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         Ok(MiddleNode {
             node_type: {
@@ -604,18 +617,18 @@ impl MirLowering for AstContinue {
                     let chain_defers = env.scoping.collect_defers_until(scope, Some(ctx.scope_id));
 
                     for x in chain_defers {
-                        lst.push(x.lower_or_empty(env, scope, span));
+                        lst.push(x.lower_or_empty(env, scope, span, None));
                     }
                 } else if let Ok(s) = env.scoping.scope_or_err(scope) {
                     for x in s.defers.clone() {
-                        lst.push(x.lower_or_empty(env, scope, span));
+                        lst.push(x.lower_or_empty(env, scope, span, None));
                     }
                 }
 
                 if let Some(ctx) = continue_ctx.clone()
                     && let Some(inject) = ctx.continue_inject.clone()
                 {
-                    lst.push(inject.lower_or_empty(env, scope, span));
+                    lst.push(inject.lower_or_empty(env, scope, span, None));
                 }
 
                 let cont_node = MiddleNode::new(
@@ -649,10 +662,12 @@ impl MirLowering for AstReturn {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         Ok(MiddleNode {
             node_type: MiddleNodeType::Return(MirReturn {
                 value: {
+                    let mut data_type = None;
                     if !env.tagging.tag_info.contains(&TagInfo::IgnoreInvalidReturn) {
                         if let Some(ret_ty) = env.scoping.return_type_stack.last().cloned() {
                             let node_ty = if let Some(value) = &self.value {
@@ -679,19 +694,23 @@ impl MirLowering for AstReturn {
                                     },
                                 ));
                             }
+
+                            data_type = Some(ret_ty);
                         } else {
                             return Err(env.context.err_at_current(MiddleErr::ReturnOutOfFunction));
                         }
                     }
 
-                    let value = self.value.map(|x| x.lower_or_empty(env, scope, span));
+                    let value = self
+                        .value
+                        .map(|x| x.lower_or_empty(env, scope, span, data_type));
 
                     let mut lst: Vec<MiddleNode> = env
                         .scoping
                         .collect_defers_until(scope, None)
                         .into_iter()
                         .chain(env.symbols.function_defers.clone().into_iter())
-                        .map(|x| x.lower_or_empty(env, scope, span))
+                        .map(|x| x.lower_or_empty(env, scope, span, None))
                         .collect();
 
                     if lst.is_empty() {
@@ -727,6 +746,7 @@ impl MirLowering for AstPipe {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if self.values.is_empty() {
             return Ok(MiddleNode::new(MiddleNodeType::EmptyLine, span));
@@ -882,7 +902,7 @@ impl MirLowering for AstPipe {
             restore_mapping(env, k, v)?;
         }
 
-        value.lower(env, scope, span)
+        value.lower(env, scope, span, data_type)
     }
 
     fn type_of(

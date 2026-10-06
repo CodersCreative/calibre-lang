@@ -135,6 +135,7 @@ impl MirLowering for AstMatch {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let (decl, value) = if let Some(value) = self.value {
             let tmp_name = env.context.get_temp("match_ident");
@@ -229,7 +230,7 @@ impl MirLowering for AstMatch {
         } else {
             ifs
         }
-        .lower(env, scope, span)
+        .lower(env, scope, span, data_type)
     }
 
     fn type_of(
@@ -252,6 +253,7 @@ impl MirLowering for AstFnMatch {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         AstNode::new(
             span,
@@ -281,7 +283,7 @@ impl MirLowering for AstFnMatch {
                 },
             }),
         )
-        .lower(env, scope, span)
+        .lower(env, scope, span, data_type)
     }
 
     fn type_of(

@@ -39,6 +39,7 @@ impl MirLowering for AstSelect {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let done_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("select_done"));
 
@@ -350,7 +351,7 @@ impl MirLowering for AstSelect {
             create_new_scope: Some(false),
             define: false,
         }
-        .lower(env, scope, span)
+        .lower(env, scope, span, None)
     }
 }
 
@@ -361,6 +362,7 @@ impl MirLowering for AstSpawn {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if self.auto_wait {
             let ident = PotentialDollarIdentifier::new(span, env.context.get_temp("spawn_wg"));
@@ -391,7 +393,7 @@ impl MirLowering for AstSpawn {
                 ],
                 Some(false),
             )
-            .lower(env, scope, span)
+            .lower(env, scope, span, None)
         } else if self.items.len() == 1 {
             let value: AstNode = self.items.remove(0);
 
@@ -485,7 +487,7 @@ impl MirLowering for AstSpawn {
                             )))),
                         ),
                     ])
-                    .lower(env, scope, span);
+                    .lower(env, scope, span, None);
                 }
                 AstNodeType::FunctionDeclaration { .. } => value,
                 _ => unimplemented!(),
@@ -493,7 +495,7 @@ impl MirLowering for AstSpawn {
 
             Ok(MiddleNode::new(
                 MiddleNodeType::Spawn(MirSpawn {
-                    value: Box::new(inner.lower(env, scope, span)?),
+                    value: Box::new(inner.lower(env, scope, span, None)?),
                 }),
                 span,
             ))
@@ -556,7 +558,7 @@ impl MirLowering for AstSpawn {
                 create_new_scope: Some(false),
                 define: false,
             }
-            .lower(env, scope, span)
+            .lower(env, scope, span, None)
         }
     }
 

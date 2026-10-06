@@ -353,6 +353,7 @@ pub struct LoopContext {
     pub result_target: Option<Ustr>,
     pub broke_target: Option<Ustr>,
     pub continue_inject: Option<AstNode>,
+    pub data_type: Option<MirDataType>,
     pub scope_id: ScopeId,
 }
 

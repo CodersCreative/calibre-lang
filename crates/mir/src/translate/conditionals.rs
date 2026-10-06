@@ -24,6 +24,7 @@ impl MirLowering for AstIf {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if !env.context.type_check {
             let then_type = self.then.type_of(env, scope, span);
@@ -44,11 +45,19 @@ impl MirLowering for AstIf {
         match *self.comparison {
             IfComparisonType::If(x) => Ok(MiddleNode {
                 node_type: MiddleNodeType::Conditional(MirConditional {
-                    comparison: Box::new(x.lower_or_empty(env, scope, span)),
-                    then: Box::new(self.then.lower_or_empty(env, scope, span)),
+                    comparison: Box::new(x.lower_or_empty(
+                        env,
+                        scope,
+                        span,
+                        Some(MirDataType::Bool),
+                    )),
+                    then: Box::new(
+                        self.then
+                            .lower_or_empty(env, scope, span, data_type.clone()),
+                    ),
                     otherwise: self
                         .otherwise
-                        .map(|x| Box::new(x.lower_or_empty(env, scope, span))),
+                        .map(|x| Box::new(x.lower_or_empty(env, scope, span, data_type))),
                 }),
                 span,
             }),
@@ -77,7 +86,7 @@ impl MirLowering for AstIf {
                 }),
                 span,
             }
-            .lower(env, scope, span),
+            .lower(env, scope, span, data_type),
         }
     }
 
@@ -117,6 +126,7 @@ impl MirLowering for AstTernary {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         match self.ternary_type {
             TernaryType::Normal => {
@@ -146,7 +156,7 @@ impl MirLowering for AstTernary {
                     }),
                     span,
                 }
-                .lower(env, scope, span)
+                .lower(env, scope, span, data_type)
             }
             TernaryType::Option => AstNode {
                 node_type: AstNodeType::IfStatement(AstIf {
@@ -162,7 +172,7 @@ impl MirLowering for AstTernary {
                 }),
                 span,
             }
-            .lower(env, scope, span),
+            .lower(env, scope, span, data_type),
             TernaryType::Result => {
                 let otherwise = self
                     .otherwise
@@ -184,7 +194,7 @@ impl MirLowering for AstTernary {
                     }),
                     span,
                 }
-                .lower(env, scope, span)
+                .lower(env, scope, span, data_type)
             }
         }
     }

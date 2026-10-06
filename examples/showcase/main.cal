@@ -48,16 +48,6 @@ type Pair := struct { left right : int };
 const sum_pair_tuple := fn ((a, b) : <int, int>) => a + b;
 const sum_pair_struct := fn ({left: a, right: b} : Pair) => a + b;
 
-// An example of traits in the language;
-trait Describe {
-	const describe : fn (&Self) -> str;
-};
-
-// An example of a trait being implemented on an type
-impl Describe for Pair {
-	const describe := fn (self : &Pair) -> str => "Pair(" & self.left & ", " & self.right & ")";
-};
-
 // Test showcase: run with "calibre test".
 test "showcase_core_math" => {
 	assert(factorial(6) = 720, "factorial(6) should equal 720");
@@ -183,12 +173,12 @@ const main := fn => {
 	
 	// Examples of mutable references and capturing
 	fn => {
-		let maybe_mut := maybe.&mut;
+		let mut maybe_mut := maybe.&mut;
 		maybe_mut.* += 1;
 	}();
 	
 	=> {
-		let maybe_mut := maybe.&mut;
+		let mut maybe_mut := maybe.&mut;
 		maybe_mut.* += 1;
 	};
 	
@@ -217,7 +207,6 @@ const main := fn => {
 	let p := Pair { left : 7, right : 8 };
 	print("sum pair tuple => " & sum_pair_tuple((10, 20)));
 	print("sum pair struct => " & sum_pair_struct(p));
-	print("trait describe => " & p.describe());
 	
 	// Recursive-ish match destructuring on tuples/structs/options.
 	match (10, 90, 20) {

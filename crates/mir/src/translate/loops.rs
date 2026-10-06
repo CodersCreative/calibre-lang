@@ -182,6 +182,7 @@ impl MirLowering for AstLoop {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if let LoopType::While(x) = &*self.loop_type
             && let Some(condition_type) = x.type_of(env, scope, span)
@@ -194,7 +195,7 @@ impl MirLowering for AstLoop {
                 )),
                 ..self
             }
-            .lower(env, scope, span);
+            .lower(env, scope, span, data_type);
         }
 
         if self.label.is_none() {
@@ -247,7 +248,7 @@ impl MirLowering for AstLoop {
 
                 self.body = Box::new(wrap_loop_body(*self.body, break_if_not, true));
                 self.loop_type = Box::new(LoopType::Loop);
-                self.lower(env, scope, span)
+                self.lower(env, scope, span, data_type)
             }
 
             LoopType::Let { value, pattern } => {
@@ -268,7 +269,7 @@ impl MirLowering for AstLoop {
 
                 self.body = Box::new(break_else);
                 self.loop_type = Box::new(LoopType::Loop);
-                self.lower(env, scope, span)
+                self.lower(env, scope, span, data_type)
             }
 
             LoopType::For(name, range) => {
@@ -467,9 +468,11 @@ impl MirLowering for AstLoop {
                     } else {
                         None
                     },
+                    data_type,
                     scope_id: scope,
                 });
-                let out = temp_scope.lower(env, scope, span);
+
+                let out = temp_scope.lower(env, scope, span, None);
                 env.scoping.loop_stack.pop();
 
                 out
@@ -492,7 +495,10 @@ impl MirLowering for AstLoop {
                         result_ident.clone().into(),
                         VarType::Mutable,
                         *else_body,
-                        ParserDataType::auto(span),
+                        data_type
+                            .clone()
+                            .map(|x| x.into())
+                            .unwrap_or(ParserDataType::auto(span)),
                     );
 
                     let broke_decl = AstNode::var_decl(
@@ -514,9 +520,10 @@ impl MirLowering for AstLoop {
                         result_target: temp_names.result,
                         broke_target: temp_names.broke,
                         continue_inject: injected_continue,
+                        data_type,
                         scope_id: scope,
                     });
-                    let out = temp_scope.lower(env, scope, span);
+                    let out = temp_scope.lower(env, scope, span, None);
                     env.scoping.loop_stack.pop();
 
                     return out;
@@ -546,10 +553,11 @@ impl MirLowering for AstLoop {
                     broke_target,
                     continue_inject: cont_inj,
                     scope_id: inner_scope,
+                    data_type,
                 });
 
                 let body_span = self.body.span;
-                let body = self.body.lower(env, inner_scope, body_span)?;
+                let body = self.body.lower(env, inner_scope, body_span, None)?;
 
                 env.scoping.loop_stack.pop();
 

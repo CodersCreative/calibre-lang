@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirAssignment},
+    ast::{MiddleNode, MiddleNodeType, MirAssignment, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -60,24 +60,30 @@ impl MirLowering for AstAssignment {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        mut data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if !env.context.type_check {
-            let identifier_type = self.identifier.type_of(env, scope, self.identifier.span);
-            let value_type = self.value.type_of(env, scope, self.value.span);
+            let identifier_type = self
+                .identifier
+                .type_of(env, scope, self.identifier.span)
+                .or(data_type.clone());
+            let value_type = self
+                .value
+                .type_of(env, scope, self.value.span)
+                .or(data_type.clone());
 
-            env.compare_types_ref(
-                identifier_type.as_ref(),
-                value_type.as_ref(),
+            data_type = Some(env.compare_types(
+                identifier_type,
+                value_type,
                 Some(&TagInfo::IgnoreInvalidTypeCheck),
                 span,
-            )?;
+            )?);
         }
 
         if env
             .check_if_mutable(scope, &self.identifier)
             .is_some_and(|x| !x)
         {
-            println!("{}", self.identifier);
             return Err(env.context.err_at_span(
                 self.identifier.span,
                 MiddleErr::InvalidMutation(self.identifier.to_string()),
@@ -110,7 +116,7 @@ impl MirLowering for AstAssignment {
                 }),
                 span,
             }
-            .lower(env, scope, span),
+            .lower(env, scope, span, None),
             AstNodeType::Ternary(AstTernary {
                 comparison,
                 then,
@@ -130,7 +136,7 @@ impl MirLowering for AstAssignment {
                 }),
                 span,
             }
-            .lower(env, scope, span),
+            .lower(env, scope, span, None),
             AstNodeType::DerefStatement(AstDeref {
                 value: deref_target,
             }) => Ok(MiddleNode {
@@ -142,9 +148,14 @@ impl MirLowering for AstAssignment {
                                 value: deref_target,
                             }),
                         )
-                        .lower_or_empty(env, scope, span),
+                        .lower_or_empty(
+                            env,
+                            scope,
+                            span,
+                            data_type.clone(),
+                        ),
                     ),
-                    value: Box::new(self.value.lower_or_empty(env, scope, span)),
+                    value: Box::new(self.value.lower_or_empty(env, scope, span, data_type)),
                 }),
                 span,
             }),
@@ -152,9 +163,9 @@ impl MirLowering for AstAssignment {
                 node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
                     identifier: Box::new(
                         AstNode::new(span, AstNodeType::FieldAccess(AstField { base, field }))
-                            .lower_or_empty(env, scope, span),
+                            .lower_or_empty(env, scope, span, data_type.clone()),
                     ),
-                    value: Box::new(self.value.lower_or_empty(env, scope, span)),
+                    value: Box::new(self.value.lower_or_empty(env, scope, span, data_type)),
                 }),
                 span,
             }),
@@ -162,9 +173,9 @@ impl MirLowering for AstAssignment {
                 node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
                     identifier: Box::new(
                         AstNode::new(span, AstNodeType::ScopeAccess(AstScope { base, field }))
-                            .lower_or_empty(env, scope, span),
+                            .lower_or_empty(env, scope, span, data_type.clone()),
                     ),
-                    value: Box::new(self.value.lower_or_empty(env, scope, span)),
+                    value: Box::new(self.value.lower_or_empty(env, scope, span, data_type)),
                 }),
                 span,
             }),
@@ -175,6 +186,7 @@ impl MirLowering for AstAssignment {
                     *base.clone(),
                     *index.clone(),
                     *self.value.clone(),
+                    data_type.as_ref(),
                 )? {
                     return Ok(overloaded);
                 }
@@ -183,17 +195,22 @@ impl MirLowering for AstAssignment {
                     node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
                         identifier: Box::new(
                             AstNode::new(span, AstNodeType::IndexAccess(AstIndex { base, index }))
-                                .lower_or_empty(env, scope, span),
+                                .lower_or_empty(env, scope, span, data_type.clone()),
                         ),
-                        value: Box::new(self.value.lower_or_empty(env, scope, span)),
+                        value: Box::new(self.value.lower_or_empty(env, scope, span, data_type)),
                     }),
                     span,
                 })
             }
             _ => Ok(MiddleNode {
                 node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
-                    identifier: Box::new(self.identifier.lower_or_empty(env, scope, span)),
-                    value: Box::new(self.value.lower_or_empty(env, scope, span)),
+                    identifier: Box::new(self.identifier.lower_or_empty(
+                        env,
+                        scope,
+                        span,
+                        data_type.clone(),
+                    )),
+                    value: Box::new(self.value.lower_or_empty(env, scope, span, data_type)),
                 }),
                 span,
             }),
@@ -208,6 +225,7 @@ impl MirLowering for AstAssignDestructure {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let tmp_ident: PotentialDollarIdentifier =
             PotentialDollarIdentifier::new(span, env.context.get_temp("destructure"));
@@ -226,6 +244,6 @@ impl MirLowering for AstAssignDestructure {
         let mut body = vec![tmp_decl];
         body.extend(env.emit_destructure_statements(&tmp_ident, &self.pattern, span, false));
 
-        AstNode::new_temp_scope_with_create(body, Some(false)).lower(env, scope, span)
+        AstNode::new_temp_scope_with_create(body, Some(false)).lower(env, scope, span, None)
     }
 }

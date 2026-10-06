@@ -155,6 +155,6 @@ impl MiddleEnvironment {
                 variables: vec![default_fn],
             }),
         )
-        .lower(self, scope, span)
+        .lower(self, scope, span, None)
     }
 }

@@ -247,6 +247,7 @@ impl MirLowering for AstIter {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if let LoopType::While(x) = &*self.loop_type
             && let Some(condition_type) = x.type_of(env, scope, span)
@@ -259,16 +260,28 @@ impl MirLowering for AstIter {
                 )),
                 ..self
             }
-            .lower(env, scope, span);
+            .lower(env, scope, span, data_type);
         }
 
-        let resolved_data_type = if self.data_type.is_auto() {
+        let resolved_data_type = match if self.data_type.is_auto() {
             self.map.type_of(env, scope, span).ok_or_else(|| {
                 env.context
                     .err_at_current(MiddleErr::CannotInferLoopIteratorType)
-            })?
+            })
         } else {
-            env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?
+            env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())
+        } {
+            Ok(x) => x,
+            Err(e) => {
+                if let Some(x) = data_type {
+                    match x {
+                        MirDataType::List(x) => *x,
+                        x => x,
+                    }
+                } else {
+                    return Err(e);
+                }
+            }
         };
 
         // Basically optimizing [...; ...] since I recently removed it and [... for ...] is the closest alternative
@@ -278,7 +291,9 @@ impl MirLowering for AstIter {
             && let LoopType::While(condition) = *self.loop_type.clone()
             && let AstNodeType::IntLiteral(times) = condition.node_type
         {
-            let map = self.map.lower(env, scope, span)?;
+            let map = self
+                .map
+                .lower(env, scope, span, Some(resolved_data_type.clone()))?;
             return Ok(MiddleNode {
                 node_type: MiddleNodeType::ListLiteral(MirList {
                     data_type: resolved_data_type,
@@ -288,18 +303,18 @@ impl MirLowering for AstIter {
             });
         }
 
-        let resolved_data_type = ParserDataType::from(resolved_data_type);
+        let resolved_parser_data_type = ParserDataType::from(resolved_data_type.clone());
 
         if self.spawned {
             return transform_spawn_iter(
                 span,
-                resolved_data_type.clone(),
+                resolved_parser_data_type.clone(),
                 *self.map,
                 self.loop_type,
                 self.conditionals,
                 self.until,
             )
-            .lower(env, scope, span);
+            .lower(env, scope, span, Some(resolved_data_type.clone()));
         }
 
         let list_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("iter_list"));
@@ -307,7 +322,7 @@ impl MirLowering for AstIter {
 
         let list_type = ParserDataType::new(
             span,
-            ParserInnerType::List(Box::new(resolved_data_type.clone())),
+            ParserInnerType::List(Box::new(resolved_parser_data_type.clone())),
         );
 
         let guard = self.conditionals.into_iter().reduce(|left, right| {
@@ -380,7 +395,7 @@ impl MirLowering for AstIter {
             loop_node,
             AstNode::emit(AstNode::identifier(span, list_ident)),
         ])
-        .lower(env, scope, span)
+        .lower(env, scope, span, Some(resolved_data_type))
     }
 
     fn type_of(

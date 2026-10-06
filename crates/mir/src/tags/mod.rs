@@ -1,18 +1,15 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType},
+    ast::{MiddleNode, MiddleNodeType, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
     symbols::{VariableKey, resolve::ResolutionOptions},
     translate::MirLowering,
 };
-use calibre_parser::ast::{
-    idents::ParserText,
-    nodes::{
-        AstNode, AstNodeType,
-        functions::{AstCall, CallArg},
-        types::Overload,
-    },
+use calibre_parser::ast::nodes::{
+    AstNode, AstNodeType,
+    functions::{AstCall, CallArg},
+    types::Overload,
 };
 use std::{fmt::Debug, sync::Arc};
 use ustr::{Ustr, UstrMap};
@@ -28,7 +25,7 @@ pub type TagHandlerFn = Arc<
                 &mut MiddleEnvironment,
                 ScopeId,
                 AstNode,
-                ParserText,
+                Option<MirDataType>,
                 Vec<AstNode>,
             ) -> Result<MiddleNode, MiddleErr>
             + Send
@@ -90,7 +87,7 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              args: Vec<AstNode>| {
                 let priority = if let Some(AstNodeType::IntLiteral(val)) =
                     args.first().map(|x| &x.node_type)
@@ -102,7 +99,7 @@ impl MiddleEnvironment {
 
                 env.tagging.tag_info.push(TagInfo::Init(priority));
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -121,7 +118,7 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              args: Vec<AstNode>| {
                 #[cfg(feature = "native")]
                 let backend = "interpreter-native";
@@ -140,7 +137,7 @@ impl MiddleEnvironment {
 
                 if build {
                     let span = node.span;
-                    node.lower(env, scope, span)
+                    node.lower(env, scope, span, data_type)
                 } else {
                     Ok(MiddleNode::new(MiddleNodeType::EmptyLine, node.span))
                 }
@@ -158,7 +155,7 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              args: Vec<AstNode>| {
                 let os = std::env::consts::OS;
                 let mut build = false;
@@ -174,7 +171,7 @@ impl MiddleEnvironment {
 
                 if build {
                     let span = node.span;
-                    node.lower(env, scope, span)
+                    node.lower(env, scope, span, data_type)
                 } else {
                     Ok(MiddleNode::new(MiddleNodeType::EmptyLine, node.span))
                 }
@@ -192,7 +189,7 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              args: Vec<AstNode>| {
                 let priority = if let Some(AstNodeType::IntLiteral(val)) =
                     args.first().map(|x| &x.node_type)
@@ -204,7 +201,7 @@ impl MiddleEnvironment {
 
                 env.tagging.tag_info.push(TagInfo::Fin(priority));
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -222,11 +219,11 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Default);
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -244,11 +241,11 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Builder);
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -266,11 +263,11 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Panics);
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -288,7 +285,7 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              mut args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Todo(args.pop().and_then(
                     |x| match x.node_type {
@@ -298,7 +295,7 @@ impl MiddleEnvironment {
                 )));
 
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -316,7 +313,7 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              mut args: Vec<AstNode>| {
                 env.tagging
                     .tag_info
@@ -328,7 +325,7 @@ impl MiddleEnvironment {
                     )));
 
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
                 middle
             },
@@ -345,7 +342,7 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              mut args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Skip(args.pop().and_then(
                     |x| match &x.node_type {
@@ -355,7 +352,7 @@ impl MiddleEnvironment {
                 )));
 
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
                 middle
             },
@@ -372,12 +369,12 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Bench);
 
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
                 middle
             },
@@ -394,7 +391,7 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              mut args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::Suite(
                     args.pop()
@@ -406,7 +403,7 @@ impl MiddleEnvironment {
                 ));
 
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
                 middle
             },
@@ -423,9 +420,9 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
-                let middle = env.evaluate_with_package_injection(scope, node)?;
+                let middle = env.evaluate_with_package_injection(scope, node, data_type)?;
                 Ok(middle)
             },
         ));
@@ -441,11 +438,11 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::CallerContext);
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -463,11 +460,11 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::IgnoreInvalidReturn);
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -485,11 +482,11 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::IgnoreInvalidLet);
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -507,11 +504,11 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::IgnoreInvalidTypeCheck);
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -529,11 +526,11 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::IgnoreInvalidBinary);
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -551,11 +548,11 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::IgnoreInvalidComparison);
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -573,11 +570,11 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
                 env.tagging.tag_info.push(TagInfo::IgnoreInvalidBoolean);
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -595,7 +592,7 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              args: Vec<AstNode>| {
                 let mut memo = false;
                 let mut params = Vec::new();
@@ -659,7 +656,7 @@ impl MiddleEnvironment {
                     .push(TagInfo::Pure(MemoInfo { memo, params }));
 
                 let span = node.span;
-                let middle = node.lower(env, scope, span);
+                let middle = node.lower(env, scope, span, data_type);
                 let _ = env.tagging.tag_info.pop();
 
                 middle
@@ -677,9 +674,9 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              _args: Vec<AstNode>| {
-                let middle = env.evaluate_with_current_context_injection(scope, node)?;
+                let middle = env.evaluate_with_current_context_injection(scope, node, data_type)?;
                 Ok(middle)
             },
         ));
@@ -695,7 +692,7 @@ impl MiddleEnvironment {
             |env: &mut MiddleEnvironment,
              scope: ScopeId,
              node: AstNode,
-             _tag: ParserText,
+             data_type: Option<MirDataType>,
              mut args: Vec<AstNode>| {
                 let span = node.span;
 
@@ -762,7 +759,7 @@ impl MiddleEnvironment {
                             _ => unimplemented!(),
                         }
 
-                        return x.lower(env, scope, span);
+                        return x.lower(env, scope, span, data_type);
                     }
                     _ => unimplemented!(),
                 }

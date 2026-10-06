@@ -262,7 +262,7 @@ impl MiddleEnvironment {
 
         debug!("translating AST to MIR");
         let span = node.span;
-        let inner = node.clone().lower_or_empty(&mut env, scope, span);
+        let inner = node.clone().lower_or_empty(&mut env, scope, span, None);
         let mut middle = wrap(&env, scope, node.span, inner);
 
         if let Some(mut decls) = env.symbols.specialization_decls_by_scope.remove(&scope)

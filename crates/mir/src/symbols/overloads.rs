@@ -19,9 +19,10 @@ impl MiddleEnvironment {
         scope: ScopeId,
         left: &AstNode,
         right: &AstNode,
+        data_type: Option<&MirDataType>,
         operator: Operator,
     ) -> Option<MirDataType> {
-        self.get_operator_overload(scope, left, right, &operator)
+        self.get_operator_overload(scope, left, right, data_type, &operator)
             .map(|x| x.return_type.clone())
             .or(Some(MirDataType::Bool))
     }
@@ -33,6 +34,7 @@ impl MiddleEnvironment {
         span: Span,
         left: AstNode,
         right: AstNode,
+        data_type: Option<&MirDataType>,
         operator: Operator,
     ) -> Result<Option<MiddleNode>, MiddleErr> {
         if matches!(operator, Operator::As) {
@@ -62,6 +64,16 @@ impl MiddleEnvironment {
                             .map(|x| x.as_str())
                             .collect::<Vec<_>>(),
                     )
+                    && data_type.is_none_or(|x| {
+                        overload.return_type.matches(
+                            x,
+                            &overload
+                                .generic_params
+                                .iter()
+                                .map(|x| x.as_str())
+                                .collect::<Vec<_>>(),
+                        )
+                    })
             };
 
             if let Some(overload) = self
@@ -71,12 +83,18 @@ impl MiddleEnvironment {
                 .find(|x| matches_overload(x))
                 .cloned()
             {
+                let func_type = MirDataType::from(&overload);
                 return Ok(Some(MiddleNode {
                     node_type: MiddleNodeType::CallExpression(MirCall {
-                        caller: Box::new(overload.func.clone().lower(self, scope, span)?),
+                        caller: Box::new(overload.func.clone().lower(
+                            self,
+                            scope,
+                            span,
+                            Some(func_type),
+                        )?),
                         args: Box::new([
-                            left.lower(self, scope, span)?,
-                            right.lower(self, scope, span)?,
+                            left.lower(self, scope, span, overload.parameters.first().cloned())?,
+                            right.lower(self, scope, span, overload.parameters.last().cloned())?,
                         ]),
                     }),
                     span,
@@ -128,10 +146,21 @@ impl MiddleEnvironment {
             .cloned();
 
         if let Some(overload) = overload {
+            let func_type = MirDataType::from(&overload);
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {
-                    caller: Box::new(overload.func.clone().lower(self, scope, span)?),
-                    args: Box::new([value.lower(self, scope, span)?]),
+                    caller: Box::new(overload.func.clone().lower(
+                        self,
+                        scope,
+                        span,
+                        Some(func_type),
+                    )?),
+                    args: Box::new([value.lower(
+                        self,
+                        scope,
+                        span,
+                        overload.parameters.first().cloned(),
+                    )?]),
                 }),
                 span,
             }));
@@ -189,6 +218,7 @@ impl MiddleEnvironment {
         base: AstNode,
         index: AstNode,
         value: AstNode,
+        data_type: Option<&MirDataType>,
     ) -> Result<Option<MiddleNode>, MiddleErr> {
         let (Some(base_ty), Some(index_ty), Some(value_ty)) = (
             self.resolve_type_from_node(scope, &base),
@@ -204,37 +234,55 @@ impl MiddleEnvironment {
             .iter()
             .filter(|x| matches!(x.operator, Operator::IndexAssign))
             .filter(|x| x.parameters.len() == 3)
-            .find(|x| {
-                x.parameters[0].matches(
+            .find(|overload| {
+                overload.parameters[0].matches(
                     &base_ty,
-                    &x.generic_params
+                    &overload
+                        .generic_params
                         .iter()
                         .map(|x| x.as_str())
                         .collect::<Vec<_>>(),
-                ) && x.parameters[1].matches(
+                ) && overload.parameters[1].matches(
                     &index_ty,
-                    &x.generic_params
+                    &overload
+                        .generic_params
                         .iter()
                         .map(|x| x.as_str())
                         .collect::<Vec<_>>(),
-                ) && x.parameters[2].matches(
+                ) && overload.parameters[2].matches(
                     &value_ty,
-                    &x.generic_params
+                    &overload
+                        .generic_params
                         .iter()
                         .map(|x| x.as_str())
                         .collect::<Vec<_>>(),
-                )
+                ) && data_type.is_none_or(|x| {
+                    overload.return_type.matches(
+                        x,
+                        &overload
+                            .generic_params
+                            .iter()
+                            .map(|x| x.as_str())
+                            .collect::<Vec<_>>(),
+                    )
+                })
             })
             .cloned();
 
         if let Some(overload) = overload {
+            let func_type = MirDataType::from(&overload);
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {
-                    caller: Box::new(overload.func.clone().lower(self, scope, span)?),
+                    caller: Box::new(overload.func.clone().lower(
+                        self,
+                        scope,
+                        span,
+                        Some(func_type),
+                    )?),
                     args: Box::new([
-                        base.lower(self, scope, span)?,
-                        index.lower(self, scope, span)?,
-                        value.lower(self, scope, span)?,
+                        base.lower(self, scope, span, overload.parameters.first().cloned())?,
+                        index.lower(self, scope, span, overload.parameters.get(1).cloned())?,
+                        value.lower(self, scope, span, overload.parameters.last().cloned())?,
                     ]),
                 }),
                 span,
@@ -249,6 +297,7 @@ impl MiddleEnvironment {
         scope: ScopeId,
         left: &AstNode,
         right: &AstNode,
+        data_type: Option<&MirDataType>,
         operator: &Operator,
     ) -> Option<&MiddleOverload> {
         if let (Some(left_ty), Some(right_ty)) = (
@@ -259,20 +308,31 @@ impl MiddleEnvironment {
             .overloads
             .iter()
             .filter(|x| x.parameters.len() == 2 && &x.operator == operator)
-            .find(|x| {
-                x.parameters[0].matches(
+            .find(|overload| {
+                overload.parameters[0].matches(
                     &left_ty,
-                    &x.generic_params
+                    &overload
+                        .generic_params
                         .iter()
                         .map(|x| x.as_str())
                         .collect::<Vec<_>>(),
-                ) && x.parameters[1].matches(
+                ) && overload.parameters[1].matches(
                     &right_ty,
-                    &x.generic_params
+                    &overload
+                        .generic_params
                         .iter()
                         .map(|x| x.as_str())
                         .collect::<Vec<_>>(),
-                )
+                ) && data_type.is_none_or(|x| {
+                    overload.return_type.matches(
+                        x,
+                        &overload
+                            .generic_params
+                            .iter()
+                            .map(|x| x.as_str())
+                            .collect::<Vec<_>>(),
+                    )
+                })
             })
         {
             return Some(overload);

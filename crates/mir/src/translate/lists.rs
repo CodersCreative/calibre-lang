@@ -17,11 +17,15 @@ impl MirLowering for AstList {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut value = MirListBuilder::default();
 
         let mut data_type = if self.data_type.is_auto() {
-            None
+            data_type.map(|x| match x {
+                MirDataType::List(x) => *x,
+                x => x,
+            })
         } else {
             Some(env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?)
         };
@@ -38,7 +42,7 @@ impl MirLowering for AstList {
                         Some(&TagInfo::IgnoreInvalidTypeCheck),
                         span,
                     )?);
-                    item.lower(env, scope, span)
+                    item.lower(env, scope, span, data_type.clone())
                 })
                 .collect::<Result<Box<[_]>, MiddleErr>>()?,
         );

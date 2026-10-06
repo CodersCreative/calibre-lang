@@ -29,9 +29,10 @@ impl MirLowering for AstCurry {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let value = env.rewrite_curry_call(scope, span, *self.value)?;
-        value.lower(env, scope, span)
+        value.lower(env, scope, span, data_type)
     }
 
     fn type_of(

@@ -1,5 +1,5 @@
 use crate::{
-    ast::MiddleNode,
+    ast::{MiddleNode, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{MiddleScope, ScopeId},
@@ -79,11 +79,12 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         node: AstNode,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let span = node.span;
 
         let Ok(scope_ref) = self.scoping.scope_or_err(scope) else {
-            return node.lower(self, scope, span);
+            return node.lower(self, scope, span, data_type);
         };
 
         let meta = self.package_metadata_for_scope(scope_ref);
@@ -135,18 +136,19 @@ impl MiddleEnvironment {
             create_new_scope: Some(false),
             define: false,
         }
-        .lower(self, scope, span)
+        .lower(self, scope, span, None)
     }
 
     pub fn evaluate_with_current_context_injection(
         &mut self,
         scope: ScopeId,
         node: AstNode,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let span = node.span;
 
         let Ok(scope_ref) = self.scoping.scope_or_err(scope) else {
-            return node.lower(self, scope, span);
+            return node.lower(self, scope, span, data_type);
         };
 
         let value = |v: Ustr| {
@@ -212,6 +214,6 @@ impl MiddleEnvironment {
             create_new_scope: Some(false),
             define: false,
         }
-        .lower(self, scope, span)
+        .lower(self, scope, span, None)
     }
 }

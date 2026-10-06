@@ -25,10 +25,11 @@ impl MirLowering for AstNeg {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         Ok(MiddleNode {
             node_type: MiddleNodeType::NegExpression(MirNeg {
-                value: Box::new(self.value.lower(env, scope, span)?),
+                value: Box::new(self.value.lower(env, scope, span, data_type)?),
             }),
             span,
         })
@@ -51,6 +52,7 @@ impl MirLowering for AstNot {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         AstNode {
             node_type: AstNodeType::ComparisonExpression(AstComparison {
@@ -60,7 +62,12 @@ impl MirLowering for AstNot {
             }),
             span,
         }
-        .lower(env, scope, span)
+        .lower(
+            env,
+            scope,
+            span,
+            Some(data_type.unwrap_or(MirDataType::Bool)),
+        )
     }
 
     fn type_of(

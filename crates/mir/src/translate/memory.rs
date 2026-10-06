@@ -29,6 +29,7 @@ impl MirLowering for AstRef {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if self.mutability == RefMutability::MutRef
             && env.check_if_mutable(scope, &self.value).is_some_and(|x| !x)
@@ -42,7 +43,12 @@ impl MirLowering for AstRef {
         Ok(MiddleNode {
             node_type: MiddleNodeType::RefStatement(MirRef {
                 mutability: self.mutability,
-                value: Box::new(self.value.lower(env, scope, span)?),
+                value: Box::new(self.value.lower(
+                    env,
+                    scope,
+                    span,
+                    data_type.map(|x| x.unwrap_all_refs().clone()),
+                )?),
             }),
             span,
         })
@@ -73,10 +79,22 @@ impl MirLowering for AstDeref {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         Ok(MiddleNode {
             node_type: MiddleNodeType::DerefStatement(MirDeref {
-                value: Box::new(self.value.lower(env, scope, span)?),
+                value: Box::new(self.value.lower(
+                    env,
+                    scope,
+                    span,
+                    data_type.map(|x| {
+                        if x.is_ref() {
+                            x
+                        } else {
+                            MirDataType::Ref(Box::new(x), RefMutability::Ref)
+                        }
+                    }),
+                )?),
             }),
             span,
         })
@@ -101,6 +119,7 @@ impl MirLowering for AstMove {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         match self.value.node_type {
             AstNodeType::Identifier(x) => Ok(MiddleNode {
@@ -145,7 +164,7 @@ impl MirLowering for AstMove {
                     }),
                 );
 
-                AstNode::new_temp_scope(vec![tmp_decl, member]).lower(env, scope, span)
+                AstNode::new_temp_scope(vec![tmp_decl, member]).lower(env, scope, span, data_type)
             }
             AstNodeType::ScopeAccess(AstScope { base, field }) => {
                 let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("move"));
@@ -180,7 +199,7 @@ impl MirLowering for AstMove {
                     }),
                 );
 
-                AstNode::new_temp_scope(vec![tmp_decl, member]).lower(env, scope, span)
+                AstNode::new_temp_scope(vec![tmp_decl, member]).lower(env, scope, span, data_type)
             }
             AstNodeType::IndexAccess(AstIndex { base, index }) => {
                 let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("move"));
@@ -215,9 +234,9 @@ impl MirLowering for AstMove {
                     }),
                 );
 
-                AstNode::new_temp_scope(vec![tmp_decl, member]).lower(env, scope, span)
+                AstNode::new_temp_scope(vec![tmp_decl, member]).lower(env, scope, span, data_type)
             }
-            _ => self.value.lower(env, scope, span),
+            _ => self.value.lower(env, scope, span, data_type),
         }
     }
 
@@ -240,6 +259,7 @@ impl MirLowering for AstDrop {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         Ok(MiddleNode {
             node_type: MiddleNodeType::Drop(MirDrop {

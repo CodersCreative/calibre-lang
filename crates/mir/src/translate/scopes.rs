@@ -42,6 +42,7 @@ impl MirLowering for AstScopeDef {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut stmts = Vec::new();
         let mut create_new_scope = self.create_new_scope.unwrap_or(true);
@@ -121,7 +122,7 @@ impl MirLowering for AstScopeDef {
                         AstNodeType::Null,
                     )]))),
                 }
-                .lower(env, scope, span);
+                .lower(env, scope, span, None);
             }
             let mut added = Vec::new();
 
@@ -181,16 +182,28 @@ impl MirLowering for AstScopeDef {
                 let last = body.pop();
                 for statement in body.into_iter() {
                     let span = statement.span;
+                    let is_emit = statement.is_emit();
                     stmts.extend(
                         statement
-                            .lower_or_empty(env, new_scope, span)
+                            .lower_or_empty(
+                                env,
+                                new_scope,
+                                span,
+                                if is_emit { data_type.clone() } else { None },
+                            )
                             .nodes_if_no_new_scope(),
                     );
                 }
 
                 let last = last.map(|x| {
                     let span = x.span;
-                    x.lower_or_empty(env, new_scope, span)
+                    let is_emit = x.is_emit();
+                    x.lower_or_empty(
+                        env,
+                        new_scope,
+                        span,
+                        if is_emit { data_type.clone() } else { None },
+                    )
                 });
 
                 if !last
@@ -200,7 +213,7 @@ impl MirLowering for AstScopeDef {
                     for x in env.scoping.scope_or_err(new_scope)?.defers.clone() {
                         let span = x.span;
                         stmts.extend(
-                            x.lower_or_empty(env, new_scope, span)
+                            x.lower_or_empty(env, new_scope, span, None)
                                 .nodes_if_no_new_scope(),
                         );
                     }
@@ -211,7 +224,10 @@ impl MirLowering for AstScopeDef {
                 }
             } else {
                 for statement in body.into_iter() {
-                    if let Ok(x) = statement.clone().lower(env, new_scope, statement.span) {
+                    if let Ok(x) = statement
+                        .clone()
+                        .lower(env, new_scope, statement.span, None)
+                    {
                         stmts.extend(x.nodes_if_isnt_temp());
                     }
                 }
@@ -300,6 +316,7 @@ impl MirLowering for AstScopeAlias {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let identifer = env.resolve(
             scope,

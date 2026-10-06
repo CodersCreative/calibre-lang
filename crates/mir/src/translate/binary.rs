@@ -84,12 +84,14 @@ impl MirLowering for AstBinary {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if let Some(x) = env.handle_operator_overloads(
             scope,
             span,
             *self.left.clone(),
             *self.right.clone(),
+            data_type.as_ref(),
             Operator::Binary(self.operator),
         )? {
             return Ok(x);
@@ -98,11 +100,13 @@ impl MirLowering for AstBinary {
         let mut left_type = self
             .left
             .type_of(env, scope, span)
+            .or(data_type.clone())
             .unwrap_or(MirDataType::Dynamic);
 
         let mut right_type = self
             .right
             .type_of(env, scope, span)
+            .or(data_type.clone())
             .unwrap_or(MirDataType::Dynamic);
 
         #[allow(clippy::single_match)]
@@ -167,8 +171,11 @@ impl MirLowering for AstBinary {
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::BinaryExpression(MirBinary {
-                left: Box::new(self.left.lower_or_empty(env, scope, span)),
-                right: Box::new(self.right.lower_or_empty(env, scope, span)),
+                left: Box::new(self.left.lower_or_empty(env, scope, span, Some(left_type))),
+                right: Box::new(
+                    self.right
+                        .lower_or_empty(env, scope, span, Some(right_type)),
+                ),
                 operator: self.operator,
             }),
             span,
@@ -185,6 +192,7 @@ impl MirLowering for AstBinary {
             scope,
             &self.left,
             &self.right,
+            None,
             &Operator::Binary(self.operator),
         ) {
             Some(x.return_type.clone())
@@ -222,12 +230,14 @@ impl MirLowering for AstBoolean {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if let Some(x) = env.handle_operator_overloads(
             scope,
             span,
             *self.left.clone(),
             *self.right.clone(),
+            data_type.as_ref(),
             Operator::Boolean(self.operator),
         )? {
             return Ok(x);
@@ -273,8 +283,16 @@ impl MirLowering for AstBoolean {
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::BooleanExpression(MirBoolean {
-                left: Box::new(self.left.lower_or_empty(env, scope, span)),
-                right: Box::new(self.right.lower_or_empty(env, scope, span)),
+                left: Box::new(
+                    self.left
+                        .lower_or_empty(env, scope, span, Some(MirDataType::Bool)),
+                ),
+                right: Box::new(self.right.lower_or_empty(
+                    env,
+                    scope,
+                    span,
+                    Some(MirDataType::Bool),
+                )),
                 operator: self.operator,
             }),
             span,
@@ -291,6 +309,7 @@ impl MirLowering for AstBoolean {
             scope,
             &self.left,
             &self.right,
+            None,
             Operator::Boolean(self.operator),
         )
     }
@@ -303,29 +322,47 @@ impl MirLowering for AstComparison {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if let Some(x) = env.handle_operator_overloads(
             scope,
             span,
             *self.left.clone(),
             *self.right.clone(),
+            data_type.as_ref(),
             Operator::Comparison(self.operator),
         )? {
             return Ok(x);
         }
 
+        let mut left_type = self
+            .left
+            .type_of(env, scope, span)
+            .or(data_type.clone())
+            .unwrap_or(MirDataType::Dynamic);
+
+        let mut right_type = self
+            .right
+            .type_of(env, scope, span)
+            .or(data_type.clone())
+            .unwrap_or(MirDataType::Dynamic);
+
         if !env
             .tagging
             .tag_info
             .contains(&TagInfo::IgnoreInvalidComparison)
+            && !VALID_BINARY_GENERAL
+                .iter()
+                .find(|x| {
+                    x.0.loose_eq(&left_type) && x.1.loose_eq(&right_type)
+                        || x.0.loose_eq(&right_type) && x.1.loose_eq(&left_type)
+                })
+                .is_some()
         {
-            let left_type = self.left.type_of(env, scope, span);
-            let right_type = self.right.type_of(env, scope, span);
-
-            let _ = env
-                .compare_types_ref(
-                    left_type.as_ref(),
-                    right_type.as_ref(),
+            let data_type = env
+                .compare_types(
+                    Some(left_type.clone()),
+                    Some(right_type.clone()),
                     Some(&TagInfo::IgnoreInvalidComparison),
                     span,
                 )
@@ -334,17 +371,23 @@ impl MirLowering for AstComparison {
                         span,
                         MiddleErr::InvalidComparisonOperation {
                             operator: self.operator,
-                            left: Box::new(left_type.unwrap_or_default()),
-                            right: Box::new(right_type.unwrap_or_default()),
+                            left: Box::new(left_type),
+                            right: Box::new(right_type),
                         },
                     )
-                });
+                })?;
+
+            left_type = data_type.clone();
+            right_type = data_type;
         }
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::ComparisonExpression(MirComparison {
-                left: Box::new(self.left.lower_or_empty(env, scope, span)),
-                right: Box::new(self.right.lower_or_empty(env, scope, span)),
+                left: Box::new(self.left.lower_or_empty(env, scope, span, Some(left_type))),
+                right: Box::new(
+                    self.right
+                        .lower_or_empty(env, scope, span, Some(right_type)),
+                ),
                 operator: self.operator,
             }),
             span,
@@ -361,6 +404,7 @@ impl MirLowering for AstComparison {
             scope,
             &self.left,
             &self.right,
+            None,
             Operator::Comparison(self.operator),
         )
     }
@@ -373,6 +417,7 @@ impl MirLowering for AstAs {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let target = env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?;
 
@@ -398,7 +443,7 @@ impl MirLowering for AstAs {
                         }),
                         span,
                     }
-                    .lower(env, scope, span);
+                    .lower(env, scope, span, data_type);
                 }
                 AsFailureMode::Panic => {
                     return AstNode {
@@ -416,7 +461,7 @@ impl MirLowering for AstAs {
                         }),
                         span,
                     }
-                    .lower(env, scope, span);
+                    .lower(env, scope, span, data_type);
                 }
             }
         }
@@ -429,12 +474,12 @@ impl MirLowering for AstAs {
         if value_ty.is_some_and(|x| x.loose_eq(&target))
             && self.failure_mode == AsFailureMode::Panic
         {
-            return self.value.lower(env, scope, span);
+            return self.value.lower(env, scope, span, None);
         }
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::AsExpression(MirAs {
-                value: Box::new(self.value.lower(env, scope, span)?),
+                value: Box::new(self.value.lower(env, scope, span, None)?),
                 data_type: target,
                 failure_mode: self.failure_mode,
             }),
@@ -470,15 +515,17 @@ impl MirLowering for AstIs {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
+        let data_type =
+            env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?;
         Ok(MiddleNode {
             node_type: MiddleNodeType::IsExpression(MirIs {
-                value: Box::new(self.value.lower(env, scope, span)?),
-                data_type: env.resolve_data_type(
-                    scope,
-                    &self.data_type,
-                    ResolutionOptions::typing(),
-                )?,
+                value: Box::new(
+                    self.value
+                        .lower(env, scope, span, Some(data_type.clone()))?,
+                ),
+                data_type,
             }),
             span,
         })
@@ -501,12 +548,14 @@ impl MirLowering for AstIn {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if let Some(x) = env.handle_operator_overloads(
             scope,
             span,
             *self.identifier.clone(),
             *self.value.clone(),
+            data_type.as_ref(),
             Operator::In,
         )? {
             return Ok(x);
@@ -548,7 +597,7 @@ impl MirLowering for AstIn {
                     operator: BooleanOperator::And,
                 }),
             )
-            .lower(env, scope, span);
+            .lower(env, scope, span, Some(MirDataType::Bool));
         }
 
         if let AstNodeType::ListLiteral(AstList { values, .. }) = self.value.node_type.clone() {
@@ -575,37 +624,24 @@ impl MirLowering for AstIn {
                             }),
                         )
                     })
-                    .lower(env, scope, span);
+                    .lower(env, scope, span, Some(MirDataType::Bool));
             }
         }
 
-        if let Some(data_type) = self.value.type_of(env, scope, span)
-            && matches!(
-                data_type.unwrap_all_refs(),
-                MirDataType::List(_) | MirDataType::Str
-            )
-        {
-            let member = AstNode::new(
-                span,
-                AstNodeType::FieldAccess(AstField {
-                    base: Box::new(*self.value.clone()),
-                    field: PotentialDollarIdentifier::new(span, "contains"),
-                }),
-            );
-
-            return AstNode::call(span, member, vec![CallArg::Value(*self.identifier)])
-                .lower(env, scope, span);
-        }
-
-        AstNode::call(
+        let member = AstNode::new(
             span,
-            AstNode::identifier(span, "contains"),
-            vec![
-                CallArg::Value(*self.value),
-                CallArg::Value(*self.identifier),
-            ],
+            AstNodeType::FieldAccess(AstField {
+                base: Box::new(*self.value.clone()),
+                field: PotentialDollarIdentifier::new(span, "contains"),
+            }),
+        );
+
+        AstNode::call(span, member, vec![CallArg::Value(*self.identifier)]).lower(
+            env,
+            scope,
+            span,
+            Some(MirDataType::Bool),
         )
-        .lower(env, scope, span)
     }
 
     fn type_of(
@@ -614,6 +650,6 @@ impl MirLowering for AstIn {
         scope: ScopeId,
         _span: Span,
     ) -> Option<MirDataType> {
-        env.resolve_operator_or_bool(scope, &self.identifier, &self.value, Operator::In)
+        env.resolve_operator_or_bool(scope, &self.identifier, &self.value, None, Operator::In)
     }
 }

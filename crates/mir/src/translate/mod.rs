@@ -39,13 +39,20 @@ pub trait MirLowering {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr>;
 
-    fn lower_or_empty(self, env: &mut MiddleEnvironment, scope: ScopeId, span: Span) -> MiddleNode
+    fn lower_or_empty(
+        self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+        data_type: Option<MirDataType>,
+    ) -> MiddleNode
     where
         Self: Sized,
     {
-        match self.lower(env, scope, span) {
+        match self.lower(env, scope, span, data_type) {
             Ok(node) => node,
             Err(err) => {
                 debug!(error = %err, "evaluation failed, pushing error");
@@ -72,6 +79,7 @@ impl MirLowering for AstNode {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut span = if self.span.is_none() { span } else { self.span };
 
@@ -94,98 +102,98 @@ impl MirLowering for AstNode {
             }),
 
             // Flow
-            AstNodeType::Break(x) => x.lower(env, scope, span),
-            AstNodeType::Emit(x) => x.lower(env, scope, span),
-            AstNodeType::Defer(x) => x.lower(env, scope, span),
-            AstNodeType::Try(x) => x.lower(env, scope, span),
-            AstNodeType::Continue(x) => x.lower(env, scope, span),
-            AstNodeType::Return(x) => x.lower(env, scope, span),
-            AstNodeType::PipeExpression(x) => x.lower(env, scope, span),
+            AstNodeType::Break(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::Emit(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::Defer(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::Try(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::Continue(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::Return(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::PipeExpression(x) => x.lower(env, scope, span, data_type),
 
             // Literals
-            AstNodeType::StructLiteral(x) => x.lower(env, scope, span),
-            AstNodeType::EnumExpression(x) => x.lower(env, scope, span),
-            AstNodeType::TupleLiteral(x) => x.lower(env, scope, span),
-            AstNodeType::StringLiteral(x) => x.lower(env, scope, span),
-            AstNodeType::RangeDeclaration(x) => x.lower(env, scope, span),
-            AstNodeType::IntLiteral(x) => x.lower(env, scope, span),
-            AstNodeType::BigLiteral(x) => x.lower(env, scope, span),
-            AstNodeType::FloatLiteral(x) => x.lower(env, scope, span),
-            AstNodeType::CharLiteral(x) => x.lower(env, scope, span),
+            AstNodeType::StructLiteral(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::EnumExpression(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::TupleLiteral(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::StringLiteral(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::RangeDeclaration(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::IntLiteral(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::BigLiteral(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::FloatLiteral(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::CharLiteral(x) => x.lower(env, scope, span, data_type),
 
             // Lists
-            AstNodeType::ListLiteral(x) => x.lower(env, scope, span),
+            AstNodeType::ListLiteral(x) => x.lower(env, scope, span, data_type),
 
             // Conditionals
-            AstNodeType::Ternary(x) => x.lower(env, scope, span),
-            AstNodeType::IfStatement(x) => x.lower(env, scope, span),
+            AstNodeType::Ternary(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::IfStatement(x) => x.lower(env, scope, span, data_type),
 
             // Unary
-            AstNodeType::NotExpression(x) => x.lower(env, scope, span),
-            AstNodeType::NegExpression(x) => x.lower(env, scope, span),
+            AstNodeType::NotExpression(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::NegExpression(x) => x.lower(env, scope, span, data_type),
 
             // Binary
-            AstNodeType::BooleanExpression(x) => x.lower(env, scope, span),
-            AstNodeType::ComparisonExpression(x) => x.lower(env, scope, span),
-            AstNodeType::BinaryExpression(x) => x.lower(env, scope, span),
-            AstNodeType::AsExpression(x) => x.lower(env, scope, span),
-            AstNodeType::IsExpression(x) => x.lower(env, scope, span),
-            AstNodeType::InDeclaration(x) => x.lower(env, scope, span),
+            AstNodeType::BooleanExpression(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::ComparisonExpression(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::BinaryExpression(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::AsExpression(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::IsExpression(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::InDeclaration(x) => x.lower(env, scope, span, data_type),
 
             // Functions
-            AstNodeType::CurryExpression(x) => x.lower(env, scope, span),
-            AstNodeType::FunctionDeclaration(x) => x.lower(env, scope, span),
-            AstNodeType::ExternFunctionDeclaration(x) => x.lower(env, scope, span),
-            AstNodeType::CallExpression(x) => x.lower(env, scope, span),
+            AstNodeType::CurryExpression(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::FunctionDeclaration(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::ExternFunctionDeclaration(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::CallExpression(x) => x.lower(env, scope, span, data_type),
 
             // Access
-            AstNodeType::Identifier(x) => x.lower(env, scope, span),
-            AstNodeType::FieldAccess(x) => x.lower(env, scope, span),
-            AstNodeType::ScopeAccess(x) => x.lower(env, scope, span),
-            AstNodeType::IndexAccess(x) => x.lower(env, scope, span),
+            AstNodeType::Identifier(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::FieldAccess(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::ScopeAccess(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::IndexAccess(x) => x.lower(env, scope, span, data_type),
 
             // Memory
-            AstNodeType::RefStatement(x) => x.lower(env, scope, span),
-            AstNodeType::DerefStatement(x) => x.lower(env, scope, span),
-            AstNodeType::Drop(x) => x.lower(env, scope, span),
-            AstNodeType::MoveExpression(x) => x.lower(env, scope, span),
+            AstNodeType::RefStatement(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::DerefStatement(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::Drop(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::MoveExpression(x) => x.lower(env, scope, span, data_type),
 
             // Matching
-            AstNodeType::MatchStatement(x) => x.lower(env, scope, span),
-            AstNodeType::FnMatchDeclaration(x) => x.lower(env, scope, span),
+            AstNodeType::MatchStatement(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::FnMatchDeclaration(x) => x.lower(env, scope, span, data_type),
 
             // Spawn
-            AstNodeType::SelectStatement(x) => x.lower(env, scope, span),
-            AstNodeType::Spawn(x) => x.lower(env, scope, span),
+            AstNodeType::SelectStatement(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::Spawn(x) => x.lower(env, scope, span, data_type),
 
             // Assignment
-            AstNodeType::AssignmentExpression(x) => x.lower(env, scope, span),
-            AstNodeType::DestructureAssignment(x) => x.lower(env, scope, span),
+            AstNodeType::AssignmentExpression(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::DestructureAssignment(x) => x.lower(env, scope, span, data_type),
 
             // Declarations
-            AstNodeType::VariableDeclaration(x) => x.lower(env, scope, span),
-            AstNodeType::DestructureDeclaration(x) => x.lower(env, scope, span),
+            AstNodeType::VariableDeclaration(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::DestructureDeclaration(x) => x.lower(env, scope, span, data_type),
 
             // Types
-            AstNodeType::TypeDeclaration(x) => x.lower(env, scope, span),
-            AstNodeType::ImplDeclaration(x) => x.lower(env, scope, span),
+            AstNodeType::TypeDeclaration(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::ImplDeclaration(x) => x.lower(env, scope, span, data_type),
 
             // Lists
-            AstNodeType::IterExpression(x) => x.lower(env, scope, span),
-            AstNodeType::LoopDeclaration(x) => x.lower(env, scope, span),
+            AstNodeType::IterExpression(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::LoopDeclaration(x) => x.lower(env, scope, span, data_type),
 
             // Scopes
-            AstNodeType::ScopeAlias(x) => x.lower(env, scope, span),
-            AstNodeType::ScopeDeclaration(x) => x.lower(env, scope, span),
+            AstNodeType::ScopeAlias(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::ScopeDeclaration(x) => x.lower(env, scope, span, data_type),
 
             // Generator
-            AstNodeType::InlineGenerator(x) => x.lower(env, scope, span),
+            AstNodeType::InlineGenerator(x) => x.lower(env, scope, span, data_type),
 
             // Misc
-            AstNodeType::ParenExpression(x) => x.lower(env, scope, span),
-            AstNodeType::TestDeclaration(x) => x.lower(env, scope, span),
-            AstNodeType::Tag(x) => x.lower(env, scope, span),
-            AstNodeType::ImportStatement(x) => x.lower(env, scope, span),
+            AstNodeType::ParenExpression(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::TestDeclaration(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::Tag(x) => x.lower(env, scope, span, data_type),
+            AstNodeType::ImportStatement(x) => x.lower(env, scope, span, data_type),
         }
     }
 
