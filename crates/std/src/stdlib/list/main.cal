@@ -33,22 +33,23 @@ impl<T> list:<T> {
 	};
 
 	@pure
-	const index_of := fn (self : list:<T>, needle : T) -> int => {
-		for i in len(self) => if (try!! self[i]) = needle => return i;
-		return -1;
+	const index_of := fn (self : list:<T>, needle : T) -> uint? => {
+		for i in len(self) => if (try!! self[i]) = needle => return some(i);
+		return none;
 	};
 
 	@pure
-	const last_index_of := fn (self : list:<T>, needle : T) -> int => {
-		let mut i := (len(self) as! int) - 1;
+	const last_index_of := fn (self : list:<T>, needle : T) -> uint? => {
+		let mut i := len(self) - 1;
 		
 		for i >= 0 => {
 			let value : T? = try!! self[i];
-			if value = needle => return i;
+			if value = needle => return some(i);
+			if i = 0 => return none;
 			i -= 1;
 		};
 		
-		return -1;
+		return none;
 	};
 
 	@pure
@@ -79,7 +80,7 @@ impl<T> list:<T> {
 
 	const pop := fn (self : &mut list:<T>) -> T? => {
 		let l := len(self);
-		if l = 0 => return none;
+		if l = 0u => return none;
 		return raw_remove(self, l - 1);
 	};
 
@@ -87,13 +88,12 @@ impl<T> list:<T> {
 		self := move list:<T>[];
 	};
 
-	const remove := fn (self : &mut list:<T>, idx : int) -> T? => {
+	const remove := fn (self : &mut list:<T>, idx : uint) -> T? => {
 		return raw_remove(self, idx);
 	};
 
 	const remove_value := fn (self : &mut list:<T>, needle : T) -> bool => {
-		let idx := self.index_of(needle);
-		if idx = -1 => return false;
+		let idx := try self.index_of(needle) => return false;
 		let _ := self.remove(idx);
 		return true;
 	};

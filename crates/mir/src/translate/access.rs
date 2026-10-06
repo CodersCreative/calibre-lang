@@ -31,13 +31,14 @@ impl MiddleEnvironment {
         scope: ScopeId,
         args: Vec<CallArg>,
         reverse_args: Vec<AstNode>,
-    ) -> Box<[MiddleNode]> {
+    ) -> Box<[(MiddleNode, Option<MirDataType>)]> {
         args.into_iter()
             .map(AstNode::from)
             .chain(reverse_args)
             .map(|arg| {
                 let span = arg.span;
-                arg.lower_or_empty(self, scope, span, None)
+                let node_type = arg.type_of(self, scope, span);
+                (arg.lower_or_empty(self, scope, span, None), node_type)
             })
             .collect()
     }

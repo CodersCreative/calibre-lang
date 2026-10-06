@@ -705,7 +705,7 @@ impl ParserDataType {
                             )))),
                             RefMutability::MutRef,
                         ),
-                        ParserInnerType::Int,
+                        ParserInnerType::UInt,
                     ],
                     ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Dynamic))),
                 ),
