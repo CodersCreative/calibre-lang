@@ -1,3 +1,4 @@
+// TODO Fix - FAILING - list -> gen conversion
 type Counter := struct { current end : int };
 
 @overload("as") fn (self : Counter) -> gen:<int> => {

@@ -1,8 +1,8 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAs, MirAssignment, MirBinary, MirBoolean, MirCall,
-        MirComparison, MirDeref, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex, MirIs,
-        MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
+        MirComparison, MirDeref, MirEmit, MirEnum, MirField, MirFunction, MirIdentifier, MirIndex,
+        MirIs, MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
     },
     symbols::VariableKey,
 };
@@ -114,6 +114,7 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<VariableKey, InlineFn>)
         }
         MiddleNodeType::AsExpression(MirAs { value, .. })
         | MiddleNodeType::IsExpression(MirIs { value, .. })
+        | MiddleNodeType::Emit(MirEmit { value, .. })
         | MiddleNodeType::NegExpression(MirNeg { value })
         | MiddleNodeType::RefStatement(MirRef { value, .. })
         | MiddleNodeType::DerefStatement(MirDeref { value })

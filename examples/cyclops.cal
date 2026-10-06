@@ -18,7 +18,7 @@ const main := fn => {
 
 const print_vector := fn (v : list:<int>, nc : int) => {
 	let mut col := 0;
-	let txt := "";
+	let mut txt := "";
 	
 	for e in v => {
 		txt &= fmt"{e}\t";
@@ -32,6 +32,7 @@ const print_vector := fn (v : list:<int>, nc : int) => {
 	print(txt);
 };
 
+@pure(memo)
 const is_cyclops_number := fn (num : int) -> bool => {
 	if num = 0 => return true;
 	
@@ -72,15 +73,10 @@ const first_cyclops := fn (n : int) -> list:<int> => {
 	return result;
 };
 
-const is_prime := fn (n : int) -> bool => {
-	if n < 2 => return false;
-	
-	let sqrt_n := ((n as! float) ** 0.5) as! int;
-	
-	for i in 2..=sqrt_n => if (n % i) = 0 => return false;
-	
-	return true;
-};
+// Im wrapping the default is_prime function with memoization
+@pure(memo)
+const is_prime := fn (n : int) -> bool =>
+	return n.is_prime();
 
 const first_cyclops_primes := fn (n : int) -> list:<int> => {
 	let mut result := list:<int>[];
@@ -135,6 +131,7 @@ const first_blind_cyclops_primes := fn (n : int) -> list:<int> => {
 	return result;
 };
 
+@pure(memo)
 const is_palindrome := fn (n : int) -> bool => {
 	let mut k := 0;
 	let mut l := n;

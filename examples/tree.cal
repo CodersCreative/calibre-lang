@@ -1,7 +1,8 @@
 import (Path, Dir, FileType) from std::fs;
 
-@pure(memo(path));
-const get_tree_output := fn (path : Path, depth : int = 100) -> str => {
+// Fix memo with Path that way we can remove dir_name
+@pure(memo(dir_name));
+const get_tree_output := fn (dir_name : str, path : Path, depth : int = 100) -> str => {
 	if depth <= 0 => return "";
 	let objects : str!list:<DirEntry> = path.read_dir();
 	let objects : list:<DirEntry> = try objects => panic();
@@ -14,7 +15,7 @@ const get_tree_output := fn (path : Path, depth : int = 100) -> str => {
 		let typ : str!FileType = object.file_type();
 		let typ : FileType = try typ => panic();
 		if typ.is_dir() => {
-			let dir_out := get_tree_output(object.path(), depth - 1);
+			let dir_out := get_tree_output(object.file_name(), object.path(), depth - 1);
 			if !dir_out.is_empty() => {
 				out &= dir_out; 
 				out &= "\n";
@@ -27,5 +28,5 @@ const get_tree_output := fn (path : Path, depth : int = 100) -> str => {
 
 @current_context const main := fn => {
 	let path : Path = Path.new(current_context.path.replace("examples/tree.cal", "."));
-	print(get_tree_output(path));
+	print(get_tree_output("", path));
 };

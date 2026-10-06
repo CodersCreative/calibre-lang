@@ -141,6 +141,7 @@ impl MiddleNode {
                 count += right.len();
             }
             MiddleNodeType::AsExpression(MirAs { value, .. })
+            | MiddleNodeType::Emit(MirEmit { value, .. })
             | MiddleNodeType::FieldAccess(MirField { base: value, .. })
             | MiddleNodeType::IsExpression(MirIs { value, .. })
             | MiddleNodeType::NegExpression(MirNeg { value })
@@ -213,6 +214,7 @@ impl MiddleNode {
                 right.substitute(repl);
             }
             MiddleNodeType::AsExpression(MirAs { value, .. })
+            | MiddleNodeType::Emit(MirEmit { value, .. })
             | MiddleNodeType::IsExpression(MirIs { value, .. })
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })
@@ -273,6 +275,7 @@ impl MiddleNode {
                 ..
             }) => left.calls_self(name) || right.calls_self(name),
             MiddleNodeType::AsExpression(MirAs { value, .. })
+            | MiddleNodeType::Emit(MirEmit { value })
             | MiddleNodeType::IsExpression(MirIs { value, .. })
             | MiddleNodeType::NegExpression(MirNeg { value })
             | MiddleNodeType::RefStatement(MirRef { value, .. })

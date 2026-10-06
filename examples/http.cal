@@ -1,3 +1,4 @@
+// TODO Fix - FAILING - Invalid uri character
 import * from std::net;
 import * from std::thread;
 import * from std::console;
@@ -5,7 +6,7 @@ import * from std::console;
 const main := fn => {
 	let listener := Tcp.listen("127.0.0.1", 41001);
 	
-	spawn => {
+	let wg := spawn => {
 		let sock := Tcp.connect("127.0.0.1", 41001);
 		let req := "GET / HTTP/1.1\nHost: 127.0.0.1\nConnection: close\n\n";
 		let _ := sock.write(req);
@@ -13,6 +14,7 @@ const main := fn => {
 		print("local raw response => " & raw);
 		sock.close();
 	};
+	defer wg.wait()
 	
 	let stream := Tcp.accept(listener);
 	print("server accepted connection");

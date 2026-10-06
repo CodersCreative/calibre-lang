@@ -19,7 +19,6 @@ const main := fn => {
 	nums.insert(2, 99);
 	nums.remove_value(4);
 	print("nums => " & nums);
-	print("slice => " & nums.slice(1, 3));
 	print("sum/min/max => " & nums.sum() & ", " & nums.min() & ", " & nums.max());
 	
 	let words := list:<str>["alpha", "beta", "gamma"];

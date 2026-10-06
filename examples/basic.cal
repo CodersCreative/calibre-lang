@@ -1,3 +1,4 @@
+// TODO Fix - FAILING - Type inference
 import std::console;
 
 @default type Stack := struct { values : list:<int> };
@@ -27,7 +28,7 @@ type StackList := struct (list:<Stack2>);
 	let mut stacks := StackList(list:<Stack2>[move arr2]);
 	stacks.0[0].0.values[2] := 80;
 	print("stacks.0[0].0.values[2] = " & (try!! stacks.0[0]).0.values[2]);
-	let mut hashmap : HashMap:<str, str> = HashMap:<str, str>.new(("hello", "world"), ("world", "hello"));
+	let mut hashmap := HashMap:<str, str>.new(("hello", "world"), ("world", "hello"));
 	if let .Some : x <- HashMap:<str, str>.get(hashmap.&, "hello") => print(x);
 	if let .Some : x <- hashmap.get("world") => print(x);
 	if let .None <- hashmap.get("") => print("none");

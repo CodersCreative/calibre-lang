@@ -2,8 +2,8 @@ use super::*;
 use calibre_mir::{
     ast::{
         MiddleNodeType, MirAggregate, MirAs, MirAssignment, MirBinary, MirBoolean, MirCall,
-        MirComparison, MirConditional, MirDeref, MirEnum, MirField, MirFunction, MirIndex, MirList,
-        MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
+        MirComparison, MirConditional, MirDeref, MirEmit, MirEnum, MirField, MirFunction, MirIndex,
+        MirList, MirLoop, MirNeg, MirRange, MirRef, MirReturn, MirScopeDecl, MirVarDecl,
     },
     scoping::ScopeId,
     symbols::resolve::{Key, ResolutionOptions},
@@ -56,6 +56,7 @@ impl CalibreLanguageServer {
                 })
                 | MiddleNodeType::NegExpression(MirNeg { value, .. })
                 | MiddleNodeType::AsExpression(MirAs { value, .. })
+                | MiddleNodeType::Emit(MirEmit { value, .. })
                 | MiddleNodeType::FunctionDeclaration(MirFunction { body: value, .. })
                 | MiddleNodeType::Return(MirReturn {
                     value: Some(value), ..

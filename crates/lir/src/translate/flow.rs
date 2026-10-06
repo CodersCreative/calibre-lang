@@ -5,12 +5,11 @@ Continue,
 Return,
 Conditional,
 LoopDeclaration,
-RangeDeclaration,
-Emit
+RangeDeclaration
 */
 
 use crate::{
-    ast::{LirEmit, LirLoad, LirNodeType, LirRange, LirTerminator},
+    ast::{LirLoad, LirNodeType, LirRange, LirTerminator},
     environment::LirEnvironment,
     translate::LirLowering,
 };
@@ -81,8 +80,11 @@ impl LirLowering for MirReturn {
 impl LirLowering for MirConditional {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType {
-        let then_id = env.create_block();
-        let else_id = env.create_block();
+        let then_start = env.create_block();
+        let else_start = env.create_block();
+
+        // Create the merge.
+        let merge_id = env.create_block();
 
         let temp = env.get_temp();
         env.declare_temp_null(span, temp.clone());
@@ -91,49 +93,35 @@ impl LirLowering for MirConditional {
         env.set_terminator(LirTerminator::Branch {
             span,
             condition: cond,
-            then_block: then_id,
-            else_block: Some(else_id),
+            then_block: then_start,
+            else_block: Some(else_start),
         });
 
-        env.switch_to(then_id);
+        // Lower the then block
+        env.switch_to(then_start);
         let then_val = env.lower_node(*self.then);
-        let then_open = env.current_block_open();
-        if then_open {
+
+        if env.current_block_open() {
             env.assign_temp_if_non_null(span, temp.clone(), then_val);
+            env.jump_if_open(span, merge_id);
         }
 
-        env.switch_to(else_id);
+        // Lower the else block
+        env.switch_to(else_start);
         let else_val = if let Some(alt) = self.otherwise {
             env.lower_node(*alt)
         } else {
             LirNodeType::null()
         };
-        let else_open = env.current_block_open();
-        if else_open {
+
+        if env.current_block_open() {
             env.assign_temp_if_non_null(span, temp.clone(), else_val);
+            env.jump_if_open(span, merge_id);
         }
 
-        if then_open && else_open {
-            let merge_id = env.create_block();
-            env.switch_to(then_id);
-            env.jump_if_open(span, merge_id);
+        env.switch_to(merge_id);
 
-            env.switch_to(else_id);
-            env.jump_if_open(span, merge_id);
-
-            env.switch_to(merge_id);
-            LirNodeType::Load(LirLoad { value: temp })
-        } else if then_open {
-            env.switch_to(then_id);
-            LirNodeType::Load(LirLoad { value: temp })
-        } else if else_open {
-            env.switch_to(else_id);
-            LirNodeType::Load(LirLoad { value: temp })
-        } else {
-            let continue_id = env.create_block();
-            env.switch_to(continue_id);
-            LirNodeType::Load(LirLoad { value: temp })
-        }
+        LirNodeType::Load(LirLoad { value: temp })
     }
 }
 
@@ -180,8 +168,13 @@ impl LirLowering for MirRange {
 impl LirLowering for MirEmit {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Emit(LirEmit {
-            value: Box::new(env.lower_node(*self.value)),
-        })
+        env.lower_node(*self.value)
+    }
+
+    fn lower_lvalue<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> crate::ast::LirLValue
+    where
+        Self: Sized,
+    {
+        env.lower_lvalue(*self.value)
     }
 }

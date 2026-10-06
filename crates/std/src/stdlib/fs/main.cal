@@ -46,8 +46,7 @@ impl Path {
 		return path_stem(self.inner);
 	};
 
-	@pure
-	const join := fn (self : &Path, other : str) => path_join(self.inner, other);
+	const join := fn (self : &mut Path, other : str) => path_join(self.inner, other);
 
 	@pure
 	const with_extension := fn (self : &Path, extension : str) -> Path => return Path { inner : path_with_extension(self.inner, extension) };

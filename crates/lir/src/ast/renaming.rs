@@ -2,9 +2,8 @@ use std::sync::Arc;
 
 use crate::ast::{
     LirAggregate, LirAs, LirAssign, LirBinary, LirBoolean, LirCall, LirClosure, LirComparison,
-    LirDeclare, LirDeref, LirDiscriminant, LirDrop, LirEmit, LirEnum, LirIndex, LirIs, LirLValue,
-    LirList, LirLoad, LirMember, LirMove, LirNode, LirNodeType, LirRange, LirRef, LirRefLoad,
-    LirSpawn,
+    LirDeclare, LirDeref, LirDiscriminant, LirDrop, LirEnum, LirIndex, LirIs, LirLValue, LirList,
+    LirLoad, LirMember, LirMove, LirNode, LirNodeType, LirRange, LirRef, LirRefLoad, LirSpawn,
 };
 use calibre_mir::{
     MirRenamable, MirRenameState, scoping::FullyQualifiedPath, symbols::VariableKey,
@@ -45,9 +44,6 @@ impl MirRenamable for LirNodeType {
                 value.rename(state);
             }
             Self::Discriminant(LirDiscriminant { value }) => {
-                value.rename(state);
-            }
-            Self::Emit(LirEmit { value }) => {
                 value.rename(state);
             }
             Self::Declare(LirDeclare {

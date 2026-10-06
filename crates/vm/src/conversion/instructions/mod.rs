@@ -175,6 +175,7 @@ impl VMInstruction {
                 | VMInstruction::Branch(_)
                 | VMInstruction::Jump(_)
                 | VMInstruction::Return(_)
+                | VMInstruction::Spawn(_)
         )
     }
 

@@ -34,10 +34,12 @@ impl MiddleEnvironment {
                     .unwrap_variable();
                 Some(self.symbols.variables.get(&ident)?.var_type == VarType::Mutable)
             }
-            AstNodeType::Ternary(x) => self.check_if_mutable(scope, &x.then).and_then(|_| {
+            AstNodeType::Ternary(x) => self.check_if_mutable(scope, &x.then).map(|y| {
                 x.otherwise
                     .as_ref()
                     .and_then(|y| self.check_if_mutable(scope, y))
+                    .unwrap_or(true)
+                    && y
             }),
             AstNodeType::DerefStatement(AstDeref { value })
             | AstNodeType::RefStatement(AstRef { value, .. }) => {
@@ -75,6 +77,7 @@ impl MirLowering for AstAssignment {
             .check_if_mutable(scope, &self.identifier)
             .is_some_and(|x| !x)
         {
+            println!("{}", self.identifier);
             return Err(env.context.err_at_span(
                 self.identifier.span,
                 MiddleErr::InvalidMutation(self.identifier.to_string()),

@@ -112,12 +112,14 @@ impl AstPrattParserFoldable for AstTernary {
         let ternary = AstNode::new(
             sp.into(),
             AstNodeType::Ternary(AstTernary {
-                comparison: Box::new(value.1),
+                comparison: Box::new(value.1.clone()),
                 then: Box::new(base),
                 otherwise: value.2.clone().map(Box::new),
                 ternary_type: value.0,
             }),
         );
+
+        let otherwise_exists = value.2.is_some();
 
         if let Some(otherwise) = value.2
             && let AstNodeType::AssignmentExpression(AstAssignment { identifier, value }) =
@@ -128,6 +130,25 @@ impl AstPrattParserFoldable for AstTernary {
             };
 
             ternary.otherwise = Some(identifier);
+
+            return AstNode::new(
+                sp.into(),
+                AstNodeType::AssignmentExpression(AstAssignment {
+                    identifier: Box::new(AstNode::new(sp.into(), AstNodeType::Ternary(ternary))),
+                    value,
+                }),
+            );
+        }
+
+        if !otherwise_exists
+            && let AstNodeType::AssignmentExpression(AstAssignment { identifier, value }) =
+                value.1.node_type
+        {
+            let AstNodeType::Ternary(mut ternary) = ternary.node_type else {
+                return ternary;
+            };
+
+            ternary.comparison = identifier;
 
             return AstNode::new(
                 sp.into(),

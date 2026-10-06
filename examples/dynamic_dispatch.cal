@@ -1,3 +1,4 @@
+// TODO Fix - FAILING - Has Traits
 trait Animal {
 	const name : fn (&Self) -> str;
 
