@@ -17,16 +17,12 @@ use calibre_parser::ast::nodes::scopes::AstScopeDef;
 use calibre_parser::ast::nodes::types::Overload;
 use calibre_parser::{
     Span,
-    ast::{
-        Operator,
-        nodes::{AstNode, AstNodeType, VarType},
-    },
+    ast::nodes::{AstNode, AstNodeType, VarType},
 };
 use indextree::{Arena, NodeId};
 use rustc_hash::FxHashMap;
 use std::fmt::Debug;
 use std::path::PathBuf;
-use std::str::FromStr;
 use tracing::{debug, instrument};
 use ustr::Ustr;
 
@@ -58,9 +54,20 @@ impl MiddleEnvironment {
         generic_params: Vec<Ustr>,
     ) -> Result<Option<MiddleOverload>, MiddleErr> {
         debug!("processing overload");
-        overload.verify().map_err(MiddleErr::Overload)?;
+        let operator = overload.verify().map_err(MiddleErr::Overload)?;
 
-        let operator = Operator::from_str(&overload.operator.text).map_err(MiddleErr::Overload)?;
+        let generic_params: Vec<Ustr> = overload
+            .header
+            .generics
+            .0
+            .iter()
+            .map(|g| Ustr::from(&g.identifier.to_string()))
+            .chain(generic_params)
+            .collect();
+
+        if !generic_params.is_empty() {
+            self.scoping.push_generic_params(generic_params.clone());
+        }
 
         let return_type = self.resolve_data_type(
             scope,
@@ -82,6 +89,10 @@ impl MiddleEnvironment {
 
             Ok(ty)
         }).collect::<Result<Vec<_>, MiddleErr>>()?;
+
+        if !generic_params.is_empty() {
+            self.scoping.pop_generic_params();
+        }
 
         debug!(operator = %operator, "overload processed successfully");
         Ok(Some(MiddleOverload {

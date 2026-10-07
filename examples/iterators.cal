@@ -1,13 +1,14 @@
 // TODO Fix - FAILING - list -> gen conversion
 type Counter := struct { current end : int };
 
-@overload("as") fn (self : Counter) -> gen:<int> => {
-	if self.current >= self.end => return;
-	
-	let value := self.current;
-	self.current := self.current + 1;
-	return value;
-}
+@overload("as") fn (self : Counter) -> null!gen:<int> =>
+	return ok(fn -> gen:<int> => {
+		if self.current >= self.end => return;
+		
+		let value := self.current;
+		self.current := self.current + 1;
+		return value;
+	})
 
 const main := fn => {
 	print("Starting: ");

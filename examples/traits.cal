@@ -16,8 +16,8 @@ impl Person {
 type User := struct { name : str };
 
 // Basically implementing the trait
-@overload("as") fn(self : User) -> Person => 
-	return Person {name : self.name};
+@overload("as") fn(self : User) -> null!Person => 
+	return ok(Person {name : self.name});
 
 // Is being used as a trait
 @default
@@ -34,20 +34,20 @@ const show := fn (label : str, p : Human) => {
 
 type Ty := struct { };
 
-@overload("as") fn(self : Ty) -> Human => {
+@overload("as") fn(self : Ty) -> null!Human => {
 	let mut human := Human.default();
 	human.name = "Ty";
-	return human;
+	return ok(human);
 }
 
 type Tadiwa := struct { };
 
-@overload("as") fn(self : Tadiwa) -> Human =>
-	return Human {
+@overload("as") fn(self : Tadiwa) -> null!Human =>
+	return ok(Human {
 		name : "Tadiwa",
 		age : 21u,
 		country : "United States"
-	};
+	});
 
 
 @current_context const main := fn => {

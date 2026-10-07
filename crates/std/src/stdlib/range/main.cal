@@ -1,11 +1,12 @@
 @pure
-@overload("as") fn (self : range) -> gen:<int> => {
-	let end := len(self.range);
-	let start := min_or_zero(self.range);
-	let current := start + self.index;
-	if current >= end => return;
-	return start + (self.index += 1);
-} 
+@overload("as") fn (self : range) -> null!gen:<int> =>
+	return ok(fn -> gen:<int> => {
+		let end := len(self.range);
+		let start := min_or_zero(self.range);
+		let current := start + self.index;
+		if current >= end => return;
+		return start + (self.index += 1);
+	});
 
 impl range {
 	@pure

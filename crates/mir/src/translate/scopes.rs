@@ -224,12 +224,11 @@ impl MirLowering for AstScopeDef {
                 }
             } else {
                 for statement in body.into_iter() {
-                    if let Ok(x) = statement
+                    let x = statement
                         .clone()
-                        .lower(env, new_scope, statement.span, None)
-                    {
-                        stmts.extend(x.nodes_if_isnt_temp());
-                    }
+                        .lower_or_empty(env, new_scope, statement.span, None);
+
+                    stmts.extend(x.nodes_if_isnt_temp());
                 }
             }
         }

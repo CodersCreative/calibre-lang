@@ -3,7 +3,7 @@ import * from std::console;
 import * from std::list;
 import * from std::str;
 
-@overload("as") fn (self : int) -> str!str => ok("int");
+@overload("as") fn (self : int) -> null!str => ok("int");
 
 type Vec2 := struct { x y : int }
 
@@ -27,7 +27,7 @@ type Vec2 := struct { x y : int }
 
 @overload("in") fn (value : int, vec : Vec2) -> bool => return (value = vec.x) || (value = vec.y);
 
-@overload("as") fn (self : Vec2) -> str!str => return ok("Vec2");
+@overload("as") fn (self : Vec2) -> null!str => return ok("Vec2");
 
 const main := fn => {
 	let mut v := Vec2 { x : 1, y : 2 };

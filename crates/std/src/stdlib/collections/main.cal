@@ -10,11 +10,12 @@ type HashMap:<K, V> := struct { inner : host };
 @pure
 @overload("in") fn<K, V>(key : K, map : HashMap:<K, V>) -> bool => return map.contains(key);
 
+// TODO Rewrite this
 @pure
-@overload("as") fn<K, V>(self : HashMap:<K, V>) -> gen:<<K, V>> => {
-	for i in len(self) => 
-		return try!! self[i];
-} 
+@overload("as") fn<K, V>(self : &HashMap:<K, V>) -> null!gen:<<&K, &V>> => {
+	let values : list:<<&K, V>> = self.entries()
+	return values as gen:<<&K, &V>>
+}
 
 type HashSet:<T> := struct { inner : host };
 
@@ -22,11 +23,10 @@ type HashSet:<T> := struct { inner : host };
 @overload("in") fn<T>(value : T, set : HashSet:<T>) -> bool => return set.contains(value);
 
 @pure
-@overload("as") fn<T>(self : &HashSet:<T>) -> gen:<&T> => {
+@overload("as") fn<T>(self : &HashSet:<T>) -> null!gen:<&T> => {
 	let values : list:<&T> = self.values()
-	return values as! gen:<&T>
-} 
-
+	return values as gen:<&T>
+}
 
 impl<K, V> HashMap:<K, V> {
 	@pure

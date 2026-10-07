@@ -56,7 +56,7 @@ pub trait MirLowering {
             Ok(node) => node,
             Err(err) => {
                 debug!(error = %err, "evaluation failed, pushing error");
-                env.context.push_error(err);
+                env.context.push_error(env.context.err_at_span(span, err));
                 MiddleNode::new(MiddleNodeType::EmptyLine, span)
             }
         }

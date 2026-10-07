@@ -127,35 +127,113 @@ impl Overload {
         &self.operator.span
     }
 
-    pub fn verify(&self) -> Result<(), String> {
+    pub fn verify(&self) -> Result<Operator, String> {
         let operator = Operator::from_str(&self.operator.text)?;
-        match operator {
-            Operator::As if !self.header.return_type.is_result() => Err(format!(
-                "Expect result return type (Err!Ok) found {}",
-                self.header.return_type
-            )),
-            Operator::In if !self.header.return_type.is_bool() => Err(format!(
-                "Expect bool return type found {}",
-                self.header.return_type
-            )),
-            Operator::Binary(_) | Operator::Comparison(_) | Operator::Binary(_)
-                if self.header.return_type.is_null() || self.header.return_type.is_auto() =>
-            {
-                Err(format!(
-                    "Expect known non-null return type found {}",
-                    self.header.return_type
-                ))
+        match &operator {
+            Operator::As => {
+                if self.header.parameters.len() != 1 {
+                    return Err(format!(
+                        "An `as` overload requires that there only be 1 parameter but {} was supplied.",
+                        self.header.parameters.len(),
+                    ));
+                }
+
+                if !self.header.return_type.is_result() {
+                    return Err(format!(
+                        "An `as` overload requires that the return type be an result (`Err!Ok`) not {}",
+                        self.header.return_type,
+                    ));
+                }
             }
-            Operator::Index if self.header.parameters.len() != 2 => Err(format!(
-                "Expect 2 parameters found {}",
-                self.header.parameters.len()
-            )),
-            Operator::IndexAssign if self.header.parameters.len() != 3 => Err(format!(
-                "Expect 3 parameters found {}",
-                self.header.parameters.len()
-            )),
-            _ => Ok(()),
+            Operator::IndexAssign => {
+                if self.header.parameters.len() != 3 {
+                    return Err(format!(
+                        "A `[]=` overload requires that there be 3 parameters but {} were supplied.",
+                        self.header.parameters.len(),
+                    ));
+                }
+            }
+            Operator::Index => {
+                if self.header.parameters.len() != 2 {
+                    return Err(format!(
+                        "A `[]` overload requires that there be 2 parameters but {} were supplied.",
+                        self.header.parameters.len(),
+                    ));
+                }
+
+                if !self.header.return_type.is_option() {
+                    return Err(format!(
+                        "A `[]` overload requires that the return type be an option (`T?`) not {}",
+                        self.header.return_type,
+                    ));
+                }
+            }
+            Operator::In => {
+                if self.header.parameters.len() != 2 {
+                    return Err(format!(
+                        "An `in` overload requires that there be 2 parameters but {} were supplied.",
+                        self.header.parameters.len(),
+                    ));
+                }
+
+                if !self.header.return_type.is_bool() && !self.header.return_type.is_option() {
+                    return Err(format!(
+                        "An `in` overload requires that the return type either be a `bool` or option (`T?`) not {}",
+                        self.header.return_type,
+                    ));
+                }
+            }
+            Operator::Binary(x) => {
+                if self.header.parameters.len() != 2 {
+                    return Err(format!(
+                        "A `{}` overload requires that there be 2 parameters but {} were supplied.",
+                        x,
+                        self.header.parameters.len(),
+                    ));
+                }
+
+                if self.header.return_type.is_null() {
+                    return Err(format!(
+                        "A `{}` overload requires that a return type be present",
+                        x,
+                    ));
+                }
+            }
+            Operator::Comparison(x) => {
+                if self.header.parameters.len() != 2 {
+                    return Err(format!(
+                        "A `{}` overload requires that there be 2 parameters but {} were supplied.",
+                        x,
+                        self.header.parameters.len(),
+                    ));
+                }
+
+                if self.header.return_type.is_null() {
+                    return Err(format!(
+                        "A `{}` overload requires that a return type be present",
+                        x,
+                    ));
+                }
+            }
+            Operator::Boolean(x) => {
+                if self.header.parameters.len() != 2 {
+                    return Err(format!(
+                        "A `{}` overload requires that there be 2 parameters but {} were supplied.",
+                        x,
+                        self.header.parameters.len(),
+                    ));
+                }
+
+                if self.header.return_type.is_null() {
+                    return Err(format!(
+                        "A `{}` overload requires that a return type be present",
+                        x,
+                    ));
+                }
+            }
         }
+
+        Ok(operator)
     }
 }
 
