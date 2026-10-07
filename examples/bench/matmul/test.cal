@@ -1,15 +1,15 @@
 const matmul := fn (a b : list:<list:<float>>) -> list:<list:<float>> => {
 	let n := len(a);
-	let m := len(try!! b[0]);
-	let p := len(try!! a[0]);
+	let m := len(b[0]!);
+	let p := len(a[0]!);
 	let mut c := list:<list:<float>>[];
 	
 	for i in n => {
 		let mut ci := list:<float>[0f for n];
 		
 		for k in p => {
-			let aik : float = try!! a[i][k];
-			let bk : list:<float> = try!! b[k];
+			let aik : float = a[i][k]!;
+			let bk : list:<float> = b[k]!;
 			
 			for j in m => ci[j] := (try ci[j] => emit 0) + (aik * try bk[j] => emit 0);
 		};
@@ -31,7 +31,7 @@ const main := fn => {
 	let d := matmul(a, b);
 
 	print("Finished");
-	print(try!! d[n / 2][n / 2]);
+	print(d[n / 2][n / 2]!);
 	print("Success");
 };
 

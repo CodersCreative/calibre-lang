@@ -54,4 +54,7 @@ const main := fn => {
     print("coerced vec : ", my_coerced_vec);
     my_coerced_vec := (80, 20);
     print("coerced vec : ", my_coerced_vec);
+
+    let my_list : list:<int> = [90, 39];
+    print(my_list[1]!); 
 }

@@ -806,6 +806,7 @@ impl From<MiddleNodeType> for AstNodeType {
             MiddleNodeType::IndexAccess(value) => AstNodeType::IndexAccess(AstIndex {
                 base: Box::new((*value.base).into()),
                 index: Box::new((*value.index).into()),
+                panic: false,
             }),
             MiddleNodeType::Discriminant(MirDiscriminant { value }) => {
                 AstNodeType::CallExpression(AstCall {

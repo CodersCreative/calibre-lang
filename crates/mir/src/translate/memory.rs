@@ -212,7 +212,7 @@ impl MirLowering for AstMove {
 
                 AstNode::new_temp_scope(vec![tmp_decl, member]).lower(env, scope, span, data_type)
             }
-            AstNodeType::IndexAccess(AstIndex { base, index }) => {
+            AstNodeType::IndexAccess(AstIndex { base, index, panic }) => {
                 let tmp_ident = PotentialDollarIdentifier::new(span, env.context.get_temp("move"));
 
                 let tmp_decl = AstNode::new(
@@ -242,6 +242,7 @@ impl MirLowering for AstMove {
                     AstNodeType::IndexAccess(AstIndex {
                         base: Box::new(moved_base),
                         index,
+                        panic,
                     }),
                 );
 

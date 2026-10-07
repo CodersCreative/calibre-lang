@@ -171,7 +171,7 @@ impl MirLowering for AstAssignment {
                         .lower_or_empty(env, scope, span, data_type.clone()),
                 ),
             },
-            AstNodeType::IndexAccess(AstIndex { base, index }) => {
+            AstNodeType::IndexAccess(AstIndex { base, index, .. }) => {
                 if let Some(overloaded) = env.handle_index_assign_overload(
                     scope,
                     span,
@@ -187,8 +187,20 @@ impl MirLowering for AstAssignment {
 
                 MirAssignment {
                     identifier: Box::new(
-                        AstNode::new(span, AstNodeType::IndexAccess(AstIndex { base, index }))
-                            .lower_or_empty(env, scope, span, data_type.clone()),
+                        AstNode::new(
+                            span,
+                            AstNodeType::IndexAccess(AstIndex {
+                                base,
+                                index,
+                                panic: false,
+                            }),
+                        )
+                        .lower_or_empty(
+                            env,
+                            scope,
+                            span,
+                            data_type.clone(),
+                        ),
                     ),
                     value: Box::new(
                         self.value

@@ -44,7 +44,7 @@ const find_values := fn(data_array : &list:<int?>) -> uint => {
   let lines := try file.read_lines();
 
   for i in len(lines).min(99) =>
-    data_array[i] := (try!! lines[i]) as? int
+    data_array[i] := lines[i]! as? int
 }
 
 const bubble_sort := fn(data_array : &mut list:<int?>) => {
@@ -53,10 +53,10 @@ const bubble_sort := fn(data_array : &mut list:<int?>) => {
   for i in n => {
     let mut swapped := false;
     for j in n-i-1 => 
-      if (try (try!! data_array[j]) => continue) > (try (try!! data_array[j+1]) => continue) => {
+      if (try data_array[j]! => continue) > (try data_array[j+1]! => continue) => {
         swapped := true;
-        let temp := try!! data_array[j];
-        data_array[j] := try!! data_array[j+1];
+        let temp := data_array[j]!;
+        data_array[j] := data_array[j+1]!;
         data_array[j+1] := temp;
         print("swap");
       }

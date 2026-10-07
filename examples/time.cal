@@ -9,7 +9,7 @@ const pow := fn(num : int) -> int => return num ** 2;
 
 const main := fn => {
 	let arr : list:<&fn(int) -> int> = [custom_wait_and_time.&, pow.&];
-	print((try!! arr[0])(1));
+	print(arr[0]!(1));
 	Duration.from_s(5).sleep();
 	print("Okay!!");
 };

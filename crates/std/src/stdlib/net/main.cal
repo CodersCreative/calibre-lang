@@ -61,7 +61,7 @@ const strip_prefix := fn (s prefix : str) -> str => {
 	
 	for idx < len(parts) => {
 		if idx > 1 => out &= prefix;
-		out &= try!! parts[idx];
+		out &= parts[idx]!;
 		idx = idx + 1;
 	};
 	

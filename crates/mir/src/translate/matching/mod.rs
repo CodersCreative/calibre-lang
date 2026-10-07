@@ -46,6 +46,7 @@ impl MiddleEnvironment {
             AstNodeType::IndexAccess(AstIndex {
                 base: Box::new(base),
                 index: Box::new(AstNode::int(self.context.current_span(), index)),
+                panic: true,
             }),
         )
     }

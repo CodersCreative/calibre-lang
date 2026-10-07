@@ -32,9 +32,10 @@ impl AstFormatting for AstIndex {
 
     fn narrow_format(&self, formatter: &mut Formatter) -> String {
         format!(
-            "{}[{}]",
+            "{}[{}]{}",
             self.base.format(formatter),
-            self.index.format(formatter)
+            self.index.format(formatter),
+            if self.panic { "!" } else { "" }
         )
     }
 }

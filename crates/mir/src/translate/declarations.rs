@@ -158,12 +158,11 @@ impl MiddleEnvironment {
                 for (idx, entry) in head.into_iter().enumerate() {
                     if let Some((var_type, name)) = entry {
                         push_binding(&mut out, var_type, name, {
-                            let index_node = AstNode::int(span, idx);
                             AstNode::new(
                                 span,
-                                AstNodeType::IndexAccess(AstIndex {
+                                AstNodeType::FieldAccess(AstField {
                                     base: Box::new(tmp_member_base()),
-                                    index: Box::new(index_node),
+                                    field: PotentialDollarIdentifier::new(span, idx),
                                 }),
                             )
                         });
@@ -191,6 +190,7 @@ impl MiddleEnvironment {
                             }),
                         );
 
+                        // TODO Rewrite this
                         push_binding(
                             &mut out,
                             var_type,
@@ -200,6 +200,7 @@ impl MiddleEnvironment {
                                 AstNodeType::IndexAccess(AstIndex {
                                     base: Box::new(tmp_member_base()),
                                     index: Box::new(index_expr),
+                                    panic: true,
                                 }),
                             ),
                         );

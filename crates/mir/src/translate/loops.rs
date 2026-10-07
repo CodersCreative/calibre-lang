@@ -391,16 +391,13 @@ impl MirLowering for AstLoop {
                 let loop_item_value = if is_count_loop {
                     idx_node.clone()
                 } else if is_indexable_loop {
-                    AstNode::unwrap_or(
+                    AstNode::new(
                         span,
-                        AstNode::new(
-                            span,
-                            AstNodeType::IndexAccess(AstIndex {
-                                base: Box::new(iter_node.clone()),
-                                index: Box::new(idx_node.clone()),
-                            }),
-                        ),
-                        AstNode::call(span, AstNode::identifier(span, "panic"), Vec::new()),
+                        AstNodeType::IndexAccess(AstIndex {
+                            base: Box::new(iter_node.clone()),
+                            index: Box::new(idx_node.clone()),
+                            panic: true,
+                        }),
                     )
                 } else {
                     AstNode::call(

@@ -2,14 +2,14 @@
 import (Path, File) from std::fs;
 
 const parse_direction := fn (line : str) -> char => {
-	return try!! trim(line)[0];
+	return trim(line)[0]!;
 };
 
 const parse_distance := fn (line : str) -> int => {
 	let chars : str = trim(line);
 	let mut num_text : str = "";
 	
-	for i in len(chars) - 1 => num_text &= try!! chars[i + 1];
+	for i in len(chars) - 1 => num_text &= chars[i + 1]!;
 	return num_text as! int;
 };
 
@@ -18,8 +18,8 @@ const count_zeros_part1 := fn (lines : list:<str>) -> int => {
 	let mut zero_count := 0;
 	
 	for i in 0..len(lines) => {
-		let direction := parse_direction(try!! lines[i]);
-		let distance := parse_distance(try!! lines[i]);
+		let direction := parse_direction(lines[i]!);
+		let distance := parse_distance(lines[i]!);
 		
 		dial += -distance if direction = 'L' else distance;
 		
@@ -37,8 +37,8 @@ const count_zeros_part2 := fn (lines : list:<str>) -> int => {
 	let mut zero_count := 0;
 	
 	for i in 0..len(lines) => {
-		let direction := parse_direction(try!! lines[i]);
-		let distance := parse_distance(try!! lines[i]);
+		let direction := parse_direction(lines[i]!);
+		let distance := parse_distance(lines[i]!);
 		
 		for _ in 0..distance => {
 			if direction = 'L' => {

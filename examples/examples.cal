@@ -16,7 +16,7 @@ const main := fn => {
 		let mut txt : str = "";
 		
 		for i in len(splits) => {
-			txt &= try!! splits[i];
+			txt &= splits[i]!;
 			if i < len(inputs) => txt &= try inputs[i] => emit "";
 		};
 		

@@ -189,9 +189,13 @@ impl<'a> PrattParser {
                     .or_not(),
             );
 
-        let index = select! { Token::LeftSquare => () }
-            .ignore_then(data.stmt.clone().padded_by(potential_new_line()))
-            .then_ignore(select! { Token::RightSquare => () });
+        let index = data
+            .stmt
+            .clone()
+            .padded_by(potential_new_line())
+            .delimited_by(just(Token::LeftSquare), just(Token::RightSquare))
+            .then(select! {Token::Not => ()}.or_not())
+            .boxed();
 
         let memory = just(Token::Dot)
             .padded_by(potential_new_line())
@@ -275,16 +279,21 @@ impl<'a> PrattParser {
                     let span: SimpleSpan = extra.span();
                     AstCall::fold_postfix(base, value, span)
                 }),
-                postfix(90, index, |base, index, sp| {
-                    let span: SimpleSpan = sp.span();
-                    AstNode::new(
-                        span.into(),
-                        AstNodeType::IndexAccess(AstIndex {
-                            base: Box::new(base),
-                            index: Box::new(index),
-                        }),
-                    )
-                }),
+                postfix(
+                    90,
+                    index,
+                    |base, (index, panic): (AstNode, Option<()>), sp| {
+                        let span: SimpleSpan = sp.span();
+                        AstNode::new(
+                            span.into(),
+                            AstNodeType::IndexAccess(AstIndex {
+                                base: Box::new(base),
+                                index: Box::new(index),
+                                panic: panic.is_some(),
+                            }),
+                        )
+                    },
+                ),
                 postfix(90, memory, |value, mutability, sp| {
                     let span: SimpleSpan = sp.span();
                     match mutability {

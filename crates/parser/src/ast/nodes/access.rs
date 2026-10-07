@@ -25,4 +25,5 @@ pub struct AstScope {
 pub struct AstIndex {
     pub base: Box<AstNode>,
     pub index: Box<AstNode>,
+    pub panic: bool,
 }

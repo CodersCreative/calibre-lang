@@ -253,10 +253,11 @@ pub trait NodeVisitor {
                     field,
                 })
             }
-            AstNodeType::IndexAccess(AstIndex { base, index }) => {
+            AstNodeType::IndexAccess(AstIndex { base, index, panic }) => {
                 AstNodeType::IndexAccess(AstIndex {
                     base: Box::new(self.visit(*base)),
                     index: Box::new(self.visit(*index)),
+                    panic,
                 })
             }
             AstNodeType::DestructureDeclaration(AstDeclareDestructure {
@@ -508,6 +509,7 @@ pub trait NodeAnalyzer {
             | AstNodeType::IndexAccess(AstIndex {
                 base: left,
                 index: right,
+                ..
             })
             | AstNodeType::InDeclaration(AstIn {
                 identifier: left,

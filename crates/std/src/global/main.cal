@@ -39,8 +39,8 @@ const fmt := fn (splits : list:<str>, inputs : list:<str>) -> str => {
 	let mut txt : str = "";
 	
 	for i in len(splits) => {
-		txt &= try!! splits[i];
-		if i < len(inputs) => txt &= try!! inputs[i];
+		txt &= splits[i]!;
+		if let .Some : x <- inputs[i] => txt &= x;
 	};
 	
 	return txt;

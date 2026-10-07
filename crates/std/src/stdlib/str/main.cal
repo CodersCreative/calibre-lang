@@ -2,7 +2,7 @@
 @overload("as") fn (self : str) -> null!gen:<char> =>
 	return ok(fn -> gen:<char> => {
 		for i in len(self) => 
-			return try!! self[i];
+			return self[i]!;
 	})
 
 impl str {
@@ -39,8 +39,8 @@ impl str {
 		let cut := if idx < 0 => emit 0 else => emit if idx > l => emit l else => emit idx;
 		let mut left := "";
 		let mut right := "";
-		for i in cut => left &= try!! self[i];
-		for i in cut..l => right &= try!! self[i];
+		for i in cut => left &= self[i]!;
+		for i in cut..l => right &= self[i]!;
 		return tuple(left, right);
 	};
 
@@ -61,7 +61,7 @@ impl str {
 		
 		for _ in parts => {
 			if idx > 0 => out &= to;
-			out &= try!! parts[idx];
+			out &= parts[idx]!;
 			idx += 1;
 		};
 		
@@ -77,7 +77,7 @@ impl str {
 		let mut idx := 1;
 		
 		for _ in rest => {
-			if (idx > 0) && (idx < len(rest)) => out &= try!! rest[idx];
+			if (idx > 0) && (idx < len(rest)) => out &= rest[idx]!;
 			idx += 1;
 		};
 		
@@ -93,7 +93,7 @@ impl str {
 		let mut idx := 0;
 		
 		for _ in parts => {
-			if idx < len(parts) - 1 => out &= try!! parts[idx];
+			if idx < len(parts) - 1 => out &= parts[idx]!;
 			idx += 1;
 		};
 		
@@ -103,38 +103,38 @@ impl str {
 	@pure
 	const lowercase := fn (self : str) -> str => {
 		let mut out := "";
-		for i in len(self) => out &= (try!! self[i]).lowercase();
+		for i in len(self) => out &= (self[i]!).lowercase();
 		return out;
 	};
 
 	@pure
 	const uppercase := fn (self : str) -> str => {
 		let mut out := "";
-		for i in len(self) => out &= (try!! self[i]).uppercase();
+		for i in len(self) => out &= (self[i]!).uppercase();
 		return out;
 	};
 
 	@pure
 	const trim_start := fn (self : str) -> str => {
 		let mut start := 0;
-		for (start < len(self)) && (try!! self[start]).is_whitespace() => start += 1;
+		for (start < len(self)) && self[start]!.is_whitespace() => start += 1;
 		let mut out := "";
-		for i in start..len(self) => out &= try!! self[i];
+		for i in start..len(self) => out &= self[i]!;
 		return out;
 	};
 
 	@pure
 	const trim_end := fn (self : str) -> str => {
 		let mut end := len(self);
-		for (end > 0) && (try!! self[end - 1]).is_whitespace() => end -= 1;
+		for (end > 0) && self[end - 1]!.is_whitespace() => end -= 1;
 		let mut out := "";
-		for i in end => out &= try!! self[i];
+		for i in end => out &= self[i]!;
 		return out;
 	};
 
 	@pure
 	const is_whitespace := fn (self : str) -> bool => {
-		for i in len(self) => if !(try!! self[i]).is_whitespace() => return false;
+		for i in len(self) => if !(self[i]!).is_whitespace() => return false;
 		return true;
 	};
 };

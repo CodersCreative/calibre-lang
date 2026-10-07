@@ -428,7 +428,7 @@ impl IdentifiersUsed for AstNode {
             AstNodeType::ScopeAccess(AstScope { base, .. }) => {
                 names.extend(base.identifiers_used());
             }
-            AstNodeType::IndexAccess(AstIndex { base, index }) => {
+            AstNodeType::IndexAccess(AstIndex { base, index, .. }) => {
                 names.extend(base.identifiers_used());
                 names.extend(index.identifiers_used());
             }
