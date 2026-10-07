@@ -10,6 +10,7 @@ pub mod environment;
 pub mod errors;
 pub mod inline;
 pub mod manifest;
+pub mod monomorphization;
 pub mod multipass;
 pub mod native;
 pub mod scoping;

@@ -35,6 +35,7 @@ use crate::{
     },
     formatter::{AstFormatting, Formatter},
 };
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, matches, ops::Range};
 use ustr::Ustr;
@@ -412,6 +413,17 @@ impl AstNode {
             },
             _ => self,
         }
+    }
+
+    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        let span = self.span;
+
+        // TODO
+        let node_type = match self.node_type {
+            x => x,
+        };
+
+        Self { node_type, span }
     }
 }
 

@@ -692,7 +692,29 @@ impl MirDataType {
         }
     }
 
-    pub fn matches(&self, other: &Self, _generic_params: &[&str]) -> bool {
+    pub fn matches(&self, other: &Self, generic_params: &[&str]) -> bool {
+        if let MirDataType::Struct {
+            identifier,
+            generic_types,
+        } = self
+            && generic_types.is_empty()
+            && let Some(name) = identifier.fully_qualified_path.name
+            && generic_params.contains(&name.as_str())
+        {
+            return true;
+        }
+
+        if let MirDataType::Struct {
+            identifier,
+            generic_types,
+        } = other
+            && generic_types.is_empty()
+            && let Some(name) = identifier.fully_qualified_path.name
+            && generic_params.contains(&name.as_str())
+        {
+            return true;
+        }
+
         match (self, other) {
             (MirDataType::Never, _) | (_, MirDataType::Never) => true,
             (
@@ -710,24 +732,95 @@ impl MirDataType {
                 }
                 ag.iter()
                     .zip(bg.iter())
-                    .all(|(x, y)| x.matches(y, _generic_params))
+                    .all(|(x, y)| x.matches(y, generic_params))
             }
-            (MirDataType::List(a), MirDataType::List(b)) => a.matches(b, _generic_params),
-            (MirDataType::Option(a), MirDataType::Option(b)) => a.matches(b, _generic_params),
+            (
+                MirDataType::Struct {
+                    identifier,
+                    generic_types,
+                },
+                MirDataType::Option(c),
+            ) if identifier.name() == "option" && generic_types.len() == 1 => {
+                generic_types[0].matches(c, generic_params)
+            }
+            (
+                MirDataType::Option(p),
+                MirDataType::Struct {
+                    identifier,
+                    generic_types,
+                },
+            ) if identifier.name() == "option" && generic_types.len() == 1 => {
+                p.matches(&generic_types[0], generic_params)
+            }
+            (
+                MirDataType::Struct {
+                    identifier,
+                    generic_types,
+                },
+                MirDataType::Result {
+                    ok: ok_c,
+                    err: err_c,
+                },
+            ) if identifier.name() == "result" && generic_types.len() == 2 => {
+                generic_types[1].matches(ok_c, generic_params)
+                    && generic_types[0].matches(err_c, generic_params)
+            }
+            (
+                MirDataType::Result {
+                    ok: ok_p,
+                    err: err_p,
+                },
+                MirDataType::Struct {
+                    identifier,
+                    generic_types,
+                },
+            ) if identifier.name() == "result" && generic_types.len() == 2 => {
+                ok_p.matches(&generic_types[1], generic_params)
+                    && err_p.matches(&generic_types[0], generic_params)
+            }
+            (MirDataType::List(a), MirDataType::List(b)) => a.matches(b, generic_params),
+            (MirDataType::Option(a), MirDataType::Option(b)) => a.matches(b, generic_params),
             (MirDataType::Result { ok: ao, err: ae }, MirDataType::Result { ok: bo, err: be }) => {
-                ao.matches(bo, _generic_params) && ae.matches(be, _generic_params)
+                ao.matches(bo, generic_params) && ae.matches(be, generic_params)
             }
-            (MirDataType::Ptr(a), MirDataType::Ptr(b)) => a.matches(b, _generic_params),
-            (MirDataType::Ref(a, _), MirDataType::Ref(b, _)) => a.matches(b, _generic_params),
-            (MirDataType::Ref(a, _), b) => a.matches(b, _generic_params),
-            (a, MirDataType::Ref(b, _)) => a.matches(b, _generic_params),
+            (MirDataType::Ptr(a), MirDataType::Ptr(b)) => a.matches(b, generic_params),
+            (MirDataType::Ref(a, _), MirDataType::Ref(b, _)) => a.matches(b, generic_params),
+            (MirDataType::Ref(a, _), b) => a.matches(b, generic_params),
+            (a, MirDataType::Ref(b, _)) => a.matches(b, generic_params),
+            (
+                MirDataType::Function {
+                    return_type: ret_a,
+                    parameters: param_a,
+                },
+                MirDataType::Function {
+                    return_type: ret_b,
+                    parameters: param_b,
+                },
+            )
+            | (
+                MirDataType::NativeFunction {
+                    return_type: ret_a,
+                    parameters: param_a,
+                },
+                MirDataType::NativeFunction {
+                    return_type: ret_b,
+                    parameters: param_b,
+                },
+            ) => {
+                ret_a.matches(ret_b, generic_params)
+                    && param_a.len() == param_b.len()
+                    && param_a
+                        .iter()
+                        .zip(param_b)
+                        .all(|(x, y)| x.matches(y, generic_params))
+            }
             (MirDataType::Tuple(a), MirDataType::Tuple(b)) => {
                 if a.len() != b.len() {
                     return false;
                 }
                 a.iter()
                     .zip(b.iter())
-                    .all(|(x, y)| x.matches(y, _generic_params))
+                    .all(|(x, y)| x.matches(y, generic_params))
             }
             (x, y) => x == y,
         }

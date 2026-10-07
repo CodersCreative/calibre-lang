@@ -65,6 +65,16 @@ impl MirLowering for AstAssignment {
         let mut identifier_type = self
             .identifier
             .type_of(env, scope, self.identifier.span)
+            .map(|x| {
+                if matches!(self.identifier.node_type, AstNodeType::IndexAccess(_)) {
+                    match x {
+                        MirDataType::Option(inner) => *inner,
+                        other => other,
+                    }
+                } else {
+                    x
+                }
+            })
             .or(data_type.clone());
 
         let value_type = self.value.type_of(env, scope, span);
@@ -183,7 +193,10 @@ impl MirLowering for AstAssignment {
                     return Ok(overloaded);
                 }
 
-                identifier_type = identifier_type.map(|x| x.unwrap_one_option());
+                identifier_type = identifier_type.map(|x| match x {
+                    MirDataType::Option(inner) => *inner,
+                    other => other,
+                });
 
                 MirAssignment {
                     identifier: Box::new(
@@ -226,12 +239,11 @@ impl MirLowering for AstAssignment {
             let value_type = value.value.mir_type_of(env, scope, span).or(value_type);
 
             env.compare_types_ref(
-                identifier_type.as_ref(),
                 value_type.as_ref(),
+                identifier_type.as_ref(),
                 Some(&TagInfo::IgnoreInvalidTypeCheck),
                 span,
-            )
-            .unwrap();
+            )?;
         }
 
         Ok(MiddleNode {

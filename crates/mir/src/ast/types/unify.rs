@@ -42,6 +42,12 @@ impl From<TypeKey> for TypeImplKey {
 impl From<&MirDataType> for TypeImplKey {
     fn from(value: &MirDataType) -> Self {
         match value.unwrap_all_refs() {
+            MirDataType::Struct { identifier, .. } if identifier.name() == "option" => {
+                TypeImplKey::Option
+            }
+            MirDataType::Struct { identifier, .. } if identifier.name() == "result" => {
+                TypeImplKey::Result
+            }
             MirDataType::Struct { identifier, .. } => TypeImplKey::Nominal(identifier.clone()),
             MirDataType::List(_) => TypeImplKey::List,
             MirDataType::Tuple(_) => TypeImplKey::Tuple,
@@ -103,6 +109,24 @@ impl MirDataType {
                 p.can_unify(c, generic_params, bindings)
             }
             (
+                MirDataType::Struct {
+                    identifier,
+                    generic_types,
+                },
+                MirDataType::Option(c),
+            ) if identifier.name() == "option" && generic_types.len() == 1 => {
+                generic_types[0].can_unify(c, generic_params, bindings)
+            }
+            (
+                MirDataType::Option(p),
+                MirDataType::Struct {
+                    identifier,
+                    generic_types,
+                },
+            ) if identifier.name() == "option" && generic_types.len() == 1 => {
+                p.can_unify(&generic_types[0], generic_params, bindings)
+            }
+            (
                 MirDataType::Result {
                     ok: ok_p,
                     err: err_p,
@@ -115,6 +139,32 @@ impl MirDataType {
                 ok_p.can_unify(ok_c, generic_params, bindings)
                     && err_p.can_unify(err_c, generic_params, bindings)
             }
+            (
+                MirDataType::Struct {
+                    identifier,
+                    generic_types,
+                },
+                MirDataType::Result {
+                    ok: ok_c,
+                    err: err_c,
+                },
+            ) if identifier.name() == "result" && generic_types.len() == 2 => {
+                generic_types[1].can_unify(ok_c, generic_params, bindings)
+                    && generic_types[0].can_unify(err_c, generic_params, bindings)
+            }
+            (
+                MirDataType::Result {
+                    ok: ok_p,
+                    err: err_p,
+                },
+                MirDataType::Struct {
+                    identifier,
+                    generic_types,
+                },
+            ) if identifier.name() == "result" && generic_types.len() == 2 => {
+                ok_p.can_unify(&generic_types[1], generic_params, bindings)
+                    && err_p.can_unify(&generic_types[0], generic_params, bindings)
+            }
             (MirDataType::Tuple(ps), MirDataType::Tuple(cs)) => {
                 ps.len() == cs.len()
                     && ps
@@ -125,6 +175,8 @@ impl MirDataType {
             (MirDataType::Ref(p, m_p), MirDataType::Ref(c, m_c)) => {
                 m_p == m_c && p.can_unify(c, generic_params, bindings)
             }
+            (MirDataType::Ref(p, _), c) => p.can_unify(c, generic_params, bindings),
+            (p, MirDataType::Ref(c, _)) => p.can_unify(c, generic_params, bindings),
             (
                 MirDataType::Struct {
                     identifier: id_p,

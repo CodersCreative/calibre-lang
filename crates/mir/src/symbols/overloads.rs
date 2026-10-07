@@ -83,15 +83,9 @@ impl MiddleEnvironment {
                 .find(|x| matches_overload(x))
                 .cloned()
             {
-                let func_type = MirDataType::from(&overload);
                 return Ok(Some(MiddleNode {
                     node_type: MiddleNodeType::CallExpression(MirCall {
-                        caller: Box::new(overload.func.clone().lower(
-                            self,
-                            scope,
-                            span,
-                            Some(func_type),
-                        )?),
+                        caller: Box::new(MiddleNode::identifier(span, overload.func.clone())),
                         args: Box::new([
                             left.lower(self, scope, span, overload.parameters.first().cloned())?,
                             right.lower(self, scope, span, overload.parameters.last().cloned())?,
@@ -146,15 +140,24 @@ impl MiddleEnvironment {
             .cloned();
 
         if let Some(overload) = overload {
-            let func_type = MirDataType::from(&overload);
+            if overload.generic_params.is_empty() {
+                return Ok(Some(MiddleNode {
+                    node_type: MiddleNodeType::CallExpression(MirCall {
+                        caller: Box::new(MiddleNode::identifier(span, overload.func.clone())),
+                        args: Box::new([value.lower(
+                            self,
+                            scope,
+                            span,
+                            overload.parameters.first().cloned(),
+                        )?]),
+                    }),
+                    span,
+                }));
+            }
+
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {
-                    caller: Box::new(overload.func.clone().lower(
-                        self,
-                        scope,
-                        span,
-                        Some(func_type),
-                    )?),
+                    caller: Box::new(MiddleNode::identifier(span, overload.func.clone())),
                     args: Box::new([value.lower(
                         self,
                         scope,
@@ -270,15 +273,9 @@ impl MiddleEnvironment {
             .cloned();
 
         if let Some(overload) = overload {
-            let func_type = MirDataType::from(&overload);
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {
-                    caller: Box::new(overload.func.clone().lower(
-                        self,
-                        scope,
-                        span,
-                        Some(func_type),
-                    )?),
+                    caller: Box::new(MiddleNode::identifier(span, overload.func.clone())),
                     args: Box::new([
                         base.lower(self, scope, span, overload.parameters.first().cloned())?,
                         index.lower(self, scope, span, overload.parameters.get(1).cloned())?,

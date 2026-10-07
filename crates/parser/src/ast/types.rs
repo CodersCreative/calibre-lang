@@ -77,15 +77,15 @@ impl ParserDataType {
         self.data_type.impl_name()
     }
 
-    pub fn substitute(&self, subst: &FxHashMap<String, ParserDataType>) -> ParserDataType {
+    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> ParserDataType {
         let span = self.span;
-        let data_type = match &self.data_type {
-            ParserInnerType::Struct(s) if subst.contains_key(s) => subst
-                .get(s)
+        let data_type = match self.data_type {
+            ParserInnerType::Struct(s) if subst.contains_key(&s) => subst
+                .get(&s)
                 .map(|dt| dt.data_type.clone())
-                .unwrap_or_else(|| self.data_type.clone()),
+                .unwrap_or_else(|| ParserInnerType::Struct(s)),
             ParserInnerType::Tuple(xs) => {
-                ParserInnerType::Tuple(xs.iter().map(|x| x.substitute(subst)).collect())
+                ParserInnerType::Tuple(xs.into_iter().map(|x| x.substitute(subst)).collect())
             }
             ParserInnerType::List(x) => ParserInnerType::List(Box::new(x.substitute(subst))),
             ParserInnerType::Ptr(x) => ParserInnerType::Ptr(Box::new(x.substitute(subst))),
@@ -99,17 +99,23 @@ impl ParserDataType {
                 parameters,
             } => ParserInnerType::Function {
                 return_type: Box::new(return_type.substitute(subst)),
-                parameters: parameters.iter().map(|p| p.substitute(subst)).collect(),
+                parameters: parameters
+                    .into_iter()
+                    .map(|p| p.substitute(subst))
+                    .collect(),
             },
-            ParserInnerType::Ref(x, m) => ParserInnerType::Ref(Box::new(x.substitute(subst)), *m),
+            ParserInnerType::Ref(x, m) => ParserInnerType::Ref(Box::new(x.substitute(subst)), m),
             ParserInnerType::StructWithGenerics {
                 identifier,
                 generic_types,
             } => ParserInnerType::StructWithGenerics {
                 identifier: identifier.clone(),
-                generic_types: generic_types.iter().map(|g| g.substitute(subst)).collect(),
+                generic_types: generic_types
+                    .into_iter()
+                    .map(|g| g.substitute(subst))
+                    .collect(),
             },
-            _ => self.data_type.clone(),
+            x => x,
         };
 
         ParserDataType { data_type, span }

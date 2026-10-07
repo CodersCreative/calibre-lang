@@ -3,6 +3,7 @@ use crate::ast::{
     nodes::{AstNode, DestructurePattern},
     types::{GenericTypes, ParserDataType},
 };
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
@@ -15,6 +16,26 @@ pub struct FunctionHeader {
     )>,
     pub return_type: ParserDataType,
     pub param_destructures: Vec<(usize, DestructurePattern)>,
+}
+
+impl FunctionHeader {
+    pub fn substitute(mut self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        self.parameters = self
+            .parameters
+            .into_iter()
+            .map(|x| {
+                (
+                    x.0,
+                    x.1.map(|x| x.substitute(subst)),
+                    x.2.map(|x| Box::new(x.substitute(subst))),
+                )
+            })
+            .collect();
+
+        self.return_type = self.return_type.substitute(subst);
+
+        self
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -263,6 +263,17 @@ impl MirLowering for AstIndex {
         scope: ScopeId,
         span: Span,
     ) -> Option<MirDataType> {
+        if let Some(x) =
+            env.get_operator_overload(scope, &self.base, &self.index, None, &Operator::Index)
+        {
+            let ret = x.return_type.clone();
+            return if self.panic {
+                Some(ret.unwrap_one_option())
+            } else {
+                Some(ret)
+            };
+        }
+
         let base_type = self.base.type_of(env, scope, span).map(|x| match x {
             MirDataType::Option(x) => *x,
             x => x,

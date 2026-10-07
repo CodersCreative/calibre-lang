@@ -167,6 +167,7 @@ pub struct MiddleVariable {
     pub var_type: VarType,
     pub location: Option<Location>,
     pub key: VariableKey,
+    pub scope: ScopeId,
 }
 
 impl MiddleVariable {
@@ -185,7 +186,7 @@ pub struct MiddleOverload {
     pub operator: Operator,
     pub parameters: Vec<MirDataType>,
     pub return_type: MirDataType,
-    pub func: AstNode,
+    pub func: VariableKey,
     pub generic_params: Vec<Ustr>,
 }
 

@@ -33,20 +33,18 @@ pub enum TypeDefType {
 }
 
 impl TypeDefType {
-    pub fn substitute(&self, subst: &FxHashMap<String, ParserDataType>) -> TypeDefType {
+    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> TypeDefType {
         match self {
             TypeDefType::Struct { fields } => TypeDefType::Struct {
                 fields: match fields {
                     ObjectType::Map(xs) => ObjectType::Map(
-                        xs.iter()
-                            .map(|(k, (tags, v, _))| {
-                                (*k, (tags.clone(), v.substitute(subst), None))
-                            })
+                        xs.into_iter()
+                            .map(|(k, (tags, v, _))| (k, (tags, v.substitute(subst), None)))
                             .collect(),
                     ),
                     ObjectType::Tuple(xs) => ObjectType::Tuple(
-                        xs.iter()
-                            .map(|(tags, v, _)| (tags.clone(), v.substitute(subst), None))
+                        xs.into_iter()
+                            .map(|(tags, v, _)| (tags, v.substitute(subst), None))
                             .collect(),
                     ),
                 },
@@ -57,17 +55,11 @@ impl TypeDefType {
                 default_variant,
             } => TypeDefType::Enum {
                 variants: variants
-                    .iter()
-                    .map(|(tags, k, v)| {
-                        (
-                            tags.clone(),
-                            k.clone(),
-                            v.as_ref().map(|p| p.substitute(subst)),
-                        )
-                    })
+                    .into_iter()
+                    .map(|(tags, k, v)| (tags, k, v.map(|p| p.substitute(subst))))
                     .collect(),
-                default_value: default_value.clone(),
-                default_variant: *default_variant,
+                default_value,
+                default_variant,
             },
             TypeDefType::NewType(inner) => TypeDefType::NewType(Box::new(inner.substitute(subst))),
         }

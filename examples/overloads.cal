@@ -11,12 +11,12 @@ type Vec2 := struct { x y : int }
 
 @overload("=") fn (a b : Vec2) -> bool => return (a.x = b.x) && (a.y = b.y);
 
-@overload("[]") fn (self : Vec2, idx : int) -> int => {
-	if idx = 0 => return self.x;
+@overload("[]") fn (self : Vec2, idx : int) -> int? => {
+	if idx = 0 => return some(self.x);
 	
-	if idx = 1 => return self.y;
+	if idx = 1 => return some(self.y);
 	
-	return 0;
+	return none;
 };
 
 @overload("[]=") fn (self : Vec2, idx value : int) -> Vec2 => {

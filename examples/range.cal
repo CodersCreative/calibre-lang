@@ -1,0 +1,4 @@
+@ignore_invalid_type_check const main := fn => {
+    let mut values : gen:<int> = (0..10) as! gen:<int>;
+    print(values.next())
+}

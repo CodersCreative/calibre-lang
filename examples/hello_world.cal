@@ -1,3 +1,4 @@
 @current_context const main := fn => {
+	print(5 / 2)
 	print("Hello, World! at " & current_context.path);
 };

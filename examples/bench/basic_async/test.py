@@ -6,7 +6,7 @@ async def worker(worker_id: int):
 
 async def main():
     async with asyncio.TaskGroup() as tg:
-        for i in range(800000):
+        for i in range(8000000):
             tg.create_task(worker(i))
 
     print("all workers finished")

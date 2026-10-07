@@ -5,6 +5,7 @@ use crate::ast::{MiddleNode, MiddleNodeType, MirScopeDecl};
 use crate::context::MiddleContext;
 use crate::errors::MiddleErr;
 use crate::manifest::Manifest;
+use crate::monomorphization::Monomorphizer;
 use crate::scoping::{FullyQualifiedPath, ScopeId, Scoping};
 use crate::symbols::resolve::ResolutionOptions;
 use crate::symbols::{MiddleOverload, MiddleVariable, Symbols, TypeKey, VariableKey};
@@ -13,8 +14,11 @@ use crate::tags::context::PackageMetadata;
 use crate::testing::Testing;
 use crate::translate::MirLowering;
 use crate::typing::Typing;
+use calibre_parser::ast::idents::PotentialDollarIdentifier;
+use calibre_parser::ast::nodes::declaration::AstDeclaration;
 use calibre_parser::ast::nodes::scopes::AstScopeDef;
 use calibre_parser::ast::nodes::types::Overload;
+use calibre_parser::ast::types::ParserDataType;
 use calibre_parser::{
     Span,
     ast::nodes::{AstNode, AstNodeType, VarType},
@@ -35,6 +39,7 @@ pub struct MiddleEnvironment {
     pub scoping: Scoping,
     pub tagging: Tagging,
     pub testing: Testing,
+    pub monomorphizer: Monomorphizer,
 }
 
 pub type MirId = NodeId;
@@ -90,6 +95,39 @@ impl MiddleEnvironment {
             Ok(ty)
         }).collect::<Result<Vec<_>, MiddleErr>>()?;
 
+        let span = *overload.span();
+
+        let name = Ustr::from(&format!(
+            "{}_{}_{}",
+            operator,
+            params
+                .iter()
+                .map(|x| x.impl_name())
+                .collect::<Vec<String>>()
+                .join("_"),
+            return_type.impl_name()
+        ));
+
+        let data_type = MirDataType::Function {
+            return_type: Box::new(return_type.clone()),
+            parameters: params.clone(),
+        };
+
+        let key = self.register_variable(scope, name, data_type.clone(), VarType::Constant)?;
+
+        let node = AstNode::new(
+            span,
+            AstNodeType::VariableDeclaration(AstDeclaration {
+                var_type: VarType::Constant,
+                identifier: PotentialDollarIdentifier::new(span, name),
+                value: Box::new(overload.into()),
+                data_type: ParserDataType::from(data_type),
+                declared: true,
+            }),
+        );
+
+        let _ = node.lower_or_empty(self, scope, span, None);
+
         if !generic_params.is_empty() {
             self.scoping.pop_generic_params();
         }
@@ -99,7 +137,7 @@ impl MiddleEnvironment {
             operator,
             return_type,
             parameters: params,
-            func: overload.into(),
+            func: key,
             generic_params,
         }))
     }
@@ -199,6 +237,7 @@ impl MiddleEnvironment {
                 var_type,
                 location: self.context.current_location.clone(),
                 key: key.clone(),
+                scope,
             },
         );
 
