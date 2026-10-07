@@ -1,5 +1,7 @@
 use crate::{
-    ast::types::MirDataType, environment::MiddleEnvironment, scoping::ScopeId,
+    ast::{MiddleNode, MiddleNodeType, types::MirDataType, typing::MirTypable},
+    environment::MiddleEnvironment,
+    scoping::ScopeId,
     translate::MirLowering,
 };
 use calibre_parser::ast::nodes::{AstNode, AstNodeType, flow::AstEmit};
@@ -16,6 +18,18 @@ impl MiddleEnvironment {
                 self.resolve_type_from_node(scope, node)
             }
             AstNodeType::Emit(AstEmit::Scope(x)) => self.resolve_type_from_node(scope, x),
+            _ => None,
+        }
+    }
+
+    pub fn resolve_emit_type_from_middle_node(
+        &mut self,
+        scope: ScopeId,
+        node: &MiddleNode,
+    ) -> Option<MirDataType> {
+        match &node.node_type {
+            MiddleNodeType::Conditional(_) => node.mir_type_of(self, scope, node.span),
+            MiddleNodeType::Emit(x) => x.mir_type_of(self, scope, node.span),
             _ => None,
         }
     }

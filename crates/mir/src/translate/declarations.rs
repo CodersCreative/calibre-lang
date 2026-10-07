@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirVarDecl, types::MirDataType},
+    ast::{MiddleNode, MiddleNodeType, MirVarDecl, types::MirDataType, typing::MirTypable},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -289,25 +289,25 @@ impl MirLowering for AstDeclaration {
 
         let node_ty = self.value.type_of(env, scope, span);
 
-        let data_type = if self.data_type.is_auto() {
+        let mut data_type = if self.data_type.is_auto() {
             None
         } else {
             Some(env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?)
         };
 
-        let data_type = env.compare_types(
-            data_type,
-            node_ty.clone(),
-            Some(&TagInfo::IgnoreInvalidLet),
-            span,
-        )?;
-
         let var_key = if let AstNodeType::FunctionDeclaration(func) = &self.value.node_type {
+            data_type = Some(env.compare_types(
+                data_type,
+                node_ty.clone(),
+                Some(&TagInfo::IgnoreInvalidLet),
+                span,
+            )?);
+
             let key = if self.declared {
                 env.resolve(scope, identifier, ResolutionOptions::idents())?
                     .unwrap_variable()
             } else {
-                env.register_variable(scope, identifier, data_type.clone(), self.var_type)?
+                env.register_variable(scope, identifier, data_type.clone().unwrap(), self.var_type)?
             };
 
             env.handle_function_template(scope, func, key.clone());
@@ -333,16 +333,25 @@ impl MirLowering for AstDeclaration {
 
         let value = self
             .value
-            .lower_or_empty(env, scope, span, Some(data_type.clone()));
+            .lower_or_empty(env, scope, span, data_type.clone());
 
         let var_key = if let Some(var_key) = var_key {
             var_key
         } else {
+            let node_ty = value.mir_type_of(env, scope, span).or(node_ty);
+
+            data_type = Some(env.compare_types(
+                data_type,
+                node_ty.clone(),
+                Some(&TagInfo::IgnoreInvalidLet),
+                span,
+            )?);
+
             if self.declared {
                 env.resolve(scope, identifier, ResolutionOptions::idents())?
                     .unwrap_variable()
             } else {
-                env.register_variable(scope, identifier, data_type.clone(), self.var_type)?
+                env.register_variable(scope, identifier, data_type.clone().unwrap(), self.var_type)?
             }
         };
 
@@ -351,7 +360,7 @@ impl MirLowering for AstDeclaration {
                 var_type: self.var_type,
                 identifier: var_key,
                 value: Box::new(value),
-                data_type,
+                data_type: data_type.unwrap(),
             }),
             span,
         ))

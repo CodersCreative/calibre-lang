@@ -42,8 +42,7 @@ impl ExhaustivenessChecker for TupleExhaustivenessChecker {
 
         if has_infinite {
             return Ok(ExhaustivenessReport::requires_wildcard(
-                "tuple contains infinite possibilities, add a `_` pattern"
-                    .to_string(),
+                "tuple contains infinite possibilities, add a `_` pattern".to_string(),
             ));
         }
 
@@ -52,10 +51,8 @@ impl ExhaustivenessChecker for TupleExhaustivenessChecker {
         for pattern in patterns {
             let (inner_pattern, _aliases) = pattern.clone().alias_bindings();
             if let MatchArmType::TuplePattern(items) = inner_pattern {
-                let field_patterns: Vec<Option<MatchArmType>> = items
-                    .iter()
-                    .map(extract_pattern_from_tuple_item)
-                    .collect();
+                let field_patterns: Vec<Option<MatchArmType>> =
+                    items.iter().map(extract_pattern_from_tuple_item).collect();
                 covered_patterns.push(field_patterns);
             } else {
                 return Ok(ExhaustivenessReport::requires_wildcard(
@@ -101,22 +98,18 @@ fn extract_pattern_from_tuple_item(item: &MatchTupleItem) -> Option<MatchArmType
             name,
             destructure,
             pattern,
-        } => {
-            Some(MatchArmType::Enum {
-                value: value.clone(),
-                var_type: *var_type,
-                name: name.clone(),
-                destructure: destructure.clone(),
-                pattern: pattern.clone(),
-            })
-        }
+        } => Some(MatchArmType::Enum {
+            value: value.clone(),
+            var_type: *var_type,
+            name: name.clone(),
+            destructure: destructure.clone(),
+            pattern: pattern.clone(),
+        }),
         MatchTupleItem::StructPattern(fields) => Some(MatchArmType::StructPattern(fields.clone())),
-        MatchTupleItem::Binding { var_type, name } => {
-            Some(MatchArmType::Let {
-                var_type: *var_type,
-                name: name.clone(),
-            })
-        }
+        MatchTupleItem::Binding { var_type, name } => Some(MatchArmType::Let {
+            var_type: *var_type,
+            name: name.clone(),
+        }),
         _ => None,
     }
 }
@@ -126,7 +119,9 @@ fn compute_domain(env: &MiddleEnvironment, data_type: &MirDataType) -> Vec<Strin
     match data_type.unwrap_all_refs() {
         MirDataType::Bool => vec!["true".to_string(), "false".to_string()],
         MirDataType::Struct { identifier, .. } => {
-            if let Some(obj) = env.typing.objects.get(identifier) && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type {
+            if let Some(obj) = env.typing.objects.get(identifier)
+                && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
+            {
                 return variants
                     .iter()
                     .map(|(name, _)| format!(".{}", name))
@@ -157,7 +152,6 @@ fn cartesian_product(domains: &[Vec<String>]) -> Vec<Vec<String>> {
     result
 }
 
-/// Check if a combination is covered by any pattern
 fn is_combination_covered(combination: &[String], patterns: &[Vec<Option<MatchArmType>>]) -> bool {
     for pattern in patterns {
         if pattern_matches_combination(pattern, combination) {
@@ -175,15 +169,14 @@ fn pattern_matches_combination(pattern: &[Option<MatchArmType>], combination: &[
                     return false;
                 }
             }
-            
+
             Some(MatchArmType::Enum { value, .. }) => {
                 let variant_name = format!(".{}", value.text());
                 if variant_name != *expected_value {
                     return false;
                 }
             }
-            Some(MatchArmType::Wildcard(_)) | Some(MatchArmType::Let { .. })=> {
-            }
+            Some(MatchArmType::Wildcard(_)) | Some(MatchArmType::Let { .. }) => {}
             _ => {
                 return false;
             }

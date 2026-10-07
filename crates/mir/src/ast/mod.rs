@@ -43,6 +43,7 @@ use crate::{
 pub mod identifiers;
 pub mod renaming;
 pub mod types;
+pub mod typing;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MiddleNode {

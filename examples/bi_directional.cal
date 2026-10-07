@@ -2,7 +2,15 @@ type Vector2 := struct {
     x y : int
 };
 
+
+@overload("as") fn(nums : <int, int>) -> null!Vector2 =>
+    return ok(Vector2{
+        x : nums.0,
+        y : nums.1,
+    });
+
 type Vector3 := struct(float, float, float);
+
 
 type Language := enum {
 	// Enums can have hasmap type data structuress.
@@ -12,6 +20,11 @@ type Language := enum {
 	SPANISH,
 	ARABIC : <Language, Language>
 };
+
+type Number := struct(int);
+
+@overload("as") fn(num : int) -> null!Number =>
+    return ok(Number(num))
 
 
 const main := fn => {
@@ -30,4 +43,15 @@ const main := fn => {
     print(lang);
     lang := .ENGLISH : 1;
     print(lang)
+    
+    let my_coerced_int : int = 10.38322;
+    print("coerced int : ", my_coerced_int);
+
+    let my_coerced_number : Number = 10;
+    print("coerced number : ", my_coerced_number);
+
+    let mut my_coerced_vec : Vector2 = (10, 30);
+    print("coerced vec : ", my_coerced_vec);
+    my_coerced_vec := (80, 20);
+    print("coerced vec : ", my_coerced_vec);
 }

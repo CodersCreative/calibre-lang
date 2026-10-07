@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirAssignment, types::MirDataType},
+    ast::{MiddleNode, MiddleNodeType, MirAssignment, types::MirDataType, typing::MirTypable},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -62,29 +62,16 @@ impl MirLowering for AstAssignment {
         span: Span,
         mut data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let identifier_is_index = matches!(self.identifier.node_type, AstNodeType::IndexAccess(_));
-        if env.context.type_check {
-            let identifier_type = self
-                .identifier
-                .type_of(env, scope, self.identifier.span)
-                .or(data_type.clone());
+        let mut identifier_type = self
+            .identifier
+            .type_of(env, scope, self.identifier.span)
+            .or(data_type.clone());
 
-            let value_type = self
-                .value
-                .type_of(env, scope, self.value.span)
-                .or(data_type.clone());
+        let value_type = self.value.type_of(env, scope, span);
 
-            data_type = Some(env.compare_types(
-                if identifier_is_index {
-                    identifier_type.map(|x| x.unwrap_one_option())
-                } else {
-                    identifier_type
-                },
-                value_type,
-                Some(&TagInfo::IgnoreInvalidTypeCheck),
-                span,
-            )?);
-        }
+        data_type = data_type
+            .or_else(|| identifier_type.clone())
+            .or_else(|| value_type.clone());
 
         if env
             .check_if_mutable(scope, &self.identifier)
@@ -96,95 +83,94 @@ impl MirLowering for AstAssignment {
             ));
         }
 
-        match self.identifier.node_type {
+        let value = match self.identifier.node_type {
             AstNodeType::Ternary(AstTernary {
                 comparison,
                 then,
                 otherwise: Some(otherwise),
                 ternary_type: TernaryType::Normal,
-            }) => AstNode {
-                node_type: AstNodeType::IfStatement(AstIf {
-                    comparison: Box::new(IfComparisonType::If(*comparison)),
-                    then: Box::new(AstNode::new(
-                        span,
-                        AstNodeType::AssignmentExpression(AstAssignment {
-                            identifier: then,
-                            value: self.value.clone(),
-                        }),
-                    )),
-                    otherwise: Some(Box::new(AstNode::new(
-                        span,
-                        AstNodeType::AssignmentExpression(AstAssignment {
-                            identifier: otherwise,
-                            value: self.value,
-                        }),
-                    ))),
-                }),
-                span,
+            }) => {
+                return AstNode {
+                    node_type: AstNodeType::IfStatement(AstIf {
+                        comparison: Box::new(IfComparisonType::If(*comparison)),
+                        then: Box::new(AstNode::new(
+                            span,
+                            AstNodeType::AssignmentExpression(AstAssignment {
+                                identifier: then,
+                                value: self.value.clone(),
+                            }),
+                        )),
+                        otherwise: Some(Box::new(AstNode::new(
+                            span,
+                            AstNodeType::AssignmentExpression(AstAssignment {
+                                identifier: otherwise,
+                                value: self.value,
+                            }),
+                        ))),
+                    }),
+                    span,
+                }
+                .lower(env, scope, span, None);
             }
-            .lower(env, scope, span, None),
             AstNodeType::Ternary(AstTernary {
                 comparison,
                 then,
                 otherwise: None,
                 ternary_type: TernaryType::Option,
-            }) => AstNode {
-                node_type: AstNodeType::IfStatement(AstIf {
-                    comparison: Box::new(IfComparisonType::If(*comparison)),
-                    then: Box::new(AstNode::new(
-                        span,
-                        AstNodeType::AssignmentExpression(AstAssignment {
-                            identifier: then,
-                            value: self.value.clone(),
-                        }),
-                    )),
-                    otherwise: None,
-                }),
-                span,
+            }) => {
+                return AstNode {
+                    node_type: AstNodeType::IfStatement(AstIf {
+                        comparison: Box::new(IfComparisonType::If(*comparison)),
+                        then: Box::new(AstNode::new(
+                            span,
+                            AstNodeType::AssignmentExpression(AstAssignment {
+                                identifier: then,
+                                value: self.value.clone(),
+                            }),
+                        )),
+                        otherwise: None,
+                    }),
+                    span,
+                }
+                .lower(env, scope, span, None);
             }
-            .lower(env, scope, span, None),
             AstNodeType::DerefStatement(AstDeref {
                 value: deref_target,
-            }) => Ok(MiddleNode {
-                node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
-                    identifier: Box::new(
-                        AstNode::new(
-                            span,
-                            AstNodeType::DerefStatement(AstDeref {
-                                value: deref_target,
-                            }),
-                        )
-                        .lower_or_empty(
-                            env,
-                            scope,
-                            span,
-                            data_type.clone(),
-                        ),
-                    ),
-                    value: Box::new(self.value.lower_or_empty(env, scope, span, data_type)),
-                }),
-                span,
-            }),
-            AstNodeType::FieldAccess(AstField { base, field }) => Ok(MiddleNode {
-                node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
-                    identifier: Box::new(
-                        AstNode::new(span, AstNodeType::FieldAccess(AstField { base, field }))
-                            .lower_or_empty(env, scope, span, data_type.clone()),
-                    ),
-                    value: Box::new(self.value.lower_or_empty(env, scope, span, data_type)),
-                }),
-                span,
-            }),
-            AstNodeType::ScopeAccess(AstScope { base, field }) => Ok(MiddleNode {
-                node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
-                    identifier: Box::new(
-                        AstNode::new(span, AstNodeType::ScopeAccess(AstScope { base, field }))
-                            .lower_or_empty(env, scope, span, data_type.clone()),
-                    ),
-                    value: Box::new(self.value.lower_or_empty(env, scope, span, data_type)),
-                }),
-                span,
-            }),
+            }) => MirAssignment {
+                identifier: Box::new(
+                    AstNode::new(
+                        span,
+                        AstNodeType::DerefStatement(AstDeref {
+                            value: deref_target,
+                        }),
+                    )
+                    .lower_or_empty(env, scope, span, data_type.clone()),
+                ),
+                value: Box::new(
+                    self.value
+                        .lower_or_empty(env, scope, span, data_type.clone()),
+                ),
+            },
+            AstNodeType::FieldAccess(AstField { base, field }) => MirAssignment {
+                identifier: Box::new(
+                    AstNode::new(span, AstNodeType::FieldAccess(AstField { base, field }))
+                        .lower_or_empty(env, scope, span, data_type.clone()),
+                ),
+                value: Box::new(
+                    self.value
+                        .lower_or_empty(env, scope, span, data_type.clone()),
+                ),
+            },
+            AstNodeType::ScopeAccess(AstScope { base, field }) => MirAssignment {
+                identifier: Box::new(
+                    AstNode::new(span, AstNodeType::ScopeAccess(AstScope { base, field }))
+                        .lower_or_empty(env, scope, span, data_type.clone()),
+                ),
+                value: Box::new(
+                    self.value
+                        .lower_or_empty(env, scope, span, data_type.clone()),
+                ),
+            },
             AstNodeType::IndexAccess(AstIndex { base, index }) => {
                 if let Some(overloaded) = env.handle_index_assign_overload(
                     scope,
@@ -197,30 +183,60 @@ impl MirLowering for AstAssignment {
                     return Ok(overloaded);
                 }
 
-                Ok(MiddleNode {
-                    node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
-                        identifier: Box::new(
-                            AstNode::new(span, AstNodeType::IndexAccess(AstIndex { base, index }))
-                                .lower_or_empty(env, scope, span, data_type.clone()),
-                        ),
-                        value: Box::new(self.value.lower_or_empty(env, scope, span, data_type)),
-                    }),
-                    span,
-                })
+                identifier_type = identifier_type.map(|x| x.unwrap_one_option());
+
+                MirAssignment {
+                    identifier: Box::new(
+                        AstNode::new(span, AstNodeType::IndexAccess(AstIndex { base, index }))
+                            .lower_or_empty(env, scope, span, data_type.clone()),
+                    ),
+                    value: Box::new(
+                        self.value
+                            .lower_or_empty(env, scope, span, data_type.clone()),
+                    ),
+                }
             }
-            _ => Ok(MiddleNode {
-                node_type: MiddleNodeType::AssignmentExpression(MirAssignment {
-                    identifier: Box::new(self.identifier.lower_or_empty(
-                        env,
-                        scope,
-                        span,
-                        data_type.clone(),
-                    )),
-                    value: Box::new(self.value.lower_or_empty(env, scope, span, data_type)),
-                }),
+            _ => MirAssignment {
+                identifier: Box::new(self.identifier.lower_or_empty(
+                    env,
+                    scope,
+                    span,
+                    data_type.clone(),
+                )),
+                value: Box::new(
+                    self.value
+                        .lower_or_empty(env, scope, span, data_type.clone()),
+                ),
+            },
+        };
+
+        if env.context.type_check {
+            let value_type = value.value.mir_type_of(env, scope, span).or(value_type);
+
+            env.compare_types_ref(
+                identifier_type.as_ref(),
+                value_type.as_ref(),
+                Some(&TagInfo::IgnoreInvalidTypeCheck),
                 span,
-            }),
+            )
+            .unwrap();
         }
+
+        Ok(MiddleNode {
+            node_type: MiddleNodeType::AssignmentExpression(value),
+            span,
+        })
+    }
+
+    fn type_of(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+    ) -> Option<MirDataType> {
+        self.identifier
+            .type_of(env, scope, span)
+            .or_else(|| self.value.type_of(env, scope, span))
     }
 }
 

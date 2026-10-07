@@ -119,20 +119,6 @@ impl File {
 			}
 		};
 	};
-
-	const read_to_string := fn (path : str) -> str!str => {
-		let file := try File.open_read(path) => return err("failed to read: " & path);
-		let txt := file.read_all();
-		let _ := file.close();
-		return txt;
-	};
-
-	const read_to_lines := fn (path : str) -> str!list:<str> => {
-		let file := try File.open_read(path) => return err("failed to read lines: " & path);
-		let lines := file.read_lines();
-		let _ := file.close();
-		return lines;
-	};
 };
 
 impl DirEntry {

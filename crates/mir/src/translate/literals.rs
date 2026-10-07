@@ -104,7 +104,10 @@ impl MirLowering for AstStruct {
                                 )?);
 
                                 if !field_hashmap.insert(itm.0) {
-                                    return Err(env.context.err_at_span(span, MiddleErr::StructFieldMultiple(itm.0.to_string())));
+                                    return Err(env.context.err_at_span(
+                                        span,
+                                        MiddleErr::StructFieldMultiple(itm.0.to_string()),
+                                    ));
                                 }
                             } else {
                                 return Err(env.context.err_at_span(

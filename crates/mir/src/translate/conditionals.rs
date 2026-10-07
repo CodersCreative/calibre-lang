@@ -96,13 +96,6 @@ impl MirLowering for AstIf {
         span: Span,
     ) -> Option<MirDataType> {
         if let Some(otherwise) = &self.otherwise {
-            let otherwise =
-                if let AstNodeType::IfStatement(AstIf { then, .. }) = &otherwise.node_type {
-                    then
-                } else {
-                    otherwise
-                };
-
             let then_ty = self.then.type_of(env, scope, span);
             let else_ty = otherwise.type_of(env, scope, span);
 
