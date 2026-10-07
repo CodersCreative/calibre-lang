@@ -46,7 +46,7 @@ struct Task {
 
 impl SchedulerHandle {
     pub fn new(config: &VMConfig) -> Self {
-        let max_per_thread = config.async_max_per_thread.unwrap_or(1);
+        let max_per_thread = config.async_max_per_thread.unwrap_or(10);
         let quantum = config.async_quantum.unwrap_or(1024);
 
         let inner = Arc::new(SchedulerInner {

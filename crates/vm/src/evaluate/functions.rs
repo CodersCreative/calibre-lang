@@ -8,9 +8,9 @@ use calibre_bytecode::{
     VMBlock, VMFunction,
     instructions::functions::{VMCall, VMCallSelf, VMSpawn},
 };
-use calibre_lir::{VariableKey, ast::BlockId};
+use calibre_lir::ast::BlockId;
 use rustc_hash::FxHashMap;
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 use tracing::instrument;
 use wasm_sync::Mutex;
 
@@ -141,31 +141,10 @@ impl VMEvaluation for VMSpawn {
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         let resolved = vm.resolve_value_ref(vm.get_reg_value(self.callee))?;
-
-        let to_spawn = match resolved {
-            RuntimeValue::Function { name, captures } => {
-                let resolved_caps: Vec<(VariableKey, RuntimeValue)> = captures
-                    .as_ref()
-                    .iter()
-                    .map(|(k, v)| {
-                        let resolved = vm
-                            .resolve_value_ref(v)
-                            .unwrap_or_else(|_| RuntimeValue::Null);
-                        (k.clone(), resolved)
-                    })
-                    .collect();
-
-                RuntimeValue::Function {
-                    name,
-                    captures: Arc::new(resolved_caps),
-                }
-            }
-            other => other,
-        };
-
         let wg = Arc::new(WaitGroupInner::default());
-        wg.count.store(1, std::sync::atomic::Ordering::Release);
-        vm.spawn_async_task(to_spawn, Some(wg.clone()));
+        wg.count.store(1, Ordering::Release);
+        vm.spawn_async_task(resolved, Some(wg.clone()));
+
         vm.set_reg_value(self.dst, RuntimeValue::WaitGroup(wg));
 
         Ok(TerminateValue::None)

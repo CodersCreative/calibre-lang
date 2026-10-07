@@ -126,7 +126,7 @@ pub fn resolve_channel(env: &VM, value: RuntimeValue) -> Result<Arc<ChannelInner
     } else {
         Err(RuntimeError::UnexpectedTypeInConversion {
             value: Box::new(value),
-            target_type: ParserInnerType::Host,
+            target_type: ParserInnerType::Struct(String::from("Channel")),
         })
     }
 }
@@ -142,7 +142,7 @@ pub fn resolve_waitgroup(
     } else {
         Err(RuntimeError::UnexpectedTypeInConversion {
             value: Box::new(value),
-            target_type: ParserInnerType::Host,
+            target_type: ParserInnerType::Struct(String::from("WaitGroup")),
         })
     }
 }
@@ -155,7 +155,7 @@ pub fn resolve_mutex(env: &VM, value: RuntimeValue) -> Result<Arc<MutexInner>, R
     } else {
         Err(RuntimeError::UnexpectedTypeInConversion {
             value: Box::new(value),
-            target_type: ParserInnerType::Host,
+            target_type: ParserInnerType::Struct(String::from("Mutex")),
         })
     }
 }

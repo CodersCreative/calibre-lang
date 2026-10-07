@@ -229,13 +229,12 @@ impl NativeFunction for WaitGroupJoin {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[2])?;
 
+        let other = resolve_waitgroup(env, pop_or_null(&mut args))?;
         let wg = resolve_waitgroup(env, pop_or_null(&mut args))?;
-        let func = pop_or_null(&mut args);
 
-        wg.count.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-        env.spawn_async_task(func, Some(wg.clone()));
+        wg.join(other);
 
-        Ok(RuntimeValue::WaitGroup(wg))
+        Ok(RuntimeValue::Null)
     }
 }
 

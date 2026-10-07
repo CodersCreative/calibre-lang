@@ -32,6 +32,10 @@ impl WaitGroupInner {
         }
     }
 
+    pub fn join(&self, other: Arc<WaitGroupInner>) {
+        self.joined.lock().unwrap().push(other);
+    }
+
     pub fn wait(&self) -> Result<(), RuntimeError> {
         let mut guard = self.mutex.lock().unwrap();
 
@@ -46,6 +50,7 @@ impl WaitGroupInner {
         for inner in joined.iter() {
             inner.wait()?;
         }
+
         Ok(())
     }
 }

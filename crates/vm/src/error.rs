@@ -127,6 +127,11 @@ pub enum RuntimeError {
         value: Box<RuntimeValue>,
         target_type: ParserInnerType,
     },
+    UnexpectedTypeInConversionWithCaller {
+        value: Box<RuntimeValue>,
+        target_type: ParserInnerType,
+        caller: String,
+    },
     CannotConvertIntToFloat {
         value: Box<RuntimeValue>,
     },
@@ -287,6 +292,16 @@ impl std::fmt::Display for RuntimeError {
                     "Unexpected type in conversion to {target_type:?}: {value:?}"
                 )
             }
+            RuntimeError::UnexpectedTypeInConversionWithCaller {
+                value,
+                target_type,
+                caller,
+            } => {
+                write!(
+                    f,
+                    "Unexpected type in conversion to {target_type:?}: {value:?} at {caller}"
+                )
+            }
             RuntimeError::CannotConvertIntToFloat { value } => {
                 write!(f, "Cannot convert integer to float: {value:?}")
             }
@@ -354,8 +369,9 @@ impl calibre_parser::CalibreError for RuntimeError {
             Self::ExpectedNativeFunctionFound { .. } => "V072",
             // Type conversion errors (codes V080-V089)
             Self::UnexpectedTypeInConversion { .. } => "V080",
-            Self::CannotConvertIntToFloat { .. } => "V081",
-            Self::CannotConvertFloatToInt { .. } => "V082",
+            Self::UnexpectedTypeInConversionWithCaller { .. } => "V081",
+            Self::CannotConvertIntToFloat { .. } => "V082",
+            Self::CannotConvertFloatToInt { .. } => "V083",
             // Fallback
             Self::UnexpectedType(_) => "V099",
         }
@@ -496,6 +512,9 @@ impl calibre_parser::CalibreError for RuntimeError {
             }
             // Type conversion errors
             Self::UnexpectedTypeInConversion { .. } => {
+                Some("Verify the value can be converted to the target type.".to_string())
+            }
+            Self::UnexpectedTypeInConversionWithCaller { .. } => {
                 Some("Verify the value can be converted to the target type.".to_string())
             }
             Self::CannotConvertIntToFloat { .. } => {

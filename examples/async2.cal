@@ -12,4 +12,8 @@ const main := fn => {
 	
 	print("Started getting");
 	if let .Some : x <- ch.get() => print(x);
+
+	spawn@ for i in 0..10 => {
+		print(i);
+	};
 };

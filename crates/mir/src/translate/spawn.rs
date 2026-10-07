@@ -1,5 +1,5 @@
 use crate::{
-    ast::{MiddleNode, MiddleNodeType, MirSpawn, types::MirDataType},
+    ast::{MiddleNode, MiddleNodeType, MirAggregate, MirSpawn, types::MirDataType},
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
@@ -9,7 +9,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        RefMutability,
+        ObjectMap, RefMutability,
         comparison::{BooleanOperator, ComparisonOperator},
         idents::PotentialDollarIdentifier,
         nodes::{
@@ -31,6 +31,7 @@ use calibre_parser::{
     },
 };
 use tracing::instrument;
+use ustr::Ustr;
 
 impl MirLowering for AstSelect {
     #[instrument(skip_all)]
@@ -494,8 +495,20 @@ impl MirLowering for AstSpawn {
             };
 
             Ok(MiddleNode::new(
-                MiddleNodeType::Spawn(MirSpawn {
-                    value: Box::new(inner.lower(env, scope, span, None)?),
+                MiddleNodeType::AggregateExpression(MirAggregate {
+                    identifier: Some(
+                        env.resolve(scope, &"WaitGroup", ResolutionOptions::typing())?
+                            .unwrap_typing(),
+                    ),
+                    value: ObjectMap(vec![(
+                        Ustr::from("inner"),
+                        MiddleNode::new(
+                            MiddleNodeType::Spawn(MirSpawn {
+                                value: Box::new(inner.lower(env, scope, span, None)?),
+                            }),
+                            span,
+                        ),
+                    )]),
                 }),
                 span,
             ))

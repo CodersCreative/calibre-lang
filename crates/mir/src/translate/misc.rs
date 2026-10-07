@@ -9,7 +9,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        idents::{ParserText, PotentialDollarIdentifier},
+        idents::PotentialDollarIdentifier,
         nodes::{
             AstNode, AstNodeType, VarType,
             declaration::AstDeclaration,
@@ -86,9 +86,16 @@ impl MirLowering for AstTest {
         span: Span,
         _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        let func_identifier = env.get_new_variable_key(
+        let identifier = Ustr::from(&format!("test::{}", self.identifier.text.trim()));
+
+        let func_identifier = env.register_variable(
             scope,
-            Ustr::from(&format!("test::{}", self.identifier.text.trim())),
+            identifier,
+            MirDataType::Function {
+                return_type: Box::new(MirDataType::Null),
+                parameters: Vec::new(),
+            },
+            VarType::Constant,
         )?;
 
         let file_path = env.scoping.scope_or_err(scope).map(|s| s.path.clone()).ok();
@@ -104,10 +111,7 @@ impl MirLowering for AstTest {
             span,
             AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Constant,
-                identifier: PotentialDollarIdentifier::Identifier(ParserText::new(
-                    span,
-                    func_identifier.name(),
-                )),
+                identifier: PotentialDollarIdentifier::new(span, identifier),
                 data_type: ParserDataType::auto(span),
                 value: Box::new(AstNode::new(
                     span,

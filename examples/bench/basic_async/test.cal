@@ -1,15 +1,15 @@
 import WaitGroup from std::async;
-import (wait, Duration) from std::thread;
 
 const worker := fn (id : int) => {
 	let x := 10000000 / 3 + 5;
-	print("worker " & (id + x) & " done");
+	console_output(1, "worker " & (id + x) & " done" & "\n");
 };
 
 const main := fn => {
 	let mut wg := WaitGroup.new();
 	
-	for i in 0..800000 => wg.join(spawn worker(i));
+	for i in 0..8 => 
+		wg.join(spawn worker(i));
 	
 	wg.wait();
 	print("all workers finished");
