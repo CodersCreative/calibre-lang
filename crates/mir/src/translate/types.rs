@@ -17,7 +17,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
-        idents::{ParserText, PotentialDollarIdentifier},
+        idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType,
             declaration::AstDeclaration,
@@ -105,13 +105,36 @@ impl MirLowering for AstType {
             &self.identifier,
             ResolutionOptions::default().with_dollar(),
         )?;
+
         let type_key = match ident_key {
             Key::TypeKey(tk) => tk,
             Key::VariableKey(vk) => TypeKey {
                 fully_qualified_path: vk.fully_qualified_path,
             },
         };
+
         let ident_ustr = *type_key.name();
+
+        let generic_params = match self.identifier {
+            PotentialGenericTypeIdentifier::Generic { generic_types, .. } => generic_types
+                .iter()
+                .map(|x| {
+                    env.resolve_data_type(scope, x, ResolutionOptions::default().with_dollar())
+                        .map(|x| Ustr::from(&x.impl_name()))
+                })
+                .collect::<Result<_, MiddleErr>>()?,
+            _ => Vec::new(),
+        };
+
+        env.add_type_template(
+            scope,
+            MirDataType::Struct {
+                identifier: type_key.clone(),
+                generic_types: Vec::new(),
+            },
+            generic_params,
+            self.object.clone(),
+        );
 
         let object = MiddleTypeDefType::from_type_def_type(env, scope, self.object.clone());
 

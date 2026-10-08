@@ -83,9 +83,36 @@ impl MiddleEnvironment {
                 .find(|x| matches_overload(x))
                 .cloned()
             {
+                if overload.generic_params.is_empty() {
+                    return Ok(Some(MiddleNode {
+                        node_type: MiddleNodeType::CallExpression(MirCall {
+                            caller: Box::new(MiddleNode::identifier(span, overload.func.clone())),
+                            args: Box::new([
+                                left.lower(
+                                    self,
+                                    scope,
+                                    span,
+                                    overload.parameters.first().cloned(),
+                                )?,
+                                right.lower(
+                                    self,
+                                    scope,
+                                    span,
+                                    overload.parameters.last().cloned(),
+                                )?,
+                            ]),
+                        }),
+                        span,
+                    }));
+                }
+
+                // TODO Find a way to extract the concrete args from an overload call
+                let concrete_args = Vec::new();
+                let key = self.monomorphize_overload(scope, &overload, concrete_args)?;
+
                 return Ok(Some(MiddleNode {
                     node_type: MiddleNodeType::CallExpression(MirCall {
-                        caller: Box::new(MiddleNode::identifier(span, overload.func.clone())),
+                        caller: Box::new(MiddleNode::identifier(span, key)),
                         args: Box::new([
                             left.lower(self, scope, span, overload.parameters.first().cloned())?,
                             right.lower(self, scope, span, overload.parameters.last().cloned())?,
@@ -141,6 +168,7 @@ impl MiddleEnvironment {
 
         if let Some(overload) = overload {
             if overload.generic_params.is_empty() {
+                // Non-generic - use original
                 return Ok(Some(MiddleNode {
                     node_type: MiddleNodeType::CallExpression(MirCall {
                         caller: Box::new(MiddleNode::identifier(span, overload.func.clone())),
@@ -155,9 +183,13 @@ impl MiddleEnvironment {
                 }));
             }
 
+            // TODO Find a way to extract the concrete args from an overload call
+            let concrete_args = Vec::new();
+            let key = self.monomorphize_overload(scope, &overload, concrete_args)?;
+
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {
-                    caller: Box::new(MiddleNode::identifier(span, overload.func.clone())),
+                    caller: Box::new(MiddleNode::identifier(span, key)),
                     args: Box::new([value.lower(
                         self,
                         scope,
@@ -273,9 +305,27 @@ impl MiddleEnvironment {
             .cloned();
 
         if let Some(overload) = overload {
+            if overload.generic_params.is_empty() {
+                return Ok(Some(MiddleNode {
+                    node_type: MiddleNodeType::CallExpression(MirCall {
+                        caller: Box::new(MiddleNode::identifier(span, overload.func.clone())),
+                        args: Box::new([
+                            base.lower(self, scope, span, overload.parameters.first().cloned())?,
+                            index.lower(self, scope, span, overload.parameters.get(1).cloned())?,
+                            value.lower(self, scope, span, overload.parameters.last().cloned())?,
+                        ]),
+                    }),
+                    span,
+                }));
+            }
+
+            // TODO Find a way to extract the concrete args from an overload call
+            let concrete_args = Vec::new();
+            let key = self.monomorphize_overload(scope, &overload, concrete_args)?;
+
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {
-                    caller: Box::new(MiddleNode::identifier(span, overload.func.clone())),
+                    caller: Box::new(MiddleNode::identifier(span, key)),
                     args: Box::new([
                         base.lower(self, scope, span, overload.parameters.first().cloned())?,
                         index.lower(self, scope, span, overload.parameters.get(1).cloned())?,

@@ -2,8 +2,8 @@ use crate::{
     ast::types::MirDataType,
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    scoping::ScopeId,
-    symbols::{MiddleOverload, VariableKey, resolve::ResolutionOptions},
+    scoping::{FullyQualifiedPath, ScopeId},
+    symbols::{MiddleOverload, TypeKey, VariableKey, resolve::ResolutionOptions},
     translate::MirLowering,
 };
 use calibre_parser::ast::{
@@ -19,6 +19,7 @@ use calibre_parser::ast::{
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use ustr::Ustr;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +52,9 @@ impl MiddleEnvironment {
         overload: &MiddleOverload,
         concrete_args: Vec<MirDataType>,
     ) -> Result<VariableKey, MiddleErr> {
+        if concrete_args.is_empty() {
+            return Ok(overload.func.clone());
+        }
         let key = self.monomorphize_function(scope, overload.func.clone(), concrete_args)?;
         Ok(key)
     }
@@ -249,5 +253,121 @@ impl MiddleEnvironment {
             ));
 
         true
+    }
+
+    pub fn monomorphize_type_impls(
+        &mut self,
+        scope: ScopeId,
+        original_type: MirDataType,
+        concrete_args: Vec<MirDataType>,
+    ) -> Result<(), MiddleErr> {
+        let template = self
+            .monomorphizer
+            .generic_type_templates
+            .get(&original_type)
+            .ok_or_else(|| MiddleErr::Variable("Type template not found".to_string()))?;
+
+        let subst = template
+            .generic_params
+            .iter()
+            .zip(concrete_args.iter())
+            .map(|(param, concrete)| {
+                (
+                    param.as_str().to_string(),
+                    ParserDataType::from(concrete.clone()),
+                )
+            })
+            .collect();
+
+        let scope = match &original_type {
+            MirDataType::Struct { identifier, .. } => {
+                self.typing.objects.get(identifier).map(|x| x.scope)
+            }
+            _ => None,
+        }
+        .unwrap_or(scope);
+
+        self.monomorphizer.awaiting_lowering.extend(
+            template
+                .impls
+                .iter()
+                .map(|node| (node.clone().substitute(&subst), scope)),
+        );
+
+        Ok(())
+    }
+
+    pub fn monomorphize_type(
+        &mut self,
+        scope: ScopeId,
+        original_type: MirDataType,
+        concrete_args: Vec<MirDataType>,
+    ) -> Result<MirDataType, MiddleErr> {
+        let cache_key = (original_type.clone(), concrete_args.clone());
+
+        if let Some(cached) = self.monomorphizer.types.get(&cache_key) {
+            return Ok(cached.clone());
+        }
+
+        let template = self
+            .monomorphizer
+            .generic_type_templates
+            .get(&original_type)
+            .ok_or_else(|| MiddleErr::Variable("Type template not found".to_string()))?;
+
+        let subst = template
+            .generic_params
+            .iter()
+            .zip(concrete_args.iter())
+            .map(|(param, concrete)| {
+                (
+                    param.as_str().to_string(),
+                    ParserDataType::from(concrete.clone()),
+                )
+            })
+            .collect();
+
+        // TODO Re-add this to be evaluated normally
+        let _mono_type_def = template.type_def.clone().substitute(&subst);
+
+        let base_name = match &original_type {
+            MirDataType::Struct { identifier, .. } => identifier
+                .fully_qualified_path
+                .name
+                .map(|x| x.to_string())
+                .unwrap_or_else(|| "unknown".to_string()),
+            _ => "unknown".to_string(),
+        };
+
+        let mono_name = format!(
+            "{}_{}",
+            base_name,
+            template
+                .generic_params
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join("_")
+        );
+
+        let mono_identifier = TypeKey {
+            fully_qualified_path: Arc::new(FullyQualifiedPath {
+                name: Some(Ustr::from(&mono_name)),
+                parent: None,
+            }),
+        };
+
+        let mono_type = MirDataType::Struct {
+            identifier: mono_identifier,
+            generic_types: vec![],
+        };
+
+        self.monomorphizer
+            .types
+            .insert(cache_key, mono_type.clone());
+
+        self.monomorphize_type_impls(scope, original_type, concrete_args)?;
+
+        Ok(mono_type)
     }
 }

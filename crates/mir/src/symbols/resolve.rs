@@ -646,6 +646,13 @@ impl MiddleEnvironment {
             ParserInnerType::Struct(identifier) => MirDataType::Struct {
                 identifier: match self.resolve(scope, identifier, options)? {
                     Key::TypeKey(x) => x,
+                    Key::VariableKey(x)
+                        if options.dollar_resolution && !options.type_resolution =>
+                    {
+                        TypeKey {
+                            fully_qualified_path: x.fully_qualified_path,
+                        }
+                    }
                     _ => return Err(MiddleErr::Object(identifier.to_string())),
                 },
                 generic_types: Vec::new(),
@@ -669,6 +676,13 @@ impl MiddleEnvironment {
 
                 let identifier = match self.resolve(scope, identifier, options)? {
                     Key::TypeKey(x) => x,
+                    Key::VariableKey(x)
+                        if options.dollar_resolution && !options.type_resolution =>
+                    {
+                        TypeKey {
+                            fully_qualified_path: x.fully_qualified_path,
+                        }
+                    }
                     _ => return Err(MiddleErr::Object(identifier.to_string())),
                 };
 
