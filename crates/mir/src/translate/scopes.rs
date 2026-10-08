@@ -232,7 +232,10 @@ impl MirLowering for AstScopeDef {
                         for (node, scope) in
                             std::mem::take(&mut env.monomorphizer.awaiting_lowering)
                         {
-                            stmts.extend(node.lower_or_empty(env, scope, span, None).nodes_if_isnt_temp());
+                            stmts.extend(
+                                node.lower_or_empty(env, scope, span, None)
+                                    .nodes_if_isnt_temp(),
+                            );
                         }
                     }
 

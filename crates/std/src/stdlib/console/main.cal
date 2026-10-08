@@ -13,8 +13,7 @@ const stderr := fn (msg : list:<dyn>) => {
 };
 
 const clear := fn => {
-	out("x1b[2Jx1b[1;1H");
-	null;
+	console_output(1, "x1b[2Jx1b[1;1H");
 };
 
 const input := fn (prompt : dyn) -> str => {

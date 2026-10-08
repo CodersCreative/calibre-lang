@@ -18,7 +18,7 @@ const float_range := fn (min max : int) -> float => {
 };
 
 const choice := fn <T> (values : list:<T>) -> T? => {
-	if len(values) = 0 => return none;
-	let idx := range(0, len(values));
+	if len(values) = 0u => return none;
+	let idx := range(0, len(values) as! int);
 	return values[idx];
 };

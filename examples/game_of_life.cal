@@ -1,0 +1,146 @@
+// Based on Mojo's Game of Life example:
+// https://mojolang.org/docs/manual/get-started/
+
+import bool from std::random;
+import input from std::console;
+import Duration from std::thread;
+
+type Grid := struct {
+    rows : uint,
+    cols : uint,
+    grid : list:<list:<bool>>
+};
+
+impl Grid {
+    const default := fn -> Self =>
+        return Self{
+            rows : 8u,
+            cols : 8u,
+            grid : [[false for 8] for 8],
+        };
+
+    const glider := fn -> Self =>
+        return Self{
+            rows : 8u,
+            cols : 8u,
+            grid : [
+            [false, true, false, false, false, false, false, false],
+            [false, false, true, false, false, false, false, false],
+            [true, true, true, false, false, false, false, false],
+            [false for 8],
+            [false for 8],
+            [false for 8],
+            [false for 8],       
+            [false for 8],
+            ]
+        };
+
+    const random := fn(rows : uint, cols : uint) -> Self => {
+        let mut grid : list:<list:<bool>> = [];
+
+        for rows => {
+            let mut row : list:<bool> = [];
+
+            for cols =>
+                row <<= bool();
+            
+            grid <<= row;
+        }
+
+        return Self {
+            rows,
+            cols,
+            grid,
+        }
+    }
+
+    const evolve := fn(self : Self) -> Self => {
+        let mut next_generation := list:<list:<bool>>[];
+
+        for row in self.rows => {
+            let mut row_data := list:<bool>[];
+
+            let row_above := (row - 1) % self.rows;
+            let row_below := (row + 1) % self.rows;
+
+            for col in self.cols => {
+                let col_left := (col - 1) % self.cols;
+                let col_right := (col + 1) % self.cols;
+
+                let num_neighbours :=
+                    (self.grid[row_above][col_left]! as! uint) +
+                    (self.grid[row_above][col]! as! uint) +
+                    (self.grid[row_above][col_right]! as! uint) +
+                    (self.grid[row][col_left]! as! uint) +
+                    (self.grid[row][col_right]! as! uint) +
+                    (self.grid[row_below][col_left]! as! uint) +
+                    (self.grid[row_below][col]! as! uint) +
+                    (self.grid[row_below][col_right]! as! uint);
+
+                let new_state :=
+                    (self.grid[row][col]! && num_neighbours in 2..=3) ||
+                    (!self.grid[row][col]! && num_neighbours = 3);
+
+                row_data <<= new_state;
+            }
+
+            next_generation <<= row_data;
+        }
+
+        return Self {
+            rows : self.rows,
+            cols : self.cols,
+            grid : next_generation,
+        }
+    }
+}
+
+@overload("[]") fn(self : Grid, index : int) -> list:<bool>? => {
+    return self.grid[index]
+}  
+
+@overload("as") const grid_to_str := fn(self : Grid) -> null!str => {
+    let mut text := "";
+
+    for row in self.rows => {
+        for col in self.cols =>
+            text &= "█" if self.grid[row][col]! else " ";
+        if row != self.rows-1 =>
+            text &= "\n";
+    }
+
+    return ok(text);
+}
+
+const main := fn => {
+    print("Welcome to the game of life in Calibre!!!");
+    print("There's a couple different ways to play.");
+    print("Firstly, do you want to start out with a glider?");
+
+    let mut grid := Grid.glider();
+    
+    if input("Y (default) or N? ") = "N" => grid := Grid.random(40u, 80u);
+
+    print("Next, do you want to have simulation be automated?");
+
+    let mut generation := 1u;
+    if input("Y (default) or N? ") != "N" => {
+        for => {
+            print("\nGeneration : " & generation);
+            // TODO Fix overloads not being executed
+            print(grid_to_str(grid).next);
+            Duration.from_ms(100).sleep();
+            grid := grid.evolve();
+            generation += 1u;
+        }
+    }else => {
+        for => {
+            print("\nGeneration : " & generation);
+            // TODO Fix overloads not being executed
+            print(grid_to_str(grid).next);
+            if input("Enter `q` to quit : ") = "q" => break;
+            grid := grid.evolve();
+            generation += 1u;
+        }
+    }
+};
