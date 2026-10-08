@@ -362,6 +362,30 @@ impl AstNode {
         }
     }
 
+    #[inline]
+    pub fn unwrap_or_panic(span: Span, value: AstNode) -> AstNode {
+        AstNode {
+            node_type: AstNodeType::Try(AstTry {
+                value: Box::new(value),
+                catch: None,
+                try_type: TryType::Panic,
+            }),
+            span,
+        }
+    }
+
+    #[inline]
+    pub fn as_or_panic(span: Span, value: AstNode, data_type: ParserDataType) -> AstNode {
+        AstNode {
+            node_type: AstNodeType::AsExpression(AstAs {
+                value: Box::new(value),
+                data_type,
+                failure_mode: binary::AsFailureMode::Panic,
+            }),
+            span,
+        }
+    }
+
     pub fn unwrap_bit_ors(self) -> Vec<Self> {
         match self.node_type {
             AstNodeType::BinaryExpression(AstBinary {

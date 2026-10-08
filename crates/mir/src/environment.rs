@@ -126,7 +126,7 @@ impl MiddleEnvironment {
             }),
         );
 
-        let _ = node.lower_or_empty(self, scope, span, None);
+        self.monomorphizer.awaiting_lowering.push((node, scope));
 
         if !generic_params.is_empty() {
             self.scoping.pop_generic_params();

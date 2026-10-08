@@ -2,6 +2,11 @@ type Vector2 := struct {
     x y : int
 };
 
+@overload("as") fn(self : Vector2) -> null!str =>
+    return ok("x : " & self.x & ", y : " & self.y )
+
+@overload("as") fn(self : Vector2) -> null!int => 
+    return ok((self.x * self.x + self.y * self.y) ** 0.5 )
 
 @overload("as") fn(nums : <int, int>) -> null!Vector2 =>
     return ok(Vector2{
@@ -26,6 +31,12 @@ type Number := struct(int);
 @overload("as") fn(num : int) -> null!Number =>
     return ok(Number(num))
 
+
+const going_to_err := fn -> int!Vector2 => {
+    let errored_var : Vector2!Vector2 = err(Vector2 { x : 100, y : 9000});
+    // It should convert the error type into a int
+    return ok(try errored_var);
+}
 
 const main := fn => {
     let lst : list:<int> = [];
@@ -54,6 +65,8 @@ const main := fn => {
     print("coerced vec : ", my_coerced_vec);
     my_coerced_vec := (80, 20);
     print("coerced vec : ", my_coerced_vec);
+
+    print("coerced return error type : ", going_to_err());
 
     let mut my_list : list:<int> = [90, 39];
     my_list[1]! += 39;

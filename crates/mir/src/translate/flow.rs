@@ -244,10 +244,16 @@ impl MirLowering for AstTry {
         let resolved_type = self.value.type_of(env, scope, span);
 
         let is_option = resolved_type.as_ref().is_some_and(|x| x.is_option());
-        let (function_is_option, function_is_null) = {
+        let (function_err_type, function_is_null) = {
             match env.scoping.return_type_stack.last() {
-                Some(x) => (x.is_option(), x.is_null()),
-                None => (false, false),
+                Some(x) => (
+                    match x {
+                        MirDataType::Result { err, .. } => Some(*err.clone()),
+                        _ => None,
+                    },
+                    x.is_null(),
+                ),
+                None => (None, false),
             }
         };
 
@@ -334,18 +340,22 @@ impl MirLowering for AstTry {
                                 None,
                                 AstNode::new(span, AstNodeType::Return(AstReturn { value: None })),
                             )
-                        } else if function_is_option {
-                            enum_arm("Err", None, AstNode::ret(AstNode::identifier(span, "none")))
-                        } else {
+                        } else if let Some(err_type) = function_err_type {
                             let err_name = env.context.get_temp("anon_err_value");
                             enum_arm(
                                 "Err",
                                 Some(ParserText::from(err_name.to_string()).into()),
                                 return_call(
                                     "err",
-                                    vec![CallArg::Value(AstNode::identifier(span, err_name))],
+                                    vec![CallArg::Value(AstNode::as_or_panic(
+                                        span,
+                                        AstNode::identifier(span, err_name),
+                                        ParserDataType::from(err_type),
+                                    ))],
                                 ),
                             )
+                        } else {
+                            enum_arm("Err", None, AstNode::ret(AstNode::identifier(span, "none")))
                         };
 
                         MatchBody {
