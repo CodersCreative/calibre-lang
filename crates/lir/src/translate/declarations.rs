@@ -83,7 +83,8 @@ impl LirLowering for MirScopeDecl {
                     let global_type = data_type.clone();
                     let identifier = identifier.clone();
 
-                    let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, env.counter, false);
+                    let mut sub_lowerer =
+                        LirEnvironment::new_with_hoist(env.env, env.counter, false);
 
                     let _ = sub_lowerer.lower_node(stmt);
 

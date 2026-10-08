@@ -1,6 +1,8 @@
 use crate::{
     Span,
-    ast::{idents::PotentialDollarIdentifier, nodes::AstNode, types::ParserDataType},
+    ast::{
+        Substitutable, idents::PotentialDollarIdentifier, nodes::AstNode, types::ParserDataType,
+    },
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -30,6 +32,13 @@ pub struct AstContinue {
 pub struct TryCatch {
     pub name: Option<PotentialDollarIdentifier>,
     pub body: Box<AstNode>,
+}
+
+impl TryCatch {
+    pub fn substitute(mut self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        *self.body = self.body.substitute(subst);
+        self
+    }
 }
 
 #[repr(u8)]
@@ -92,8 +101,10 @@ impl PipeSegment {
             } => node,
         }
     }
+}
 
-    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+impl Substitutable for PipeSegment {
+    fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
         match self {
             Self::Named { identifier, node } => Self::Named {
                 identifier,

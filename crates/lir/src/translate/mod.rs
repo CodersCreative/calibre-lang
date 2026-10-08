@@ -52,7 +52,7 @@ impl<'a> LirEnvironment<'a> {
         ));
     }
 
-    fn declare_temp_null(&mut self, span: Span, dest: VariableKey, data_type : MirDataType,) {
+    fn declare_temp_null(&mut self, span: Span, dest: VariableKey, data_type: MirDataType) {
         self.add_instr(LirNode::new(
             span,
             LirNodeType::Declare(LirDeclare {

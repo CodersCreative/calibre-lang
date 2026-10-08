@@ -246,7 +246,7 @@ impl MirRenamable for MiddleNodeType {
                 comparison,
                 then,
                 otherwise,
-                data_type
+                data_type,
             }) => {
                 comparison.rename(state);
                 then.rename(state);

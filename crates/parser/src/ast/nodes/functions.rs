@@ -1,4 +1,5 @@
 use crate::ast::{
+    Substitutable,
     idents::{ParserText, PotentialDollarIdentifier},
     nodes::{AstNode, DestructurePattern},
     types::{GenericTypes, ParserDataType},
@@ -65,8 +66,10 @@ impl CallArg {
     pub fn get_node(&self) -> &AstNode {
         self.into()
     }
+}
 
-    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+impl Substitutable for CallArg {
+    fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
         match self {
             Self::Named(x, y) => Self::Named(x, y.substitute(subst)),
             Self::Value(x) => Self::Value(x.substitute(subst)),

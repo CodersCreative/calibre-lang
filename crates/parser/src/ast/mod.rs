@@ -1,6 +1,7 @@
 use crate::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
+    types::ParserDataType,
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -121,6 +122,23 @@ impl<T> ObjectType<T> {
         match self {
             Self::Map(x) => x.is_empty(),
             Self::Tuple(x) => x.is_empty(),
+        }
+    }
+}
+
+pub trait Substitutable {
+    fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self;
+}
+
+impl<T: Substitutable> Substitutable for ObjectType<T> {
+    fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        match self {
+            Self::Map(x) => Self::Map(
+                x.into_iter()
+                    .map(|x| (x.0, x.1.substitute(subst)))
+                    .collect(),
+            ),
+            Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.substitute(subst)).collect()),
         }
     }
 }

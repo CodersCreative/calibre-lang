@@ -1,10 +1,12 @@
 use crate::{
     ParserError, Span,
     ast::{
+        Substitutable,
         nodes::{AstNode, AstNodeType, access::AstIdentifier},
         types::ParserDataType,
     },
 };
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::Display,
@@ -63,6 +65,24 @@ impl Display for PotentialGenericTypeIdentifier {
 impl PotentialGenericTypeIdentifier {
     pub fn new(span: Span, text: impl ToString) -> Self {
         Self::Identifier(PotentialDollarIdentifier::new(span, text))
+    }
+}
+
+impl Substitutable for PotentialGenericTypeIdentifier {
+    fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        match self {
+            Self::Generic {
+                identifier,
+                generic_types,
+            } => Self::Generic {
+                identifier: identifier.substitute(subst),
+                generic_types: generic_types
+                    .into_iter()
+                    .map(|x| x.substitute(subst))
+                    .collect(),
+            },
+            Self::Identifier(x) => Self::Identifier(x.substitute(subst)),
+        }
     }
 }
 
@@ -139,6 +159,19 @@ impl PotentialDollarIdentifier {
         match self {
             Self::Identifier(x) => &x.text,
             Self::DollarIdentifier(x) => &x.text,
+        }
+    }
+}
+
+impl Substitutable for PotentialDollarIdentifier {
+    fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        match self {
+            Self::Identifier(ident) => Self::Identifier(if let Some(x) = subst.get(&ident.text) {
+                ParserText::new(ident.span, x.impl_name())
+            } else {
+                ident
+            }),
+            x => x,
         }
     }
 }

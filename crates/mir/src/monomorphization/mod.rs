@@ -7,6 +7,7 @@ use crate::{
     translate::MirLowering,
 };
 use calibre_parser::ast::{
+    Substitutable,
     idents::PotentialDollarIdentifier,
     nodes::{
         AstNode, AstNodeType, VarType,

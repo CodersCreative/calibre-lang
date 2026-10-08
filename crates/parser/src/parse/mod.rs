@@ -200,6 +200,7 @@ impl<'a> AstNode {
         let paren_start = just(Token::LeftParen).rewind().ignore_then(choice((
             AstParen::parser(data.clone()).map(AstNodeType::ParenExpression),
             AstTuple::parser(data.clone()).map(AstNodeType::TupleLiteral),
+            AstAssignDestructure::parser(data.clone()).map(AstNodeType::DestructureAssignment),
         )));
 
         let literal = select! {

@@ -125,19 +125,20 @@ const main := fn => {
 
     let mut generation := 1u;
     if input("Y (default) or N? ") != "N" => {
+        let should_add_wait := grid.rows < 30u || grid.cols < 30u;
+
         for => {
             print("\nGeneration : " & generation);
-            // TODO Fix overloads not being executed
-            print(grid_to_str(grid).next);
-            Duration.from_ms(100).sleep();
+            print(grid);
+            if should_add_wait =>
+                Duration.from_ms(100).sleep();
             grid := grid.evolve();
             generation += 1u;
         }
     }else => {
         for => {
             print("\nGeneration : " & generation);
-            // TODO Fix overloads not being executed
-            print(grid_to_str(grid).next);
+            print(grid);
             if input("Enter `q` to quit : ") = "q" => break;
             grid := grid.evolve();
             generation += 1u;

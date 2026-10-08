@@ -1,4 +1,5 @@
 use crate::ast::{
+    Substitutable,
     idents::PotentialDollarIdentifier,
     nodes::{AstNode, matching::MatchArmType},
     types::ParserDataType,
@@ -17,8 +18,8 @@ pub enum LoopType {
     Loop,
 }
 
-impl LoopType {
-    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+impl Substitutable for LoopType {
+    fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
         match self {
             Self::For(x, y) => Self::For(x, y.substitute(subst)),
             Self::While(x) => Self::While(x.substitute(subst)),

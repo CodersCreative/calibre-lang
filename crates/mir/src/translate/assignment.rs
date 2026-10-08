@@ -79,7 +79,8 @@ impl MirLowering for AstAssignment {
 
         let value_type = self.value.type_of(env, scope, span);
 
-        let data_type = original_data_type.clone()
+        let data_type = original_data_type
+            .clone()
             .or_else(|| identifier_type.clone())
             .or_else(|| value_type.clone());
 

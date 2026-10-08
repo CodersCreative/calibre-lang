@@ -1,9 +1,9 @@
 use crate::{
     Span,
     ast::{
+        Substitutable,
         idents::{ParserText, PotentialDollarIdentifier},
-        nodes::{AstNode, functions::FunctionHeader},
-        nodes::{DestructurePattern, VarType},
+        nodes::{AstNode, DestructurePattern, VarType, functions::FunctionHeader},
         types::ParserDataType,
     },
 };
@@ -77,8 +77,8 @@ pub enum MatchArmType {
     Rest(Span),
 }
 
-impl MatchArmType {
-    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+impl Substitutable for MatchArmType {
+    fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
         match self {
             Self::At {
                 var_type,
@@ -106,7 +106,9 @@ impl MatchArmType {
             x => x,
         }
     }
+}
 
+impl MatchArmType {
     fn first_span_from_string_parts(parts: &[MatchStringPatternPart]) -> Option<&Span> {
         let part = parts.first()?;
         match part {

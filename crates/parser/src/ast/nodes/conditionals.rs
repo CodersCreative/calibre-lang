@@ -1,4 +1,5 @@
 use crate::ast::{
+    Substitutable,
     nodes::{AstNode, matching::MatchArmType},
     types::ParserDataType,
 };
@@ -14,8 +15,8 @@ pub enum IfComparisonType {
     If(AstNode),
 }
 
-impl IfComparisonType {
-    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+impl Substitutable for IfComparisonType {
+    fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
         match self {
             Self::If(x) => Self::If(x.substitute(subst)),
             Self::IfLet { value, pattern } => Self::IfLet {

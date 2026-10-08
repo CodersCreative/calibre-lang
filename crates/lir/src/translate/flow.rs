@@ -14,7 +14,8 @@ use crate::{
     translate::LirLowering,
 };
 use calibre_mir::ast::{
-    MiddleNodeType, MirBreak, MirConditional, MirContinue, MirEmit, MirLoop, MirRange, MirReturn, types::MirDataType,
+    MiddleNodeType, MirBreak, MirConditional, MirContinue, MirEmit, MirLoop, MirRange, MirReturn,
+    types::MirDataType,
 };
 use calibre_parser::Span;
 
@@ -90,7 +91,11 @@ impl LirLowering for MirConditional {
         let mut temp = None;
         if self.data_type.as_ref().is_none_or(|x| !x.is_null()) {
             let tmp = env.get_temp();
-            env.declare_temp_null(span, tmp.clone(), self.data_type.unwrap_or(MirDataType::Null));
+            env.declare_temp_null(
+                span,
+                tmp.clone(),
+                self.data_type.unwrap_or(MirDataType::Null),
+            );
             temp = Some(tmp)
         }
 
@@ -122,7 +127,6 @@ impl LirLowering for MirConditional {
         };
 
         if env.current_block_open() {
-
             if let Some(temp) = temp.clone() {
                 env.assign_temp_if_non_null(span, temp.clone(), else_val);
             }
@@ -131,12 +135,11 @@ impl LirLowering for MirConditional {
 
         env.switch_to(merge_id);
 
-        
-            if let Some(temp) = temp.clone() {
-        LirNodeType::Load(LirLoad { value: temp })
-            }else{
-                LirNodeType::null()
-            }
+        if let Some(temp) = temp.clone() {
+            LirNodeType::Load(LirLoad { value: temp })
+        } else {
+            LirNodeType::null()
+        }
     }
 }
 

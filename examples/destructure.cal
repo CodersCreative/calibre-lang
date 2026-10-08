@@ -101,7 +101,7 @@ const main := fn => {
 		print(l + r);
 	};
 	
-	if let .Tuple : (a, 9) <- PairEnum.Tuple : (3, 9) => {
+	if let .Tuple : (a, _) <- PairEnum.Tuple : (3, 9) => {
 		print(a);
 	} else => {
 		print(0);

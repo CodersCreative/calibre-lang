@@ -13,6 +13,7 @@ type Country := enum { England : str, @default Zimbabwe : ZimbabweanCities = Zim
 	age : int = (fn -> int => return 10)(),
 	country : Country = Country.England : "London"
 };
+
 const main := fn => {
 	let person := Person.default();
 	print("Person: " & person);

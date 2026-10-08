@@ -1,6 +1,7 @@
 use crate::{
     IdentifiersUsed, Span,
     ast::{
+        Substitutable,
         binary::BinaryOperator,
         idents::{
             ParsedIntLiteral, ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier,
@@ -438,8 +439,10 @@ impl AstNode {
             _ => self,
         }
     }
+}
 
-    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+impl Substitutable for AstNode {
+    fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
         Self {
             node_type: self.node_type.substitute(subst),
             span: self.span,
@@ -608,8 +611,10 @@ impl AstNodeType {
             _ => false,
         }
     }
+}
 
-    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+impl Substitutable for AstNodeType {
+    fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
         // TODO
         match self {
             Self::AsExpression(AstAs {
@@ -670,7 +675,10 @@ impl AstNodeType {
             }) => Self::CallExpression(AstCall {
                 string_fn,
                 caller: Box::new(caller.substitute(subst)),
-                generic_types,
+                generic_types: generic_types
+                    .into_iter()
+                    .map(|x| x.substitute(subst))
+                    .collect(),
                 args: args.into_iter().map(|x| x.substitute(subst)).collect(),
                 reverse_args: reverse_args
                     .into_iter()
@@ -722,7 +730,7 @@ impl AstNodeType {
                 value,
                 data,
             }) => Self::EnumExpression(AstEnum {
-                identifier,
+                identifier: identifier.map(|x| x.substitute(subst)),
                 value,
                 data: data.map(|x| Box::new(x.substitute(subst))),
             }),
@@ -856,6 +864,117 @@ impl AstNodeType {
             Self::PipeExpression(AstPipe { values }) => Self::PipeExpression(AstPipe {
                 values: values.into_iter().map(|x| x.substitute(subst)).collect(),
             }),
+            Self::RangeDeclaration(AstRange {
+                from,
+                to,
+                inclusive,
+            }) => Self::RangeDeclaration(AstRange {
+                from: Box::new(from.substitute(subst)),
+                to: Box::new(to.substitute(subst)),
+                inclusive,
+            }),
+            Self::RefStatement(AstRef { mutability, value }) => Self::RefStatement(AstRef {
+                mutability,
+                value: Box::new(value.substitute(subst)),
+            }),
+            Self::Return(AstReturn { value }) => Self::Return(AstReturn {
+                value: value.map(|x| Box::new(x.substitute(subst))),
+            }),
+            Self::ScopeAccess(AstScope { base, field }) => Self::ScopeAccess(AstScope {
+                base: Box::new(base.substitute(subst)),
+                field,
+            }),
+            Self::ScopeAlias(AstScopeAlias {
+                identifier,
+                value,
+                create_new_scope,
+            }) => Self::ScopeAlias(AstScopeAlias {
+                identifier,
+                value: value.substitute(subst),
+                create_new_scope,
+            }),
+            Self::ScopeDeclaration(AstScopeDef {
+                body,
+                named,
+                is_temp,
+                create_new_scope,
+                define,
+            }) => Self::ScopeDeclaration(AstScopeDef {
+                body: body.map(|x| x.into_iter().map(|x| x.substitute(subst)).collect()),
+                named: named.map(|x| x.substitute(subst)),
+                is_temp,
+                create_new_scope,
+                define,
+            }),
+            Self::SelectStatement(AstSelect { arms }) => Self::SelectStatement(AstSelect {
+                arms: arms.into_iter().map(|x| x.substitute(subst)).collect(),
+            }),
+            Self::Spawn(AstSpawn { items, auto_wait }) => Self::Spawn(AstSpawn {
+                items: items.into_iter().map(|x| x.substitute(subst)).collect(),
+                auto_wait,
+            }),
+            Self::StructLiteral(AstStruct { identifier, value }) => {
+                Self::StructLiteral(AstStruct {
+                    identifier: identifier.map(|x| x.substitute(subst)),
+                    value: value.substitute(subst),
+                })
+            }
+            Self::Tag(AstTag {
+                node,
+                tag,
+                arguments,
+            }) => Self::Tag(AstTag {
+                node: Box::new(node.substitute(subst)),
+                tag,
+                arguments: arguments.into_iter().map(|x| x.substitute(subst)).collect(),
+            }),
+            Self::Ternary(AstTernary {
+                comparison,
+                then,
+                otherwise,
+                ternary_type,
+            }) => Self::Ternary(AstTernary {
+                comparison: Box::new(comparison.substitute(subst)),
+                then: Box::new(then.substitute(subst)),
+                otherwise: otherwise.map(|x| Box::new(x.substitute(subst))),
+                ternary_type,
+            }),
+            Self::TestDeclaration(AstTest { identifier, body }) => Self::TestDeclaration(AstTest {
+                identifier,
+                body: Box::new(body.substitute(subst)),
+            }),
+            Self::Try(AstTry {
+                value,
+                catch,
+                try_type,
+            }) => Self::Try(AstTry {
+                value: Box::new(value.substitute(subst)),
+                catch: catch.map(|x| x.substitute(subst)),
+                try_type,
+            }),
+            Self::TupleLiteral(AstTuple { values }) => Self::TupleLiteral(AstTuple {
+                values: values.into_iter().map(|x| x.substitute(subst)).collect(),
+            }),
+            Self::TypeDeclaration(AstType { identifier, object }) => {
+                Self::TypeDeclaration(AstType {
+                    identifier,
+                    object: object.substitute(subst),
+                })
+            }
+            Self::VariableDeclaration(AstDeclaration {
+                var_type,
+                identifier,
+                value,
+                data_type,
+                declared,
+            }) => Self::VariableDeclaration(AstDeclaration {
+                var_type,
+                identifier,
+                value: Box::new(value.substitute(subst)),
+                data_type: data_type.substitute(subst),
+                declared,
+            }),
+
             x => x,
         }
     }

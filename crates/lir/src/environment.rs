@@ -109,7 +109,11 @@ impl<'a> LirEnvironment<'a> {
     }
 
     #[instrument(skip_all, fields(allow_global_hoist = allow_global_hoist))]
-    pub fn new_with_hoist(env: &'a MiddleEnvironment, count : usize, allow_global_hoist: bool) -> Self {
+    pub fn new_with_hoist(
+        env: &'a MiddleEnvironment,
+        count: usize,
+        allow_global_hoist: bool,
+    ) -> Self {
         debug!("creating LIR environment");
         let entry_id = BlockId(0);
 

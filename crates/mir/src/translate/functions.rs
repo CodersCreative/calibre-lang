@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirDiscriminant,
-        MirExtern, MirFunction,  MirScopeDecl, MirVarDecl, types::MirDataType,
+        MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirDiscriminant, MirExtern, MirFunction,
+        MirScopeDecl, MirVarDecl, types::MirDataType,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
