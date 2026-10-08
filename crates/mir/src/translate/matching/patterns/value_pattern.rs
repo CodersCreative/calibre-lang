@@ -29,7 +29,9 @@ impl PatternTranslator for ValuePatternTranslator {
                     operator: ComparisonOperator::Equal,
                 }),
             ),
-            MatchArmType::Wildcard(_) => AstNode::bool(env.context.current_span(), true),
+            MatchArmType::Wildcard(_) | MatchArmType::Rest(_) => {
+                AstNode::bool(env.context.current_span(), true)
+            }
             _ => {
                 return Err(env.context.err_at_current(MiddleErr::Internal(
                     "ValuePatternCompiler called with non-value pattern".to_string(),

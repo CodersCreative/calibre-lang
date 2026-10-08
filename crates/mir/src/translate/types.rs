@@ -142,6 +142,7 @@ impl MirLowering for AstType {
                     Vec::new()
                 },
                 location: env.context.current_location.clone(),
+                scope,
             },
         );
 
@@ -247,11 +248,7 @@ impl GenericParamState {
             .iter()
             .map(|generic| {
                 let name = env
-                    .resolve(
-                        scope,
-                        &generic.identifier,
-                        ResolutionOptions::default().with_dollar(),
-                    )
+                    .resolve(scope, generic, ResolutionOptions::default().with_dollar())
                     .map(|k| k.unwrap_dollar())?;
                 Ok((name, env.get_new_type_key(scope, name)?))
             })

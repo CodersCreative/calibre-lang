@@ -709,12 +709,8 @@ impl MiddleEnvironment {
                             .0
                             .iter()
                             .map(|x| {
-                                env.resolve(
-                                    scope,
-                                    &x.identifier,
-                                    ResolutionOptions::default().with_dollar(),
-                                )
-                                .map(|x| x.unwrap_dollar())
+                                env.resolve(scope, x, ResolutionOptions::default().with_dollar())
+                                    .map(|x| x.unwrap_dollar())
                             })
                             .collect::<Result<Vec<_>, _>>()?;
                         let overload = Overload {
@@ -738,12 +734,13 @@ impl MiddleEnvironment {
                                     .map(|x| {
                                         env.resolve(
                                             scope,
-                                            &x.identifier,
+                                            x,
                                             ResolutionOptions::default().with_dollar(),
                                         )
                                         .map(|x| x.unwrap_dollar())
                                     })
                                     .collect::<Result<Vec<_>, _>>()?;
+
                                 let overload = Overload {
                                     operator,
                                     body: x.body,

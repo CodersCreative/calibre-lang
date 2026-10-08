@@ -1,12 +1,12 @@
 use crate::{
     ast::types::MirDataType,
     environment::MiddleEnvironment,
+    monomorphization::Monomorphizer,
     scoping::{FullyQualifiedPath, MiddleScope, ScopeId, Scoping},
     symbols::{MiddleOverload, MiddleVariable, Symbols, VariableKey, resolve::Key},
     tags::{Tagging, context::PackageMetadata},
     typing::Typing,
 };
-use calibre_parser::ast::nodes::{AstNode, functions::FunctionHeader};
 use indextree::Arena;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -21,6 +21,7 @@ pub struct Manifest {
     pub symbols: ManifestSymbols,
     pub typing: Typing,
     pub tagging: ManifestTagging,
+    pub monomorphizer: Monomorphizer,
 }
 
 // TODO Convert to a TryFrom
@@ -44,6 +45,7 @@ impl From<&MiddleEnvironment> for Manifest {
                 .expect("Package Metadata needs to be set to build a Manifest"),
             symbols: ManifestSymbols::from(&value.symbols),
             tagging: ManifestTagging::from(&value.tagging),
+            monomorphizer: value.monomorphizer.clone(),
             typing: value.typing.clone(),
         }
     }
@@ -69,7 +71,6 @@ pub struct ManifestSymbols {
     pub variables: FxHashMap<VariableKey, MiddleVariable>,
     pub native_mappings: UstrMap<Key>,
     pub overloads: Vec<MiddleOverload>,
-    pub generic_fn_templates: FxHashMap<VariableKey, (Vec<Ustr>, FunctionHeader, AstNode)>,
     pub fn_specializations: UstrMap<Ustr>,
 }
 
@@ -79,7 +80,6 @@ impl From<&Symbols> for ManifestSymbols {
             variables: value.variables.clone(),
             native_mappings: value.native_mappings.clone(),
             overloads: value.overloads.clone(),
-            generic_fn_templates: value.generic_fn_templates.clone(),
             fn_specializations: value.function_specializations.clone(),
         }
     }

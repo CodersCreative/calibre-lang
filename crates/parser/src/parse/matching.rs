@@ -5,7 +5,6 @@ use crate::ast::nodes::VarType;
 use crate::ast::nodes::functions::FunctionHeader;
 use crate::ast::nodes::matching::{
     AstFnMatch, AstMatch, MatchArmType, MatchBody, MatchStringPatternPart, MatchStructFieldPattern,
-    MatchTupleItem,
 };
 use crate::ast::types::{GenericTypes, ParserDataType};
 use crate::parse::MapWithSpanExt;
@@ -123,151 +122,6 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
             select! { Token::Identifier(x) if x == "_" => () }
                 .map_with_span(|_, span| MatchStringPatternPart::Wildcard(span)),
         ))
-    }
-}
-
-impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I>
-    for MatchTupleItem
-{
-    type Data = StatementData<'a, I>;
-
-    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
-        recursive(|tuple_item| {
-            choice((
-                // rest
-                just(Token::Range).map_with_span(move |_, span| MatchTupleItem::Rest(span)),
-                // wildcard
-                select! { Token::Identifier(x) if x == "_" => () }
-                    .map_with_span(move |_, span| MatchTupleItem::Wildcard(span)),
-                // value
-                data.node.clone().map(MatchTupleItem::Value),
-                // is
-                just(Token::Is)
-                    .ignore_then(data.data_type.clone())
-                    .map(MatchTupleItem::IsType),
-                // in
-                just(Token::In)
-                    .ignore_then(data.node.clone())
-                    .map(MatchTupleItem::In),
-                // string
-                select! { Token::StringLiteral(s) => s }
-                    .map_with_span(|s, span| {
-                        MatchStringPatternPart::Literal(ParserText::new(
-                            span,
-                            ParserText::decode_literal(s),
-                        ))
-                    })
-                    .then(
-                        just(Token::BitAnd)
-                            .ignore_then(MatchStringPatternPart::parser(data.clone()))
-                            .repeated()
-                            .collect::<Vec<_>>(),
-                    )
-                    .map(|(head, mut tail)| {
-                        let mut parts = vec![head];
-                        parts.append(&mut tail);
-                        MatchTupleItem::StringPattern(parts)
-                    }),
-                // @
-                VarType::parser(())
-                    .then(data.dollar_ident.clone())
-                    .then_ignore(just(Token::At))
-                    .then(tuple_item.clone())
-                    .map(|((var_type, name), pattern)| MatchTupleItem::At {
-                        var_type,
-                        name,
-                        pattern: Box::new(pattern),
-                    }),
-                // .enum @
-                just(Token::Dot)
-                    .ignore_then(data.dollar_ident.clone())
-                    .then(
-                        just(Token::Colon)
-                            .ignore_then(choice((
-                                // tuple
-                                data.dollar_ident
-                                    .clone()
-                                    .map_with_span(|name, span| {
-                                        Some((
-                                            VarType::Immutable,
-                                            PotentialDollarIdentifier::Identifier(ParserText::new(
-                                                span,
-                                                name.text().clone(),
-                                            )),
-                                        ))
-                                    })
-                                    .separated_by(
-                                        just(Token::Comma).padded_by(potential_new_line()),
-                                    )
-                                    .allow_trailing()
-                                    .collect::<Vec<_>>()
-                                    .padded_by(potential_new_line())
-                                    .delimited_by(just(Token::LeftParen), just(Token::RightParen))
-                                    .map(|items| if items.is_empty() { vec![None] } else { items })
-                                    .map(DestructurePattern::Tuple)
-                                    .map(|d| (None, None, Some(d))),
-                                // struct
-                                data.dollar_ident
-                                    .clone()
-                                    .map_with_span(|name, span| {
-                                        (
-                                            name.to_string(),
-                                            VarType::Immutable,
-                                            PotentialDollarIdentifier::Identifier(ParserText::new(
-                                                span,
-                                                name.text().clone(),
-                                            )),
-                                        )
-                                    })
-                                    .separated_by(
-                                        just(Token::Comma).padded_by(potential_new_line()),
-                                    )
-                                    .allow_trailing()
-                                    .collect::<Vec<_>>()
-                                    .padded_by(potential_new_line())
-                                    .delimited_by(
-                                        just(Token::LeftBracket),
-                                        just(Token::RightBracket),
-                                    )
-                                    .map(DestructurePattern::Struct)
-                                    .map(|d| (None, None, Some(d))),
-                                // binding
-                                VarType::parser(())
-                                    .then(data.dollar_ident.clone())
-                                    .map(|(var_type, name)| (Some(var_type), Some(name), None)),
-                            )))
-                            .or_not(),
-                    )
-                    .map(|(value, bind)| {
-                        let (var_type, name, destructure) = bind.unwrap_or((None, None, None));
-                        let (var_type, name) = if let (Some(vt), Some(n)) = (var_type, name) {
-                            (vt, Some(n))
-                        } else {
-                            (VarType::Immutable, None)
-                        };
-                        MatchTupleItem::Enum {
-                            value,
-                            var_type,
-                            name,
-                            destructure,
-                            pattern: None,
-                        }
-                    }),
-                // struct
-                MatchStructFieldPattern::parser(data.clone())
-                    .separated_by(just(Token::Comma).padded_by(potential_new_line()))
-                    .allow_trailing()
-                    .collect::<Vec<_>>()
-                    .padded_by(potential_new_line())
-                    .delimited_by(just(Token::LeftBracket), just(Token::RightBracket))
-                    .map(MatchTupleItem::StructPattern),
-                // binding
-                VarType::parser(())
-                    .then(data.dollar_ident.clone())
-                    .map(|(var_type, name)| MatchTupleItem::Binding { var_type, name }),
-            ))
-            .boxed()
-        })
     }
 }
 
@@ -426,11 +280,10 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                         MatchArmType::StringPattern(parts)
                     }),
                 // rest
-                just(Token::Range).map_with_span(|_, span| {
-                    MatchArmType::TuplePattern(vec![MatchTupleItem::Rest(span)])
-                }),
+                just(Token::Range).map_with_span(|_, span| MatchArmType::Rest(span)),
                 // (...)
-                MatchTupleItem::parser(data.clone())
+                arm_type
+                    .clone()
                     .separated_by(just(Token::Comma).padded_by(potential_new_line()))
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -438,7 +291,8 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                     .delimited_by(just(Token::LeftParen), just(Token::RightParen))
                     .map(MatchArmType::TuplePattern),
                 // [...]
-                MatchTupleItem::parser(data.clone())
+                arm_type
+                    .clone()
                     .separated_by(just(Token::Comma).padded_by(potential_new_line()))
                     .allow_trailing()
                     .collect::<Vec<_>>()
@@ -515,6 +369,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
             .map(|(((first, rest), conditions), body)| {
                 let mut values = vec![first.clone()];
                 values.extend(rest.iter().map(|(_, v)| v.clone()));
+
                 let has_comma = rest.iter().any(|(sep, _)| *sep == ',');
 
                 if has_comma {
@@ -527,7 +382,8 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                         }
                     }
 
-                    let mut tuple_item_variants: Vec<Vec<Vec<MatchTupleItem>>> = Vec::new();
+                    // TODO
+                    let mut tuple_item_variants: Vec<Vec<Vec<MatchArmType>>> = Vec::new();
                     for slot in slots {
                         let mut variants = Vec::new();
                         for arm in slot {
@@ -542,7 +398,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                         tuple_item_variants.push(variants);
                     }
 
-                    let mut combos: Vec<Vec<MatchTupleItem>> = vec![Vec::new()];
+                    let mut combos: Vec<Vec<MatchArmType>> = vec![Vec::new()];
                     for slot_variants in tuple_item_variants {
                         let mut next = Vec::new();
                         for prefix in &combos {

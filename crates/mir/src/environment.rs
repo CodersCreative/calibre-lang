@@ -66,7 +66,7 @@ impl MiddleEnvironment {
             .generics
             .0
             .iter()
-            .map(|g| Ustr::from(&g.identifier.to_string()))
+            .map(|g| Ustr::from(g))
             .chain(generic_params)
             .collect();
 
@@ -355,9 +355,8 @@ impl MiddleEnvironment {
             }
         }
 
-        for (name, template) in std::mem::take(&mut manifest.typing.generic_type_templates) {
-            self.typing.generic_type_templates.insert(name, template);
-        }
+        self.monomorphizer
+            .append(std::mem::take(&mut manifest.monomorphizer));
 
         for mut overload in std::mem::take(&mut manifest.symbols.overloads) {
             overload.rename(&mut rename_state);
@@ -390,11 +389,8 @@ impl MiddleEnvironment {
         self.scoping
             .append_manifest(manifest.metadata.name, manifest.scoping);
 
-        for (name, (params, header, node)) in manifest.symbols.generic_fn_templates {
-            self.symbols
-                .generic_fn_templates
-                .insert(name, (params, header, node));
-        }
+        self.monomorphizer
+            .append(std::mem::take(&mut manifest.monomorphizer));
 
         for (original, specialized) in manifest.symbols.fn_specializations {
             self.symbols

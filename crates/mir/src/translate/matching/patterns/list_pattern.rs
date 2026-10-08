@@ -5,11 +5,7 @@ use crate::{
 };
 use calibre_parser::ast::{
     comparison::ComparisonOperator,
-    nodes::{
-        AstNode, AstNodeType,
-        binary::AstComparison,
-        matching::{MatchArmType, MatchTupleItem},
-    },
+    nodes::{AstNode, AstNodeType, binary::AstComparison, matching::MatchArmType},
 };
 
 pub struct ListPatternTranslator;
@@ -49,7 +45,7 @@ impl PatternTranslator for ListPatternTranslator {
         // TODO Eventually allow for multiple rests
         let rest_index = items
             .iter()
-            .position(|item| matches!(item, MatchTupleItem::Rest(_)));
+            .position(|item| matches!(item, MatchArmType::Rest(_)));
         let min_len = rest_index.unwrap_or(items.len());
         let has_rest = rest_index.is_some();
 
@@ -74,11 +70,11 @@ impl PatternTranslator for ListPatternTranslator {
             let (inner_item, item_aliases) = item.clone().alias_bindings();
 
             match inner_item {
-                MatchTupleItem::Rest(_) => break,
-                MatchTupleItem::Wildcard(_) => {
+                MatchArmType::Rest(_) => break,
+                MatchArmType::Wildcard(_) => {
                     idx += 1;
                 }
-                MatchTupleItem::Binding { var_type, name } => {
+                MatchArmType::Let { var_type, name } => {
                     let current = env.match_index_access(value.clone(), idx);
 
                     bindings.push(BindingDeclaration {
@@ -114,7 +110,7 @@ impl PatternTranslator for ListPatternTranslator {
 
                     idx += 1;
                 }
-                MatchTupleItem::Value(expected) => {
+                MatchArmType::Value(expected) => {
                     let current = env.match_index_access(value.clone(), idx);
 
                     condition = env.bool_and_nodes(

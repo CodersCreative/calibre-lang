@@ -5,11 +5,7 @@ use crate::{
 };
 use calibre_parser::ast::{
     comparison::ComparisonOperator,
-    nodes::{
-        AstNode, AstNodeType,
-        binary::AstComparison,
-        matching::{MatchArmType, MatchTupleItem},
-    },
+    nodes::{AstNode, AstNodeType, binary::AstComparison, matching::MatchArmType},
 };
 
 pub struct TuplePatternTranslator;
@@ -51,11 +47,11 @@ impl PatternTranslator for TuplePatternTranslator {
             let (inner_item, item_aliases) = item.alias_bindings();
 
             match inner_item {
-                MatchTupleItem::Rest(_) => break,
-                MatchTupleItem::Wildcard(_) => {
+                MatchArmType::Rest(_) => break,
+                MatchArmType::Wildcard(_) => {
                     idx += 1;
                 }
-                MatchTupleItem::Binding { var_type, name } => {
+                MatchArmType::Let { var_type, name } => {
                     let current =
                         AstNode::member(env.context.current_span(), value.clone(), idx.to_string());
 
@@ -93,7 +89,7 @@ impl PatternTranslator for TuplePatternTranslator {
 
                     idx += 1;
                 }
-                MatchTupleItem::Value(expected) => {
+                MatchArmType::Value(expected) => {
                     let current =
                         AstNode::member(env.context.current_span(), value.clone(), idx.to_string());
 
@@ -131,7 +127,7 @@ impl PatternTranslator for TuplePatternTranslator {
 
                     idx += 1;
                 }
-                MatchTupleItem::StructPattern(struct_fields) => {
+                MatchArmType::StructPattern(struct_fields) => {
                     let current =
                         AstNode::member(env.context.current_span(), value.clone(), idx.to_string());
 
@@ -169,7 +165,7 @@ impl PatternTranslator for TuplePatternTranslator {
 
                     idx += 1;
                 }
-                MatchTupleItem::Enum {
+                MatchArmType::Enum {
                     value: variant_name,
                     var_type,
                     name,
@@ -220,7 +216,7 @@ impl PatternTranslator for TuplePatternTranslator {
 
                     idx += 1;
                 }
-                MatchTupleItem::StringPattern(parts) => {
+                MatchArmType::StringPattern(parts) => {
                     let current =
                         AstNode::member(env.context.current_span(), value.clone(), idx.to_string());
 
@@ -258,13 +254,18 @@ impl PatternTranslator for TuplePatternTranslator {
 
                     idx += 1;
                 }
-                MatchTupleItem::IsType(_) | MatchTupleItem::In(_) => {
+                MatchArmType::IsType(_) | MatchArmType::In(_) => {
                     // TODO
                     idx += 1;
                 }
-                MatchTupleItem::At { .. } => {
+                MatchArmType::At { .. } => {
                     return Err(env.context.err_at_current(MiddleErr::Internal(
                         "Unwrapped @ pattern still present in tuple".to_string(),
+                    )));
+                }
+                MatchArmType::ListPattern(_) | MatchArmType::TuplePattern(_) => {
+                    return Err(env.context.err_at_current(MiddleErr::Internal(
+                        "list or tuple pattern still present in tuple".to_string(),
                     )));
                 }
             }

@@ -3,7 +3,7 @@ use crate::{
     ast::{
         RefMutability,
         ffi::{ParserFfiDataType, ParserFfiInnerType},
-        types::{GenericType, GenericTypes, ParserDataType, ParserInnerType},
+        types::{GenericTypes, ParserDataType, ParserInnerType},
     },
     lexer::Token,
     parse::{AstParser, AstParserErr, MapWithSpanExt, StatementData, potential_new_line},
@@ -299,37 +299,20 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
 
     #[inline(always)]
     fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
-        GenericType::parser(data)
+        data.dollar_ident
+            .clone()
             .separated_by(just(Token::Comma).padded_by(potential_new_line()))
             .allow_trailing()
             .collect::<Vec<_>>()
             .padded_by(potential_new_line())
             .delimited_by(just(Token::Lesser), just(Token::Greater))
             .or_not()
-            .map(|items| GenericTypes(items.unwrap_or_default()))
-    }
-}
-
-impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, I> for GenericType {
-    type Data = StatementData<'a, I>;
-
-    #[inline(always)]
-    fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
-        data.dollar_ident
-            .clone()
-            .then(
-                just(Token::Colon)
-                    .ignore_then(
-                        data.dollar_ident
-                            .clone()
-                            .separated_by(select! { Token::Add => () })
-                            .collect::<Vec<_>>(),
-                    )
-                    .or_not(),
-            )
-            .map(|(identifier, trait_constraints)| GenericType {
-                identifier,
-                trait_constraints: trait_constraints.unwrap_or_default(),
+            .map(|items| {
+                GenericTypes(
+                    items
+                        .map(|x| x.into_iter().map(|x| x.text().clone()).collect())
+                        .unwrap_or_default(),
+                )
             })
     }
 }

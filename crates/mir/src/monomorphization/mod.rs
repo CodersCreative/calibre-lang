@@ -3,22 +3,44 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::{MiddleOverload, TypeKey, VariableKey},
+    symbols::{MiddleOverload, VariableKey, resolve::ResolutionOptions},
     translate::MirLowering,
 };
 use calibre_parser::ast::{
     idents::PotentialDollarIdentifier,
-    nodes::{AstNode, AstNodeType, VarType, declaration::AstDeclaration},
+    nodes::{
+        AstNode, AstNodeType, VarType,
+        declaration::AstDeclaration,
+        functions::{AstFunction, FunctionHeader},
+        types::TypeDefType,
+    },
     types::ParserDataType,
 };
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 use ustr::Ustr;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeTemplate {
+    pub generic_params: Vec<Ustr>,
+    pub type_def: TypeDefType,
+    pub impls: Vec<AstNode>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Monomorphizer {
-    pub awaiting_lowering: Vec<(AstNode, ScopeId)>,
+    pub generic_type_templates: FxHashMap<MirDataType, TypeTemplate>,
+    pub generic_fn_templates: FxHashMap<VariableKey, (Vec<Ustr>, FunctionHeader, AstNode)>,
+
     pub functions: FxHashMap<(VariableKey, Vec<MirDataType>), VariableKey>,
-    pub types: FxHashMap<(TypeKey, Vec<MirDataType>), TypeKey>,
+    pub types: FxHashMap<(MirDataType, Vec<MirDataType>), MirDataType>,
+
+    #[serde(skip)]
+    pub awaiting_lowering: Vec<(AstNode, ScopeId)>,
+}
+
+impl Monomorphizer {
+    pub fn append(&mut self, other: Self) {}
 }
 
 impl MiddleEnvironment {
@@ -60,19 +82,22 @@ impl MiddleEnvironment {
         concrete_args: &[MirDataType],
     ) -> Result<VariableKey, MiddleErr> {
         let (generic_params, mut header, body) = self
-            .symbols
+            .monomorphizer
             .generic_fn_templates
             .get(&original_key)
             .cloned()
             .ok_or_else(|| MiddleErr::Variable("Generic function not found".to_string()))?;
 
-        let mut subst = FxHashMap::default();
-        for (param, concrete) in generic_params.iter().zip(concrete_args.iter()) {
-            subst.insert(
-                param.as_str().to_string(),
-                ParserDataType::from(concrete.clone()),
-            );
-        }
+        let subst = generic_params
+            .iter()
+            .zip(concrete_args.iter())
+            .map(|(param, concrete)| {
+                (
+                    param.as_str().to_string(),
+                    ParserDataType::from(concrete.clone()),
+                )
+            })
+            .collect();
 
         header = header.substitute(&subst);
 
@@ -116,5 +141,112 @@ impl MiddleEnvironment {
             .push((node, original_scope));
 
         Ok(key)
+    }
+
+    pub(crate) fn add_type_template(
+        &mut self,
+        _scope: ScopeId,
+        name: MirDataType,
+        generic_params: Vec<Ustr>,
+        type_def: TypeDefType,
+    ) -> bool {
+        if generic_params.is_empty() {
+            return false;
+        }
+
+        self.monomorphizer
+            .generic_type_templates
+            .entry(name)
+            .or_insert(TypeTemplate {
+                generic_params,
+                type_def,
+                impls: Vec::new(),
+            });
+
+        true
+    }
+
+    pub(crate) fn add_type_impl(
+        &mut self,
+        _scope: ScopeId,
+        name: &MirDataType,
+        generic_params: Vec<Ustr>,
+        value: AstNode,
+    ) -> bool {
+        if generic_params.is_empty() {
+            return false;
+        }
+
+        if let Some(template) = self.monomorphizer.generic_type_templates.get_mut(name) {
+            template.impls.push(value.clone());
+        } else {
+            return false;
+        }
+
+        let scope = match name {
+            MirDataType::Struct { identifier, .. } => {
+                self.typing.objects.get(identifier).unwrap().scope
+            }
+            _ => self.scoping.get_global_scope().unwrap(),
+        };
+
+        self.monomorphizer.awaiting_lowering.extend(
+            self.monomorphizer
+                .types
+                .keys()
+                .filter(|x| &x.0 == name)
+                .map(|(_, concrete_args)| {
+                    let subst = generic_params
+                        .iter()
+                        .zip(concrete_args.iter())
+                        .map(|(param, concrete)| {
+                            (
+                                param.as_str().to_string(),
+                                ParserDataType::from(concrete.clone()),
+                            )
+                        })
+                        .collect();
+
+                    let value = value.clone().substitute(&subst);
+
+                    (value, scope)
+                }),
+        );
+
+        true
+    }
+
+    pub(crate) fn add_function_template(
+        &mut self,
+        scope: ScopeId,
+        name: VariableKey,
+        header: &AstFunction,
+    ) -> bool {
+        if header.header.generics.0.is_empty() {
+            return false;
+        }
+
+        let generic_params: Vec<Ustr> = header
+            .header
+            .generics
+            .0
+            .iter()
+            .map(|g| {
+                self.resolve(scope, g, ResolutionOptions::default().with_dollar())
+                    .map(|x| x.unwrap_dollar())
+            })
+            .collect::<Result<Vec<_>, MiddleErr>>()
+            .unwrap_or_default();
+
+        self.monomorphizer
+            .generic_fn_templates
+            .entry(name)
+            .or_insert((
+                generic_params,
+                header.header.clone(),
+                (*header.body).clone(),
+            ));
+
+        true
     }
 }

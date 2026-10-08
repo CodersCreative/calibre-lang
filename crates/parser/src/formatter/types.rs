@@ -566,20 +566,7 @@ impl AstFormatting for GenericTypes {
             "<{}>",
             self.0
                 .iter()
-                .map(|typ| {
-                    let mut txt = typ.identifier.to_string();
-                    if !typ.trait_constraints.is_empty() {
-                        txt.push_str(&format!(
-                            " : {}",
-                            typ.trait_constraints
-                                .iter()
-                                .map(|x| x.to_string())
-                                .collect::<Vec<_>>()
-                                .join(" + ")
-                        ));
-                    }
-                    txt
-                })
+                .map(|typ| { typ.to_string() })
                 .collect::<Vec<_>>()
                 .join(", ")
         )

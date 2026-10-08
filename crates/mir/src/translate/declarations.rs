@@ -18,7 +18,7 @@ use calibre_parser::{
             assignment::AstAssignment,
             binary::AstBinary,
             declaration::{AstDeclaration, AstDeclareDestructure},
-            functions::{AstCall, AstFunction, FunctionHeader},
+            functions::{AstCall, FunctionHeader},
             memory::AstRef,
             scopes::AstScopeDef,
         },
@@ -26,47 +26,8 @@ use calibre_parser::{
     },
 };
 use tracing::instrument;
-use ustr::Ustr;
 
 impl MiddleEnvironment {
-    fn handle_function_template(
-        &mut self,
-        scope: ScopeId,
-        header: &AstFunction,
-        new_name: VariableKey,
-    ) -> bool {
-        if header.header.generics.0.is_empty() {
-            return false;
-        }
-
-        let template_params: Vec<Ustr> = header
-            .header
-            .generics
-            .0
-            .iter()
-            .map(|g| {
-                self.resolve(
-                    scope,
-                    &g.identifier,
-                    ResolutionOptions::default().with_dollar(),
-                )
-                .map(|x| x.unwrap_dollar())
-            })
-            .collect::<Result<Vec<_>, MiddleErr>>()
-            .unwrap_or_default();
-
-        self.symbols
-            .generic_fn_templates
-            .entry(new_name)
-            .or_insert((
-                template_params,
-                header.header.clone(),
-                (*header.body).clone(),
-            ));
-
-        true
-    }
-
     fn process_parameter_defaults(
         &mut self,
         scope: ScopeId,
@@ -311,7 +272,7 @@ impl MirLowering for AstDeclaration {
                 env.register_variable(scope, identifier, data_type.clone().unwrap(), self.var_type)?
             };
 
-            env.handle_function_template(scope, func, key.clone());
+            env.add_function_template(scope, key.clone(), func);
 
             for tag in &env.tagging.tag_info {
                 match tag {

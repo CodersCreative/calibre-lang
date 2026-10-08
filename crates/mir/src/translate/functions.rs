@@ -507,12 +507,8 @@ impl MirLowering for FunctionHeader {
             .0
             .iter()
             .map(|g| {
-                env.resolve(
-                    scope,
-                    &g.identifier,
-                    ResolutionOptions::default().with_dollar(),
-                )
-                .map(|x| x.unwrap_dollar())
+                env.resolve(scope, g, ResolutionOptions::default().with_dollar())
+                    .map(|x| x.unwrap_dollar())
             })
             .collect::<Result<Vec<Ustr>, MiddleErr>>()
             .ok()?;
@@ -674,7 +670,7 @@ impl MirLowering for AstFunction {
             .generics
             .0
             .iter()
-            .map(|g| Ustr::from(&g.identifier.to_string()))
+            .map(|g| Ustr::from(g))
             .collect();
 
         if !generic_params.is_empty() {

@@ -31,7 +31,7 @@ impl PatternTranslatorDispatcher {
         let (inner_pattern, aliases) = pattern.clone().alias_bindings();
 
         let compilation = match &inner_pattern {
-            MatchArmType::Value(_) | MatchArmType::Wildcard(_) => {
+            MatchArmType::Value(_) | MatchArmType::Wildcard(_) | MatchArmType::Rest(_) => {
                 ValuePatternTranslator.translate(env, scope, &inner_pattern, value)?
             }
             MatchArmType::Enum { .. } => {

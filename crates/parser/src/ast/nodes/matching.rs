@@ -10,53 +10,6 @@ use crate::{
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
-#[repr(u8)]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum MatchTupleItem {
-    Rest(Span),
-    Wildcard(Span),
-    Value(AstNode),
-    IsType(ParserDataType),
-    In(AstNode),
-    At {
-        var_type: VarType,
-        name: PotentialDollarIdentifier,
-        pattern: Box<MatchTupleItem>,
-    },
-    StringPattern(Vec<MatchStringPatternPart>),
-    Enum {
-        value: PotentialDollarIdentifier,
-        var_type: VarType,
-        name: Option<PotentialDollarIdentifier>,
-        destructure: Option<DestructurePattern>,
-        pattern: Option<Box<MatchArmType>>,
-    },
-    StructPattern(Vec<MatchStructFieldPattern>),
-    Binding {
-        var_type: VarType,
-        name: PotentialDollarIdentifier,
-    },
-}
-
-impl MatchTupleItem {
-    pub fn alias_bindings(self) -> (Self, Vec<(VarType, PotentialDollarIdentifier)>) {
-        let mut aliases = Vec::new();
-        let mut current = self;
-
-        while let MatchTupleItem::At {
-            var_type,
-            name,
-            pattern: inner,
-        } = current
-        {
-            aliases.push((var_type, name));
-            current = *inner;
-        }
-
-        (current, aliases)
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum MatchStructFieldPattern {
     Value {
@@ -111,8 +64,8 @@ pub enum MatchArmType {
         destructure: Option<DestructurePattern>,
         pattern: Option<Box<MatchArmType>>,
     },
-    TuplePattern(Vec<MatchTupleItem>),
-    ListPattern(Vec<MatchTupleItem>),
+    TuplePattern(Vec<MatchArmType>),
+    ListPattern(Vec<MatchArmType>),
     StructPattern(Vec<MatchStructFieldPattern>),
     Let {
         var_type: VarType,
@@ -121,15 +74,39 @@ pub enum MatchArmType {
     Value(AstNode),
     IsType(ParserDataType),
     Wildcard(Span),
+    Rest(Span),
 }
 
 impl MatchArmType {
     pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
-        self
+        match self {
+            Self::At {
+                var_type,
+                name,
+                pattern,
+            } => Self::At {
+                var_type,
+                name,
+                pattern: Box::new(pattern.substitute(subst)),
+            },
+            Self::In(x) => Self::In(x.substitute(subst)),
+            Self::Enum {
+                value,
+                var_type,
+                name,
+                destructure,
+                pattern,
+            } => Self::Enum {
+                value,
+                var_type,
+                name,
+                destructure,
+                pattern: pattern.map(|x| Box::new(x.substitute(subst))),
+            },
+            x => x,
+        }
     }
-}
 
-impl MatchArmType {
     fn first_span_from_string_parts(parts: &[MatchStringPatternPart]) -> Option<&Span> {
         let part = parts.first()?;
         match part {
@@ -139,80 +116,31 @@ impl MatchArmType {
         }
     }
 
+    pub fn has_wildcard(&self) -> bool {
+        match self {
+            MatchArmType::Wildcard(_) => true,
+            MatchArmType::At { pattern: inner, .. } => inner.has_wildcard(),
+            MatchArmType::TuplePattern(items) => items.iter().any(|item| item.has_wildcard()),
+            MatchArmType::ListPattern(items) => items.iter().any(|item| item.has_wildcard()),
+            MatchArmType::Enum { pattern: inner, .. } => {
+                inner.as_ref().map(|p| p.has_wildcard()).unwrap_or(false)
+            }
+            _ => false,
+        }
+    }
+
     pub fn is_wildcard(&self) -> bool {
         matches!(self, MatchArmType::Wildcard(_))
     }
 
-    fn first_span_from_tuple_items(items: &[MatchTupleItem]) -> Option<&Span> {
-        for item in items {
-            match item {
-                MatchTupleItem::Rest(sp) | MatchTupleItem::Wildcard(sp) => return Some(sp),
-                MatchTupleItem::Value(node) => return Some(&node.span),
-                MatchTupleItem::IsType(data_type) => return Some(&data_type.span),
-                MatchTupleItem::In(node) => return Some(&node.span),
-                MatchTupleItem::At { name, .. } => return Some(name.span()),
-                MatchTupleItem::StringPattern(parts) => {
-                    if let Some(span) = Self::first_span_from_string_parts(parts) {
-                        return Some(span);
-                    }
-                }
-                MatchTupleItem::Enum { value, .. } => return Some(value.span()),
-                MatchTupleItem::Binding { name, .. } => return Some(name.span()),
-                // TODO
-                MatchTupleItem::StructPattern(_) => return None,
-            }
-        }
-        None
+    pub fn is_wildcard_or_rest(&self) -> bool {
+        matches!(self, MatchArmType::Wildcard(_) | MatchArmType::Rest(_))
     }
 
-    pub fn into_tuple_item(self) -> Option<MatchTupleItem> {
-        match self {
-            MatchArmType::At {
-                var_type,
-                name,
-                pattern,
-            } => Some(MatchTupleItem::At {
-                var_type,
-                name,
-                pattern: Box::new(pattern.into_tuple_item()?),
-            }),
-            MatchArmType::Wildcard(sp) => Some(MatchTupleItem::Wildcard(sp)),
-            MatchArmType::Let { var_type, name } => {
-                Some(MatchTupleItem::Binding { var_type, name })
-            }
-            MatchArmType::Enum {
-                value,
-                var_type,
-                name,
-                destructure,
-                pattern,
-            } => Some(MatchTupleItem::Enum {
-                value,
-                var_type,
-                name,
-                destructure,
-                pattern,
-            }),
-            MatchArmType::Value(node) => Some(MatchTupleItem::Value(node)),
-            MatchArmType::IsType(data_type) => Some(MatchTupleItem::IsType(data_type)),
-            MatchArmType::In(node) => Some(MatchTupleItem::In(node)),
-            MatchArmType::StringPattern(parts) => Some(MatchTupleItem::StringPattern(parts)),
-            MatchArmType::TuplePattern(mut inner) => {
-                if inner.len() == 1 {
-                    Some(inner.remove(0))
-                } else {
-                    None
-                }
-            }
-            MatchArmType::ListPattern(_) => None,
-            MatchArmType::StructPattern(_) => None,
-        }
-    }
-
-    pub fn into_tuple_items(self) -> Option<Vec<MatchTupleItem>> {
+    pub fn into_tuple_items(self) -> Option<Vec<MatchArmType>> {
         match self {
             MatchArmType::TuplePattern(inner) => Some(inner),
-            other => Some(vec![other.into_tuple_item()?]),
+            other => Some(vec![other]),
         }
     }
 
@@ -226,8 +154,8 @@ impl MatchArmType {
         match self {
             Self::Enum { value, .. } => value.span(),
             Self::TuplePattern(items) | Self::ListPattern(items) => {
-                if let Some(span) = Self::first_span_from_tuple_items(items) {
-                    span
+                if let Some(first) = items.first() {
+                    first.span()
                 } else {
                     Self::default_span()
                 }
@@ -262,6 +190,7 @@ impl MatchArmType {
             Self::Value(x) => &x.span,
             Self::IsType(x) => &x.span,
             Self::Wildcard(x) => x,
+            Self::Rest(x) => x,
         }
     }
 
@@ -289,8 +218,18 @@ pub struct MatchBody {
 }
 
 impl MatchBody {
-    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
-        // TODO
+    pub fn substitute(mut self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        self.values = self
+            .values
+            .into_iter()
+            .map(|x| {
+                (
+                    x.0.substitute(subst),
+                    x.1.into_iter().map(|x| x.substitute(subst)).collect(),
+                    Box::new(x.2.substitute(subst)),
+                )
+            })
+            .collect();
         self
     }
 }

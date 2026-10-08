@@ -34,10 +34,9 @@ pub struct Symbols {
     pub native_mappings: UstrMap<Key>,
     pub overloads: Vec<MiddleOverload>,
 
-    pub generic_fn_templates: FxHashMap<VariableKey, (Vec<Ustr>, FunctionHeader, AstNode)>,
-
     pub name_to_param_defaults: FxHashMap<VariableKey, usize>,
     pub function_param_defaults: FxHashMap<usize, Rc<[FunctionParamDefault]>>,
+
     pub function_specializations: UstrMap<Ustr>,
     pub function_defers: Vec<AstNode>,
 }

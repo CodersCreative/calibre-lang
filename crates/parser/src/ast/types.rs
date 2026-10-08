@@ -3,7 +3,7 @@ use crate::{
     ast::{
         RefMutability,
         ffi::ParserFfiInnerType,
-        idents::{ParserText, PotentialDollarIdentifier},
+        idents::ParserText,
         nodes::{
             AstNode, AstNodeType,
             functions::CallArg,
@@ -753,12 +753,12 @@ impl Display for ParserInnerType {
     }
 }
 
-// TODO Evaluate use of this
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub struct GenericTypes(pub Vec<GenericType>);
+pub struct GenericTypes(pub Vec<String>);
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GenericType {
-    pub identifier: PotentialDollarIdentifier,
-    pub trait_constraints: Vec<PotentialDollarIdentifier>,
+impl GenericTypes {
+    pub fn substitute(mut self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        self.0.retain(|x| !subst.contains_key(x));
+        self
+    }
 }

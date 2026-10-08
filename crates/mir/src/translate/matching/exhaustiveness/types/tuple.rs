@@ -9,10 +9,7 @@ use crate::{
     },
     typing::MiddleTypeDefType,
 };
-use calibre_parser::ast::nodes::{
-    AstNode, AstNodeType,
-    matching::{MatchArmType, MatchTupleItem},
-};
+use calibre_parser::ast::nodes::{AstNode, AstNodeType, matching::MatchArmType};
 
 pub struct TupleExhaustivenessChecker;
 
@@ -51,9 +48,7 @@ impl ExhaustivenessChecker for TupleExhaustivenessChecker {
         for pattern in patterns {
             let (inner_pattern, _aliases) = pattern.clone().alias_bindings();
             if let MatchArmType::TuplePattern(items) = inner_pattern {
-                let field_patterns: Vec<Option<MatchArmType>> =
-                    items.iter().map(extract_pattern_from_tuple_item).collect();
-                covered_patterns.push(field_patterns);
+                covered_patterns.push(items);
             } else {
                 return Ok(ExhaustivenessReport::requires_wildcard(
                     "non-tuple pattern in tuple pattern, add a `_` pattern".to_string(),
@@ -84,33 +79,6 @@ impl ExhaustivenessChecker for TupleExhaustivenessChecker {
         } else {
             Ok(ExhaustivenessReport::non_exhaustive(missing_combinations))
         }
-    }
-}
-
-fn extract_pattern_from_tuple_item(item: &MatchTupleItem) -> Option<MatchArmType> {
-    match item {
-        MatchTupleItem::Value(node) => Some(MatchArmType::Value(node.clone())),
-        MatchTupleItem::Wildcard(span) => Some(MatchArmType::Wildcard(*span)),
-        MatchTupleItem::At { pattern, .. } => extract_pattern_from_tuple_item(pattern),
-        MatchTupleItem::Enum {
-            value,
-            var_type,
-            name,
-            destructure,
-            pattern,
-        } => Some(MatchArmType::Enum {
-            value: value.clone(),
-            var_type: *var_type,
-            name: name.clone(),
-            destructure: destructure.clone(),
-            pattern: pattern.clone(),
-        }),
-        MatchTupleItem::StructPattern(fields) => Some(MatchArmType::StructPattern(fields.clone())),
-        MatchTupleItem::Binding { var_type, name } => Some(MatchArmType::Let {
-            var_type: *var_type,
-            name: name.clone(),
-        }),
-        _ => None,
     }
 }
 
@@ -152,7 +120,7 @@ fn cartesian_product(domains: &[Vec<String>]) -> Vec<Vec<String>> {
     result
 }
 
-fn is_combination_covered(combination: &[String], patterns: &[Vec<Option<MatchArmType>>]) -> bool {
+fn is_combination_covered(combination: &[String], patterns: &[Vec<MatchArmType>]) -> bool {
     for pattern in patterns {
         if pattern_matches_combination(pattern, combination) {
             return true;
@@ -161,22 +129,22 @@ fn is_combination_covered(combination: &[String], patterns: &[Vec<Option<MatchAr
     false
 }
 
-fn pattern_matches_combination(pattern: &[Option<MatchArmType>], combination: &[String]) -> bool {
+fn pattern_matches_combination(pattern: &[MatchArmType], combination: &[String]) -> bool {
     for (field_pattern, expected_value) in pattern.iter().zip(combination.iter()) {
         match field_pattern {
-            Some(MatchArmType::Value(node)) => {
+            MatchArmType::Value(node) => {
                 if !pattern_value_matches(node, expected_value) {
                     return false;
                 }
             }
 
-            Some(MatchArmType::Enum { value, .. }) => {
+            MatchArmType::Enum { value, .. } => {
                 let variant_name = format!(".{}", value.text());
                 if variant_name != *expected_value {
                     return false;
                 }
             }
-            Some(MatchArmType::Wildcard(_)) | Some(MatchArmType::Let { .. }) => {}
+            MatchArmType::Wildcard(_) | MatchArmType::Let { .. } => {}
             _ => {
                 return false;
             }

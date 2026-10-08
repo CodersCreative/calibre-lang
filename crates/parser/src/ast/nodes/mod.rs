@@ -748,7 +748,7 @@ impl AstNodeType {
                 target,
                 variables,
             }) => Self::ImplDeclaration(AstImpl {
-                generics,
+                generics: generics.substitute(subst),
                 target: target.substitute(subst),
                 variables: variables.into_iter().map(|x| x.substitute(subst)).collect(),
             }),
