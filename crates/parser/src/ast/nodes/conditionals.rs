@@ -1,4 +1,8 @@
-use crate::ast::nodes::{AstNode, matching::MatchArmType};
+use crate::ast::{
+    nodes::{AstNode, matching::MatchArmType},
+    types::ParserDataType,
+};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -8,6 +12,21 @@ pub enum IfComparisonType {
         pattern: (Vec<MatchArmType>, Vec<AstNode>),
     },
     If(AstNode),
+}
+
+impl IfComparisonType {
+    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        match self {
+            Self::If(x) => Self::If(x.substitute(subst)),
+            Self::IfLet { value, pattern } => Self::IfLet {
+                value: value.substitute(subst),
+                pattern: (
+                    pattern.0.into_iter().map(|x| x.substitute(subst)).collect(),
+                    pattern.1.into_iter().map(|x| x.substitute(subst)).collect(),
+                ),
+            },
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

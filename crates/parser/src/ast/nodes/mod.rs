@@ -416,14 +416,10 @@ impl AstNode {
     }
 
     pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
-        let span = self.span;
-
-        // TODO
-        let node_type = match self.node_type {
-            x => x,
-        };
-
-        Self { node_type, span }
+        Self {
+            node_type: self.node_type.substitute(subst),
+            span: self.span,
+        }
     }
 }
 
@@ -586,6 +582,257 @@ impl AstNodeType {
             }
 
             _ => false,
+        }
+    }
+
+    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        // TODO
+        match self {
+            Self::AsExpression(AstAs {
+                value,
+                data_type,
+                failure_mode,
+            }) => Self::AsExpression(AstAs {
+                value: Box::new(value.substitute(subst)),
+                data_type: data_type.substitute(subst),
+                failure_mode,
+            }),
+            Self::AssignmentExpression(AstAssignment { identifier, value }) => {
+                Self::AssignmentExpression(AstAssignment {
+                    identifier: Box::new(identifier.substitute(subst)),
+                    value: Box::new(value.substitute(subst)),
+                })
+            }
+            Self::BinaryExpression(AstBinary {
+                left,
+                right,
+                operator,
+            }) => Self::BinaryExpression(AstBinary {
+                left: Box::new(left.substitute(subst)),
+                right: Box::new(right.substitute(subst)),
+                operator,
+            }),
+            Self::BooleanExpression(AstBoolean {
+                left,
+                right,
+                operator,
+            }) => Self::BooleanExpression(AstBoolean {
+                left: Box::new(left.substitute(subst)),
+                right: Box::new(right.substitute(subst)),
+                operator,
+            }),
+            Self::ComparisonExpression(AstComparison {
+                left,
+                right,
+                operator,
+            }) => Self::ComparisonExpression(AstComparison {
+                left: Box::new(left.substitute(subst)),
+                right: Box::new(right.substitute(subst)),
+                operator,
+            }),
+            Self::Break(AstBreak {
+                label,
+                value: Some(value),
+            }) => Self::Break(AstBreak {
+                label,
+                value: Some(Box::new(value.substitute(subst))),
+            }),
+            Self::CallExpression(AstCall {
+                string_fn,
+                caller,
+                generic_types,
+                args,
+                reverse_args,
+            }) => Self::CallExpression(AstCall {
+                string_fn,
+                caller: Box::new(caller.substitute(subst)),
+                generic_types,
+                args: args.into_iter().map(|x| x.substitute(subst)).collect(),
+                reverse_args: reverse_args
+                    .into_iter()
+                    .map(|x| x.substitute(subst))
+                    .collect(),
+            }),
+            Self::DataType(AstDataType { data_type }) => Self::DataType(AstDataType {
+                data_type: data_type.substitute(subst),
+            }),
+            Self::CurryExpression(AstCurry { value }) => Self::CurryExpression(AstCurry {
+                value: Box::new(value.substitute(subst)),
+            }),
+            Self::Defer(AstDefer { value, function }) => Self::Defer(AstDefer {
+                value: Box::new(value.substitute(subst)),
+                function,
+            }),
+            Self::DerefStatement(AstDeref { value }) => Self::DerefStatement(AstDeref {
+                value: Box::new(value.substitute(subst)),
+            }),
+            Self::DestructureAssignment(AstAssignDestructure { pattern, value }) => {
+                Self::DestructureAssignment(AstAssignDestructure {
+                    pattern,
+                    value: Box::new(value.substitute(subst)),
+                })
+            }
+            Self::DestructureDeclaration(AstDeclareDestructure {
+                var_type,
+                pattern,
+                value,
+            }) => Self::DestructureDeclaration(AstDeclareDestructure {
+                var_type,
+                pattern,
+                value: Box::new(value.substitute(subst)),
+            }),
+            Self::Emit(AstEmit::Channel {
+                left,
+                right,
+                left_channel,
+            }) => Self::Emit(AstEmit::Channel {
+                left: Box::new(left.substitute(subst)),
+                right: Box::new(right.substitute(subst)),
+                left_channel,
+            }),
+            Self::Emit(AstEmit::Scope(x)) => {
+                Self::Emit(AstEmit::Scope(Box::new(x.substitute(subst))))
+            }
+            Self::EnumExpression(AstEnum {
+                identifier,
+                value,
+                data,
+            }) => Self::EnumExpression(AstEnum {
+                identifier,
+                value,
+                data: data.map(|x| Box::new(x.substitute(subst))),
+            }),
+            Self::ExternFunctionDeclaration(AstExtern {
+                abi,
+                identifier,
+                parameters,
+                return_type,
+                library,
+                symbol,
+                declared,
+            }) => Self::ExternFunctionDeclaration(AstExtern {
+                abi,
+                identifier,
+                parameters: parameters
+                    .into_iter()
+                    .map(|x| x.substitute(subst))
+                    .collect(),
+                return_type: return_type.substitute(subst),
+                library,
+                symbol,
+                declared,
+            }),
+            Self::FnMatchDeclaration(AstFnMatch { header, body }) => {
+                Self::FnMatchDeclaration(AstFnMatch {
+                    header: header.substitute(subst),
+                    body: body.substitute(subst),
+                })
+            }
+            Self::FunctionDeclaration(AstFunction { header, body }) => {
+                Self::FunctionDeclaration(AstFunction {
+                    header: header.substitute(subst),
+                    body: Box::new(body.substitute(subst)),
+                })
+            }
+            Self::IfStatement(AstIf {
+                comparison,
+                then,
+                otherwise,
+            }) => Self::IfStatement(AstIf {
+                comparison: Box::new(comparison.substitute(subst)),
+                then: Box::new(then.substitute(subst)),
+                otherwise: otherwise.map(|x| Box::new(x.substitute(subst))),
+            }),
+            Self::ImplDeclaration(AstImpl {
+                generics,
+                target,
+                variables,
+            }) => Self::ImplDeclaration(AstImpl {
+                generics,
+                target: target.substitute(subst),
+                variables: variables.into_iter().map(|x| x.substitute(subst)).collect(),
+            }),
+            Self::InDeclaration(AstIn { identifier, value }) => Self::InDeclaration(AstIn {
+                identifier: Box::new(identifier.substitute(subst)),
+                value: Box::new(value.substitute(subst)),
+            }),
+            Self::IndexAccess(AstIndex { base, index, panic }) => Self::IndexAccess(AstIndex {
+                base: Box::new(base.substitute(subst)),
+                index: Box::new(index.substitute(subst)),
+                panic,
+            }),
+            Self::InlineGenerator(AstGenerator {
+                map,
+                data_type,
+                loop_type,
+                conditionals,
+                until,
+            }) => Self::InlineGenerator(AstGenerator {
+                map: Box::new(map.substitute(subst)),
+                data_type: data_type.map(|x| x.substitute(subst)),
+                loop_type: Box::new(loop_type.substitute(subst)),
+                conditionals: conditionals
+                    .into_iter()
+                    .map(|x| x.substitute(subst))
+                    .collect(),
+                until: until.map(|x| Box::new(x.substitute(subst))),
+            }),
+            Self::IsExpression(AstIs { value, data_type }) => Self::IsExpression(AstIs {
+                value: Box::new(value.substitute(subst)),
+                data_type: data_type.substitute(subst),
+            }),
+            Self::IterExpression(AstIter {
+                data_type,
+                map,
+                spawned,
+                loop_type,
+                conditionals,
+                until,
+            }) => Self::IterExpression(AstIter {
+                data_type: data_type.substitute(subst),
+                map: Box::new(map.substitute(subst)),
+                spawned,
+                loop_type: Box::new(loop_type.substitute(subst)),
+                conditionals: conditionals
+                    .into_iter()
+                    .map(|x| x.substitute(subst))
+                    .collect(),
+                until: until.map(|x| Box::new(x.substitute(subst))),
+            }),
+            Self::ListLiteral(AstList { data_type, values }) => Self::ListLiteral(AstList {
+                data_type: data_type.substitute(subst),
+                values: values.into_iter().map(|x| x.substitute(subst)).collect(),
+            }),
+            Self::LoopDeclaration(AstLoop {
+                loop_type,
+                body,
+                until,
+                label,
+                else_body,
+            }) => Self::LoopDeclaration(AstLoop {
+                loop_type: Box::new(loop_type.substitute(subst)),
+                body: Box::new(body.substitute(subst)),
+                until: until.map(|x| Box::new(x.substitute(subst))),
+                label,
+                else_body: else_body.map(|x| Box::new(x.substitute(subst))),
+            }),
+            Self::MatchStatement(AstMatch { value, body }) => Self::MatchStatement(AstMatch {
+                value: value.map(|x| Box::new(x.substitute(subst))),
+                body: body.substitute(subst),
+            }),
+            Self::NegExpression(AstNeg { value }) => Self::NegExpression(AstNeg {
+                value: Box::new(value.substitute(subst)),
+            }),
+            Self::NotExpression(AstNot { value }) => Self::NotExpression(AstNot {
+                value: Box::new(value.substitute(subst)),
+            }),
+            Self::ParenExpression(AstParen { value }) => Self::ParenExpression(AstParen {
+                value: Box::new(value.substitute(subst)),
+            }),
+            Self::PipeExpression(AstPipe { values }) => Self::PipeExpression(AstPipe {
+                values: values.into_iter().map(|x| x.substitute(subst)).collect(),
+            }),
+            x => x,
         }
     }
 }

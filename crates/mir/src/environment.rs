@@ -313,39 +313,7 @@ impl MiddleEnvironment {
         debug!("translating AST to MIR");
         let span = node.span;
         let inner = node.clone().lower_or_empty(&mut env, scope, span, None);
-        let mut middle = wrap(&env, scope, node.span, inner);
-
-        if let Some(mut decls) = env.symbols.specialization_decls_by_scope.remove(&scope)
-            && !decls.is_empty()
-        {
-            debug!(
-                decl_count = decls.len(),
-                "adding specialization declarations"
-            );
-            match &mut middle.node_type {
-                MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
-                    let mut new_body = std::mem::take(&mut decls);
-                    new_body.extend(std::mem::take(body).into_vec());
-                    *body = new_body.into_boxed_slice();
-                }
-                _ => {
-                    let mut body = std::mem::take(&mut decls);
-                    let middle_span = middle.span;
-                    body.push(middle);
-
-                    middle = MiddleNode::new(
-                        MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                            body: body.into_boxed_slice(),
-                            create_new_scope: false,
-                            is_temp: false,
-                            function_body: false,
-                            scope_id: scope,
-                        }),
-                        middle_span,
-                    );
-                }
-            }
-        }
+        let middle = wrap(&env, scope, span, inner);
 
         debug!("MIR construction completed");
         (env, scope, middle)

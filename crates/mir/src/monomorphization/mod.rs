@@ -105,7 +105,7 @@ impl MiddleEnvironment {
             AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::new(span, name),
-                value: Box::new(body.clone().substitute(&subst)),
+                value: Box::new(body.substitute(&subst)),
                 data_type: ParserDataType::from(data_type),
                 declared: true,
             }),

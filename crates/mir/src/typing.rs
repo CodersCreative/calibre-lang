@@ -17,11 +17,18 @@ use std::fmt::Display;
 use tracing::{instrument, trace};
 use ustr::{Ustr, UstrMap, UstrSet};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeTemplate {
+    pub generic_params: Vec<Ustr>,
+    pub type_def: TypeDefType,
+    pub impls: Vec<AstNode>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Typing {
     pub objects: FxHashMap<TypeKey, MiddleObject>,
     pub inherent_impls: FxHashMap<TypeImplKey, Vec<MiddleImpl>>,
-    pub generic_type_templates: UstrMap<(Vec<Ustr>, TypeDefType)>,
+    pub generic_type_templates: FxHashMap<MirDataType, TypeTemplate>,
 }
 
 impl Typing {

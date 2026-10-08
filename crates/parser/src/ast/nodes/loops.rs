@@ -3,6 +3,7 @@ use crate::ast::{
     nodes::{AstNode, matching::MatchArmType},
     types::ParserDataType,
 };
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -14,6 +15,23 @@ pub enum LoopType {
     While(AstNode),
     For(PotentialDollarIdentifier, AstNode),
     Loop,
+}
+
+impl LoopType {
+    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        match self {
+            Self::For(x, y) => Self::For(x, y.substitute(subst)),
+            Self::While(x) => Self::While(x.substitute(subst)),
+            Self::Let { value, pattern } => Self::Let {
+                value: value.substitute(subst),
+                pattern: (
+                    pattern.0.into_iter().map(|x| x.substitute(subst)).collect(),
+                    pattern.1.into_iter().map(|x| x.substitute(subst)).collect(),
+                ),
+            },
+            x => x,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

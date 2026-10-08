@@ -1,7 +1,8 @@
 use crate::{
     Span,
-    ast::{idents::PotentialDollarIdentifier, nodes::AstNode},
+    ast::{idents::PotentialDollarIdentifier, nodes::AstNode, types::ParserDataType},
 };
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -89,6 +90,16 @@ impl PipeSegment {
                 identifier: _,
                 node,
             } => node,
+        }
+    }
+
+    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        match self {
+            Self::Named { identifier, node } => Self::Named {
+                identifier,
+                node: node.substitute(subst),
+            },
+            Self::Unnamed(x) => Self::Unnamed(x.substitute(subst)),
         }
     }
 }

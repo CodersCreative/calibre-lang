@@ -7,6 +7,7 @@ use crate::{
         types::ParserDataType,
     },
 };
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 #[repr(u8)]
@@ -120,6 +121,12 @@ pub enum MatchArmType {
     Value(AstNode),
     IsType(ParserDataType),
     Wildcard(Span),
+}
+
+impl MatchArmType {
+    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        self
+    }
 }
 
 impl MatchArmType {
@@ -279,6 +286,13 @@ impl MatchArmType {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MatchBody {
     pub values: Vec<(MatchArmType, Vec<AstNode>, Box<AstNode>)>,
+}
+
+impl MatchBody {
+    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        // TODO
+        self
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

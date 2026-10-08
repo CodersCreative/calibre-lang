@@ -65,6 +65,13 @@ impl CallArg {
     pub fn get_node(&self) -> &AstNode {
         self.into()
     }
+
+    pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> Self {
+        match self {
+            Self::Named(x, y) => Self::Named(x, y.substitute(subst)),
+            Self::Value(x) => Self::Value(x.substitute(subst)),
+        }
+    }
 }
 
 impl From<CallArg> for AstNode {
