@@ -189,6 +189,7 @@ impl Display for RuntimeValue {
             Self::MutexGuard(_) => write!(f, "MutexGuard"),
             Self::HashMap(_) => write!(f, "HashMap"),
             Self::HashSet(_) => write!(f, "HashSet"),
+            Self::Reader(_) => write!(f, "Reader"),
             Self::Host(_) => write!(f, "Host"),
             Self::Str(x) => write!(f, "{:?}", x),
             Self::Char(x) => write!(f, "{:?}", x),

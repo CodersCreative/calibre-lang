@@ -1,5 +1,6 @@
 pub mod r#async;
 pub mod collections;
+pub mod console;
 pub mod crypto;
 pub mod env;
 pub mod generator;

@@ -110,6 +110,7 @@ impl ParserDataType {
         NATIVES.get_or_init(|| {
             let lst: Vec<(&str, Vec<ParserInnerType>, ParserInnerType)> = vec![
                 ("console_input", Vec::new(), ParserInnerType::Str),
+                ("console.input_stream", Vec::new(), ParserInnerType::Host),
                 #[cfg(feature = "native")]
                 ("libc.get_c_errno", vec![], ParserInnerType::Int),
                 #[cfg(feature = "native")]
@@ -460,6 +461,12 @@ impl ParserDataType {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
                         ok: Box::new(Self::native_type(ParserInnerType::Str)),
                     },
+                ),
+                #[cfg(feature = "native")]
+                (
+                    "fs.file_stream_lines",
+                    vec![ParserInnerType::Host],
+                    ParserInnerType::Host,
                 ),
                 #[cfg(feature = "native")]
                 (

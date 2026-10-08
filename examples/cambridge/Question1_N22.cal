@@ -1,7 +1,7 @@
 // TODO Fix - FAILING - Type Inference
 // From 9618 w22 qp 22
 
-import input from std::console;
+import stdin from std::console;
 import (File, Path) from std::fs;
 
 const main := fn => {
@@ -12,11 +12,11 @@ const main := fn => {
 }
 
 const find_values := fn(data_array : &list:<int?>) -> uint => {
-  let mut number := input("Enter number : ") as int;
+  let mut number := stdin("Enter number : ") as int;
 
   for let .Err : e <- number => {
     print("Incorrect number entered : " & e & ".\nTry again...");
-    number := input("Enter number : ") as int;
+    number := stdin("Enter number : ") as int;
   }
 
   if !((try!! number) in 100) => {

@@ -2,7 +2,7 @@
 // https://mojolang.org/docs/manual/get-started/
 
 import bool from std::random;
-import input from std::console;
+import stdin from std::console;
 import Duration from std::thread;
 
 type Grid := struct {
@@ -119,12 +119,12 @@ const main := fn => {
 
     let mut grid := Grid.glider();
     
-    if input("Y (default) or N? ") = "N" => grid := Grid.random(40u, 80u);
+    if stdin("Y (default) or N? ") = "N" => grid := Grid.random(40u, 80u);
 
     print("Next, do you want to have simulation be automated?");
 
     let mut generation := 1u;
-    if input("Y (default) or N? ") != "N" => {
+    if stdin("Y (default) or N? ") != "N" => {
         let should_add_wait := grid.rows < 30u || grid.cols < 30u;
 
         for => {
@@ -139,7 +139,7 @@ const main := fn => {
         for => {
             print("\nGeneration : " & generation);
             print(grid);
-            if input("Enter `q` to quit : ") = "q" => break;
+            if stdin("Enter `q` to quit : ") = "q" => break;
             grid := grid.evolve();
             generation += 1u;
         }

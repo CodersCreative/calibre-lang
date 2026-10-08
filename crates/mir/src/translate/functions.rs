@@ -38,8 +38,8 @@ use tracing::instrument;
 use ustr::Ustr;
 
 struct GeneratorReturnsRewriter<'a> {
-    _env: &'a mut MiddleEnvironment,
-    _scope: ScopeId,
+    env: &'a mut MiddleEnvironment,
+    scope: ScopeId,
     _return_type: &'a MirDataType,
 }
 
@@ -48,11 +48,17 @@ impl<'a> NodeVisitor for GeneratorReturnsRewriter<'a> {
     fn visit(&mut self, node: AstNode) -> AstNode {
         let span = node.span;
         match node.node_type {
-            AstNodeType::Return(AstReturn { value: Some(value) }) => AstNode::call(
-                span,
-                AstNode::identifier(span, "gen_suspend"),
-                vec![CallArg::Value(*value)],
-            ),
+            AstNodeType::Return(AstReturn { value: Some(value) })
+                if value
+                    .type_of(self.env, self.scope, span)
+                    .is_none_or(|x| !x.is_gen()) =>
+            {
+                AstNode::call(
+                    span,
+                    AstNode::identifier(span, "gen_suspend"),
+                    vec![CallArg::Value(*value)],
+                )
+            }
             AstNodeType::Return(AstReturn { value: None }) => AstNode::new(
                 span,
                 AstNodeType::Return(AstReturn {
@@ -354,8 +360,8 @@ impl MiddleEnvironment {
         node: AstNode,
     ) -> AstNode {
         let mut rewriter = GeneratorReturnsRewriter {
-            _env: self,
-            _scope: scope,
+            env: self,
+            scope,
             _return_type: return_type,
         };
         rewriter.visit(node)
@@ -798,7 +804,9 @@ impl MirLowering for AstFunction {
             };
         }
 
-        if let Some(elem_type) = return_type.clone().get_gen() {
+        if let Some(elem_type) = return_type.clone().get_gen()
+            && !env.tagging.tag_info.contains(&TagInfo::ReturnsGen)
+        {
             body = MiddleEnvironment::wrap_generator_body(env, scope, body, elem_type, span);
         }
 
@@ -866,7 +874,7 @@ impl MirLowering for AstFunction {
         if pure && return_type.is_null() {
             env.context.push_error(
                 env.context
-                    .err_at_current(MiddleErr::PureFunctionNoReturnType),
+                    .err_at_span(span, MiddleErr::PureFunctionNoReturnType),
             );
         }
 

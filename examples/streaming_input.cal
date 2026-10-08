@@ -1,0 +1,14 @@
+import (stream_stdin, stdout) from std::console;
+
+const main := fn => {
+    let mut stream : gen:<str> = stream_stdin();
+    print("Hello! This is just a basic program that echos your input");
+    print("Have fun!!!");
+    print();
+
+    stdout(">>> ");
+    for let .Some : v <- stream.next() => {
+        print(v);
+        stdout(">>> ");
+    }
+}

@@ -54,6 +54,7 @@ pub enum TagInfo {
     Panics,
     Bench,
     CallerContext,
+    ReturnsGen,
     IgnoreInvalidReturn,
     IgnoreInvalidLet,
     IgnoreInvalidTypeCheck,
@@ -254,6 +255,28 @@ impl MiddleEnvironment {
 
         self.tagging.tag_handlers.insert(
             Ustr::from("builder"),
+            TagHandler {
+                handler: builder_handler,
+            },
+        );
+
+        let builder_handler: TagHandlerFn = Arc::new(Mutex::new(
+            |env: &mut MiddleEnvironment,
+             scope: ScopeId,
+             node: AstNode,
+             data_type: Option<MirDataType>,
+             _args: Vec<AstNode>| {
+                env.tagging.tag_info.push(TagInfo::ReturnsGen);
+                let span = node.span;
+                let middle = node.lower(env, scope, span, data_type);
+                let _ = env.tagging.tag_info.pop();
+
+                middle
+            },
+        ));
+
+        self.tagging.tag_handlers.insert(
+            Ustr::from("returns_gen"),
             TagHandler {
                 handler: builder_handler,
             },

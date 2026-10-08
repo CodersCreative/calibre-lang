@@ -167,7 +167,7 @@ impl VM {
             MirDataType::Float => matches!(value, RuntimeValue::Float(_)),
             MirDataType::Int => matches!(value, RuntimeValue::Int(_)),
             MirDataType::UInt => matches!(value, RuntimeValue::UInt(_)),
-            MirDataType::Host => matches!(value, RuntimeValue::Host(_)),
+            MirDataType::Host => matches!(value, RuntimeValue::Host(_) | RuntimeValue::Reader(_)),
             MirDataType::Struct { identifier, .. } if identifier.name() == "gen" => {
                 matches!(value, RuntimeValue::Generator { .. })
             }

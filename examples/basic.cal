@@ -1,6 +1,4 @@
 // TODO Fix - FAILING - Type inference
-import std::console;
-
 @default type Stack := struct { values : list:<int> };
 
 impl Stack {

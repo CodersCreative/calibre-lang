@@ -106,6 +106,19 @@ impl VMEvaluation for VMLoadMember {
                     }));
                 }
             },
+            RuntimeValue::Reader(x) if member == "gen_next" => {
+                vm.set_reg_value(
+                    self.dst,
+                    RuntimeValue::Option(x.0.lock().ok().and_then(|mut x| {
+                        let mut txt = String::new();
+                        x.read_line(&mut txt)
+                            .ok()
+                            .map(|_| Gc::new(RuntimeValue::Str(Ustr::from(&txt))))
+                    })),
+                );
+
+                return Ok(TerminateValue::None);
+            }
             RuntimeValue::Aggregate(None, map) => {
                 let idx = tuple_index.ok_or(RuntimeError::ExpectedIntIndexFound {
                     found: Box::new(RuntimeValue::Null),
@@ -220,6 +233,7 @@ impl VMEvaluation for VMLoadMember {
                 vm.new_mutation_handle(source_reg, PathSegment::Field(*member))
             }
         });
+
         vm.current_frame_mut()
             .set_shared_mutation_handle(self.dst, final_source);
 

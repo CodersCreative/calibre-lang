@@ -17,7 +17,7 @@ use dumpster::{TraceWith, Visitor};
 use ustr::Ustr;
 
 use dyn_hash::DynHash;
-use std::{any::Any, ops::DerefMut};
+use std::{any::Any, io::BufRead, ops::DerefMut};
 use std::{
     fmt::{Debug, Display},
     ops::Deref,
@@ -133,6 +133,15 @@ impl GcMap {
     }
 }
 
+#[derive(Clone)]
+pub struct StringReader(pub Arc<Mutex<dyn BufRead + Send + Sync>>);
+
+impl Debug for StringReader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Reader")
+    }
+}
+
 impl Deref for GcMap {
     type Target = ObjectMap<ValueSlot>;
 
@@ -219,6 +228,7 @@ pub enum RuntimeValue {
     WaitGroup(Arc<WaitGroupInner>),
     Mutex(Arc<MutexInner>),
     MutexGuard(Arc<MutexGuardInner>),
+    Reader(StringReader),
     HashMap(RuntimeHashMap),
     HashSet(RuntimeHashSet),
     NativeFunction(Arc<dyn NativeFunction>),

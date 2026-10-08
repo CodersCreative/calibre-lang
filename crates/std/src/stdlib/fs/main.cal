@@ -100,6 +100,11 @@ impl File {
 		};
 	};
 
+	@ignore_invalid_return
+	@returns_gen
+	const stream_lines := fn(self : &Self) -> gen:<str> =>
+		return file_stream_lines(self.inner);
+
 	const read_all := fn (self : &File) -> str!str => {
 		match file_read_all(self.inner) {
 			.Ok : content => return ok(content),

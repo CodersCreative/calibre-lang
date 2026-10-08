@@ -5,11 +5,10 @@ use crate::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null, resolve_host, resolve_str},
     },
-    value::{GcVec, RuntimeValue},
+    value::{GcVec, RuntimeValue, StringReader},
 };
 use calibre_parser::ast::types::ParserInnerType;
 use dumpster::sync::Gc;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::{
     fs::{DirEntry, File, FileType, Metadata, OpenOptions},
@@ -19,6 +18,7 @@ use std::{
     hash::{Hash, Hasher},
     io::{Read, Write},
 };
+use std::{io::BufReader, path::PathBuf};
 use ustr::Ustr;
 use wasm_sync::Mutex;
 
@@ -1055,6 +1055,36 @@ impl NativeFunction for FsFileReadAll {
                 Ustr::from(&e.to_string()),
             ))))),
         }
+    }
+}
+
+pub struct FsFileStreamLines;
+
+impl NativeFunction for FsFileStreamLines {
+    fn name(&self) -> String {
+        String::from("fs.file_stream_lines")
+    }
+
+    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[1])?;
+
+        let file = resolve_host(env, pop_or_null(&mut args))?;
+
+        let host_file = file
+            .lock()
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<HostFile>()
+            .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
+            .0
+            .try_clone()
+            .unwrap();
+
+        let reader = BufReader::new(host_file);
+
+        Ok(RuntimeValue::Reader(StringReader(Arc::new(Mutex::new(
+            reader,
+        )))))
     }
 }
 

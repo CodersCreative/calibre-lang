@@ -30,6 +30,10 @@ impl RuntimeValue {
             let lst: Vec<(&str, Arc<dyn NativeFunction>)> = vec![
                 ("console_output", Arc::new(native::global::ConsoleOutput)),
                 ("console_input", Arc::new(native::global::ConsoleInput)),
+                (
+                    "console.input_stream",
+                    Arc::new(stdlib::console::InputStream),
+                ),
                 ("ok", Arc::new(native::global::OkFn)),
                 ("err", Arc::new(native::global::ErrFn)),
                 ("some", Arc::new(native::global::SomeFn)),
@@ -162,6 +166,11 @@ impl RuntimeValue {
                 ("fs.file_write_line", Arc::new(stdlib::fs::FsFileWriteLine)),
                 #[cfg(feature = "native")]
                 ("fs.file_read_all", Arc::new(stdlib::fs::FsFileReadAll)),
+                #[cfg(feature = "native")]
+                (
+                    "fs.file_stream_lines",
+                    Arc::new(stdlib::fs::FsFileStreamLines),
+                ),
                 #[cfg(feature = "native")]
                 ("fs.file_flush", Arc::new(stdlib::fs::FsFileFlush)),
                 ("tuple", Arc::new(native::global::TupleFn)),
