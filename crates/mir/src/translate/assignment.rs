@@ -60,7 +60,7 @@ impl MirLowering for AstAssignment {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-        mut data_type: Option<MirDataType>,
+        original_data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut identifier_type = self
             .identifier
@@ -75,11 +75,11 @@ impl MirLowering for AstAssignment {
                     x
                 }
             })
-            .or(data_type.clone());
+            .or(original_data_type.clone());
 
         let value_type = self.value.type_of(env, scope, span);
 
-        data_type = data_type
+        let data_type = original_data_type.clone()
             .or_else(|| identifier_type.clone())
             .or_else(|| value_type.clone());
 
@@ -188,7 +188,7 @@ impl MirLowering for AstAssignment {
                     *base.clone(),
                     *index.clone(),
                     *self.value.clone(),
-                    data_type.as_ref(),
+                    original_data_type.as_ref(),
                 )? {
                     return Ok(overloaded);
                 }

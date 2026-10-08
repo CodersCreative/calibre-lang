@@ -83,9 +83,11 @@ impl LirLowering for MirScopeDecl {
                     let global_type = data_type.clone();
                     let identifier = identifier.clone();
 
-                    let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
+                    let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, env.counter, false);
 
                     let _ = sub_lowerer.lower_node(stmt);
+
+                    env.counter = sub_lowerer.counter;
 
                     env.registry.append(sub_lowerer.registry);
 
@@ -144,7 +146,7 @@ impl LirLowering for MirFunction {
 
         let internal_name = env.next_function_label();
 
-        let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, false);
+        let mut sub_lowerer = LirEnvironment::new_with_hoist(env.env, env.counter, false);
         sub_lowerer.referenced_identifiers = referenced_names;
 
         let body_span = self.body.span;
@@ -164,6 +166,7 @@ impl LirLowering for MirFunction {
             sub_lowerer.emit_return_value(body_span, Some(body_val));
         }
 
+        env.counter = sub_lowerer.counter;
         env.registry.append(sub_lowerer.registry);
 
         let mut capture_names = Vec::with_capacity(captures.len());

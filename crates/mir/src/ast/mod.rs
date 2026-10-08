@@ -418,6 +418,7 @@ pub struct MirConditional {
     pub comparison: Box<MiddleNode>,
     pub then: Box<MiddleNode>,
     pub otherwise: Option<Box<MiddleNode>>,
+    pub data_type: Option<MirDataType>,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]

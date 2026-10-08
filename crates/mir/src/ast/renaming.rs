@@ -246,9 +246,11 @@ impl MirRenamable for MiddleNodeType {
                 comparison,
                 then,
                 otherwise,
+                data_type
             }) => {
                 comparison.rename(state);
                 then.rename(state);
+                data_type.as_mut().map(|x| x.rename(state));
                 if let Some(otherwise) = otherwise {
                     otherwise.rename(state);
                 }

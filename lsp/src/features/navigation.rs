@@ -115,6 +115,7 @@ impl CalibreLanguageServer {
                     comparison,
                     then,
                     otherwise,
+                    ..
                 }) => {
                     traverse(comparison, pos, text, current_scope, smallest_span);
                     traverse(then, pos, text, current_scope, smallest_span);

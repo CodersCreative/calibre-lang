@@ -105,11 +105,11 @@ pub struct LirEnvironment<'a> {
 
 impl<'a> LirEnvironment<'a> {
     pub fn new(env: &'a MiddleEnvironment) -> Self {
-        Self::new_with_hoist(env, true)
+        Self::new_with_hoist(env, 0, true)
     }
 
     #[instrument(skip_all, fields(allow_global_hoist = allow_global_hoist))]
-    pub fn new_with_hoist(env: &'a MiddleEnvironment, allow_global_hoist: bool) -> Self {
+    pub fn new_with_hoist(env: &'a MiddleEnvironment, count : usize, allow_global_hoist: bool) -> Self {
         debug!("creating LIR environment");
         let entry_id = BlockId(0);
 
@@ -147,7 +147,7 @@ impl<'a> LirEnvironment<'a> {
             referenced_identifiers: FxHashSet::default(),
             loop_stack: vec![],
             allow_global_hoist,
-            counter: 0,
+            counter: count,
         }
     }
 

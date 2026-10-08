@@ -14,7 +14,7 @@ use crate::{
     translate::LirLowering,
 };
 use calibre_mir::ast::{
-    MiddleNodeType, MirBreak, MirConditional, MirContinue, MirEmit, MirLoop, MirRange, MirReturn,
+    MiddleNodeType, MirBreak, MirConditional, MirContinue, MirEmit, MirLoop, MirRange, MirReturn, types::MirDataType,
 };
 use calibre_parser::Span;
 
@@ -42,6 +42,7 @@ impl LirLowering for MirReturn {
                 comparison,
                 then,
                 otherwise,
+                ..
             }) = v.node_type
             {
                 let then_id = env.create_block();
@@ -86,8 +87,12 @@ impl LirLowering for MirConditional {
         // Create the merge.
         let merge_id = env.create_block();
 
-        let temp = env.get_temp();
-        env.declare_temp_null(span, temp.clone());
+        let mut temp = None;
+        if self.data_type.as_ref().is_none_or(|x| !x.is_null()) {
+            let tmp = env.get_temp();
+            env.declare_temp_null(span, tmp.clone(), self.data_type.unwrap_or(MirDataType::Null));
+            temp = Some(tmp)
+        }
 
         let cond = env.lower_node(*self.comparison);
         env.set_terminator(LirTerminator::Branch {
@@ -102,7 +107,9 @@ impl LirLowering for MirConditional {
         let then_val = env.lower_node(*self.then);
 
         if env.current_block_open() {
-            env.assign_temp_if_non_null(span, temp.clone(), then_val);
+            if let Some(temp) = temp.clone() {
+                env.assign_temp_if_non_null(span, temp, then_val);
+            }
             env.jump_if_open(span, merge_id);
         }
 
@@ -115,13 +122,21 @@ impl LirLowering for MirConditional {
         };
 
         if env.current_block_open() {
-            env.assign_temp_if_non_null(span, temp.clone(), else_val);
+
+            if let Some(temp) = temp.clone() {
+                env.assign_temp_if_non_null(span, temp.clone(), else_val);
+            }
             env.jump_if_open(span, merge_id);
         }
 
         env.switch_to(merge_id);
 
+        
+            if let Some(temp) = temp.clone() {
         LirNodeType::Load(LirLoad { value: temp })
+            }else{
+                LirNodeType::null()
+            }
     }
 }
 

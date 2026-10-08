@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirConditional, MirDiscriminant,
-        MirExtern, MirFunction, MirReturn, MirScopeDecl, MirVarDecl, types::MirDataType,
+        MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirDiscriminant,
+        MirExtern, MirFunction,  MirScopeDecl, MirVarDecl, types::MirDataType,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -815,78 +815,9 @@ impl MirLowering for AstFunction {
         }) = body.node_type
         {
             let mut scope_body = scope_body.into_vec();
-            let mut last = scope_body.pop();
+
             for defer in func_defers {
                 scope_body.push(defer.lower(env, scope_id, span, None)?);
-            }
-
-            if return_type != MirDataType::Null
-                && let Some(last_node) = last.take()
-            {
-                if matches!(last_node.node_type, MiddleNodeType::Return { .. }) {
-                    last = Some(last_node);
-                } else {
-                    let simple_return = matches!(
-                        last_node.node_type,
-                        MiddleNodeType::Identifier(_)
-                            | MiddleNodeType::IntLiteral { .. }
-                            | MiddleNodeType::FloatLiteral(_)
-                            | MiddleNodeType::StringLiteral(_)
-                            | MiddleNodeType::CharLiteral(_)
-                            | MiddleNodeType::Null
-                            | MiddleNodeType::FieldAccess { .. }
-                            | MiddleNodeType::IndexAccess { .. }
-                    );
-                    if simple_return {
-                        last = Some(MiddleNode::new(
-                            MiddleNodeType::Return(MirReturn {
-                                value: Some(Box::new(last_node)),
-                            }),
-                            span,
-                        ));
-                    } else {
-                        let last_node = match last_node.node_type {
-                            MiddleNodeType::Conditional(MirConditional {
-                                comparison,
-                                then,
-                                otherwise,
-                            }) => {
-                                let wrap = |node: Box<MiddleNode>| {
-                                    if matches!(node.node_type, MiddleNodeType::Return { .. }) {
-                                        node
-                                    } else {
-                                        Box::new(MiddleNode::new(
-                                            MiddleNodeType::Return(MirReturn { value: Some(node) }),
-                                            span,
-                                        ))
-                                    }
-                                };
-                                let then = wrap(then);
-                                let otherwise = match otherwise {
-                                    Some(other) => Some(wrap(other)),
-                                    None => Some(Box::new(MiddleNode::new(
-                                        MiddleNodeType::Return(MirReturn { value: None }),
-                                        span,
-                                    ))),
-                                };
-                                MiddleNode {
-                                    span: last_node.span,
-                                    node_type: MiddleNodeType::Conditional(MirConditional {
-                                        comparison,
-                                        then,
-                                        otherwise,
-                                    }),
-                                }
-                            }
-                            _ => last_node,
-                        };
-                        last = Some(last_node);
-                    }
-                }
-            }
-
-            if let Some(last) = last {
-                scope_body.push(last);
             }
 
             MiddleNode {

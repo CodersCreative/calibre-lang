@@ -24,7 +24,7 @@ impl MirLowering for AstIf {
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-        data_type: Option<MirDataType>,
+        mut data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         if !env.context.type_check && data_type.is_some() {
             let then_type = self.then.type_of(env, scope, span);
@@ -33,12 +33,12 @@ impl MirLowering for AstIf {
                 .as_ref()
                 .and_then(|x| x.type_of(env, scope, span));
 
-            env.compare_types_ref(
-                then_type.as_ref(),
-                otherwise_type.as_ref(),
+            data_type = Some(env.compare_types(
+                then_type,
+                otherwise_type,
                 Some(&TagInfo::IgnoreInvalidTypeCheck),
                 span,
-            )?;
+            )?);
         }
 
         match *self.comparison {
@@ -56,7 +56,8 @@ impl MirLowering for AstIf {
                     ),
                     otherwise: self
                         .otherwise
-                        .map(|x| Box::new(x.lower_or_empty(env, scope, span, data_type))),
+                        .map(|x| Box::new(x.lower_or_empty(env, scope, span, data_type.clone()))),
+                    data_type,
                 }),
                 span,
             }),

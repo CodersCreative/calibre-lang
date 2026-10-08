@@ -37,7 +37,7 @@ const main := fn => {
 	print(v[0]);
 	print(v[1]);
 	print(2 in v);
-	v[0] := 9;
+	v[0] := 97231698;
 	print(v);
 	print(v as! str);
 	print(v = Vec2 { x : 9, y : 2 });
