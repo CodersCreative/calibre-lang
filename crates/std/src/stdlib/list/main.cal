@@ -1,8 +1,10 @@
-@overload("as") fn<T>(self : list:<T>) -> null!gen:<T> =>
+// TODO Rework generators
+/*@overload("as") fn<T>(self : list:<T>) -> null!gen:<T> => {
 	return ok(fn<T> -> gen:<T> => {
 		for i in len(self) => 
 			return self[i]!;
 	});
+}*/
 
 impl<T> list:<T> {
 	@pure

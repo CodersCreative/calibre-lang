@@ -708,7 +708,9 @@ impl MirLowering for AstReturn {
 
                             data_type = Some(ret_ty);
                         } else {
-                            return Err(env.context.err_at_current(MiddleErr::ReturnOutOfFunction));
+                            return Err(env
+                                .context
+                                .err_at_span(span, MiddleErr::ReturnOutOfFunction));
                         }
                     }
 

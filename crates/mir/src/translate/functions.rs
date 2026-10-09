@@ -1048,6 +1048,52 @@ impl MirLowering for AstCall {
                 .resolve(scope, &ident.value, ResolutionOptions::idents())?
                 .unwrap_variable();
 
+            if let Some((generic_params, header, _)) = env
+                .monomorphizer
+                .generic_fn_templates
+                .get(&caller_name)
+                .cloned()
+            {
+                let arg_types: Vec<MirDataType> = self
+                    .args
+                    .iter()
+                    .filter_map(|arg| arg.get_node().type_of(env, scope, span))
+                    .collect();
+
+                let param_types: Vec<MirDataType> = header
+                    .parameters
+                    .iter()
+                    .map(|p| {
+                        if let Some(data_type) = &p.1 {
+                            env.resolve_data_type(scope, data_type, ResolutionOptions::typing())
+                        } else if let Some(node) = &p.2 {
+                            node.type_of(env, scope, span)
+                                .ok_or(MiddleErr::InferImpossible)
+                        } else {
+                            Err(MiddleErr::InferImpossible)
+                        }
+                    })
+                    .collect::<Result<Vec<_>, MiddleErr>>()?;
+
+                let return_type = MirDataType::from(header.return_type.clone());
+
+                let concrete_args = env.infer_concrete_type_args(
+                    scope,
+                    &generic_params,
+                    &param_types,
+                    &return_type,
+                    &arg_types,
+                    data_type.as_ref(),
+                )?;
+
+                let key = env.monomorphize_function(scope, caller_name.clone(), concrete_args)?;
+
+                self.caller = Box::new(AstNode::identifier(
+                    self.caller.span,
+                    env.context.convert_key_to_ustr(Key::VariableKey(key)),
+                ));
+            }
+
             let needs_caller_context = if let Some(var) = env.symbols.variables.get(&caller_name) {
                 match var.data_type.unwrap_all_refs() {
                     MirDataType::Function {

@@ -1,11 +1,11 @@
-const stdout := fn (msg : list:<dyn>) => {
+const stdout := fn (msg : list:<str>) => {
 	let mut txt := "";
 	for m in msg => txt &= m;
 	
 	console_output(1, txt);
 };
 
-const stderr := fn (msg : list:<dyn>) => {
+const stderr := fn (msg : list:<str>) => {
 	let mut txt := "";
 	for m in msg => txt &= m;
 	
@@ -16,7 +16,7 @@ const clear := fn => {
 	console_output(1, "x1b[2Jx1b[1;1H");
 };
 
-const stdin := fn (prompt : dyn) -> str => {
+const stdin := fn (prompt : str) -> str => {
 	out(prompt);
 	return console_input();
 };

@@ -106,9 +106,8 @@ impl MiddleEnvironment {
                     }));
                 }
 
-                // TODO Find a way to extract the concrete args from an overload call
-                let concrete_args = Vec::new();
-                let key = self.monomorphize_overload(scope, &overload, concrete_args)?;
+                let arg_types = vec![left_ty.clone(), right_ty.clone()];
+                let key = self.monomorphize_overload(scope, &overload, arg_types, data_type)?;
 
                 return Ok(Some(MiddleNode {
                     node_type: MiddleNodeType::CallExpression(MirCall {
@@ -168,7 +167,6 @@ impl MiddleEnvironment {
 
         if let Some(overload) = overload {
             if overload.generic_params.is_empty() {
-                // Non-generic - use original
                 return Ok(Some(MiddleNode {
                     node_type: MiddleNodeType::CallExpression(MirCall {
                         caller: Box::new(MiddleNode::identifier(span, overload.func.clone())),
@@ -183,9 +181,8 @@ impl MiddleEnvironment {
                 }));
             }
 
-            // TODO Find a way to extract the concrete args from an overload call
-            let concrete_args = Vec::new();
-            let key = self.monomorphize_overload(scope, &overload, concrete_args)?;
+            let arg_types = vec![left_ty.clone()];
+            let key = self.monomorphize_overload(scope, &overload, arg_types, Some(target))?;
 
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {
@@ -319,9 +316,8 @@ impl MiddleEnvironment {
                 }));
             }
 
-            // TODO Find a way to extract the concrete args from an overload call
-            let concrete_args = Vec::new();
-            let key = self.monomorphize_overload(scope, &overload, concrete_args)?;
+            let arg_types = vec![base_ty.clone(), index_ty.clone(), value_ty.clone()];
+            let key = self.monomorphize_overload(scope, &overload, arg_types, data_type)?;
 
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {

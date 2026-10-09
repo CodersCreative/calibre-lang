@@ -20,7 +20,7 @@ use calibre_parser::ast::{
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use ustr::Ustr;
+use ustr::{Ustr, UstrSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TypeTemplate {
@@ -50,13 +50,157 @@ impl MiddleEnvironment {
         &mut self,
         scope: ScopeId,
         overload: &MiddleOverload,
-        concrete_args: Vec<MirDataType>,
+        arg_types: Vec<MirDataType>,
+        expected_return: Option<&MirDataType>,
     ) -> Result<VariableKey, MiddleErr> {
-        if concrete_args.is_empty() {
-            return Ok(overload.func.clone());
-        }
+        let concrete_args = self.infer_concrete_type_args(
+            scope,
+            &overload.generic_params,
+            &overload.parameters,
+            &overload.return_type,
+            &arg_types,
+            expected_return,
+        )?;
+
         let key = self.monomorphize_function(scope, overload.func.clone(), concrete_args)?;
         Ok(key)
+    }
+
+    pub fn infer_concrete_type_args(
+        &mut self,
+        scope: ScopeId,
+        generic_params: &[Ustr],
+        param_types: &[MirDataType],
+        return_type: &MirDataType,
+        arg_types: &[MirDataType],
+        expected_return: Option<&MirDataType>,
+    ) -> Result<Vec<MirDataType>, MiddleErr> {
+        let mut subst = FxHashMap::default();
+
+        for (param, arg) in param_types.iter().zip(arg_types.iter()) {
+            self.unify_types(scope, param, arg, generic_params, &mut subst)?;
+        }
+
+        if let Some(expected) = expected_return {
+            self.unify_types(scope, return_type, expected, generic_params, &mut subst)?;
+        }
+
+        let mut concrete_args = Vec::with_capacity(generic_params.len());
+
+        for param in generic_params {
+            let param_str = param.as_str();
+            if let Some(ty) = subst.get(param_str)
+                && !concrete_args.contains(ty)
+            {
+                concrete_args.push(ty.clone());
+            } else {
+                // TODO Probably deal with this better
+                concrete_args.push(MirDataType::Struct {
+                    identifier: TypeKey {
+                        fully_qualified_path: FullyQualifiedPath::combine(None, *param),
+                    },
+                    generic_types: Vec::new(),
+                });
+            }
+        }
+
+        Ok(concrete_args)
+    }
+
+    fn unify_types(
+        &mut self,
+        _scope: ScopeId,
+        pattern: &MirDataType,
+        concrete: &MirDataType,
+        generic_params: &[Ustr],
+        subst: &mut FxHashMap<String, MirDataType>,
+    ) -> Result<(), MiddleErr> {
+        let generic_param_set: UstrSet = generic_params.iter().cloned().collect();
+
+        match pattern {
+            MirDataType::Struct {
+                identifier,
+                generic_types,
+            } => {
+                if generic_types.is_empty() {
+                    let name = identifier.fully_qualified_path.name.unwrap_or_default();
+
+                    if generic_param_set.contains(&name) {
+                        if let Some(existing) = subst.get(name.as_str()) {
+                            if existing != concrete {
+                                return Err(MiddleErr::Object(format!(
+                                    "Type parameter {} has conflicting types: {} and {}",
+                                    name, existing, concrete
+                                )));
+                            }
+                        } else {
+                            subst.insert(name.to_string(), concrete.clone());
+                        }
+                        return Ok(());
+                    }
+                }
+
+                if let MirDataType::Struct {
+                    identifier: concrete_id,
+                    generic_types: concrete_gens,
+                } = concrete
+                    && identifier.fully_qualified_path.name == concrete_id.fully_qualified_path.name
+                {
+                    for (g1, g2) in generic_types.iter().zip(concrete_gens.iter()) {
+                        self.unify_types(_scope, g1, g2, generic_params, subst)?;
+                    }
+                }
+            }
+            MirDataType::List(inner) => {
+                if let MirDataType::List(concrete_inner) = concrete {
+                    self.unify_types(_scope, inner, concrete_inner, generic_params, subst)?;
+                }
+            }
+            MirDataType::Tuple(items) => {
+                if let MirDataType::Tuple(concrete_items) = concrete {
+                    for (i1, i2) in items.iter().zip(concrete_items.iter()) {
+                        self.unify_types(_scope, i1, i2, generic_params, subst)?;
+                    }
+                }
+            }
+            MirDataType::Function {
+                return_type,
+                parameters,
+            } => {
+                if let MirDataType::Function {
+                    return_type: concrete_ret,
+                    parameters: concrete_params,
+                } = concrete
+                {
+                    self.unify_types(_scope, return_type, concrete_ret, generic_params, subst)?;
+                    for (p1, p2) in parameters.iter().zip(concrete_params.iter()) {
+                        self.unify_types(_scope, p1, p2, generic_params, subst)?;
+                    }
+                }
+            }
+            MirDataType::Option(inner) => {
+                if let MirDataType::Option(concrete_inner) = concrete {
+                    self.unify_types(_scope, inner, concrete_inner, generic_params, subst)?;
+                }
+            }
+            MirDataType::Result { ok, err } => {
+                if let MirDataType::Result {
+                    ok: concrete_ok,
+                    err: concrete_err,
+                } = concrete
+                {
+                    self.unify_types(_scope, ok, concrete_ok, generic_params, subst)?;
+                    self.unify_types(_scope, err, concrete_err, generic_params, subst)?;
+                }
+            }
+            _ => {
+                if pattern != concrete {
+                    // TODO Handle types not matching
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub fn monomorphize_function(
