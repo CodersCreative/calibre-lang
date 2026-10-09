@@ -66,7 +66,9 @@ impl VMEvaluation for VMLoadLiteral {
                 let mut last_err = None;
                 let mut handle_opt = None;
 
-                for candidate in VM::resolve_library_candidates(&library) {
+                let candidates = VM::resolve_library_candidates(&library);
+
+                for candidate in candidates {
                     match unsafe { libloading::Library::new(&candidate) } {
                         Ok(h) => {
                             handle_opt = Some(h);

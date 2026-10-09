@@ -1,6 +1,6 @@
 use super::{BindingDeclaration, PatternTranslation, PatternTranslator};
 use crate::{
-    environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+    ast::types::MirDataType, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
 };
 use calibre_parser::ast::{
@@ -21,6 +21,7 @@ impl PatternTranslator for StructPatternTranslator {
         scope: ScopeId,
         pattern: &MatchArmType,
         value: &AstNode,
+        _value_type: Option<&MirDataType>,
     ) -> Result<PatternTranslation, MiddleErr> {
         let (inner_pattern, aliases) = pattern.clone().alias_bindings();
 

@@ -298,10 +298,6 @@ impl ParserDataType {
         }
     }
 
-    pub fn loose_eq(&self, other: &Self) -> bool {
-        self.data_type.loose_eq(&other.data_type) || self.key().loose_eq(&other.key())
-    }
-
     pub fn function(
         span: Span,
         parameters: Vec<ParserDataType>,
@@ -339,14 +335,17 @@ impl ParserDataType {
 
     pub fn is_int(self) -> bool {
         matches!(
-            self.unwrap_all_refs().resolve_ffi().data_type,
-            ParserInnerType::Int | ParserInnerType::UInt | ParserInnerType::Byte
+            self.unwrap_all_refs().data_type,
+            ParserInnerType::Int
+                | ParserInnerType::UInt
+                | ParserInnerType::Byte
+                | ParserInnerType::FfiType(_)
         )
     }
 
     pub fn is_native(self) -> bool {
         !matches!(
-            self.unwrap_all_refs().resolve_ffi().data_type,
+            self.unwrap_all_refs().data_type,
             ParserInnerType::Struct(_) | ParserInnerType::StructWithGenerics { .. }
         )
     }
@@ -405,20 +404,6 @@ impl ParserDataType {
                 vec![CallArg::Value(ok.default_node()?)],
             )),
             _ => None,
-        }
-    }
-
-    pub fn verify(self) -> Self {
-        Self {
-            data_type: self.data_type.verify(),
-            span: self.span,
-        }
-    }
-
-    pub fn resolve_ffi(self) -> Self {
-        Self {
-            data_type: self.data_type.resolve_ffi(),
-            span: self.span,
         }
     }
 }
@@ -547,71 +532,6 @@ impl ParserInnerType {
 
     pub fn is_tuple(&self) -> bool {
         matches!(self, Self::Tuple(_))
-    }
-
-    pub fn loose_eq(&self, other: &Self) -> bool {
-        other.is_auto()
-            || other.is_tuple()
-            || other.is_never()
-            || other.is_host()
-            || other.is_dyn()
-            || other.is_dyn_list()
-            || self.is_auto()
-            || self.is_never()
-            || self.is_tuple()
-            || self.is_host()
-            || self.is_dyn()
-            || self.is_dyn_list()
-            || other == self
-            || self.impl_name() == other.impl_name()
-            || self.clone().resolve_ffi() == other.clone().resolve_ffi()
-    }
-
-    pub fn verify(self) -> Self {
-        match self {
-            Self::Result { ok, err } => Self::Result {
-                ok: Box::new(ok.verify()),
-                err: Box::new(err.verify()),
-            },
-            Self::Ref(x, y) => Self::Ref(Box::new(x.verify()), y),
-            Self::Ptr(x) => Self::Ptr(Box::new(x.verify())),
-            Self::Option(x) => Self::Option(Box::new(x.verify())),
-            Self::List(x) => Self::List(Box::new(x.verify())),
-            Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.verify()).collect()),
-            Self::Struct(x) => Self::from_str(&x).unwrap_or(Self::Struct(x)),
-            ty => ty,
-        }
-    }
-
-    pub fn resolve_ffi(self) -> Self {
-        match self {
-            Self::FfiType(ffi) => ffi.into(),
-            Self::Result { ok, err } => Self::Result {
-                ok: Box::new(ok.resolve_ffi()),
-                err: Box::new(err.resolve_ffi()),
-            },
-            Self::Ref(x, m) => Self::Ref(Box::new(x.resolve_ffi()), m),
-            Self::Ptr(x) => Self::Ptr(Box::new(x.resolve_ffi())),
-            Self::Option(x) => Self::Option(Box::new(x.resolve_ffi())),
-            Self::List(x) => Self::List(Box::new(x.resolve_ffi())),
-            Self::Tuple(x) => Self::Tuple(x.into_iter().map(|x| x.resolve_ffi()).collect()),
-            Self::Function {
-                return_type,
-                parameters,
-            } => Self::Function {
-                return_type: Box::new(return_type.resolve_ffi()),
-                parameters: parameters.into_iter().map(|x| x.resolve_ffi()).collect(),
-            },
-            Self::StructWithGenerics {
-                identifier,
-                generic_types,
-            } => Self::StructWithGenerics {
-                identifier,
-                generic_types: generic_types.into_iter().map(|x| x.resolve_ffi()).collect(),
-            },
-            Self::Scope(x) => Self::Scope(x.into_iter().map(|x| x.resolve_ffi()).collect()),
-            x => x,
-        }
     }
 
     #[inline]

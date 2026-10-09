@@ -1,4 +1,6 @@
-use crate::{environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId};
+use crate::{
+    ast::types::MirDataType, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+};
 use calibre_parser::ast::{
     nodes::{AstNode, VarType, matching::MatchArmType},
     types::ParserDataType,
@@ -26,6 +28,7 @@ pub trait PatternTranslator {
         scope: ScopeId,
         pattern: &MatchArmType,
         value: &AstNode,
+        value_type: Option<&MirDataType>,
     ) -> Result<PatternTranslation, MiddleErr>;
 }
 

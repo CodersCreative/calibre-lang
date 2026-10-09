@@ -38,6 +38,9 @@ const going_to_err := fn -> int!Vector2 => {
     return ok(try errored_var);
 }
 
+const takes_in_coerced_vec := fn(vec : Vector2) =>
+    print("coerced vec as func param " & vec);
+
 const main := fn => {
     let lst : list:<int> = [];
     print([lst as! str]);
@@ -65,6 +68,8 @@ const main := fn => {
     print("coerced vec : ", my_coerced_vec);
     my_coerced_vec := (80, 20);
     print("coerced vec : ", my_coerced_vec);
+
+    takes_in_coerced_vec((20, 40));
 
     print("coerced return error type : ", going_to_err());
 

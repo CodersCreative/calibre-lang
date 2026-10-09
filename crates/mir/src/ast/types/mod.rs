@@ -138,6 +138,7 @@ pub enum MirDataType {
     Dynamic,
     Tuple(Vec<MirDataType>),
     List(Box<MirDataType>),
+    FfiType(ParserFfiInnerType),
     Range,
     Option(Box<MirDataType>),
     Result {
@@ -160,15 +161,15 @@ pub enum MirDataType {
     Ptr(Box<MirDataType>),
 }
 
-impl From<ParserFfiInnerType> for MirDataType {
-    fn from(val: ParserFfiInnerType) -> MirDataType {
+impl From<&ParserFfiInnerType> for MirDataType {
+    fn from(val: &ParserFfiInnerType) -> MirDataType {
         match val {
             ParserFfiInnerType::F32 | ParserFfiInnerType::F64 | ParserFfiInnerType::LongDouble => {
                 MirDataType::Float
             }
             ParserFfiInnerType::SChar | ParserFfiInnerType::UChar => MirDataType::Char,
+            ParserFfiInnerType::U8 => MirDataType::Byte,
             ParserFfiInnerType::U16
-            | ParserFfiInnerType::U8
             | ParserFfiInnerType::U32
             | ParserFfiInnerType::U64
             | ParserFfiInnerType::USize
@@ -206,6 +207,7 @@ impl From<MirDataType> for ParserInnerType {
             MirDataType::Range => ParserInnerType::Range,
             MirDataType::Null => ParserInnerType::Null,
             MirDataType::UInt => ParserInnerType::UInt,
+            MirDataType::FfiType(x) => ParserInnerType::FfiType(x),
             MirDataType::Function {
                 return_type,
                 parameters,
@@ -339,6 +341,7 @@ impl From<ParserInnerType> for MirDataType {
                 .into_iter()
                 .next()
                 .map_or(MirDataType::Null, |t| t.into()),
+            ParserInnerType::FfiType(x) => MirDataType::FfiType(x),
             _ => MirDataType::Null,
         }
     }
@@ -359,6 +362,7 @@ impl MirRenamable for MirDataType {
             | MirDataType::Never
             | MirDataType::UInt
             | MirDataType::Str
+            | MirDataType::FfiType(_)
             | MirDataType::Dynamic => {}
             MirDataType::Struct {
                 identifier,
@@ -435,10 +439,14 @@ impl MirDataType {
         }
     }
 
+    pub fn is_ffi(&self) -> bool {
+        matches!(self.unwrap_all_refs(), MirDataType::FfiType(_))
+    }
+
     pub fn is_int(&self) -> bool {
         matches!(
             self.unwrap_all_refs(),
-            MirDataType::Int | MirDataType::UInt | MirDataType::Byte
+            MirDataType::Int | MirDataType::UInt | MirDataType::Byte | MirDataType::FfiType(_)
         )
     }
 
@@ -640,6 +648,8 @@ impl MirDataType {
             (MirDataType::Ref(a, _), MirDataType::Ref(b, _)) => a.loose_eq(b),
             (MirDataType::Ref(a, _), b) => a.loose_eq(b),
             (a, MirDataType::Ref(b, _)) => a.loose_eq(b),
+            (MirDataType::FfiType(a), b) => MirDataType::from(a).loose_eq(b),
+            (a, MirDataType::FfiType(b)) => a.loose_eq(&MirDataType::from(b)),
             (MirDataType::Tuple(a), MirDataType::Tuple(b)) => {
                 if a.len() != b.len() {
                     return false;
@@ -786,6 +796,8 @@ impl MirDataType {
             (MirDataType::Ptr(a), MirDataType::Ptr(b)) => a.matches(b, generic_params),
             (MirDataType::Ref(a, _), MirDataType::Ref(b, _)) => a.matches(b, generic_params),
             (MirDataType::Ref(a, _), b) => a.matches(b, generic_params),
+            (MirDataType::FfiType(a), b) => MirDataType::from(a).matches(b, generic_params),
+            (a, MirDataType::FfiType(b)) => a.matches(&MirDataType::from(b), generic_params),
             (a, MirDataType::Ref(b, _)) => a.matches(b, generic_params),
             (
                 MirDataType::Function {

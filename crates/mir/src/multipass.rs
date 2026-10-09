@@ -80,17 +80,17 @@ impl MiddleEnvironment {
                 }
 
                 let mut params = Vec::new();
-                for ty in parameters.clone() {
+                for ty in parameters {
                     params.push(self.resolve_data_type(
                         scope,
-                        &ty.resolve_ffi(),
+                        &*ty,
                         ResolutionOptions::typing(),
                     )?);
                 }
 
                 let return_type = self.resolve_data_type(
                     scope,
-                    &return_type.clone().resolve_ffi(),
+                    &return_type.clone(),
                     ResolutionOptions::typing(),
                 )?;
 
@@ -100,7 +100,7 @@ impl MiddleEnvironment {
                     scope,
                     name,
                     data_type,
-                    VarType::Mutable,
+                    VarType::Constant,
                     false,
                 )?;
 

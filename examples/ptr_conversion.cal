@@ -8,7 +8,7 @@ const main := fn => {
 		.Err : msg => print("err: " & msg)
 	};
 	
-	let any := value as ptr:<null>;
+	let any := value as ptr:<dyn>;
 	print(any);
 	match any {
 		.Ok : val => print(try val as int => emit 0),

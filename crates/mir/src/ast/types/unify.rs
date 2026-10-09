@@ -58,6 +58,7 @@ impl From<&MirDataType> for TypeImplKey {
                 TypeImplKey::Function
             }
             MirDataType::Dynamic => TypeImplKey::Dynamic,
+            MirDataType::FfiType(x) => TypeImplKey::from(&MirDataType::from(x)),
             other => TypeImplKey::Primitive(Ustr::from(&other.to_string())),
         }
     }
@@ -250,6 +251,7 @@ impl MirDataType {
             | MirDataType::Null
             | MirDataType::Dynamic
             | MirDataType::Range
+            | MirDataType::FfiType(_)
             | MirDataType::Host => 10,
 
             MirDataType::List(inner)

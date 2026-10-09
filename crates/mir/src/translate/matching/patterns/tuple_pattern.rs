@@ -1,6 +1,6 @@
 use super::{BindingDeclaration, PatternTranslation, PatternTranslator};
 use crate::{
-    environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+    ast::types::MirDataType, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
     symbols::resolve::ResolutionOptions, translate::matching::PatternTranslatorDispatcher,
 };
 use calibre_parser::ast::{
@@ -17,6 +17,7 @@ impl PatternTranslator for TuplePatternTranslator {
         scope: ScopeId,
         pattern: &MatchArmType,
         value: &AstNode,
+        _value_type: Option<&MirDataType>,
     ) -> Result<PatternTranslation, MiddleErr> {
         let (inner_pattern, aliases) = pattern.clone().alias_bindings();
 
@@ -132,11 +133,14 @@ impl PatternTranslator for TuplePatternTranslator {
                         AstNode::member(env.context.current_span(), value.clone(), idx.to_string());
 
                     let struct_pattern = MatchArmType::StructPattern(struct_fields);
+
+                    // TODO Extract the value type
                     let struct_compilation = PatternTranslatorDispatcher::translate(
                         env,
                         scope,
                         &struct_pattern,
                         &current,
+                        None,
                     )?;
 
                     condition = env.bool_and_nodes(condition, struct_compilation.condition);
@@ -183,11 +187,13 @@ impl PatternTranslator for TuplePatternTranslator {
                         pattern: payload_pattern,
                     };
 
+                    // TODO Extract the value type
                     let enum_compilation = PatternTranslatorDispatcher::translate(
                         env,
                         scope,
                         &enum_pattern,
                         &current,
+                        None,
                     )?;
 
                     condition = env.bool_and_nodes(condition, enum_compilation.condition);
@@ -221,11 +227,14 @@ impl PatternTranslator for TuplePatternTranslator {
                         AstNode::member(env.context.current_span(), value.clone(), idx.to_string());
 
                     let string_pattern = MatchArmType::StringPattern(parts);
+
+                    // TODO Extract the value type
                     let string_compilation = PatternTranslatorDispatcher::translate(
                         env,
                         scope,
                         &string_pattern,
                         &current,
+                        None,
                     )?;
 
                     condition = env.bool_and_nodes(condition, string_compilation.condition);

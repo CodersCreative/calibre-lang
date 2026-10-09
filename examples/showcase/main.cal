@@ -303,7 +303,7 @@ const main := fn => {
 	
 	// Pointer conversions and pointer casts.
 	let ptr_val := 42 as? ptr:<int>;
-	let raw_ptr := 42 as! ptr:<null>;
+	let raw_ptr := 42 as! ptr:<dyn>;
 	print("ptr as? => " & ptr_val);
 	print("ptr as! => " & raw_ptr);
 	

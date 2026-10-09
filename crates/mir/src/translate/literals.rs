@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirBig, MirChar, MirEnum, MirFloat, MirInt,
-        MirRange, MirString, types::MirDataType,
+        MirRange, MirString, types::MirDataType, typing::MirTypable,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -29,8 +29,6 @@ use calibre_parser::{
 };
 use tracing::instrument;
 use ustr::{Ustr, UstrSet};
-
-// TODO Try to get literal coercion working
 
 impl MirLowering for AstStruct {
     #[instrument(skip_all)]
@@ -85,48 +83,52 @@ impl MirLowering for AstStruct {
                 let mut field_hashmap: UstrSet = UstrSet::default();
 
                 for itm in x {
-                    let span = itm.1.span;
-                    let mut data_type = None;
+                    let item_span = itm.1.span;
+                    let mut expected_type = None;
 
-                    if env.context.type_check {
-                        let node_ty = itm.1.type_of(env, scope, span);
-                        if let Some(obj) = &obj
-                            && let MiddleTypeDefType::Struct(fields) = &obj.object_type
+                    if let Some(obj) = &obj
+                        && let MiddleTypeDefType::Struct(fields) = &obj.object_type
+                    {
+                        if let Some((_, (expected_ty, _))) =
+                            fields.0.iter().find(|(name, _)| name == &itm.0)
                         {
-                            if let Some((_, (expected_ty, _))) =
-                                fields.0.iter().find(|(name, _)| name == &itm.0)
-                            {
-                                data_type = Some(env.compare_types(
-                                    Some(expected_ty.clone()),
-                                    node_ty,
-                                    Some(&TagInfo::IgnoreInvalidTypeCheck),
-                                    span,
-                                )?);
+                            expected_type = Some(expected_ty.clone());
 
-                                if !field_hashmap.insert(itm.0) {
-                                    return Err(env.context.err_at_span(
-                                        span,
-                                        MiddleErr::StructFieldMultiple(itm.0.to_string()),
-                                    ));
-                                }
-                            } else {
+                            if !field_hashmap.insert(itm.0) {
                                 return Err(env.context.err_at_span(
-                                    span,
-                                    MiddleErr::InvalidStructField {
-                                        field: itm.0.to_string(),
-                                        available: fields
-                                            .0
-                                            .iter()
-                                            .map(|x| x.0.to_string())
-                                            .collect(),
-                                        data_type: identifier.name().to_string(),
-                                    },
+                                    item_span,
+                                    MiddleErr::StructFieldMultiple(itm.0.to_string()),
                                 ));
                             }
+                        } else {
+                            return Err(env.context.err_at_span(
+                                item_span,
+                                MiddleErr::InvalidStructField {
+                                    field: itm.0.to_string(),
+                                    available: fields.0.iter().map(|x| x.0.to_string()).collect(),
+                                    data_type: identifier.name().to_string(),
+                                },
+                            ));
                         }
                     }
 
-                    map.push((itm.0, itm.1.lower_or_empty(env, scope, span, data_type)));
+                    let item = itm
+                        .1
+                        .lower_or_empty(env, scope, item_span, expected_type.clone());
+
+                    if env.context.type_check
+                        && let Some(expected_ty) = expected_type
+                    {
+                        let lowered_ty = item.mir_type_of(env, scope, item_span);
+                        env.compare_types(
+                            Some(expected_ty),
+                            lowered_ty,
+                            Some(&TagInfo::IgnoreInvalidTypeCheck),
+                            item_span,
+                        )?;
+                    }
+
+                    map.push((itm.0, item));
                 }
 
                 map
@@ -135,32 +137,33 @@ impl MirLowering for AstStruct {
                 let mut map = Vec::new();
 
                 for (idx, itm) in x.into_iter().enumerate() {
-                    let span = itm.span;
-                    let mut data_type = None;
+                    let item_span = itm.span;
+                    let field_name = idx.to_string();
+                    let mut expected_type = None;
 
-                    if env.context.type_check {
-                        let node_ty = itm.type_of(env, scope, span);
-                        if let Some(obj) = &obj
-                            && let MiddleTypeDefType::Struct(fields) = &obj.object_type
-                        {
-                            let field_name = idx.to_string();
-                            if let Some((_, (expected_ty, _))) =
-                                fields.0.iter().find(|(name, _)| name == &field_name)
-                            {
-                                data_type = Some(env.compare_types(
-                                    Some(expected_ty.clone()),
-                                    node_ty,
-                                    Some(&TagInfo::IgnoreInvalidTypeCheck),
-                                    span,
-                                )?);
-                            }
-                        }
+                    if let Some(obj) = &obj
+                        && let MiddleTypeDefType::Struct(fields) = &obj.object_type
+                        && let Some((_, (expected_ty, _))) =
+                            fields.0.iter().find(|(name, _)| name == &field_name)
+                    {
+                        expected_type = Some(expected_ty.clone());
                     }
 
-                    map.push((
-                        Ustr::from(&idx.to_string()),
-                        itm.lower_or_empty(env, scope, span, data_type),
-                    ));
+                    let item = itm.lower_or_empty(env, scope, item_span, expected_type.clone());
+
+                    if env.context.type_check
+                        && let Some(expected_ty) = expected_type
+                    {
+                        let lowered_ty = item.mir_type_of(env, scope, item_span);
+                        env.compare_types(
+                            Some(expected_ty),
+                            lowered_ty,
+                            Some(&TagInfo::IgnoreInvalidTypeCheck),
+                            item_span,
+                        )?;
+                    }
+
+                    map.push((Ustr::from(&idx.to_string()), item));
                 }
 
                 map
@@ -309,18 +312,21 @@ impl MirLowering for AstEnum {
                 identifier: Some(identifier),
                 value: *value,
                 data: if let Some(data) = self.data {
-                    let mut data_type = None;
+                    let data_span = data.span;
+
+                    let data = data.lower(env, scope, data_span, variant_data_type.clone())?;
+
                     if env.context.type_check {
-                        let node_ty = data.type_of(env, scope, span);
-                        data_type = Some(env.compare_types(
-                            node_ty,
+                        let lowered_ty = data.mir_type_of(env, scope, data_span);
+                        env.compare_types(
+                            lowered_ty,
                             variant_data_type,
                             Some(&TagInfo::IgnoreInvalidTypeCheck),
-                            data.span,
-                        )?);
+                            data_span,
+                        )?;
                     }
 
-                    Some(Box::new(data.lower(env, scope, span, data_type)?))
+                    Some(Box::new(data))
                 } else {
                     None
                 },
@@ -434,9 +440,17 @@ impl MirLowering for AstRange {
             .lower(env, scope, span, None);
         }
 
+        let from = self
+            .from
+            .lower_or_empty(env, scope, span, Some(MirDataType::Int));
+
+        let to = self
+            .to
+            .lower_or_empty(env, scope, span, Some(MirDataType::Int));
+
         if env.context.type_check {
-            let from_type = self.from.type_of(env, scope, span);
-            let to_type = self.to.type_of(env, scope, span);
+            let from_type = from.mir_type_of(env, scope, span);
+            let to_type = to.mir_type_of(env, scope, span);
 
             if !(from_type.as_ref().is_none_or(|x| x.is_int())
                 && to_type.as_ref().is_none_or(|x| x.is_int()))
@@ -453,14 +467,8 @@ impl MirLowering for AstRange {
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::RangeDeclaration(MirRange {
-                from: Box::new(
-                    self.from
-                        .lower_or_empty(env, scope, span, Some(MirDataType::Int)),
-                ),
-                to: Box::new(
-                    self.to
-                        .lower_or_empty(env, scope, span, Some(MirDataType::Int)),
-                ),
+                from: Box::new(from),
+                to: Box::new(to),
                 inclusive: self.inclusive,
             }),
             span,

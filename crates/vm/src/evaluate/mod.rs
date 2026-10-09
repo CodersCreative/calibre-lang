@@ -162,6 +162,7 @@ impl VM {
         match target {
             MirDataType::Never => false,
             MirDataType::Dynamic => true,
+            MirDataType::FfiType(x) => self.runtime_matches_type(value, &MirDataType::from(x)),
             MirDataType::Ref(inner, _) => self.runtime_matches_type(value, inner),
             MirDataType::Big => matches!(value, RuntimeValue::Big(_)),
             MirDataType::Float => matches!(value, RuntimeValue::Float(_)),

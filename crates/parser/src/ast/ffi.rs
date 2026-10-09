@@ -82,8 +82,8 @@ impl From<ParserFfiInnerType> for ParserInnerType {
                 ParserInnerType::Float
             }
             ParserFfiInnerType::SChar | ParserFfiInnerType::UChar => ParserInnerType::Char,
+            ParserFfiInnerType::U8 => ParserInnerType::Byte,
             ParserFfiInnerType::U16
-            | ParserFfiInnerType::U8
             | ParserFfiInnerType::U32
             | ParserFfiInnerType::U64
             | ParserFfiInnerType::USize

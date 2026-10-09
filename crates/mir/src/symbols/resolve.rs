@@ -238,7 +238,7 @@ impl MiddleEnvironment {
     }
 
     pub fn resolve_member_field_type(
-        &mut self,
+        &self,
         base: &MirDataType,
         member: &Ustr,
     ) -> Option<MirDataType> {

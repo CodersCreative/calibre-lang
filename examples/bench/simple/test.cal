@@ -29,7 +29,7 @@ const main := fn => {
 	print(thing);
 	
 	// print(global_thing.name());
-	print("mentioned object : " & ThingEnum.name(thing));
+	print("mentioned object : " & ThingEnum.name(thing.&));
 	print("object inferred : " & thing.name());
 	print("static from object : " & ThingEnum.age);
 	print("static from object inferred : " & thing.age);

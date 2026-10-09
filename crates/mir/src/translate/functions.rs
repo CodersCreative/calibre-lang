@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         MiddleNode, MiddleNodeType, MirAggregate, MirCall, MirDiscriminant, MirExtern, MirFunction,
-        MirScopeDecl, MirVarDecl, types::MirDataType,
+        MirScopeDecl, MirVarDecl, types::MirDataType, typing::MirTypable,
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -74,285 +74,6 @@ impl<'a> NodeVisitor for GeneratorReturnsRewriter<'a> {
 }
 
 impl MiddleEnvironment {
-    #[inline]
-    fn should_combine_excess_args_into_list_param(
-        parameters: &[ParserDataType],
-        positional_count: usize,
-        reverse_arg_count: usize,
-    ) -> bool {
-        let total_args = positional_count + reverse_arg_count;
-        let list_idx = parameters.len().saturating_sub(reverse_arg_count + 1);
-        let has_list_param = parameters
-            .get(list_idx)
-            .map(|p| p.is_list())
-            .unwrap_or(false);
-        has_list_param
-            && (parameters.len() < total_args
-                || parameters.len() == total_args + 1
-                || parameters.len() == total_args)
-    }
-
-    #[allow(clippy::type_complexity)]
-    pub(crate) fn lower_args(
-        &mut self,
-        scope: ScopeId,
-        span: Span,
-        caller: &MiddleNode,
-        data_type: &Option<ParserInnerType>,
-        mut args: Vec<CallArg>,
-        reverse_args: Vec<AstNode>,
-    ) -> Option<Box<[(MiddleNode, Option<MirDataType>)]>> {
-        let defaults_id = match &caller.node_type {
-            MiddleNodeType::Identifier(x) => self.symbols.name_to_param_defaults.get(&x.identifier),
-            MiddleNodeType::FunctionDeclaration(x) => x.default_args_id.as_ref(),
-            _ => None,
-        };
-
-        let defaults = defaults_id
-            .and_then(|id| self.symbols.function_param_defaults.get(id).cloned())
-            .unwrap_or_default();
-
-        let parameters = match data_type {
-            Some(ParserInnerType::Function { parameters, .. }) => Some(parameters.as_slice()),
-            _ => None,
-        };
-
-        if let Some(params) = parameters
-            && Self::should_combine_excess_args_into_list_param(
-                params,
-                args.iter()
-                    .filter(|arg| matches!(arg, CallArg::Value(_)))
-                    .count(),
-                reverse_args.len(),
-            )
-        {
-            let normal_count = params
-                .len()
-                .saturating_sub(1 + reverse_args.len())
-                .min(args.len());
-            let mut lst = Vec::with_capacity(params.len());
-
-            for (i, arg) in args.drain(..normal_count).enumerate() {
-                let node: AstNode = arg.into();
-                let arg_type = node.type_of(self, scope, span);
-                lst.push((
-                    node.lower_or_empty(
-                        self,
-                        scope,
-                        span,
-                        self.resolve_data_type(scope, &params[i], ResolutionOptions::typing())
-                            .ok(),
-                    ),
-                    arg_type,
-                ));
-            }
-
-            let list_inner_type = params
-                .last()
-                .map(|p| p.clone().unwrap_all_refs().data_type)
-                .and_then(|dt| match dt {
-                    ParserInnerType::List(x) => Some(*x),
-                    _ => None,
-                })
-                .unwrap_or_else(|| ParserDataType::auto(span));
-
-            let list_arg = if args.len() == 1 {
-                let arg: AstNode = args.pop().unwrap().into();
-                let is_already_list = matches!(arg.node_type, AstNodeType::ListLiteral(_))
-                    || arg
-                        .type_of(self, scope, span)
-                        .is_some_and(|dt| dt.is_list());
-
-                if is_already_list {
-                    arg
-                } else {
-                    AstNode::new(
-                        span,
-                        AstNodeType::ListLiteral(AstList {
-                            data_type: list_inner_type.clone(),
-                            values: vec![AstNode::new(
-                                span,
-                                AstNodeType::AsExpression(AstAs {
-                                    value: Box::new(arg),
-                                    data_type: list_inner_type.clone(),
-                                    failure_mode: AsFailureMode::Panic,
-                                }),
-                            )],
-                        }),
-                    )
-                }
-            } else {
-                AstNode::new(
-                    span,
-                    AstNodeType::ListLiteral(AstList {
-                        data_type: list_inner_type.clone(),
-                        values: args
-                            .into_iter()
-                            .map(|x| {
-                                AstNode::new(
-                                    span,
-                                    AstNodeType::AsExpression(AstAs {
-                                        value: Box::new(x.into()),
-                                        data_type: list_inner_type.clone(),
-                                        failure_mode: AsFailureMode::Panic,
-                                    }),
-                                )
-                            })
-                            .collect(),
-                    }),
-                )
-            };
-
-            lst.push((
-                list_arg.lower_or_empty(
-                    self,
-                    scope,
-                    span,
-                    self.resolve_data_type(scope, &list_inner_type, ResolutionOptions::typing())
-                        .ok(),
-                ),
-                self.resolve_data_type(scope, &list_inner_type, ResolutionOptions::typing())
-                    .ok()
-                    .map(|x| MirDataType::List(Box::new(x))),
-            ));
-
-            for arg in reverse_args {
-                // TODO Find a way to pass in the desired param type
-                let arg_type = arg.type_of(self, scope, span);
-                lst.push((arg.lower_or_empty(self, scope, span, None), arg_type));
-            }
-
-            return Some(lst.into_boxed_slice());
-        }
-
-        let param_len = parameters.map_or(defaults.len(), |p| p.len());
-        if defaults.is_empty() || param_len == 0 {
-            return None;
-        }
-
-        let mut slots: Vec<Option<AstNode>> = vec![None; param_len];
-        let reverse_len = reverse_args.len().min(param_len);
-
-        for (i, node) in reverse_args.into_iter().enumerate().take(reverse_len) {
-            slots[param_len - reverse_len + i] = Some(node);
-        }
-
-        let mut next_pos = 0usize;
-        for arg in args {
-            match arg {
-                CallArg::Named(name, value) => {
-                    if let Some(idx) = defaults.iter().position(|d| d.name == name.to_string()) {
-                        slots[idx] = Some(value);
-                    }
-                }
-                CallArg::Value(value) => {
-                    while next_pos < param_len && slots[next_pos].is_some() {
-                        next_pos += 1;
-                    }
-                    if next_pos < param_len {
-                        slots[next_pos] = Some(value);
-                        next_pos += 1;
-                    }
-                }
-            }
-        }
-
-        let is_option_type = |env: &mut MiddleEnvironment, node: &AstNode| {
-            matches!(
-                env.resolve_type_from_node(scope, node)
-                    .as_ref()
-                    .map(|x| x.unwrap_all_refs()),
-                Some(MirDataType::Option(_))
-            )
-        };
-
-        slots
-            .into_iter()
-            .enumerate()
-            .map(|(i, slot)| {
-                let meta = defaults.get(i)?;
-                let mut wrap_some = false;
-
-                let node = match slot {
-                    None => {
-                        if let Some(default) = &meta.explicit_default {
-                            default.clone().into()
-                        } else if meta.implicit_none {
-                            AstNode::none(span)
-                        } else {
-                            return None;
-                        }
-                    }
-                    Some(current) => {
-                        if current.is_none() {
-                            meta.explicit_default.as_ref()?.clone().into()
-                        } else if meta.implicit_none {
-                            if !current.is_raw_option_value() && !is_option_type(self, &current) {
-                                wrap_some = true;
-                            }
-                            current
-                        } else if let Some(default) = &meta.explicit_default {
-                            if is_option_type(self, &current) {
-                                AstNode::unwrap_or(span, current, default.clone().into())
-                            } else {
-                                current
-                            }
-                        } else {
-                            current
-                        }
-                    }
-                };
-
-                let node_type = node.type_of(self, scope, span);
-
-                // TODO Find a way to pass in the desired param type
-                if wrap_some {
-                    Some((
-                        AstNode::call(
-                            span,
-                            AstNode::identifier(span, "some"),
-                            vec![CallArg::Value(node)],
-                        )
-                        .lower_or_empty(self, scope, span, None),
-                        node_type,
-                    ))
-                } else {
-                    Some((node.lower_or_empty(self, scope, span, None), node_type))
-                }
-            })
-            .collect::<Option<Box<[_]>>>()
-    }
-
-    #[inline]
-    fn collect_call_nodes(args: Vec<CallArg>, mut reverse_args: Vec<AstNode>) -> Vec<AstNode> {
-        let mut nodes: Vec<AstNode> = args.into_iter().map(Into::into).collect();
-        nodes.append(&mut reverse_args);
-        nodes
-    }
-
-    // TODO Find a way to pass in the desired param type
-    #[inline]
-    fn aggregate_from_call_nodes(
-        &mut self,
-        scope: ScopeId,
-        span: Span,
-        identifier: Option<TypeKey>,
-        args: Vec<CallArg>,
-        reverse_args: Vec<AstNode>,
-    ) -> MiddleNode {
-        let value = Self::collect_call_nodes(args, reverse_args)
-            .into_iter()
-            .enumerate()
-            .map(|(i, arg)| (i.to_string(), arg.lower_or_empty(self, scope, span, None)))
-            .collect::<Vec<_>>()
-            .into();
-
-        MiddleNode {
-            node_type: MiddleNodeType::AggregateExpression(MirAggregate { identifier, value }),
-            span,
-        }
-    }
-
     fn rewrite_generator_returns(
         &mut self,
         scope: ScopeId,
@@ -572,17 +293,11 @@ impl MirLowering for AstExtern {
         let params = self
             .parameters
             .iter()
-            .map(|ty| {
-                let ty = ty.clone().resolve_ffi();
-                env.resolve_data_type(scope, &ty, ResolutionOptions::typing())
-            })
+            .map(|ty| env.resolve_data_type(scope, ty, ResolutionOptions::typing()))
             .collect::<Result<Vec<_>, MiddleErr>>()?;
 
-        let return_type = env.resolve_data_type(
-            scope,
-            &self.return_type.resolve_ffi(),
-            ResolutionOptions::typing(),
-        )?;
+        let return_type =
+            env.resolve_data_type(scope, &self.return_type, ResolutionOptions::typing())?;
 
         let fn_type = MirDataType::function(params.clone(), return_type.clone());
 
@@ -636,20 +351,13 @@ impl MirLowering for AstExtern {
     ) -> Option<MirDataType> {
         Some(MirDataType::NativeFunction {
             return_type: Box::new(
-                env.resolve_data_type(
-                    scope,
-                    &self.return_type.clone().resolve_ffi(),
-                    ResolutionOptions::typing(),
-                )
-                .ok()?,
+                env.resolve_data_type(scope, &self.return_type, ResolutionOptions::typing())
+                    .ok()?,
             ),
             parameters: self
                 .parameters
-                .clone()
-                .into_iter()
-                .map(|x| {
-                    env.resolve_data_type(scope, &x.resolve_ffi(), ResolutionOptions::typing())
-                })
+                .iter()
+                .map(|x| env.resolve_data_type(scope, x, ResolutionOptions::typing()))
                 .collect::<Result<Vec<_>, MiddleErr>>()
                 .ok()?,
         })
@@ -921,9 +629,313 @@ impl MirLowering for AstFunction {
     }
 }
 
+impl MiddleEnvironment {
+    #[inline]
+    fn should_combine_excess_args_into_list_param(
+        parameters: &[ParserDataType],
+        positional_count: usize,
+        reverse_arg_count: usize,
+    ) -> bool {
+        let total_args = positional_count + reverse_arg_count;
+        let list_idx = parameters.len().saturating_sub(reverse_arg_count + 1);
+
+        let has_list_param = parameters
+            .get(list_idx)
+            .map(|p| p.is_list())
+            .unwrap_or(false);
+
+        has_list_param
+            && (parameters.len() < total_args
+                || parameters.len() == total_args + 1
+                || parameters.len() == total_args)
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn lower_args(
+        &mut self,
+        scope: ScopeId,
+        span: Span,
+        caller: &MiddleNode,
+        data_type: &Option<ParserInnerType>,
+        mut args: Vec<CallArg>,
+        reverse_args: Vec<AstNode>,
+    ) -> Option<Box<[MiddleNode]>> {
+        let defaults_id = match &caller.node_type {
+            MiddleNodeType::Identifier(x) => self.symbols.name_to_param_defaults.get(&x.identifier),
+            MiddleNodeType::FunctionDeclaration(x) => x.default_args_id.as_ref(),
+            _ => None,
+        };
+
+        let defaults = defaults_id
+            .and_then(|id| self.symbols.function_param_defaults.get(id).cloned())
+            .unwrap_or_default();
+
+        let parameters = match data_type {
+            Some(ParserInnerType::Function { parameters, .. }) => Some(parameters.as_slice()),
+            _ => None,
+        };
+
+        if let Some(params) = parameters
+            && Self::should_combine_excess_args_into_list_param(
+                params,
+                args.iter()
+                    .filter(|arg| matches!(arg, CallArg::Value(_)))
+                    .count(),
+                reverse_args.len(),
+            )
+        {
+            let normal_count = params
+                .len()
+                .saturating_sub(1 + reverse_args.len())
+                .min(args.len());
+            let mut lst = Vec::with_capacity(params.len());
+
+            for (i, arg) in args.drain(..normal_count).enumerate() {
+                let node: AstNode = arg.into();
+                let param_ty = params.get(i).and_then(|p| {
+                    self.resolve_data_type(scope, p, ResolutionOptions::typing())
+                        .ok()
+                });
+                lst.push(node.lower_or_empty(self, scope, span, param_ty));
+            }
+
+            let list_inner_type = params
+                .last()
+                .map(|p| p.clone().unwrap_all_refs().data_type)
+                .and_then(|dt| match dt {
+                    ParserInnerType::List(x) => Some(*x),
+                    _ => None,
+                })
+                .unwrap_or_else(|| ParserDataType::auto(span));
+
+            let list_arg = if args.len() == 1 {
+                let arg: AstNode = args.pop().unwrap().into();
+                let is_already_list = matches!(arg.node_type, AstNodeType::ListLiteral(_))
+                    || arg
+                        .type_of(self, scope, span)
+                        .is_some_and(|dt| dt.is_list());
+
+                if is_already_list {
+                    arg
+                } else {
+                    AstNode::new(
+                        span,
+                        AstNodeType::ListLiteral(AstList {
+                            data_type: list_inner_type.clone(),
+                            values: vec![AstNode::new(
+                                span,
+                                AstNodeType::AsExpression(AstAs {
+                                    value: Box::new(arg),
+                                    data_type: list_inner_type.clone(),
+                                    failure_mode: AsFailureMode::Panic,
+                                }),
+                            )],
+                        }),
+                    )
+                }
+            } else {
+                AstNode::new(
+                    span,
+                    AstNodeType::ListLiteral(AstList {
+                        data_type: list_inner_type.clone(),
+                        values: args
+                            .into_iter()
+                            .map(|x| {
+                                AstNode::new(
+                                    span,
+                                    AstNodeType::AsExpression(AstAs {
+                                        value: Box::new(x.into()),
+                                        data_type: list_inner_type.clone(),
+                                        failure_mode: AsFailureMode::Panic,
+                                    }),
+                                )
+                            })
+                            .collect(),
+                    }),
+                )
+            };
+
+            let list_param_ty = self
+                .resolve_data_type(scope, &list_inner_type, ResolutionOptions::typing())
+                .ok();
+            lst.push(list_arg.lower_or_empty(self, scope, span, list_param_ty));
+
+            let reverse_len = reverse_args.len();
+            for (r_idx, arg) in reverse_args.into_iter().enumerate() {
+                let param_idx = params.len().saturating_sub(reverse_len) + r_idx;
+                let param_ty = params.get(param_idx).and_then(|p| {
+                    self.resolve_data_type(scope, p, ResolutionOptions::typing())
+                        .ok()
+                });
+                lst.push(arg.lower_or_empty(self, scope, span, param_ty));
+            }
+
+            return Some(lst.into_boxed_slice());
+        }
+
+        let param_len = parameters.map_or(defaults.len(), |p| p.len());
+        if defaults.is_empty() || param_len == 0 {
+            return None;
+        }
+
+        let mut slots: Vec<Option<AstNode>> = vec![None; param_len];
+        let reverse_len = reverse_args.len().min(param_len);
+
+        for (i, node) in reverse_args.into_iter().enumerate().take(reverse_len) {
+            slots[param_len - reverse_len + i] = Some(node);
+        }
+
+        let mut next_pos = 0usize;
+        for arg in args {
+            match arg {
+                CallArg::Named(name, value) => {
+                    if let Some(idx) = defaults.iter().position(|d| d.name == name.to_string()) {
+                        slots[idx] = Some(value);
+                    }
+                }
+                CallArg::Value(value) => {
+                    while next_pos < param_len && slots[next_pos].is_some() {
+                        next_pos += 1;
+                    }
+                    if next_pos < param_len {
+                        slots[next_pos] = Some(value);
+                        next_pos += 1;
+                    }
+                }
+            }
+        }
+
+        let is_option_type = |env: &mut MiddleEnvironment, node: &AstNode| {
+            matches!(
+                env.resolve_type_from_node(scope, node)
+                    .as_ref()
+                    .map(|x| x.unwrap_all_refs()),
+                Some(MirDataType::Option(_))
+            )
+        };
+
+        slots
+            .into_iter()
+            .enumerate()
+            .map(|(i, slot)| {
+                let meta = defaults.get(i)?;
+                let mut wrap_some = false;
+
+                let node = match slot {
+                    None => {
+                        if let Some(default) = &meta.explicit_default {
+                            default.clone().into()
+                        } else if meta.implicit_none {
+                            AstNode::none(span)
+                        } else {
+                            return None;
+                        }
+                    }
+                    Some(current) => {
+                        if current.is_none() {
+                            meta.explicit_default.as_ref()?.clone().into()
+                        } else if meta.implicit_none {
+                            if !current.is_raw_option_value() && !is_option_type(self, &current) {
+                                wrap_some = true;
+                            }
+                            current
+                        } else if let Some(default) = &meta.explicit_default {
+                            if is_option_type(self, &current) {
+                                AstNode::unwrap_or(span, current, default.clone().into())
+                            } else {
+                                current
+                            }
+                        } else {
+                            current
+                        }
+                    }
+                };
+
+                let param_ty = parameters.and_then(|p| p.get(i)).and_then(|p| {
+                    self.resolve_data_type(scope, p, ResolutionOptions::typing())
+                        .ok()
+                });
+
+                if wrap_some {
+                    Some(
+                        AstNode::call(
+                            span,
+                            AstNode::identifier(span, "some"),
+                            vec![CallArg::Value(node)],
+                        )
+                        .lower_or_empty(self, scope, span, param_ty),
+                    )
+                } else {
+                    Some(node.lower_or_empty(self, scope, span, param_ty))
+                }
+            })
+            .collect::<Option<Box<[_]>>>()
+    }
+
+    #[inline]
+    fn collect_call_nodes(args: Vec<CallArg>, mut reverse_args: Vec<AstNode>) -> Vec<AstNode> {
+        let mut nodes: Vec<AstNode> = args.into_iter().map(Into::into).collect();
+        nodes.append(&mut reverse_args);
+        nodes
+    }
+
+    #[inline]
+    fn aggregate_from_call_nodes(
+        &mut self,
+        scope: ScopeId,
+        span: Span,
+        identifier: Option<TypeKey>,
+        args: Vec<CallArg>,
+        reverse_args: Vec<AstNode>,
+        parameters: Option<&[ParserDataType]>,
+    ) -> MiddleNode {
+        let value = Self::collect_call_nodes(args, reverse_args)
+            .into_iter()
+            .enumerate()
+            .map(|(i, arg)| {
+                let param_ty = parameters.and_then(|p| p.get(i)).and_then(|p| {
+                    self.resolve_data_type(scope, p, ResolutionOptions::typing())
+                        .ok()
+                });
+                (
+                    i.to_string(),
+                    arg.lower_or_empty(self, scope, span, param_ty),
+                )
+            })
+            .collect::<Vec<_>>()
+            .into();
+
+        MiddleNode {
+            node_type: MiddleNodeType::AggregateExpression(MirAggregate { identifier, value }),
+            span,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn lower_call_args(
+        &mut self,
+        scope: ScopeId,
+        args: Vec<CallArg>,
+        reverse_args: Vec<AstNode>,
+        parameters: Option<&[ParserDataType]>,
+    ) -> Box<[MiddleNode]> {
+        args.into_iter()
+            .map(AstNode::from)
+            .chain(reverse_args)
+            .enumerate()
+            .map(|(i, arg)| {
+                let span = arg.span;
+                let param_ty = parameters.and_then(|p| p.get(i)).and_then(|p| {
+                    self.resolve_data_type(scope, p, ResolutionOptions::typing())
+                        .ok()
+                });
+                arg.lower_or_empty(self, scope, span, param_ty)
+            })
+            .collect()
+    }
+}
+
 impl MirLowering for AstCall {
-    // TODO Deal with generics
-    // TODO Come up with a caller type to help with type inference
     #[instrument(skip_all)]
     #[allow(clippy::only_used_in_recursion)]
     fn lower(
@@ -993,6 +1005,17 @@ impl MirLowering for AstCall {
                 }
             }
             AstNodeType::Identifier(caller_ident) => {
+                let parser_inner_type = data_type
+                    .as_ref()
+                    .map(|dt| ParserInnerType::from(dt.clone()));
+
+                let parameters = match &parser_inner_type {
+                    Some(ParserInnerType::Function { parameters, .. }) => {
+                        Some(parameters.as_slice())
+                    }
+                    _ => None,
+                };
+
                 match caller_ident.value.get_ident().text().as_str() {
                     "discriminant" if self.args.len() == 1 => {
                         return Ok(MiddleNode::new(
@@ -1012,6 +1035,7 @@ impl MirLowering for AstCall {
                             None,
                             self.args,
                             self.reverse_args,
+                            parameters,
                         ));
                     }
                     "curry" if self.args.len() == 1 && self.reverse_args.is_empty() => {
@@ -1032,6 +1056,7 @@ impl MirLowering for AstCall {
                         Some(caller),
                         self.args,
                         self.reverse_args,
+                        parameters,
                     ));
                 }
             }
@@ -1115,25 +1140,36 @@ impl MirLowering for AstCall {
 
         let caller = self.caller.lower(env, scope, span, None)?;
 
+        let parser_inner_type = data_type
+            .as_ref()
+            .map(|dt| ParserInnerType::from(dt.clone()));
+
+        let parameters = match &parser_inner_type {
+            Some(ParserInnerType::Function { parameters, .. }) => Some(parameters.as_slice()),
+            _ => None,
+        };
+
         let args = if let Some(x) = env.lower_args(
             scope,
             span,
             &caller,
-            &data_type.clone().map(ParserInnerType::from),
+            &parser_inner_type,
             self.args.clone(),
             self.reverse_args.clone(),
         ) {
             x
         } else {
-            env.lower_call_args(scope, self.args, self.reverse_args)
+            env.lower_call_args(scope, self.args, self.reverse_args, parameters)
         };
 
         if env.context.type_check
             && let Some(MirDataType::Function { parameters, .. })
             | Some(MirDataType::NativeFunction { parameters, .. }) = &data_type
         {
-            for (i, (arg, arg_ty)) in args.iter().enumerate() {
+            for (i, arg) in args.iter().enumerate() {
                 let span = arg.span;
+                let arg_ty = arg.mir_type_of(env, scope, span);
+
                 if let Some(param) = parameters.get(i) {
                     env.compare_types_ref(
                         Some(param),
@@ -1147,7 +1183,7 @@ impl MirLowering for AstCall {
 
         Ok(MiddleNode {
             node_type: MiddleNodeType::CallExpression(MirCall {
-                args: args.into_iter().map(|x| x.0).collect(),
+                args,
                 caller: Box::new(caller),
             }),
             span,

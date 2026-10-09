@@ -5,7 +5,7 @@ use super::patterns::{
     value_pattern::ValuePatternTranslator,
 };
 use crate::{
-    environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
+    ast::types::MirDataType, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
 };
 use calibre_parser::ast::{
@@ -27,27 +27,28 @@ impl PatternTranslatorDispatcher {
         scope: ScopeId,
         pattern: &MatchArmType,
         value: &AstNode,
+        value_type: Option<&MirDataType>,
     ) -> Result<PatternTranslation, MiddleErr> {
         let (inner_pattern, aliases) = pattern.clone().alias_bindings();
 
         let compilation = match &inner_pattern {
             MatchArmType::Value(_) | MatchArmType::Wildcard(_) | MatchArmType::Rest(_) => {
-                ValuePatternTranslator.translate(env, scope, &inner_pattern, value)?
+                ValuePatternTranslator.translate(env, scope, &inner_pattern, value, value_type)?
             }
             MatchArmType::Enum { .. } => {
-                EnumPatternTranslator.translate(env, scope, &inner_pattern, value)?
+                EnumPatternTranslator.translate(env, scope, &inner_pattern, value, value_type)?
             }
             MatchArmType::TuplePattern(_) => {
-                TuplePatternTranslator.translate(env, scope, &inner_pattern, value)?
+                TuplePatternTranslator.translate(env, scope, &inner_pattern, value, value_type)?
             }
             MatchArmType::ListPattern(_) => {
-                ListPatternTranslator.translate(env, scope, &inner_pattern, value)?
+                ListPatternTranslator.translate(env, scope, &inner_pattern, value, value_type)?
             }
             MatchArmType::StructPattern(_) => {
-                StructPatternTranslator.translate(env, scope, &inner_pattern, value)?
+                StructPatternTranslator.translate(env, scope, &inner_pattern, value, value_type)?
             }
             MatchArmType::StringPattern(_) => {
-                StringPatternTranslator.translate(env, scope, &inner_pattern, value)?
+                StringPatternTranslator.translate(env, scope, &inner_pattern, value, value_type)?
             }
             MatchArmType::IsType(data_type) => {
                 let condition = AstNode::new(

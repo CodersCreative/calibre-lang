@@ -160,7 +160,7 @@ impl MirLowering for AstMatch {
         };
 
         if let Some(ref _value_node) = value {
-            if let Some(matched_type) = value_type {
+            if let Some(matched_type) = value_type.clone() {
                 let patterns: Vec<MatchArmType> =
                     self.body.values.iter().map(|(p, _, _)| p.clone()).collect();
                 let report =
@@ -192,8 +192,13 @@ impl MirLowering for AstMatch {
             let guard_nodes = pattern.1.clone();
 
             if let Some(value_node) = value.clone() {
-                let compilation =
-                    PatternTranslatorDispatcher::translate(env, scope, &pattern.0, &value_node)?;
+                let compilation = PatternTranslatorDispatcher::translate(
+                    env,
+                    scope,
+                    &pattern.0,
+                    &value_node,
+                    value_type.as_ref(),
+                )?;
 
                 let mut body_nodes =
                     PatternTranslatorDispatcher::bindings_to_decls(&compilation.bindings, env);

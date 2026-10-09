@@ -15,34 +15,12 @@ use calibre_parser::{
         nodes::{
             AstNode, AstNodeType,
             access::{AstField, AstIdentifier, AstIndex, AstScope},
-            functions::CallArg,
             literals::AstEnum,
         },
     },
 };
 use tracing::instrument;
 use ustr::Ustr;
-
-impl MiddleEnvironment {
-    #[inline]
-    // TODO Find a way to pass in param types
-    pub(crate) fn lower_call_args(
-        &mut self,
-        scope: ScopeId,
-        args: Vec<CallArg>,
-        reverse_args: Vec<AstNode>,
-    ) -> Box<[(MiddleNode, Option<MirDataType>)]> {
-        args.into_iter()
-            .map(AstNode::from)
-            .chain(reverse_args)
-            .map(|arg| {
-                let span = arg.span;
-                let node_type = arg.type_of(self, scope, span);
-                (arg.lower_or_empty(self, scope, span, None), node_type)
-            })
-            .collect()
-    }
-}
 
 impl MirLowering for AstField {
     #[instrument(skip_all)]

@@ -8,6 +8,7 @@ use crate::{
     },
 };
 use calibre_lir::{FullyQualifiedPath, MirDataType, VariableKey};
+use calibre_parser::ast::ffi::ParserFfiInnerType;
 use libffi::{
     low::CodePtr,
     middle::{Cif, Type},
@@ -84,7 +85,7 @@ impl ExternFunction {
 
         for (param, value) in self.parameters.iter().zip(args) {
             match &param {
-                x if true => match (env.resolve_value_ref(value).unwrap_or_default(), x) {
+                x if !x.is_ffi() => match (env.resolve_value_ref(value).unwrap_or_default(), x) {
                     (RuntimeValue::Str(x), MirDataType::Str) => {
                         arg_types.push(Type::pointer());
                         let value = CString::new(x.as_str())
@@ -218,7 +219,7 @@ impl ExternFunction {
                     }
                     _ => return Err(RuntimeError::InvalidFunctionCall),
                 },
-                /*ParserInnerType::FfiType(x) => {
+                MirDataType::FfiType(x) => {
                     arg_types.push(Self::type_to_libffi_type(param));
                     let value = env.resolve_value_ref(value).unwrap_or_default();
                     let arg = match (x, value) {
@@ -374,7 +375,7 @@ impl ExternFunction {
                         _ => return Err(RuntimeError::InvalidFunctionCall),
                     };
                     Self::push_arg(&mut ffi_args, arg);
-                }*/
+                }
                 _ => return Err(RuntimeError::InvalidFunctionCall),
             }
         }
@@ -385,8 +386,8 @@ impl ExternFunction {
 
         let symbol = unsafe {
             self.handle
-                .get::<*const c_void>(self.symbol.as_bytes())
-                .map_err(|_| RuntimeError::InvalidFunctionCall)?
+                .get::<*const c_void>(self.symbol.as_cstr())
+                .map_err(|e| RuntimeError::InvalidNativeFunctionCall(e.to_string()))?
         };
 
         let code = CodePtr::from_ptr(*symbol as *mut c_void);
