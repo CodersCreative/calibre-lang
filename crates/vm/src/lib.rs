@@ -476,6 +476,7 @@ impl VM {
     }
 
     #[inline(always)]
+    #[allow(unused)]
     pub(crate) fn take_reg_value_in_frame(&mut self, frame_idx: usize, reg: Reg) -> RuntimeValue {
         if let Some(frame) = self.frames.get(frame_idx)
             && (reg as usize) < frame.reg_count

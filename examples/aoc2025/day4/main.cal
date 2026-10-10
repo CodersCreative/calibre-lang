@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Type Inference
+// TODO Fix - FAILING - Panicking
 import (File, Path) from std::fs;
 
 const CELL_KEY := 1000000;
@@ -19,14 +19,14 @@ const CELL_KEY := 1000000;
 	print("Part 2 - Total rolls of paper removed: " & part2);
 };
 
-const build_grid := fn (lines : list:<str>) -> list:<list:<char>> => {
-	let mut grid := list:<list:<char>>[];
+const build_grid := fn (lines : list:<str>) -> list:<str> => {
+	let mut grid := list:<str>[];
 	
-	for i in 0..len(lines) => grid <<= trim(try lines[i] => emit "").to_chars();
+	for i in 0..len(lines) => grid <<= trim(try lines[i] => emit "");
 	return grid;
 };
 
-const count_neighbors := fn (grid : list:<list:<char>>, row col : int) -> int => {
+const count_neighbors := fn (grid : list:<str>, row col : int) -> int => {
 	let rows := len(grid);
 	if (row < 0) || (row >= rows) => return 0;
 	
@@ -46,7 +46,7 @@ const count_neighbors := fn (grid : list:<list:<char>>, row col : int) -> int =>
 			let nr := row + dr;
 			let nc := col + dc;
 			
-			if (nr >= 0) && (nr < rows) && (nc >= 0) && ((try grid[nr][nc] => emit ' ') = '@') => count += 1;
+			if nr >= 0 && nr < rows && nc >= 0 && (try grid[nr][nc] => emit ' ') = '@' => count += 1;
 			
 			dc += 1;
 		};
@@ -70,7 +70,7 @@ const solve_part1 := fn (lines : list:<str>) -> int => {
 	return accessible;
 };
 
-const build_degrees := fn (grid : list:<list:<char>>) -> list:<list:<int>> => {
+const build_degrees := fn (grid : list:<str>) -> list:<list:<int>> => {
 	let mut degree := list:<list:<int>>[];
 	
 	for r in 0..len(grid) => {
@@ -92,7 +92,7 @@ const solve_part2 := fn (lines : list:<str>) -> int => {
 	for r in 0..len(grid) => {
 		let row := try grid[r] => continue;
 		for c in 0..len(row) => {
-			if (try row[c] => emit ' ' = '@') && (try degree[r][c] => emit 0 < 4) => queue <<= (r * CELL_KEY + c);
+			if (try row[c] => emit ' ') = '@' && (try degree[r][c] => emit 0) < 4 => queue <<= (r * CELL_KEY + c);
 		};
 	};
 	
@@ -106,7 +106,7 @@ const solve_part2 := fn (lines : list:<str>) -> int => {
 		let r := key / CELL_KEY;
 		let c := key % CELL_KEY;
 		
-		if (try degree[r][c] => emit 0 >= 4) || (try grid[r][c] => emit ' ' != '@') || (r < 0) || (r >= len(grid)) || (c < 0) || (c >= len(grid[r]!)) => continue;
+		if (try degree[r][c] => emit 0) >= 4 || (try grid[r][c] => emit ' ') != '@' || r < 0 || (r >= len(grid)) || (c < 0) || (c >= len(grid[r]!)) => continue;
 		
 		let mut row := grid[r]!;
 		row[c] := '.';
@@ -130,7 +130,7 @@ const solve_part2 := fn (lines : list:<str>) -> int => {
 				
 				if (nr >= 0) && (nr < len(grid)) && (nc >= 0) && (nc < len(grid[nr]!)) && (grid[nr][nc]! = '@') => {
 					let mut drow := degree[nr]!;
-					drow[nc] -= 1;
+					drow[nc]! -= 1;
 					let new_deg := drow[nc]!;
 					degree[nr] := move drow;
 					if new_deg < 4 => queue <<= (nr * CELL_KEY) + nc;

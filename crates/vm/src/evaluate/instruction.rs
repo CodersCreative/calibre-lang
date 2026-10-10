@@ -78,21 +78,6 @@ impl VMEvaluation for VMInstruction {
 }
 
 #[inline]
-pub(crate) fn resolve_index(len: usize, idx: i64) -> Result<usize, RuntimeError> {
-    if len == 0 {
-        return Err(RuntimeError::StackUnderflow);
-    }
-
-    let resolved = if idx < 0 { len as i64 + idx } else { idx };
-
-    if resolved < 0 || resolved as usize >= len {
-        Err(RuntimeError::StackUnderflow)
-    } else {
-        Ok(resolved as usize)
-    }
-}
-
-#[inline]
 pub(crate) fn resolve_slice_range(len: usize, start: i64, end: i64) -> Option<(usize, usize)> {
     let mut s = start;
     let mut e = end;

@@ -5,7 +5,7 @@ use crate::{
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    scoping::ScopeId,
+    scoping::{FullyQualifiedPath, ScopeId},
     symbols::{
         FunctionParamDefault, TypeKey,
         resolve::{Key, ResolutionOptions},
@@ -32,6 +32,7 @@ use calibre_parser::{
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
+use std::sync::Arc;
 use tracing::instrument;
 use ustr::Ustr;
 
@@ -422,6 +423,7 @@ impl MirLowering for AstFunction {
                         .extend(env.emit_destructure_statements(tmp_name, &pattern, span, true));
                 }
             }
+
             body = match body.node_type {
                 AstNodeType::ScopeDeclaration(AstScopeDef {
                     body: Some(mut inner),
@@ -1026,7 +1028,10 @@ impl MirLowering for AstCall {
                 let arg_types: Vec<MirDataType> = self
                     .args
                     .iter()
-                    .filter_map(|arg| arg.get_node().type_of(env, scope, span))
+                    .filter_map(|arg| {
+                        let lowered = arg.get_node().clone().lower(env, scope, span, None).ok()?;
+                        lowered.mir_type_of(env, scope, span)
+                    })
                     .collect();
 
                 let param_types: Vec<MirDataType> = header
@@ -1034,6 +1039,20 @@ impl MirLowering for AstCall {
                     .iter()
                     .map(|p| {
                         if let Some(data_type) = &p.1 {
+                            if let ParserInnerType::Struct(name) = &data_type.data_type
+                                && generic_params.iter().any(|gp| gp.as_str() == name.as_str())
+                            {
+                                return Ok(MirDataType::Struct {
+                                    identifier: TypeKey {
+                                        fully_qualified_path: Arc::new(FullyQualifiedPath {
+                                            name: Some(Ustr::from(name.as_str())),
+                                            parent: None,
+                                        }),
+                                    },
+                                    generic_types: vec![],
+                                });
+                            }
+
                             env.resolve_data_type(scope, data_type, ResolutionOptions::typing())
                         } else if let Some(node) = &p.2 {
                             node.type_of(env, scope, span)
@@ -1044,7 +1063,22 @@ impl MirLowering for AstCall {
                     })
                     .collect::<Result<Vec<_>, MiddleErr>>()?;
 
-                let return_type = MirDataType::from(header.return_type.clone());
+                let return_type = if let ParserInnerType::Struct(name) =
+                    &header.return_type.data_type
+                    && generic_params.iter().any(|gp| gp.as_str() == name.as_str())
+                {
+                    MirDataType::Struct {
+                        identifier: TypeKey {
+                            fully_qualified_path: Arc::new(FullyQualifiedPath {
+                                name: Some(Ustr::from(name.as_str())),
+                                parent: None,
+                            }),
+                        },
+                        generic_types: vec![],
+                    }
+                } else {
+                    env.resolve_data_type(scope, &header.return_type, ResolutionOptions::typing())?
+                };
 
                 let concrete_args = env.infer_concrete_type_args(
                     scope,
