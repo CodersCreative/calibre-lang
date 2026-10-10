@@ -246,6 +246,8 @@ pub enum Token<'a> {
     // Ignore
     #[regex("[\n;]")]
     NewLine,
+    #[regex(r"#![^\n]*", allow_greedy = true, callback = |lex| lex.slice())]
+    Shebang(&'a str),
     #[regex(r"//[^\n]*", allow_greedy = true, callback = |lex| lex.slice())]
     LineComment(&'a str),
     #[regex(r"/\*", lex_block_comment)]
@@ -427,6 +429,7 @@ impl FromStr for Token<'static> {
             // Ignore
             "NewLine" => Ok(Token::NewLine),
             "LineComment" => Ok(Token::LineComment("")),
+            "Shebang" => Ok(Token::Shebang("")),
             "BlockComment" => Ok(Token::BlockComment("")),
             "Whitespace" => Ok(Token::Whitespace),
 
@@ -568,6 +571,7 @@ impl<'a> Token<'a> {
 
             // Ignore
             Token::NewLine => "NewLine",
+            Token::Shebang(_) => "Shebang",
             Token::LineComment(_) => "LineComment",
             Token::BlockComment(_) => "BlockComment",
             Token::Whitespace => "Whitespace",

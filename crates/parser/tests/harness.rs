@@ -140,7 +140,12 @@ impl TestHarness {
 
         let actual_lines: Vec<&str> = actual_tokens
             .iter()
-            .filter(|x| !matches!(x.0, Token::LineComment(_) | Token::BlockComment(_)))
+            .filter(|x| {
+                !matches!(
+                    x.0,
+                    Token::LineComment(_) | Token::BlockComment(_) | Token::Shebang(_)
+                )
+            })
             .map(|token| token.0.variant_name())
             .collect();
 

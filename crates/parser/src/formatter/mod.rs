@@ -182,6 +182,7 @@ pub struct Comment {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CommentKind {
     Line,
+    Shebang,
     Block,
 }
 
@@ -435,6 +436,25 @@ impl Formatter {
                             span: Span::new(start_offset, end_offset),
                         });
                         continue;
+                    } else if c == '#' && next == Some('!') {
+                        let start_offset = i;
+                        i += 2;
+                        let mut val = String::new();
+                        while i < chars.len() {
+                            let ch = chars[i];
+                            if ch == '\n' {
+                                break;
+                            }
+                            val.push(ch);
+                            i += 1;
+                        }
+                        let end_offset = i;
+                        comments.push(Comment {
+                            value: val,
+                            kind: CommentKind::Shebang,
+                            span: Span::new(start_offset, end_offset),
+                        });
+                        continue;
                     } else if c == '/' && next == Some('*') {
                         let start_offset = i;
                         i += 2;
@@ -577,6 +597,7 @@ impl Formatter {
                 let value = comment.value.trim();
                 match comment.kind {
                     CommentKind::Line => format!("// {}", value),
+                    CommentKind::Shebang => format!("#!{}", value),
                     CommentKind::Block => {
                         let stripped = value
                             .lines()

@@ -226,7 +226,10 @@ impl Parser {
         for result in Token::lexer(source).spanned() {
             match result {
                 (Ok(token), span) => {
-                    if !matches!(token, Token::LineComment(_) | Token::BlockComment(_)) {
+                    if !matches!(
+                        token,
+                        Token::LineComment(_) | Token::BlockComment(_) | Token::Shebang(_)
+                    ) {
                         tokens.push((token, span.into()));
                     }
                 }
@@ -265,8 +268,11 @@ impl Parser {
                     .spanned()
                     .filter_map(|(token, span)| {
                         let token = token.ok()?;
-                        (!matches!(token, Token::LineComment(_) | Token::BlockComment(_)))
-                            .then_some(Span::from(span))
+                        (!matches!(
+                            token,
+                            Token::LineComment(_) | Token::BlockComment(_) | Token::Shebang(_)
+                        ))
+                        .then_some(Span::from(span))
                     })
                     .collect::<Vec<_>>();
 
