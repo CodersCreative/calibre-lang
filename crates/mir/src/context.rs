@@ -17,6 +17,7 @@ pub struct MiddleContext {
     pub type_check: bool,
     pub in_stdlib: Option<Ustr>,
     pub in_temp_scope: bool,
+    pub in_generator: bool,
     pub counter: usize,
 }
 

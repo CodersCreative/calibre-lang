@@ -190,10 +190,9 @@ impl gen:<T> {
 		};
 	};
 
+	// TODO Account for step < 1
 	@pure
 	const step_by := fn (self : Self, step : int) -> gen:<T> => {
-		if step <= 1 => return self;
-		
 		let mut i := 0;
 		
 		for => {

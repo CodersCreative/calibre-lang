@@ -23,96 +23,35 @@ use calibre_parser::{
             access::AstField,
             binary::{AsFailureMode, AstAs},
             declaration::AstDeclaration,
-            flow::AstReturn,
             functions::{AstCall, AstExtern, AstFunction, CallArg, FunctionHeader},
             lists::AstList,
             literals::{AstString, AstStruct},
             memory::AstRef,
             scopes::AstScopeDef,
         },
-        traversal::NodeVisitor,
         types::{GenericTypes, ParserDataType, ParserInnerType},
     },
 };
 use tracing::instrument;
 use ustr::Ustr;
 
-struct GeneratorReturnsRewriter<'a> {
-    env: &'a mut MiddleEnvironment,
-    scope: ScopeId,
-    _return_type: &'a MirDataType,
-}
-
-// TODO Detect when the value being returned is a gen that matches the return type and not rewrite it into a yield
-impl<'a> NodeVisitor for GeneratorReturnsRewriter<'a> {
-    fn visit(&mut self, node: AstNode) -> AstNode {
-        let span = node.span;
-        match node.node_type {
-            AstNodeType::Return(AstReturn { value: Some(value) })
-                if value
-                    .type_of(self.env, self.scope, span)
-                    .is_none_or(|x| !x.is_gen()) =>
-            {
-                AstNode::call(
-                    span,
-                    AstNode::identifier(span, "gen_suspend"),
-                    vec![CallArg::Value(*value)],
-                )
-            }
-            AstNodeType::Return(AstReturn { value: None }) => AstNode::new(
-                span,
-                AstNodeType::Return(AstReturn {
-                    value: Some(Box::new(AstNode::identifier(span, "none"))),
-                }),
-            ),
-            _ => {
-                let node_type = self.visit_children(node.node_type);
-                AstNode::new(span, node_type)
-            }
-        }
-    }
-}
-
 impl MiddleEnvironment {
-    fn rewrite_generator_returns(
-        &mut self,
-        scope: ScopeId,
-        return_type: &MirDataType,
-        node: AstNode,
-    ) -> AstNode {
-        let mut rewriter = GeneratorReturnsRewriter {
-            env: self,
-            scope,
-            _return_type: return_type,
-        };
-        rewriter.visit(node)
-    }
-
     pub(crate) fn wrap_generator_body(
         &mut self,
-        scope: ScopeId,
+        _scope: ScopeId,
         body: AstNode,
         elem_type: MirDataType,
         span: Span,
     ) -> AstNode {
         let next_name = self.context.get_temp("gen_next");
-        let rewritten = Self::rewrite_generator_returns(self, scope, &elem_type, body);
 
         let elem_type: ParserDataType = elem_type.into();
-
-        let next_body = match rewritten.node_type {
-            AstNodeType::ScopeDeclaration(AstScopeDef {
-                body: Some(mut items),
-                ..
-            }) => {
-                items.push(AstNode::identifier(span, "none"));
-                AstNode::new_temp_scope(items)
-            }
-            other => AstNode::new_temp_scope(vec![
-                AstNode::new(span, other),
-                AstNode::identifier(span, "none"),
-            ]),
-        };
+        let next_body = AstNode::new_temp_scope(
+            body.nodes()
+                .into_iter()
+                .chain(std::iter::once(AstNode::identifier(span, "none")))
+                .collect(),
+        );
 
         let next_decl = AstNode::new(
             span,
@@ -512,13 +451,17 @@ impl MirLowering for AstFunction {
             };
         }
 
+        let old_in_generator = env.context.in_generator;
+
         if let Some(elem_type) = return_type.clone().get_gen()
             && !env.tagging.tag_info.contains(&TagInfo::ReturnsGen)
         {
             body = MiddleEnvironment::wrap_generator_body(env, scope, body, elem_type, span);
+            env.context.in_generator = true;
         }
 
         let body = body.lower(env, new_scope, span, None)?;
+
         let mut func_defers = Vec::new();
         func_defers.append(&mut env.symbols.function_defers);
 
@@ -560,6 +503,7 @@ impl MirLowering for AstFunction {
         };
 
         env.symbols.function_defers.append(&mut old_func_defers);
+        env.context.in_generator = old_in_generator;
 
         let mut memo = false;
         let mut memo_params = Vec::new();

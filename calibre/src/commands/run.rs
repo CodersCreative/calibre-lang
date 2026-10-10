@@ -315,12 +315,14 @@ impl RunSource {
                 if self.backtrace {
                     eprintln!("{}", vm.format_backtrace());
                 }
+
                 calibre_frontend::diagnostics::emit_calibre_error(
                     &self.path,
                     &self.contents,
                     &err,
                     None,
                 );
+
                 return Err("runtime error".into());
             }
         }

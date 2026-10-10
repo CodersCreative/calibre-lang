@@ -669,27 +669,53 @@ impl MirLowering for AstContinue {
 impl MirLowering for AstReturn {
     #[instrument(skip_all)]
     fn lower(
-        self,
+        mut self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
-        _data_type: Option<MirDataType>,
+        data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         Ok(MiddleNode {
             node_type: MiddleNodeType::Return(MirReturn {
                 value: {
+                    let mut node_ty = None;
+
+                    if env.context.in_generator {
+                        match &self.value {
+                            Some(value) if !value.is_none() => {
+                                node_ty = value.type_of(env, scope, span);
+
+                                if node_ty.as_ref().is_none_or(|x| !x.is_gen()) {
+                                    return AstNode::call(
+                                        span,
+                                        AstNode::identifier(span, "gen_suspend"),
+                                        vec![CallArg::Value(*self.value.unwrap())],
+                                    )
+                                    .lower(env, scope, span, data_type);
+                                }
+                            }
+                            None => {
+                                self.value = Some(Box::new(AstNode::identifier(span, "none")));
+                                return self.lower(env, scope, span, data_type);
+                            }
+                            _ => {}
+                        }
+                    }
+
                     let mut data_type = None;
                     if !env.tagging.tag_info.contains(&TagInfo::IgnoreInvalidReturn) {
                         if let Some(ret_ty) = env.scoping.return_type_stack.last().cloned() {
-                            let node_ty = if let Some(value) = &self.value {
-                                if let Some(x) = value.type_of(env, scope, span) {
-                                    x.key()
+                            let node_ty = node_ty.unwrap_or_else(|| {
+                                if let Some(value) = &self.value {
+                                    if let Some(x) = value.type_of(env, scope, span) {
+                                        x.key()
+                                    } else {
+                                        MirDataType::Dynamic
+                                    }
                                 } else {
-                                    MirDataType::Dynamic
+                                    MirDataType::Null
                                 }
-                            } else {
-                                MirDataType::Null
-                            };
+                            });
 
                             let ret_ty = if let Some(x) = ret_ty.get_gen() {
                                 x
