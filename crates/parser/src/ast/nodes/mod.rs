@@ -179,6 +179,7 @@ impl AstNode {
                 named: None,
                 is_temp: true,
                 create_new_scope,
+                is_function_body: false,
                 define: false,
             }),
         )
@@ -410,6 +411,7 @@ impl AstNode {
                 is_temp,
                 named,
                 define,
+                is_function_body,
             }) => AstNode {
                 node_type: AstNodeType::ScopeDeclaration(AstScopeDef {
                     body: Some(
@@ -429,6 +431,7 @@ impl AstNode {
                     is_temp,
                     named,
                     define,
+                    is_function_body,
                 }),
                 span: self.span,
             },
@@ -899,12 +902,14 @@ impl Substitutable for AstNodeType {
                 is_temp,
                 create_new_scope,
                 define,
+                is_function_body,
             }) => Self::ScopeDeclaration(AstScopeDef {
                 body: body.map(|x| x.into_iter().map(|x| x.substitute(subst)).collect()),
                 named: named.map(|x| x.substitute(subst)),
                 is_temp,
                 create_new_scope,
                 define,
+                is_function_body,
             }),
             Self::SelectStatement(AstSelect { arms }) => Self::SelectStatement(AstSelect {
                 arms: arms.into_iter().map(|x| x.substitute(subst)).collect(),

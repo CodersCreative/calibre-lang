@@ -744,7 +744,7 @@ impl MirLowering for AstReturn {
                         .value
                         .map(|x| x.lower_or_empty(env, scope, span, data_type));
 
-                    let mut lst: Vec<MiddleNode> = env
+                    let lst: Vec<MiddleNode> = env
                         .scoping
                         .collect_defers_until(scope, None)
                         .into_iter()
@@ -755,13 +755,18 @@ impl MirLowering for AstReturn {
                     if lst.is_empty() {
                         value.map(Box::new)
                     } else {
-                        if let Some(x) = value {
-                            lst.push(x);
-                        }
-
                         Some(Box::new(MiddleNode::new(
                             MiddleNodeType::ScopeDeclaration(MirScopeDecl {
-                                body: lst.into_boxed_slice(),
+                                body: value
+                                    .map(|x| MiddleNode {
+                                        node_type: MiddleNodeType::Emit(MirEmit {
+                                            value: Box::new(x),
+                                        }),
+                                        span,
+                                    })
+                                    .into_iter()
+                                    .chain(lst.into_iter())
+                                    .collect(),
                                 create_new_scope: false,
                                 is_temp: true,
                                 function_body: false,
@@ -907,6 +912,7 @@ impl MirLowering for AstPipe {
                             is_temp,
                             create_new_scope: _,
                             define,
+                            is_function_body,
                         }) => {
                             body.insert(0, var_dec);
 
@@ -916,6 +922,7 @@ impl MirLowering for AstPipe {
                                     named: None,
                                     is_temp,
                                     create_new_scope: Some(!keep_scope),
+                                    is_function_body,
                                     define,
                                 }),
                                 ..point
@@ -928,6 +935,8 @@ impl MirLowering for AstPipe {
                                 named: None,
                                 is_temp: true,
                                 create_new_scope: Some(!keep_scope),
+
+                                is_function_body: false,
                                 define: false,
                             }),
                         ),

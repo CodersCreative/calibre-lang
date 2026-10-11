@@ -295,6 +295,7 @@ impl MirLowering for AstFnMatch {
                         is_temp: true,
                         create_new_scope: Some(true),
                         define: false,
+                        is_function_body: false,
                     }),
                 )),
                 header: FunctionHeader {

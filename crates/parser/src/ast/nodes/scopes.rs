@@ -35,8 +35,9 @@ pub struct AstScopeAlias {
 pub struct AstScopeDef {
     pub body: Option<Vec<AstNode>>,
     pub named: Option<NamedScope>,
-    pub is_temp: bool,
     pub create_new_scope: Option<bool>,
+    pub is_temp: bool,
+    pub is_function_body: bool,
     pub define: bool,
 }
 

@@ -211,6 +211,7 @@ fn empty_scope_node() -> AstNode {
             define: false,
             named: None,
             create_new_scope: Some(false),
+            is_function_body: false,
         }),
     )
 }

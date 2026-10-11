@@ -135,6 +135,7 @@ impl MiddleEnvironment {
             is_temp: false,
             create_new_scope: Some(false),
             define: false,
+            is_function_body: false,
         }
         .lower(self, scope, span, None)
     }
@@ -213,6 +214,7 @@ impl MiddleEnvironment {
             is_temp: false,
             create_new_scope: Some(false),
             define: false,
+            is_function_body: false,
         }
         .lower(self, scope, span, None)
     }

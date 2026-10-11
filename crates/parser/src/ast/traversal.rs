@@ -109,12 +109,14 @@ pub trait NodeVisitor {
                 is_temp,
                 create_new_scope,
                 define,
+                is_function_body,
             }) => AstNodeType::ScopeDeclaration(AstScopeDef {
                 body: body.map(|items| items.into_iter().map(|n| self.visit(n)).collect()),
                 named,
                 is_temp,
                 create_new_scope,
                 define,
+                is_function_body,
             }),
             AstNodeType::ParenExpression(AstParen { value }) => {
                 AstNodeType::ParenExpression(AstParen {

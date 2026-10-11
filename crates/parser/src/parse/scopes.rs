@@ -78,6 +78,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                 is_temp: true,
                 create_new_scope,
                 define: false,
+                is_function_body: false,
             })
             .boxed()
     }

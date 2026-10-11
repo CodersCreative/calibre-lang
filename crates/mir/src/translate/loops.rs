@@ -55,6 +55,7 @@ fn extract_label_from_named_scope(
             named: Some(named),
             is_temp,
             create_new_scope,
+            is_function_body,
             define: false,
         }) if named.args.is_empty() => {
             let new_body = AstNode::new(
@@ -64,6 +65,7 @@ fn extract_label_from_named_scope(
                     named: None,
                     is_temp,
                     create_new_scope,
+                    is_function_body,
                     define: false,
                 }),
             );

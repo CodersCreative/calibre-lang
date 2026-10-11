@@ -368,6 +368,7 @@ pub fn parse_program_with_source<'a, I: ValueInput<'a, Token = Token<'a>, Span =
                 is_temp: false,
                 create_new_scope: Some(false),
                 define: false,
+                is_function_body: false,
             }),
         ));
     }

@@ -1,0 +1,81 @@
+import (Path, File) from std::fs;
+import (Channel, WaitGroup) from std::async;
+
+// Ideally would leave at max 100 lines per thread
+const THREAD_COUNT := 4;
+
+@default
+type ProcessResult := struct {
+    station : str = "",
+    count : uint = 0u,
+    total : float = 0f,
+    min : float = 0f,
+    max : float = 0f,
+};
+
+const process_thread := fn(lines : list:<str>, ch : &mut Channel:<list:<ProcessResult>>) => {
+    let mut res : list:<ProcessResult> = [];
+
+    for line in lines => {
+        let split : list:<str> = line.split(";");
+        let station := split[0]!;
+        let value : float = split[1]! as! float;
+        let mut added := false;
+
+
+        for i in len(res) =>
+            if res[i]!.station = station => {
+                let mut current := res[i]!;
+                added := true;
+
+                current.count += 1;
+                current.total += value;
+                current.min := current.min.min(value);
+                current.max := current.max.max(value);
+
+                res[i]! := current;
+                break;
+            }
+        
+
+        if !added =>
+            res <<= ProcessResult{
+                station,
+                count : 1,
+                total : value,
+                min : value,
+                max : value,
+            };
+    }
+
+    emit ch <- res;
+}
+
+@current_context const main := fn => {
+    let file : File = try File.open_read(Path.new(current_context.path.replace("main.cal", "measurements.txt"))) : e => {
+        print(e);
+        return;
+    };
+	
+    let lines := try file.read_lines() => panic("Failed to read file.");
+    let line_length := lines.len();
+    let split_size := line_length / THREAD_COUNT;
+    let mut ch := Channel:<HashMap:<str, ProcessResult>>.new();
+    defer ch.close();
+
+    let mut wg := WaitGroup.new();
+    
+    for i in 0..line_length/split_size => {
+        let lines := try lines[i*split_size..(i+1)*split_size] => continue;
+        wg.join(spawn process_thread(lines, ch.&mut));
+    }
+
+    for !ch.closed() =>
+        if let .Some : x <- ch.get() => {
+            print(x);
+        } else => {
+            break;
+        }
+
+    wg.wait();
+};

@@ -253,7 +253,7 @@ impl MiddleEnvironment {
         let name = Ustr::from(&format!(
             "{}_{}",
             original_key,
-            generic_params
+            concrete_args
                 .iter()
                 .map(|x| x.to_string())
                 .collect::<Vec<String>>()
@@ -269,7 +269,7 @@ impl MiddleEnvironment {
             .variables
             .get(&original_key)
             .map(|x| x.scope)
-            .unwrap();
+            .unwrap_or(scope);
 
         let key =
             self.register_variable(original_scope, name, data_type.clone(), VarType::Constant)?;

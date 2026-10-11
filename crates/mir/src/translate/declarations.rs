@@ -361,6 +361,7 @@ impl MirLowering for AstDeclareDestructure {
             is_temp: true,
             create_new_scope: Some(false),
             define: false,
+            is_function_body: false,
         }
         .lower(env, scope, span, None)
     }

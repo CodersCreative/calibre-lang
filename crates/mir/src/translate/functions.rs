@@ -431,6 +431,7 @@ impl MirLowering for AstFunction {
                     is_temp,
                     create_new_scope,
                     define,
+                    is_function_body,
                 }) => {
                     let mut new_body = destructures;
                     new_body.append(&mut inner);
@@ -441,6 +442,7 @@ impl MirLowering for AstFunction {
                             named,
                             is_temp,
                             create_new_scope,
+                            is_function_body,
                             define,
                         }),
                     )
@@ -1019,82 +1021,118 @@ impl MirLowering for AstCall {
                 .resolve(scope, &ident.value, ResolutionOptions::idents())?
                 .unwrap_variable();
 
+            let explicit_args = match &ident.value {
+                PotentialGenericTypeIdentifier::Generic {
+                    identifier: _,
+                    generic_types,
+                } => Some(
+                    generic_types
+                        .iter()
+                        .map(|gt| env.resolve_data_type(scope, gt, ResolutionOptions::typing()))
+                        .collect::<Result<Vec<_>, _>>(),
+                ),
+                _ => None,
+            };
+
             if let Some((generic_params, header, _)) = env
                 .monomorphizer
                 .generic_fn_templates
                 .get(&caller_name)
                 .cloned()
             {
-                let arg_types: Vec<MirDataType> = self
-                    .args
-                    .iter()
-                    .filter_map(|arg| {
-                        let lowered = arg.get_node().clone().lower(env, scope, span, None).ok()?;
-                        lowered.mir_type_of(env, scope, span)
-                    })
-                    .collect();
+                if let Some(explicit) = explicit_args {
+                    let concrete_args = explicit?;
 
-                let param_types: Vec<MirDataType> = header
-                    .parameters
-                    .iter()
-                    .map(|p| {
-                        if let Some(data_type) = &p.1 {
-                            if let ParserInnerType::Struct(name) = &data_type.data_type
-                                && generic_params.iter().any(|gp| gp.as_str() == name.as_str())
-                            {
-                                return Ok(MirDataType::Struct {
-                                    identifier: TypeKey {
-                                        fully_qualified_path: Arc::new(FullyQualifiedPath {
-                                            name: Some(Ustr::from(name.as_str())),
-                                            parent: None,
-                                        }),
-                                    },
-                                    generic_types: vec![],
-                                });
-                            }
+                    let key =
+                        env.monomorphize_function(scope, caller_name.clone(), concrete_args)?;
 
-                            env.resolve_data_type(scope, data_type, ResolutionOptions::typing())
-                        } else if let Some(node) = &p.2 {
-                            node.type_of(env, scope, span)
-                                .ok_or(MiddleErr::InferImpossible)
-                        } else {
-                            Err(MiddleErr::InferImpossible)
+                    if !env.monomorphizer.awaiting_lowering.is_empty() {
+                        for (node, node_scope) in
+                            std::mem::take(&mut env.monomorphizer.awaiting_lowering)
+                        {
+                            node.lower_or_empty(env, node_scope, span, None);
                         }
-                    })
-                    .collect::<Result<Vec<_>, MiddleErr>>()?;
-
-                let return_type = if let ParserInnerType::Struct(name) =
-                    &header.return_type.data_type
-                    && generic_params.iter().any(|gp| gp.as_str() == name.as_str())
-                {
-                    MirDataType::Struct {
-                        identifier: TypeKey {
-                            fully_qualified_path: Arc::new(FullyQualifiedPath {
-                                name: Some(Ustr::from(name.as_str())),
-                                parent: None,
-                            }),
-                        },
-                        generic_types: vec![],
                     }
+
+                    let mono_name = key.name();
+
+                    self.caller = Box::new(AstNode::identifier(self.caller.span, *mono_name));
                 } else {
-                    env.resolve_data_type(scope, &header.return_type, ResolutionOptions::typing())?
-                };
+                    let arg_types: Vec<MirDataType> = self
+                        .args
+                        .iter()
+                        .filter_map(|arg| arg.get_node().type_of(env, scope, span))
+                        .collect();
 
-                let concrete_args = env.infer_concrete_type_args(
-                    scope,
-                    &generic_params,
-                    &param_types,
-                    &return_type,
-                    &arg_types,
-                    data_type.as_ref(),
-                )?;
+                    let param_types: Vec<MirDataType> = header
+                        .parameters
+                        .iter()
+                        .map(|p| {
+                            if let Some(data_type) = &p.1 {
+                                if let ParserInnerType::Struct(name) = &data_type.data_type
+                                    && generic_params.iter().any(|gp| gp.as_str() == name.as_str())
+                                {
+                                    return Ok(MirDataType::Struct {
+                                        identifier: TypeKey {
+                                            fully_qualified_path: Arc::new(FullyQualifiedPath {
+                                                name: Some(Ustr::from(name.as_str())),
+                                                parent: None,
+                                            }),
+                                        },
+                                        generic_types: vec![],
+                                    });
+                                }
 
-                let key = env.monomorphize_function(scope, caller_name.clone(), concrete_args)?;
+                                env.resolve_data_type(scope, data_type, ResolutionOptions::typing())
+                            } else if let Some(node) = &p.2 {
+                                node.type_of(env, scope, span)
+                                    .ok_or(MiddleErr::InferImpossible)
+                            } else {
+                                Err(MiddleErr::InferImpossible)
+                            }
+                        })
+                        .collect::<Result<Vec<_>, MiddleErr>>()?;
 
-                self.caller = Box::new(AstNode::identifier(
-                    self.caller.span,
-                    env.context.convert_key_to_ustr(Key::VariableKey(key)),
-                ));
+                    let return_type = if let ParserInnerType::Struct(name) =
+                        &header.return_type.data_type
+                        && generic_params.iter().any(|gp| gp.as_str() == name.as_str())
+                    {
+                        MirDataType::Struct {
+                            identifier: TypeKey {
+                                fully_qualified_path: Arc::new(FullyQualifiedPath {
+                                    name: Some(Ustr::from(name.as_str())),
+                                    parent: None,
+                                }),
+                            },
+                            generic_types: vec![],
+                        }
+                    } else {
+                        data_type.clone().unwrap_or(MirDataType::Dynamic)
+                    };
+
+                    let concrete_args = env.infer_concrete_type_args(
+                        scope,
+                        &generic_params,
+                        &param_types,
+                        &return_type,
+                        &arg_types,
+                        None,
+                    )?;
+
+                    if concrete_args
+                        .iter()
+                        .all(|t| matches!(t, MirDataType::Dynamic))
+                    {
+                        // TODO Potentially output error because no concrete types could be inferred
+                    } else {
+                        let key =
+                            env.monomorphize_function(scope, caller_name.clone(), concrete_args)?;
+
+                        let mono_name = key.name();
+
+                        self.caller = Box::new(AstNode::identifier(self.caller.span, *mono_name));
+                    }
+                }
             }
 
             let needs_caller_context = if let Some(var) = env.symbols.variables.get(&caller_name) {

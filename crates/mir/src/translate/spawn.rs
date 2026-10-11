@@ -172,6 +172,7 @@ impl MirLowering for AstSelect {
                                 is_temp: true,
                                 create_new_scope: Some(true),
                                 define: false,
+                                is_function_body: false,
                             }),
                         );
                         if arm.conditionals.is_empty() {
@@ -206,6 +207,7 @@ impl MirLowering for AstSelect {
                                 is_temp: true,
                                 create_new_scope: Some(true),
                                 define: false,
+                                is_function_body: false,
                             }),
                         );
 
@@ -239,6 +241,7 @@ impl MirLowering for AstSelect {
                                 is_temp: true,
                                 create_new_scope: Some(true),
                                 define: false,
+                                is_function_body: false,
                             }),
                         );
 
@@ -270,6 +273,7 @@ impl MirLowering for AstSelect {
                                 is_temp: true,
                                 create_new_scope: Some(true),
                                 define: false,
+                                is_function_body: false,
                             }),
                         );
                         let cond = fold_guards(
@@ -331,6 +335,7 @@ impl MirLowering for AstSelect {
                 is_temp: true,
                 create_new_scope: Some(true),
                 define: false,
+                is_function_body: false,
             }),
         );
 
@@ -351,6 +356,7 @@ impl MirLowering for AstSelect {
             is_temp: true,
             create_new_scope: Some(false),
             define: false,
+            is_function_body: false,
         }
         .lower(env, scope, span, None)
     }
@@ -570,6 +576,7 @@ impl MirLowering for AstSpawn {
                 is_temp: true,
                 create_new_scope: Some(false),
                 define: false,
+                is_function_body: false,
             }
             .lower(env, scope, span, None)
         }

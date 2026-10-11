@@ -689,6 +689,7 @@ impl From<MiddleNodeType> for AstNodeType {
                 is_temp: value.is_temp,
                 create_new_scope: Some(value.create_new_scope),
                 define: false,
+                is_function_body: false,
             }),
             MiddleNodeType::FunctionDeclaration(value) => {
                 AstNodeType::FunctionDeclaration(AstFunction {

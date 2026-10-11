@@ -21,20 +21,6 @@ use calibre_parser::{
 use tracing::instrument;
 use ustr::Ustr;
 
-impl MiddleEnvironment {
-    fn ends_in_control_flow(node: &MiddleNode) -> bool {
-        match &node.node_type {
-            MiddleNodeType::Break { .. }
-            | MiddleNodeType::Continue { .. }
-            | MiddleNodeType::Return { .. } => true,
-            MiddleNodeType::ScopeDeclaration(MirScopeDecl { body, .. }) => {
-                body.last().is_some_and(Self::ends_in_control_flow)
-            }
-            _ => false,
-        }
-    }
-}
-
 impl MirLowering for AstScopeDef {
     #[instrument(skip_all)]
     fn lower(
@@ -177,10 +163,9 @@ impl MirLowering for AstScopeDef {
             }
         }
 
-        if let Some(mut body) = self.body {
+        if let Some(body) = self.body {
             if self.is_temp {
-                let last = body.pop();
-                for statement in body.into_iter() {
+                for statement in body {
                     let span = statement.span;
                     let is_emit = statement.is_emit();
                     stmts.extend(
@@ -195,32 +180,22 @@ impl MirLowering for AstScopeDef {
                     );
                 }
 
-                let last = last.map(|x| {
+                for x in env.scoping.scope_or_err(new_scope)?.defers.clone() {
                     let span = x.span;
-                    let is_emit = x.is_emit();
-                    x.lower_or_empty(
-                        env,
-                        new_scope,
-                        span,
-                        if is_emit { data_type.clone() } else { None },
-                    )
-                });
+                    stmts.extend(
+                        x.lower_or_empty(env, new_scope, span, None)
+                            .nodes_if_no_new_scope(),
+                    );
+                }
 
-                if !last
-                    .as_ref()
-                    .is_some_and(MiddleEnvironment::ends_in_control_flow)
-                {
-                    for x in env.scoping.scope_or_err(new_scope)?.defers.clone() {
+                if self.is_function_body {
+                    for x in env.symbols.function_defers.clone() {
                         let span = x.span;
                         stmts.extend(
                             x.lower_or_empty(env, new_scope, span, None)
                                 .nodes_if_no_new_scope(),
                         );
                     }
-                }
-
-                if let Some(last) = last {
-                    stmts.extend(last.nodes_if_no_new_scope());
                 }
             } else {
                 for statement in body.into_iter() {
