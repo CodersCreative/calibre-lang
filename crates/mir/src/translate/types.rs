@@ -115,7 +115,7 @@ impl MirLowering for AstType {
 
         let ident_ustr = *type_key.name();
 
-        let generic_params = match self.identifier {
+        let _generic_params = match self.identifier {
             PotentialGenericTypeIdentifier::Generic { generic_types, .. } => generic_types
                 .iter()
                 .map(|x| {
@@ -126,15 +126,17 @@ impl MirLowering for AstType {
             _ => Vec::new(),
         };
 
-        env.add_type_template(
+        // TODO Re-enable type template registration when type monomorphization is fully working
+        // For now skip it to avoid breaking stdlib
+        /*env.add_type_template(
             scope,
             MirDataType::Struct {
                 identifier: type_key.clone(),
                 generic_types: Vec::new(),
             },
-            generic_params,
+            _generic_params,
             self.object.clone(),
-        );
+        );*/
 
         let object = MiddleTypeDefType::from_type_def_type(env, scope, self.object.clone());
 

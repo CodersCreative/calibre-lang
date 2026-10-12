@@ -1046,17 +1046,7 @@ impl MirLowering for AstCall {
                     let key =
                         env.monomorphize_function(scope, caller_name.clone(), concrete_args)?;
 
-                    if !env.monomorphizer.awaiting_lowering.is_empty() {
-                        for (node, node_scope) in
-                            std::mem::take(&mut env.monomorphizer.awaiting_lowering)
-                        {
-                            node.lower_or_empty(env, node_scope, span, None);
-                        }
-                    }
-
-                    let mono_name = key.name();
-
-                    self.caller = Box::new(AstNode::identifier(self.caller.span, *mono_name));
+                    self.caller = Box::new(AstNode::identifier(self.caller.span, *key.name()));
                 } else {
                     let arg_types: Vec<MirDataType> = self
                         .args
@@ -1128,9 +1118,7 @@ impl MirLowering for AstCall {
                         let key =
                             env.monomorphize_function(scope, caller_name.clone(), concrete_args)?;
 
-                        let mono_name = key.name();
-
-                        self.caller = Box::new(AstNode::identifier(self.caller.span, *mono_name));
+                        self.caller = Box::new(AstNode::identifier(self.caller.span, *key.name()));
                     }
                 }
             }

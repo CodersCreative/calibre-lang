@@ -8,12 +8,12 @@ use crate::{
 };
 use calibre_parser::ast::{
     Substitutable,
-    idents::PotentialDollarIdentifier,
+    idents::{PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
     nodes::{
         AstNode, AstNodeType, VarType,
         declaration::AstDeclaration,
         functions::{AstFunction, FunctionHeader},
-        types::TypeDefType,
+        types::{AstType, TypeDefType},
     },
     types::ParserDataType,
 };
@@ -42,7 +42,37 @@ pub struct Monomorphizer {
 }
 
 impl Monomorphizer {
-    pub fn append(&mut self, other: Self) {}
+    pub fn append(&mut self, other: Self) {
+        for (key, value) in other.generic_fn_templates {
+            self.generic_fn_templates.entry(key).or_insert(value);
+        }
+
+        for (key, value) in other.generic_type_templates {
+            self.generic_type_templates.entry(key).or_insert(value);
+        }
+
+        for (key, value) in other.functions {
+            self.functions.entry(key).or_insert(value);
+        }
+
+        for (key, value) in other.types {
+            self.types.entry(key).or_insert(value);
+        }
+
+        self.awaiting_lowering.extend(other.awaiting_lowering);
+    }
+}
+
+fn mangle_name(base: &str, concrete_args: &[MirDataType]) -> String {
+    format!(
+        "{}_{}",
+        base,
+        concrete_args
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>()
+            .join("_")
+    )
 }
 
 impl MiddleEnvironment {
@@ -230,7 +260,7 @@ impl MiddleEnvironment {
         original_key: VariableKey,
         concrete_args: &[MirDataType],
     ) -> Result<VariableKey, MiddleErr> {
-        let (generic_params, mut header, body) = self
+        let (generic_params, header, body) = self
             .monomorphizer
             .generic_fn_templates
             .get(&original_key)
@@ -248,21 +278,10 @@ impl MiddleEnvironment {
             })
             .collect();
 
-        header = header.substitute(&subst);
-
-        let name = Ustr::from(&format!(
-            "{}_{}",
-            original_key,
-            concrete_args
-                .iter()
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>()
-                .join("_")
-        ));
+        let base_name = original_key.name();
+        let name = Ustr::from(&mangle_name(base_name.as_str(), concrete_args));
 
         let span = body.span;
-
-        let data_type = header.type_of(self, scope, span).unwrap();
 
         let original_scope = self
             .symbols
@@ -271,15 +290,26 @@ impl MiddleEnvironment {
             .map(|x| x.scope)
             .unwrap_or(scope);
 
+        let header = header.substitute(&subst);
+
+        let data_type = header.type_of(self, original_scope, span).unwrap();
+
         let key =
             self.register_variable(original_scope, name, data_type.clone(), VarType::Constant)?;
+
+        let substituted_body = body.substitute(&subst);
+
+        let func = AstFunction {
+            header,
+            body: Box::new(substituted_body),
+        };
 
         let node = AstNode::new(
             span,
             AstNodeType::VariableDeclaration(AstDeclaration {
                 var_type: VarType::Constant,
                 identifier: PotentialDollarIdentifier::new(span, name),
-                value: Box::new(body.substitute(&subst)),
+                value: Box::new(AstNode::new(span, AstNodeType::FunctionDeclaration(func))),
                 data_type: ParserDataType::from(data_type),
                 declared: true,
             }),
@@ -292,6 +322,8 @@ impl MiddleEnvironment {
         Ok(key)
     }
 
+    // TODO Re-enable when type monomorphization is fully integrated
+    #[allow(dead_code)]
     pub(crate) fn add_type_template(
         &mut self,
         _scope: ScopeId,
@@ -311,56 +343,6 @@ impl MiddleEnvironment {
                 type_def,
                 impls: Vec::new(),
             });
-
-        true
-    }
-
-    pub(crate) fn add_type_impl(
-        &mut self,
-        _scope: ScopeId,
-        name: &MirDataType,
-        generic_params: Vec<Ustr>,
-        value: AstNode,
-    ) -> bool {
-        if generic_params.is_empty() {
-            return false;
-        }
-
-        if let Some(template) = self.monomorphizer.generic_type_templates.get_mut(name) {
-            template.impls.push(value.clone());
-        } else {
-            return false;
-        }
-
-        let scope = match name {
-            MirDataType::Struct { identifier, .. } => {
-                self.typing.objects.get(identifier).unwrap().scope
-            }
-            _ => self.scoping.get_global_scope().unwrap(),
-        };
-
-        self.monomorphizer.awaiting_lowering.extend(
-            self.monomorphizer
-                .types
-                .keys()
-                .filter(|x| &x.0 == name)
-                .map(|(_, concrete_args)| {
-                    let subst = generic_params
-                        .iter()
-                        .zip(concrete_args.iter())
-                        .map(|(param, concrete)| {
-                            (
-                                param.as_str().to_string(),
-                                ParserDataType::from(concrete.clone()),
-                            )
-                        })
-                        .collect();
-
-                    let value = value.clone().substitute(&subst);
-
-                    (value, scope)
-                }),
-        );
 
         true
     }
@@ -471,9 +453,6 @@ impl MiddleEnvironment {
             })
             .collect();
 
-        // TODO Re-add this to be evaluated normally
-        let _mono_type_def = template.type_def.clone().substitute(&subst);
-
         let base_name = match &original_type {
             MirDataType::Struct { identifier, .. } => identifier
                 .fully_qualified_path
@@ -483,35 +462,52 @@ impl MiddleEnvironment {
             _ => "unknown".to_string(),
         };
 
-        let mono_name = format!(
-            "{}_{}",
-            base_name,
-            template
-                .generic_params
-                .iter()
-                .map(|x| x.to_string())
-                .collect::<Vec<_>>()
-                .join("_")
+        let mono_name = mangle_name(&base_name, &concrete_args);
+
+        let parent_path = match &original_type {
+            MirDataType::Struct { identifier, .. } => identifier.fully_qualified_path.clone(),
+            _ => FullyQualifiedPath::combine(None, Ustr::from("unknown")),
+        };
+
+        let type_key = MirDataType::Struct {
+            identifier: TypeKey {
+                fully_qualified_path: Arc::new(FullyQualifiedPath {
+                    name: Some(Ustr::from(&mono_name)),
+                    parent: Some(parent_path),
+                }),
+            },
+            generic_types: Vec::new(),
+        };
+
+        // TODO Find a way to get the original type span
+        let span = self.context.current_span();
+
+        let type_node = AstNode::new(
+            span,
+            AstNodeType::TypeDeclaration(AstType {
+                identifier: PotentialGenericTypeIdentifier::Identifier(
+                    PotentialDollarIdentifier::new(span, Ustr::from(&mono_name)),
+                ),
+                object: template.type_def.clone().substitute(&subst),
+            }),
         );
 
-        let mono_identifier = TypeKey {
-            fully_qualified_path: Arc::new(FullyQualifiedPath {
-                name: Some(Ustr::from(&mono_name)),
-                parent: None,
-            }),
-        };
-
-        let mono_type = MirDataType::Struct {
-            identifier: mono_identifier,
-            generic_types: vec![],
-        };
+        let type_scope = match &original_type {
+            MirDataType::Struct { identifier, .. } => {
+                self.typing.objects.get(identifier).map(|x| x.scope)
+            }
+            _ => None,
+        }
+        .unwrap_or(scope);
 
         self.monomorphizer
-            .types
-            .insert(cache_key, mono_type.clone());
+            .awaiting_lowering
+            .push((type_node, type_scope));
+
+        self.monomorphizer.types.insert(cache_key, type_key.clone());
 
         self.monomorphize_type_impls(scope, original_type, concrete_args)?;
 
-        Ok(mono_type)
+        Ok(type_key)
     }
 }

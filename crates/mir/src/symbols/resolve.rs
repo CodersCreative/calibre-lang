@@ -662,16 +662,9 @@ impl MiddleEnvironment {
                 generic_types,
             } => {
                 let mut resolved_gens: Vec<MirDataType> = Vec::new();
-                for g in generic_types {
-                    resolved_gens.push(self.resolve_data_type(scope, g, options)?);
-                }
 
-                if identifier == "ptr" && resolved_gens.len() == 1 {
-                    return Ok(MirDataType::Ptr(Box::new(resolved_gens.remove(0))));
-                }
-
-                if identifier == "list" && resolved_gens.len() == 1 {
-                    return Ok(MirDataType::List(Box::new(resolved_gens.remove(0))));
+                for gen_type in generic_types {
+                    resolved_gens.push(self.resolve_data_type(scope, gen_type, options)?);
                 }
 
                 let identifier = match self.resolve(scope, identifier, options)? {

@@ -28,7 +28,7 @@ use calibre_parser::{
 use tracing::instrument;
 
 impl MiddleEnvironment {
-    fn process_parameter_defaults(
+    pub(crate) fn process_parameter_defaults(
         &mut self,
         scope: ScopeId,
         header: &FunctionHeader,

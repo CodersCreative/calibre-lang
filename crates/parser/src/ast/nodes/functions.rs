@@ -35,6 +35,8 @@ impl FunctionHeader {
 
         self.return_type = self.return_type.substitute(subst);
 
+        self.generics = self.generics.substitute(subst);
+
         self
     }
 }
