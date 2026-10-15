@@ -783,8 +783,8 @@ impl ParserDataType {
                 #[cfg(feature = "native")]
                 (
                     "net.tcp_write",
-                    vec![ParserInnerType::Host, ParserInnerType::Int],
-                    ParserInnerType::Int,
+                    vec![ParserInnerType::Host, ParserInnerType::Str],
+                    ParserInnerType::UInt,
                 ),
                 #[cfg(feature = "native")]
                 (

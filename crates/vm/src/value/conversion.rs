@@ -23,11 +23,11 @@ impl RuntimeValue {
 
         match (self, data_type) {
             (RuntimeValue::Big(x), MirDataType::Int) => {
-                Ok(RuntimeValue::Int((x.int().to_string()).parse::<i64>()?))
+                Ok(RuntimeValue::Int((x.int().to_string()).parse::<isize>()?))
             }
             (RuntimeValue::Big(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(!x.is_zero())),
             (RuntimeValue::Big(x), MirDataType::UInt) => {
-                Ok(RuntimeValue::UInt((x.int().to_string()).parse::<u64>()?))
+                Ok(RuntimeValue::UInt((x.int().to_string()).parse::<usize>()?))
             }
             (RuntimeValue::Big(x), MirDataType::Byte) => {
                 Ok(RuntimeValue::Byte((x.int().to_string()).parse::<u8>()?))
@@ -42,7 +42,7 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
 
-            (RuntimeValue::UInt(x), MirDataType::Int) => Ok(RuntimeValue::Int(x as i64)),
+            (RuntimeValue::UInt(x), MirDataType::Int) => Ok(RuntimeValue::Int(x as isize)),
             (RuntimeValue::UInt(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
             (RuntimeValue::UInt(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x)),
             (RuntimeValue::UInt(x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
@@ -51,25 +51,27 @@ impl RuntimeValue {
             (RuntimeValue::UInt(x), MirDataType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
-            (RuntimeValue::UInt(x), MirDataType::Big) => {
-                Ok(RuntimeValue::Big(BigFloat::from_u64(x, BIG_PRECISION)))
-            }
+            (RuntimeValue::UInt(x), MirDataType::Big) => Ok(RuntimeValue::Big(BigFloat::from_u64(
+                x as u64,
+                BIG_PRECISION,
+            ))),
             (RuntimeValue::Int(x), MirDataType::Int) => Ok(RuntimeValue::Int(x)),
             (RuntimeValue::Int(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
-            (RuntimeValue::Int(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Int(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as usize)),
             (RuntimeValue::Int(x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
             (RuntimeValue::Int(x), MirDataType::Float) => Ok(RuntimeValue::Float(x as f64)),
             (RuntimeValue::Int(x), MirDataType::Char) => Ok(RuntimeValue::Char((x as u8) as char)),
             (RuntimeValue::Int(x), MirDataType::Str) => {
                 Ok(RuntimeValue::Str(Ustr::from(&x.to_string())))
             }
-            (RuntimeValue::Int(x), MirDataType::Big) => {
-                Ok(RuntimeValue::Big(BigFloat::from_i64(x, BIG_PRECISION)))
-            }
+            (RuntimeValue::Int(x), MirDataType::Big) => Ok(RuntimeValue::Big(BigFloat::from_i64(
+                x as i64,
+                BIG_PRECISION,
+            ))),
             (RuntimeValue::Float(x), MirDataType::Float) => Ok(RuntimeValue::Float(x)),
-            (RuntimeValue::Float(x), MirDataType::Int) => Ok(RuntimeValue::Int(x as i64)),
+            (RuntimeValue::Float(x), MirDataType::Int) => Ok(RuntimeValue::Int(x as isize)),
             (RuntimeValue::Float(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0.0)),
-            (RuntimeValue::Float(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Float(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as usize)),
             (RuntimeValue::Float(x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
             (RuntimeValue::Float(x), MirDataType::Char) => {
                 Ok(RuntimeValue::Char((x as u8) as char))
@@ -85,7 +87,7 @@ impl RuntimeValue {
             }
             (RuntimeValue::Range(_, x), MirDataType::Int) => Ok(RuntimeValue::Int(x)),
             (RuntimeValue::Range(_, x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
-            (RuntimeValue::Range(_, x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Range(_, x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as usize)),
             (RuntimeValue::Range(_, x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
             (RuntimeValue::Range(_, x), MirDataType::Float) => Ok(RuntimeValue::Float(x as f64)),
             (RuntimeValue::Bool(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x)),
@@ -112,9 +114,9 @@ impl RuntimeValue {
             }))),
             (RuntimeValue::Char(x), MirDataType::Char) => Ok(RuntimeValue::Char(x)),
             (RuntimeValue::Char(x), MirDataType::Bool) => Ok(RuntimeValue::Bool((x as u16) > 0)),
-            (RuntimeValue::Char(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
+            (RuntimeValue::Char(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as usize)),
             (RuntimeValue::Char(x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x as u8)),
-            (RuntimeValue::Char(x), MirDataType::Int) => Ok(RuntimeValue::Int(x as i64)),
+            (RuntimeValue::Char(x), MirDataType::Int) => Ok(RuntimeValue::Int(x as isize)),
             (RuntimeValue::Char(x), MirDataType::Float) => {
                 Ok(RuntimeValue::Float((x as u8) as f64))
             }
@@ -134,8 +136,8 @@ impl RuntimeValue {
             (RuntimeValue::Str(x), MirDataType::Int) => Ok(RuntimeValue::Int(x.trim().parse()?)),
             (RuntimeValue::Byte(x), MirDataType::Byte) => Ok(RuntimeValue::Byte(x)),
             (RuntimeValue::Byte(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
-            (RuntimeValue::Byte(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as u64)),
-            (RuntimeValue::Byte(x), MirDataType::Int) => Ok(RuntimeValue::Int(x as i64)),
+            (RuntimeValue::Byte(x), MirDataType::UInt) => Ok(RuntimeValue::UInt(x as usize)),
+            (RuntimeValue::Byte(x), MirDataType::Int) => Ok(RuntimeValue::Int(x as isize)),
             (RuntimeValue::Byte(x), MirDataType::Float) => Ok(RuntimeValue::Float(x as f64)),
             (RuntimeValue::Byte(x), MirDataType::Char) => Ok(RuntimeValue::Char(x as char)),
             (RuntimeValue::Byte(x), MirDataType::Big) => {

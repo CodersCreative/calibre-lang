@@ -232,7 +232,7 @@ pub enum IntLiteralType {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParsedIntLiteral {
-    pub value: i64,
+    pub value: isize,
     pub int_type: IntLiteralType,
 }
 
@@ -265,11 +265,11 @@ impl ParsedIntLiteral {
         let number_text = number_text.replace('_', "");
         let parse_base = |text: &str| {
             if let Some((_, x)) = text.split_once("x") {
-                i64::from_str_radix(x, 16)
+                isize::from_str_radix(x, 16)
             } else if let Some((_, x)) = text.split_once("o") {
-                i64::from_str_radix(x, 8)
+                isize::from_str_radix(x, 8)
             } else if let Some((_, x)) = text.split_once("b") {
-                i64::from_str_radix(x, 2)
+                isize::from_str_radix(x, 2)
             } else {
                 text.parse()
             }
@@ -277,7 +277,9 @@ impl ParsedIntLiteral {
 
         let parsed = if let Some((base, exp)) = number_text.split_once('e') {
             match (parse_base(base).ok(), exp.parse::<u32>().ok()) {
-                (Some(base_val), Some(power)) => base_val.checked_mul(10_i64.pow(power)).ok_or(()),
+                (Some(base_val), Some(power)) => {
+                    base_val.checked_mul(10_isize.pow(power)).ok_or(())
+                }
                 _ => Err(()),
             }
         } else {

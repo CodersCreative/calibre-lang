@@ -14,8 +14,8 @@ impl RuntimeValue {
                 ("true", RuntimeValue::Bool(true)),
                 ("false", RuntimeValue::Bool(false)),
                 ("none", RuntimeValue::Option(None)),
-                ("INT_MIN", RuntimeValue::Int(i64::MIN)),
-                ("INT_MAX", RuntimeValue::Int(i64::MAX)),
+                ("INT_MIN", RuntimeValue::Int(isize::MIN)),
+                ("INT_MAX", RuntimeValue::Int(isize::MAX)),
             ]
             .into_iter()
             .map(|(name, value)| (name.to_string(), value))

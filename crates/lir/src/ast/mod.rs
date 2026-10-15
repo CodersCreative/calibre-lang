@@ -41,8 +41,8 @@ impl Display for LirNode {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LirLiteral {
     Bool(bool),
-    Int(i64),
-    UInt(u64),
+    Int(isize),
+    UInt(usize),
     Byte(u8),
     Float(f64),
     Char(char),

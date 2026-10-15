@@ -160,7 +160,7 @@ fn format_command_line(command: &Ustr, args: &[Ustr]) -> String {
 }
 
 // TODO Create macros for this honestly...
-fn process_result(command: Ustr, status: i64, stdout: Ustr, stderr: Ustr) -> RuntimeValue {
+fn process_result(command: Ustr, status: isize, stdout: Ustr, stderr: Ustr) -> RuntimeValue {
     RuntimeValue::Aggregate(
         // Some(Ustr::from("ProcessResult")),
         None,
@@ -219,7 +219,7 @@ fn execute_raw(options: RawExecOptions) -> Result<RuntimeValue, String> {
     }
 
     let output = child.wait_with_output().map_err(|e| e.to_string())?;
-    let status = output.status.code().map_or(-1, |x| x as i64);
+    let status = output.status.code().map_or(-1, |x| x as isize);
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 

@@ -324,8 +324,8 @@ pub struct AggregateLayout {
 pub enum VMLiteral {
     Bool(bool),
     Big(Ustr),
-    Int(i64),
-    UInt(u64),
+    Int(isize),
+    UInt(usize),
     Byte(u8),
     Float(f64),
     Char(char),

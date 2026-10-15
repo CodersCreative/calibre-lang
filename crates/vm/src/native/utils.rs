@@ -80,19 +80,19 @@ pub fn resolve_host(env: &VM, value: RuntimeValue) -> Result<Host, RuntimeError>
 }
 
 #[inline]
-pub fn resolve_int(env: &VM, value: RuntimeValue) -> Result<i64, RuntimeError> {
+pub fn resolve_int(env: &VM, value: RuntimeValue) -> Result<isize, RuntimeError> {
     Ok(match env.resolve_value(value)? {
         RuntimeValue::Int(v) => v,
-        RuntimeValue::Char(c) => c as i64,
-        RuntimeValue::UInt(v) => v as i64,
-        RuntimeValue::Byte(v) => v as i64,
-        RuntimeValue::Float(v) => v as i64,
+        RuntimeValue::Char(c) => c as isize,
+        RuntimeValue::UInt(v) => v as isize,
+        RuntimeValue::Byte(v) => v as isize,
+        RuntimeValue::Float(v) => v as isize,
         v => return Err(RuntimeError::ExpectedIntFound { found: Box::new(v) }),
     })
 }
 
 #[inline]
-pub fn resolve_range(env: &VM, value: RuntimeValue) -> Result<Range<i64>, RuntimeError> {
+pub fn resolve_range(env: &VM, value: RuntimeValue) -> Result<Range<isize>, RuntimeError> {
     Ok(match env.resolve_value(value)? {
         RuntimeValue::Range(from, to) => from..to,
         v => {

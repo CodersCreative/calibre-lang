@@ -124,16 +124,16 @@ impl VMEvaluation for VMRange {
         let from = vm.resolve_value_ref(vm.get_reg_value(self.from))?;
         let to = vm.resolve_value_ref(vm.get_reg_value(self.to))?;
 
-        let as_range_bound = |value: RuntimeValue| -> Result<i64, RuntimeError> {
+        let as_range_bound = |value: RuntimeValue| -> Result<isize, RuntimeError> {
             match value {
                 RuntimeValue::Int(v) => Ok(v),
-                RuntimeValue::UInt(v) => Ok(v as i64),
-                RuntimeValue::Float(v) => Ok(v as i64),
-                RuntimeValue::Bool(v) => Ok(v as i64),
-                RuntimeValue::Char(v) => Ok(v as i64),
-                RuntimeValue::List(v) => Ok(v.as_ref().0.len() as i64),
-                RuntimeValue::Aggregate(_, v) => Ok(v.as_ref().0.0.len() as i64),
-                RuntimeValue::Str(v) => Ok(v.len() as i64),
+                RuntimeValue::UInt(v) => Ok(v as isize),
+                RuntimeValue::Float(v) => Ok(v as isize),
+                RuntimeValue::Bool(v) => Ok(v as isize),
+                RuntimeValue::Char(v) => Ok(v as isize),
+                RuntimeValue::List(v) => Ok(v.as_ref().0.len() as isize),
+                RuntimeValue::Aggregate(_, v) => Ok(v.as_ref().0.0.len() as isize),
+                RuntimeValue::Str(v) => Ok(v.len() as isize),
                 RuntimeValue::Range(from, to) => Ok((to - from).max(0)),
                 other => Err(RuntimeError::ExpectedNumericFound {
                     found: Box::new(other),

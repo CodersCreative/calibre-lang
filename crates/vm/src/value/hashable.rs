@@ -17,15 +17,15 @@ use ustr::Ustr;
 #[derive(Debug, Clone)]
 pub enum HashKey {
     Null,
-    Int(i64),
-    UInt(u64),
+    Int(isize),
+    UInt(usize),
     Bool(bool),
     Char(char),
     Str(Ustr),
     Float(u64),
     Big(Ustr),
     Ptr(u64),
-    Range(i64, i64),
+    Range(isize, isize),
     List(Vec<HashKey>),
     Aggregate(Option<TypeKey>, Vec<(Ustr, HashKey)>),
     Option(Option<Box<HashKey>>),
@@ -128,7 +128,7 @@ impl TryFrom<RuntimeValue> for HashKey {
                 Ok(Self::Function(name, Some(converted)))
             }
             RuntimeValue::UInt(x) => Ok(Self::UInt(x)),
-            RuntimeValue::Byte(x) => Ok(Self::UInt(x as u64)),
+            RuntimeValue::Byte(x) => Ok(Self::UInt(x as usize)),
             RuntimeValue::Bool(x) => Ok(Self::Bool(x)),
             RuntimeValue::Char(x) => Ok(Self::Char(x)),
             RuntimeValue::Str(x) => Ok(Self::Str(x)),

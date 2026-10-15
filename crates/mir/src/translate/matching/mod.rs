@@ -51,7 +51,7 @@ impl MiddleEnvironment {
         )
     }
 
-    fn builtin_enum_variant_index(variant_name: &str) -> Option<i64> {
+    fn builtin_enum_variant_index(variant_name: &str) -> Option<usize> {
         match variant_name {
             "Ok" | "Some" => Some(0),
             "Err" | "None" => Some(1),
@@ -70,13 +70,13 @@ impl MiddleEnvironment {
         &self,
         data_type: &MirDataType,
         variant_name: &Ustr,
-    ) -> Option<i64> {
+    ) -> Option<usize> {
         if let Some(key) = Self::enum_key_from_data_type(data_type)
             && let Some(obj) = self.typing.objects.get(&key)
             && let MiddleTypeDefType::Enum { variants, .. } = &obj.object_type
             && let Some(index) = variants.iter().position(|x| &x.0 == variant_name)
         {
-            return Some(index as i64);
+            return Some(index);
         }
         Self::builtin_enum_variant_index(variant_name)
     }
@@ -102,7 +102,7 @@ impl MiddleEnvironment {
             .fold(first, |acc, node| self.bool_and_nodes(acc, node))
     }
 
-    pub fn discriminant_eq(&self, value: AstNode, index: i64) -> AstNode {
+    pub fn discriminant_eq(&self, value: AstNode, index: usize) -> AstNode {
         AstNode::new(
             self.context.current_span(),
             AstNodeType::ComparisonExpression(AstComparison {
@@ -111,7 +111,10 @@ impl MiddleEnvironment {
                     AstNode::identifier(self.context.current_span(), "discriminant"),
                     vec![CallArg::Value(value)],
                 )),
-                right: Box::new(AstNode::int(self.context.current_span(), index)),
+                right: Box::new(AstNode::int(
+                    self.context.current_span(),
+                    format!("{}u", index),
+                )),
                 operator: ComparisonOperator::Equal,
             }),
         )
@@ -122,7 +125,7 @@ impl MiddleEnvironment {
         scope: ScopeId,
         value_node: &AstNode,
         variant_name: &Ustr,
-    ) -> Option<i64> {
+    ) -> Option<usize> {
         if let Some(dt) = self.resolve_type_from_node(scope, value_node) {
             return self.enum_variant_index_from_data_type(dt.unwrap_all_refs(), variant_name);
         }

@@ -19,7 +19,7 @@ pub struct GeneratorState {
     pub function_name: VariableKey,
     pub captures: Arc<Vec<(VariableKey, RuntimeValue)>>,
     pub task_state: TaskState,
-    pub index: i64,
+    pub index: isize,
     pub completed: bool,
 }
 

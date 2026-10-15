@@ -27,20 +27,20 @@ impl VMEvaluation for VMDiscriminant {
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         let value = match vm.get_reg_value(self.value) {
-            RuntimeValue::Enum(_, index, _) => *index as i64,
+            RuntimeValue::Enum(_, index, _) => *index,
             RuntimeValue::Option(Some(_)) | RuntimeValue::Result(Ok(_)) => 0,
             RuntimeValue::Option(None) | RuntimeValue::Result(Err(_)) => 1,
             _ => 0,
         };
 
-        vm.set_reg_value(self.dst, RuntimeValue::Int(value));
+        vm.set_reg_value(self.dst, RuntimeValue::UInt(value));
         Ok(TerminateValue::None)
     }
 }
 
 #[inline]
-fn normalize_index(len: usize, index: i64) -> Option<usize> {
-    let len_i64 = len as i64;
+fn normalize_index(len: usize, index: isize) -> Option<usize> {
+    let len_i64 = len as isize;
     let actual = if index < 0 { len_i64 + index } else { index };
 
     if actual >= 0 && actual < len_i64 {
@@ -54,12 +54,9 @@ fn normalize_index(len: usize, index: i64) -> Option<usize> {
 fn resolve_element_index(len: usize, index: &RuntimeValue) -> Result<Option<usize>, RuntimeError> {
     match index {
         RuntimeValue::Int(idx) => Ok(normalize_index(len, *idx)),
-        RuntimeValue::UInt(idx) => {
-            let idx = *idx as usize;
-            Ok((idx < len).then_some(idx))
-        }
+        RuntimeValue::UInt(idx) => Ok((*idx < len).then_some(*idx)),
         RuntimeValue::Str(s) => {
-            if let Ok(idx) = s.parse::<i64>() {
+            if let Ok(idx) = s.parse::<isize>() {
                 Ok(normalize_index(len, idx))
             } else {
                 Err(RuntimeError::ExpectedIntIndexFound {
@@ -74,15 +71,16 @@ fn resolve_element_index(len: usize, index: &RuntimeValue) -> Result<Option<usiz
 }
 
 #[inline]
-fn resolve_numeric_index(index: &RuntimeValue) -> Result<i64, RuntimeError> {
+fn resolve_numeric_index(index: &RuntimeValue) -> Result<isize, RuntimeError> {
     match index {
         RuntimeValue::Int(idx) => Ok(*idx),
-        RuntimeValue::UInt(idx) => Ok(*idx as i64),
-        RuntimeValue::Str(s) => s
-            .parse::<i64>()
-            .map_err(|_| RuntimeError::ExpectedIntIndexFound {
-                found: Box::new(index.clone()),
-            }),
+        RuntimeValue::UInt(idx) => Ok(*idx as isize),
+        RuntimeValue::Str(s) => {
+            s.parse::<isize>()
+                .map_err(|_| RuntimeError::ExpectedIntIndexFound {
+                    found: Box::new(index.clone()),
+                })
+        }
         _ => Err(RuntimeError::ExpectedIntIndexFound {
             found: Box::new(RuntimeValue::Null),
         }),
@@ -100,7 +98,7 @@ impl VMEvaluation for VMLoadMember {
     ) -> Result<TerminateValue, RuntimeError> {
         let source_reg = self.value;
         let member = vm.local_string(block, self.member)?;
-        let tuple_index = member.parse::<i64>().ok();
+        let tuple_index = member.parse::<isize>().ok();
         let raw_receiver = vm.get_reg_value(self.value).clone();
         let is_next_or_zero = member == "next" || member == "0";
 
@@ -274,7 +272,7 @@ impl VMEvaluation for VMSetMember {
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
         let member = vm.local_string(block, self.member)?;
-        let tuple_index = member.parse::<i64>().ok();
+        let tuple_index = member.parse::<isize>().ok();
         let value = vm.get_reg_value(self.value).clone();
 
         let update_aggregate = |agg_name: &Option<TypeKey>, mut map: Arc<GcMap>| {
@@ -322,7 +320,7 @@ impl VMEvaluation for VMSetMember {
                 match member.as_str() {
                     "index" => match &value {
                         RuntimeValue::Int(x) => guard.index = (*x).max(0),
-                        RuntimeValue::UInt(x) => guard.index = *x as i64,
+                        RuntimeValue::UInt(x) => guard.index = *x as isize,
                         other => {
                             return Err(RuntimeError::ExpectedIntForGeneratorIndex {
                                 found: Box::new((*other).clone()),
@@ -630,8 +628,8 @@ impl VMEvaluation for VMIndex {
                         resolve_slice_range(len, *slice_start, *slice_end)
                             .map(|(s, e)| {
                                 RuntimeValue::Option(Some(Gc::new(RuntimeValue::Range(
-                                    start + s as i64,
-                                    start + e as i64,
+                                    start + s as isize,
+                                    start + e as isize,
                                 ))))
                             })
                             .unwrap_or_else(|| RuntimeValue::Option(None))
@@ -640,7 +638,7 @@ impl VMEvaluation for VMIndex {
                         let resolved = resolve_element_index(len, other)?;
                         match resolved {
                             Some(i) => {
-                                let num = start + i as i64;
+                                let num = start + i as isize;
                                 if num > end {
                                     RuntimeValue::Option(None)
                                 } else {

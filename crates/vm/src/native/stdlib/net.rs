@@ -18,12 +18,12 @@ use std::{
 use ustr::Ustr;
 use wasm_sync::Mutex;
 
-fn port_redirects() -> &'static Mutex<HashMap<String, i64>> {
-    static REDIRECTS: OnceLock<Mutex<HashMap<String, i64>>> = OnceLock::new();
+fn port_redirects() -> &'static Mutex<HashMap<String, isize>> {
+    static REDIRECTS: OnceLock<Mutex<HashMap<String, isize>>> = OnceLock::new();
     REDIRECTS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn key_for(host: &str, port: i64) -> String {
+fn key_for(host: &str, port: isize) -> String {
     format!("{host}:{port}")
 }
 
@@ -258,8 +258,8 @@ impl NativeFunction for TcpListen {
             && let Ok(mut redirects) = port_redirects().try_lock()
         {
             let key = key_for(host.as_str(), port);
-            if local_addr.port() as i64 != port {
-                redirects.insert(key, local_addr.port() as i64);
+            if local_addr.port() as isize != port {
+                redirects.insert(key, local_addr.port() as isize);
             } else {
                 redirects.remove(&key);
             }
@@ -363,7 +363,7 @@ impl NativeFunction for TcpWrite {
             .write(data.as_bytes())
             .map_err(|e| RuntimeError::Io(e.to_string()))?;
 
-        Ok(RuntimeValue::Int(n as i64))
+        Ok(RuntimeValue::UInt(n))
     }
 }
 

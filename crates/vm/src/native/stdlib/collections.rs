@@ -179,7 +179,7 @@ impl NativeFunction for HashMapLen {
 
         let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
-        let len = map.map.len() as i64;
+        let len = map.map.len() as isize;
         Ok(RuntimeValue::Int(len))
     }
 }
@@ -388,7 +388,7 @@ impl NativeFunction for HashSetLen {
 
         let set = resolve_hashset(env, pop_or_null(&mut args))?;
 
-        let len = set.set.len() as i64;
+        let len = set.set.len() as isize;
         Ok(RuntimeValue::Int(len))
     }
 }

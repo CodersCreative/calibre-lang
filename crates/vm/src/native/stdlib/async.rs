@@ -13,7 +13,7 @@ use crate::{
         spawn::{ChannelInner, MutexInner, WaitGroupInner},
     },
 };
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
 pub struct ChannelNew;
 
@@ -40,7 +40,7 @@ impl NativeFunction for ChannelSend {
         let value = env.resolve_value(pop_or_null(&mut args))?;
         let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
-        if ch.closed.load(std::sync::atomic::Ordering::Acquire) {
+        if ch.closed.load(Ordering::Acquire) {
             return Ok(RuntimeValue::Null);
         }
 
@@ -66,7 +66,7 @@ impl NativeFunction for ChannelTrySend {
         let value = env.resolve_value(pop_or_null(&mut args))?;
         let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
-        if ch.closed.load(std::sync::atomic::Ordering::Acquire) {
+        if ch.closed.load(Ordering::Acquire) {
             return Ok(RuntimeValue::Bool(false));
         }
 
@@ -98,7 +98,7 @@ impl NativeFunction for ChannelGet {
                 return Ok(RuntimeValue::Option(Some(dumpster::sync::Gc::new(value))));
             }
 
-            if ch.closed.load(std::sync::atomic::Ordering::Acquire) {
+            if ch.closed.load(Ordering::Acquire) {
                 return Ok(RuntimeValue::Option(None));
             }
 
@@ -141,7 +141,7 @@ impl NativeFunction for ChannelClose {
 
         let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
-        ch.closed.store(true, std::sync::atomic::Ordering::Release);
+        ch.closed.store(true, Ordering::Release);
         ch.cvar.notify_all();
         Ok(RuntimeValue::Null)
     }
@@ -159,7 +159,7 @@ impl NativeFunction for ChannelClosed {
 
         let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
-        if !ch.closed.load(std::sync::atomic::Ordering::Acquire) {
+        if !ch.closed.load(Ordering::Acquire) {
             return Ok(RuntimeValue::Bool(false));
         }
 
@@ -194,8 +194,7 @@ impl NativeFunction for WaitGroupRawAdd {
         let value = resolve_int(env, pop_or_null(&mut args))?;
         let wg = resolve_waitgroup(env, pop_or_null(&mut args))?;
 
-        wg.count
-            .fetch_add(value as isize, std::sync::atomic::Ordering::AcqRel);
+        wg.count.fetch_add(value, Ordering::AcqRel);
 
         Ok(RuntimeValue::Null)
     }
@@ -267,8 +266,8 @@ impl NativeFunction for WaitGroupCount {
 
         let wg = resolve_waitgroup(env, pop_or_null(&mut args))?;
 
-        let count = wg.count.load(std::sync::atomic::Ordering::Acquire);
-        Ok(RuntimeValue::Int(count as i64))
+        let count = wg.count.load(Ordering::Acquire);
+        Ok(RuntimeValue::Int(count))
     }
 }
 

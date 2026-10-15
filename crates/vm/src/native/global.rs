@@ -132,7 +132,9 @@ impl NativeFunction for Wait {
         let val = resolve_int(env, pop_or_null(&mut args))? as u64;
         thread::sleep(Duration::from_millis(val));
 
-        Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(val)))))
+        Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
+            val as usize,
+        )))))
     }
 }
 
@@ -218,16 +220,16 @@ impl NativeFunction for Len {
 
         Ok(RuntimeValue::UInt(
             match env.resolve_value(pop_or_null(&mut args))? {
-                RuntimeValue::List(data) => data.as_ref().0.len() as u64,
-                RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len() as u64,
+                RuntimeValue::List(data) => data.as_ref().0.len(),
+                RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len(),
                 RuntimeValue::Range(from, to) => (to - from).max(0).unsigned_abs(),
-                RuntimeValue::Str(x) => x.len() as u64,
+                RuntimeValue::Str(x) => x.len(),
                 RuntimeValue::Null => 0,
-                RuntimeValue::HashMap(map) => map.map.len() as u64,
-                RuntimeValue::HashSet(set) => set.set.len() as u64,
-                RuntimeValue::Int(x) => x as u64,
+                RuntimeValue::HashMap(map) => map.map.len(),
+                RuntimeValue::HashSet(set) => set.set.len(),
+                RuntimeValue::Int(x) => x as usize,
                 RuntimeValue::UInt(x) => x,
-                RuntimeValue::Float(x) => x as u64,
+                RuntimeValue::Float(x) => x as usize,
                 other => {
                     return Err(RuntimeError::UnexpectedTypeInConversion {
                         value: Box::new(other),

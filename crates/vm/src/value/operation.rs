@@ -39,10 +39,10 @@ pub fn comparison(
             (RuntimeValue::Int(a), RuntimeValue::Int(b)) => Some(a == b),
             (RuntimeValue::UInt(a), RuntimeValue::UInt(b)) => Some(a == b),
             (RuntimeValue::Byte(a), RuntimeValue::Byte(b)) => Some(a == b),
-            (RuntimeValue::Int(a), RuntimeValue::UInt(b)) => Some(*a >= 0 && (*a as u64) == *b),
-            (RuntimeValue::UInt(a), RuntimeValue::Int(b)) => Some(*b >= 0 && *a == (*b as u64)),
-            (RuntimeValue::UInt(a), RuntimeValue::Byte(b)) => Some(*a == *b as u64),
-            (RuntimeValue::Byte(a), RuntimeValue::UInt(b)) => Some(*a as u64 == *b),
+            (RuntimeValue::Int(a), RuntimeValue::UInt(b)) => Some(*a >= 0 && (*a as usize) == *b),
+            (RuntimeValue::UInt(a), RuntimeValue::Int(b)) => Some(*b >= 0 && *a == (*b as usize)),
+            (RuntimeValue::UInt(a), RuntimeValue::Byte(b)) => Some(*a == *b as usize),
+            (RuntimeValue::Byte(a), RuntimeValue::UInt(b)) => Some(*a as usize == *b),
             (RuntimeValue::Int(a), RuntimeValue::Byte(b)) => Some(*a >= 0 && (*a as u8) == *b),
             (RuntimeValue::Byte(a), RuntimeValue::Int(b)) => Some(*b >= 0 && *a == (*b as u8)),
             (RuntimeValue::Float(a), RuntimeValue::Float(b)) => Some(a == b),
@@ -166,12 +166,12 @@ pub fn comparison(
         (RuntimeValue::Byte(x), RuntimeValue::Byte(y), op) => {
             Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y)))
         }
-        (RuntimeValue::Byte(x), RuntimeValue::UInt(y), op) => {
-            Ok(RuntimeValue::Bool(comparison_value_handle(op, x as u64, y)))
-        }
-        (RuntimeValue::UInt(x), RuntimeValue::Byte(y), op) => {
-            Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y as u64)))
-        }
+        (RuntimeValue::Byte(x), RuntimeValue::UInt(y), op) => Ok(RuntimeValue::Bool(
+            comparison_value_handle(op, x as usize, y),
+        )),
+        (RuntimeValue::UInt(x), RuntimeValue::Byte(y), op) => Ok(RuntimeValue::Bool(
+            comparison_value_handle(op, x, y as usize),
+        )),
         (RuntimeValue::Byte(x), RuntimeValue::Int(y), op) => {
             if y < 0 {
                 Ok(RuntimeValue::Bool(matches!(
@@ -181,7 +181,9 @@ pub fn comparison(
                         | ComparisonOperator::NotEqual
                 )))
             } else {
-                Ok(RuntimeValue::Bool(comparison_value_handle(op, x as i64, y)))
+                Ok(RuntimeValue::Bool(comparison_value_handle(
+                    op, x as isize, y,
+                )))
             }
         }
         (RuntimeValue::Int(x), RuntimeValue::Byte(y), op) => {
@@ -193,7 +195,9 @@ pub fn comparison(
                         | ComparisonOperator::NotEqual
                 )))
             } else {
-                Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y as i64)))
+                Ok(RuntimeValue::Bool(comparison_value_handle(
+                    op, x, y as isize,
+                )))
             }
         }
         (RuntimeValue::Int(x), RuntimeValue::UInt(y), op) => {
@@ -205,7 +209,9 @@ pub fn comparison(
                         | ComparisonOperator::NotEqual
                 )))
             } else {
-                Ok(RuntimeValue::Bool(comparison_value_handle(op, x as u64, y)))
+                Ok(RuntimeValue::Bool(comparison_value_handle(
+                    op, x as usize, y,
+                )))
             }
         }
         (RuntimeValue::UInt(x), RuntimeValue::Int(y), op) => {
@@ -217,7 +223,9 @@ pub fn comparison(
                         | ComparisonOperator::NotEqual
                 )))
             } else {
-                Ok(RuntimeValue::Bool(comparison_value_handle(op, x, y as u64)))
+                Ok(RuntimeValue::Bool(comparison_value_handle(
+                    op, x, y as usize,
+                )))
             }
         }
         (RuntimeValue::Float(x), RuntimeValue::Float(y), op) => {
@@ -269,30 +277,30 @@ macro_rules! handle_bitwise {
         match $self {
             RuntimeValue::Int(x) => match $rhs{
                 RuntimeValue::Int(y) => Ok(RuntimeValue::Int(x $op y)),
-                RuntimeValue::UInt(y) => Ok(RuntimeValue::Int(x $op (y as i64))),
-                RuntimeValue::Byte(y) => Ok(RuntimeValue::Int(x $op (y as i64))),
-                RuntimeValue::Bool(y) => Ok(RuntimeValue::Int(x $op y as i64)),
+                RuntimeValue::UInt(y) => Ok(RuntimeValue::Int(x $op (y as isize))),
+                RuntimeValue::Byte(y) => Ok(RuntimeValue::Int(x $op (y as isize))),
+                RuntimeValue::Bool(y) => Ok(RuntimeValue::Int(x $op y as isize)),
                 _ => $self.panic_operator(&$rhs, &BinaryOperator::$op_trait),
             },
             RuntimeValue::UInt(x) => match $rhs{
                 RuntimeValue::UInt(y) => Ok(RuntimeValue::UInt(x $op y)),
-                RuntimeValue::Byte(y) => Ok(RuntimeValue::UInt(x $op y as u64)),
-                RuntimeValue::Int(y) => Ok(RuntimeValue::Int((x as i64) $op y)),
-                RuntimeValue::Bool(y) => Ok(RuntimeValue::UInt(x $op y as u64)),
+                RuntimeValue::Byte(y) => Ok(RuntimeValue::UInt(x $op y as usize)),
+                RuntimeValue::Int(y) => Ok(RuntimeValue::Int((x as isize) $op y)),
+                RuntimeValue::Bool(y) => Ok(RuntimeValue::UInt(x $op y as usize)),
                 _ => $self.panic_operator(&$rhs, &BinaryOperator::$op_trait),
             },
             RuntimeValue::Byte(x) => match $rhs{
                 RuntimeValue::Byte(y) => Ok(RuntimeValue::Byte(x $op y)),
-                RuntimeValue::UInt(y) => Ok(RuntimeValue::UInt((x as u64) $op y)),
-                RuntimeValue::Int(y) => Ok(RuntimeValue::Int((x as i64) $op y)),
-                RuntimeValue::Bool(y) => Ok(RuntimeValue::UInt((x as u64) $op y as u64)),
+                RuntimeValue::UInt(y) => Ok(RuntimeValue::UInt((x as usize) $op y)),
+                RuntimeValue::Int(y) => Ok(RuntimeValue::Int((x as isize) $op y)),
+                RuntimeValue::Bool(y) => Ok(RuntimeValue::UInt((x as usize) $op y as usize)),
                 _ => $self.panic_operator(&$rhs, &BinaryOperator::$op_trait),
             },
             RuntimeValue::Bool(x) => match $rhs{
-                RuntimeValue::Int(y) => Ok(RuntimeValue::Int((x as i64) $op y)),
-                RuntimeValue::UInt(y) => Ok(RuntimeValue::UInt((x as u64) $op y)),
-                RuntimeValue::Byte(y) => Ok(RuntimeValue::UInt((x as u64) $op y as u64)),
-                RuntimeValue::Bool(y) => Ok(RuntimeValue::Int((x as i64) $op y as i64)),
+                RuntimeValue::Int(y) => Ok(RuntimeValue::Int((x as isize) $op y)),
+                RuntimeValue::UInt(y) => Ok(RuntimeValue::UInt((x as usize) $op y)),
+                RuntimeValue::Byte(y) => Ok(RuntimeValue::UInt((x as usize) $op y as usize)),
+                RuntimeValue::Bool(y) => Ok(RuntimeValue::Int((x as isize) $op y as isize)),
                 _ => $self.panic_operator(&$rhs, &BinaryOperator::$op_trait),
             },
             _ => $self.panic_operator(&$rhs, &BinaryOperator::$op_trait),
@@ -401,22 +409,22 @@ macro_rules! handle_binop_numeric {
                 Ok(RuntimeValue::Byte(x $op y))
             }
             (RuntimeValue::Int(x), RuntimeValue::UInt(y)) => {
-                Ok(RuntimeValue::Int(x $op y as i64))
+                Ok(RuntimeValue::Int(x $op y as isize))
             }
             (RuntimeValue::Int(x), RuntimeValue::Byte(y)) => {
-                Ok(RuntimeValue::Int(x $op y as i64))
+                Ok(RuntimeValue::Int(x $op y as isize))
             }
             (RuntimeValue::UInt(x), RuntimeValue::Int(y)) => {
-                Ok(RuntimeValue::Int(x as i64 $op y))
+                Ok(RuntimeValue::Int(x as isize $op y))
             }
             (RuntimeValue::UInt(x), RuntimeValue::Byte(y)) => {
-                Ok(RuntimeValue::UInt(x $op y as u64))
+                Ok(RuntimeValue::UInt(x $op y as usize))
             }
             (RuntimeValue::Byte(x), RuntimeValue::UInt(y)) => {
-                Ok(RuntimeValue::UInt((x as u64) $op y))
+                Ok(RuntimeValue::UInt((x as usize) $op y))
             }
             (RuntimeValue::Byte(x), RuntimeValue::Int(y)) => {
-                Ok(RuntimeValue::Int(x as i64 $op y))
+                Ok(RuntimeValue::Int(x as isize $op y))
             }
             (x, y) => x.panic_operator(&y, &BinaryOperator::$op_trait),
         }
@@ -540,7 +548,7 @@ impl RuntimeValue {
             (RuntimeValue::Int(x), RuntimeValue::UInt(y)) => Ok(RuntimeValue::Int(x.pow(y as u32))),
             (RuntimeValue::Int(x), RuntimeValue::Byte(y)) => Ok(RuntimeValue::Int(x.pow(y as u32))),
             (RuntimeValue::Int(x), RuntimeValue::Float(y)) => {
-                Ok(RuntimeValue::Int((x as f64).powf(y) as i64))
+                Ok(RuntimeValue::Int((x as f64).powf(y) as isize))
             }
             (RuntimeValue::UInt(x), RuntimeValue::UInt(y)) => {
                 Ok(RuntimeValue::UInt(x.pow(y as u32)))
@@ -556,7 +564,7 @@ impl RuntimeValue {
                 }
             }
             (RuntimeValue::UInt(x), RuntimeValue::Float(y)) => {
-                Ok(RuntimeValue::UInt((x as f64).powf(y) as u64))
+                Ok(RuntimeValue::UInt((x as f64).powf(y) as usize))
             }
             (RuntimeValue::Float(x), RuntimeValue::Float(y)) => Ok(RuntimeValue::Float(x.powf(y))),
             (RuntimeValue::Float(x), RuntimeValue::Int(y)) => {
@@ -572,13 +580,13 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Byte(x.pow(y as u32)))
             }
             (RuntimeValue::Byte(x), RuntimeValue::UInt(y)) => {
-                Ok(RuntimeValue::UInt((x as u64).pow(y as u32)))
+                Ok(RuntimeValue::UInt((x as usize).pow(y as u32)))
             }
             (RuntimeValue::Byte(x), RuntimeValue::Int(y)) => {
                 if y < 0 {
                     Ok(RuntimeValue::Float((x as f64).powf(y as f64)))
                 } else {
-                    Ok(RuntimeValue::UInt((x as u64).pow(y as u32)))
+                    Ok(RuntimeValue::UInt((x as usize).pow(y as u32)))
                 }
             }
             (RuntimeValue::Byte(x), RuntimeValue::Float(y)) => {

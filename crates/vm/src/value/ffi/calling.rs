@@ -95,7 +95,7 @@ impl ExternFunction {
                     }
                     (RuntimeValue::UInt(x), MirDataType::UInt) => {
                         arg_types.push(Type::u64());
-                        Self::push_arg(&mut ffi_args, FfiArg::U64(x));
+                        Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
                     }
                     (RuntimeValue::UInt(x), MirDataType::Int) => {
                         arg_types.push(Type::i64());
@@ -107,7 +107,7 @@ impl ExternFunction {
                     }
                     (RuntimeValue::Int(x), MirDataType::Int) => {
                         arg_types.push(Type::i64());
-                        Self::push_arg(&mut ffi_args, FfiArg::I64(x));
+                        Self::push_arg(&mut ffi_args, FfiArg::I64(x as i64));
                     }
                     (RuntimeValue::Int(x), MirDataType::Float) => {
                         arg_types.push(Type::f64());
@@ -300,7 +300,7 @@ impl ExternFunction {
                             | ParserFfiInnerType::ULong
                             | ParserFfiInnerType::ULongLong,
                             RuntimeValue::UInt(x),
-                        ) => FfiArg::U64(x),
+                        ) => FfiArg::U64(x as u64),
                         (
                             ParserFfiInnerType::U64
                             | ParserFfiInnerType::ULong
@@ -318,7 +318,7 @@ impl ExternFunction {
                             | ParserFfiInnerType::Long
                             | ParserFfiInnerType::LongLong,
                             RuntimeValue::Int(x),
-                        ) => FfiArg::I64(x),
+                        ) => FfiArg::I64(x as i64),
                         (
                             ParserFfiInnerType::I64
                             | ParserFfiInnerType::Long
@@ -331,12 +331,12 @@ impl ExternFunction {
                             | ParserFfiInnerType::LongLong,
                             RuntimeValue::Float(x),
                         ) => FfiArg::I64(x as i64),
-                        (ParserFfiInnerType::USize, RuntimeValue::UInt(x)) => FfiArg::U64(x),
+                        (ParserFfiInnerType::USize, RuntimeValue::UInt(x)) => FfiArg::U64(x as u64),
                         (ParserFfiInnerType::USize, RuntimeValue::Int(x)) => FfiArg::U64(x as u64),
                         (ParserFfiInnerType::USize, RuntimeValue::Float(x)) => {
                             FfiArg::U64(x as u64)
                         }
-                        (ParserFfiInnerType::ISize, RuntimeValue::Int(x)) => FfiArg::I64(x),
+                        (ParserFfiInnerType::ISize, RuntimeValue::Int(x)) => FfiArg::I64(x as i64),
                         (ParserFfiInnerType::ISize, RuntimeValue::UInt(x)) => FfiArg::I64(x as i64),
                         (ParserFfiInnerType::ISize, RuntimeValue::Float(x)) => {
                             FfiArg::I64(x as i64)
@@ -420,7 +420,7 @@ impl ExternFunction {
                 }
                 MirDataType::Ptr(_) => {
                     let res: *const c_void = cif.call(code, &libffi_args);
-                    Ok(RuntimeValue::UInt(res as u64))
+                    Ok(RuntimeValue::UInt(res as usize))
                 }
                 _ => Err(RuntimeError::InvalidFunctionCall),
             }

@@ -723,7 +723,7 @@ impl NativeFunction for FsMetadataLen {
                     target_type: ParserInnerType::Host,
                 })?
                 .0
-                .len(),
+                .len() as usize,
         ))
     }
 }
@@ -754,7 +754,7 @@ impl NativeFunction for FsMetadataModified {
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
                 Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
-                    duration.as_secs(),
+                    duration.as_secs() as usize,
                 )))))
             }
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
@@ -790,7 +790,7 @@ impl NativeFunction for FsMetadataCreated {
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
                 Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
-                    duration.as_secs(),
+                    duration.as_secs() as usize,
                 )))))
             }
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
@@ -826,7 +826,7 @@ impl NativeFunction for FsMetadataAccessed {
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
                 Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
-                    duration.as_secs(),
+                    duration.as_secs() as usize,
                 )))))
             }
             Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(

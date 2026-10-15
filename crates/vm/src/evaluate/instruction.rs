@@ -78,14 +78,14 @@ impl VMEvaluation for VMInstruction {
 }
 
 #[inline]
-pub(crate) fn resolve_slice_range(len: usize, start: i64, end: i64) -> Option<(usize, usize)> {
+pub(crate) fn resolve_slice_range(len: usize, start: isize, end: isize) -> Option<(usize, usize)> {
     let mut s = start;
     let mut e = end;
     if s < 0 {
-        s += len as i64;
+        s += len as isize;
     }
     if e < 0 {
-        e += len as i64;
+        e += len as isize;
     }
     if s < 0 {
         s = 0;
@@ -94,7 +94,7 @@ pub(crate) fn resolve_slice_range(len: usize, start: i64, end: i64) -> Option<(u
         e = 0;
     }
 
-    if s > len as i64 || e > len as i64 {
+    if s > len as isize || e > len as isize {
         return None;
     }
 

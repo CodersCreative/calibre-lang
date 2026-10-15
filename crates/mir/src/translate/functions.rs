@@ -1349,7 +1349,7 @@ impl MirLowering for AstCall {
                     return env.resolve_curried_type(scope, self.args[0].get_node());
                 }
                 "discriminant" => {
-                    return Some(MirDataType::Int);
+                    return Some(MirDataType::UInt);
                 }
                 _ => {}
             }

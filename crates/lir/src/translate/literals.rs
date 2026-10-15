@@ -70,7 +70,9 @@ impl LirLowering for MirInt {
     fn lower<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         match self.value.int_type {
             IntLiteralType::Int => LirNodeType::Literal(LirLiteral::Int(self.value.value)),
-            IntLiteralType::UInt => LirNodeType::Literal(LirLiteral::UInt(self.value.value as u64)),
+            IntLiteralType::UInt => {
+                LirNodeType::Literal(LirLiteral::UInt(self.value.value as usize))
+            }
             IntLiteralType::Byte => LirNodeType::Literal(LirLiteral::Byte(self.value.value as u8)),
         }
     }

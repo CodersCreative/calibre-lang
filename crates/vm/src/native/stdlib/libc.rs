@@ -22,7 +22,7 @@ impl NativeFunction for GetCErrNo {
         expect_num_args(&args, &[0])?;
 
         let e = errno();
-        Ok(RuntimeValue::Int(e.0 as i64))
+        Ok(RuntimeValue::Int(e.0 as isize))
     }
 }
 

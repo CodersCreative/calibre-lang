@@ -103,7 +103,7 @@ impl NativeFunction for ListBinarySearchBy {
                 Ordering::Greater => high = mid,
                 Ordering::Equal => {
                     return Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Int(
-                        mid as i64,
+                        mid as isize,
                     )))));
                 }
             }
