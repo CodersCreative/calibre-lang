@@ -15,7 +15,7 @@ use calibre_parser::{
     Span,
     ast::{
         ObjectMap, ObjectType,
-        idents::{IntLiteralType, ParsedIntLiteral},
+        idents::{IntLiteralType, ParsedIntLiteral, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType,
             binary::{AsFailureMode, AstAs},
@@ -40,13 +40,51 @@ impl MirLowering for AstStruct {
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let identifier = if let Some(ident) = self.identifier {
-            match env.resolve_to_data_type(scope, &ident)?.unwrap_all_refs() {
-                MirDataType::Struct { identifier, .. } => identifier.clone(),
-                _ => {
-                    return Err(MiddleErr::At(
-                        span,
-                        Box::new(MiddleErr::Object("gen".to_string())),
-                    ));
+            if let PotentialGenericTypeIdentifier::Generic { generic_types, .. } = &ident {
+                let resolved = env.resolve_to_data_type(scope, &ident)?;
+
+                let identifier = match resolved.unwrap_all_refs() {
+                    MirDataType::Struct { identifier, .. } => identifier.clone(),
+                    _ => {
+                        return Err(MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::Object(
+                                "generic type must be a struct".to_string(),
+                            )),
+                        ));
+                    }
+                };
+
+                let concrete_args: Vec<MirDataType> = generic_types
+                    .iter()
+                    .map(|gt| env.resolve_data_type(scope, gt, ResolutionOptions::typing()))
+                    .collect::<Result<_, _>>()?;
+
+                let original_type = MirDataType::Struct {
+                    identifier: identifier.clone(),
+                    generic_types: Vec::new(),
+                };
+
+                if let Ok(MirDataType::Struct { identifier, .. }) =
+                    env.monomorphize_type(scope, original_type, concrete_args)
+                {
+                    identifier
+                } else {
+                    identifier
+                }
+            } else {
+                let resolved = env.resolve_to_data_type(scope, &ident)?;
+
+                match resolved.unwrap_all_refs() {
+                    MirDataType::Struct { identifier, .. } => identifier.clone(),
+                    _ => {
+                        return Err(MiddleErr::At(
+                            span,
+                            Box::new(MiddleErr::CannotInferFromExpression(
+                                "struct type inference".to_string(),
+                            )),
+                        ));
+                    }
                 }
             }
         } else {

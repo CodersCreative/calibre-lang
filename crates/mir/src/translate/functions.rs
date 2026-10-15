@@ -899,38 +899,148 @@ impl MirLowering for AstCall {
                     .resolve(scope, &field, ResolutionOptions::default().with_dollar())?
                     .unwrap_dollar();
 
-                if let Some(ty) = base.type_of(env, scope, span)
-                    && let Some(x) = env
+                if let Some(ty) = base.type_of(env, scope, span) {
+                    if let Some((member, bindings)) =
+                        env.typing.find_impl_member_with_subst(&ty, field_name)
+                    {
+                        let symbol_name = member.symbol_name.clone();
+                        let generic_params = member.generic_params.clone();
+
+                        if member.has_method_generics
+                            || env
+                                .monomorphizer
+                                .generic_fn_templates
+                                .contains_key(&symbol_name)
+                        {
+                            let mut concrete_args = Vec::new();
+                            for param in &generic_params {
+                                if let Some(concrete) = bindings.get(param.as_str()) {
+                                    concrete_args.push(concrete.clone());
+                                } else {
+                                    concrete_args.push(MirDataType::Dynamic);
+                                }
+                            }
+
+                            let arg_types: Vec<_> = self
+                                .args
+                                .iter()
+                                .filter_map(|arg| {
+                                    if let CallArg::Value(node) = arg {
+                                        node.type_of(env, scope, span)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+
+                            let inferred = env.infer_concrete_type_args(
+                                scope,
+                                &generic_params,
+                                &[],
+                                &ty,
+                                arg_types.as_slice(),
+                                None,
+                            );
+
+                            if let Ok(inferred_types) = inferred {
+                                concrete_args = inferred_types;
+                            }
+
+                            let key = env.monomorphize_function(
+                                scope,
+                                symbol_name.clone(),
+                                concrete_args,
+                            )?;
+
+                            let base = if let Some(var) = env.symbols.variables.get(&key)
+                                && let MirDataType::Function { parameters, .. } = &var.data_type
+                                && let Some(MirDataType::Ref(_, mutability)) = parameters.first()
+                            {
+                                AstNode::new(
+                                    base.span,
+                                    AstNodeType::RefStatement(AstRef {
+                                        value: base.clone(),
+                                        mutability: *mutability,
+                                    }),
+                                )
+                            } else {
+                                *base
+                            };
+
+                            self.args.insert(0, CallArg::Value(base));
+
+                            return AstCall {
+                                string_fn: None,
+                                caller: Box::new(AstNode::identifier(
+                                    self.caller.span,
+                                    env.context.convert_key_to_ustr(Key::VariableKey(key)),
+                                )),
+                                ..self
+                            }
+                            .lower(env, scope, span, data_type);
+                        }
+
+                        let base = if let Some(var) = env.symbols.variables.get(&symbol_name)
+                            && let MirDataType::Function { parameters, .. } = &var.data_type
+                            && let Some(MirDataType::Ref(_, mutability)) = parameters.first()
+                        {
+                            AstNode::new(
+                                base.span,
+                                AstNodeType::RefStatement(AstRef {
+                                    value: base.clone(),
+                                    mutability: *mutability,
+                                }),
+                            )
+                        } else {
+                            *base
+                        };
+
+                        self.args.insert(0, CallArg::Value(base));
+
+                        return AstCall {
+                            string_fn: None,
+                            caller: Box::new(AstNode::identifier(
+                                self.caller.span,
+                                env.context
+                                    .convert_key_to_ustr(Key::VariableKey(symbol_name)),
+                            )),
+                            ..self
+                        }
+                        .lower(env, scope, span, data_type);
+                    }
+
+                    if let Some(x) = env
                         .typing
                         .find_impl_member(&ty, field_name)
                         .map(|x| x.symbol_name.clone())
-                {
-                    let base = if let Some(var) = env.symbols.variables.get(&x)
-                        && let MirDataType::Function { parameters, .. } = &var.data_type
-                        && let Some(MirDataType::Ref(_, mutability)) = parameters.first()
                     {
-                        AstNode::new(
-                            base.span,
-                            AstNodeType::RefStatement(AstRef {
-                                value: base,
-                                mutability: *mutability,
-                            }),
-                        )
-                    } else {
-                        *base
-                    };
+                        let base = if let Some(var) = env.symbols.variables.get(&x)
+                            && let MirDataType::Function { parameters, .. } = &var.data_type
+                            && let Some(MirDataType::Ref(_, mutability)) = parameters.first()
+                        {
+                            AstNode::new(
+                                base.span,
+                                AstNodeType::RefStatement(AstRef {
+                                    value: base.clone(),
+                                    mutability: *mutability,
+                                }),
+                            )
+                        } else {
+                            *base
+                        };
 
-                    self.args.insert(0, CallArg::Value(base));
+                        self.args.insert(0, CallArg::Value(base));
 
-                    return AstCall {
-                        string_fn: None,
-                        caller: Box::new(AstNode::identifier(
-                            self.caller.span,
-                            env.context.convert_key_to_ustr(Key::VariableKey(x)),
-                        )),
-                        ..self
+                        return AstCall {
+                            string_fn: None,
+                            caller: Box::new(AstNode::identifier(
+                                self.caller.span,
+                                env.context.convert_key_to_ustr(Key::VariableKey(x)),
+                            )),
+                            ..self
+                        }
+                        .lower(env, scope, span, data_type);
                     }
-                    .lower(env, scope, span, data_type);
                 }
 
                 if let Ok(resolved) = (AstField {

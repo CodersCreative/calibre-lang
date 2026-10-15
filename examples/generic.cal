@@ -1,7 +1,7 @@
 type SmthType:<T> := struct { value : T };
 
 const id := fn <T> (x : T) -> T => {
-	x;
+	return x;
 };
 
 const main := fn => {

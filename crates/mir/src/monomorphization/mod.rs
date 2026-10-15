@@ -322,8 +322,6 @@ impl MiddleEnvironment {
         Ok(key)
     }
 
-    // TODO Re-enable when type monomorphization is fully integrated
-    #[allow(dead_code)]
     pub(crate) fn add_type_template(
         &mut self,
         _scope: ScopeId,
@@ -380,7 +378,9 @@ impl MiddleEnvironment {
 
         true
     }
+}
 
+impl MiddleEnvironment {
     pub fn monomorphize_type_impls(
         &mut self,
         scope: ScopeId,

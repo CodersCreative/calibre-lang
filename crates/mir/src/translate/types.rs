@@ -115,7 +115,7 @@ impl MirLowering for AstType {
 
         let ident_ustr = *type_key.name();
 
-        let _generic_params = match self.identifier {
+        let generic_params = match self.identifier {
             PotentialGenericTypeIdentifier::Generic { generic_types, .. } => generic_types
                 .iter()
                 .map(|x| {
@@ -126,17 +126,17 @@ impl MirLowering for AstType {
             _ => Vec::new(),
         };
 
-        // TODO Re-enable type template registration when type monomorphization is fully working
-        // For now skip it to avoid breaking stdlib
-        /*env.add_type_template(
-            scope,
-            MirDataType::Struct {
-                identifier: type_key.clone(),
-                generic_types: Vec::new(),
-            },
-            _generic_params,
-            self.object.clone(),
-        );*/
+        if !generic_params.is_empty() {
+            env.add_type_template(
+                scope,
+                MirDataType::Struct {
+                    identifier: type_key.clone(),
+                    generic_types: Vec::new(),
+                },
+                generic_params.clone(),
+                self.object.clone(),
+            );
+        }
 
         let object = MiddleTypeDefType::from_type_def_type(env, scope, self.object.clone());
 
@@ -462,6 +462,27 @@ impl MirLowering for AstImpl {
             .unwrap_all_refs()
             .clone();
 
+        if !generic_params.is_empty()
+            && let MirDataType::Struct { identifier, .. } = &resolved
+        {
+            // TODO Probably add the generic types here
+            let key = MirDataType::Struct {
+                identifier: identifier.clone(),
+                generic_types: vec![],
+            };
+
+            if let Some(template) = env.monomorphizer.generic_type_templates.get_mut(&key) {
+                template.impls.push(AstNode::new(
+                    span,
+                    AstNodeType::ImplDeclaration(AstImpl {
+                        generics: self.generics.clone(),
+                        target: self.target.clone(),
+                        variables: self.variables.clone(),
+                    }),
+                ));
+            }
+        }
+
         let impl_key = Ustr::from(&resolved.to_string());
         let target_key = TypeImplKey::from(&resolved);
 
@@ -571,6 +592,16 @@ impl MirLowering for AstImpl {
                     Err(e) => return Some(Err(e)),
                 };
 
+                // TODO Try to deal with the function having its own generic params better
+                let func_template = if let AstNodeType::FunctionDeclaration(func) =
+                    &processed.node.node_type
+                    && !func.header.generics.0.is_empty()
+                {
+                    Some(processed.node.clone())
+                } else {
+                    None
+                };
+
                 let dec = processed.node.lower_or_empty(env, scope, span, None);
 
                 let new_name = match &dec.node_type {
@@ -591,14 +622,23 @@ impl MirLowering for AstImpl {
                     .get_mut(&target_key)
                     .and_then(|v| v.last_mut())
                 {
+                    let has_method_generics = func_template.is_some();
+
                     impl_ref.insert_member(
                         processed.identifier,
-                        MiddleImplMember::new(
-                            new_name.clone(),
-                            generic_params.clone(),
-                            processed.is_dependant,
-                        ),
+                        MiddleImplMember {
+                            symbol_name: new_name.clone(),
+                            generic_params: generic_params.clone(),
+                            dependant: processed.is_dependant,
+                            has_method_generics,
+                        },
                     );
+
+                    if let Some(AstNodeType::FunctionDeclaration(func)) =
+                        func_template.as_ref().map(|x| &x.node_type)
+                    {
+                        env.add_function_template(scope, new_name.clone(), func);
+                    }
                 }
 
                 Some(Ok(dec))

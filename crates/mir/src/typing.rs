@@ -210,6 +210,7 @@ pub struct MiddleImplMember {
     pub symbol_name: VariableKey,
     pub generic_params: Vec<Ustr>,
     pub dependant: bool,
+    pub has_method_generics: bool,
 }
 
 impl MiddleImplMember {
@@ -218,6 +219,7 @@ impl MiddleImplMember {
             symbol_name,
             generic_params,
             dependant,
+            has_method_generics: false,
         }
     }
 }
