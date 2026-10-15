@@ -130,9 +130,9 @@ impl Overload {
                     ));
                 }
 
-                if !self.header.return_type.is_result() {
+                if !self.header.return_type.is_result() && !self.header.return_type.is_gen() {
                     return Err(format!(
-                        "An `as` overload requires that the return type be an result (`Err!Ok`) not {}",
+                        "An `as` overload requires that the return type be an result (`Err!Ok`) or a generator (`gen:<T>`), not {}",
                         self.header.return_type,
                     ));
                 }

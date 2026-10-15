@@ -1,9 +1,7 @@
 @pure
-@overload("as") fn (self : str) -> null!gen:<char> =>
-	return ok(fn -> gen:<char> => {
-		for i in len(self) => 
-			return self[i]!;
-	})
+@overload("as") fn (self : str) -> gen:<char> =>
+	for i in len(self) => 
+		return self[i]!;
 
 impl str {
 	@pure

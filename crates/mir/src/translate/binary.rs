@@ -420,13 +420,27 @@ impl MirLowering for AstAs {
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let target = env.resolve_data_type(scope, &self.data_type, ResolutionOptions::typing())?;
+        let mut is_gen = false;
+
+        if let MirDataType::Struct { identifier, .. } = &target
+            && identifier.name() == "gen"
+        {
+            is_gen = true;
+            if self.failure_mode != AsFailureMode::Panic {
+                return Err(MiddleErr::At(
+                    span,
+                    Box::new(MiddleErr::Overload(
+                        "gen:<T> conversions must use `as!`, not `as` or `as?`".to_string(),
+                    )),
+                ));
+            }
+        }
 
         if env
             .handle_as_overload_exists(scope, *self.value.clone(), &target)
             .unwrap_or_default()
         {
             match &self.failure_mode {
-                AsFailureMode::Result => {}
                 AsFailureMode::Option => {
                     return AstNode {
                         node_type: AstNodeType::Try(AstTry {
@@ -445,7 +459,7 @@ impl MirLowering for AstAs {
                     }
                     .lower(env, scope, span, data_type);
                 }
-                AsFailureMode::Panic => {
+                AsFailureMode::Panic if !is_gen => {
                     return AstNode {
                         node_type: AstNodeType::Try(AstTry {
                             value: Box::new(AstNode {
@@ -463,6 +477,7 @@ impl MirLowering for AstAs {
                     }
                     .lower(env, scope, span, data_type);
                 }
+                AsFailureMode::Result | AsFailureMode::Panic => {}
             }
         }
 

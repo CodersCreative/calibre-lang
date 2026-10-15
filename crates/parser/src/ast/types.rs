@@ -77,6 +77,14 @@ impl ParserDataType {
         self.data_type.impl_name()
     }
 
+    pub fn is_result(&self) -> bool {
+        self.data_type.is_result()
+    }
+
+    pub fn is_gen(&self) -> bool {
+        self.data_type.is_gen()
+    }
+
     pub fn substitute(self, subst: &FxHashMap<String, ParserDataType>) -> ParserDataType {
         let span = self.span;
         let data_type = match self.data_type {
