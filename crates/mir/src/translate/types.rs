@@ -154,24 +154,28 @@ impl MirLowering for AstType {
             .ok()
             .map(|k| k.unwrap_typing());
 
-        env.typing.objects.insert(
-            type_key.clone(),
-            MiddleObject {
-                object_type: object.clone(),
-                variables: UstrMap::default(),
-                traits: if let Some(x) = default_ident
-                    && has_default
-                {
-                    vec![x]
-                } else {
-                    Vec::new()
+        if generic_params.is_empty() {
+            env.typing.objects.insert(
+                type_key.clone(),
+                MiddleObject {
+                    object_type: object.clone(),
+                    variables: UstrMap::default(),
+                    traits: if let Some(x) = default_ident
+                        && has_default
+                    {
+                        vec![x]
+                    } else {
+                        Vec::new()
+                    },
+                    location: env.context.current_location.clone(),
+                    scope,
                 },
-                location: env.context.current_location.clone(),
-                scope,
-            },
-        );
+            );
+        }
 
-        if let Some(x) = env.context.in_stdlib {
+        if let Some(x) = env.context.in_stdlib
+            && generic_params.is_empty()
+        {
             env.symbols.native_mappings.insert(
                 Ustr::from(&format!("{}.{}", x, ident_ustr)),
                 Key::TypeKey(type_key.clone()),
@@ -200,13 +204,13 @@ impl MirLowering for AstType {
 
         let identifier = ParserText::new(span, ident_ustr);
 
-        let default_node = if has_default {
+        let default_node = if has_default && generic_params.is_empty() {
             Some(env.generate_default_impl(scope, span, identifier.clone(), object.clone())?)
         } else {
             None
         };
 
-        let builder_nodes = if has_builder {
+        let builder_nodes = if has_builder && generic_params.is_empty() {
             Some(env.generate_builder(
                 scope,
                 span,
