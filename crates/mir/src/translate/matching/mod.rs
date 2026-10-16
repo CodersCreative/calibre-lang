@@ -4,11 +4,6 @@ pub mod guards;
 pub mod patterns;
 pub mod translator;
 
-pub use bindings::BindingExtractor;
-pub use exhaustiveness::{ExhaustivenessCheckerDispatcher, ExhaustivenessReport};
-pub use guards::GuardProcessor;
-pub use translator::PatternTranslatorDispatcher;
-
 use crate::{
     ast::{MiddleNode, types::MirDataType},
     environment::MiddleEnvironment,
@@ -18,6 +13,10 @@ use crate::{
     translate::MirLowering,
     typing::MiddleTypeDefType,
 };
+pub use bindings::BindingExtractor;
+pub use exhaustiveness::{ExhaustivenessCheckerDispatcher, ExhaustivenessReport};
+pub use guards::GuardProcessor;
+pub use translator::PatternTranslatorDispatcher;
 
 use calibre_parser::{
     Span,
@@ -142,24 +141,28 @@ impl MirLowering for AstMatch {
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut value_type = None;
-        let (decl, value) = if let Some(value) = self.value {
-            value_type = value.type_of(env, scope, span);
-            let tmp_name = env.context.get_temp("match_ident");
-            (
-                Some(AstNode::new(
-                    span,
-                    AstNodeType::VariableDeclaration(AstDeclaration {
-                        var_type: VarType::Mutable,
-                        identifier: PotentialDollarIdentifier::new(span, &tmp_name),
-                        data_type: ParserDataType::auto(span),
-                        value,
-                        declared: false,
-                    }),
-                )),
-                Some(AstNode::identifier(span, tmp_name)),
-            )
-        } else {
-            (None, None)
+        let (decl, value) = match self.value.map(|x| *x) {
+            Some(value) => match &value.node_type {
+                AstNodeType::Identifier(_) => (None, Some(value)),
+                _ => {
+                    value_type = value.type_of(env, scope, span);
+                    let tmp_name = env.context.get_temp("match_ident");
+                    (
+                        Some(AstNode::new(
+                            span,
+                            AstNodeType::VariableDeclaration(AstDeclaration {
+                                var_type: VarType::Mutable,
+                                identifier: PotentialDollarIdentifier::new(span, &tmp_name),
+                                data_type: ParserDataType::auto(span),
+                                value: Box::new(value),
+                                declared: false,
+                            }),
+                        )),
+                        Some(AstNode::identifier(span, tmp_name)),
+                    )
+                }
+            },
+            None => (None, None),
         };
 
         if let Some(ref _value_node) = value {

@@ -150,15 +150,22 @@ impl MiddleEnvironment {
                         .map(|x| x.as_str())
                         .collect::<Vec<_>>(),
                 ) && let Some(t) = x.return_type.unwrap_one_result()
-                    && t.matches(
+                {
+                    t.matches(
                         target,
                         &x.generic_params
                             .iter()
                             .map(|x| x.as_str())
                             .collect::<Vec<_>>(),
                     )
-                {
-                    true
+                } else if x.return_type.is_gen() {
+                    x.return_type.matches(
+                        target,
+                        &x.generic_params
+                            .iter()
+                            .map(|x| x.as_str())
+                            .collect::<Vec<_>>(),
+                    )
                 } else {
                     false
                 }

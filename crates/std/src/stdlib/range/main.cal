@@ -3,6 +3,14 @@
 	for i in self =>
 		return i;
 
+@pure
+@overload("as") fn (self : range) -> null!list:<int> =>
+	return ok(list:<int>[i for i in self]);
+
+@pure
+@overload("as") fn (self : range) -> null!list:<uint> =>
+	return ok(list:<int>[i for i in 0..len(self)]);
+
 impl range {
 	@pure
 	const len := fn (self : range) -> uint => return len(self);
@@ -22,10 +30,6 @@ impl range {
 		let e : int = len(self) as! int;
 		return (value >= s) && (value < e);
 	};
-
-	@pure
-	const to_list := fn (self : range) -> list:<int> =>
-		return list:<int>[i for i in self];
 
 	@pure
 	const sum := fn (self : range) -> int => {

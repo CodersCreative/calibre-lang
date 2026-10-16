@@ -3,19 +3,92 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
+    symbols::{VariableKey, resolve::ResolutionOptions},
     tags::TagInfo,
     translate::MirLowering,
 };
 use calibre_parser::{
     Span,
-    ast::nodes::{
-        AstNode, AstNodeType,
-        conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType},
-        functions::CallArg,
-        matching::{AstMatch, MatchArmType, MatchBody},
+    ast::{
+        comparison::BooleanOperator,
+        nodes::{
+            AstNode, AstNodeType,
+            conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType},
+            functions::CallArg,
+            matching::{AstMatch, MatchArmType, MatchBody},
+        },
     },
 };
+use rustc_hash::FxHashMap;
 use tracing::instrument;
+
+#[derive(Debug, Default)]
+pub struct TypeNarrowing {
+    variables: FxHashMap<VariableKey, MirDataType>,
+}
+
+impl From<FxHashMap<VariableKey, MirDataType>> for TypeNarrowing {
+    fn from(value: FxHashMap<VariableKey, MirDataType>) -> Self {
+        Self { variables: value }
+    }
+}
+
+impl TypeNarrowing {
+    fn analyze(
+        &mut self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        node: &AstNode,
+        negated: bool,
+    ) -> Result<(), MiddleErr> {
+        match &node.node_type {
+            AstNodeType::IsExpression(is_expr) => {
+                if let AstNodeType::Identifier(id) = &is_expr.value.node_type
+                    && let Ok(key) = env
+                        .resolve(scope, &id.value, ResolutionOptions::idents())
+                        .map(|x| x.unwrap_variable())
+                {
+                    let target_type = env.resolve_data_type(
+                        scope,
+                        &is_expr.data_type,
+                        ResolutionOptions::typing(),
+                    )?;
+
+                    if let Some(variable) = env.symbols.variables.get_mut(&key)
+                        && !negated
+                    {
+                        self.variables.insert(key, variable.data_type.clone());
+                        variable.data_type = target_type;
+                    }
+                }
+            }
+            AstNodeType::ParenExpression(x) => {
+                self.analyze(env, scope, &x.value, negated)?;
+            }
+            AstNodeType::NotExpression(x) => {
+                self.analyze(env, scope, &x.value, !negated)?;
+            }
+            AstNodeType::BooleanExpression(x) => match x.operator {
+                BooleanOperator::And => {
+                    self.analyze(env, scope, &x.left, negated)?;
+                    self.analyze(env, scope, &x.right, negated)?;
+                }
+                BooleanOperator::Or => {}
+            },
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    pub fn restore(self, env: &mut MiddleEnvironment) {
+        for (variable_key, original_type) in self.variables {
+            if let Some(variable) = env.symbols.variables.get_mut(&variable_key) {
+                variable.data_type = original_type;
+            }
+        }
+    }
+}
 
 impl MirLowering for AstIf {
     #[instrument(skip_all)]
@@ -42,25 +115,30 @@ impl MirLowering for AstIf {
         }
 
         match *self.comparison {
-            IfComparisonType::If(x) => Ok(MiddleNode {
-                node_type: MiddleNodeType::Conditional(MirConditional {
-                    comparison: Box::new(x.lower_or_empty(
-                        env,
-                        scope,
-                        span,
-                        Some(MirDataType::Bool),
-                    )),
-                    then: Box::new(
-                        self.then
-                            .lower_or_empty(env, scope, span, data_type.clone()),
-                    ),
-                    otherwise: self
-                        .otherwise
-                        .map(|x| Box::new(x.lower_or_empty(env, scope, span, data_type.clone()))),
-                    data_type,
-                }),
-                span,
-            }),
+            IfComparisonType::If(x) => {
+                let mut narrowing = TypeNarrowing::default();
+                narrowing.analyze(env, scope, &x, false)?;
+
+                let comparison = x.lower_or_empty(env, scope, span, Some(MirDataType::Bool));
+
+                let then = self
+                    .then
+                    .lower_or_empty(env, scope, span, data_type.clone());
+
+                narrowing.restore(env);
+
+                Ok(MiddleNode {
+                    node_type: MiddleNodeType::Conditional(MirConditional {
+                        comparison: Box::new(comparison),
+                        then: Box::new(then),
+                        otherwise: self.otherwise.map(|x| {
+                            Box::new(x.lower_or_empty(env, scope, span, data_type.clone()))
+                        }),
+                        data_type,
+                    }),
+                    span,
+                })
+            }
             IfComparisonType::IfLet { value, pattern } => AstNode {
                 node_type: AstNodeType::MatchStatement(AstMatch {
                     value: Some(Box::new(value)),

@@ -1,0 +1,95 @@
+type Wolf := struct {
+    name : str,
+    hunger : int,
+}
+
+impl Wolf {
+    const description := fn (self : Wolf) -> str => return "Wolf: " & self.name;
+}
+
+type Dog := struct {
+    name : str,
+    breed : str,
+}
+
+impl Dog {
+    const description := fn (self : Dog) -> str => return "Dog: " & self.name & " (" & self.breed & ")";
+}
+
+type Cat := struct {
+    name : str,
+    lives : int,
+}
+
+impl Cat {
+    const description := fn (self : Cat) -> str => return "Cat: " & self.name;
+}
+
+@current_context const main := fn => {
+    let wolf := Wolf { name: "Shadow", hunger: 5 };
+    let dog := Dog { name: "Buddy", breed: "Golden Retriever" };
+    let cat := Cat { name: "Whiskers", lives: 9 };
+
+    let mut animal : dyn = wolf;
+
+    match animal {
+        is Wolf => {
+            print("animal is a wolf!");
+            print(animal.description());
+            print(animal.name);
+            print(animal.hunger);
+        },
+        is Dog => {
+            print("animal is a dog!");
+            print(animal.description());
+            print(animal.name);
+            print(animal.breed);
+        },
+        is Cat => {
+            print("animal is a cat!");
+            print(animal.description());
+            print(animal.name);
+            print(animal.lives);
+        },
+        _ => print("Unknown animal")
+    };
+
+    animal := dog;
+    match animal {
+        is Wolf => {
+            print("This should not print");
+        },
+        is Dog => {
+            print("animal is a dog!");
+            print(animal.description());
+        },
+        _ => print("Unknown animal")
+    };
+
+    animal := cat;
+    match animal {
+        is Cat => {
+            print("animal is a cat!");
+            print(animal.description());
+        },
+        _ => print("Unknown animal")
+    };
+
+    animal := wolf;
+    if animal is Wolf => {
+        print("animal is a wolf!");
+        print(animal.description());
+    };
+
+    animal := wolf;
+    if !!(animal is Wolf) => {
+        print("animal is a wolf!");
+        print(animal.description());
+    };
+
+    animal := wolf;
+    if animal is Wolf && 0 < animal.hunger => {
+        print(animal.description());
+        print(animal.hunger);
+    }
+}

@@ -10,6 +10,7 @@ use crate::{
     scoping::ScopeId,
     translate::matching::exhaustiveness::{
         types::{
+            NormalExhaustivenessChecker,
             aggregate::{EnumExhaustivenessChecker, StructExhaustivenessChecker},
             bool::BoolExhaustivenessChecker,
             integer::IntegerExhaustivenessChecker,
@@ -101,11 +102,7 @@ impl ExhaustivenessCheckerDispatcher {
             }
             MirDataType::Tuple(_) => Box::new(TupleExhaustivenessChecker),
             MirDataType::List(_) => Box::new(ListExhaustivenessChecker),
-            _ => {
-                return Ok(ExhaustivenessReport::requires_wildcard(String::from(
-                    "add a `_` pattern",
-                )));
-            }
+            _ => Box::new(NormalExhaustivenessChecker),
         };
 
         let mut report = checker.check(env, scope, patterns, data_type)?;

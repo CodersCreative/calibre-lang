@@ -7,6 +7,13 @@ use calibre_parser::ast::{
 };
 use ustr::Ustr;
 
+pub mod enum_pattern;
+pub mod list_pattern;
+pub mod string_pattern;
+pub mod struct_pattern;
+pub mod tuple_pattern;
+pub mod value_pattern;
+
 #[derive(Debug, Clone)]
 pub struct PatternTranslation {
     pub condition: AstNode,
@@ -41,10 +48,3 @@ pub trait BindingExtractor {
         value: &AstNode,
     ) -> Vec<BindingDeclaration>;
 }
-
-pub mod enum_pattern;
-pub mod list_pattern;
-pub mod string_pattern;
-pub mod struct_pattern;
-pub mod tuple_pattern;
-pub mod value_pattern;
