@@ -1,68 +1,58 @@
-// TODO Fix - FAILING - Has Traits
-trait State {
-	const name : fn (&Self) -> str;
-
-	const on_input : fn (&Self, str) -> dyn:<State>;
-
-	const done : fn (&Self) -> bool;
-};
-
 type Locked := struct { attempts : int };
+
+@overload("as") fn(self : Locked) -> null!str => 
+	return ok("Locked[" & self.attempts & "]");
+
 type Unlocked := struct { };
+
+@overload("as") fn(self : Unlocked) -> null!str =>
+	return ok("Unlocked[]");
+
 type Alarm := struct { };
 
-impl Display for Locked {
-	const display := fn (self : &Locked) -> str => return "Locked[" & self.attempts & "]";
-};
+@overload("as") fn(self : Alarm) -> null!str =>
+	return ok("Alarm[]");
 
-impl Display for Unlocked {
-	const display := fn (_self : &Unlocked) -> str => return "Unlocked[]";
-};
-
-impl Display for Alarm {
-	const display := fn (_self : &Alarm) -> str => return "Alarm[]";
-};
-
-impl State for Locked {
+impl Locked {
 	const name := fn (self : &Locked) -> str => return "Locked(" & self.attempts & ")";
-
+	
 	const done := fn (_self : &Locked) -> bool => return false;
-
-	const on_input := fn (self : &Locked, input : str) -> dyn:<State> => {
-		if input = "1234" => {
-			return Unlocked { } as! dyn:<State>;
-		} else if self.attempts >= 2 => {
-			return Alarm { } as! dyn:<State>;
+	
+	const on_input := fn (self : &Locked, input : str) -> dyn => {
+		@ignore_invalid_comparison if input = "1234" => {
+			return Unlocked { };
+		} else if 2 <= self.attempts  => {
+			return Alarm { };
 		} else => {
-			return Locked { attempts : self.attempts + 1 } as! dyn:<State>;
+			return Locked { attempts : self.attempts + 1 };
 		};
 	};
 };
 
-impl State for Unlocked {
+impl Unlocked {
 	const name := fn (_self : &Unlocked) -> str => return "Unlocked";
-
+	
 	const done := fn (_self : &Unlocked) -> bool => return true;
-
-	const on_input := fn (_self : &Unlocked, input : str) -> dyn:<State> => {
+	
+	const on_input := fn (_self : &Unlocked, input : str) -> dyn => {
 		if input = "lock" => {
-			return Locked { attempts : 0 } as! dyn:<State>;
+			return Locked { attempts : 0 };
 		} else => {
-			return Unlocked { } as! dyn:<State>;
+			return Unlocked { };
 		};
 	};
 };
 
-impl State for Alarm {
+impl Alarm {
 	const name := fn (_self : &Alarm) -> str => return "Alarm";
-
+	
 	const done := fn (_self : &Alarm) -> bool => return true;
-
-	const on_input := fn (_self : &Alarm, input : str) -> dyn:<State> => {
+	
+	const on_input := fn (_self : &Alarm, input : str) -> dyn => {
 		if input = "reset" => {
-			return Locked { attempts : 0 } as! dyn:<State>;
+			return Locked { attempts : 0 };
 		} else => {
-			return Alarm { } as! dyn:<State>;
+			return Alarm { };
 		};
 	};
 };
@@ -76,7 +66,7 @@ const main := fn => {
 	print(Unlocked { }.name());
 	print(Alarm { }.name());
 	
-	let mut state : dyn:<State> = Locked { attempts : 0 };
+	let mut state : dyn = Locked { attempts : 0 };
 	let inputs := list:<str>[
 		"0000",
 		"1111",
@@ -86,13 +76,25 @@ const main := fn => {
 	];
 	
 	for input in inputs => {
-		print("state=" & state.name() & " input=" & input);
-		state := state.on_input(input);
-		
 		match state {
-			is Locked => print("Locked"),
-			is Unlocked => print("Unlocked"),
-			is Alarm => print("Alarm")
+			is Locked => {
+				print("state=" & state.name() & " input=" & input);
+				state := state.on_input(input);
+
+				print("Locked");
+			},
+			is Unlocked => {
+				print("state=" & state.name() & " input=" & input);
+				state := state.on_input(input);
+
+				print("Unlocked")
+			},
+			is Alarm => {
+				print("state=" & state.name() & " input=" & input);
+				state := state.on_input(input);
+
+				print("Alarm")
+			}
 		};
 	};
 };
