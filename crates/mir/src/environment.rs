@@ -344,6 +344,11 @@ impl MiddleEnvironment {
             .retain(|name, _| !rename_state.variables.contains_key(name));
 
         manifest
+            .symbols
+            .constants
+            .retain(|name, _| !rename_state.variables.contains_key(name));
+
+        manifest
             .typing
             .objects
             .retain(|name, _| !rename_state.types.contains_key(name));

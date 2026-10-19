@@ -1,7 +1,22 @@
 const TEN := 10;
+let mut TEN_MUT := 10;
+let TEN_LET := 10;
 
 const main := fn => {
+    // Should be swapped at compile time
     print(TEN);
     print(TEN);
-    print(TEN);
+
+    // Should be expanded at compile time
+    let ten_of_ten := [TEN for TEN];
+    print(ten_of_ten as! str);
+
+    // Should not be swapped at compile time (basically acts like static in Rust)
+    print(TEN_MUT);
+    
+    // Is potentially unsafe when async
+    TEN_MUT += 1;
+
+    print(TEN_MUT);
+    print(TEN_LET);
 }

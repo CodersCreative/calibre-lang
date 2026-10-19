@@ -7,6 +7,7 @@ use crate::{
     tags::{Tagging, context::PackageMetadata},
     typing::Typing,
 };
+use calibre_parser::ast::nodes::AstNode;
 use indextree::Arena;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -69,6 +70,7 @@ impl From<&Tagging> for ManifestTagging {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ManifestSymbols {
     pub variables: FxHashMap<VariableKey, MiddleVariable>,
+    pub constants: FxHashMap<VariableKey, AstNode>,
     pub native_mappings: UstrMap<Key>,
     pub overloads: Vec<MiddleOverload>,
     pub fn_specializations: UstrMap<Ustr>,
@@ -78,6 +80,7 @@ impl From<&Symbols> for ManifestSymbols {
     fn from(value: &Symbols) -> Self {
         Self {
             variables: value.variables.clone(),
+            constants: value.constants.clone(),
             native_mappings: value.native_mappings.clone(),
             overloads: value.overloads.clone(),
             fn_specializations: value.function_specializations.clone(),

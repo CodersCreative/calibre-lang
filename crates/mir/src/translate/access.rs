@@ -313,11 +313,15 @@ impl MirLowering for AstIdentifier {
                 KeyOrAstNode::Key(x) => {
                     let key = x.unwrap_variable();
 
-                    env.scoping
-                        .is_variable_moved(scope, &key)
-                        .map_err(|e| env.context.err_at_span(span, e))?;
+                    if let Some(x) = env.symbols.constants.get(&key) {
+                        return x.clone().lower(env, scope, span, data_type);
+                    } else {
+                        env.scoping
+                            .is_variable_moved(scope, &key)
+                            .map_err(|e| env.context.err_at_span(span, e))?;
 
-                    key
+                        key
+                    }
                 }
                 KeyOrAstNode::Node(x) => return x.lower(env, scope, span, data_type),
             },

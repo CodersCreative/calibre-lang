@@ -284,16 +284,20 @@ impl MirLowering for AstIter {
             }
         };
 
-        // Basically optimizing [...; ...] since I recently removed it and [... for ...] is the closest alternative
+        // Basically optimizing [...; ...] since I recently removed it and [... for _ in ...] is the closest alternative
         if self.conditionals.is_empty()
             && self.until.is_none()
             && !self.spawned
-            && let LoopType::While(condition) = *self.loop_type.clone()
-            && let AstNodeType::IntLiteral(times) = condition.node_type
+            && let LoopType::For(x, condition) = *self.loop_type.clone()
+            && x.text() == "_"
+            && let AstNodeType::IntLiteral(times) = env
+                .resolve_macro_constant_or_node(scope, condition)
+                .node_type
         {
             let map = self
                 .map
                 .lower(env, scope, span, Some(resolved_data_type.clone()))?;
+
             return Ok(MiddleNode {
                 node_type: MiddleNodeType::ListLiteral(MirList {
                     data_type: resolved_data_type,

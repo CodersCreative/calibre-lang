@@ -293,6 +293,35 @@ impl MirLowering for AstDeclaration {
             None
         };
 
+        if self.var_type == VarType::Constant && var_key.is_none() {
+            let var_key = {
+                let node_ty = self.value.type_of(env, scope, span).or(node_ty);
+
+                data_type = Some(env.compare_types(
+                    data_type,
+                    node_ty.clone(),
+                    Some(&TagInfo::IgnoreInvalidLet),
+                    span,
+                )?);
+
+                if self.declared {
+                    env.resolve(scope, identifier, ResolutionOptions::idents())?
+                        .unwrap_variable()
+                } else {
+                    env.register_variable(
+                        scope,
+                        identifier,
+                        data_type.clone().unwrap(),
+                        self.var_type,
+                    )?
+                }
+            };
+
+            env.symbols.constants.insert(var_key, *self.value);
+
+            return Ok(MiddleNode::new(MiddleNodeType::EmptyLine, span));
+        }
+
         let value = self
             .value
             .lower_or_empty(env, scope, span, data_type.clone());

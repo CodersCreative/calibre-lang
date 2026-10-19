@@ -3,7 +3,7 @@ use crate::{
     ast::{MiddleNode, types::MirDataType},
     environment::MiddleEnvironment,
     scoping::{FullyQualifiedPath, ScopeId},
-    symbols::resolve::{Key, ResolutionOptions},
+    symbols::resolve::{Key, KeyOrAstNode, ResolutionOptions},
     translate::MirLowering,
 };
 use calibre_parser::{
@@ -11,7 +11,7 @@ use calibre_parser::{
     ast::{
         Operator,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
-        nodes::{AstNode, VarType, functions::FunctionHeader},
+        nodes::{AstNode, AstNodeType, VarType, functions::FunctionHeader},
         types::{ParserDataType, ParserInnerType},
     },
 };
@@ -31,6 +31,8 @@ pub mod resolve;
 #[derive(Debug, Clone, Default)]
 pub struct Symbols {
     pub variables: FxHashMap<VariableKey, MiddleVariable>,
+    pub constants: FxHashMap<VariableKey, AstNode>,
+
     pub native_mappings: UstrMap<Key>,
     pub overloads: Vec<MiddleOverload>,
 
@@ -39,6 +41,39 @@ pub struct Symbols {
 
     pub function_specializations: UstrMap<Ustr>,
     pub function_defers: Vec<AstNode>,
+}
+
+impl MiddleEnvironment {
+    pub fn resolve_macro_constant_or_node(&mut self, scope: ScopeId, node: AstNode) -> AstNode {
+        match node.node_type {
+            AstNodeType::Identifier(ident) => {
+                match self.resolve_potential_node(scope, &ident.value, ResolutionOptions::idents())
+                {
+                    Ok(KeyOrAstNode::Key(x)) => {
+                        let key = x.unwrap_variable();
+
+                        if let Some(x) = self.symbols.constants.get(&key) {
+                            x.clone()
+                        } else {
+                            AstNode {
+                                span: node.span,
+                                node_type: AstNodeType::Identifier(ident),
+                            }
+                        }
+                    }
+                    Ok(KeyOrAstNode::Node(x)) => *x,
+                    _ => AstNode {
+                        span: node.span,
+                        node_type: AstNodeType::Identifier(ident),
+                    },
+                }
+            }
+            x => AstNode {
+                span: node.span,
+                node_type: x,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

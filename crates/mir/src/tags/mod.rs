@@ -89,9 +89,10 @@ impl MiddleEnvironment {
              scope: ScopeId,
              node: AstNode,
              data_type: Option<MirDataType>,
-             args: Vec<AstNode>| {
-                let priority = if let Some(AstNodeType::IntLiteral(val)) =
-                    args.first().map(|x| &x.node_type)
+             mut args: Vec<AstNode>| {
+                let priority = if let Some(AstNodeType::IntLiteral(val)) = args
+                    .pop()
+                    .map(|x| env.resolve_macro_constant_or_node(scope, x).node_type)
                 {
                     val.value.value as i32
                 } else {
@@ -191,9 +192,10 @@ impl MiddleEnvironment {
              scope: ScopeId,
              node: AstNode,
              data_type: Option<MirDataType>,
-             args: Vec<AstNode>| {
-                let priority = if let Some(AstNodeType::IntLiteral(val)) =
-                    args.first().map(|x| &x.node_type)
+             mut args: Vec<AstNode>| {
+                let priority = if let Some(AstNodeType::IntLiteral(val)) = args
+                    .pop()
+                    .map(|x| env.resolve_macro_constant_or_node(scope, x).node_type)
                 {
                     val.value.value as i32
                 } else {
@@ -621,7 +623,7 @@ impl MiddleEnvironment {
                 let mut params = Vec::new();
 
                 for arg in args {
-                    match arg.node_type {
+                    match env.resolve_macro_constant_or_node(scope, arg).node_type {
                         AstNodeType::Identifier(x) =>
                         {
                             #[allow(clippy::single_match)]
@@ -656,7 +658,7 @@ impl MiddleEnvironment {
                                     let CallArg::Value(x) = arg else {
                                         continue;
                                     };
-                                    match x.node_type {
+                                    match env.resolve_macro_constant_or_node(scope, x).node_type {
                                         AstNodeType::Identifier(x) => {
                                             params.push(Ustr::from(
                                                 x.value.get_ident().text().trim(),
