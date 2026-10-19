@@ -364,7 +364,6 @@ pub enum MiddleTypeDefType {
     },
     Struct(ObjectMap<(MirDataType, Option<Box<AstNode>>)>),
     NewType(MirDataType),
-    Trait,
 }
 
 impl Display for MiddleTypeDefType {
@@ -432,9 +431,6 @@ impl Display for MiddleTypeDefType {
             }
             MiddleTypeDefType::NewType(data_type) => {
                 write!(f, "type {}", data_type)
-            }
-            MiddleTypeDefType::Trait => {
-                write!(f, "trait")
             }
         }
     }

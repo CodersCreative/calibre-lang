@@ -333,7 +333,6 @@ impl MirRenamable for MiddleTypeDefType {
             MiddleTypeDefType::NewType(dt) => {
                 dt.rename(state);
             }
-            MiddleTypeDefType::Trait => {}
         }
     }
 }

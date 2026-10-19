@@ -7,7 +7,10 @@ use crate::{
     },
     environment::{LirFunction, LirGlobal, LirRegistry},
 };
-use calibre_mir::symbols::VariableKey;
+use calibre_mir::{
+    ast::types::MirDataType,
+    symbols::{TypeKey, VariableKey},
+};
 use rustc_hash::FxHashSet;
 
 enum WorkItem {
@@ -20,6 +23,7 @@ struct WorkList {
     stack: Vec<WorkItem>,
     seen_functions: FxHashSet<VariableKey>,
     seen_globals: FxHashSet<VariableKey>,
+    seen_types: FxHashSet<TypeKey>,
 }
 
 impl WorkList {
@@ -44,6 +48,14 @@ impl WorkList {
         self.seen_globals.insert(value.clone());
         self.stack.push(WorkItem::Global(value));
     }
+
+    pub fn push_type(&mut self, value: TypeKey) {
+        if self.seen_types.contains(&value) {
+            return;
+        }
+
+        self.seen_types.insert(value.clone());
+    }
 }
 
 impl LirRegistry {
@@ -52,7 +64,7 @@ impl LirRegistry {
         entry_points: Vec<VariableKey>,
         include_tests: bool,
     ) -> LirRegistry {
-        let (reachable_functions, reachable_globals) =
+        let (reachable_functions, reachable_globals, reachable_types) =
             self.collect_references(entry_points, include_tests);
 
         self.functions
@@ -61,6 +73,8 @@ impl LirRegistry {
         self.globals
             .retain(|name, _| reachable_globals.contains(name));
 
+        self.types.retain(|name, _| reachable_types.contains(name));
+
         self
     }
 
@@ -68,9 +82,14 @@ impl LirRegistry {
         &self,
         entry_points: Vec<VariableKey>,
         include_tests: bool,
-    ) -> (FxHashSet<VariableKey>, FxHashSet<VariableKey>) {
+    ) -> (
+        FxHashSet<VariableKey>,
+        FxHashSet<VariableKey>,
+        FxHashSet<TypeKey>,
+    ) {
         let mut reachable_functions = FxHashSet::default();
         let mut reachable_globals = FxHashSet::default();
+        let mut reachable_types = FxHashSet::default();
 
         for entry in entry_points.iter() {
             if self.functions.contains_key(entry) {
@@ -114,6 +133,7 @@ impl LirRegistry {
                             self,
                             &mut reachable_functions,
                             &mut reachable_globals,
+                            &mut reachable_types,
                             &mut worklist,
                         );
                     }
@@ -124,6 +144,7 @@ impl LirRegistry {
                             self,
                             &mut reachable_functions,
                             &mut reachable_globals,
+                            &mut reachable_types,
                             &mut worklist,
                         );
                     }
@@ -131,7 +152,7 @@ impl LirRegistry {
             }
         }
 
-        (reachable_functions, reachable_globals)
+        (reachable_functions, reachable_globals, reachable_types)
     }
 }
 
@@ -141,6 +162,7 @@ impl LirFunction {
         registry: &LirRegistry,
         reachable_functions: &mut FxHashSet<VariableKey>,
         reachable_globals: &mut FxHashSet<VariableKey>,
+        referenced_types: &mut FxHashSet<TypeKey>,
         worklist: &mut WorkList,
     ) {
         for block in self.blocks.iter().flatten() {
@@ -149,6 +171,7 @@ impl LirFunction {
                     registry,
                     reachable_functions,
                     reachable_globals,
+                    referenced_types,
                     worklist,
                 );
             }
@@ -158,6 +181,7 @@ impl LirFunction {
                     registry,
                     reachable_functions,
                     reachable_globals,
+                    referenced_types,
                     worklist,
                 );
             }
@@ -171,6 +195,7 @@ impl LirGlobal {
         registry: &LirRegistry,
         reachable_functions: &mut FxHashSet<VariableKey>,
         reachable_globals: &mut FxHashSet<VariableKey>,
+        referenced_types: &mut FxHashSet<TypeKey>,
         worklist: &mut WorkList,
     ) {
         for block in self.blocks.iter().flatten() {
@@ -179,6 +204,7 @@ impl LirGlobal {
                     registry,
                     reachable_functions,
                     reachable_globals,
+                    referenced_types,
                     worklist,
                 );
             }
@@ -188,6 +214,7 @@ impl LirGlobal {
                     registry,
                     reachable_functions,
                     reachable_globals,
+                    referenced_types,
                     worklist,
                 );
             }
@@ -201,6 +228,7 @@ impl LirNodeType {
         registry: &LirRegistry,
         reachable_functions: &mut FxHashSet<VariableKey>,
         reachable_globals: &mut FxHashSet<VariableKey>,
+        referenced_types: &mut FxHashSet<TypeKey>,
         worklist: &mut WorkList,
     ) {
         match self {
@@ -222,6 +250,7 @@ impl LirNodeType {
                     registry,
                     reachable_functions,
                     reachable_globals,
+                    referenced_types,
                     worklist,
                 );
 
@@ -230,6 +259,7 @@ impl LirNodeType {
                         registry,
                         reachable_functions,
                         reachable_globals,
+                        referenced_types,
                         worklist,
                     );
                 }
@@ -241,22 +271,36 @@ impl LirNodeType {
                     worklist.push_function(label.clone());
                 }
             }
-            LirNodeType::List(LirList { values, .. }) => {
+            LirNodeType::List(LirList { values, data_type }) => {
+                if let MirDataType::Struct { identifier, .. } = data_type
+                    && referenced_types.insert(identifier.clone())
+                {
+                    worklist.push_type(identifier.clone());
+                }
+
                 for element in values {
                     element.collect_references(
                         registry,
                         reachable_functions,
                         reachable_globals,
+                        referenced_types,
                         worklist,
                     );
                 }
             }
-            LirNodeType::Aggregate(LirAggregate { fields, .. }) => {
+            LirNodeType::Aggregate(LirAggregate { fields, name }) => {
+                if let Some(identifier) = name
+                    && referenced_types.insert(identifier.clone())
+                {
+                    worklist.push_type(identifier.clone());
+                }
+
                 for (_field_name, field) in &fields.0 {
                     field.collect_references(
                         registry,
                         reachable_functions,
                         reachable_globals,
+                        referenced_types,
                         worklist,
                     );
                 }
@@ -269,42 +313,76 @@ impl LirNodeType {
             | LirNodeType::Boolean(LirBoolean { left, right, .. })
             | LirNodeType::Comparison(LirComparison { left, right, .. })
             | LirNodeType::Binary(LirBinary { left, right, .. }) => {
-                left.collect_references(registry, reachable_functions, reachable_globals, worklist);
+                left.collect_references(
+                    registry,
+                    reachable_functions,
+                    reachable_globals,
+                    referenced_types,
+                    worklist,
+                );
 
                 right.collect_references(
                     registry,
                     reachable_functions,
                     reachable_globals,
+                    referenced_types,
                     worklist,
                 );
             }
 
             LirNodeType::Index(LirIndex { base, index }) => {
-                base.collect_references(registry, reachable_functions, reachable_globals, worklist);
+                base.collect_references(
+                    registry,
+                    reachable_functions,
+                    reachable_globals,
+                    referenced_types,
+                    worklist,
+                );
                 index.collect_references(
                     registry,
                     reachable_functions,
                     reachable_globals,
+                    referenced_types,
                     worklist,
                 );
             }
-            LirNodeType::Enum(LirEnum { payload, .. }) => {
+            LirNodeType::Enum(LirEnum { payload, name, .. }) => {
+                if let Some(identifier) = name
+                    && referenced_types.insert(identifier.clone())
+                {
+                    worklist.push_type(identifier.clone());
+                }
+
                 if let Some(payload) = payload {
                     payload.collect_references(
                         registry,
                         reachable_functions,
                         reachable_globals,
+                        referenced_types,
                         worklist,
                     );
                 }
             }
-            LirNodeType::As(LirAs { value, .. })
-            | LirNodeType::Declare(LirDeclare { value, .. })
-            | LirNodeType::Is(LirIs { value, .. }) => {
+            LirNodeType::As(LirAs {
+                value, data_type, ..
+            })
+            | LirNodeType::Declare(LirDeclare {
+                value, data_type, ..
+            })
+            | LirNodeType::Is(LirIs {
+                value, data_type, ..
+            }) => {
+                if let MirDataType::Struct { identifier, .. } = data_type
+                    && referenced_types.insert(identifier.clone())
+                {
+                    worklist.push_type(identifier.clone());
+                }
+
                 value.collect_references(
                     registry,
                     reachable_functions,
                     reachable_globals,
+                    referenced_types,
                     worklist,
                 );
             }
@@ -320,6 +398,7 @@ impl LirNodeType {
                     registry,
                     reachable_functions,
                     reachable_globals,
+                    referenced_types,
                     worklist,
                 );
             }
@@ -328,6 +407,7 @@ impl LirNodeType {
                     registry,
                     reachable_functions,
                     reachable_globals,
+                    referenced_types,
                     worklist,
                 );
 
@@ -336,6 +416,7 @@ impl LirNodeType {
                         registry,
                         reachable_functions,
                         reachable_globals,
+                        referenced_types,
                         worklist,
                     );
                 }
@@ -354,6 +435,7 @@ impl LirTerminator {
         registry: &LirRegistry,
         reachable_functions: &mut FxHashSet<VariableKey>,
         reachable_globals: &mut FxHashSet<VariableKey>,
+        referenced_types: &mut FxHashSet<TypeKey>,
         worklist: &mut WorkList,
     ) {
         match self {
@@ -363,6 +445,7 @@ impl LirTerminator {
                     registry,
                     reachable_functions,
                     reachable_globals,
+                    referenced_types,
                     worklist,
                 );
             }
@@ -372,6 +455,7 @@ impl LirTerminator {
                         registry,
                         reachable_functions,
                         reachable_globals,
+                        referenced_types,
                         worklist,
                     );
                 }

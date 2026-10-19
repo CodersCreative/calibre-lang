@@ -3,18 +3,39 @@ use calibre_mir::{
     ast::types::MirDataType,
     environment::MiddleEnvironment,
     scoping::{FullyQualifiedPath, ScopeId},
-    symbols::{VariableKey, resolve::Key},
+    symbols::{TypeKey, VariableKey, resolve::Key},
+    typing::MiddleTypeDefType,
 };
+use calibre_parser::ast::ObjectMap;
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use tracing::{debug, instrument};
 use ustr::{Ustr, UstrMap};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LirType {
+    Enum(Vec<(Ustr, Option<MirDataType>)>),
+    Struct(ObjectMap<MirDataType>),
+}
+
+impl<'a> From<&'a MiddleTypeDefType> for LirType {
+    fn from(value: &'a MiddleTypeDefType) -> Self {
+        match value {
+            MiddleTypeDefType::Enum { variants, .. } => Self::Enum(variants.clone()),
+            MiddleTypeDefType::Struct(x) => {
+                Self::Struct(ObjectMap(x.iter().map(|x| (x.0, x.1.0.clone())).collect()))
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LirRegistry {
     pub functions: FxHashMap<VariableKey, LirFunction>,
     pub globals: FxHashMap<VariableKey, LirGlobal>,
+    pub types: FxHashMap<TypeKey, LirType>,
     pub natives: UstrMap<Key>,
     pub scope_to_file: FxHashMap<ScopeId, Ustr>,
 }
@@ -137,6 +158,12 @@ impl<'a> LirEnvironment<'a> {
             env,
             last_ident: None,
             registry: LirRegistry {
+                types: env
+                    .typing
+                    .objects
+                    .iter()
+                    .map(|x| (x.0.clone(), LirType::from(&x.1.object_type)))
+                    .collect(),
                 functions: FxHashMap::default(),
                 globals: FxHashMap::default(),
                 natives: env.symbols.native_mappings.clone(),
