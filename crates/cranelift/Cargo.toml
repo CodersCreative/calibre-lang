@@ -1,0 +1,31 @@
+[package]
+name = "calibre-cranelift"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+authors.workspace = true
+description.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+license.workspace = true
+
+[dependencies]
+tracing = { workspace = true }
+calibre-lir = { workspace = true }
+calibre-mir = { workspace = true }
+calibre-parser = { workspace = true }
+thiserror = { workspace = true }
+rustc-hash = { workspace = true }
+serde = { workspace = true }
+ustr = { workspace = true }
+fastrand = { workspace = true }
+cranelift = "0"
+cranelift-module = "0"
+cranelift-native ="0"
+cranelift-object = "0"
+libc = "0"
+
+[lints]
+workspace = true
