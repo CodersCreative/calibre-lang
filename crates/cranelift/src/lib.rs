@@ -1,4 +1,7 @@
-use crate::layout::Layouts;
+use std::collections::VecDeque;
+
+use crate::layout::{Layout, Layouts};
+use calibre_lir::MirDataType;
 use calibre_lir::environment::LirRegistry;
 use cranelift::frontend::FunctionBuilderContext;
 use cranelift::prelude::*;
@@ -26,13 +29,52 @@ pub struct Compiler {
 
 impl From<LirRegistry> for Compiler {
     fn from(value: LirRegistry) -> Self {
-        // TODO Go through types in the LirRegistry and initialize them in the layouts
+        let mut layouts = Layouts::default();
+        let mut work_list = VecDeque::new();
+
+        for (key, lir_type) in &value.types {
+            if let Some(layout) = Layout::from_lir_type(&layouts, lir_type) {
+                layouts.layouts.insert(
+                    MirDataType::Struct {
+                        identifier: key.clone(),
+                        generic_types: Vec::new(),
+                    },
+                    layout,
+                );
+            } else {
+                work_list.push_back((key, lir_type));
+            }
+        }
+
+        let mut depth = 64;
+        while let Some((key, lir_type)) = work_list.pop_front()
+            && depth > 0
+        {
+            if let Some(layout) = Layout::from_lir_type(&layouts, lir_type) {
+                layouts.layouts.insert(
+                    MirDataType::Struct {
+                        identifier: key.clone(),
+                        generic_types: Vec::new(),
+                    },
+                    layout,
+                );
+            } else {
+                work_list.push_back((key, lir_type));
+            }
+
+            depth -= 1;
+        }
+
+        if work_list.is_empty() {
+            eprintln!("something went wrong...........");
+        }
+
         Self {
             builder_context: FunctionBuilderContext::new(),
             ctx: codegen::Context::new(),
             data_description: DataDescription::new(),
             lir_registry: value,
-            layouts: Layouts::default(),
+            layouts,
         }
     }
 }
