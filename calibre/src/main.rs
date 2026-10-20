@@ -117,6 +117,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 time,
                 profile,
                 profile_output,
+                backend,
             }) => {
                 RunBuilder::default()
                     .paths(paths)
@@ -129,6 +130,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .type_check(!no_type_check)
                     .readable(readable)
                     .time(time)
+                    .backend(backend)
                     .profiling(profile)
                     .profiling_output(profile_output)
                     .backtrace(args.backtrace)

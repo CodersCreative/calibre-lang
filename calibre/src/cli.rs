@@ -27,6 +27,14 @@ pub enum Verbosity {
     None,
 }
 
+#[derive(Debug, Default, Clone, Parser, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum Backend {
+    #[default]
+    Interpreter,
+    Jit,
+    Object,
+}
+
 impl Verbosity {
     pub fn is_level(&self, other: &Verbosity) -> bool {
         matches!(self, Verbosity::All) || self == other
@@ -69,6 +77,8 @@ pub enum Commands {
         example: Option<String>,
         #[arg(long)]
         verbosity: Option<Verbosity>,
+        #[arg(long)]
+        backend: Option<Backend>,
         #[arg(long, default_value_t = false)]
         no_cache: bool,
         #[arg(long, default_value_t = false)]

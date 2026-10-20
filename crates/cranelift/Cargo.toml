@@ -21,10 +21,11 @@ rustc-hash = { workspace = true }
 serde = { workspace = true }
 ustr = { workspace = true }
 fastrand = { workspace = true }
-cranelift = "0"
-cranelift-module = "0"
-cranelift-native ="0"
-cranelift-object = "0"
+cranelift = "0.123"
+cranelift-module = "0.123"
+cranelift-native = "0.123"
+cranelift-object = "0.123"
+cranelift-jit = "0.123"
 libc = "0"
 
 [lints]

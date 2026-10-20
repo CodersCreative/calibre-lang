@@ -1,94 +1,178 @@
-use std::collections::VecDeque;
-
-use crate::layout::{Layout, Layouts};
+use crate::layout::Layouts;
+use crate::translation::FunctionTranslator;
+use crate::values::CraneliftTypes;
 use calibre_lir::MirDataType;
 use calibre_lir::environment::LirRegistry;
+use calibre_mir::symbols::VariableKey;
 use cranelift::frontend::FunctionBuilderContext;
 use cranelift::prelude::*;
-use cranelift_module::DataDescription;
+use cranelift_jit::{JITBuilder, JITModule};
+use cranelift_module::{FuncId, Linkage, Module};
+use cranelift_object::{ObjectBuilder, ObjectModule};
+use rustc_hash::FxHashMap;
+use std::error::Error;
+use std::sync::Arc;
 
 pub mod layout;
+pub mod translation;
+pub mod values;
 
-pub struct Compiler {
-    /// The function builder context, which is reused across multiple
-    /// FunctionBuilder instances.
-    pub builder_context: FunctionBuilderContext,
-
-    /// The main Cranelift context, which holds the state for codegen.
-    pub ctx: codegen::Context,
-
-    /// The data description, which is to data objects what `ctx` is to functions.
-    pub data_description: DataDescription,
-
-    pub lir_registry: LirRegistry,
-
-    pub layouts: Layouts,
+pub struct CompilerData {
+    context: codegen::Context,
+    registry: LirRegistry,
+    builder_context: FunctionBuilderContext,
+    types: CraneliftTypes,
+    functions: FxHashMap<VariableKey, FuncId>,
+    layouts: Layouts,
 }
 
-const PRIMITIVE_TYPES: [MirDataType; 9] = [
-    MirDataType::Int,
-    MirDataType::UInt,
-    MirDataType::Byte,
-    MirDataType::Float,
-    MirDataType::Bool,
-    MirDataType::Char,
-    MirDataType::Str,
-    MirDataType::Range,
-    MirDataType::Dynamic,
-];
+fn create_target_isa() -> Result<Arc<dyn isa::TargetIsa>, Box<dyn Error>> {
+    let mut flag_builder = settings::builder();
+    flag_builder.set("use_colocated_libcalls", "false")?;
+    flag_builder.set("is_pic", "false")?;
 
-impl From<LirRegistry> for Compiler {
-    fn from(value: LirRegistry) -> Self {
-        let mut layouts = Layouts::default();
-        let mut work_list = VecDeque::new();
+    let isa_builder = cranelift_native::builder()
+        .map_err(|msg| format!("host machine is not supported: {msg}"))?;
+    let isa = isa_builder.finish(settings::Flags::new(flag_builder))?;
 
-        for data_type in &PRIMITIVE_TYPES {
-            layouts.ensure_layout(data_type);
-        }
+    Ok(isa)
+}
 
-        for (key, lir_type) in &value.types {
-            if let Some(layout) = Layout::from_lir_type(&layouts, lir_type) {
-                layouts.layouts.insert(
-                    MirDataType::Struct {
-                        identifier: key.clone(),
-                        generic_types: Vec::new(),
-                    },
-                    layout,
-                );
-            } else {
-                work_list.push_back((key, lir_type));
-            }
-        }
+impl CompilerData {
+    fn compile<M: Module>(&mut self, module: &mut M) -> Result<(), Box<dyn Error>> {
+        for (key, func) in &self.registry.functions {
+            let mut signature = module.make_signature();
 
-        let mut depth = 64;
-        while let Some((key, lir_type)) = work_list.pop_front()
-            && depth > 0
-        {
-            if let Some(layout) = Layout::from_lir_type(&layouts, lir_type) {
-                layouts.layouts.insert(
-                    MirDataType::Struct {
-                        identifier: key.clone(),
-                        generic_types: Vec::new(),
-                    },
-                    layout,
-                );
-            } else {
-                work_list.push_back((key, lir_type));
+            for (_, param_ty) in func.params.iter() {
+                signature
+                    .params
+                    .push(AbiParam::new(self.types.to_cranelift_type(param_ty)));
             }
 
-            depth -= 1;
+            if !func.return_type.is_null() && func.return_type != MirDataType::Never {
+                signature.returns.push(AbiParam::new(
+                    self.types.to_cranelift_type(&func.return_type),
+                ));
+            }
+
+            let symbol_name = key.to_string();
+            let function = module.declare_function(&symbol_name, Linkage::Export, &signature)?;
+            self.functions.insert(key.clone(), function);
         }
 
-        if !work_list.is_empty() {
-            eprintln!("Could not resolve layouts for {} types", work_list.len());
+        for (key, func) in self.registry.functions.clone() {
+            let Some(&function) = self.functions.get(&key) else {
+                continue;
+            };
+
+            self.context.func.signature.params.clear();
+            self.context.func.signature.returns.clear();
+
+            for (_, param_ty) in func.params.iter() {
+                self.context
+                    .func
+                    .signature
+                    .params
+                    .push(AbiParam::new(self.types.to_cranelift_type(param_ty)));
+            }
+
+            if !func.return_type.is_null() && func.return_type != MirDataType::Never {
+                self.context.func.signature.returns.push(AbiParam::new(
+                    self.types.to_cranelift_type(&func.return_type),
+                ));
+            }
+
+            {
+                let builder =
+                    FunctionBuilder::new(&mut self.context.func, &mut self.builder_context);
+                let translator =
+                    FunctionTranslator::new(builder, module, &self.types, &mut self.layouts);
+                translator.translate_function(func)?;
+            }
+
+            module.define_function(function, &mut self.context)?;
+            module.clear_context(&mut self.context);
         }
 
-        Self {
+        Ok(())
+    }
+}
+
+pub struct JitCompiler {
+    module: JITModule,
+    data: CompilerData,
+}
+
+impl JitCompiler {
+    pub fn new(registry: LirRegistry) -> Result<Self, Box<dyn Error>> {
+        let isa = create_target_isa()?;
+        let builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
+        let mut module = JITModule::new(builder);
+
+        let ptr_type = module.target_config().pointer_type();
+        let layouts = Layouts::new(Some(&registry), ptr_type.bits());
+
+        let ctx = module.make_context();
+
+        let mut data = CompilerData {
+            context: ctx,
             builder_context: FunctionBuilderContext::new(),
-            ctx: codegen::Context::new(),
-            data_description: DataDescription::new(),
-            lir_registry: value,
+            types: CraneliftTypes::new(ptr_type),
+            functions: FxHashMap::default(),
             layouts,
-        }
+            registry,
+        };
+
+        data.compile(&mut module)?;
+
+        module.finalize_definitions()?;
+
+        Ok(Self { module, data })
+    }
+
+    pub fn get_function(&self, key: &VariableKey) -> Option<*const u8> {
+        let func_id = self.data.functions.get(key)?;
+        Some(self.module.get_finalized_function(*func_id))
+    }
+}
+
+pub struct AotCompiler {
+    module: ObjectModule,
+    data: CompilerData,
+}
+
+impl AotCompiler {
+    pub fn new(module_name: &str, registry: LirRegistry) -> Result<Self, Box<dyn Error>> {
+        let isa = create_target_isa()?;
+        let builder = ObjectBuilder::new(
+            isa,
+            module_name.to_string(),
+            cranelift_module::default_libcall_names(),
+        )?;
+        let mut module = ObjectModule::new(builder);
+
+        let ptr_type = module.target_config().pointer_type();
+        let layouts = Layouts::new(Some(&registry), ptr_type.bits());
+
+        let context = module.make_context();
+
+        let mut data = CompilerData {
+            context,
+            builder_context: FunctionBuilderContext::new(),
+            types: CraneliftTypes::new(ptr_type),
+            functions: FxHashMap::default(),
+            layouts,
+            registry,
+        };
+
+        data.compile(&mut module)?;
+
+        Ok(Self { module, data })
+    }
+
+    pub fn finish(self) -> Result<Vec<u8>, Box<dyn Error>> {
+        let product = self.module.finish();
+        let bytes = product.emit()?;
+        Ok(bytes)
     }
 }

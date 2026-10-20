@@ -1,5 +1,22 @@
-use calibre_lir::{MirDataType, environment::LirType};
+use std::collections::VecDeque;
+
+use calibre_lir::{
+    MirDataType,
+    environment::{LirRegistry, LirType},
+};
 use rustc_hash::FxHashMap;
+
+const PRIMITIVE_TYPES: [MirDataType; 9] = [
+    MirDataType::Int,
+    MirDataType::UInt,
+    MirDataType::Byte,
+    MirDataType::Float,
+    MirDataType::Bool,
+    MirDataType::Char,
+    MirDataType::Str,
+    MirDataType::Range,
+    MirDataType::Dynamic,
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Layouts {
@@ -9,16 +26,63 @@ pub struct Layouts {
 
 impl Default for Layouts {
     fn default() -> Self {
-        Self::new(64)
+        Self::new(None, 64)
     }
 }
 
 impl Layouts {
-    pub fn new(pointer_bit_width: u32) -> Self {
-        Self {
+    pub fn new(registry: Option<&LirRegistry>, pointer_bit_width: u32) -> Self {
+        let mut layouts = Self {
             pointer_bit_width,
             layouts: FxHashMap::default(),
+        };
+
+        for data_type in &PRIMITIVE_TYPES {
+            layouts.ensure_layout(data_type);
         }
+
+        if let Some(registry) = registry {
+            let mut work_list = VecDeque::new();
+
+            for (key, lir_type) in &registry.types {
+                if let Some(layout) = Layout::from_lir_type(&layouts, lir_type) {
+                    layouts.layouts.insert(
+                        MirDataType::Struct {
+                            identifier: key.clone(),
+                            generic_types: Vec::new(),
+                        },
+                        layout,
+                    );
+                } else {
+                    work_list.push_back((key, lir_type));
+                }
+            }
+
+            let mut depth = 64;
+            while let Some((key, lir_type)) = work_list.pop_front()
+                && depth > 0
+            {
+                if let Some(layout) = Layout::from_lir_type(&layouts, lir_type) {
+                    layouts.layouts.insert(
+                        MirDataType::Struct {
+                            identifier: key.clone(),
+                            generic_types: Vec::new(),
+                        },
+                        layout,
+                    );
+                } else {
+                    work_list.push_back((key, lir_type));
+                }
+
+                depth -= 1;
+            }
+
+            if !work_list.is_empty() {
+                eprintln!("Could not resolve layouts for {} types", work_list.len());
+            }
+        }
+
+        layouts
     }
 
     #[inline(always)]

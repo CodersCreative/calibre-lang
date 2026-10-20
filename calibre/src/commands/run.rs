@@ -1,4 +1,4 @@
-use crate::cli::Verbosity;
+use crate::cli::{Backend, Verbosity};
 use crate::commands::repl::{Repl, ReplBuilder};
 use crate::commands::utils::{is_repl_file, package_metadata_from_project};
 use calibre::PackagedProgramBlob;
@@ -19,6 +19,7 @@ pub struct Run {
     paths: Vec<String>,
     example: Option<String>,
     verbosity: Option<Verbosity>,
+    backend: Option<Backend>,
     no_std: Option<bool>,
     parallel: bool,
     program_args: Vec<String>,
@@ -75,6 +76,7 @@ impl Run {
             run.no_std(self.no_std);
             run.cache(self.cache_enabled);
             run.verbosity(self.verbosity.clone().unwrap_or_default());
+            run.backend(self.backend.clone().unwrap_or_default());
             run.program_args(self.program_args.clone());
             run.type_check(self.type_check);
             run.readable(self.readable);
@@ -115,6 +117,7 @@ struct RunSource {
     path: PathBuf,
     cache: bool,
     verbosity: Verbosity,
+    backend: Backend,
     program_args: Vec<String>,
     entry_name: Option<String>,
     vm_config: VMConfig,
@@ -273,6 +276,83 @@ impl RunSource {
             println!("Bytecode : ");
             println!("{}", vm.registry.as_ref());
         };
+
+        match self.backend {
+            #[cfg(feature = "cranelift")]
+            Backend::Jit => {
+                use calibre_cranelift::JitCompiler;
+
+                let jit_begin = start.elapsed();
+                let Some(lir) = artifacts.lir else {
+                    return Err("LIR artifacts not available for Cranelift JIT backend".into());
+                };
+
+                let jit = JitCompiler::new(lir.data)?;
+
+                if self.time {
+                    println!(
+                        "Cranelift JIT - elapsed {}ms",
+                        (start.elapsed() - jit_begin).as_millis()
+                    );
+                }
+
+                let mut ran = false;
+                for (_, func_name) in &artifacts.init_functions {
+                    if let Some(code_ptr) = jit.get_function(func_name) {
+                        let func: extern "C" fn() = unsafe { std::mem::transmute(code_ptr) };
+                        func();
+                        ran = true;
+                    }
+                }
+
+                if !ran {
+                    return Err(format!("Missing entry point in JIT: {}", entry_name).into());
+                }
+
+                for (_, func_name) in &artifacts.fin_functions {
+                    if let Some(code_ptr) = jit.get_function(func_name) {
+                        let func: extern "C" fn() = unsafe { std::mem::transmute(code_ptr) };
+                        func();
+                    }
+                }
+
+                if self.time {
+                    println!("Finished - elapsed {}ms", start.elapsed().as_millis());
+                }
+
+                return Ok(());
+            }
+            #[cfg(not(feature = "cranelift"))]
+            Backend::Jit => {
+                return Err(
+                    "Calibre was compiled without the 'cranelift' feature. Cannot use JIT backend."
+                        .into(),
+                );
+            }
+            #[cfg(feature = "cranelift")]
+            Backend::Object => {
+                use calibre_cranelift::AotCompiler;
+
+                let Some(lir) = artifacts.lir else {
+                    return Err("LIR artifacts not available for Cranelift Object backend".into());
+                };
+
+                let aot = AotCompiler::new(&entry_name.to_string(), lir.data)?;
+                let obj = aot.finish()?;
+
+                let out_path = PathBuf::from(format!("{}.o", entry_name));
+
+                fs::write(&out_path, &obj).await?;
+                println!("Object file written to {}", out_path.display());
+
+                return Ok(());
+            }
+            #[cfg(not(feature = "cranelift"))]
+            Backend::Object => {
+                return Err("Calibre was compiled without the 'cranelift' feature. Cannot use Object backend.".into());
+            }
+            Backend::Interpreter => {}
+        }
 
         let vm_begin = start.elapsed();
 
