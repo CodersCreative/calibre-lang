@@ -544,7 +544,6 @@ impl CalibreLanguageServer {
                             MiddleTypeDefType::Struct(_) => CompletionItemKind::STRUCT,
                             MiddleTypeDefType::Enum { .. } => CompletionItemKind::ENUM,
                             MiddleTypeDefType::NewType(_) => CompletionItemKind::TYPE_PARAMETER,
-                            MiddleTypeDefType::Trait => CompletionItemKind::INTERFACE,
                         },
                     )
                 } else {
@@ -643,7 +642,6 @@ impl CalibreLanguageServer {
                 MiddleTypeDefType::Struct(_) => CompletionItemKind::STRUCT,
                 MiddleTypeDefType::Enum { .. } => CompletionItemKind::ENUM,
                 MiddleTypeDefType::NewType(_) => CompletionItemKind::TYPE_PARAMETER,
-                MiddleTypeDefType::Trait => CompletionItemKind::INTERFACE,
             };
 
             out.entry(display_name.clone()).or_insert(CompletionItem {
