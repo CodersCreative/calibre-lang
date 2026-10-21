@@ -16,6 +16,7 @@ tracing = { workspace = true }
 calibre-lir = { workspace = true }
 calibre-mir = { workspace = true }
 calibre-parser = { workspace = true }
+calibre-runtime = { workspace = true }
 thiserror = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }

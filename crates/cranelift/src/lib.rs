@@ -4,6 +4,7 @@ use crate::values::CraneliftTypes;
 use calibre_lir::MirDataType;
 use calibre_lir::environment::LirRegistry;
 use calibre_mir::symbols::VariableKey;
+use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::FunctionBuilderContext;
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
@@ -40,6 +41,13 @@ fn create_target_isa() -> Result<Arc<dyn isa::TargetIsa>, Box<dyn Error>> {
 
 impl CompilerData {
     fn compile<M: Module>(&mut self, module: &mut M) -> Result<(), Box<dyn Error>> {
+        for symbol in calibre_runtime::get_runtime_symbols() {
+            let mut sig = module.make_signature();
+            sig.call_conv = CallConv::SystemV;
+
+            let _ = module.declare_function(symbol.name, Linkage::Import, &sig)?;
+        }
+
         for (key, func) in &self.registry.functions {
             let mut signature = module.make_signature();
 
@@ -106,7 +114,12 @@ pub struct JitCompiler {
 impl JitCompiler {
     pub fn new(registry: LirRegistry) -> Result<Self, Box<dyn Error>> {
         let isa = create_target_isa()?;
-        let builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
+        let mut builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
+
+        for sym in calibre_runtime::get_runtime_symbols() {
+            builder.symbol(sym.name, sym.ptr);
+        }
+
         let mut module = JITModule::new(builder);
 
         let ptr_type = module.target_config().pointer_type();
@@ -144,11 +157,13 @@ pub struct AotCompiler {
 impl AotCompiler {
     pub fn new(module_name: &str, registry: LirRegistry) -> Result<Self, Box<dyn Error>> {
         let isa = create_target_isa()?;
+
         let builder = ObjectBuilder::new(
             isa,
             module_name.to_string(),
             cranelift_module::default_libcall_names(),
         )?;
+
         let mut module = ObjectModule::new(builder);
 
         let ptr_type = module.target_config().pointer_type();

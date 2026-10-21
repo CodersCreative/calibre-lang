@@ -471,6 +471,7 @@ dependencies = [
  "calibre-lir",
  "calibre-mir",
  "calibre-parser",
+ "calibre-runtime",
  "cranelift",
  "cranelift-jit",
  "cranelift-module",

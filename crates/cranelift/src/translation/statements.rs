@@ -32,7 +32,7 @@ impl CraneliftTranslation for LirAssign {
         translator: &mut FunctionTranslator<'a, M>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         let value = self.value.translate(translator)?;
-        
+
         match self.dest {
             LirLValue::Var(key) => {
                 let name = key.to_string();
