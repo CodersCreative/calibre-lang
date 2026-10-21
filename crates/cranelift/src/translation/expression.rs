@@ -4,9 +4,12 @@ use crate::{
 };
 use calibre_lir::{
     MirDataType,
-    ast::{LirBinary, LirComparison},
+    ast::{LirAs, LirBinary, LirBoolean, LirComparison, LirIs},
 };
-use calibre_parser::ast::{binary::BinaryOperator, comparison::ComparisonOperator};
+use calibre_parser::ast::{
+    binary::BinaryOperator,
+    comparison::{BooleanOperator, ComparisonOperator},
+};
 use cranelift::codegen::ir::{
     InstBuilder,
     condcodes::{FloatCC, IntCC},
@@ -225,5 +228,73 @@ impl CraneliftTranslation for LirBinary {
                 },
             ))
         }
+    }
+}
+
+impl CraneliftTranslation for LirBoolean {
+    fn translate<'a, M: Module>(
+        self,
+        translator: &mut FunctionTranslator<'a, M>,
+    ) -> Result<CompiledValue, Box<dyn Error>> {
+        let left = self.left.translate(translator)?;
+        let right = self.right.translate(translator)?;
+
+        let value = match self.operator {
+            BooleanOperator::And => translator.builder.ins().band(left.value, right.value),
+            BooleanOperator::Or => translator.builder.ins().bor(left.value, right.value),
+        };
+
+        Ok(CompiledValue::new(value, MirDataType::Bool))
+    }
+}
+
+impl CraneliftTranslation for LirAs {
+    fn translate<'a, M: Module>(
+        self,
+        translator: &mut FunctionTranslator<'a, M>,
+    ) -> Result<CompiledValue, Box<dyn Error>> {
+        let value = self.value.translate(translator)?;
+        let target = translator.types.to_cranelift_type(&self.data_type);
+
+        let value = match (value.data_type, &self.data_type) {
+            (MirDataType::Int, MirDataType::Float) => {
+                translator.builder.ins().fcvt_from_sint(target, value.value)
+            }
+            (MirDataType::UInt, MirDataType::Float) => {
+                translator.builder.ins().fcvt_from_uint(target, value.value)
+            }
+            (MirDataType::Float, MirDataType::Int) => {
+                translator.builder.ins().fcvt_to_sint(target, value.value)
+            }
+            (MirDataType::Float, MirDataType::UInt) => {
+                translator.builder.ins().fcvt_to_uint(target, value.value)
+            }
+            _ => {
+                // TODO Use the runtime to check every other type
+                value.value
+            }
+        };
+
+        Ok(CompiledValue::new(value, self.data_type))
+    }
+}
+
+impl CraneliftTranslation for LirIs {
+    fn translate<'a, M: Module>(
+        self,
+        translator: &mut FunctionTranslator<'a, M>,
+    ) -> Result<CompiledValue, Box<dyn Error>> {
+        // TODO Handle dynamics this only works for compile time known types right now
+        let value = self.value.translate(translator)?;
+        let value = translator.builder.ins().iconst(
+            translator.types.bool(),
+            if value.data_type.loose_eq(&self.data_type) {
+                1
+            } else {
+                0
+            },
+        );
+
+        Ok(CompiledValue::new(value, MirDataType::Bool))
     }
 }

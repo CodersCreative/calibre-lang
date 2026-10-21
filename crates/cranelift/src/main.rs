@@ -26,8 +26,7 @@ const calc := fn (x : int) -> int => {
 };
 
 const main := fn (x : int) -> int => {
-    calibre_assert_ints(3, 2);
-    let result := calc(x);
+    let result := calc(x) if x is int else calc(x+1);
     return result;
 };
 "#;

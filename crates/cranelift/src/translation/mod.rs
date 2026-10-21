@@ -10,6 +10,7 @@ use cranelift_module::Module;
 use rustc_hash::FxHashMap;
 use std::error::Error;
 
+pub mod access;
 pub mod expression;
 pub mod functions;
 pub mod literals;
@@ -207,6 +208,15 @@ impl CraneliftTranslation for LirNodeType {
             LirNodeType::Binary(x) => x.translate(translator),
             LirNodeType::Comparison(x) => x.translate(translator),
             LirNodeType::Call(x) => x.translate(translator),
+            LirNodeType::Boolean(x) => x.translate(translator),
+            LirNodeType::As(x) => x.translate(translator),
+            LirNodeType::Is(x) => x.translate(translator),
+            LirNodeType::Ref(x) => x.translate(translator),
+            LirNodeType::RefLoad(x) => x.translate(translator),
+            LirNodeType::Deref(x) => x.translate(translator),
+            LirNodeType::Discriminant(x) => x.translate(translator),
+            LirNodeType::Move(x) => x.translate(translator),
+            LirNodeType::Drop(x) => x.translate(translator),
             _ => {
                 unimplemented!()
             }
