@@ -31,7 +31,7 @@ impl CraneliftTranslation for LirLoad {
                 .builder
                 .ins()
                 .load(cl_type, MemFlags::new(), addr, 0);
-            
+
             Ok(CompiledValue::new(value, data_type.clone()))
         } else {
             Err(format!("Unable to find variable: {}", self.value).into())

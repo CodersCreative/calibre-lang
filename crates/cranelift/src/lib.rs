@@ -1,9 +1,13 @@
 use crate::layout::Layouts;
 use crate::translation::FunctionTranslator;
 use crate::values::CraneliftTypes;
-use calibre_lir::MirDataType;
-use calibre_lir::environment::LirRegistry;
+use calibre_lir::ast::{
+    BlockId, LirAssign, LirBlock, LirLValue, LirNode, LirNodeType, LirTerminator,
+};
+use calibre_lir::environment::{LirFunction, LirRegistry};
+use calibre_lir::{FullyQualifiedPath, MirDataType};
 use calibre_mir::symbols::VariableKey;
+use calibre_parser::Span;
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::FunctionBuilderContext;
 use cranelift::prelude::*;
@@ -23,7 +27,7 @@ pub type Functions = FxHashMap<VariableKey, FuncId>;
 
 pub struct CompilerData {
     context: codegen::Context,
-    registry: LirRegistry,
+    pub registry: LirRegistry,
     builder_context: FunctionBuilderContext,
     types: CraneliftTypes,
     functions: Functions,
@@ -48,20 +52,82 @@ impl CompilerData {
         for symbol in calibre_runtime::get_runtime_symbols() {
             let mut sig = module.make_signature();
             sig.call_conv = CallConv::SystemV;
-
             let _ = module.declare_function(symbol.name, Linkage::Import, &sig)?;
         }
 
+        let mut blocks: Vec<Option<LirBlock>> = Vec::new();
+        let mut block_id = 0;
+
         for (key, global) in &self.registry.globals {
-            let data_id =
-                module.declare_data(&key.to_string(), Linkage::Export, global.mutable, false)?;
+            let mut transformed_blocks = Vec::with_capacity(global.blocks.len());
+
+            for block in global.blocks.iter().flatten() {
+                let mut block = block.clone();
+                block.id = BlockId(block_id);
+                block_id += 1;
+
+                block.instructions = block
+                    .instructions
+                    .into_iter()
+                    .map(|instr| match instr.node_type {
+                        LirNodeType::Declare(decl) if decl.dest == *key => LirNode::new(
+                            instr.span,
+                            LirNodeType::Assign(LirAssign {
+                                dest: LirLValue::Var(decl.dest.clone()),
+                                value: decl.value.clone(),
+                            }),
+                        ),
+                        _ => instr,
+                    })
+                    .collect();
+
+                blocks.push(Some(block.clone()));
+                transformed_blocks.push(Some(block));
+            }
+        }
+
+        if !blocks.is_empty() {
+            if let Some(Some(block)) = blocks.last_mut() {
+                block.terminator = Some(LirTerminator::Return {
+                    span: Span::default(),
+                    value: None,
+                });
+            }
+
+            let name = VariableKey {
+                fully_qualified_path: FullyQualifiedPath::combine(
+                    None,
+                    ustr::Ustr::from("__init_globals"),
+                ),
+                shadow_counter: None,
+            };
+
+            let func = LirFunction {
+                name: name.clone(),
+                params: Box::default(),
+                captures: Box::default(),
+                return_type: MirDataType::Null,
+                blocks: blocks.into_boxed_slice(),
+                pure: false,
+                memo: false,
+                referenced_params: 0,
+                memo_params: 0,
+            };
+
+            self.registry.functions.insert(name, func);
+        }
+
+        for (key, global) in &self.registry.globals {
+            let data_id = module.declare_data(&key.to_string(), Linkage::Export, true, false)?;
 
             self.globals
                 .insert(key.clone(), (global.data_type.clone(), data_id));
 
-            let mut data = DataDescription::new();
-            data.define_zeroinit(8);
-            module.define_data(data_id, &data)?;
+            if let Some(layout) = self.layouts.get_layout(&global.data_type) {
+                let mut data = DataDescription::new();
+                data.define_zeroinit(layout.size as usize);
+                module.define_data(data_id, &data)?;
+            }
         }
 
         for (key, func) in &self.registry.functions {
@@ -133,7 +199,7 @@ impl CompilerData {
 
 pub struct JitCompiler {
     module: JITModule,
-    data: CompilerData,
+    pub data: CompilerData,
 }
 
 impl JitCompiler {

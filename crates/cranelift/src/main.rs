@@ -10,7 +10,7 @@ use calibre_parser::Parser;
 use std::{fmt::Debug, path::PathBuf, str::FromStr};
 
 const BASIC_CODE: &str = r#"
-const sixty : int = 60;
+let sixty : int = 60;
 
 const add := fn (a : int, b : int) -> int => {
     return a + b;
@@ -44,11 +44,6 @@ fn parse(text: String) -> (LirRegistry, MiddleEnvironment) {
     println!("Lowering to LIR...");
     let lir_result = LirEnvironment::lower(&env, middle);
 
-    println!("LIR functions:");
-    for (name, func) in &lir_result.functions {
-        println!("\t{} : {}", name, func);
-    }
-
     println!("Starting JIT...");
     (lir_result, env)
 }
@@ -63,6 +58,19 @@ fn run<I, T: Debug>(input: I) {
             return;
         }
     };
+
+    if let Some(init_key) = jit
+        .data
+        .registry
+        .functions
+        .keys()
+        .find(|k| k.name() == "__init_globals")
+        .cloned()
+        && let Some(init_code_ptr) = jit.get_function(&init_key)
+    {
+        let init_fn = unsafe { std::mem::transmute::<*const u8, extern "C" fn()>(init_code_ptr) };
+        init_fn();
+    }
 
     let main_ptr = env
         .symbols
