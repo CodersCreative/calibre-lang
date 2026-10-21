@@ -12,7 +12,6 @@ impl CraneliftTranslation for LirDeclare {
         translator: &mut FunctionTranslator<'a, M>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         let value = self.value.translate(translator)?;
-        let name = self.dest.to_string();
 
         let ty = translator.types.to_cranelift_type(&self.data_type);
         let var = translator.builder.declare_var(ty);
@@ -20,7 +19,7 @@ impl CraneliftTranslation for LirDeclare {
         translator.builder.def_var(var, value.value);
         translator
             .variables
-            .insert(name, (self.data_type.clone(), var));
+            .insert(self.dest, (self.data_type.clone(), var));
 
         Ok(value)
     }
@@ -35,13 +34,11 @@ impl CraneliftTranslation for LirAssign {
 
         match self.dest {
             LirLValue::Var(key) => {
-                let name = key.to_string();
-
-                if let Some((_, var)) = translator.variables.get(&name) {
+                if let Some((_, var)) = translator.variables.get(&key) {
                     translator.builder.def_var(*var, value.value);
                     Ok(value)
                 } else {
-                    Err(format!("Unable to find variable: {name}").into())
+                    Err(format!("Unable to find variable: {key}").into())
                 }
             }
             LirLValue::Ptr(_) => {

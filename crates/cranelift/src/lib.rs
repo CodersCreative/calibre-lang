@@ -8,7 +8,7 @@ use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::FunctionBuilderContext;
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{FuncId, Linkage, Module};
+use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 use rustc_hash::FxHashMap;
 use std::error::Error;
@@ -18,12 +18,16 @@ pub mod layout;
 pub mod translation;
 pub mod values;
 
+pub type Globals = FxHashMap<VariableKey, (MirDataType, DataId)>;
+pub type Functions = FxHashMap<VariableKey, FuncId>;
+
 pub struct CompilerData {
     context: codegen::Context,
     registry: LirRegistry,
     builder_context: FunctionBuilderContext,
     types: CraneliftTypes,
-    functions: FxHashMap<VariableKey, FuncId>,
+    functions: Functions,
+    globals: Globals,
     layouts: Layouts,
 }
 
@@ -46,6 +50,18 @@ impl CompilerData {
             sig.call_conv = CallConv::SystemV;
 
             let _ = module.declare_function(symbol.name, Linkage::Import, &sig)?;
+        }
+
+        for (key, global) in &self.registry.globals {
+            let data_id =
+                module.declare_data(&key.to_string(), Linkage::Export, global.mutable, false)?;
+
+            self.globals
+                .insert(key.clone(), (global.data_type.clone(), data_id));
+
+            let mut data = DataDescription::new();
+            data.define_zeroinit(8);
+            module.define_data(data_id, &data)?;
         }
 
         for (key, func) in &self.registry.functions {
@@ -93,8 +109,17 @@ impl CompilerData {
             {
                 let builder =
                     FunctionBuilder::new(&mut self.context.func, &mut self.builder_context);
-                let translator =
-                    FunctionTranslator::new(builder, module, &self.types, &mut self.layouts);
+
+                let translator = FunctionTranslator::new(
+                    builder,
+                    module,
+                    &self.registry,
+                    &self.types,
+                    &mut self.layouts,
+                    &self.globals,
+                    &self.functions,
+                );
+
                 translator.translate_function(func)?;
             }
 
@@ -132,6 +157,7 @@ impl JitCompiler {
             builder_context: FunctionBuilderContext::new(),
             types: CraneliftTypes::new(ptr_type),
             functions: FxHashMap::default(),
+            globals: FxHashMap::default(),
             layouts,
             registry,
         };
@@ -176,6 +202,7 @@ impl AotCompiler {
             builder_context: FunctionBuilderContext::new(),
             types: CraneliftTypes::new(ptr_type),
             functions: FxHashMap::default(),
+            globals: FxHashMap::default(),
             layouts,
             registry,
         };

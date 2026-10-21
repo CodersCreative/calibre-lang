@@ -65,6 +65,7 @@ pub struct LirGlobal {
     pub name: VariableKey,
     pub data_type: MirDataType,
     pub blocks: Box<[Option<LirBlock>]>,
+    pub mutable: bool,
 }
 
 impl Display for LirGlobal {

@@ -1,14 +1,17 @@
 use crate::layout::Layouts;
 use crate::values::{CompiledValue, CraneliftTypes};
+use crate::{Functions, Globals};
 use calibre_lir::MirDataType;
 use calibre_lir::ast::{BlockId, LirNodeType, LirTerminator};
-use calibre_lir::environment::LirFunction;
+use calibre_lir::environment::{LirFunction, LirRegistry};
+use calibre_mir::symbols::VariableKey;
 use cranelift::prelude::*;
 use cranelift_module::Module;
 use rustc_hash::FxHashMap;
 use std::error::Error;
 
 pub mod expression;
+pub mod functions;
 pub mod literals;
 pub mod memory;
 pub mod statements;
@@ -20,27 +23,38 @@ pub trait CraneliftTranslation {
     ) -> Result<CompiledValue, Box<dyn Error>>;
 }
 
+pub type Variables = FxHashMap<VariableKey, (MirDataType, Variable)>;
+
 pub struct FunctionTranslator<'a, M: Module> {
     pub types: &'a CraneliftTypes,
     pub layouts: &'a mut Layouts,
     pub builder: FunctionBuilder<'a>,
     pub module: &'a mut M,
-    pub variables: FxHashMap<String, (MirDataType, Variable)>,
+    pub variables: Variables,
+    pub globals: &'a Globals,
+    pub functions: &'a Functions,
+    pub registry: &'a LirRegistry,
 }
 
 impl<'a, M: Module> FunctionTranslator<'a, M> {
     pub fn new(
         builder: FunctionBuilder<'a>,
         module: &'a mut M,
+        registry: &'a LirRegistry,
         types: &'a CraneliftTypes,
         layouts: &'a mut Layouts,
+        globals: &'a Globals,
+        functions: &'a Functions,
     ) -> Self {
         Self {
             types,
             builder,
             module,
+            registry,
             layouts,
             variables: FxHashMap::default(),
+            globals,
+            functions,
         }
     }
 
@@ -71,7 +85,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             }
 
             self.variables
-                .insert(name.to_string(), (data_type.clone(), var));
+                .insert(name.clone(), (data_type.clone(), var));
         }
 
         let first_id = function.blocks.iter().flatten().next().map(|b| b.id);
@@ -192,6 +206,7 @@ impl CraneliftTranslation for LirNodeType {
             LirNodeType::Assign(x) => x.translate(translator),
             LirNodeType::Binary(x) => x.translate(translator),
             LirNodeType::Comparison(x) => x.translate(translator),
+            LirNodeType::Call(x) => x.translate(translator),
             _ => {
                 unimplemented!()
             }

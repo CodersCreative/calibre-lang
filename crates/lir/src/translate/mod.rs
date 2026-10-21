@@ -148,6 +148,7 @@ impl<'a> LirEnvironment<'a> {
                     name: root_name,
                     data_type: MirDataType::Dynamic,
                     blocks,
+                    mutable: false,
                 },
             );
         }

@@ -12,9 +12,23 @@ use std::{fmt::Debug, path::PathBuf, str::FromStr};
 const BASIC_CODE: &str = r#"
 const sixty : int = 60;
 
+const add := fn (a : int, b : int) -> int => {
+    return a + b;
+};
+
+const mul := fn (a : int, b : int) -> int => {
+    return a * b;
+};
+
+const calc := fn (x : int) -> int => {
+    let x := add(x, sixty);
+    return mul(x, 2);
+};
+
 const main := fn (x : int) -> int => {
     calibre_assert_ints(3, 2);
-    return x + sixty;
+    let result := calc(x);
+    return result;
 };
 "#;
 
@@ -29,6 +43,11 @@ fn parse(text: String) -> (LirRegistry, MiddleEnvironment) {
 
     println!("Lowering to LIR...");
     let lir_result = LirEnvironment::lower(&env, middle);
+
+    println!("LIR functions:");
+    for (name, func) in &lir_result.functions {
+        println!("\t{} : {}", name, func);
+    }
 
     println!("Starting JIT...");
     (lir_result, env)
@@ -54,7 +73,8 @@ fn run<I, T: Debug>(input: I) {
 
     if let Some(code_ptr) = main_ptr {
         let code_fn = unsafe { std::mem::transmute::<*const u8, fn(I) -> T>(code_ptr) };
-        println!("Result: {:?}", code_fn(input));
+        let result = code_fn(input);
+        println!("Result: {:?}", result);
     } else {
         todo!()
     }
