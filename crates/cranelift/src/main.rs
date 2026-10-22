@@ -25,9 +25,26 @@ const calc := fn (x : int) -> int => {
     return mul(x, 2);
 };
 
+const conversions := fn () -> int => {
+    let f := 10 as! float;
+    let fi := f as! int;
+
+    let b : byte = 5;
+    let bi := b as! int;
+
+    let c := 'A';
+    let ci := c as! int;
+
+    let u := fi as! uint;
+    let ui := u as! int;
+    
+    return fi + bi + ci + ui;
+};
+
 const main := fn (x : int) -> int => {
     let result := calc(x) if x is int else calc(x+1);
-    return result;
+    let value := conversions();
+    return result + value;
 };
 "#;
 

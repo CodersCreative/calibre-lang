@@ -257,18 +257,114 @@ impl CraneliftTranslation for LirAs {
         let target = translator.types.to_cranelift_type(&self.data_type);
 
         let value = match (value.data_type, &self.data_type) {
+            // int -> float
             (MirDataType::Int, MirDataType::Float) => {
                 translator.builder.ins().fcvt_from_sint(target, value.value)
             }
             (MirDataType::UInt, MirDataType::Float) => {
                 translator.builder.ins().fcvt_from_uint(target, value.value)
             }
+            (MirDataType::Byte, MirDataType::Float) => {
+                let value = translator
+                    .builder
+                    .ins()
+                    .uextend(translator.types.int(), value.value);
+
+                translator.builder.ins().fcvt_from_uint(target, value)
+            }
+            (MirDataType::Bool, MirDataType::Float) => {
+                let value = translator
+                    .builder
+                    .ins()
+                    .uextend(translator.types.int(), value.value);
+
+                translator.builder.ins().fcvt_from_uint(target, value)
+            }
+            (MirDataType::Char, MirDataType::Float) => {
+                let value = translator
+                    .builder
+                    .ins()
+                    .uextend(translator.types.int(), value.value);
+
+                translator.builder.ins().fcvt_from_uint(target, value)
+            }
+
+            // float -> int
             (MirDataType::Float, MirDataType::Int) => {
                 translator.builder.ins().fcvt_to_sint(target, value.value)
             }
             (MirDataType::Float, MirDataType::UInt) => {
                 translator.builder.ins().fcvt_to_uint(target, value.value)
             }
+            (MirDataType::Float, MirDataType::Byte) => {
+                let value = translator
+                    .builder
+                    .ins()
+                    .fcvt_to_sint(translator.types.int(), value.value);
+
+                translator.builder.ins().ireduce(target, value)
+            }
+            (MirDataType::Float, MirDataType::Bool) => {
+                let value = translator
+                    .builder
+                    .ins()
+                    .fcvt_to_sint(translator.types.int(), value.value);
+
+                translator.builder.ins().ireduce(target, value)
+            }
+            (MirDataType::Float, MirDataType::Char) => {
+                let value = translator
+                    .builder
+                    .ins()
+                    .fcvt_to_sint(translator.types.int(), value.value);
+
+                translator.builder.ins().ireduce(target, value)
+            }
+
+            // Same Size
+            (MirDataType::Int, MirDataType::UInt) => value.value,
+            (MirDataType::UInt, MirDataType::Int) => value.value,
+
+            // Extend
+            (MirDataType::Byte, MirDataType::Int) => {
+                translator.builder.ins().sextend(target, value.value)
+            }
+            (MirDataType::Byte, MirDataType::UInt) => {
+                translator.builder.ins().uextend(target, value.value)
+            }
+            (MirDataType::Bool, MirDataType::Int) => {
+                translator.builder.ins().sextend(target, value.value)
+            }
+            (MirDataType::Bool, MirDataType::UInt) => {
+                translator.builder.ins().uextend(target, value.value)
+            }
+            (MirDataType::Char, MirDataType::Int) => {
+                translator.builder.ins().sextend(target, value.value)
+            }
+            (MirDataType::Char, MirDataType::UInt) => {
+                translator.builder.ins().uextend(target, value.value)
+            }
+
+            // Reduce
+            (MirDataType::Int, MirDataType::Byte) => {
+                translator.builder.ins().ireduce(target, value.value)
+            }
+            (MirDataType::Int, MirDataType::Bool) => {
+                translator.builder.ins().ireduce(target, value.value)
+            }
+            (MirDataType::Int, MirDataType::Char) => {
+                translator.builder.ins().ireduce(target, value.value)
+            }
+            (MirDataType::UInt, MirDataType::Byte) => {
+                translator.builder.ins().ireduce(target, value.value)
+            }
+            (MirDataType::UInt, MirDataType::Bool) => {
+                translator.builder.ins().ireduce(target, value.value)
+            }
+            (MirDataType::UInt, MirDataType::Char) => {
+                translator.builder.ins().ireduce(target, value.value)
+            }
+
             _ => {
                 // TODO Use the runtime to check every other type
                 value.value
