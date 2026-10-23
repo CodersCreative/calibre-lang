@@ -12,7 +12,7 @@ pub enum ArgumentKind {
 #[derive(Clone, Debug)]
 pub struct RuntimeFunction {
     pub params: Vec<(Type, ArgumentKind)>,
-    pub returns: Vec<Type>,
+    pub returns: Option<Type>,
 }
 
 pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFunction> {
@@ -24,126 +24,126 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 "calibre_gc_alloc_list",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: vec![types::I64],
+                    returns: Some(types::I64),
                 },
             ),
             (
                 "calibre_gc_alloc_string",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: vec![types::I64],
+                    returns: Some(types::I64),
                 },
             ),
             (
                 "calibre_gc_alloc_aggregate",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: vec![types::I64],
+                    returns: Some(types::I64),
                 },
             ),
             (
                 "calibre_gc_collect",
                 RuntimeFunction {
                     params: vec![],
-                    returns: vec![],
+                    returns: None,
                 },
             ),
             (
                 "calibre_gc_stats",
                 RuntimeFunction {
                     params: vec![],
-                    returns: vec![],
+                    returns: None,
                 },
             ),
             (
                 "calibre_gc_add_root",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: vec![],
+                    returns: None,
                 },
             ),
             (
                 "calibre_gc_remove_root",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: vec![],
+                    returns: None,
                 },
             ),
             (
                 "calibre_option_none",
                 RuntimeFunction {
                     params: vec![],
-                    returns: vec![types::I64],
+                    returns: Some(types::I64),
                 },
             ),
             (
                 "calibre_option_some",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::TagPayload)],
-                    returns: vec![types::I64],
+                    returns: Some(types::I64),
                 },
             ),
             (
                 "calibre_option_is_some",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: vec![types::I8],
+                    returns: Some(types::I8),
                 },
             ),
             (
                 "calibre_option_is_none",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: vec![types::I8],
+                    returns: Some(types::I8),
                 },
             ),
             (
                 "calibre_option_unwrap",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: vec![types::I64],
+                    returns: Some(types::I64),
                 },
             ),
             (
                 "calibre_result_ok",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::TagPayload)],
-                    returns: vec![types::I64],
+                    returns: Some(types::I64),
                 },
             ),
             (
                 "calibre_result_err",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::TagPayload)],
-                    returns: vec![types::I64],
+                    returns: Some(types::I64),
                 },
             ),
             (
                 "calibre_result_is_ok",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: vec![types::I8],
+                    returns: Some(types::I8),
                 },
             ),
             (
                 "calibre_result_is_err",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: vec![types::I8],
+                    returns: Some(types::I8),
                 },
             ),
             (
                 "calibre_result_unwrap_ok",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: vec![types::I64],
+                    returns: Some(types::I64),
                 },
             ),
             (
                 "calibre_result_unwrap_err",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: vec![types::I64],
+                    returns: Some(types::I64),
                 },
             ),
         ];

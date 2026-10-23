@@ -7,7 +7,7 @@ use calibre_cranelift::JitCompiler;
 use calibre_lir::environment::{LirEnvironment, LirRegistry};
 use calibre_mir::environment::MiddleEnvironment;
 use calibre_parser::Parser;
-use std::{fmt::Debug, path::PathBuf, str::FromStr};
+use std::{fmt::Debug, path::PathBuf, str::FromStr, time::Instant};
 
 const BASIC_CODE: &str = r#"
 let sixty : int = 60;
@@ -24,6 +24,9 @@ const calc := fn (x : int) -> int => {
     let x := add(x, sixty);
     return mul(x, 2);
 };
+
+const fib := fn (n : int) -> int => 
+    return n if n < 2 else (fib(n - 1) + fib(n - 2));
 
 const conversions := fn () -> int => {
     let f := 10 as! float;
@@ -44,7 +47,7 @@ const conversions := fn () -> int => {
 const main := fn (x : int) -> int => {
     let result := calc(x) if x is int else calc(x+1);
     let value := conversions();
-    return result + value;
+    return result + value + fib(28);
 };
 "#;
 
@@ -105,5 +108,7 @@ fn run<I, T: Debug>(input: I) {
 }
 
 fn main() {
+    let start = Instant::now();
     run::<i64, i64>(300);
+    println!("elapsed - {}ms", start.elapsed().as_millis());
 }

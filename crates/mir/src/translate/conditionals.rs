@@ -209,8 +209,10 @@ impl MirLowering for AstTernary {
                 AstNode {
                     node_type: AstNodeType::IfStatement(AstIf {
                         comparison: Box::new(IfComparisonType::If(*self.comparison)),
-                        then: Box::new(AstNode::new_temp_scope(vec![*self.then])),
-                        otherwise: Some(Box::new(AstNode::new_temp_scope(vec![*otherwise]))),
+                        then: Box::new(AstNode::new_temp_scope(vec![AstNode::emit(*self.then)])),
+                        otherwise: Some(Box::new(AstNode::new_temp_scope(vec![AstNode::emit(
+                            *otherwise,
+                        )]))),
                     }),
                     span,
                 }
@@ -219,14 +221,14 @@ impl MirLowering for AstTernary {
             TernaryType::Option => AstNode {
                 node_type: AstNodeType::IfStatement(AstIf {
                     comparison: Box::new(IfComparisonType::If(*self.comparison)),
-                    then: Box::new(AstNode::new_temp_scope(vec![AstNode::call(
+                    then: Box::new(AstNode::new_temp_scope(vec![AstNode::emit(AstNode::call(
                         span,
                         AstNode::identifier(span, "some"),
                         vec![CallArg::Value(*self.then)],
-                    )])),
-                    otherwise: Some(Box::new(AstNode::new_temp_scope(vec![
+                    ))])),
+                    otherwise: Some(Box::new(AstNode::new_temp_scope(vec![AstNode::emit(
                         AstNode::identifier(span, "none"),
-                    ]))),
+                    )]))),
                 }),
                 span,
             }
@@ -239,15 +241,19 @@ impl MirLowering for AstTernary {
                 AstNode {
                     node_type: AstNodeType::IfStatement(AstIf {
                         comparison: Box::new(IfComparisonType::If(*self.comparison)),
-                        then: Box::new(AstNode::new_temp_scope(vec![AstNode::call(
-                            span,
-                            AstNode::identifier(span, "ok"),
-                            vec![CallArg::Value(*self.then)],
+                        then: Box::new(AstNode::new_temp_scope(vec![AstNode::emit(
+                            AstNode::call(
+                                span,
+                                AstNode::identifier(span, "ok"),
+                                vec![CallArg::Value(*self.then)],
+                            ),
                         )])),
-                        otherwise: Some(Box::new(AstNode::new_temp_scope(vec![AstNode::call(
-                            span,
-                            AstNode::identifier(span, "err"),
-                            vec![CallArg::Value(*otherwise)],
+                        otherwise: Some(Box::new(AstNode::new_temp_scope(vec![AstNode::emit(
+                            AstNode::call(
+                                span,
+                                AstNode::identifier(span, "err"),
+                                vec![CallArg::Value(*otherwise)],
+                            ),
                         )]))),
                     }),
                     span,

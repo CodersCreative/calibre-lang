@@ -69,7 +69,7 @@ impl CompilerData {
                 }
             }
 
-            for ty in &sig.returns {
+            if let Some(ty) = &sig.returns {
                 signature.returns.push(AbiParam::new(*ty));
             }
 

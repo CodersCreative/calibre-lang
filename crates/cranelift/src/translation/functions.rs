@@ -101,7 +101,9 @@ impl CraneliftTranslation for LirCall {
             let call = translator.builder.ins().call(func_ref, &args);
             let result = translator.builder.inst_results(call)[0];
 
-            if sig.returns.len() == 1 && sig.returns[0] == translator.types.ptr() {
+            if let Some(t) = &sig.returns
+                && t == &translator.types.ptr()
+            {
                 let root_func_id = translator
                     .runtime_functions
                     .get("calibre_gc_add_root")
@@ -119,14 +121,14 @@ impl CraneliftTranslation for LirCall {
                 ))
             } else {
                 // TODO Probably swap this for an MirDataType return type and just remove all of this hassle
-                let return_type = if sig.returns.len() == 1 {
-                    match sig.returns[0] {
-                        t if t == translator.types.int() => MirDataType::Int,
-                        t if t == translator.types.uint() => MirDataType::UInt,
-                        t if t == translator.types.float() => MirDataType::Float,
-                        t if t == translator.types.bool() => MirDataType::Bool,
-                        t if t == translator.types.byte() => MirDataType::Byte,
-                        t if t == translator.types.char() => MirDataType::Char,
+                let return_type = if let Some(t) = &sig.returns {
+                    match t {
+                        t if t == &translator.types.int() => MirDataType::Int,
+                        t if t == &translator.types.uint() => MirDataType::UInt,
+                        t if t == &translator.types.float() => MirDataType::Float,
+                        t if t == &translator.types.bool() => MirDataType::Bool,
+                        t if t == &translator.types.byte() => MirDataType::Byte,
+                        t if t == &translator.types.char() => MirDataType::Char,
                         _ => MirDataType::Null,
                     }
                 } else {
