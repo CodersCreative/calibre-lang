@@ -239,6 +239,176 @@ pub extern "C" fn calibre_gc_remove_root(ptr: usize) {
     }
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_option_none() -> *mut GcAggregate {
+    let header = register_alloc(GcObject::Aggregate(GcAggregate {
+        field_count: 1,
+        data: vec![Value::Int(0)],
+    }));
+
+    unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_option_some(tag: i64, payload: i64) -> *mut GcAggregate {
+    let value = match tag {
+        0 => Value::Int(payload),
+        1 => Value::UInt(payload.cast_unsigned()),
+        2 => Value::Float(f64::from_bits(payload.cast_unsigned())),
+        3 => Value::Null,
+        4 => Value::Ptr(payload.cast_unsigned() as usize),
+        _ => Value::Null,
+    };
+
+    let header = register_alloc(GcObject::Aggregate(GcAggregate {
+        field_count: 2,
+        data: vec![Value::Int(1), value],
+    }));
+
+    unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_option_is_some(opt: *const GcAggregate) -> bool {
+    if opt.is_null() {
+        return false;
+    }
+
+    unsafe {
+        (&(*opt).data)
+            .first()
+            .is_some_and(|v| matches!(v, Value::Int(1)))
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_option_is_none(opt: *const GcAggregate) -> bool {
+    if opt.is_null() {
+        return true;
+    }
+
+    unsafe {
+        (&(*opt).data)
+            .first()
+            .is_none_or(|v| matches!(v, Value::Int(0)))
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_option_unwrap(opt: *const GcAggregate) -> i64 {
+    if opt.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        match (&(*opt).data).get(1).copied().unwrap_or(Value::Null) {
+            Value::Int(x) => x,
+            Value::UInt(x) => x as i64,
+            Value::Float(x) => x.to_bits() as i64,
+            Value::Ptr(x) => x as i64,
+            Value::Null => 0,
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_result_ok(tag: i64, payload: i64) -> *mut GcAggregate {
+    let value = match tag {
+        0 => Value::Int(payload),
+        1 => Value::UInt(payload.cast_unsigned()),
+        2 => Value::Float(f64::from_bits(payload.cast_unsigned())),
+        3 => Value::Null,
+        4 => Value::Ptr(payload.cast_unsigned() as usize),
+        _ => Value::Null,
+    };
+
+    let header = register_alloc(GcObject::Aggregate(GcAggregate {
+        field_count: 2,
+        data: vec![Value::Int(0), value],
+    }));
+
+    unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_result_err(tag: i64, payload: i64) -> *mut GcAggregate {
+    let value = match tag {
+        0 => Value::Int(payload),
+        1 => Value::UInt(payload.cast_unsigned()),
+        2 => Value::Float(f64::from_bits(payload.cast_unsigned())),
+        3 => Value::Null,
+        4 => Value::Ptr(payload.cast_unsigned() as usize),
+        _ => Value::Null,
+    };
+
+    let header = register_alloc(GcObject::Aggregate(GcAggregate {
+        field_count: 2,
+        data: vec![Value::Int(1), value],
+    }));
+
+    unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_result_is_ok(res: *const GcAggregate) -> bool {
+    if res.is_null() {
+        return false;
+    }
+
+    unsafe {
+        (&(*res).data)
+            .first()
+            .is_some_and(|v| matches!(v, Value::Int(0)))
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_result_is_err(res: *const GcAggregate) -> bool {
+    if res.is_null() {
+        return true;
+    }
+
+    unsafe {
+        (&(*res).data)
+            .first()
+            .is_none_or(|v| matches!(v, Value::Int(1)))
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_result_unwrap_ok(res: *const GcAggregate) -> i64 {
+    if res.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        match (&(*res).data).get(1).copied().unwrap_or(Value::Null) {
+            Value::Int(x) => x,
+            Value::UInt(x) => x as i64,
+            Value::Float(x) => x.to_bits() as i64,
+            Value::Ptr(x) => x as i64,
+            Value::Null => 0,
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_result_unwrap_err(res: *const GcAggregate) -> i64 {
+    if res.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        match (&(*res).data).get(1).copied().unwrap_or(Value::Null) {
+            Value::Int(x) => x,
+            Value::UInt(x) => x as i64,
+            Value::Float(x) => x.to_bits() as i64,
+            Value::Ptr(x) => x as i64,
+            Value::Null => 0,
+        }
+    }
+}
+
 pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
     &[
         RuntimeSymbol {
@@ -268,6 +438,50 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_gc_remove_root",
             ptr: calibre_gc_remove_root as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_option_none",
+            ptr: calibre_option_none as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_option_some",
+            ptr: calibre_option_some as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_option_is_some",
+            ptr: calibre_option_is_some as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_option_is_none",
+            ptr: calibre_option_is_none as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_option_unwrap",
+            ptr: calibre_option_unwrap as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_result_ok",
+            ptr: calibre_result_ok as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_result_err",
+            ptr: calibre_result_err as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_result_is_ok",
+            ptr: calibre_result_is_ok as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_result_is_err",
+            ptr: calibre_result_is_err as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_result_unwrap_ok",
+            ptr: calibre_result_unwrap_ok as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_result_unwrap_err",
+            ptr: calibre_result_unwrap_err as *const u8,
         },
     ]
 }

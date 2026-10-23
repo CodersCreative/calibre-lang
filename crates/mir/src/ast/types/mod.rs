@@ -429,6 +429,17 @@ impl MirDataType {
         }
     }
 
+    // Only for cranelift
+    pub fn type_tag(&self) -> usize {
+        match self {
+            MirDataType::Int => 0,
+            MirDataType::UInt => 1,
+            MirDataType::Float => 2,
+            MirDataType::Null => 3,
+            _ => 4,
+        }
+    }
+
     pub fn get_gen(&self) -> Option<MirDataType> {
         match self.unwrap_all_refs() {
             MirDataType::Struct {

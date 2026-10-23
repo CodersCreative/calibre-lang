@@ -2,6 +2,7 @@ use crate::{
     translation::{CraneliftTranslation, FunctionTranslator},
     values::CompiledValue,
 };
+use calibre_lir::Key;
 use calibre_lir::{
     MirDataType,
     ast::{LirDrop, LirLoad, LirMove},
@@ -15,7 +16,71 @@ impl CraneliftTranslation for LirLoad {
         self,
         translator: &mut FunctionTranslator<'a, M>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
-        if let Some((ty, var)) = translator.variables.get(&self.value) {
+        // TODO Find a way to handle this more gracefully
+        if let Some(Key::VariableKey(_)) = translator.registry.natives.get(&self.value.name()) {
+            let name_str = self.value.name().as_str();
+
+            match name_str {
+                "none" => {
+                    let func_id = translator
+                        .runtime_functions
+                        .get("calibre_option_none")
+                        .ok_or("calibre_option_none not found in runtime functions")?;
+
+                    let func_ref = translator
+                        .module
+                        .declare_func_in_func(*func_id, translator.builder.func);
+
+                    let call = translator.builder.ins().call(func_ref, &[]);
+                    let result = translator.builder.inst_results(call)[0];
+
+                    let root_func_id = translator
+                        .runtime_functions
+                        .get("calibre_gc_add_root")
+                        .ok_or("calibre_gc_add_root not found in runtime functions")?;
+
+                    let root_func_ref = translator
+                        .module
+                        .declare_func_in_func(*root_func_id, translator.builder.func);
+
+                    translator.builder.ins().call(root_func_ref, &[result]);
+
+                    Ok(CompiledValue::new(
+                        result,
+                        MirDataType::Option(Box::new(MirDataType::Dynamic)),
+                    ))
+                }
+                "true" => {
+                    let value = translator.builder.ins().iconst(translator.types.bool(), 1);
+
+                    Ok(CompiledValue::new(value, MirDataType::Bool))
+                }
+                "false" => {
+                    let value = translator.builder.ins().iconst(translator.types.bool(), 0);
+
+                    Ok(CompiledValue::new(value, MirDataType::Bool))
+                }
+                "INT_MIN" => {
+                    let value = translator
+                        .builder
+                        .ins()
+                        .iconst(translator.types.int(), isize::MIN as i64);
+
+                    Ok(CompiledValue::new(value, MirDataType::Int))
+                }
+                "INT_MAX" => {
+                    let value = translator
+                        .builder
+                        .ins()
+                        .iconst(translator.types.int(), isize::MAX as i64);
+
+                    Ok(CompiledValue::new(value, MirDataType::Int))
+                }
+                _ => {
+                    unreachable!()
+                }
+            }
+        } else if let Some((ty, var)) = translator.variables.get(&self.value) {
             let value = translator.builder.use_var(*var);
             Ok(CompiledValue::new(value, ty.clone()))
         } else if let Some((data_type, data_id)) = translator.globals.get(&self.value) {

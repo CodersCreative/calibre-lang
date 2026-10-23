@@ -1,6 +1,7 @@
 use crate::layout::Layouts;
+use crate::natives::{Natives, build_native_mapping};
 use crate::values::{CompiledValue, CraneliftTypes};
-use crate::{Functions, Globals};
+use crate::{Functions, Globals, RuntimeFunctions};
 use calibre_lir::MirDataType;
 use calibre_lir::ast::{BlockId, LirNodeType, LirTerminator};
 use calibre_lir::environment::{LirFunction, LirRegistry};
@@ -35,6 +36,8 @@ pub struct FunctionTranslator<'a, M: Module> {
     pub globals: &'a Globals,
     pub functions: &'a Functions,
     pub registry: &'a LirRegistry,
+    pub natives: Natives,
+    pub runtime_functions: &'a RuntimeFunctions,
 }
 
 impl<'a, M: Module> FunctionTranslator<'a, M> {
@@ -46,7 +49,10 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         layouts: &'a mut Layouts,
         globals: &'a Globals,
         functions: &'a Functions,
+        runtime_functions: &'a RuntimeFunctions,
     ) -> Self {
+        let natives = build_native_mapping(registry);
+
         Self {
             types,
             builder,
@@ -56,6 +62,8 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             variables: FxHashMap::default(),
             globals,
             functions,
+            natives,
+            runtime_functions,
         }
     }
 

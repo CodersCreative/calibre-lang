@@ -1,4 +1,5 @@
 use crate::layout::Layouts;
+use crate::natives::{ArgumentKind, runtime_functions};
 use crate::translation::FunctionTranslator;
 use crate::values::CraneliftTypes;
 use calibre_lir::ast::{
@@ -19,11 +20,13 @@ use std::error::Error;
 use std::sync::Arc;
 
 pub mod layout;
+pub mod natives;
 pub mod translation;
 pub mod values;
 
 pub type Globals = FxHashMap<VariableKey, (MirDataType, DataId)>;
 pub type Functions = FxHashMap<VariableKey, FuncId>;
+pub type RuntimeFunctions = FxHashMap<&'static str, FuncId>;
 
 pub struct CompilerData {
     context: codegen::Context,
@@ -33,6 +36,7 @@ pub struct CompilerData {
     functions: Functions,
     globals: Globals,
     layouts: Layouts,
+    runtime_functions: RuntimeFunctions,
 }
 
 fn create_target_isa() -> Result<Arc<dyn isa::TargetIsa>, Box<dyn Error>> {
@@ -49,10 +53,28 @@ fn create_target_isa() -> Result<Arc<dyn isa::TargetIsa>, Box<dyn Error>> {
 
 impl CompilerData {
     fn compile<M: Module>(&mut self, module: &mut M) -> Result<(), Box<dyn Error>> {
-        for symbol in calibre_runtime::get_runtime_symbols() {
-            let mut sig = module.make_signature();
-            sig.call_conv = CallConv::SystemV;
-            let _ = module.declare_function(symbol.name, Linkage::Import, &sig)?;
+        for (name, sig) in runtime_functions() {
+            let mut signature = module.make_signature();
+            signature.call_conv = CallConv::SystemV;
+
+            for (ty, arg_kind) in &sig.params {
+                match arg_kind {
+                    ArgumentKind::Direct => {
+                        signature.params.push(AbiParam::new(*ty));
+                    }
+                    ArgumentKind::TagPayload => {
+                        signature.params.push(AbiParam::new(*ty));
+                        signature.params.push(AbiParam::new(*ty));
+                    }
+                }
+            }
+
+            for ty in &sig.returns {
+                signature.returns.push(AbiParam::new(*ty));
+            }
+
+            let func_id = module.declare_function(*name, Linkage::Import, &signature)?;
+            self.runtime_functions.insert(*name, func_id);
         }
 
         let mut blocks: Vec<Option<LirBlock>> = Vec::new();
@@ -184,6 +206,7 @@ impl CompilerData {
                     &mut self.layouts,
                     &self.globals,
                     &self.functions,
+                    &self.runtime_functions,
                 );
 
                 translator.translate_function(func)?;
@@ -226,6 +249,7 @@ impl JitCompiler {
             globals: FxHashMap::default(),
             layouts,
             registry,
+            runtime_functions: FxHashMap::default(),
         };
 
         data.compile(&mut module)?;
@@ -271,6 +295,7 @@ impl AotCompiler {
             globals: FxHashMap::default(),
             layouts,
             registry,
+            runtime_functions: FxHashMap::default(),
         };
 
         data.compile(&mut module)?;
