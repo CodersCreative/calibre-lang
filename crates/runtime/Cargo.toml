@@ -12,6 +12,7 @@ categories.workspace = true
 license.workspace = true
 
 [dependencies]
+wasm_sync = { workspace = true }
 
 [lints]
 workspace = true

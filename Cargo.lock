@@ -593,6 +593,9 @@ dependencies = [
 [[package]]
 name = "calibre-runtime"
 version = "0.0.1"
+dependencies = [
+ "wasm_sync",
+]
 
 [[package]]
 name = "calibre-std"

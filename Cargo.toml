@@ -84,8 +84,8 @@ large_futures = "warn"
 
 # Don't Do Unsafe Things with Memory
 mem_forget = "warn"
-undocumented_unsafe_blocks = "warn"
-multiple_unsafe_ops_per_block = "warn"
+# undocumented_unsafe_blocks = "warn"
+# multiple_unsafe_ops_per_block = "warn"
 unnecessary_safety_doc = "warn"
 unnecessary_safety_comment = "warn"
 

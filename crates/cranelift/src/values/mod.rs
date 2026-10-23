@@ -19,6 +19,10 @@ impl CraneliftTypes {
         types::I64
     }
 
+    pub fn uint(&self) -> Type {
+        types::I64
+    }
+
     pub fn float(&self) -> Type {
         types::F64
     }
@@ -37,7 +41,8 @@ impl CraneliftTypes {
 
     pub fn to_cranelift_type(&self, ty: &MirDataType) -> Type {
         match ty {
-            MirDataType::Int | MirDataType::UInt => self.int(),
+            MirDataType::Int => self.int(),
+            MirDataType::UInt => self.uint(),
             MirDataType::Float => self.float(),
             MirDataType::Bool | MirDataType::Byte => self.bool(),
             MirDataType::Char => self.char(),
