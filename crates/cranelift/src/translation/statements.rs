@@ -4,7 +4,7 @@ use crate::{
 };
 use calibre_lir::{
     MirDataType,
-    ast::{LirAssign, LirDeclare, LirLValue, LirMember, LirNodeType},
+    ast::{LirAssign, LirDeclare, LirLValue, LirNodeType},
 };
 use cranelift::prelude::*;
 use cranelift_module::Module;
@@ -73,7 +73,7 @@ impl CraneliftTranslation for LirAssign {
                     Err(format!("Unable to find variable: {key}").into())
                 }
             }
-            LirLValue::Ptr(ptr_expr) => {
+            LirLValue::Ptr(_) => {
                 let value = self.value.translate(translator, None)?;
 
                 // TODO

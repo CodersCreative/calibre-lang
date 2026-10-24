@@ -4,28 +4,11 @@ use crate::{
 };
 use calibre_lir::{
     MirDataType,
-    ast::{LirCall, LirDeref, LirDiscriminant, LirMember, LirNodeType, LirRef, LirRefLoad},
+    ast::{LirDeref, LirDiscriminant, LirMember, LirRef, LirRefLoad},
 };
 use cranelift::codegen::ir::{InstBuilder, MemFlags, StackSlotData, StackSlotKind};
 use cranelift_module::Module;
-use rustc_hash::FxHashMap;
-use std::{error::Error, sync::OnceLock};
-
-// TODO Replace with a different system that selects the member function based on the type
-pub(crate) fn member_getters() -> &'static FxHashMap<&'static str, &'static str> {
-    static GETTERS: OnceLock<FxHashMap<&'static str, &'static str>> = OnceLock::new();
-
-    GETTERS.get_or_init(|| {
-        let lst = [
-            ("next", "calibre_option_get"),
-            ("0", "calibre_option_get"),
-            ("ok", "calibre_result_get"),
-            ("err", "calibre_result_get"),
-        ];
-
-        lst.into_iter().collect()
-    })
-}
+use std::error::Error;
 
 impl CraneliftTranslation for LirMember {
     fn translate<'a, M: Module>(
@@ -35,46 +18,56 @@ impl CraneliftTranslation for LirMember {
     ) -> Result<CompiledValue, Box<dyn Error>> {
         let base = self.base.translate(translator, None)?;
         let member = self.field.as_str();
-        let _is_next_or_zero = member == "next" || member == "0";
+        let is_next_or_zero = member == "next" || member == "0";
 
-        if let Some(&runtime_name) = member_getters().get(member) {
-            let stack_slot = translator.builder.create_sized_stack_slot(StackSlotData {
-                kind: StackSlotKind::ExplicitSlot,
-                size: 8,
-                align_shift: 3,
-            });
+        // TODO Get if enum
+        match &base.data_type {
+            MirDataType::Option(_) | MirDataType::Result { .. }
+                if is_next_or_zero
+                    || base.data_type.is_result() && (member == "ok" || member == "err") =>
+            {
+                let stack_slot = translator.builder.create_sized_stack_slot(StackSlotData {
+                    kind: StackSlotKind::ExplicitSlot,
+                    size: 8,
+                    align_shift: 3,
+                });
 
-            translator
-                .builder
-                .ins()
-                .stack_store(base.value, stack_slot, 0);
-            let ptr = translator
-                .builder
-                .ins()
-                .stack_load(translator.types.int(), stack_slot, 0);
+                translator
+                    .builder
+                    .ins()
+                    .stack_store(base.value, stack_slot, 0);
 
-            // Some pointer arithmetic to get the pointer of the GCAggregate
-            let ptr = translator.builder.ins().iadd_imm(ptr, 8);
+                let ptr =
+                    translator
+                        .builder
+                        .ins()
+                        .stack_load(translator.types.int(), stack_slot, 0);
 
-            let func_id = translator
-                .runtime_functions
-                .get(runtime_name)
-                .ok_or(format!("{} not found in runtime_functions", runtime_name))?;
+                let ptr = translator.builder.ins().iadd_imm(ptr, 8);
 
-            let func_ref = translator
-                .module
-                .declare_func_in_func(*func_id, translator.builder.func);
+                let runtime_name = "calibre_enum_get";
 
-            let call = translator.builder.ins().call(func_ref, &[ptr]);
-            let result = translator.builder.inst_results(call)[0];
+                let func_id = translator
+                    .runtime_functions
+                    .get(runtime_name)
+                    .ok_or(format!("{} not found in runtime_functions", runtime_name))?;
 
-            Ok(CompiledValue::new(
-                result,
-                data_type.unwrap_or(MirDataType::Int),
-            ))
-        } else {
-            // TODO
-            Ok(base)
+                let func_ref = translator
+                    .module
+                    .declare_func_in_func(*func_id, translator.builder.func);
+
+                let call = translator.builder.ins().call(func_ref, &[ptr]);
+                let result = translator.builder.inst_results(call)[0];
+
+                Ok(CompiledValue::new(
+                    result,
+                    data_type.unwrap_or(MirDataType::Int),
+                ))
+            }
+            _ => {
+                // TODO
+                Ok(base)
+            }
         }
     }
 }
@@ -85,9 +78,51 @@ impl CraneliftTranslation for LirDiscriminant {
         translator: &mut FunctionTranslator<'a, M>,
         _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
-        // TODO Get Disciminant
-        let value = translator.builder.ins().iconst(translator.types.int(), 0);
-        Ok(CompiledValue::new(value, MirDataType::Int))
+        let value = self.value.translate(translator, None)?;
+
+        // TODO Get if enum
+        match &value.data_type {
+            MirDataType::Option(_) | MirDataType::Result { .. } => {
+                let stack_slot = translator.builder.create_sized_stack_slot(StackSlotData {
+                    kind: StackSlotKind::ExplicitSlot,
+                    size: 8,
+                    align_shift: 3,
+                });
+
+                translator
+                    .builder
+                    .ins()
+                    .stack_store(value.value, stack_slot, 0);
+
+                let ptr =
+                    translator
+                        .builder
+                        .ins()
+                        .stack_load(translator.types.int(), stack_slot, 0);
+
+                let ptr = translator.builder.ins().iadd_imm(ptr, 8);
+
+                let runtime_name = "calibre_enum_discriminant";
+
+                let func_id = translator
+                    .runtime_functions
+                    .get(runtime_name)
+                    .ok_or(format!("{} not found in runtime_functions", runtime_name))?;
+
+                let func_ref = translator
+                    .module
+                    .declare_func_in_func(*func_id, translator.builder.func);
+
+                let call = translator.builder.ins().call(func_ref, &[ptr]);
+                let result = translator.builder.inst_results(call)[0];
+
+                Ok(CompiledValue::new(result, MirDataType::Int))
+            }
+            _ => {
+                let value = translator.builder.ins().iconst(translator.types.int(), 0);
+                Ok(CompiledValue::new(value, MirDataType::Int))
+            }
+        }
     }
 }
 

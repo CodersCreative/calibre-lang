@@ -125,31 +125,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
-                "calibre_option_none",
-                RuntimeFunction {
-                    params: vec![],
-                    returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
-                },
-            ),
-            (
-                "calibre_option_is_some",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                    typed_return: Some(MirDataType::Bool),
-                },
-            ),
-            (
-                "calibre_option_is_none",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                    typed_return: Some(MirDataType::Bool),
-                },
-            ),
-            (
-                "calibre_option_unwrap",
+                "calibre_enum_get",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
@@ -157,35 +133,11 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
-                "calibre_option_get",
+                "calibre_enum_discriminant",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Dynamic),
-                },
-            ),
-            (
-                "calibre_result_is_ok",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                    typed_return: Some(MirDataType::Dynamic),
-                },
-            ),
-            (
-                "calibre_result_is_err",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                    typed_return: Some(MirDataType::Dynamic),
-                },
-            ),
-            (
-                "calibre_result_get",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Dynamic),
+                    typed_return: Some(MirDataType::UInt),
                 },
             ),
         ];

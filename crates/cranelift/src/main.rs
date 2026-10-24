@@ -25,6 +25,9 @@ const calc := fn (x : int) -> int => {
     return mul(x, 2);
 };
 
+const fib := fn (n : int) -> int => 
+    return n if n < 2 else (fib(n - 1) + fib(n - 2));
+
 const conversions := fn () -> int => {
     let f := 10 as! float;
     let fi := f as! int;
@@ -56,8 +59,10 @@ const test_result_err := fn () -> int => {
     return res.err;
 }
 
-const main := fn () -> int => {
-    return test_option_next() + test_result_ok() + test_result_err();
+const main := fn (x : int) -> int => {
+    let result := calc(x) if x is int else calc(x+1);
+    let value := conversions();
+    return result + value + test_option_next() + test_result_ok() + test_result_err() + fib(28);;
 };
 "#;
 
@@ -77,7 +82,7 @@ fn parse(text: String) -> (LirRegistry, MiddleEnvironment) {
     (lir_result, env)
 }
 
-fn run<T: Debug>() {
+fn run<I, T: Debug>(input: I) {
     let (lir, env) = parse(BASIC_CODE.to_string());
 
     let jit = match JitCompiler::new(lir.clone()) {
@@ -109,8 +114,8 @@ fn run<T: Debug>() {
         .and_then(|(k, _)| jit.get_function(k));
 
     if let Some(code_ptr) = main_ptr {
-        let code_fn = unsafe { std::mem::transmute::<*const u8, fn() -> T>(code_ptr) };
-        let result = code_fn();
+        let code_fn = unsafe { std::mem::transmute::<*const u8, fn(I) -> T>(code_ptr) };
+        let result = code_fn(input);
         println!("Result: {:?}", result);
     } else {
         eprintln!("Failed to find `main`");
@@ -122,6 +127,6 @@ fn run<T: Debug>() {
 
 fn main() {
     let start = Instant::now();
-    run::<i64>();
+    run::<i64, i64>(300);
     println!("elapsed - {}ms", start.elapsed().as_millis());
 }
