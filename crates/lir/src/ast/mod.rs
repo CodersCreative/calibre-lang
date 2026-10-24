@@ -281,6 +281,10 @@ impl LirNodeType {
         )
     }
 
+    pub fn load(ident: VariableKey) -> LirNodeType {
+        LirNodeType::Load(LirLoad { value: ident })
+    }
+
     #[inline]
     pub fn null() -> LirNodeType {
         LirNodeType::Literal(LirLiteral::Null)

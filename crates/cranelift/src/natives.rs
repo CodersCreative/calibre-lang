@@ -1,4 +1,4 @@
-use calibre_lir::{Key, VariableKey, environment::LirRegistry};
+use calibre_lir::{Key, MirDataType, TypeKey, VariableKey, environment::LirRegistry};
 use cranelift::prelude::*;
 use rustc_hash::FxHashMap;
 use std::sync::OnceLock;
@@ -13,6 +13,7 @@ pub enum ArgumentKind {
 pub struct RuntimeFunction {
     pub params: Vec<(Type, ArgumentKind)>,
     pub returns: Option<Type>,
+    pub typed_return: Option<MirDataType>,
 }
 
 pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFunction> {
@@ -25,6 +26,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
+                    typed_return: Some(MirDataType::List(Box::new(MirDataType::Dynamic))),
                 },
             ),
             (
@@ -32,6 +34,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
+                    typed_return: Some(MirDataType::List(Box::new(MirDataType::Str))),
                 },
             ),
             (
@@ -39,6 +42,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
                 },
             ),
             (
@@ -46,6 +50,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![],
                     returns: None,
+                    typed_return: None,
                 },
             ),
             (
@@ -53,6 +58,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![],
                     returns: None,
+                    typed_return: None,
                 },
             ),
             (
@@ -60,6 +66,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: None,
+                    typed_return: None,
                 },
             ),
             (
@@ -67,6 +74,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: None,
+                    typed_return: None,
                 },
             ),
             (
@@ -74,6 +82,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![],
                     returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
                 },
             ),
             (
@@ -81,27 +90,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::TagPayload)],
                     returns: Some(types::I64),
-                },
-            ),
-            (
-                "calibre_option_is_some",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                },
-            ),
-            (
-                "calibre_option_is_none",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                },
-            ),
-            (
-                "calibre_option_unwrap",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Struct {
+                        identifier: TypeKey::from("1"),
+                        generic_types: Vec::new(),
+                    }))),
                 },
             ),
             (
@@ -109,6 +101,13 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::TagPayload)],
                     returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Struct {
+                            identifier: TypeKey::from("1"),
+                            generic_types: Vec::new(),
+                        }),
+                        err: Box::new(MirDataType::Dynamic),
+                    }),
                 },
             ),
             (
@@ -116,6 +115,53 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::TagPayload)],
                     returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Dynamic),
+                        err: Box::new(MirDataType::Struct {
+                            identifier: TypeKey::from("1"),
+                            generic_types: Vec::new(),
+                        }),
+                    }),
+                },
+            ),
+            (
+                "calibre_option_none",
+                RuntimeFunction {
+                    params: vec![],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
+                },
+            ),
+            (
+                "calibre_option_is_some",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_option_is_none",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_option_unwrap",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
+                },
+            ),
+            (
+                "calibre_option_get",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
                 },
             ),
             (
@@ -123,6 +169,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Dynamic),
                 },
             ),
             (
@@ -130,20 +177,15 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Dynamic),
                 },
             ),
             (
-                "calibre_result_unwrap_ok",
+                "calibre_result_get",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                },
-            ),
-            (
-                "calibre_result_unwrap_err",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
                 },
             ),
         ];
@@ -164,6 +206,15 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
 
         lst.into_iter().collect()
     })
+}
+
+pub(crate) fn pointer_returning_functions() -> &'static [&'static str] {
+    &[
+        "calibre_option_some",
+        "calibre_result_ok",
+        "calibre_result_err",
+        "calibre_option_none",
+    ]
 }
 
 pub type Natives = FxHashMap<VariableKey, &'static str>;

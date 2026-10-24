@@ -21,9 +21,12 @@ impl CraneliftTranslation for LirComparison {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
-        let left = self.left.translate(translator)?;
-        let right = self.right.translate(translator)?;
+        let left = self.left.translate(translator, None)?;
+        let right = self
+            .right
+            .translate(translator, Some(left.data_type.clone()))?;
 
         let is_float =
             left.data_type == MirDataType::Float || right.data_type == MirDataType::Float;
@@ -146,9 +149,12 @@ impl CraneliftTranslation for LirBinary {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
-        let left = self.left.translate(translator)?;
-        let right = self.right.translate(translator)?;
+        let left = self.left.translate(translator, None)?;
+        let right = self
+            .right
+            .translate(translator, Some(left.data_type.clone()))?;
 
         let is_float =
             left.data_type == MirDataType::Float || right.data_type == MirDataType::Float;
@@ -235,9 +241,10 @@ impl CraneliftTranslation for LirBoolean {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
-        let left = self.left.translate(translator)?;
-        let right = self.right.translate(translator)?;
+        let left = self.left.translate(translator, Some(MirDataType::Bool))?;
+        let right = self.right.translate(translator, Some(MirDataType::Bool))?;
 
         let value = match self.operator {
             BooleanOperator::And => translator.builder.ins().band(left.value, right.value),
@@ -252,8 +259,9 @@ impl CraneliftTranslation for LirAs {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
-        let value = self.value.translate(translator)?;
+        let value = self.value.translate(translator, None)?;
         let target = translator.types.to_cranelift_type(&self.data_type);
 
         let value = match (value.data_type, &self.data_type) {
@@ -379,9 +387,10 @@ impl CraneliftTranslation for LirIs {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         // TODO Handle dynamics this only works for compile time known types right now
-        let value = self.value.translate(translator)?;
+        let value = self.value.translate(translator, None)?;
         let value = translator.builder.ins().iconst(
             translator.types.bool(),
             if value.data_type.loose_eq(&self.data_type) {

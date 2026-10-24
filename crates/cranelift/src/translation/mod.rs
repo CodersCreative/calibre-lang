@@ -8,7 +8,7 @@ use calibre_lir::environment::{LirFunction, LirRegistry};
 use calibre_mir::symbols::VariableKey;
 use cranelift::prelude::*;
 use cranelift_module::Module;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::error::Error;
 
 pub mod access;
@@ -22,6 +22,7 @@ pub trait CraneliftTranslation {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
+        data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>>;
 }
 
@@ -38,6 +39,8 @@ pub struct FunctionTranslator<'a, M: Module> {
     pub registry: &'a LirRegistry,
     pub natives: Natives,
     pub runtime_functions: &'a RuntimeFunctions,
+    pub gc_managed_vars: FxHashSet<VariableKey>,
+    pub return_type: MirDataType,
 }
 
 impl<'a, M: Module> FunctionTranslator<'a, M> {
@@ -50,6 +53,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         globals: &'a Globals,
         functions: &'a Functions,
         runtime_functions: &'a RuntimeFunctions,
+        return_type: MirDataType,
     ) -> Self {
         let natives = build_native_mapping(registry);
 
@@ -64,6 +68,8 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             functions,
             natives,
             runtime_functions,
+            gc_managed_vars: FxHashSet::default(),
+            return_type,
         }
     }
 
@@ -124,7 +130,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             self.builder.switch_to_block(cl_block);
 
             for x in b.instructions {
-                x.node_type.translate(&mut self)?;
+                x.node_type.translate(&mut self, None)?;
             }
 
             if let Some(terminator) = b.terminator {
@@ -165,7 +171,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                 else_block,
                 ..
             } => {
-                let condition_value = condition.translate(self)?;
+                let condition_value = condition.translate(self, Some(MirDataType::Bool))?;
                 let then_dest = block_map[&then_block];
 
                 if let Some(else_block) = else_block {
@@ -188,7 +194,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             }
             LirTerminator::Return { value, .. } => {
                 if let Some(value) = value {
-                    let compiled = value.translate(self)?;
+                    let compiled = value.translate(self, Some(self.return_type.clone()))?;
                     self.builder.ins().return_(&[compiled.value]);
                 } else {
                     self.builder.ins().return_(&[]);
@@ -203,28 +209,30 @@ impl CraneliftTranslation for LirNodeType {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
+        data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         match self {
             LirNodeType::Noop => {
                 let val = translator.builder.ins().iconst(translator.types.int(), 0);
                 Ok(CompiledValue::new(val, MirDataType::Null))
             }
-            LirNodeType::Literal(x) => x.translate(translator),
-            LirNodeType::Load(x) => x.translate(translator),
-            LirNodeType::Declare(x) => x.translate(translator),
-            LirNodeType::Assign(x) => x.translate(translator),
-            LirNodeType::Binary(x) => x.translate(translator),
-            LirNodeType::Comparison(x) => x.translate(translator),
-            LirNodeType::Call(x) => x.translate(translator),
-            LirNodeType::Boolean(x) => x.translate(translator),
-            LirNodeType::As(x) => x.translate(translator),
-            LirNodeType::Is(x) => x.translate(translator),
-            LirNodeType::Ref(x) => x.translate(translator),
-            LirNodeType::RefLoad(x) => x.translate(translator),
-            LirNodeType::Deref(x) => x.translate(translator),
-            LirNodeType::Discriminant(x) => x.translate(translator),
-            LirNodeType::Move(x) => x.translate(translator),
-            LirNodeType::Drop(x) => x.translate(translator),
+            LirNodeType::Literal(x) => x.translate(translator, data_type),
+            LirNodeType::Load(x) => x.translate(translator, data_type),
+            LirNodeType::Declare(x) => x.translate(translator, data_type),
+            LirNodeType::Assign(x) => x.translate(translator, data_type),
+            LirNodeType::Binary(x) => x.translate(translator, data_type),
+            LirNodeType::Comparison(x) => x.translate(translator, data_type),
+            LirNodeType::Call(x) => x.translate(translator, data_type),
+            LirNodeType::Boolean(x) => x.translate(translator, data_type),
+            LirNodeType::As(x) => x.translate(translator, data_type),
+            LirNodeType::Is(x) => x.translate(translator, data_type),
+            LirNodeType::Ref(x) => x.translate(translator, data_type),
+            LirNodeType::RefLoad(x) => x.translate(translator, data_type),
+            LirNodeType::Deref(x) => x.translate(translator, data_type),
+            LirNodeType::Discriminant(x) => x.translate(translator, data_type),
+            LirNodeType::Move(x) => x.translate(translator, data_type),
+            LirNodeType::Drop(x) => x.translate(translator, data_type),
+            LirNodeType::Member(x) => x.translate(translator, data_type),
             _ => {
                 unimplemented!()
             }

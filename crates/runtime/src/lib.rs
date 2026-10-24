@@ -295,7 +295,7 @@ pub extern "C" fn calibre_option_is_none(opt: *const GcAggregate) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_option_unwrap(opt: *const GcAggregate) -> i64 {
+pub extern "C" fn calibre_option_get(opt: *const GcAggregate) -> i64 {
     if opt.is_null() {
         return 0;
     }
@@ -376,24 +376,7 @@ pub extern "C" fn calibre_result_is_err(res: *const GcAggregate) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_result_unwrap_ok(res: *const GcAggregate) -> i64 {
-    if res.is_null() {
-        return 0;
-    }
-
-    unsafe {
-        match (&(*res).data).get(1).copied().unwrap_or(Value::Null) {
-            Value::Int(x) => x,
-            Value::UInt(x) => x as i64,
-            Value::Float(x) => x.to_bits() as i64,
-            Value::Ptr(x) => x as i64,
-            Value::Null => 0,
-        }
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn calibre_result_unwrap_err(res: *const GcAggregate) -> i64 {
+pub extern "C" fn calibre_result_get(res: *const GcAggregate) -> i64 {
     if res.is_null() {
         return 0;
     }
@@ -456,8 +439,8 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             ptr: calibre_option_is_none as *const u8,
         },
         RuntimeSymbol {
-            name: "calibre_option_unwrap",
-            ptr: calibre_option_unwrap as *const u8,
+            name: "calibre_option_get",
+            ptr: calibre_option_get as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_result_ok",
@@ -476,12 +459,8 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             ptr: calibre_result_is_err as *const u8,
         },
         RuntimeSymbol {
-            name: "calibre_result_unwrap_ok",
-            ptr: calibre_result_unwrap_ok as *const u8,
-        },
-        RuntimeSymbol {
-            name: "calibre_result_unwrap_err",
-            ptr: calibre_result_unwrap_err as *const u8,
+            name: "calibre_result_get",
+            ptr: calibre_result_get as *const u8,
         },
     ]
 }

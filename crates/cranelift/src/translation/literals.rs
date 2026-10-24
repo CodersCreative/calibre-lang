@@ -11,6 +11,7 @@ impl CraneliftTranslation for LirLiteral {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         match self {
             LirLiteral::Int(i) => {
@@ -18,6 +19,7 @@ impl CraneliftTranslation for LirLiteral {
                     .builder
                     .ins()
                     .iconst(translator.types.int(), i as i64);
+
                 Ok(CompiledValue::new(value, MirDataType::Int))
             }
             LirLiteral::UInt(u) => {
@@ -25,6 +27,7 @@ impl CraneliftTranslation for LirLiteral {
                     .builder
                     .ins()
                     .iconst(translator.types.int(), u as i64);
+
                 Ok(CompiledValue::new(value, MirDataType::UInt))
             }
             LirLiteral::Byte(b) => {
@@ -32,10 +35,12 @@ impl CraneliftTranslation for LirLiteral {
                     .builder
                     .ins()
                     .iconst(translator.types.byte(), b as i64);
+
                 Ok(CompiledValue::new(value, MirDataType::Byte))
             }
             LirLiteral::Float(f) => {
                 let value = translator.builder.ins().f64const(f);
+
                 Ok(CompiledValue::new(value, MirDataType::Float))
             }
             LirLiteral::Bool(b) => {
@@ -43,6 +48,7 @@ impl CraneliftTranslation for LirLiteral {
                     .builder
                     .ins()
                     .iconst(translator.types.bool(), if b { 1 } else { 0 });
+
                 Ok(CompiledValue::new(value, MirDataType::Bool))
             }
             LirLiteral::Char(c) => {
@@ -50,14 +56,17 @@ impl CraneliftTranslation for LirLiteral {
                     .builder
                     .ins()
                     .iconst(translator.types.char(), c as u32 as i64);
+
                 Ok(CompiledValue::new(value, MirDataType::Char))
             }
             LirLiteral::Null => {
                 let value = translator.builder.ins().iconst(translator.types.int(), 0);
+
                 Ok(CompiledValue::new(value, MirDataType::Null))
             }
             _ => {
                 let value = translator.builder.ins().iconst(translator.types.int(), 0);
+
                 Ok(CompiledValue::new(value, MirDataType::Int))
             }
         }

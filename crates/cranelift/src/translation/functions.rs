@@ -1,5 +1,5 @@
 use crate::{
-    natives::{ArgumentKind, runtime_functions},
+    natives::{ArgumentKind, pointer_returning_functions, runtime_functions},
     translation::{CraneliftTranslation, FunctionTranslator},
     values::CompiledValue,
 };
@@ -13,6 +13,7 @@ impl CraneliftTranslation for LirCall {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
+        data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         let callee_value = match *self.caller {
             LirNodeType::Load(LirLoad { value }) => value,
@@ -20,6 +21,8 @@ impl CraneliftTranslation for LirCall {
                 return Err("Call callee must be a Load".into());
             }
         };
+
+        let mut arg_types = Vec::new();
 
         if let Some(&func_id) = translator.functions.get(&callee_value) {
             let func_ref = translator
@@ -30,15 +33,21 @@ impl CraneliftTranslation for LirCall {
             let args = self
                 .args
                 .into_iter()
-                .map(|arg| Ok(arg.translate(translator)?.value))
+                .map(|arg| {
+                    let arg = arg.translate(translator, None)?;
+                    arg_types.push(arg.data_type);
+                    Ok(arg.value)
+                })
                 .collect::<Result<Box<[_]>, Box<dyn Error>>>()?;
 
             let call = translator.builder.ins().call(func_ref, &args);
             let return_type = function
                 .map(|x| x.return_type.clone())
-                .unwrap_or(MirDataType::Int);
+                .or_else(|| data_type);
 
-            if self.returns_value || return_type.is_null() {
+            if let Some(return_type) = return_type
+                && self.returns_value
+            {
                 let results = translator.builder.inst_results(call);
                 if let Some(&result) = results.first() {
                     Ok(CompiledValue::new(result, return_type))
@@ -75,7 +84,7 @@ impl CraneliftTranslation for LirCall {
                     arg_index, runtime_name
                 ))?;
 
-                let value = arg.clone().translate(translator)?;
+                let value = arg.clone().translate(translator, None)?;
 
                 match arg_kind {
                     ArgumentKind::Direct => {
@@ -96,14 +105,22 @@ impl CraneliftTranslation for LirCall {
                         arg_index += 1;
                     }
                 }
+
+                arg_types.push(value.data_type);
             }
 
             let call = translator.builder.ins().call(func_ref, &args);
             let result = translator.builder.inst_results(call)[0];
 
-            if let Some(t) = &sig.returns
+            let returns_pointer = if let Some(t) = &sig.returns
                 && t == &translator.types.ptr()
             {
+                true
+            } else {
+                pointer_returning_functions().contains(&runtime_name)
+            };
+
+            if returns_pointer {
                 let root_func_id = translator
                     .runtime_functions
                     .get("calibre_gc_add_root")
@@ -114,29 +131,40 @@ impl CraneliftTranslation for LirCall {
                     .declare_func_in_func(*root_func_id, translator.builder.func);
 
                 translator.builder.ins().call(root_func_ref, &[result]);
-
-                Ok(CompiledValue::new(
-                    result,
-                    MirDataType::Ptr(Box::new(MirDataType::Null)),
-                ))
-            } else {
-                // TODO Probably swap this for an MirDataType return type and just remove all of this hassle
-                let return_type = if let Some(t) = &sig.returns {
-                    match t {
-                        t if t == &translator.types.int() => MirDataType::Int,
-                        t if t == &translator.types.uint() => MirDataType::UInt,
-                        t if t == &translator.types.float() => MirDataType::Float,
-                        t if t == &translator.types.bool() => MirDataType::Bool,
-                        t if t == &translator.types.byte() => MirDataType::Byte,
-                        t if t == &translator.types.char() => MirDataType::Char,
-                        _ => MirDataType::Null,
-                    }
-                } else {
-                    MirDataType::Null
-                };
-
-                Ok(CompiledValue::new(result, return_type))
             }
+
+            // TODO Probably swap this for an MirDataType return type and just remove all of this hassle
+            let mut return_type = if let Some(t) = &sig.typed_return {
+                t.clone()
+            } else if let Some(t) = &sig.returns {
+                match t {
+                    t if t == &translator.types.int() => MirDataType::Int,
+                    t if t == &translator.types.uint() => MirDataType::UInt,
+                    t if t == &translator.types.float() => MirDataType::Float,
+                    t if t == &translator.types.bool() => MirDataType::Bool,
+                    t if t == &translator.types.byte() => MirDataType::Byte,
+                    t if t == &translator.types.char() => MirDataType::Char,
+                    _ => MirDataType::Null,
+                }
+            } else {
+                MirDataType::Null
+            };
+
+            if let Some(t) = data_type
+                && return_type.is_dyn()
+            {
+                return_type = t;
+            }
+
+            let subst = arg_types
+                .into_iter()
+                .enumerate()
+                .map(|x| (x.0.to_string(), x.1))
+                .collect();
+
+            return_type.substitute(&subst);
+
+            Ok(CompiledValue::new(result, return_type))
         } else {
             Err(format!("Unable to find function: {}", callee_value).into())
         }

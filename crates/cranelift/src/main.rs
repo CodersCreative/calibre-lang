@@ -25,9 +25,6 @@ const calc := fn (x : int) -> int => {
     return mul(x, 2);
 };
 
-const fib := fn (n : int) -> int => 
-    return n if n < 2 else (fib(n - 1) + fib(n - 2));
-
 const conversions := fn () -> int => {
     let f := 10 as! float;
     let fi := f as! int;
@@ -40,14 +37,27 @@ const conversions := fn () -> int => {
 
     let u := fi as! uint;
     let ui := u as! int;
-    
+
     return fi + bi + ci + ui;
 };
 
-const main := fn (x : int) -> int => {
-    let result := calc(x) if x is int else calc(x+1);
-    let value := conversions();
-    return result + value + fib(28);
+const test_option_next := fn () -> int => {
+    let res := some(50);
+    return res.next;
+}
+
+const test_result_ok := fn () -> int => {
+    let res := ok(100);
+    return res.ok;
+}
+
+const test_result_err := fn () -> int => {
+    let res := err(200);
+    return res.err;
+}
+
+const main := fn () -> int => {
+    return test_option_next() + test_result_ok() + test_result_err();
 };
 "#;
 
@@ -67,7 +77,7 @@ fn parse(text: String) -> (LirRegistry, MiddleEnvironment) {
     (lir_result, env)
 }
 
-fn run<I, T: Debug>(input: I) {
+fn run<T: Debug>() {
     let (lir, env) = parse(BASIC_CODE.to_string());
 
     let jit = match JitCompiler::new(lir.clone()) {
@@ -99,16 +109,19 @@ fn run<I, T: Debug>(input: I) {
         .and_then(|(k, _)| jit.get_function(k));
 
     if let Some(code_ptr) = main_ptr {
-        let code_fn = unsafe { std::mem::transmute::<*const u8, fn(I) -> T>(code_ptr) };
-        let result = code_fn(input);
+        let code_fn = unsafe { std::mem::transmute::<*const u8, fn() -> T>(code_ptr) };
+        let result = code_fn();
         println!("Result: {:?}", result);
     } else {
-        todo!()
+        eprintln!("Failed to find `main`");
+        for (k, _) in env.symbols.variables.iter() {
+            eprintln!("\tAvailable : {}", k.name());
+        }
     }
 }
 
 fn main() {
     let start = Instant::now();
-    run::<i64, i64>(300);
+    run::<i64>();
     println!("elapsed - {}ms", start.elapsed().as_millis());
 }

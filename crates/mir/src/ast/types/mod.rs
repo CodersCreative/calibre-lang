@@ -55,15 +55,15 @@ impl MirDataType {
                 identifier,
                 generic_types,
             } => {
-                if let Some(name) = identifier.fully_qualified_path.name.as_ref() {
-                    let name_str = name.to_string();
-                    if subst.contains_key(&name_str) {
-                        return subst
-                            .get(&name_str)
-                            .cloned()
-                            .unwrap_or_else(|| self.clone());
-                    }
+                if let Some(name) = identifier.fully_qualified_path.name.as_ref()
+                    && subst.contains_key(name.as_str())
+                {
+                    return subst
+                        .get(name.as_str())
+                        .cloned()
+                        .unwrap_or_else(|| self.clone());
                 }
+
                 MirDataType::Struct {
                     identifier: identifier.clone(),
                     generic_types: generic_types.iter().map(|g| g.substitute(subst)).collect(),

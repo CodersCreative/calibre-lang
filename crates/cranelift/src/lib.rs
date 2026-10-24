@@ -207,6 +207,7 @@ impl CompilerData {
                     &self.globals,
                     &self.functions,
                     &self.runtime_functions,
+                    func.return_type.clone(),
                 );
 
                 translator.translate_function(func)?;

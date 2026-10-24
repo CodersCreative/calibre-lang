@@ -159,6 +159,14 @@ pub struct TypeKey {
     pub fully_qualified_path: Arc<FullyQualifiedPath>,
 }
 
+impl<'a> From<&'a str> for TypeKey {
+    fn from(value: &'a str) -> Self {
+        Self {
+            fully_qualified_path: FullyQualifiedPath::combine(None, Ustr::from(value)),
+        }
+    }
+}
+
 impl TypeKey {
     pub fn name(&self) -> &Ustr {
         self.fully_qualified_path.name.as_ref().unwrap()

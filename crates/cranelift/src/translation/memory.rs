@@ -15,6 +15,7 @@ impl CraneliftTranslation for LirLoad {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         // TODO Find a way to handle this more gracefully
         if let Some(Key::VariableKey(_)) = translator.registry.natives.get(&self.value.name()) {
@@ -82,6 +83,20 @@ impl CraneliftTranslation for LirLoad {
             }
         } else if let Some((ty, var)) = translator.variables.get(&self.value) {
             let value = translator.builder.use_var(*var);
+
+            if translator.gc_managed_vars.contains(&self.value) {
+                let root_func_id = translator
+                    .runtime_functions
+                    .get("calibre_gc_add_root")
+                    .ok_or("calibre_gc_add_root not found in runtime functions")?;
+
+                let root_func_ref = translator
+                    .module
+                    .declare_func_in_func(*root_func_id, translator.builder.func);
+
+                translator.builder.ins().call(root_func_ref, &[value]);
+            }
+
             Ok(CompiledValue::new(value, ty.clone()))
         } else if let Some((data_type, data_id)) = translator.globals.get(&self.value) {
             let global_handle = translator
@@ -111,11 +126,12 @@ impl CraneliftTranslation for LirMove {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         // TODO Dropping
-        if let Some((_, var)) = translator.variables.get(&self.value) {
+        if let Some((data_type, var)) = translator.variables.get(&self.value) {
             let value = translator.builder.use_var(*var);
-            Ok(CompiledValue::new(value, MirDataType::Null))
+            Ok(CompiledValue::new(value, data_type.clone()))
         } else {
             Err(format!("Unable to find variable for move: {}", self.value).into())
         }
@@ -126,6 +142,7 @@ impl CraneliftTranslation for LirDrop {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         // TODO Dropping
         let value = translator.builder.ins().iconst(translator.types.int(), 0);
