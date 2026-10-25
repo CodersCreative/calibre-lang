@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::io::{self, Write};
 use std::sync::LazyLock;
 use wasm_sync::Mutex;
 
@@ -299,6 +300,28 @@ pub extern "C" fn calibre_enum_discriminant(val: *const GcAggregate) -> u64 {
     }
 }
 
+// TODO Add debug information
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_panic(msg: i64) {
+    eprintln!("calibre panicked with message: {}", msg);
+    std::process::exit(1);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_console_output(handle_type: i64, value: i64) {
+    if handle_type == 2 {
+        let stderr = io::stderr();
+        let mut handle = stderr.lock();
+        let _ = handle.write_all(value.to_string().as_bytes());
+        let _ = handle.flush();
+    } else {
+        let stdout = io::stdout();
+        let mut handle = stdout.lock();
+        let _ = handle.write_all(value.to_string().as_bytes());
+        let _ = handle.flush();
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_result_ok(tag: i64, payload: i64) -> *mut GcAggregate {
     let value = match tag {
@@ -382,6 +405,14 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_enum_discriminant",
             ptr: calibre_enum_discriminant as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_panic",
+            ptr: calibre_panic as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_console_output",
+            ptr: calibre_console_output as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_result_ok",

@@ -67,7 +67,9 @@ const test_result_discriminant := fn () -> int => {
 const main := fn (x : int) -> int => {
     let result := calc(x) if x is int else calc(x+1);
     let value := conversions();
-    return result + value + test_option_next() + test_result_discriminant() + test_result_ok() + test_result_err() + fib(28);
+    let fib_value := fib(28);
+    console_output(0, fib_value);
+    return result + value + test_option_next() + test_result_discriminant() + test_result_ok() + test_result_err() + fib_value;
 };
 "#;
 

@@ -140,6 +140,25 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     typed_return: Some(MirDataType::UInt),
                 },
             ),
+            (
+                "calibre_panic",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_console_output",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
         ];
 
         lst.into_iter().collect()
@@ -154,6 +173,8 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("ok", "calibre_result_ok"),
             ("err", "calibre_result_err"),
             ("some", "calibre_option_some"),
+            ("panic", "calibre_panic"),
+            ("console_output", "calibre_console_output"),
         ];
 
         lst.into_iter().collect()

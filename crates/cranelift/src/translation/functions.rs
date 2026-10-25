@@ -110,7 +110,12 @@ impl CraneliftTranslation for LirCall {
             }
 
             let call = translator.builder.ins().call(func_ref, &args);
-            let result = translator.builder.inst_results(call)[0];
+
+            let result = if sig.returns.is_some() {
+                translator.builder.inst_results(call)[0]
+            } else {
+                translator.builder.ins().iconst(translator.types.int(), 0)
+            };
 
             let returns_pointer = if let Some(t) = &sig.returns
                 && t == &translator.types.ptr()
