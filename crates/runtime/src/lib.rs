@@ -268,13 +268,13 @@ pub extern "C" fn calibre_option_some(tag: i64, payload: i64) -> *mut GcAggregat
     unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
 }
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_enum_get(opt: *const GcAggregate) -> i64 {
-    if opt.is_null() {
+pub extern "C" fn calibre_enum_get(val: *const GcAggregate) -> i64 {
+    if val.is_null() {
         return 0;
     }
 
     unsafe {
-        match (&(*opt).data).get(1).copied().unwrap_or(Value::Null) {
+        match (&(*val).data).get(1).copied().unwrap_or(Value::Null) {
             Value::Int(x) => x,
             Value::UInt(x) => x as i64,
             Value::Float(x) => x.to_bits() as i64,
@@ -285,17 +285,15 @@ pub extern "C" fn calibre_enum_get(opt: *const GcAggregate) -> i64 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_enum_discriminant(res: *mut GcObject) -> i64 {
-    if res.is_null() {
+pub extern "C" fn calibre_enum_discriminant(val: *const GcAggregate) -> u64 {
+    if val.is_null() {
         return 0;
     }
 
     unsafe {
-        match &*res {
-            GcObject::Aggregate(agg) if agg.field_count == 2 => match agg.data.first() {
-                Some(Value::Int(x)) => *x,
-                _ => 0,
-            },
+        match (&(*val).data).first().copied().unwrap_or(Value::Null) {
+            Value::Int(x) => x.cast_unsigned(),
+            Value::UInt(x) => x,
             _ => 0,
         }
     }

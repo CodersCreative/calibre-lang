@@ -116,11 +116,11 @@ impl CraneliftTranslation for LirDiscriminant {
                 let call = translator.builder.ins().call(func_ref, &[ptr]);
                 let result = translator.builder.inst_results(call)[0];
 
-                Ok(CompiledValue::new(result, MirDataType::Int))
+                Ok(CompiledValue::new(result, MirDataType::UInt))
             }
             _ => {
-                let value = translator.builder.ins().iconst(translator.types.int(), 0);
-                Ok(CompiledValue::new(value, MirDataType::Int))
+                let value = translator.builder.ins().iconst(translator.types.uint(), 0);
+                Ok(CompiledValue::new(value, MirDataType::UInt))
             }
         }
     }

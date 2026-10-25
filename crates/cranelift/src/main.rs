@@ -59,10 +59,15 @@ const test_result_err := fn () -> int => {
     return res.err;
 }
 
+const test_result_discriminant := fn () -> int => {
+    let res := err(200);
+    return discriminant(res) as! int;
+}
+
 const main := fn (x : int) -> int => {
     let result := calc(x) if x is int else calc(x+1);
     let value := conversions();
-    return result + value + test_option_next() + test_result_ok() + test_result_err() + fib(28);;
+    return result + value + test_option_next() + test_result_discriminant() + test_result_ok() + test_result_err() + fib(28);
 };
 "#;
 
@@ -72,8 +77,13 @@ fn parse(text: String) -> (LirRegistry, MiddleEnvironment) {
     parser.set_source_path(Some(path.clone()));
     let program = parser.produce_ast(&text);
 
+    println!("Lowering to MIR...");
     let (env, _scope, middle) =
         MiddleEnvironment::new_and_evaluate(program, path, Vec::new(), true, false);
+
+    if !env.context.errors.is_empty() {
+        println!("{:?}", env.context.errors);
+    }
 
     println!("Lowering to LIR...");
     let lir_result = LirEnvironment::lower(&env, middle);
