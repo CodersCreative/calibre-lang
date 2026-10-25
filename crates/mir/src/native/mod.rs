@@ -250,7 +250,7 @@ impl MiddleEnvironment {
         // TODO Fix stdlib modules that arent auto-loaded not being imported properly later.
         add("traits", true);
         add("thread", true);
-        add("libc", true);
+        add("libc", false);
         add("console", false);
         add("async", true);
         add("random", false);

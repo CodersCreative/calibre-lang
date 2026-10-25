@@ -24,10 +24,7 @@ impl MirTypable for MirField {
         scope: ScopeId,
         span: Span,
     ) -> Option<MirDataType> {
-        let base_type = self.base.mir_type_of(env, scope, span).map(|x| match x {
-            MirDataType::Option(x) => *x,
-            x => x,
-        })?;
+        let base_type = self.base.mir_type_of(env, scope, span)?;
 
         env.resolve_member_field_type(&base_type, &self.field)
     }

@@ -243,7 +243,10 @@ impl MirLowering for AstTry {
     ) -> Result<MiddleNode, MiddleErr> {
         let resolved_type = self.value.type_of(env, scope, span);
 
-        let is_option = resolved_type.as_ref().is_some_and(|x| x.is_option());
+        let is_option = resolved_type
+            .as_ref()
+            .is_some_and(|x| x.unwrap_all_refs().is_option());
+
         let (function_err_type, function_is_null) = {
             match env.scoping.return_type_stack.last() {
                 Some(x) => (
@@ -266,6 +269,14 @@ impl MirLowering for AstTry {
                     destructure: None,
                     pattern: None,
                 },
+                Vec::new(),
+                Box::new(body),
+            )
+        };
+
+        let wildcard_arm = |body: AstNode| {
+            (
+                MatchArmType::Wildcard(body.span),
                 Vec::new(),
                 Box::new(body),
             )
@@ -303,19 +314,14 @@ impl MirLowering for AstTry {
                         );
 
                         let err_arm = if let Some(catch) = self.catch {
-                            enum_arm("None", catch.name, *catch.body)
+                            wildcard_arm(*catch.body)
                         } else if function_is_null {
-                            enum_arm(
-                                "None",
-                                None,
-                                AstNode::new(span, AstNodeType::Return(AstReturn { value: None })),
-                            )
+                            wildcard_arm(AstNode::new(
+                                span,
+                                AstNodeType::Return(AstReturn { value: None }),
+                            ))
                         } else {
-                            enum_arm(
-                                "None",
-                                None,
-                                AstNode::ret(AstNode::identifier(span, "none")),
-                            )
+                            wildcard_arm(AstNode::ret(AstNode::identifier(span, "none")))
                         };
 
                         MatchBody {
@@ -335,11 +341,10 @@ impl MirLowering for AstTry {
                         let err_arm = if let Some(catch) = self.catch {
                             enum_arm("Err", catch.name, *catch.body)
                         } else if function_is_null {
-                            enum_arm(
-                                "Err",
-                                None,
-                                AstNode::new(span, AstNodeType::Return(AstReturn { value: None })),
-                            )
+                            wildcard_arm(AstNode::new(
+                                span,
+                                AstNodeType::Return(AstReturn { value: None }),
+                            ))
                         } else if let Some(err_type) = function_err_type {
                             let err_name = env.context.get_temp("anon_err_value");
                             enum_arm(
@@ -416,17 +421,9 @@ impl MirLowering for AstTry {
                     );
 
                     let err_arm_none = if let Some(ref catch) = self.catch {
-                        enum_arm(
-                            "None",
-                            None,
-                            emit_call("err", vec![CallArg::Value(*catch.body.clone())]),
-                        )
+                        wildcard_arm(emit_call("err", vec![CallArg::Value(*catch.body.clone())]))
                     } else {
-                        enum_arm(
-                            "None",
-                            None,
-                            emit_call("err", vec![CallArg::Value(AstNode::null(span))]),
-                        )
+                        wildcard_arm(emit_call("err", vec![CallArg::Value(AstNode::null(span))]))
                     };
 
                     AstNode {
@@ -501,15 +498,11 @@ impl MirLowering for AstTry {
 
                 let panic_arm = if let Some(catch) = self.catch {
                     if is_option {
-                        enum_arm(
-                            "None",
-                            None,
-                            AstNode::call(
-                                span,
-                                AstNode::identifier(span, "panic"),
-                                vec![CallArg::Value(*catch.body)],
-                            ),
-                        )
+                        wildcard_arm(AstNode::call(
+                            span,
+                            AstNode::identifier(span, "panic"),
+                            vec![CallArg::Value(*catch.body)],
+                        ))
                     } else {
                         let err_name = env.context.get_temp("anon_err_value");
                         enum_arm(
@@ -524,11 +517,11 @@ impl MirLowering for AstTry {
                     }
                 } else {
                     if is_option {
-                        enum_arm(
-                            "None",
-                            None,
-                            AstNode::call(span, AstNode::identifier(span, "panic"), Vec::new()),
-                        )
+                        wildcard_arm(AstNode::call(
+                            span,
+                            AstNode::identifier(span, "panic"),
+                            Vec::new(),
+                        ))
                     } else {
                         let err_name = env.context.get_temp("anon_err_value");
                         enum_arm(

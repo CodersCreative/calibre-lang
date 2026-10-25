@@ -13,8 +13,8 @@ readme.workspace = true
 
 [dependencies]
 clap = { workspace = true }
-calibre-parser = { workspace = true }
-calibre-mir = { workspace = true }
+calibre-parser = { workspace = true, features=["native"] }
+calibre-mir = { workspace = true, features=["native"] }
 
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Type Inference
+// TODO Fix - FAILING - Invalid member access in VM
 // From 9618 w22 qp 22
 
 import stdin from std::console;
@@ -27,10 +27,9 @@ const find_values := fn(data_array : &list:<int?>) -> uint => {
   let number := try? number;
   let mut out := 0u;
 
-  for val in data_array => {
+  for val in data_array =>
     if val = number =>
       out += 1u;
-  }
   
   return out;
 }

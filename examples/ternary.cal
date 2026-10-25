@@ -9,9 +9,9 @@ const main := fn => {
 	print(result_text);
 
 	// If Equivalent
-	let text := if true => "selected" else => "fallback";
-	let option_int := if true => some(42) else => none;
-	let result_text := if true => ok("ready") else => err("not ready");
+	let text := if true => emit "selected" else => emit "fallback";
+	let option_int := if true => emit some(42) else => emit none;
+	let result_text := if true => emit ok("ready") else => emit err("not ready");
 
 	print(text);
 	print(option_int);

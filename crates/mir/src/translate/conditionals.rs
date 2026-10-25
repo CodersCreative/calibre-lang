@@ -121,6 +121,18 @@ impl MirLowering for AstIf {
 
                 let comparison = x.lower_or_empty(env, scope, span, Some(MirDataType::Bool));
 
+                match &comparison.node_type {
+                    MiddleNodeType::Identifier(x) if x.identifier.name() == "true" => {
+                        return self.then.lower(env, scope, span, data_type);
+                    }
+                    MiddleNodeType::Identifier(x)
+                        if x.identifier.name() == "false" && self.otherwise.is_some() =>
+                    {
+                        return self.otherwise.unwrap().lower(env, scope, span, data_type);
+                    }
+                    _ => {}
+                }
+
                 let then = self
                     .then
                     .lower_or_empty(env, scope, span, data_type.clone());

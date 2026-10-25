@@ -242,7 +242,7 @@ impl MiddleEnvironment {
         base: &MirDataType,
         member: &Ustr,
     ) -> Option<MirDataType> {
-        let out = match base {
+        let out = match base.unwrap_all_refs() {
             MirDataType::Struct {
                 identifier,
                 generic_types,
@@ -253,10 +253,10 @@ impl MiddleEnvironment {
                         .cloned()
                         .unwrap_or(MirDataType::Dynamic),
                 ));
-                Some(MirDataType::Function {
+                return Some(MirDataType::Function {
                     return_type: Box::new(return_type),
                     parameters: Vec::new(),
-                })
+                });
             }
             MirDataType::Struct { identifier, .. } => self
                 .typing
@@ -295,7 +295,11 @@ impl MiddleEnvironment {
         };
 
         if let Some(out) = out {
-            return Some(out);
+            if let MirDataType::Ref(_, x) = base {
+                return Some(MirDataType::Ref(Box::new(out), *x));
+            } else {
+                return Some(out);
+            }
         }
 
         if let Some(imp) = self.typing.find_inherent_impl_for_type(base)

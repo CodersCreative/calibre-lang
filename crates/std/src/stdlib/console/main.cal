@@ -17,7 +17,7 @@ const clear := fn => {
 };
 
 const stdin := fn (prompt : str) -> str => {
-	out(prompt);
+	stdout(prompt);
 	return console_input();
 };
 
