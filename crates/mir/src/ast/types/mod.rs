@@ -440,8 +440,9 @@ impl MirDataType {
             MirDataType::Char => 5,
             MirDataType::Struct { identifier, .. } if !enums.any(|x| x == identifier) => 6,
             MirDataType::Tuple(_) => 7,
-            MirDataType::Struct { .. } => 8,
-            _ => 9,
+            MirDataType::Struct { .. } | MirDataType::Result { .. } | MirDataType::Option(_) => 8,
+            MirDataType::List(_) => 9,
+            _ => 10,
         }
     }
 

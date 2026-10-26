@@ -81,18 +81,25 @@ type Point := struct {
     y : int,
 };
 
-const test_struct_literal := fn () -> int => {
+const test_struct_literal := fn () => {
     let p := Point { x: 10, y: 20 };
     console_output(0, p);
     console_output(0, '\n');
-    return 0;
 }
 
-const test_tuple_literal := fn () -> int => {
+const test_tuple_literal := fn () => {
     let t := (1, 2, 3);
     console_output(0, t);
     console_output(0, '\n');
-    return 0;
+}
+
+const test_list_literal := fn () => {
+    let lst := [1, 2, 3];
+    console_output(0, lst);
+    console_output(0, '\n');
+    let lst := [420 for 69];
+    console_output(0, lst);
+    console_output(0, '\n');
 }
 
 type Language := enum {
@@ -109,7 +116,6 @@ const test_enum_literal := fn () => {
     console_output(0, '\n');
     console_output(0, discriminant(lang));
     console_output(0, '\n');
-
 }
 
 const main := fn (x : int) -> int => {
@@ -120,6 +126,15 @@ const main := fn (x : int) -> int => {
     test_struct_literal();
     test_tuple_literal();
     test_enum_literal();
+    test_list_literal();
+
+    let mut i := 0;
+    for i < 30 => {
+        console_output(0, i);
+        console_output(0, ' ');
+        i += 1;
+    }
+    console_output(0, '\n');
 
     console_output(0, fib_value);
     console_output(0, '\n');

@@ -35,9 +35,6 @@ impl CraneliftTranslation for LirLoad {
                     let call = translator.builder.ins().call(func_ref, &[]);
                     let result = translator.builder.inst_results(call)[0];
 
-                    let root_func_ref = translator.get_add_root()?;
-                    translator.builder.ins().call(root_func_ref, &[result]);
-
                     Ok(CompiledValue::new(
                         result,
                         MirDataType::Option(Box::new(MirDataType::Dynamic)),

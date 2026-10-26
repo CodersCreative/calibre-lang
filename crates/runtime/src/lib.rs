@@ -25,6 +25,7 @@ pub enum Value {
     Struct(*const GcAggregate),
     Tuple(*const GcAggregate),
     Enum(*const GcAggregate),
+    List(*const GcList),
     Ptr(usize),
 }
 
@@ -40,6 +41,7 @@ impl Value {
             ValueTag::Struct => Self::Struct(value.cast_unsigned() as *const GcAggregate),
             ValueTag::Tuple => Self::Tuple(value.cast_unsigned() as *const GcAggregate),
             ValueTag::Enum => Self::Enum(value.cast_unsigned() as *const GcAggregate),
+            ValueTag::List => Self::List(value.cast_unsigned() as *const GcList),
             ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
         }
     }
@@ -57,6 +59,7 @@ impl From<Value> for i64 {
             Value::Struct(x) => x as i64,
             Value::Tuple(x) => x as i64,
             Value::Enum(x) => x as i64,
+            Value::List(x) => x as i64,
             Value::Null => 0,
         }
     }
@@ -90,33 +93,17 @@ impl Display for Value {
                     write!(f, "null")
                 } else {
                     let value = unsafe { &**ptr };
-                    let field_count = value.field_count;
 
-                    let mut parts = Vec::new();
-                    for i in 0..field_count {
-                        if let Some(value) = value.data.get(i) {
-                            parts.push(value.to_string());
-                        }
-                    }
-
-                    write!(f, "{{ {} }}", parts.join(", "))
-                }
-            }
-            Value::Enum(ptr) => {
-                if ptr.is_null() {
-                    write!(f, "null")
-                } else {
-                    let value = unsafe { &**ptr };
-                    let field_count = value.field_count;
-
-                    let mut parts = Vec::new();
-                    for i in 0..field_count {
-                        if let Some(value) = value.data.get(i) {
-                            parts.push(value.to_string());
-                        }
-                    }
-
-                    write!(f, "{{ {} }}", parts.join(", "))
+                    write!(
+                        f,
+                        "{{ {} }}",
+                        value
+                            .data
+                            .iter()
+                            .map(|x| x.to_string())
+                            .collect::<Box<[_]>>()
+                            .join(", ")
+                    )
                 }
             }
             Value::Tuple(ptr) => {
@@ -124,16 +111,53 @@ impl Display for Value {
                     write!(f, "null")
                 } else {
                     let value = unsafe { &**ptr };
-                    let field_count = value.field_count;
 
-                    let mut parts = Vec::new();
-                    for i in 0..field_count {
-                        if let Some(value) = value.data.get(i) {
-                            parts.push(value.to_string());
-                        }
-                    }
+                    write!(
+                        f,
+                        "({})",
+                        value
+                            .data
+                            .iter()
+                            .map(|x| x.to_string())
+                            .collect::<Box<[_]>>()
+                            .join(", ")
+                    )
+                }
+            }
+            Value::Enum(ptr) => {
+                if ptr.is_null() {
+                    write!(f, "null")
+                } else {
+                    let value = unsafe { &**ptr };
 
-                    write!(f, "({})", parts.join(", "))
+                    write!(
+                        f,
+                        "{{ {} }}",
+                        value
+                            .data
+                            .iter()
+                            .map(|x| x.to_string())
+                            .collect::<Box<[_]>>()
+                            .join(", ")
+                    )
+                }
+            }
+            Value::List(ptr) => {
+                if ptr.is_null() {
+                    write!(f, "null")
+                } else {
+                    let value = unsafe { &**ptr };
+
+                    write!(
+                        f,
+                        "[{}]",
+                        value
+                            .data
+                            .iter()
+                            .map(|x| x.to_string())
+                            .collect::<Box<[_]>>()
+                            .join(", ")
+                    )
                 }
             }
         }
@@ -152,6 +176,7 @@ pub enum ValueTag {
     Struct,
     Tuple,
     Enum,
+    List,
     Ptr,
 }
 
@@ -354,6 +379,33 @@ pub extern "C" fn calibre_aggregate_set_field(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn calibre_list_set_index(
+    lst: *mut GcList,
+    index: usize,
+    tag: ValueTag,
+    payload: i64,
+) {
+    unsafe {
+        if !lst.is_null() {
+            let data = (*lst).data.as_mut_ptr();
+
+            if index < (*lst).capacity {
+                *data.add(index) = Value::from_tag(tag, payload);
+            }
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_list_push(lst: *mut GcList, tag: ValueTag, payload: i64) {
+    unsafe {
+        if !lst.is_null() {
+            (*lst).data.push(Value::from_tag(tag, payload));
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn calibre_gc_collect() {
     let roots = match GC_ROOTS.lock() {
         Ok(r) => r.clone(),
@@ -540,6 +592,14 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_aggregate_set_field",
             ptr: calibre_aggregate_set_field as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_list_set_index",
+            ptr: calibre_list_set_index as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_list_push",
+            ptr: calibre_list_push as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_gc_collect",

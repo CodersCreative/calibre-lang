@@ -4,7 +4,7 @@ use crate::{
 };
 use calibre_lir::{
     MirDataType, TypeKey,
-    ast::{LirAggregate, LirEnum, LirLiteral},
+    ast::{LirAggregate, LirEnum, LirList, LirLiteral},
 };
 use cranelift::codegen::ir::{InstBuilder, MemFlags};
 use cranelift_module::Module;
@@ -98,9 +98,6 @@ impl CraneliftTranslation for LirLiteral {
                         .store(MemFlags::new(), value, data_ptr, i as i32);
                 }
 
-                let root_func_ref = translator.get_add_root()?;
-                translator.builder.ins().call(root_func_ref, &[ptr]);
-
                 Ok(CompiledValue::new(ptr, MirDataType::Str))
             }
             LirLiteral::Null => {
@@ -177,10 +174,6 @@ impl CraneliftTranslation for LirAggregate {
             field_types.push(field.data_type);
         }
 
-        let root_func_ref = translator.get_add_root()?;
-
-        translator.builder.ins().call(root_func_ref, &[ptr]);
-
         let data_type = if let Some(name) = self.name {
             MirDataType::Struct {
                 identifier: name,
@@ -237,9 +230,6 @@ impl CraneliftTranslation for LirEnum {
             .call(alloc_func_ref, &[variant, tag, payload]);
         let ptr = translator.builder.inst_results(ptr)[0];
 
-        let root_func_ref = translator.get_add_root()?;
-        translator.builder.ins().call(root_func_ref, &[ptr]);
-
         let data_type = if let Some(name) = self.name {
             MirDataType::Struct {
                 identifier: name,
@@ -253,5 +243,55 @@ impl CraneliftTranslation for LirEnum {
         };
 
         Ok(CompiledValue::new(ptr, data_type))
+    }
+}
+
+impl CraneliftTranslation for LirList {
+    fn translate<'a, M: Module>(
+        mut self,
+        translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
+    ) -> Result<CompiledValue, Box<dyn Error>> {
+        let len = translator
+            .builder
+            .ins()
+            .iconst(translator.types.int(), self.values.len() as i64);
+
+        let alloc_func_id = translator
+            .runtime_functions
+            .get("calibre_gc_alloc_list")
+            .ok_or("calibre_gc_alloc_list not found in runtime_functions")?;
+
+        let alloc_func_ref = translator
+            .module
+            .declare_func_in_func(*alloc_func_id, translator.builder.func);
+
+        let ptr = translator.builder.ins().call(alloc_func_ref, &[len]);
+        let ptr = translator.builder.inst_results(ptr)[0];
+
+        let push_func_id = translator
+            .runtime_functions
+            .get("calibre_list_push")
+            .ok_or("calibre_list_push not found in runtime_functions")?;
+
+        let push_func_ref = translator
+            .module
+            .declare_func_in_func(*push_func_id, translator.builder.func);
+
+        for value in std::mem::take(&mut self.values) {
+            let value = value.translate(translator, Some(self.data_type.clone()))?;
+
+            let tag = translator.builder.ins().iconst(
+                translator.types.int(),
+                value.data_type.type_tag(translator.registry.enums()) as i64,
+            );
+
+            translator
+                .builder
+                .ins()
+                .call(push_func_ref, &[ptr, tag, value.value]);
+        }
+
+        Ok(CompiledValue::new(ptr, self.data_type))
     }
 }
