@@ -35,15 +35,7 @@ impl CraneliftTranslation for LirLoad {
                     let call = translator.builder.ins().call(func_ref, &[]);
                     let result = translator.builder.inst_results(call)[0];
 
-                    let root_func_id = translator
-                        .runtime_functions
-                        .get("calibre_gc_add_root")
-                        .ok_or("calibre_gc_add_root not found in runtime functions")?;
-
-                    let root_func_ref = translator
-                        .module
-                        .declare_func_in_func(*root_func_id, translator.builder.func);
-
+                    let root_func_ref = translator.get_add_root()?;
                     translator.builder.ins().call(root_func_ref, &[result]);
 
                     Ok(CompiledValue::new(
@@ -81,23 +73,15 @@ impl CraneliftTranslation for LirLoad {
                     unreachable!()
                 }
             }
-        } else if let Some((ty, var)) = translator.variables.get(&self.value) {
-            let value = translator.builder.use_var(*var);
+        } else if let Some((ty, var)) = translator.variables.get(&self.value).cloned() {
+            let value = translator.builder.use_var(var);
 
             if translator.gc_managed_vars.contains(&self.value) {
-                let root_func_id = translator
-                    .runtime_functions
-                    .get("calibre_gc_add_root")
-                    .ok_or("calibre_gc_add_root not found in runtime functions")?;
-
-                let root_func_ref = translator
-                    .module
-                    .declare_func_in_func(*root_func_id, translator.builder.func);
-
-                translator.builder.ins().call(root_func_ref, &[value]);
+                let func_ref = translator.get_add_root()?;
+                translator.builder.ins().call(func_ref, &[value]);
             }
 
-            Ok(CompiledValue::new(value, ty.clone()))
+            Ok(CompiledValue::new(value, ty))
         } else if let Some((data_type, data_id)) = translator.globals.get(&self.value) {
             let global_handle = translator
                 .module

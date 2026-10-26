@@ -3,8 +3,8 @@ use crate::{
     values::CompiledValue,
 };
 use calibre_lir::{
-    MirDataType,
-    ast::{LirAggregate, LirLiteral},
+    MirDataType, TypeKey,
+    ast::{LirAggregate, LirEnum, LirLiteral},
 };
 use cranelift::codegen::ir::{InstBuilder, MemFlags};
 use cranelift_module::Module;
@@ -100,15 +100,7 @@ impl CraneliftTranslation for LirLiteral {
                         .store(MemFlags::new(), value, data_ptr, i as i32);
                 }
 
-                let root_func_id = translator
-                    .runtime_functions
-                    .get("calibre_gc_add_root")
-                    .ok_or("calibre_gc_add_root not found in runtime_functions")?;
-
-                let root_func_ref = translator
-                    .module
-                    .declare_func_in_func(*root_func_id, translator.builder.func);
-
+                let root_func_ref = translator.get_add_root()?;
                 translator.builder.ins().call(root_func_ref, &[string]);
 
                 Ok(CompiledValue::new(ptr, MirDataType::Str))
@@ -171,10 +163,11 @@ impl CraneliftTranslation for LirAggregate {
         for (i, (_, value)) in std::mem::take(&mut self.fields.0).into_iter().enumerate() {
             let field = value.translate(translator, None)?;
 
-            let tag = translator
-                .builder
-                .ins()
-                .iconst(translator.types.int(), field.data_type.type_tag() as i64);
+            let tag = translator.builder.ins().iconst(
+                translator.types.int(),
+                field.data_type.type_tag(translator.registry.enums()) as i64,
+            );
+
             let index = translator
                 .builder
                 .ins()
@@ -188,14 +181,7 @@ impl CraneliftTranslation for LirAggregate {
             field_types.push(field.data_type);
         }
 
-        let root_func_id = translator
-            .runtime_functions
-            .get("calibre_gc_add_root")
-            .ok_or("calibre_gc_add_root not found in runtime_functions")?;
-
-        let root_func_ref = translator
-            .module
-            .declare_func_in_func(*root_func_id, translator.builder.func);
+        let root_func_ref = translator.get_add_root()?;
 
         translator
             .builder
@@ -211,6 +197,69 @@ impl CraneliftTranslation for LirAggregate {
             MirDataType::Tuple(field_types)
         };
 
+        Ok(CompiledValue::new(ptr, data_type))
+    }
+}
+
+impl CraneliftTranslation for LirEnum {
+    fn translate<'a, M: Module>(
+        self,
+        translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
+    ) -> Result<CompiledValue, Box<dyn Error>> {
+        let variant = translator
+            .builder
+            .ins()
+            .iconst(translator.types.int(), self.variant as i64);
+
+        let (tag, payload) = if let Some(payload) = self.payload {
+            let compiled = payload.translate(translator, None)?;
+
+            let tag = translator.builder.ins().iconst(
+                translator.types.int(),
+                compiled.data_type.type_tag(translator.registry.enums()) as i64,
+            );
+
+            (tag, compiled.value)
+        } else {
+            let tag = translator.builder.ins().iconst(translator.types.int(), 0);
+
+            let payload = translator.builder.ins().iconst(translator.types.int(), 0);
+
+            (tag, payload)
+        };
+
+        let alloc_func_id = translator
+            .runtime_functions
+            .get("calibre_gc_alloc_enum")
+            .ok_or("calibre_gc_alloc_enum not found in runtime_functions")?;
+
+        let alloc_func_ref = translator
+            .module
+            .declare_func_in_func(*alloc_func_id, translator.builder.func);
+
+        let ptr = translator
+            .builder
+            .ins()
+            .call(alloc_func_ref, &[variant, tag, payload]);
+        let ptr = translator.builder.inst_results(ptr)[0];
+
+        let root_func_ref = translator.get_add_root()?;
+        translator.builder.ins().call(root_func_ref, &[ptr]);
+
+        let data_type = if let Some(name) = self.name {
+            MirDataType::Struct {
+                identifier: name,
+                generic_types: Vec::new(),
+            }
+        } else {
+            MirDataType::Struct {
+                identifier: TypeKey::from("unknown"),
+                generic_types: Vec::new(),
+            }
+        };
+
+        let ptr = translator.builder.ins().iadd_imm(ptr, 8);
         Ok(CompiledValue::new(ptr, data_type))
     }
 }

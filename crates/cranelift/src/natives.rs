@@ -153,6 +153,20 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_gc_alloc_enum",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::TagPayload),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Struct {
+                        identifier: TypeKey::from("1"),
+                        generic_types: Vec::new(),
+                    }),
+                },
+            ),
+            (
                 "calibre_panic",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::TagPayload)],
@@ -201,6 +215,7 @@ pub(crate) fn pointer_returning_functions() -> &'static [&'static str] {
         "calibre_option_none",
         "calibre_gc_alloc_string",
         "calibre_gc_alloc_aggregate",
+        "calibre_gc_alloc_enum",
     ]
 }
 

@@ -95,6 +95,18 @@ const test_tuple_literal := fn () -> int => {
     return 0;
 }
 
+type Language := enum {
+    ENGLISH : int,
+    SPANISH,
+};
+
+const test_enum_literal := fn () => {
+    let lang := Language.ENGLISH : 42000;
+    console_output(0, "hi\n");
+    console_output(0, lang);
+    console_output(0, '\n');
+}
+
 const main := fn (x : int) -> int => {
     let result := calc(x) if x is int else calc(x+1);
     let value := conversions();
@@ -102,6 +114,7 @@ const main := fn (x : int) -> int => {
     
     test_struct_literal();
     test_tuple_literal();
+    test_enum_literal();
 
     console_output(0, fib_value);
     console_output(0, '\n');
@@ -150,7 +163,7 @@ fn run<I, T: Debug>(input: I) {
         .registry
         .functions
         .keys()
-        .find(|k| k.name() == "__init_globals")
+        .find(|k| k.name() == "calibre_init_globals")
         .cloned()
         && let Some(init_code_ptr) = jit.get_function(&init_key)
     {

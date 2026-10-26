@@ -44,6 +44,10 @@ impl LirRegistry {
     pub fn append(&mut self, other: LirRegistry) {
         self.functions.extend(other.functions);
     }
+
+    pub fn enums(&self) -> impl Iterator<Item = &TypeKey> {
+        self.types.iter().map(|x| x.0)
+    }
 }
 
 impl Display for LirRegistry {

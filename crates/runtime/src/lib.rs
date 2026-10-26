@@ -24,6 +24,7 @@ pub enum Value {
     Char(i32),
     Struct(*const GcAggregate),
     Tuple(*const GcAggregate),
+    Enum(*const GcAggregate),
     Ptr(usize),
 }
 
@@ -38,7 +39,25 @@ impl Value {
             ValueTag::Char => Self::Char(value as i32),
             ValueTag::Struct => Self::Struct(value.cast_unsigned() as *const GcAggregate),
             ValueTag::Tuple => Self::Tuple(value.cast_unsigned() as *const GcAggregate),
+            ValueTag::Enum => Self::Enum(value.cast_unsigned() as *const GcAggregate),
             ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
+        }
+    }
+}
+
+impl From<Value> for i64 {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Int(x) => x,
+            Value::UInt(x) => x as i64,
+            Value::Float(x) => x.to_bits() as i64,
+            Value::Ptr(x) => x as i64,
+            Value::String(x) => x as i64,
+            Value::Char(x) => x as i64,
+            Value::Struct(x) => x as i64,
+            Value::Tuple(x) => x as i64,
+            Value::Enum(x) => x as i64,
+            Value::Null => 0,
         }
     }
 }
@@ -67,6 +86,23 @@ impl Display for Value {
                 )
             }
             Value::Struct(ptr) => {
+                if ptr.is_null() {
+                    write!(f, "null")
+                } else {
+                    let value = unsafe { &**ptr };
+                    let field_count = value.field_count;
+
+                    let mut parts = Vec::new();
+                    for i in 0..field_count {
+                        if let Some(value) = value.data.get(i) {
+                            parts.push(value.to_string());
+                        }
+                    }
+
+                    write!(f, "{{ {} }}", parts.join(", "))
+                }
+            }
+            Value::Enum(ptr) => {
                 if ptr.is_null() {
                     write!(f, "null")
                 } else {
@@ -115,6 +151,7 @@ pub enum ValueTag {
     Char,
     Struct,
     Tuple,
+    Enum,
     Ptr,
 }
 
@@ -213,6 +250,23 @@ pub extern "C" fn calibre_gc_alloc_aggregate(field_count: usize) -> *mut GcAggre
     let header = register_alloc(GcObject::Aggregate(GcAggregate {
         field_count,
         data: vec![Value::Null; field_count],
+    }));
+
+    unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_gc_alloc_enum(
+    variant: i64,
+    tag: ValueTag,
+    payload: i64,
+) -> *mut GcAggregate {
+    let variant = Value::Int(variant);
+    let value = Value::from_tag(tag, payload);
+
+    let header = register_alloc(GcObject::Aggregate(GcAggregate {
+        field_count: 2,
+        data: vec![variant, value],
     }));
 
     unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
@@ -356,8 +410,8 @@ pub extern "C" fn calibre_gc_remove_root(ptr: usize) {
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_option_none() -> *mut GcAggregate {
     let header = register_alloc(GcObject::Aggregate(GcAggregate {
-        field_count: 1,
-        data: vec![Value::Int(1)],
+        field_count: 2,
+        data: vec![Value::Int(1), Value::Null],
     }));
 
     unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
@@ -374,25 +428,14 @@ pub extern "C" fn calibre_option_some(tag: ValueTag, payload: i64) -> *mut GcAgg
 
     unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_enum_get(val: *const GcAggregate) -> i64 {
     if val.is_null() {
         return 0;
     }
 
-    unsafe {
-        match (&(*val).data).get(1).copied().unwrap_or(Value::Null) {
-            Value::Int(x) => x,
-            Value::UInt(x) => x as i64,
-            Value::Float(x) => x.to_bits() as i64,
-            Value::Ptr(x) => x as i64,
-            Value::String(x) => x as i64,
-            Value::Char(x) => x as i64,
-            Value::Struct(x) => x as i64,
-            Value::Tuple(x) => x as i64,
-            Value::Null => 0,
-        }
-    }
+    unsafe { i64::from((&(*val).data).get(1).copied().unwrap_or(Value::Null)) }
 }
 
 #[unsafe(no_mangle)]
@@ -511,6 +554,10 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_enum_discriminant",
             ptr: calibre_enum_discriminant as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_gc_alloc_enum",
+            ptr: calibre_gc_alloc_enum as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_panic",

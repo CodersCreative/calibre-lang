@@ -100,7 +100,7 @@ impl CraneliftTranslation for LirCall {
                         arg_index += 1;
                     }
                     ArgumentKind::TagPayload => {
-                        let tag = value.data_type.type_tag() as i64;
+                        let tag = value.data_type.type_tag(translator.registry.enums()) as i64;
 
                         let tag = translator.builder.ins().iconst(translator.types.int(), tag);
 
@@ -135,16 +135,8 @@ impl CraneliftTranslation for LirCall {
             };
 
             if returns_pointer {
-                let root_func_id = translator
-                    .runtime_functions
-                    .get("calibre_gc_add_root")
-                    .ok_or("calibre_gc_add_root not found in runtime_functions")?;
-
-                let root_func_ref = translator
-                    .module
-                    .declare_func_in_func(*root_func_id, translator.builder.func);
-
-                translator.builder.ins().call(root_func_ref, &[result]);
+                let func_ref = translator.get_add_root()?;
+                translator.builder.ins().call(func_ref, &[result]);
             }
 
             // TODO Probably swap this for an MirDataType return type and just remove all of this hassle

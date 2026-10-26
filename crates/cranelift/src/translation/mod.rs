@@ -6,6 +6,7 @@ use calibre_lir::MirDataType;
 use calibre_lir::ast::{BlockId, LirNodeType, LirTerminator};
 use calibre_lir::environment::{LirFunction, LirRegistry};
 use calibre_mir::symbols::VariableKey;
+use cranelift::codegen::ir::FuncRef;
 use cranelift::prelude::*;
 use cranelift_module::Module;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -203,6 +204,15 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         }
         Ok(())
     }
+
+    pub fn get_add_root(&mut self) -> Result<FuncRef, Box<dyn Error>> {
+        let id = self
+            .runtime_functions
+            .get("calibre_gc_add_root")
+            .ok_or("calibre_gc_add_root not found in runtime_functions")?;
+
+        Ok(self.module.declare_func_in_func(*id, self.builder.func))
+    }
 }
 
 impl CraneliftTranslation for LirNodeType {
@@ -234,6 +244,7 @@ impl CraneliftTranslation for LirNodeType {
             LirNodeType::Drop(x) => x.translate(translator, data_type),
             LirNodeType::Member(x) => x.translate(translator, data_type),
             LirNodeType::Aggregate(x) => x.translate(translator, data_type),
+            LirNodeType::Enum(x) => x.translate(translator, data_type),
             _ => {
                 unimplemented!()
             }

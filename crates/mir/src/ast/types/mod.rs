@@ -430,7 +430,7 @@ impl MirDataType {
     }
 
     // Only for cranelift
-    pub fn type_tag(&self) -> usize {
+    pub fn type_tag<'a>(&self, mut enums: impl Iterator<Item = &'a TypeKey>) -> usize {
         match self {
             MirDataType::Null => 0,
             MirDataType::Int => 1,
@@ -438,9 +438,10 @@ impl MirDataType {
             MirDataType::Float => 3,
             MirDataType::Str => 4,
             MirDataType::Char => 5,
-            MirDataType::Struct { .. } => 6,
+            MirDataType::Struct { identifier, .. } if !enums.any(|x| x == identifier) => 6,
             MirDataType::Tuple(_) => 7,
-            _ => 8,
+            MirDataType::Struct { .. } => 8,
+            _ => 9,
         }
     }
 
