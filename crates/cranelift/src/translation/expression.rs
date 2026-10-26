@@ -11,8 +11,9 @@ use calibre_parser::ast::{
     comparison::{BooleanOperator, ComparisonOperator},
 };
 use cranelift::codegen::ir::{
-    InstBuilder,
+    InstBuilder, Value,
     condcodes::{FloatCC, IntCC},
+    types,
 };
 use cranelift_module::Module;
 use std::error::Error;
@@ -252,6 +253,23 @@ impl CraneliftTranslation for LirBoolean {
         };
 
         Ok(CompiledValue::new(value, MirDataType::Bool))
+    }
+}
+
+impl<'a, M: Module> FunctionTranslator<'a, M> {
+    pub fn convert_to_i64(&mut self, value: CompiledValue) -> Result<Value, Box<dyn Error>> {
+        match value.data_type {
+            MirDataType::Int => Ok(value.value),
+            MirDataType::UInt => Ok(value.value),
+            MirDataType::Float => Ok(self.builder.ins().fcvt_to_sint(types::I64, value.value)),
+            MirDataType::Bool => {
+                let value = self.builder.ins().uextend(types::I8, value.value);
+                Ok(self.builder.ins().uextend(types::I64, value))
+            }
+            MirDataType::Byte => Ok(self.builder.ins().sextend(types::I64, value.value)),
+            MirDataType::Char => Ok(self.builder.ins().sextend(types::I64, value.value)),
+            _ => Ok(value.value),
+        }
     }
 }
 

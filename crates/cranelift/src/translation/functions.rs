@@ -5,7 +5,7 @@ use crate::{
 };
 use calibre_lir::MirDataType;
 use calibre_lir::ast::{LirCall, LirLoad, LirNodeType};
-use cranelift::codegen::ir::InstBuilder;
+use cranelift::codegen::ir::{InstBuilder, types};
 use cranelift_module::Module;
 use std::error::Error;
 
@@ -78,35 +78,44 @@ impl CraneliftTranslation for LirCall {
             let mut args = Vec::new();
             let mut arg_index = 0;
 
-            for (_, arg_kind) in sig.params.iter() {
+            for (param_type, arg_kind) in sig.params.iter() {
                 let arg = self.args.get(arg_index).ok_or(format!(
-                    "Missing argument {} for runtime function {}",
-                    arg_index, runtime_name
+                    "Missing argument {} for runtime function {} (signature has {} params, have {} args)",
+                    arg_index, runtime_name, sig.params.len(), self.args.len()
                 ))?;
 
                 let value = arg.clone().translate(translator, None)?;
 
+                arg_types.push(value.data_type.clone());
+
                 match arg_kind {
                     ArgumentKind::Direct => {
-                        args.push(value.value);
+                        let value = if *param_type == types::I64 {
+                            translator.convert_to_i64(value)?
+                        } else {
+                            value.value
+                        };
+
+                        args.push(value);
                         arg_index += 1;
                     }
                     ArgumentKind::TagPayload => {
                         let tag = value.data_type.type_tag() as i64;
 
-                        let tag_value =
-                            translator.builder.ins().iconst(translator.types.int(), tag);
+                        let tag = translator.builder.ins().iconst(translator.types.int(), tag);
 
-                        let payload_value = value.value;
+                        let value = if *param_type == types::I64 {
+                            translator.convert_to_i64(value)?
+                        } else {
+                            value.value
+                        };
 
-                        args.push(tag_value);
-                        args.push(payload_value);
+                        args.push(tag);
+                        args.push(value);
 
                         arg_index += 1;
                     }
                 }
-
-                arg_types.push(value.data_type);
             }
 
             let call = translator.builder.ins().call(func_ref, &args);

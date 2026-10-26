@@ -22,6 +22,28 @@ pub enum Value {
     Ptr(usize),
 }
 
+impl Value {
+    pub fn from_tag(tag: ValueTag, value: i64) -> Self {
+        match tag {
+            ValueTag::Null => Self::Null,
+            ValueTag::Int => Self::Int(value),
+            ValueTag::UInt => Self::UInt(value.cast_unsigned()),
+            ValueTag::Float => Self::Float(f64::from_bits(value.cast_unsigned())),
+            ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub enum ValueTag {
+    Null,
+    Int,
+    UInt,
+    Float,
+    Ptr,
+}
+
 #[repr(C)]
 pub struct GcList {
     pub len: usize,
@@ -251,15 +273,8 @@ pub extern "C" fn calibre_option_none() -> *mut GcAggregate {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_option_some(tag: i64, payload: i64) -> *mut GcAggregate {
-    let value = match tag {
-        0 => Value::Int(payload),
-        1 => Value::UInt(payload.cast_unsigned()),
-        2 => Value::Float(f64::from_bits(payload.cast_unsigned())),
-        3 => Value::Null,
-        4 => Value::Ptr(payload.cast_unsigned() as usize),
-        _ => Value::Null,
-    };
+pub extern "C" fn calibre_option_some(tag: ValueTag, payload: i64) -> *mut GcAggregate {
+    let value = Value::from_tag(tag, payload);
 
     let header = register_alloc(GcObject::Aggregate(GcAggregate {
         field_count: 2,
@@ -302,36 +317,42 @@ pub extern "C" fn calibre_enum_discriminant(val: *const GcAggregate) -> u64 {
 
 // TODO Add debug information
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_panic(msg: i64) {
-    eprintln!("calibre panicked with message: {}", msg);
+pub extern "C" fn calibre_panic(tag: ValueTag, value: i64) {
+    let message = calibre_value_to_string(tag, value);
+    eprintln!("calibre panicked with message: {}", message);
     std::process::exit(1);
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_console_output(handle_type: i64, value: i64) {
+pub extern "C" fn calibre_console_output(handle_type: i64, tag: ValueTag, value: i64) {
+    let message = calibre_value_to_string(tag, value);
+
     if handle_type == 2 {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
-        let _ = handle.write_all(value.to_string().as_bytes());
+        let _ = handle.write_all(message.as_bytes());
         let _ = handle.flush();
     } else {
         let stdout = io::stdout();
         let mut handle = stdout.lock();
-        let _ = handle.write_all(value.to_string().as_bytes());
+        let _ = handle.write_all(message.as_bytes());
         let _ = handle.flush();
     }
 }
 
+fn calibre_value_to_string(tag: ValueTag, value: i64) -> String {
+    match tag {
+        ValueTag::Null => "null".to_string(),
+        ValueTag::Int => value.to_string(),
+        ValueTag::UInt => value.cast_unsigned().to_string(),
+        ValueTag::Float => f64::from_bits(value as u64).to_string(),
+        ValueTag::Ptr => format!("0x{:x}", value as usize),
+    }
+}
+
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_result_ok(tag: i64, payload: i64) -> *mut GcAggregate {
-    let value = match tag {
-        0 => Value::Int(payload),
-        1 => Value::UInt(payload.cast_unsigned()),
-        2 => Value::Float(f64::from_bits(payload.cast_unsigned())),
-        3 => Value::Null,
-        4 => Value::Ptr(payload.cast_unsigned() as usize),
-        _ => Value::Null,
-    };
+pub extern "C" fn calibre_result_ok(tag: ValueTag, payload: i64) -> *mut GcAggregate {
+    let value = Value::from_tag(tag, payload);
 
     let header = register_alloc(GcObject::Aggregate(GcAggregate {
         field_count: 2,
@@ -342,15 +363,8 @@ pub extern "C" fn calibre_result_ok(tag: i64, payload: i64) -> *mut GcAggregate 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_result_err(tag: i64, payload: i64) -> *mut GcAggregate {
-    let value = match tag {
-        0 => Value::Int(payload),
-        1 => Value::UInt(payload.cast_unsigned()),
-        2 => Value::Float(f64::from_bits(payload.cast_unsigned())),
-        3 => Value::Null,
-        4 => Value::Ptr(payload.cast_unsigned() as usize),
-        _ => Value::Null,
-    };
+pub extern "C" fn calibre_result_err(tag: ValueTag, payload: i64) -> *mut GcAggregate {
+    let value = Value::from_tag(tag, payload);
 
     let header = register_alloc(GcObject::Aggregate(GcAggregate {
         field_count: 2,

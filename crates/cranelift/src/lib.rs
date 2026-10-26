@@ -10,10 +10,13 @@ use calibre_lir::{FullyQualifiedPath, MirDataType};
 use calibre_mir::symbols::VariableKey;
 use calibre_parser::Span;
 use cranelift::codegen::isa::CallConv;
+use cranelift::codegen::print_errors::pretty_verifier_error;
+use cranelift::codegen::settings;
+use cranelift::codegen::{CodegenError, isa};
 use cranelift::frontend::FunctionBuilderContext;
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module};
+use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module, ModuleError};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 use rustc_hash::FxHashMap;
 use std::error::Error;
@@ -43,6 +46,7 @@ fn create_target_isa() -> Result<Arc<dyn isa::TargetIsa>, Box<dyn Error>> {
     let mut flag_builder = settings::builder();
     flag_builder.set("use_colocated_libcalls", "false")?;
     flag_builder.set("is_pic", "false")?;
+    flag_builder.set("enable_verifier", "true")?;
 
     let isa_builder = cranelift_native::builder()
         .map_err(|msg| format!("host machine is not supported: {msg}"))?;
@@ -213,7 +217,16 @@ impl CompilerData {
                 translator.translate_function(func)?;
             }
 
-            module.define_function(function, &mut self.context)?;
+            match module.define_function(function, &mut self.context) {
+                Ok(_) => {}
+                Err(ModuleError::Compilation(CodegenError::Verifier(verifier_errors))) => {
+                    let formatted_error =
+                        pretty_verifier_error(&self.context.func, None, verifier_errors);
+                    return Err(format!("Verifier error:\n{}", formatted_error).into());
+                }
+                Err(x) => return Err(Box::new(x)),
+            };
+
             module.clear_context(&mut self.context);
         }
 
