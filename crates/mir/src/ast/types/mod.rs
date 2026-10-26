@@ -439,7 +439,8 @@ impl MirDataType {
             MirDataType::Str => 4,
             MirDataType::Char => 5,
             MirDataType::Struct { .. } => 6,
-            _ => 7,
+            MirDataType::Tuple(_) => 7,
+            _ => 8,
         }
     }
 

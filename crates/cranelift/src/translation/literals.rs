@@ -166,6 +166,8 @@ impl CraneliftTranslation for LirAggregate {
 
         self.fields.sort_by_key(|(k, _)| *k);
 
+        let mut field_types = Vec::new();
+
         for (i, (_, value)) in std::mem::take(&mut self.fields.0).into_iter().enumerate() {
             let field = value.translate(translator, None)?;
 
@@ -182,6 +184,8 @@ impl CraneliftTranslation for LirAggregate {
                 .builder
                 .ins()
                 .call(set_field_func_ref, &[ptr, index, tag, field.value]);
+
+            field_types.push(field.data_type);
         }
 
         let root_func_id = translator
@@ -204,7 +208,7 @@ impl CraneliftTranslation for LirAggregate {
                 generic_types: Vec::new(),
             }
         } else {
-            MirDataType::Tuple(Vec::new())
+            MirDataType::Tuple(field_types)
         };
 
         Ok(CompiledValue::new(ptr, data_type))

@@ -88,11 +88,21 @@ const test_struct_literal := fn () -> int => {
     return 0;
 }
 
+const test_tuple_literal := fn () -> int => {
+    let t := (1, 2, 3);
+    console_output(0, t);
+    console_output(0, '\n');
+    return 0;
+}
+
 const main := fn (x : int) -> int => {
     let result := calc(x) if x is int else calc(x+1);
     let value := conversions();
     let fib_value := fib(28);
+    
     test_struct_literal();
+    test_tuple_literal();
+
     console_output(0, fib_value);
     console_output(0, '\n');
     test_string_literal();

@@ -23,6 +23,7 @@ pub enum Value {
     String(*const GcString),
     Char(i32),
     Struct(*const GcAggregate),
+    Tuple(*const GcAggregate),
     Ptr(usize),
 }
 
@@ -35,8 +36,9 @@ impl Value {
             ValueTag::Float => Self::Float(f64::from_bits(value.cast_unsigned())),
             ValueTag::String => Self::String(value.cast_unsigned() as *const GcString),
             ValueTag::Char => Self::Char(value as i32),
-            ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
             ValueTag::Struct => Self::Struct(value.cast_unsigned() as *const GcAggregate),
+            ValueTag::Tuple => Self::Tuple(value.cast_unsigned() as *const GcAggregate),
+            ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
         }
     }
 }
@@ -81,6 +83,23 @@ impl Display for Value {
                     write!(f, "{{ {} }}", parts.join(", "))
                 }
             }
+            Value::Tuple(ptr) => {
+                if ptr.is_null() {
+                    write!(f, "null")
+                } else {
+                    let value = unsafe { &**ptr };
+                    let field_count = value.field_count;
+
+                    let mut parts = Vec::new();
+                    for i in 0..field_count {
+                        if let Some(value) = value.data.get(i) {
+                            parts.push(value.to_string());
+                        }
+                    }
+
+                    write!(f, "({})", parts.join(", "))
+                }
+            }
         }
     }
 }
@@ -95,6 +114,7 @@ pub enum ValueTag {
     String,
     Char,
     Struct,
+    Tuple,
     Ptr,
 }
 
@@ -369,6 +389,7 @@ pub extern "C" fn calibre_enum_get(val: *const GcAggregate) -> i64 {
             Value::String(x) => x as i64,
             Value::Char(x) => x as i64,
             Value::Struct(x) => x as i64,
+            Value::Tuple(x) => x as i64,
             Value::Null => 0,
         }
     }
