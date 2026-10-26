@@ -34,6 +34,7 @@ impl CraneliftTranslation for LirDeclare {
                 | MirDataType::Option(_)
                 | MirDataType::Result { .. }
                 | MirDataType::Str
+                | MirDataType::Struct { .. }
         ) {
             translator.gc_managed_vars.insert(self.dest.clone());
         }

@@ -233,6 +233,7 @@ impl CraneliftTranslation for LirNodeType {
             LirNodeType::Move(x) => x.translate(translator, data_type),
             LirNodeType::Drop(x) => x.translate(translator, data_type),
             LirNodeType::Member(x) => x.translate(translator, data_type),
+            LirNodeType::Aggregate(x) => x.translate(translator, data_type),
             _ => {
                 unimplemented!()
             }

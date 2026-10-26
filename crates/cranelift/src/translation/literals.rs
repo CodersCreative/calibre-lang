@@ -2,7 +2,10 @@ use crate::{
     translation::{CraneliftTranslation, FunctionTranslator},
     values::CompiledValue,
 };
-use calibre_lir::{MirDataType, ast::LirLiteral};
+use calibre_lir::{
+    MirDataType,
+    ast::{LirAggregate, LirLiteral},
+};
 use cranelift::codegen::ir::{InstBuilder, MemFlags};
 use cranelift_module::Module;
 use std::error::Error;
@@ -121,5 +124,89 @@ impl CraneliftTranslation for LirLiteral {
                 Ok(CompiledValue::new(value, MirDataType::Int))
             }
         }
+    }
+}
+
+impl CraneliftTranslation for LirAggregate {
+    fn translate<'a, M: Module>(
+        mut self,
+        translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
+    ) -> Result<CompiledValue, Box<dyn Error>> {
+        let field_count = translator
+            .builder
+            .ins()
+            .iconst(translator.types.int(), self.fields.len() as i64);
+
+        let alloc_func_id = translator
+            .runtime_functions
+            .get("calibre_gc_alloc_aggregate")
+            .ok_or("calibre_gc_alloc_aggregate not found in runtime_functions")?;
+
+        let alloc_func_ref = translator
+            .module
+            .declare_func_in_func(*alloc_func_id, translator.builder.func);
+
+        let aggregate_ptr = translator
+            .builder
+            .ins()
+            .call(alloc_func_ref, &[field_count]);
+        let aggregate_ptr = translator.builder.inst_results(aggregate_ptr)[0];
+
+        let ptr = translator.builder.ins().iadd_imm(aggregate_ptr, 8);
+
+        let set_field_func_id = translator
+            .runtime_functions
+            .get("calibre_aggregate_set_field")
+            .ok_or("calibre_aggregate_set_field not found in runtime_functions")?;
+
+        let set_field_func_ref = translator
+            .module
+            .declare_func_in_func(*set_field_func_id, translator.builder.func);
+
+        self.fields.sort_by_key(|(k, _)| *k);
+
+        for (i, (_, value)) in std::mem::take(&mut self.fields.0).into_iter().enumerate() {
+            let field = value.translate(translator, None)?;
+
+            let tag = translator
+                .builder
+                .ins()
+                .iconst(translator.types.int(), field.data_type.type_tag() as i64);
+            let index = translator
+                .builder
+                .ins()
+                .iconst(translator.types.int(), i as i64);
+
+            translator
+                .builder
+                .ins()
+                .call(set_field_func_ref, &[ptr, index, tag, field.value]);
+        }
+
+        let root_func_id = translator
+            .runtime_functions
+            .get("calibre_gc_add_root")
+            .ok_or("calibre_gc_add_root not found in runtime_functions")?;
+
+        let root_func_ref = translator
+            .module
+            .declare_func_in_func(*root_func_id, translator.builder.func);
+
+        translator
+            .builder
+            .ins()
+            .call(root_func_ref, &[aggregate_ptr]);
+
+        let data_type = if let Some(name) = self.name {
+            MirDataType::Struct {
+                identifier: name,
+                generic_types: Vec::new(),
+            }
+        } else {
+            MirDataType::Tuple(Vec::new())
+        };
+
+        Ok(CompiledValue::new(ptr, data_type))
     }
 }

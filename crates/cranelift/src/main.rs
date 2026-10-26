@@ -64,22 +64,35 @@ const test_result_discriminant := fn () -> int => {
     return discriminant(res) as! int;
 }
 
-const test_string_literal := fn () => {
+const test_string_literal := fn () -> int => {
     let s := "héllo wörld";
     console_output(0, s);
     return 42;
 }
 
-const test_char_literal := fn () => {
+const test_char_literal := fn () -> int => {
     let c := '€';
     console_output(0, c);
     return 42;
+}
+
+type Point := struct {
+    x : int,
+    y : int,
+};
+
+const test_struct_literal := fn () -> int => {
+    let p := Point { x: 10, y: 20 };
+    console_output(0, p);
+    console_output(0, '\n');
+    return 0;
 }
 
 const main := fn (x : int) -> int => {
     let result := calc(x) if x is int else calc(x+1);
     let value := conversions();
     let fib_value := fib(28);
+    test_struct_literal();
     console_output(0, fib_value);
     console_output(0, '\n');
     test_string_literal();

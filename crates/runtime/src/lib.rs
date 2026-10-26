@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::io::{self, Write};
 use std::sync::LazyLock;
 use wasm_sync::Mutex;
@@ -21,6 +22,7 @@ pub enum Value {
     Float(f64),
     String(*const GcString),
     Char(i32),
+    Struct(*const GcAggregate),
     Ptr(usize),
 }
 
@@ -34,6 +36,51 @@ impl Value {
             ValueTag::String => Self::String(value.cast_unsigned() as *const GcString),
             ValueTag::Char => Self::Char(value as i32),
             ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
+            ValueTag::Struct => Self::Struct(value.cast_unsigned() as *const GcAggregate),
+        }
+    }
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Int(x) => write!(f, "{}", x),
+            Value::UInt(x) => write!(f, "{}", x),
+            Value::Float(x) => write!(f, "{}", x),
+            Value::Ptr(x) => write!(f, "0x{:x}", x),
+            Value::Null => write!(f, "null"),
+            Value::String(s) => {
+                if s.is_null() {
+                    write!(f, "null")
+                } else {
+                    let string = unsafe { &**s };
+                    write!(f, "{}", String::from_utf8_lossy(&string.data))
+                }
+            }
+            Value::Char(c) => {
+                write!(
+                    f,
+                    "{}",
+                    char::from_u32(c.cast_unsigned()).unwrap_or('\u{FFFD}')
+                )
+            }
+            Value::Struct(ptr) => {
+                if ptr.is_null() {
+                    write!(f, "null")
+                } else {
+                    let value = unsafe { &**ptr };
+                    let field_count = value.field_count;
+
+                    let mut parts = Vec::new();
+                    for i in 0..field_count {
+                        if let Some(value) = value.data.get(i) {
+                            parts.push(value.to_string());
+                        }
+                    }
+
+                    write!(f, "{{ {} }}", parts.join(", "))
+                }
+            }
         }
     }
 }
@@ -47,6 +94,7 @@ pub enum ValueTag {
     Float,
     String,
     Char,
+    Struct,
     Ptr,
 }
 
@@ -148,6 +196,23 @@ pub extern "C" fn calibre_gc_alloc_aggregate(field_count: usize) -> *mut GcAggre
     }));
 
     unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_aggregate_set_field(
+    agg: *mut GcAggregate,
+    index: usize,
+    tag: ValueTag,
+    payload: i64,
+) {
+    unsafe {
+        if !agg.is_null() {
+            let data = (*agg).data.as_mut_ptr();
+            if index < (*agg).data.len() {
+                *data.add(index) = Value::from_tag(tag, payload);
+            }
+        }
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -303,6 +368,7 @@ pub extern "C" fn calibre_enum_get(val: *const GcAggregate) -> i64 {
             Value::Ptr(x) => x as i64,
             Value::String(x) => x as i64,
             Value::Char(x) => x as i64,
+            Value::Struct(x) => x as i64,
             Value::Null => 0,
         }
     }
@@ -326,48 +392,28 @@ pub extern "C" fn calibre_enum_discriminant(val: *const GcAggregate) -> u64 {
 // TODO Add debug information
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_panic(tag: ValueTag, value: i64) {
-    let message = calibre_value_to_string(tag, value);
-    eprintln!("calibre panicked with message: {}", message);
+    let value = Value::from_tag(tag, value);
+    let value = value.to_string();
+
+    eprintln!("calibre panicked with message: {}", value);
     std::process::exit(1);
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_console_output(handle_type: i64, tag: ValueTag, value: i64) {
-    let message = calibre_value_to_string(tag, value);
+    let value = Value::from_tag(tag, value);
+    let value = value.to_string();
 
     if handle_type == 2 {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
-        let _ = handle.write_all(message.as_bytes());
+        let _ = handle.write_all(value.as_bytes());
         let _ = handle.flush();
     } else {
         let stdout = io::stdout();
         let mut handle = stdout.lock();
-        let _ = handle.write_all(message.as_bytes());
+        let _ = handle.write_all(value.as_bytes());
         let _ = handle.flush();
-    }
-}
-
-fn calibre_value_to_string(tag: ValueTag, value: i64) -> String {
-    match tag {
-        ValueTag::Null => "null".to_string(),
-        ValueTag::Int => value.to_string(),
-        ValueTag::UInt => value.cast_unsigned().to_string(),
-        ValueTag::Float => f64::from_bits(value.cast_unsigned()).to_string(),
-        ValueTag::Ptr => format!("0x{:x}", value.cast_unsigned() as usize),
-        ValueTag::String => unsafe {
-            let ptr = value as *const GcString;
-            if ptr.is_null() {
-                "null".to_string()
-            } else {
-                let gc_string = &*ptr;
-                String::from_utf8_lossy(&gc_string.data).to_string()
-            }
-        },
-        ValueTag::Char => {
-            let ch = char::from_u32(value.cast_unsigned() as u32).unwrap_or('\u{FFFD}');
-            ch.to_string()
-        }
     }
 }
 
@@ -408,6 +454,10 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_gc_alloc_aggregate",
             ptr: calibre_gc_alloc_aggregate as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_aggregate_set_field",
+            ptr: calibre_aggregate_set_field as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_gc_collect",

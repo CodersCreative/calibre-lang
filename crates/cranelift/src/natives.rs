@@ -46,6 +46,18 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_aggregate_set_field",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::TagPayload),
+                    ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
                 "calibre_gc_collect",
                 RuntimeFunction {
                     params: vec![],
@@ -188,6 +200,7 @@ pub(crate) fn pointer_returning_functions() -> &'static [&'static str] {
         "calibre_result_err",
         "calibre_option_none",
         "calibre_gc_alloc_string",
+        "calibre_gc_alloc_aggregate",
     ]
 }
 
