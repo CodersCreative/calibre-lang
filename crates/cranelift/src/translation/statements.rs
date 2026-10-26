@@ -4,7 +4,7 @@ use crate::{
 };
 use calibre_lir::{
     MirDataType,
-    ast::{LirAssign, LirDeclare, LirLValue, LirNodeType},
+    ast::{LirAssign, LirDeclare, LirLValue},
 };
 use cranelift::prelude::*;
 use cranelift_module::Module;
@@ -30,7 +30,10 @@ impl CraneliftTranslation for LirDeclare {
 
         if matches!(
             &self.data_type,
-            MirDataType::Ptr(_) | MirDataType::Option(_) | MirDataType::Result { .. }
+            MirDataType::Ptr(_)
+                | MirDataType::Option(_)
+                | MirDataType::Result { .. }
+                | MirDataType::Str
         ) {
             translator.gc_managed_vars.insert(self.dest.clone());
         }

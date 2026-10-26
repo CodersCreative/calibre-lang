@@ -64,11 +64,28 @@ const test_result_discriminant := fn () -> int => {
     return discriminant(res) as! int;
 }
 
+const test_string_literal := fn () => {
+    let s := "héllo wörld";
+    console_output(0, s);
+    return 42;
+}
+
+const test_char_literal := fn () => {
+    let c := '€';
+    console_output(0, c);
+    return 42;
+}
+
 const main := fn (x : int) -> int => {
     let result := calc(x) if x is int else calc(x+1);
     let value := conversions();
     let fib_value := fib(28);
     console_output(0, fib_value);
+    console_output(0, '\n');
+    test_string_literal();
+    console_output(0, '\n');
+    test_char_literal();
+    console_output(0, '\n');
     return result + value + test_option_next() + test_result_discriminant() + test_result_ok() + test_result_err() + fib_value;
 };
 "#;

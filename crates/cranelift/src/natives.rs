@@ -34,7 +34,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::List(Box::new(MirDataType::Str))),
+                    typed_return: Some(MirDataType::Str),
                 },
             ),
             (
@@ -187,6 +187,7 @@ pub(crate) fn pointer_returning_functions() -> &'static [&'static str] {
         "calibre_result_ok",
         "calibre_result_err",
         "calibre_option_none",
+        "calibre_gc_alloc_string",
     ]
 }
 

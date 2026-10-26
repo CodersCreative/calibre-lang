@@ -108,9 +108,14 @@ impl Layouts {
                 align: 1,
                 offsets: Vec::new(),
             },
-            MirDataType::Bool | MirDataType::Char | MirDataType::Byte => Layout {
+            MirDataType::Bool | MirDataType::Byte => Layout {
                 size: 1,
                 align: 1,
+                offsets: Vec::new(),
+            },
+            MirDataType::Char => Layout {
+                size: 4,
+                align: 4,
                 offsets: Vec::new(),
             },
             MirDataType::Int | MirDataType::UInt | MirDataType::Float => Layout {

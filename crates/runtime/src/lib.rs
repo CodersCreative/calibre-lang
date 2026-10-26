@@ -19,6 +19,8 @@ pub enum Value {
     Int(i64),
     UInt(u64),
     Float(f64),
+    String(*const GcString),
+    Char(i32),
     Ptr(usize),
 }
 
@@ -29,6 +31,8 @@ impl Value {
             ValueTag::Int => Self::Int(value),
             ValueTag::UInt => Self::UInt(value.cast_unsigned()),
             ValueTag::Float => Self::Float(f64::from_bits(value.cast_unsigned())),
+            ValueTag::String => Self::String(value.cast_unsigned() as *const GcString),
+            ValueTag::Char => Self::Char(value as i32),
             ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
         }
     }
@@ -41,6 +45,8 @@ pub enum ValueTag {
     Int,
     UInt,
     Float,
+    String,
+    Char,
     Ptr,
 }
 
@@ -295,6 +301,8 @@ pub extern "C" fn calibre_enum_get(val: *const GcAggregate) -> i64 {
             Value::UInt(x) => x as i64,
             Value::Float(x) => x.to_bits() as i64,
             Value::Ptr(x) => x as i64,
+            Value::String(x) => x as i64,
+            Value::Char(x) => x as i64,
             Value::Null => 0,
         }
     }
@@ -345,8 +353,21 @@ fn calibre_value_to_string(tag: ValueTag, value: i64) -> String {
         ValueTag::Null => "null".to_string(),
         ValueTag::Int => value.to_string(),
         ValueTag::UInt => value.cast_unsigned().to_string(),
-        ValueTag::Float => f64::from_bits(value as u64).to_string(),
-        ValueTag::Ptr => format!("0x{:x}", value as usize),
+        ValueTag::Float => f64::from_bits(value.cast_unsigned()).to_string(),
+        ValueTag::Ptr => format!("0x{:x}", value.cast_unsigned() as usize),
+        ValueTag::String => unsafe {
+            let ptr = value as *const GcString;
+            if ptr.is_null() {
+                "null".to_string()
+            } else {
+                let gc_string = &*ptr;
+                String::from_utf8_lossy(&gc_string.data).to_string()
+            }
+        },
+        ValueTag::Char => {
+            let ch = char::from_u32(value.cast_unsigned() as u32).unwrap_or('\u{FFFD}');
+            ch.to_string()
+        }
     }
 }
 

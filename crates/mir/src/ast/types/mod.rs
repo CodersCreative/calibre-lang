@@ -436,7 +436,9 @@ impl MirDataType {
             MirDataType::Int => 1,
             MirDataType::UInt => 2,
             MirDataType::Float => 3,
-            _ => 4,
+            MirDataType::Str => 4,
+            MirDataType::Char => 5,
+            _ => 6,
         }
     }
 
