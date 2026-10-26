@@ -51,8 +51,6 @@ impl CraneliftTranslation for LirMember {
                 .ins()
                 .stack_load(translator.types.int(), stack_slot, 0);
 
-            let ptr = translator.builder.ins().iadd_imm(ptr, 8);
-
             let runtime_name = "calibre_enum_get";
 
             let func_id = translator
@@ -114,8 +112,6 @@ impl CraneliftTranslation for LirDiscriminant {
                 .builder
                 .ins()
                 .stack_load(translator.types.int(), stack_slot, 0);
-
-            let ptr = translator.builder.ins().iadd_imm(ptr, 8);
 
             let runtime_name = "calibre_enum_discriminant";
 

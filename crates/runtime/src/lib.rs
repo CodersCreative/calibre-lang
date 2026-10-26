@@ -232,7 +232,18 @@ pub extern "C" fn calibre_gc_alloc_list(capacity: usize) -> *mut GcList {
         data: Vec::with_capacity(capacity),
     }));
 
-    unsafe { &mut (*header).inner as *mut GcObject as *mut GcList }
+    unsafe {
+        let object = &mut (*header).inner;
+
+        let ptr = object as *mut GcObject as usize;
+        calibre_gc_add_root(ptr);
+
+        if let GcObject::List(value) = object {
+            value as *mut GcList
+        } else {
+            std::ptr::null_mut()
+        }
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -242,7 +253,18 @@ pub extern "C" fn calibre_gc_alloc_string(len: usize) -> *mut GcString {
         data: vec![0u8; len],
     }));
 
-    unsafe { &mut (*header).inner as *mut GcObject as *mut GcString }
+    unsafe {
+        let object = &mut (*header).inner;
+
+        let ptr = object as *mut GcObject as usize;
+        calibre_gc_add_root(ptr);
+
+        if let GcObject::String(value) = object {
+            value as *mut GcString
+        } else {
+            std::ptr::null_mut()
+        }
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -252,7 +274,18 @@ pub extern "C" fn calibre_gc_alloc_aggregate(field_count: usize) -> *mut GcAggre
         data: vec![Value::Null; field_count],
     }));
 
-    unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
+    unsafe {
+        let object = &mut (*header).inner;
+
+        let ptr = object as *mut GcObject as usize;
+        calibre_gc_add_root(ptr);
+
+        if let GcObject::Aggregate(value) = object {
+            value as *mut GcAggregate
+        } else {
+            std::ptr::null_mut()
+        }
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -269,7 +302,38 @@ pub extern "C" fn calibre_gc_alloc_enum(
         data: vec![variant, value],
     }));
 
-    unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
+    unsafe {
+        let object = &mut (*header).inner;
+
+        let ptr = object as *mut GcObject as usize;
+        calibre_gc_add_root(ptr);
+
+        if let GcObject::Aggregate(value) = object {
+            value as *mut GcAggregate
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_option_some(tag: ValueTag, payload: i64) -> *mut GcAggregate {
+    calibre_gc_alloc_enum(0, tag, payload)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_option_none() -> *mut GcAggregate {
+    calibre_gc_alloc_enum(1, ValueTag::Null, 0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_result_ok(tag: ValueTag, payload: i64) -> *mut GcAggregate {
+    calibre_gc_alloc_enum(0, tag, payload)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_result_err(tag: ValueTag, payload: i64) -> *mut GcAggregate {
+    calibre_gc_alloc_enum(1, tag, payload)
 }
 
 #[unsafe(no_mangle)]
@@ -408,28 +472,6 @@ pub extern "C" fn calibre_gc_remove_root(ptr: usize) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_option_none() -> *mut GcAggregate {
-    let header = register_alloc(GcObject::Aggregate(GcAggregate {
-        field_count: 2,
-        data: vec![Value::Int(1), Value::Null],
-    }));
-
-    unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn calibre_option_some(tag: ValueTag, payload: i64) -> *mut GcAggregate {
-    let value = Value::from_tag(tag, payload);
-
-    let header = register_alloc(GcObject::Aggregate(GcAggregate {
-        field_count: 2,
-        data: vec![Value::Int(0), value],
-    }));
-
-    unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn calibre_enum_get(val: *const GcAggregate) -> i64 {
     if val.is_null() {
         return 0;
@@ -479,30 +521,6 @@ pub extern "C" fn calibre_console_output(handle_type: i64, tag: ValueTag, value:
         let _ = handle.write_all(value.as_bytes());
         let _ = handle.flush();
     }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn calibre_result_ok(tag: ValueTag, payload: i64) -> *mut GcAggregate {
-    let value = Value::from_tag(tag, payload);
-
-    let header = register_alloc(GcObject::Aggregate(GcAggregate {
-        field_count: 2,
-        data: vec![Value::Int(0), value],
-    }));
-
-    unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn calibre_result_err(tag: ValueTag, payload: i64) -> *mut GcAggregate {
-    let value = Value::from_tag(tag, payload);
-
-    let header = register_alloc(GcObject::Aggregate(GcAggregate {
-        field_count: 2,
-        data: vec![Value::Int(1), value],
-    }));
-
-    unsafe { &mut (*header).inner as *mut GcObject as *mut GcAggregate }
 }
 
 pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {

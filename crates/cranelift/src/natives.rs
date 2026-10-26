@@ -207,18 +207,6 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
     })
 }
 
-pub(crate) fn pointer_returning_functions() -> &'static [&'static str] {
-    &[
-        "calibre_option_some",
-        "calibre_result_ok",
-        "calibre_result_err",
-        "calibre_option_none",
-        "calibre_gc_alloc_string",
-        "calibre_gc_alloc_aggregate",
-        "calibre_gc_alloc_enum",
-    ]
-}
-
 pub type Natives = FxHashMap<VariableKey, &'static str>;
 
 pub(crate) fn build_native_mapping(registry: &LirRegistry) -> Natives {

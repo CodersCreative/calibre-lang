@@ -105,6 +105,11 @@ const test_enum_literal := fn () => {
     console_output(0, "hi\n");
     console_output(0, lang);
     console_output(0, '\n');
+    console_output(0, lang.next);
+    console_output(0, '\n');
+    console_output(0, discriminant(lang));
+    console_output(0, '\n');
+
 }
 
 const main := fn (x : int) -> int => {

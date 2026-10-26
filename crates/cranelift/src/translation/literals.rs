@@ -77,10 +77,8 @@ impl CraneliftTranslation for LirLiteral {
                     .module
                     .declare_func_in_func(*alloc_func_id, translator.builder.func);
 
-                let string = translator.builder.ins().call(alloc_func_ref, &[len]);
-                let string = translator.builder.inst_results(string)[0];
-
-                let ptr = translator.builder.ins().iadd_imm(string, 8);
+                let ptr = translator.builder.ins().call(alloc_func_ref, &[len]);
+                let ptr = translator.builder.inst_results(ptr)[0];
 
                 let data_ptr =
                     translator
@@ -101,7 +99,7 @@ impl CraneliftTranslation for LirLiteral {
                 }
 
                 let root_func_ref = translator.get_add_root()?;
-                translator.builder.ins().call(root_func_ref, &[string]);
+                translator.builder.ins().call(root_func_ref, &[ptr]);
 
                 Ok(CompiledValue::new(ptr, MirDataType::Str))
             }
@@ -139,13 +137,11 @@ impl CraneliftTranslation for LirAggregate {
             .module
             .declare_func_in_func(*alloc_func_id, translator.builder.func);
 
-        let aggregate_ptr = translator
+        let ptr = translator
             .builder
             .ins()
             .call(alloc_func_ref, &[field_count]);
-        let aggregate_ptr = translator.builder.inst_results(aggregate_ptr)[0];
-
-        let ptr = translator.builder.ins().iadd_imm(aggregate_ptr, 8);
+        let ptr = translator.builder.inst_results(ptr)[0];
 
         let set_field_func_id = translator
             .runtime_functions
@@ -183,10 +179,7 @@ impl CraneliftTranslation for LirAggregate {
 
         let root_func_ref = translator.get_add_root()?;
 
-        translator
-            .builder
-            .ins()
-            .call(root_func_ref, &[aggregate_ptr]);
+        translator.builder.ins().call(root_func_ref, &[ptr]);
 
         let data_type = if let Some(name) = self.name {
             MirDataType::Struct {
@@ -259,7 +252,6 @@ impl CraneliftTranslation for LirEnum {
             }
         };
 
-        let ptr = translator.builder.ins().iadd_imm(ptr, 8);
         Ok(CompiledValue::new(ptr, data_type))
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    natives::{ArgumentKind, pointer_returning_functions, runtime_functions},
+    natives::{ArgumentKind, runtime_functions},
     translation::{CraneliftTranslation, FunctionTranslator},
     values::CompiledValue,
 };
@@ -126,20 +126,6 @@ impl CraneliftTranslation for LirCall {
                 translator.builder.ins().iconst(translator.types.int(), 0)
             };
 
-            let returns_pointer = if let Some(t) = &sig.returns
-                && t == &translator.types.ptr()
-            {
-                true
-            } else {
-                pointer_returning_functions().contains(&runtime_name)
-            };
-
-            if returns_pointer {
-                let func_ref = translator.get_add_root()?;
-                translator.builder.ins().call(func_ref, &[result]);
-            }
-
-            // TODO Probably swap this for an MirDataType return type and just remove all of this hassle
             let mut return_type = if let Some(t) = &sig.typed_return {
                 t.clone()
             } else if let Some(t) = &sig.returns {
