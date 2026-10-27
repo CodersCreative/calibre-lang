@@ -625,6 +625,12 @@ pub extern "C" fn calibre_min_or_zero(tag: ValueTag, value: i64) -> i64 {
     }
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_gen_suspend(value: i64) -> i64 {
+    // TODO Implement proper suspend with state machine
+    value
+}
+
 pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
     &[
         RuntimeSymbol {
@@ -702,6 +708,10 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_min_or_zero",
             ptr: calibre_min_or_zero as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_gen_suspend",
+            ptr: calibre_gen_suspend as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_result_ok",

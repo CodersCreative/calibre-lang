@@ -17,8 +17,8 @@ impl CraneliftTranslation for LirCall {
     ) -> Result<CompiledValue, Box<dyn Error>> {
         let callee_value = match *self.caller {
             LirNodeType::Load(LirLoad { value }) => value,
-            _ => {
-                return Err("Call callee must be a Load".into());
+            x => {
+                return Err(format!("Call callee must be a Load, found {}", x).into());
             }
         };
 

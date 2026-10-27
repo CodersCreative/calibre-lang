@@ -6,7 +6,7 @@ use calibre_lir::ast::{
     BlockId, LirAssign, LirBlock, LirLValue, LirNode, LirNodeType, LirTerminator,
 };
 use calibre_lir::environment::{LirFunction, LirRegistry};
-use calibre_lir::{FullyQualifiedPath, MirDataType, TypeKey};
+use calibre_lir::{FullyQualifiedPath, MirDataType};
 use calibre_mir::symbols::VariableKey;
 use calibre_parser::Span;
 use cranelift::codegen::isa::CallConv;
@@ -18,7 +18,7 @@ use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module, ModuleError};
 use cranelift_object::{ObjectBuilder, ObjectModule};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap};
 use std::error::Error;
 use std::sync::Arc;
 
@@ -279,6 +279,7 @@ impl JitCompiler {
     }
 }
 
+#[allow(unused)]
 pub struct AotCompiler {
     module: ObjectModule,
     data: CompilerData,

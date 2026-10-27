@@ -25,7 +25,7 @@ const main := fn => {
 	
 	print("evens : ");
 	let evens := fn(x for x in 20 if (x % 2) = 0);
-	print([evens.collect()]);
+	print(evens.collect() as! str);
 	
 	print("odds : ");
 	let odds := fn(x for x in 20 if (x % 2) != 0) -> gen:<int>;
@@ -40,7 +40,7 @@ const main := fn => {
 
 	print("mapped : ");
 	let mapped := fn(x + 1 for x in 5).map(fn (x : int) -> int => return x * 10).collect();
-	print([mapped]);
+	print(mapped as! str);
 
 	let mut ten := 10;
 	let mut tenny := ten.&mut;

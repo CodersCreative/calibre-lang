@@ -131,6 +131,20 @@ const test_range := fn () -> int => {
     return l as! int + m;
 }
 
+const test_gen := fn -> gen:<int> => {
+    let mut i := 0;
+    for i < 30 => {
+        return i;
+        i += 1;
+    }
+}
+
+const test_generator := fn () -> int => {
+    let mut g := test_gen();
+    let value : int? = g.next();
+    return value.next;
+}
+
 const main := fn (x : int) -> int => {
     let result := calc(x) if x is int else calc(x+1);
     let value := conversions();
@@ -141,6 +155,7 @@ const main := fn (x : int) -> int => {
     test_enum_literal();
     test_list_literal();
     test_range();
+    test_generator();
 
     let mut i := 0;
     for i < 30 => {
