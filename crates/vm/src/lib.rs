@@ -47,6 +47,7 @@ pub enum RootBinding {
 pub enum PathSegment {
     Field(Ustr),
     Index(usize),
+    Slice(usize, usize),
     MapKey(HashKey),
     Payload,
 }
@@ -167,8 +168,6 @@ impl Clone for VM {
 
 #[derive(Debug, Clone, Default)]
 pub struct VMCaches {
-    /*call: UstrMap<Arc<VMFunction>>,
-    callsite: FxHashMap<(usize, usize, u32), Arc<VMFunction>>,*/
     #[allow(clippy::type_complexity)]
     memo: FxHashMap<VariableKey, Arc<Mutex<FxHashMap<Vec<HashKey>, RuntimeValue>>>>,
 }
@@ -593,9 +592,9 @@ impl VM {
     #[inline]
     pub(crate) fn resolve_value(&self, value: RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
         match value {
-            RuntimeValue::Ref(_)
-            | RuntimeValue::RegRef { .. }
-            | RuntimeValue::MutexGuard(_) => self.resolve_value_ref(&value),
+            RuntimeValue::Ref(_) | RuntimeValue::RegRef { .. } | RuntimeValue::MutexGuard(_) => {
+                self.resolve_value_ref(&value)
+            }
             other => Ok(other),
         }
     }
@@ -665,6 +664,9 @@ impl VM {
                 }
                 RuntimeValue::MutexGuard(guard) => {
                     owned = Some(guard.get_clone());
+                }
+                RuntimeValue::MutationHandle(x) => {
+                    owned = self.read_handle(x);
                 }
                 _ => {
                     if from_owned {

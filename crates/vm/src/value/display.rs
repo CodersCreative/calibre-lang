@@ -18,6 +18,13 @@ impl RuntimeValue {
                     self.to_string()
                 }
             }
+            Self::MutationHandle(x) => {
+                if let Some(x) = vm.read_handle(x) {
+                    x.display(vm)
+                } else {
+                    self.to_string()
+                }
+            }
             Self::HashMap(map) => {
                 let mut parts = Vec::new();
 
@@ -129,6 +136,7 @@ impl Display for RuntimeValue {
             Self::Range(from, to) => write!(f, "{}..{}", from, to),
             Self::Ref(x) => write!(f, "ref -> {}", x),
             Self::RegRef { frame, reg } => write!(f, "regref -> {}:{}", frame, reg),
+            Self::MutationHandle(_) => write!(f, "MutationHandle"),
             Self::Bool(x) => write!(f, "{}", if *x { "true" } else { "false" }),
             Self::Aggregate(x, data) => {
                 if x.is_none() {

@@ -8,16 +8,11 @@ Assign
 use crate::{
     Reg, VMLiteral,
     instructions::{
-        VMInstruction,
-        literals::VMLoadLiteral,
-        memory::VMSetRef,
-        variables::VMStoreVar,
+        VMInstruction, literals::VMLoadLiteral, memory::VMSetRef, variables::VMStoreVar,
     },
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
-use calibre_lir::ast::{
-    LirAssign, LirDeclare, LirExtern, LirLValue,
-};
+use calibre_lir::ast::{LirAssign, LirDeclare, LirExtern, LirLValue};
 use calibre_parser::Span;
 
 impl VMLowering for LirDeclare {

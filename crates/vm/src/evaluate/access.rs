@@ -244,8 +244,6 @@ impl VMEvaluation for VMLoadMember {
             }
         };
 
-        vm.set_reg_value(self.dst, val);
-
         let final_source = member_source.unwrap_or_else(|| {
             if let Some(i) = tuple_index {
                 let resolved_idx = normalize_index(usize::MAX, i).unwrap_or_default();
@@ -255,8 +253,7 @@ impl VMEvaluation for VMLoadMember {
             }
         });
 
-        vm.current_frame_mut()
-            .set_shared_mutation_handle(self.dst, final_source);
+        vm.set_reg_value(self.dst, RuntimeValue::MutationHandle(final_source));
 
         Ok(TerminateValue::None)
     }

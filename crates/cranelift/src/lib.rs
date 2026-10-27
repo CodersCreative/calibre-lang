@@ -18,7 +18,7 @@ use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module, ModuleError};
 use cranelift_object::{ObjectBuilder, ObjectModule};
-use rustc_hash::{FxHashMap};
+use rustc_hash::FxHashMap;
 use std::error::Error;
 use std::sync::Arc;
 

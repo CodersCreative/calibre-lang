@@ -196,7 +196,9 @@ fn parse(text: String) -> (LirRegistry, MiddleEnvironment) {
         .symbols
         .variables
         .iter()
-        .find(|(k, _)| k.name() == "main").map(|x| vec![x.0.clone()]).unwrap_or_default();
+        .find(|(k, _)| k.name() == "main")
+        .map(|x| vec![x.0.clone()])
+        .unwrap_or_default();
 
     let lir_result = lir_result.eliminate_dead_code(main, false);
 

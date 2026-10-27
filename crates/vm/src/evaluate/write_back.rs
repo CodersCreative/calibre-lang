@@ -150,6 +150,17 @@ impl VM {
         Some(result)
     }
 
+    pub(crate) fn read_handle(&self, handle: &MutationHandle) -> Option<RuntimeValue> {
+        let target = self.get_root(&handle.root);
+        let root = self.resolve_value(target).ok()?;
+
+        if !root.path_exists(&handle.path) {
+            return None;
+        }
+
+        root.read_path(&handle.path).cloned()
+    }
+
     pub(crate) fn replace_mutation_handle(
         &mut self,
         handle: &MutationHandle,

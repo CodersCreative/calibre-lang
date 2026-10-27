@@ -51,13 +51,15 @@ impl RuntimeValue {
                 RuntimeValue::Enum(_, _, Some(inner)) => inner.as_ref().path_exists(rest),
                 _ => false,
             },
+            PathSegment::Slice(_, _) => unimplemented!(),
         }
     }
 
-    pub fn read_path(&self, path: &[PathSegment]) -> Option<RuntimeValue> {
+    pub fn read_path<'a>(&'a self, path: &[PathSegment]) -> Option<&'a RuntimeValue> {
         let Some((segment, rest)) = path.split_first() else {
-            return Some(self.clone());
+            return Some(self);
         };
+
         match segment {
             PathSegment::Field(field) => match self {
                 RuntimeValue::Aggregate(_, map) => map
@@ -83,6 +85,7 @@ impl RuntimeValue {
                     .and_then(|(_, slot)| slot.as_ref().read_path(rest)),
                 _ => None,
             },
+
             PathSegment::MapKey(key) => match self {
                 RuntimeValue::HashMap(map) => map
                     .map
@@ -98,6 +101,7 @@ impl RuntimeValue {
                 RuntimeValue::Enum(_, _, Some(inner)) => inner.as_ref().read_path(rest),
                 _ => None,
             },
+            PathSegment::Slice(_, _) => unimplemented!(),
         }
     }
 
@@ -156,6 +160,7 @@ impl RuntimeValue {
                 RuntimeValue::Enum(_, _, Some(inner)) => Self::update_gc(inner, rest, op),
                 _ => None,
             },
+            PathSegment::Slice(_, _) => unimplemented!(),
         }
     }
 }

@@ -24,17 +24,18 @@ impl VMEvaluation for VMRef {
         let out = match vm.get_reg_value(self.value).clone() {
             RuntimeValue::Ref(name) => RuntimeValue::Ref(name),
             RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef { frame, reg },
+            RuntimeValue::MutationHandle(x) => RuntimeValue::MutationHandle(x),
             other => {
-                    let name = VariableKey {
-                        fully_qualified_path: FullyQualifiedPath::combine(
-                            None,
-                            Ustr::from(&vm.get_ref_id().to_string()),
-                        ),
-                        shadow_counter: None,
-                    };
-                    
-                    let _ = vm.variables.insert(name.clone(), other);
-                    RuntimeValue::Ref(name)
+                let name = VariableKey {
+                    fully_qualified_path: FullyQualifiedPath::combine(
+                        None,
+                        Ustr::from(&vm.get_ref_id().to_string()),
+                    ),
+                    shadow_counter: None,
+                };
+
+                let _ = vm.variables.insert(name.clone(), other);
+                RuntimeValue::Ref(name)
             }
         };
 
@@ -84,6 +85,12 @@ impl VMEvaluation for VMSetRef {
             RuntimeValue::MutexGuard(guard) => {
                 let old = guard.set_value(value);
                 let _ = vm.set_reg_value(self.dst, old);
+            }
+            RuntimeValue::MutationHandle(x) => {
+                let old = vm.replace_mutation_handle(&x, value);
+                if let Some(old) = old {
+                    let _ = vm.set_reg_value(self.dst, old);
+                }
             }
             x => return Err(RuntimeError::InvalidBytecode(format!("invalid ref {}", x))),
         }

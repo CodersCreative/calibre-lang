@@ -31,8 +31,6 @@ impl Display for VMLoadMember {
     }
 }
 
-
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VMIndex {
     pub dst: Reg,
@@ -49,5 +47,3 @@ impl Display for VMIndex {
         )
     }
 }
-
-

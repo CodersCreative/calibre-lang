@@ -1,7 +1,7 @@
 #[cfg(feature = "native")]
 use crate::value::ffi::ExternFunction;
 use crate::{
-    VM,
+    MutationHandle, VM,
     native::{NativeFunction, stdlib::generator::GeneratorState},
     value::{
         hashable::{RuntimeHashMap, RuntimeHashSet},
@@ -216,6 +216,7 @@ pub enum RuntimeValue {
     Aggregate(Option<TypeKey>, Arc<GcMap>),
     Enum(TypeKey, usize, Option<Gc<RuntimeValue>>),
     Ref(VariableKey),
+    MutationHandle(Arc<MutationHandle>),
     RegRef {
         frame: usize,
         reg: Reg,
@@ -360,6 +361,7 @@ impl RuntimeValue {
             RuntimeValue::Ref(_)
                 | RuntimeValue::RegRef { .. }
                 | RuntimeValue::MutexGuard(_)
+                | RuntimeValue::MutationHandle(_)
         )
     }
 

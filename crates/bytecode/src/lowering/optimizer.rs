@@ -2,7 +2,7 @@ use crate::{
     Reg, VMBlock,
     instructions::{
         VMInstruction::{self},
-        access::{VMLoadMember},
+        access::VMLoadMember,
         literals::{VMAggregate, VMEnum, VMLoadLiteral},
         registers::VMCopy,
         termination::{VMBranch, VMJump},
