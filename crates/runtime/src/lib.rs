@@ -26,6 +26,7 @@ pub enum Value {
     Tuple(*const GcAggregate),
     Enum(*const GcAggregate),
     List(*const GcList),
+    Range(i64, i64),
     Ptr(usize),
 }
 
@@ -42,6 +43,11 @@ impl Value {
             ValueTag::Tuple => Self::Tuple(value.cast_unsigned() as *const GcAggregate),
             ValueTag::Enum => Self::Enum(value.cast_unsigned() as *const GcAggregate),
             ValueTag::List => Self::List(value.cast_unsigned() as *const GcList),
+            ValueTag::Range => {
+                let from = value as i32 as i64;
+                let to = (value >> 32) as i32 as i64;
+                Self::Range(from, to)
+            }
             ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
         }
     }
@@ -60,6 +66,11 @@ impl From<Value> for i64 {
             Value::Tuple(x) => x as i64,
             Value::Enum(x) => x as i64,
             Value::List(x) => x as i64,
+            Value::Range(from, to) => {
+                let from_i32 = from as i32;
+                let to_i32 = to as i32;
+                ((to_i32 as i64) << 32) | (from_i32 as i64 & 0xFFFFFFFF)
+            }
             Value::Null => 0,
         }
     }
@@ -160,6 +171,9 @@ impl Display for Value {
                     )
                 }
             }
+            Value::Range(from, to) => {
+                write!(f, "{}..{}", from, to)
+            }
         }
     }
 }
@@ -177,6 +191,7 @@ pub enum ValueTag {
     Tuple,
     Enum,
     List,
+    Range,
     Ptr,
 }
 
@@ -511,6 +526,7 @@ pub extern "C" fn calibre_gc_stats() -> GcStats {
 pub extern "C" fn calibre_gc_add_root(ptr: usize) {
     if ptr != 0
         && let Ok(mut roots) = GC_ROOTS.lock()
+        && !roots.contains(&ptr.wrapping_sub(8))
     {
         roots.insert(ptr);
     }
@@ -518,8 +534,10 @@ pub extern "C" fn calibre_gc_add_root(ptr: usize) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_gc_remove_root(ptr: usize) {
-    if let Ok(mut roots) = GC_ROOTS.lock() {
-        roots.remove(&ptr);
+    if let Ok(mut roots) = GC_ROOTS.lock()
+        && !roots.remove(&ptr)
+    {
+        roots.remove(&ptr.wrapping_sub(8));
     }
 }
 
@@ -572,6 +590,38 @@ pub extern "C" fn calibre_console_output(handle_type: i64, tag: ValueTag, value:
         let mut handle = stdout.lock();
         let _ = handle.write_all(value.as_bytes());
         let _ = handle.flush();
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_len(tag: ValueTag, value: i64) -> u64 {
+    match Value::from_tag(tag, value) {
+        Value::Range(from, to) => to.abs_diff(from),
+        Value::String(string) => {
+            let string = unsafe { &*string };
+            string.data.len() as u64
+        }
+        Value::List(list) => {
+            let list = unsafe { &*list };
+            list.len as u64
+        }
+        Value::Struct(agg) => {
+            let agg = unsafe { &*agg };
+            agg.data.len() as u64
+        }
+        Value::Int(x) => x.cast_unsigned(),
+        Value::UInt(x) => x,
+        Value::Float(x) => x as u64,
+        Value::Char(x) => x.cast_unsigned() as u64,
+        _ => 0,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_min_or_zero(tag: ValueTag, value: i64) -> i64 {
+    match tag {
+        ValueTag::Range => value as i32 as i64,
+        _ => 0,
     }
 }
 
@@ -644,6 +694,14 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_console_output",
             ptr: calibre_console_output as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_len",
+            ptr: calibre_len as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_min_or_zero",
+            ptr: calibre_min_or_zero as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_result_ok",

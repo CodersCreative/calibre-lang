@@ -4,9 +4,9 @@ use crate::{
 };
 use calibre_lir::{
     MirDataType, TypeKey,
-    ast::{LirAggregate, LirEnum, LirList, LirLiteral},
+    ast::{LirAggregate, LirEnum, LirList, LirLiteral, LirRange},
 };
-use cranelift::codegen::ir::{InstBuilder, MemFlags};
+use cranelift::codegen::ir::{InstBuilder, MemFlags, types};
 use cranelift_module::Module;
 use std::error::Error;
 
@@ -293,5 +293,26 @@ impl CraneliftTranslation for LirList {
         }
 
         Ok(CompiledValue::new(ptr, self.data_type))
+    }
+}
+
+impl CraneliftTranslation for LirRange {
+    fn translate<'a, M: Module>(
+        self,
+        translator: &mut FunctionTranslator<'a, M>,
+        _data_type: Option<MirDataType>,
+    ) -> Result<CompiledValue, Box<dyn Error>> {
+        let from = (*self.from).translate(translator, Some(MirDataType::Int))?;
+        let to = (*self.to).translate(translator, Some(MirDataType::Int))?;
+
+        let from = translator.convert_to_i64(from)?;
+
+        let to = translator.convert_to_i64(to)?;
+        let to = translator.builder.ins().ireduce(types::I32, to);
+        let to = translator.builder.ins().sextend(translator.types.int(), to);
+        let to = translator.builder.ins().ishl_imm(to, 32);
+
+        let value = translator.builder.ins().iadd(from, to);
+        Ok(CompiledValue::new(value, MirDataType::Range))
     }
 }

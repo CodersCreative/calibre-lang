@@ -118,6 +118,19 @@ const test_enum_literal := fn () => {
     console_output(0, '\n');
 }
 
+const test_range := fn () -> int => {
+    let r := 0..10;
+    console_output(0, r);
+    console_output(0, '\n');
+    let l := len(r);
+    console_output(0, l);
+    console_output(0, '\n');
+    let m := min_or_zero(r);
+    console_output(0, m);
+    console_output(0, '\n');
+    return l as! int + m;
+}
+
 const main := fn (x : int) -> int => {
     let result := calc(x) if x is int else calc(x+1);
     let value := conversions();
@@ -127,6 +140,7 @@ const main := fn (x : int) -> int => {
     test_tuple_literal();
     test_enum_literal();
     test_list_literal();
+    test_range();
 
     let mut i := 0;
     for i < 30 => {

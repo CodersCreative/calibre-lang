@@ -208,6 +208,22 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     typed_return: None,
                 },
             ),
+            (
+                "calibre_len",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::TagPayload)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::UInt),
+                },
+            ),
+            (
+                "calibre_min_or_zero",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::TagPayload)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Int),
+                },
+            ),
         ];
 
         lst.into_iter().collect()
@@ -224,6 +240,8 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("some", "calibre_option_some"),
             ("panic", "calibre_panic"),
             ("console_output", "calibre_console_output"),
+            ("len", "calibre_len"),
+            ("min_or_zero", "calibre_min_or_zero"),
         ];
 
         lst.into_iter().collect()

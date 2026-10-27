@@ -442,7 +442,8 @@ impl MirDataType {
             MirDataType::Tuple(_) => 7,
             MirDataType::Struct { .. } | MirDataType::Result { .. } | MirDataType::Option(_) => 8,
             MirDataType::List(_) => 9,
-            _ => 10,
+            MirDataType::Range => 10,
+            _ => 11,
         }
     }
 
