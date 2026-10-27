@@ -168,7 +168,7 @@ fn parse(text: String) -> (LirRegistry, MiddleEnvironment) {
 
     println!("Lowering to MIR...");
     let (env, _scope, middle) =
-        MiddleEnvironment::new_and_evaluate(program, path, Vec::new(), true, false);
+        MiddleEnvironment::new_and_evaluate(program, path, Vec::new(), false, true);
 
     if !env.context.errors.is_empty() {
         println!("{:?}", env.context.errors);
@@ -176,6 +176,14 @@ fn parse(text: String) -> (LirRegistry, MiddleEnvironment) {
 
     println!("Lowering to LIR...");
     let lir_result = LirEnvironment::lower(&env, middle);
+
+    let main = env
+        .symbols
+        .variables
+        .iter()
+        .find(|(k, _)| k.name() == "main").map(|x| vec![x.0.clone()]).unwrap_or_default();
+
+    let lir_result = lir_result.eliminate_dead_code(main, false);
 
     println!("Starting JIT...");
     (lir_result, env)
