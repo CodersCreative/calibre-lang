@@ -42,7 +42,6 @@ const main := fn => {
 	
 	let mut nums := list:<int>[1, 2, 3];
 	
-	print(2 in nums);
 	nums[1] := 20;
 	print(nums[1]);
 	

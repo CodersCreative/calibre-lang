@@ -26,7 +26,6 @@ impl VMEvaluation for VMLoadRegRef {
                 reg: *reg,
             },
             RuntimeValue::Ref(name) => RuntimeValue::Ref(name.clone()),
-            RuntimeValue::VarRef(id) => RuntimeValue::VarRef(*id),
             other => other.clone(),
         };
 

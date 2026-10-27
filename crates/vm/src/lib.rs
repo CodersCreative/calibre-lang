@@ -40,7 +40,6 @@ mod vm_lookup;
 pub enum RootBinding {
     FrameReg { frame: usize, reg: Reg },
     Ref(VariableKey),
-    VarRef(usize),
     RegRef { frame: usize, reg: Reg },
 }
 
@@ -528,9 +527,6 @@ impl VM {
             RuntimeValue::Ref(name) => {
                 self.variables.insert(name, value);
             }
-            RuntimeValue::VarRef(id) => {
-                let _ = self.variables.set_by_id(id, value);
-            }
             RuntimeValue::RegRef { frame, reg } => {
                 self.set_reg_value_in_frame(frame, reg, value);
 
@@ -598,7 +594,6 @@ impl VM {
     pub(crate) fn resolve_value(&self, value: RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
         match value {
             RuntimeValue::Ref(_)
-            | RuntimeValue::VarRef(_)
             | RuntimeValue::RegRef { .. }
             | RuntimeValue::MutexGuard(_) => self.resolve_value_ref(&value),
             other => Ok(other),
@@ -632,7 +627,6 @@ impl VM {
     fn resolve_reference_chain(&self, value: &RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
         let mut owned: Option<RuntimeValue> = None;
         let mut seen_refs = FxHashSet::default();
-        let mut seen_var_refs: FxHashSet<usize> = FxHashSet::default();
         let mut seen_reg_refs: FxHashSet<(usize, u16)> = FxHashSet::default();
 
         for _ in 0..64 {
@@ -658,34 +652,6 @@ impl VM {
                     } else {
                         return Err(RuntimeError::DanglingRef(pointer.to_string()));
                     };
-                    owned = Some(v);
-                }
-                RuntimeValue::VarRef(id) => {
-                    if !seen_var_refs.insert(*id) {
-                        return Err(RuntimeError::DanglingRef(format!(
-                            "varref-cycle(id = #{} name = '{}')",
-                            id,
-                            self.variables.name_of(*id).unwrap()
-                        )));
-                    }
-
-                    let v = self
-                        .variables
-                        .get_by_id(*id)
-                        .cloned()
-                        .ok_or(RuntimeError::DanglingRef(format!("#{}", id)))?;
-
-                    if matches!(&v, RuntimeValue::VarRef(next) if next == id) {
-                        if let Some(name) = self.variables.name_of(*id)
-                            && let Ok(local) = self.resolve_value(RuntimeValue::Ref(name))
-                            && !matches!(&local, RuntimeValue::VarRef(next) if next == id)
-                        {
-                            owned = Some(local);
-                            continue;
-                        }
-                        return Err(RuntimeError::DanglingRef(format!("#{}", id)));
-                    }
-
                     owned = Some(v);
                 }
                 RuntimeValue::RegRef { frame, reg } => {
@@ -737,15 +703,6 @@ impl VM {
                 }
 
                 if let Some(inner) = self.variables.remove(name) {
-                    self.drop_runtime_value_inner_ref(&inner, seen, seen_refs, seen_regs);
-                }
-            }
-            RuntimeValue::VarRef(id) => {
-                if !seen_refs.insert(*id) {
-                    return;
-                }
-
-                if let Some(inner) = self.variables.remove_by_id(*id) {
                     self.drop_runtime_value_inner_ref(&inner, seen, seen_refs, seen_regs);
                 }
             }

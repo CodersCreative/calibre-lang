@@ -55,7 +55,6 @@ impl VM {
     fn get_root_binding(&self, source: Reg) -> RootBinding {
         match self.get_reg_value(source) {
             RuntimeValue::Ref(name) => RootBinding::Ref(name.clone()),
-            RuntimeValue::VarRef(id) => RootBinding::VarRef(*id),
             RuntimeValue::RegRef { frame, reg } => RootBinding::RegRef {
                 frame: *frame,
                 reg: *reg,
@@ -125,7 +124,6 @@ impl VM {
                 }
             }
             RootBinding::Ref(name) => RuntimeValue::Ref(name.clone()),
-            RootBinding::VarRef(id) => RuntimeValue::VarRef(*id),
         }
     }
 
@@ -255,12 +253,6 @@ impl VM {
                 }
                 _ => self.variables.insert(name, value),
             },
-            RuntimeValue::VarRef(id) => match self.variables.get_by_id(id).cloned() {
-                Some(current) if current.is_ref_like() => {
-                    self.write_back_at_depth(current, value, depth - 1)
-                }
-                _ => self.variables.set_by_id(id, value),
-            },
             RuntimeValue::RegRef { frame, reg } => {
                 let current = self.get_reg_value_in_frame(frame, reg).clone();
 
@@ -282,7 +274,6 @@ impl VM {
     ) -> Option<RuntimeValue> {
         match target {
             RuntimeValue::Ref(name) => self.variables.insert(name, value),
-            RuntimeValue::VarRef(id) => self.variables.set_by_id(id, value),
             RuntimeValue::RegRef { frame, reg } => {
                 Some(self.set_reg_value_in_frame(frame, reg, value))
             }

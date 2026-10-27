@@ -1,7 +1,7 @@
 use crate::{
     Reg,
     instructions::{
-        access::{VMDiscriminant, VMIndex, VMLoadMember, VMSetIndex, VMSetMember},
+        access::{VMDiscriminant, VMIndex, VMLoadMember},
         binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
         functions::{VMCall, VMCallSelf, VMSpawn},
         literals::{VMAggregate, VMEnum, VMList, VMRange},
@@ -62,9 +62,7 @@ pub enum VMInstruction {
     // Access
     Discriminant(VMDiscriminant),
     LoadMember(VMLoadMember),
-    SetMember(VMSetMember),
     Index(VMIndex),
-    SetIndex(VMSetIndex),
 
     // Memory
     Ref(VMRef),
@@ -98,9 +96,7 @@ impl VMInstruction {
         | VMInstruction::Spawn(VMSpawn { dst, .. })
         // Access
         | VMInstruction::LoadMember(VMLoadMember { dst, .. })
-        | VMInstruction::SetMember(VMSetMember { dst, .. })
         | VMInstruction::Index(VMIndex { dst, .. })
-        | VMInstruction::SetIndex(VMSetIndex { dst, .. })
         | VMInstruction::Discriminant(VMDiscriminant { dst, .. })
         // Memory
         | VMInstruction::Ref(VMRef { dst, .. })
@@ -140,9 +136,7 @@ impl VMInstruction {
         | VMInstruction::Spawn(VMSpawn { dst, .. })
         // Access
         | VMInstruction::LoadMember(VMLoadMember { dst, .. })
-        | VMInstruction::SetMember(VMSetMember { dst, .. })
         | VMInstruction::Index(VMIndex { dst, .. })
-        | VMInstruction::SetIndex(VMSetIndex { dst, .. })
         | VMInstruction::Discriminant(VMDiscriminant { dst, .. })
         // Memory
         | VMInstruction::Ref(VMRef { dst, .. })
@@ -169,8 +163,6 @@ impl VMInstruction {
             VMInstruction::Call(_)
                 | VMInstruction::CallSelf(_)
                 | VMInstruction::StoreVar(_)
-                | VMInstruction::SetMember(_)
-                | VMInstruction::SetIndex(_)
                 | VMInstruction::SetRef(_)
                 | VMInstruction::Branch(_)
                 | VMInstruction::Jump(_)
@@ -225,19 +217,8 @@ impl VMInstruction {
                 dst: _,
                 target,
                 value,
-            })
-            | VMInstruction::SetMember(VMSetMember { target, value, .. }) => {
-                add_use(*target);
-                add_use(*value);
-            }
-            VMInstruction::SetIndex(VMSetIndex {
-                target,
-                index,
-                value,
-                ..
             }) => {
                 add_use(*target);
-                add_use(*index);
                 add_use(*value);
             }
             VMInstruction::Branch(VMBranch { cond, .. }) => add_use(*cond),
@@ -298,9 +279,7 @@ impl Display for VMInstruction {
 
             // Access
             VMInstruction::LoadMember(x) => x.fmt(f),
-            VMInstruction::SetMember(x) => x.fmt(f),
             VMInstruction::Index(x) => x.fmt(f),
-            VMInstruction::SetIndex(x) => x.fmt(f),
             VMInstruction::Discriminant(x) => x.fmt(f),
 
             // Memory

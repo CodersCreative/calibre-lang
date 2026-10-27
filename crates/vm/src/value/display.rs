@@ -11,9 +11,9 @@ impl RuntimeValue {
             Self::Byte(x) => format!("{}", x),
             Self::Ptr(x) => format!("{:x}", x),
             Self::Int(x) => format!("{}", x),
-            Self::Ref(_) | Self::VarRef(_) | Self::RegRef { .. } => {
+            Self::Ref(_) | Self::RegRef { .. } => {
                 if let Ok(x) = vm.resolve_value_ref(self) {
-                    x.clone().display(vm)
+                    x.display(vm)
                 } else {
                     self.to_string()
                 }
@@ -128,7 +128,6 @@ impl Display for RuntimeValue {
             Self::Enum(x, y, _) => write!(f, "{}[{}]", x.name(), y),
             Self::Range(from, to) => write!(f, "{}..{}", from, to),
             Self::Ref(x) => write!(f, "ref -> {}", x),
-            Self::VarRef(id) => write!(f, "varref -> {}", id),
             Self::RegRef { frame, reg } => write!(f, "regref -> {}:{}", frame, reg),
             Self::Bool(x) => write!(f, "{}", if *x { "true" } else { "false" }),
             Self::Aggregate(x, data) => {

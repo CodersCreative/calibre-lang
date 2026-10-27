@@ -216,7 +216,6 @@ pub enum RuntimeValue {
     Aggregate(Option<TypeKey>, Arc<GcMap>),
     Enum(TypeKey, usize, Option<Gc<RuntimeValue>>),
     Ref(VariableKey),
-    VarRef(usize),
     RegRef {
         frame: usize,
         reg: Reg,
@@ -296,7 +295,6 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
             #[cfg(feature = "native")]
             RuntimeValue::ExternFunction(_) => Ok(()),
             RuntimeValue::Ptr(_) => Ok(()),
-            RuntimeValue::VarRef(_) => Ok(()),
             _ => Ok(()),
         }
     }
@@ -360,7 +358,6 @@ impl RuntimeValue {
         matches!(
             self,
             RuntimeValue::Ref(_)
-                | RuntimeValue::VarRef(_)
                 | RuntimeValue::RegRef { .. }
                 | RuntimeValue::MutexGuard(_)
         )

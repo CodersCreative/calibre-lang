@@ -7,7 +7,6 @@ def matmul(a, b):
         ci = [0.0] * m
         for k in range(p):
             aik, bk = a[i][k], b[k]
-            print(aik);
             for j in range(m):
                 ci[j] += aik * bk[j]
         c.append(ci)

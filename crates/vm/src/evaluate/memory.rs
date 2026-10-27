@@ -23,28 +23,8 @@ impl VMEvaluation for VMRef {
     ) -> Result<TerminateValue, RuntimeError> {
         let out = match vm.get_reg_value(self.value).clone() {
             RuntimeValue::Ref(name) => RuntimeValue::Ref(name),
-            RuntimeValue::VarRef(id) => RuntimeValue::VarRef(id),
             RuntimeValue::RegRef { frame, reg } => RuntimeValue::RegRef { frame, reg },
             other => {
-                if let Some(id) = (0..vm.variables.slot_len()).find(|id| {
-                    matches!(
-                        vm.variables.get_by_id(*id),
-                        Some(RuntimeValue::RegRef { frame, reg })
-                            if *frame == vm.frames.len().saturating_sub(1) && *reg == self.value
-                    )
-                }) {
-                    RuntimeValue::VarRef(id)
-                } else if let RuntimeValue::List(list) = &other
-                    && let Some(id) = (0..vm.variables.slot_len()).find(|id| {
-                        matches!(
-                            vm.variables.get_by_id(*id),
-                            Some(RuntimeValue::List(other_list))
-                                if std::ptr::eq(list.as_ref(), other_list.as_ref())
-                        )
-                    })
-                {
-                    RuntimeValue::VarRef(id)
-                } else {
                     let name = VariableKey {
                         fully_qualified_path: FullyQualifiedPath::combine(
                             None,
@@ -52,9 +32,9 @@ impl VMEvaluation for VMRef {
                         ),
                         shadow_counter: None,
                     };
-                    let id = vm.variables.insert_with_id(name, other);
-                    RuntimeValue::VarRef(id)
-                }
+                    
+                    let _ = vm.variables.insert(name.clone(), other);
+                    RuntimeValue::Ref(name)
             }
         };
 
@@ -97,11 +77,6 @@ impl VMEvaluation for VMSetRef {
                     let _ = vm.set_reg_value(self.dst, old);
                 }
             }
-            RuntimeValue::VarRef(id) => {
-                if let Some(old) = vm.variables.set_by_id(id, value) {
-                    let _ = vm.set_reg_value(self.dst, old);
-                }
-            }
             RuntimeValue::RegRef { frame, reg } => {
                 let old = vm.set_reg_value_in_frame(frame, reg, value);
                 let _ = vm.set_reg_value(self.dst, old);
@@ -110,7 +85,7 @@ impl VMEvaluation for VMSetRef {
                 let old = guard.set_value(value);
                 let _ = vm.set_reg_value(self.dst, old);
             }
-            _ => return Err(RuntimeError::InvalidBytecode("invalid ref".to_string())),
+            x => return Err(RuntimeError::InvalidBytecode(format!("invalid ref {}", x))),
         }
 
         Ok(TerminateValue::None)
