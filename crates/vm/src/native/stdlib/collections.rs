@@ -1,20 +1,15 @@
 use crate::{
-    VM,
-    error::RuntimeError,
-    native::{
+    VM, error::RuntimeError, native::{
         NativeFunction,
         utils::{
             expect_num_args, pop_or_null, resolve_hash_key, resolve_hash_key_ref, resolve_hashmap,
             resolve_hashset,
         },
-    },
-    value::{
-        GcVec, RuntimeValue,
-        hashable::{HashKey, RuntimeHashMap, RuntimeHashSet},
+    }, value::{
+        GcVec, RuntimeValue, ValueSlot, hashable::{HashKey, RuntimeHashMap, RuntimeHashSet},
     },
 };
 use calibre_parser::ast::types::ParserInnerType;
-use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 
@@ -115,7 +110,7 @@ impl NativeFunction for HashMapGet {
         let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
         if let Some(value) = map.map.get(&key) {
-            return Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::from(
+            return Ok(RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::from(
                 value.clone(),
             )))));
         }
@@ -141,7 +136,7 @@ impl NativeFunction for HashMapRemove {
         env.update_ref_value(target, RuntimeValue::HashMap(map));
 
         if let Some(value) = removed {
-            return Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::from(
+            return Ok(RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::from(
                 value.clone(),
             )))));
         }
@@ -308,7 +303,7 @@ impl NativeFunction for HashSetNew {
             .as_ref()
             .0
             .iter()
-            .map(|item| resolve_hash_key_ref(env, item))
+            .map(|item| resolve_hash_key_ref(env, &item.get()))
             .collect::<Result<FxHashSet<_>, RuntimeError>>()?;
 
         Ok(RuntimeValue::HashSet(RuntimeHashSet { set: Arc::new(set) }))

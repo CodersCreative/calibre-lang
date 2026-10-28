@@ -168,7 +168,7 @@ impl ExternFunction {
                         arg_types.push(Type::pointer());
                         let mut bytes = Vec::new();
                         for item in list.as_ref().0.iter() {
-                            match env.resolve_value_ref(item).unwrap_or_default() {
+                            match env.resolve_value_ref(&item.get()).unwrap_or_default() {
                                 RuntimeValue::UInt(x) => bytes.push(x as u8),
                                 RuntimeValue::Int(x) => bytes.push(x as u8),
                                 RuntimeValue::Float(x) => bytes.push(x as u8),

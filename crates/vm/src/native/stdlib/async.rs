@@ -1,16 +1,12 @@
 use crate::{
-    VM,
-    error::RuntimeError,
-    native::{
+    VM, error::RuntimeError, native::{
         NativeFunction,
         utils::{
             expect_num_args, pop_or_null, resolve_channel, resolve_int, resolve_mutex,
             resolve_waitgroup,
         },
-    },
-    value::{
-        RuntimeValue,
-        spawn::{ChannelInner, MutexInner, WaitGroupInner},
+    }, value::{
+        RuntimeValue, ValueSlot, spawn::{ChannelInner, MutexInner, WaitGroupInner},
     },
 };
 use std::sync::{Arc, atomic::Ordering};
@@ -95,7 +91,7 @@ impl NativeFunction for ChannelGet {
 
         loop {
             if let Some(value) = guard.pop_front() {
-                return Ok(RuntimeValue::Option(Some(dumpster::sync::Gc::new(value))));
+                return Ok(RuntimeValue::Option(Some(ValueSlot::new(value))));
             }
 
             if ch.closed.load(Ordering::Acquire) {
@@ -122,7 +118,7 @@ impl NativeFunction for ChannelTryGet {
         let mut guard = ch.queue.lock().unwrap();
 
         if let Some(value) = guard.pop_front() {
-            return Ok(RuntimeValue::Option(Some(dumpster::sync::Gc::new(value))));
+            return Ok(RuntimeValue::Option(Some(ValueSlot::new(value))));
         }
 
         Ok(RuntimeValue::Option(None))

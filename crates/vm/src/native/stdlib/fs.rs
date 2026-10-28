@@ -1,14 +1,10 @@
 use crate::{
-    VM,
-    error::RuntimeError,
-    native::{
+    VM, error::RuntimeError, native::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null, resolve_host, resolve_str},
-    },
-    value::{GcVec, RuntimeValue, StringReader},
+    }, value::{GcVec, RuntimeValue, StringReader, ValueSlot},
 };
 use calibre_parser::ast::types::ParserInnerType;
-use dumpster::sync::Gc;
 use std::sync::Arc;
 use std::{
     fs::{DirEntry, File, FileType, Metadata, OpenOptions},
@@ -166,10 +162,10 @@ impl NativeFunction for FsPathCanonicalize {
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .canonicalize()
         {
-            Ok(canonical) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
+            Ok(canonical) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Host(
                 Arc::new(Mutex::new(canonical)),
             ))))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -196,7 +192,7 @@ impl NativeFunction for FsPathParent {
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .parent()
         {
-            Some(parent) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Host(
+            Some(parent) => Ok(RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::Host(
                 Arc::new(Mutex::new(parent.to_path_buf())),
             ))))),
             None => Ok(RuntimeValue::Option(None)),
@@ -224,7 +220,7 @@ impl NativeFunction for FsPathFileName {
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .file_name()
         {
-            Some(name) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
+            Some(name) => Ok(RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&name.to_string_lossy()),
             ))))),
             None => Ok(RuntimeValue::Option(None)),
@@ -252,7 +248,7 @@ impl NativeFunction for FsPathExtension {
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .extension()
         {
-            Some(ext) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
+            Some(ext) => Ok(RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&ext.to_string_lossy()),
             ))))),
             None => Ok(RuntimeValue::Option(None)),
@@ -280,7 +276,7 @@ impl NativeFunction for FsPathStem {
             .ok_or_else(|| RuntimeError::UnexpectedType(Box::new(RuntimeValue::Null)))?
             .file_stem()
         {
-            Some(stem) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
+            Some(stem) => Ok(RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&stem.to_string_lossy()),
             ))))),
             None => Ok(RuntimeValue::Option(None)),
@@ -397,17 +393,17 @@ impl NativeFunction for FsPathReadDir {
                             ))));
                         }
                         Err(err) => {
-                            return Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+                            return Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                                 Ustr::from(&err.to_string()),
                             )))));
                         }
                     }
                 }
-                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::List(
+                Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::List(
                     Arc::new(GcVec::new(out)),
                 )))))
             }
-            Err(err) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Err(err) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&err.to_string()),
             ))))),
         }
@@ -524,10 +520,10 @@ impl NativeFunction for FsDirEntryFileType {
             .0
             .file_type()
         {
-            Ok(ft) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
+            Ok(ft) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Host(
                 Arc::new(Mutex::new(ft)),
             ))))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -555,10 +551,10 @@ impl NativeFunction for FsDirEntryMetadata {
             .0
             .metadata()
         {
-            Ok(meta) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
+            Ok(meta) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Host(
                 Arc::new(Mutex::new(HostMetadata::from(meta))),
             ))))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -753,11 +749,11 @@ impl NativeFunction for FsMetadataModified {
                 let duration: Duration = time
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
-                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
+                Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::UInt(
                     duration.as_secs() as usize,
                 )))))
             }
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -789,11 +785,11 @@ impl NativeFunction for FsMetadataCreated {
                 let duration: Duration = time
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
-                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
+                Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::UInt(
                     duration.as_secs() as usize,
                 )))))
             }
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -825,11 +821,11 @@ impl NativeFunction for FsMetadataAccessed {
                 let duration: Duration = time
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
-                Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
+                Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::UInt(
                     duration.as_secs() as usize,
                 )))))
             }
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -903,7 +899,7 @@ impl NativeFunction for FsFileOpen {
             "w+" => options.read(true).write(true).create(true).truncate(true),
             "a+" => options.read(true).write(true).create(true).append(true),
             _ => {
-                return Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+                return Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                     Ustr::from("invalid mode"),
                 )))));
             }
@@ -919,10 +915,10 @@ impl NativeFunction for FsFileOpen {
                     target_type: ParserInnerType::Host,
                 })?,
         ) {
-            Ok(file) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Host(
+            Ok(file) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Host(
                 Arc::new(Mutex::new(HostFile::from(file))),
             ))))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -952,12 +948,12 @@ impl NativeFunction for FsFileClose {
         {
             Ok(_) => (),
             Err(e) => {
-                return Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+                return Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                     Ustr::from(&e.to_string()),
                 )))));
             }
         }
-        Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null))))
+        Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Null))))
     }
 }
 
@@ -983,8 +979,8 @@ impl NativeFunction for FsFileWrite {
             .0
             .write_all(content.as_bytes())
         {
-            Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Ok(_) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Null)))),
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -1017,8 +1013,8 @@ impl NativeFunction for FsFileWriteLine {
             "{}",
             content
         ) {
-            Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Ok(_) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Null)))),
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -1048,10 +1044,10 @@ impl NativeFunction for FsFileReadAll {
             .0
             .read_to_string(&mut content)
         {
-            Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Str(
+            Ok(_) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&content),
             ))))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -1109,8 +1105,8 @@ impl NativeFunction for FsFileFlush {
             .0
             .flush()
         {
-            Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Ok(_) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Null)))),
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -1132,8 +1128,8 @@ impl NativeFunction for FsDirCreate {
         let path = resolve_str(env, pop_or_null(&mut args))?;
 
         match std::fs::create_dir(path.as_str()) {
-            Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Ok(_) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Null)))),
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -1153,8 +1149,8 @@ impl NativeFunction for FsDirCreateAll {
         let path = resolve_str(env, pop_or_null(&mut args))?;
 
         match std::fs::create_dir_all(path.as_str()) {
-            Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Ok(_) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Null)))),
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -1174,8 +1170,8 @@ impl NativeFunction for FsDirRemove {
         let path = resolve_str(env, pop_or_null(&mut args))?;
 
         match std::fs::remove_dir(path.as_str()) {
-            Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Ok(_) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Null)))),
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }
@@ -1195,8 +1191,8 @@ impl NativeFunction for FsDirRemoveAll {
         let path = resolve_str(env, pop_or_null(&mut args))?;
 
         match std::fs::remove_dir_all(path.as_str()) {
-            Ok(_) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Null)))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
+            Ok(_) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Null)))),
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&e.to_string()),
             ))))),
         }

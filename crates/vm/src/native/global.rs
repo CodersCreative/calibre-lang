@@ -1,14 +1,10 @@
 use crate::{
-    VM,
-    error::RuntimeError,
-    native::{
+    VM, error::RuntimeError, native::{
         NativeFunction,
         utils::{expect_num_args, first_or_null, panic_message_arg, pop_or_null, resolve_int},
-    },
-    value::{GcMap, RuntimeValue},
+    }, value::{GcMap, RuntimeValue, ValueSlot},
 };
 use calibre_parser::ast::types::ParserInnerType;
-use dumpster::sync::Gc;
 use std::{
     io::{self, BufRead, Write},
     sync::Arc,
@@ -98,7 +94,7 @@ impl NativeFunction for ErrFn {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        Ok(RuntimeValue::Result(Err(Gc::new(
+        Ok(RuntimeValue::Result(Err(ValueSlot::new(
             env.resolve_value(pop_or_null(&mut args))?,
         ))))
     }
@@ -114,7 +110,7 @@ impl NativeFunction for OkFn {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        Ok(RuntimeValue::Result(Ok(Gc::new(
+        Ok(RuntimeValue::Result(Ok(ValueSlot::new(
             env.resolve_value_ref(&pop_or_null(&mut args))?,
         ))))
     }
@@ -132,7 +128,7 @@ impl NativeFunction for Wait {
         let val = resolve_int(env, pop_or_null(&mut args))? as u64;
         thread::sleep(Duration::from_millis(val));
 
-        Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::UInt(
+        Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::UInt(
             val as usize,
         )))))
     }
@@ -162,7 +158,7 @@ impl NativeFunction for SomeFn {
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
-        Ok(RuntimeValue::Option(Some(Gc::new(
+        Ok(RuntimeValue::Option(Some(ValueSlot::new(
             env.resolve_value_ref(&pop_or_null(&mut args))?,
         ))))
     }

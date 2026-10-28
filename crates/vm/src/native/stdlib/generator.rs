@@ -1,15 +1,10 @@
 use crate::{
-    TaskState, VM,
-    error::RuntimeError,
-    evaluate::calling::FunctionArgs,
-    native::{
+    TaskState, VM, error::RuntimeError, evaluate::calling::FunctionArgs, native::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null},
-    },
-    value::RuntimeValue,
+    }, value::{RuntimeValue, ValueSlot},
 };
 use calibre_lir::VariableKey;
-use dumpster::sync::Gc;
 use std::{fmt::Debug, sync::Arc};
 use wasm_sync::Mutex;
 
@@ -75,7 +70,7 @@ impl NativeFunction for GeneratorResumeFn {
 
         if let Some(yielded) = state.task_state.yielded.take() {
             state.index += 1;
-            return Ok(RuntimeValue::Option(Some(Gc::new(yielded))));
+            return Ok(RuntimeValue::Option(Some(ValueSlot::new(yielded))));
         }
 
         if status.is_some() {

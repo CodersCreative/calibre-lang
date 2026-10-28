@@ -1,11 +1,8 @@
 use crate::{
-    VM,
-    error::RuntimeError,
-    value::{BIG_PRECISION, GcVec, RuntimeValue},
+    VM, error::RuntimeError, value::{BIG_PRECISION, GcVec, RuntimeValue, ValueSlot},
 };
 use astro_float::BigFloat;
 use calibre_lir::MirDataType;
-use dumpster::sync::Gc;
 use std::sync::Arc;
 use ustr::Ustr;
 
@@ -208,29 +205,29 @@ impl RuntimeValue {
             }
             (RuntimeValue::Option(x), MirDataType::Option(t)) => {
                 if let Some(x) = x {
-                    let x = x.as_ref().clone().convert(env, t)?;
-                    Ok(RuntimeValue::Option(Some(Gc::new(x))))
+                    let x = x.get().clone().convert(env, t)?;
+                    Ok(RuntimeValue::Option(Some(ValueSlot::new(x))))
                 } else {
                     Ok(RuntimeValue::Option(None))
                 }
             }
             (x, MirDataType::Option(t)) => {
                 let x = x.convert(env, t)?;
-                Ok(RuntimeValue::Option(Some(Gc::new(x))))
+                Ok(RuntimeValue::Option(Some(ValueSlot::new(x))))
             }
             (RuntimeValue::Result(x), MirDataType::Result { ok, err }) => match x {
                 Ok(x) => {
-                    let x = x.as_ref().clone().convert(env, ok)?;
-                    Ok(RuntimeValue::Result(Ok(Gc::new(x))))
+                    let x = x.get().clone().convert(env, ok)?;
+                    Ok(RuntimeValue::Result(Ok(ValueSlot::new(x))))
                 }
                 Err(x) => {
-                    let x = x.as_ref().clone().convert(env, err)?;
-                    Ok(RuntimeValue::Result(Err(Gc::new(x))))
+                    let x = x.get().clone().convert(env, err)?;
+                    Ok(RuntimeValue::Result(Err(ValueSlot::new(x))))
                 }
             },
             (x, MirDataType::Result { ok, err: _ }) => {
                 let x = x.convert(env, ok)?;
-                Ok(RuntimeValue::Result(Ok(Gc::new(x))))
+                Ok(RuntimeValue::Result(Ok(ValueSlot::new(x))))
             }
             (RuntimeValue::Ptr(id), t) => {
                 if let Some(value) = env.ptr_heap.get(&id).cloned() {

@@ -1,10 +1,6 @@
 use crate::{
-    VM,
-    error::RuntimeError,
-    evaluate::instruction::VMEvaluation,
-    value::{
-        RuntimeValue, TerminateValue,
-        operation::{binary, boolean, comparison},
+    VM, error::RuntimeError, evaluate::instruction::VMEvaluation, value::{
+        RuntimeValue, TerminateValue, ValueSlot, operation::{binary, boolean, comparison},
     },
 };
 use calibre_bytecode::{
@@ -13,7 +9,6 @@ use calibre_bytecode::{
 };
 use calibre_lir::ast::BlockId;
 use calibre_parser::ast::{comparison::BooleanOperator, nodes::binary::AsFailureMode};
-use dumpster::sync::Gc;
 use tracing::instrument;
 use ustr::Ustr;
 
@@ -39,12 +34,12 @@ impl VMEvaluation for VMAs {
                 }
             },
             AsFailureMode::Option => match conversion {
-                Ok(value) => RuntimeValue::Option(Some(Gc::new(value))),
+                Ok(value) => RuntimeValue::Option(Some(ValueSlot::new(value))),
                 Err(_) => RuntimeValue::Option(None),
             },
             AsFailureMode::Result => match conversion {
-                Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
-                Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Ustr::from(
+                Ok(value) => RuntimeValue::Result(Ok(ValueSlot::new(value))),
+                Err(err) => RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(Ustr::from(
                     &err.to_string(),
                 ))))),
             },

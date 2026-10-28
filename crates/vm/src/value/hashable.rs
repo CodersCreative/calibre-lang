@@ -10,7 +10,6 @@ use crate::{
 use calibre_bytecode::VMFunction;
 use calibre_lir::{FullyQualifiedPath, TypeKey, VariableKey};
 use calibre_parser::ast::{ObjectMap, types::ParserInnerType};
-use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use ustr::Ustr;
 
@@ -154,17 +153,17 @@ impl TryFrom<RuntimeValue> for HashKey {
             }
             RuntimeValue::Option(opt) => match opt {
                 Some(inner) => Ok(Self::Option(Some(Box::new(HashKey::try_from(
-                    inner.as_ref().clone(),
+                    inner.get().clone(),
                 )?)))),
                 None => Ok(Self::Option(None)),
             },
             RuntimeValue::Result(res) => match res {
                 Ok(value) => Ok(Self::Result(
-                    Box::new(HashKey::try_from(value.as_ref().clone())?),
+                    Box::new(HashKey::try_from(value.get().clone())?),
                     false,
                 )),
                 Err(value) => Ok(Self::Result(
-                    Box::new(HashKey::try_from(value.as_ref().clone())?),
+                    Box::new(HashKey::try_from(value.get().clone())?),
                     true,
                 )),
             },
@@ -196,15 +195,15 @@ impl From<HashKey> for RuntimeValue {
                 values.into_iter().map(RuntimeValue::from).collect(),
             ))),
             HashKey::Option(opt) => match opt {
-                Some(bx) => RuntimeValue::Option(Some(Gc::new(RuntimeValue::from(*bx)))),
+                Some(bx) => RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::from(*bx)))),
                 None => RuntimeValue::Option(None),
             },
             HashKey::Result(bx, is_err) => {
                 let v = RuntimeValue::from(*bx);
                 if is_err {
-                    RuntimeValue::Result(Err(Gc::new(v)))
+                    RuntimeValue::Result(Err(ValueSlot::new(v)))
                 } else {
-                    RuntimeValue::Result(Ok(Gc::new(v)))
+                    RuntimeValue::Result(Ok(ValueSlot::new(v)))
                 }
             }
             HashKey::Aggregate(name, values) => {

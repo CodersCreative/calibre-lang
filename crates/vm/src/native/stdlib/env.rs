@@ -1,13 +1,9 @@
 use crate::{
-    VM,
-    error::RuntimeError,
-    native::{
+    VM, error::RuntimeError, native::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null, resolve_int, resolve_str},
-    },
-    value::{GcVec, RuntimeValue},
+    }, value::{GcVec, RuntimeValue, ValueSlot},
 };
-use dumpster::sync::Gc;
 use std::sync::Arc;
 use ustr::Ustr;
 
@@ -27,7 +23,7 @@ impl NativeFunction for EnvGet {
             return Ok(RuntimeValue::Option(None));
         };
 
-        Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
+        Ok(RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::Str(
             *value,
         )))))
     }
@@ -46,7 +42,7 @@ impl NativeFunction for EnvVar {
         let name = resolve_str(env, pop_or_null(&mut args))?;
 
         match std::env::var(name.as_str()) {
-            Ok(value) => Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Str(
+            Ok(value) => Ok(RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&value),
             ))))),
             Err(std::env::VarError::NotPresent) => Ok(RuntimeValue::Option(None)),

@@ -1,9 +1,8 @@
 use crate::error::RuntimeError;
 use crate::value::hashable::{HashKey, RuntimeHashMap, RuntimeHashSet};
-use crate::value::{BIG_PRECISION, GcVec, RuntimeValue};
+use crate::value::{BIG_PRECISION, GcVec, RuntimeValue, ValueSlot};
 use astro_float::BigFloat;
 use calibre_parser::ast::types::ParserInnerType;
-use dumpster::sync::Gc;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use ustr::Ustr;
@@ -296,7 +295,7 @@ impl<K: Into<HashKey>> From<HashSet<K>> for RuntimeValue {
 impl<T: Into<RuntimeValue>> From<Option<T>> for RuntimeValue {
     fn from(value: Option<T>) -> Self {
         match value {
-            Some(v) => Self::Option(Some(Gc::new(v.into()))),
+            Some(v) => Self::Option(Some(ValueSlot::new(v.into()))),
             None => Self::Option(None),
         }
     }
@@ -305,8 +304,8 @@ impl<T: Into<RuntimeValue>> From<Option<T>> for RuntimeValue {
 impl<T: Into<RuntimeValue>, E: Into<RuntimeValue>> From<Result<T, E>> for RuntimeValue {
     fn from(value: Result<T, E>) -> Self {
         match value {
-            Ok(v) => Self::Result(Ok(Gc::new(v.into()))),
-            Err(e) => Self::Result(Err(Gc::new(e.into()))),
+            Ok(v) => Self::Result(Ok(ValueSlot::new(v.into()))),
+            Err(e) => Self::Result(Err(ValueSlot::new(e.into()))),
         }
     }
 }
@@ -620,7 +619,7 @@ impl<T: TryFrom<RuntimeValue, Error = RuntimeError>> TryFrom<RuntimeValue> for O
     fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
         match value {
             RuntimeValue::Option(opt) => match opt {
-                Some(gc_val) => Ok(Some(T::try_from(gc_val.as_ref().clone())?)),
+                Some(gc_val) => Ok(Some(T::try_from(gc_val.get().clone())?)),
                 None => Ok(None),
             },
             _ => Err(RuntimeError::UnexpectedTypeInConversion {
@@ -639,8 +638,8 @@ impl<T: TryFrom<RuntimeValue, Error = RuntimeError>, E: TryFrom<RuntimeValue, Er
     fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
         match value {
             RuntimeValue::Result(res) => match res {
-                Ok(gc_val) => Ok(Ok(T::try_from(gc_val.as_ref().clone())?)),
-                Err(gc_val) => Ok(Err(E::try_from(gc_val.as_ref().clone())?)),
+                Ok(gc_val) => Ok(Ok(T::try_from(gc_val.get().clone())?)),
+                Err(gc_val) => Ok(Err(E::try_from(gc_val.get().clone())?)),
             },
             _ => Err(RuntimeError::UnexpectedTypeInConversion {
                 value: Box::new(value),

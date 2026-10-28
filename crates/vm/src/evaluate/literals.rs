@@ -1,9 +1,5 @@
 use crate::{
-    VM,
-    error::RuntimeError,
-    evaluate::instruction::VMEvaluation,
-    native::stdlib::generator::GeneratorState,
-    value::{GcMap, GcVec, RuntimeValue, TerminateValue},
+    VM, error::RuntimeError, evaluate::instruction::VMEvaluation, native::stdlib::generator::GeneratorState, value::{GcMap, GcVec, RuntimeValue, TerminateValue, ValueSlot},
 };
 use calibre_bytecode::{
     VMBlock, VMLiteral,
@@ -11,7 +7,6 @@ use calibre_bytecode::{
 };
 use calibre_lir::{TypeImplKey, VariableKey, ast::BlockId};
 use calibre_parser::ast::ObjectMap;
-use dumpster::sync::Gc;
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 use tracing::instrument;
@@ -275,7 +270,7 @@ impl VMEvaluation for VMEnum {
         let name = vm.local_type(block, self.name)?;
         let payload = self
             .payload
-            .map(|reg| Gc::new(vm.get_reg_value(reg).clone()));
+            .map(|reg| ValueSlot::new(vm.get_reg_value(reg).clone()));
 
         vm.set_reg_value(
             self.dst,

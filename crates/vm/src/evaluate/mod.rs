@@ -19,7 +19,6 @@ pub mod memory;
 pub mod registers;
 pub mod termination;
 pub mod variables;
-pub mod write_back;
 
 #[derive(Debug)]
 enum CaptureRestore {
@@ -156,7 +155,7 @@ impl VM {
                         .as_ref()
                         .0
                         .iter()
-                        .all(|item| self.runtime_matches_type(item, inner))
+                        .all(|item| self.runtime_matches_type(&item.get(), inner))
                 } else {
                     false
                 }
@@ -172,7 +171,7 @@ impl VM {
                             .0
                             .iter()
                             .find(|(name, _)| name == &i.to_string())
-                            .map(|(_, v)| self.runtime_matches_type(v, t))
+                            .map(|(_, v)| self.runtime_matches_type(&v.get(), t))
                             .unwrap_or(false)
                     })
                 } else {
@@ -180,13 +179,13 @@ impl VM {
                 }
             }
             MirDataType::Option(inner) => match value {
-                RuntimeValue::Option(Some(v)) => self.runtime_matches_type(v.as_ref(), inner),
+                RuntimeValue::Option(Some(v)) => self.runtime_matches_type(&v.get(), inner),
                 RuntimeValue::Option(None) => true,
                 _ => false,
             },
             MirDataType::Result { ok, err } => match value {
-                RuntimeValue::Result(Ok(v)) => self.runtime_matches_type(v.as_ref(), ok),
-                RuntimeValue::Result(Err(v)) => self.runtime_matches_type(v.as_ref(), err),
+                RuntimeValue::Result(Ok(v)) => self.runtime_matches_type(&v.get(), ok),
+                RuntimeValue::Result(Err(v)) => self.runtime_matches_type(&v.get(), err),
                 _ => false,
             },
             MirDataType::Function { .. } | MirDataType::NativeFunction { .. } => {

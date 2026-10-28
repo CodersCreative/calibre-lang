@@ -1,11 +1,8 @@
 use crate::{
-    VM,
-    error::RuntimeError,
-    native::{
+    VM, error::RuntimeError, native::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null, resolve_str},
-    },
-    value::RuntimeValue,
+    }, value::{RuntimeValue, ValueSlot},
 };
 use regex::Regex;
 use ustr::Ustr;
@@ -46,7 +43,7 @@ impl NativeFunction for FindFn {
         let found = re
             .find(text.as_str())
             .map(|m| RuntimeValue::Str(Ustr::from(m.as_str())));
-        Ok(RuntimeValue::Option(found.map(dumpster::sync::Gc::new)))
+        Ok(RuntimeValue::Option(found.map(ValueSlot::new)))
     }
 }
 

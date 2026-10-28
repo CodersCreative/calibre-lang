@@ -1,13 +1,9 @@
 use crate::{
-    VM,
-    error::RuntimeError,
-    native::{
+    VM, error::RuntimeError, native::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null, resolve_int, resolve_list},
-    },
-    value::{GcVec, RuntimeValue},
+    }, value::{GcVec, RuntimeValue, ValueSlot},
 };
-use dumpster::sync::Gc;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -102,7 +98,7 @@ impl NativeFunction for ListBinarySearchBy {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid,
                 Ordering::Equal => {
-                    return Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::Int(
+                    return Ok(RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::Int(
                         mid as isize,
                     )))));
                 }
@@ -130,7 +126,7 @@ impl NativeFunction for ListRawRemove {
 
         if index > 0 && (index as usize) < list.len() {
             let value = list.remove(index as usize);
-            Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::from(
+            Ok(RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::from(
                 value,
             )))))
         } else {
