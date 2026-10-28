@@ -43,11 +43,15 @@ impl LirLowering for MirDeref {
         })
     }
 
-    fn lower_lvalue<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirLValue
+    fn lower_lvalue<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirLValue
     where
         Self: Sized,
     {
-        LirLValue::Ptr(Box::new(env.lower_node(*self.value)))
+        if let MiddleNodeType::Identifier(x) = &self.value.node_type {
+            x.clone().lower_lvalue(env, span)
+        } else {
+            LirLValue::Ptr(Box::new(env.lower_node(*self.value)))
+        }
     }
 }
 

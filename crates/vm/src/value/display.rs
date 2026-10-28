@@ -1,7 +1,7 @@
 use super::*;
 
 impl RuntimeValue {
-    pub fn display(&self, vm: &mut VM) -> String {
+    pub fn display(&self, vm: &VM) -> String {
         match self {
             Self::Str(x) => format!("{}", x),
             Self::Char(x) => format!("{}", x),
@@ -11,13 +11,13 @@ impl RuntimeValue {
             Self::Byte(x) => format!("{}", x),
             Self::Ptr(x) => format!("{:x}", x),
             Self::Int(x) => format!("{}", x),
-            Self::Ref(_) | Self::VarRef(_) | Self::RegRef { .. } => {
-                if let Ok(x) = vm.resolve_value_ref(self) {
-                    x.clone().display(vm)
-                } else {
-                    self.to_string()
-                }
-            }
+            Self::Ref(_) | Self::RegRef { .. } => match vm.resolve_value_ref(self) {
+                Ok(SlotOrRuntimeValue::Owned(x)) => x.display(vm),
+                Ok(SlotOrRuntimeValue::Value(x)) => x.display(vm),
+                Ok(SlotOrRuntimeValue::Slot(x)) => x.get().display(vm),
+                Err(_) => self.to_string(),
+            },
+            Self::GcRef(x) => x.get().display(vm),
             Self::HashMap(map) => {
                 let mut parts = Vec::new();
 
@@ -42,17 +42,17 @@ impl RuntimeValue {
                 format!(
                     "[{}]",
                     x.0.iter()
-                        .map(|x| x.display(vm))
+                        .map(|x| x.get().display(vm))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
             }
             Self::Generator { type_name, state } => format!("{} is {:?}", type_name.name(), state),
             Self::GeneratorSuspend(value) => format!("<gen-suspend {}>", value.display(vm)),
-            Self::Option(Some(x)) => format!("Some : {}", x.display(vm)),
-            Self::Result(Ok(x)) => format!("Ok : {}", x.display(vm)),
-            Self::Result(Err(x)) => format!("Err : {}", x.display(vm)),
-            Self::Enum(x, y, Some(z)) => format!("{}[{}] : {}", x.name(), y, z.display(vm)),
+            Self::Option(Some(x)) => format!("Some : {}", x.get().display(vm)),
+            Self::Result(Ok(x)) => format!("Ok : {}", x.get().display(vm)),
+            Self::Result(Err(x)) => format!("Err : {}", x.get().display(vm)),
+            Self::Enum(x, y, Some(z)) => format!("{}[{}] : {}", x.name(), y, z.get().display(vm)),
             Self::Enum(x, y, _) => format!("{}[{}]", x.name(), y),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
@@ -62,7 +62,7 @@ impl RuntimeValue {
                             .0
                             .0
                             .iter()
-                            .map(|x| x.1.display(vm))
+                            .map(|x| x.1.get().display(vm))
                             .collect::<Vec<_>>()
                             .join(", ")
                     )
@@ -84,6 +84,7 @@ impl RuntimeValue {
                         txt.push_str(" : ");
 
                         let indented = field_value
+                            .get()
                             .display(vm)
                             .lines()
                             .enumerate()
@@ -124,12 +125,12 @@ impl Display for RuntimeValue {
             Self::Byte(x) => write!(f, "{}b", x),
             Self::Ptr(x) => write!(f, "ptr -> {}", x),
             Self::Int(x) => write!(f, "{}", x),
-            Self::Enum(x, y, Some(z)) => write!(f, "{}[{}] : {}", x.name(), y, z.as_ref()),
+            Self::Enum(x, y, Some(z)) => write!(f, "{}[{}] : {}", x.name(), y, z.get()),
             Self::Enum(x, y, _) => write!(f, "{}[{}]", x.name(), y),
             Self::Range(from, to) => write!(f, "{}..{}", from, to),
             Self::Ref(x) => write!(f, "ref -> {}", x),
-            Self::VarRef(id) => write!(f, "varref -> {}", id),
             Self::RegRef { frame, reg } => write!(f, "regref -> {}:{}", frame, reg),
+            Self::GcRef(x) => write!(f, "{}", x.get()),
             Self::Bool(x) => write!(f, "{}", if *x { "true" } else { "false" }),
             Self::Aggregate(x, data) => {
                 if x.is_none() {
@@ -140,7 +141,7 @@ impl Display for RuntimeValue {
                             .0
                             .0
                             .iter()
-                            .map(|x| x.1.to_string())
+                            .map(|x| x.1.get().to_string())
                             .collect::<Vec<_>>()
                             .join(", ")
                     )
@@ -171,7 +172,7 @@ impl Display for RuntimeValue {
                     f,
                     "[{}]",
                     x.0.iter()
-                        .map(|x| x.to_string())
+                        .map(|x| x.get().to_string())
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -179,10 +180,10 @@ impl Display for RuntimeValue {
             Self::NativeFunction(x) => write!(f, "fn {} ...", x.name()),
             #[cfg(feature = "native")]
             Self::ExternFunction(x) => write!(f, "extern fn {} ...", x.symbol),
-            Self::Option(Some(x)) => write!(f, "Some : {}", x.as_ref()),
+            Self::Option(Some(x)) => write!(f, "Some : {}", x.get()),
             Self::Option(_) => write!(f, "None"),
-            Self::Result(Ok(x)) => write!(f, "Ok : {}", x.as_ref()),
-            Self::Result(Err(x)) => write!(f, "Err : {}", x.as_ref()),
+            Self::Result(Ok(x)) => write!(f, "Ok : {}", x.get()),
+            Self::Result(Err(x)) => write!(f, "Err : {}", x.get()),
             Self::Channel(_) => write!(f, "Channel"),
             Self::WaitGroup(_) => write!(f, "WaitGroup"),
             Self::Mutex(_) => write!(f, "Mutex"),
@@ -197,7 +198,6 @@ impl Display for RuntimeValue {
             Self::Generator { type_name, state } => {
                 write!(f, "{} is {:?}", type_name.name(), state)
             }
-            Self::BoundMethod { .. } => write!(f, "<bound-method>"),
             Self::GeneratorSuspend(value) => write!(f, "<gen-suspend {}>", value),
         }
     }

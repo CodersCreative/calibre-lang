@@ -32,54 +32,22 @@ impl Display for VMLoadMember {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct VMSetMember {
-    pub dst: Reg,
-    pub target: Reg,
-    pub member: u16,
-    pub value: Reg,
-}
-
-impl Display for VMSetMember {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "%r{} = SETMEMBER %r{}.{} = %r{}",
-            self.dst, self.target, self.member, self.value
-        )
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VMIndex {
     pub dst: Reg,
     pub value: Reg,
     pub index: Reg,
+    pub panic: bool,
 }
 
 impl Display for VMIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "%r{} = INDEX %r{}[%r{}]",
-            self.dst, self.value, self.index
-        )
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct VMSetIndex {
-    pub dst: Reg,
-    pub target: Reg,
-    pub index: Reg,
-    pub value: Reg,
-}
-
-impl Display for VMSetIndex {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "%r{} = SETINDEX %r{}[%r{}] = %r{}",
-            self.dst, self.target, self.index, self.value
+            "%r{} = INDEX %r{}[%r{}]{}",
+            self.dst,
+            self.value,
+            self.index,
+            if self.panic { "!" } else { "" }
         )
     }
 }

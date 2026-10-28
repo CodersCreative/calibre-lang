@@ -3,7 +3,7 @@ use crate::{
     error::RuntimeError,
     evaluate::instruction::VMEvaluation,
     native::stdlib::generator::GeneratorState,
-    value::{GcMap, GcVec, RuntimeValue, TerminateValue},
+    value::{GcMap, GcVec, RuntimeValue, TerminateValue, ValueSlot},
 };
 use calibre_bytecode::{
     VMBlock, VMLiteral,
@@ -11,7 +11,6 @@ use calibre_bytecode::{
 };
 use calibre_lir::{TypeImplKey, VariableKey, ast::BlockId};
 use calibre_parser::ast::ObjectMap;
-use dumpster::sync::Gc;
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 use tracing::instrument;
@@ -121,8 +120,12 @@ impl VMEvaluation for VMRange {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let from = vm.resolve_value_ref(vm.get_reg_value(self.from))?;
-        let to = vm.resolve_value_ref(vm.get_reg_value(self.to))?;
+        let from = vm
+            .resolve_value_ref(vm.get_reg_value(self.from))
+            .map(RuntimeValue::from)?;
+        let to = vm
+            .resolve_value_ref(vm.get_reg_value(self.to))
+            .map(RuntimeValue::from)?;
 
         let as_range_bound = |value: RuntimeValue| -> Result<isize, RuntimeError> {
             match value {
@@ -131,7 +134,7 @@ impl VMEvaluation for VMRange {
                 RuntimeValue::Float(v) => Ok(v as isize),
                 RuntimeValue::Bool(v) => Ok(v as isize),
                 RuntimeValue::Char(v) => Ok(v as isize),
-                RuntimeValue::List(v) => Ok(v.as_ref().0.len() as isize),
+                RuntimeValue::List(v) => Ok(v.0.len() as isize),
                 RuntimeValue::Aggregate(_, v) => Ok(v.as_ref().0.0.len() as isize),
                 RuntimeValue::Str(v) => Ok(v.len() as isize),
                 RuntimeValue::Range(from, to) => Ok((to - from).max(0)),
@@ -170,7 +173,7 @@ impl VMEvaluation for VMList {
             .map(|item| vm.get_reg_value(*item).clone())
             .collect();
 
-        vm.set_reg_value(self.dst, RuntimeValue::List(Arc::new(GcVec::new(values))));
+        vm.set_reg_value(self.dst, RuntimeValue::List(GcVec::new(values)));
         Ok(TerminateValue::None)
     }
 }
@@ -191,14 +194,9 @@ impl VMEvaluation for VMAggregate {
 
         let mut entries = Vec::with_capacity(layout.members.len());
         for (name, reg) in layout.members.iter().zip(self.fields.iter()) {
-            let mut value = vm.get_reg_value(*reg).clone();
-
-            if value.is_ref_like()
-                && let Ok(resolved) = vm.resolve_value_ref(&value)
-            {
-                value = resolved;
-            }
-
+            let value = vm
+                .resolve_value_ref(vm.get_reg_value(*reg))
+                .map(RuntimeValue::from)?;
             entries.push((name, value));
         }
 
@@ -214,7 +212,10 @@ impl VMEvaluation for VMAggregate {
                 let resolved_caps: Vec<(VariableKey, RuntimeValue)> = captures
                     .iter()
                     .map(|(k, v)| {
-                        let resolved = vm.resolve_value_ref(v).unwrap_or_else(|_| v.clone());
+                        let resolved = vm
+                            .resolve_value_ref(v)
+                            .map(RuntimeValue::from)
+                            .unwrap_or_else(|_| v.clone());
                         (k.clone(), resolved)
                     })
                     .collect();
@@ -275,7 +276,7 @@ impl VMEvaluation for VMEnum {
         let name = vm.local_type(block, self.name)?;
         let payload = self
             .payload
-            .map(|reg| Gc::new(vm.get_reg_value(reg).clone()));
+            .map(|reg| ValueSlot::new(vm.get_reg_value(reg).clone()));
 
         vm.set_reg_value(
             self.dst,

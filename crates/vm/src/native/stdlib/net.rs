@@ -5,9 +5,8 @@ use crate::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null, resolve_host, resolve_int, resolve_str},
     },
-    value::RuntimeValue,
+    value::{RuntimeValue, ValueSlot},
 };
-use dumpster::sync::Gc;
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, OnceLock};
 use std::{collections::HashMap, time::Duration};
@@ -146,12 +145,12 @@ impl NativeFunction for HttpRequestTry {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let (method, url, body) = parse_http_args(env, args)?;
         match send_http_request(&method, &url, &body) {
-            Ok(text) => Ok(RuntimeValue::Result(Ok(Gc::new(RuntimeValue::Str(
+            Ok(text) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&text),
             ))))),
-            Err(e) => Ok(RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(
-                Ustr::from(&e.to_string()),
-            ))))),
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(
+                RuntimeValue::Str(Ustr::from(&e.to_string())),
+            )))),
         }
     }
 }

@@ -9,12 +9,11 @@ use crate::{
         },
     },
     value::{
-        GcVec, RuntimeValue,
+        GcVec, RuntimeValue, ValueSlot,
         hashable::{HashKey, RuntimeHashMap, RuntimeHashSet},
     },
 };
 use calibre_parser::ast::types::ParserInnerType;
-use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 
@@ -56,7 +55,7 @@ impl NativeFunction for HashMapNew {
 
         let entries = args
             .pop()
-            .unwrap_or(RuntimeValue::List(Arc::new(GcVec::new(Vec::new()))));
+            .unwrap_or(RuntimeValue::List(GcVec::new(Vec::new())));
 
         #[allow(clippy::mutable_key_type)]
         let mut map: FxHashMap<HashKey, crate::value::ValueSlot> = FxHashMap::default();
@@ -68,7 +67,7 @@ impl NativeFunction for HashMapNew {
             });
         };
 
-        for item in list.as_ref().0.iter() {
+        for item in list.0.iter() {
             let (key, value) = tuple_pair(RuntimeValue::from(item.clone()))?;
 
             let key = resolve_hash_key(env, key)?;
@@ -115,9 +114,9 @@ impl NativeFunction for HashMapGet {
         let map = resolve_hashmap(env, pop_or_null(&mut args))?;
 
         if let Some(value) = map.map.get(&key) {
-            return Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::from(
-                value.clone(),
-            )))));
+            return Ok(RuntimeValue::Option(Some(ValueSlot::new(
+                RuntimeValue::from(value.clone()),
+            ))));
         }
 
         Ok(RuntimeValue::Option(None))
@@ -141,9 +140,9 @@ impl NativeFunction for HashMapRemove {
         env.update_ref_value(target, RuntimeValue::HashMap(map));
 
         if let Some(value) = removed {
-            return Ok(RuntimeValue::Option(Some(Gc::new(RuntimeValue::from(
-                value.clone(),
-            )))));
+            return Ok(RuntimeValue::Option(Some(ValueSlot::new(
+                RuntimeValue::from(value.clone()),
+            ))));
         }
 
         Ok(RuntimeValue::Option(None))
@@ -202,7 +201,7 @@ impl NativeFunction for HashMapKeys {
             .map(|key| RuntimeValue::from(key.clone()))
             .collect();
 
-        Ok(RuntimeValue::List(Arc::new(GcVec::new(out))))
+        Ok(RuntimeValue::List(GcVec::new(out)))
     }
 }
 
@@ -224,7 +223,7 @@ impl NativeFunction for HashMapValues {
             .map(|value| RuntimeValue::from(value.clone()))
             .collect();
 
-        Ok(RuntimeValue::List(Arc::new(GcVec::new(out))))
+        Ok(RuntimeValue::List(GcVec::new(out)))
     }
 }
 
@@ -258,7 +257,7 @@ impl NativeFunction for HashMapEntries {
             })
             .collect();
 
-        Ok(RuntimeValue::List(Arc::new(GcVec::new(out))))
+        Ok(RuntimeValue::List(GcVec::new(out)))
     }
 }
 
@@ -294,7 +293,7 @@ impl NativeFunction for HashSetNew {
 
         let entries = args
             .pop()
-            .unwrap_or(RuntimeValue::List(Arc::new(GcVec::new(Vec::new()))));
+            .unwrap_or(RuntimeValue::List(GcVec::new(Vec::new())));
 
         let RuntimeValue::List(list) = env.resolve_value(entries)? else {
             return Err(RuntimeError::UnexpectedTypeInConversion {
@@ -305,10 +304,9 @@ impl NativeFunction for HashSetNew {
 
         #[allow(clippy::mutable_key_type)]
         let set: FxHashSet<HashKey> = list
-            .as_ref()
             .0
             .iter()
-            .map(|item| resolve_hash_key_ref(env, item))
+            .map(|item| resolve_hash_key_ref(env, &item.get()))
             .collect::<Result<FxHashSet<_>, RuntimeError>>()?;
 
         Ok(RuntimeValue::HashSet(RuntimeHashSet { set: Arc::new(set) }))
@@ -407,7 +405,7 @@ impl NativeFunction for HashSetValues {
 
         let out: Vec<_> = set.set.iter().cloned().map(RuntimeValue::from).collect();
 
-        Ok(RuntimeValue::List(Arc::new(GcVec::new(out))))
+        Ok(RuntimeValue::List(GcVec::new(out)))
     }
 }
 

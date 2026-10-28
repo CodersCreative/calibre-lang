@@ -9,7 +9,7 @@ use crate::{
         },
     },
     value::{
-        RuntimeValue,
+        RuntimeValue, ValueSlot,
         spawn::{ChannelInner, MutexInner, WaitGroupInner},
     },
 };
@@ -95,7 +95,7 @@ impl NativeFunction for ChannelGet {
 
         loop {
             if let Some(value) = guard.pop_front() {
-                return Ok(RuntimeValue::Option(Some(dumpster::sync::Gc::new(value))));
+                return Ok(RuntimeValue::Option(Some(ValueSlot::new(value))));
             }
 
             if ch.closed.load(Ordering::Acquire) {
@@ -122,7 +122,7 @@ impl NativeFunction for ChannelTryGet {
         let mut guard = ch.queue.lock().unwrap();
 
         if let Some(value) = guard.pop_front() {
-            return Ok(RuntimeValue::Option(Some(dumpster::sync::Gc::new(value))));
+            return Ok(RuntimeValue::Option(Some(ValueSlot::new(value))));
         }
 
         Ok(RuntimeValue::Option(None))

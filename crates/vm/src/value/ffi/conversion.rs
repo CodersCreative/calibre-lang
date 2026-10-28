@@ -95,15 +95,21 @@ impl ExternFunction {
                 let mut max_align = 1usize;
 
                 for (_, field) in data.as_ref().0.0.iter() {
-                    let resolved = env.resolve_value_ref(field).unwrap_or_default();
+                    let resolved = env
+                        .resolve_value_ref(&field.get())
+                        .map(RuntimeValue::from)
+                        .unwrap_or_default();
                     let (field_bytes, field_ty, size, align) =
                         Self::struct_field_to_bytes(resolved)?;
+
                     max_align = max_align.max(align);
                     let padding = (align - (offset % align)) % align;
+
                     if padding > 0 {
                         bytes.extend(std::iter::repeat_n(0u8, padding));
                         offset += padding;
                     }
+
                     bytes.extend_from_slice(&field_bytes);
                     offset += size;
                     fields.push(field_ty);
@@ -152,7 +158,7 @@ impl ExternFunction {
                 let field_count = data.as_ref().0.0.len();
                 let mut bytes = Vec::with_capacity(field_count.saturating_mul(8));
                 for (_, field) in data.as_ref().0.0.iter() {
-                    if !push_number(&mut bytes, field) {
+                    if !push_number(&mut bytes, &field.get()) {
                         return None;
                     }
                 }

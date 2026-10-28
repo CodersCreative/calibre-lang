@@ -10,7 +10,6 @@ use crate::{
 use calibre_bytecode::VMFunction;
 use calibre_lir::{FullyQualifiedPath, TypeKey, VariableKey};
 use calibre_parser::ast::{ObjectMap, types::ParserInnerType};
-use dumpster::sync::Gc;
 use rustc_hash::{FxHashMap, FxHashSet};
 use ustr::Ustr;
 
@@ -133,9 +132,9 @@ impl TryFrom<RuntimeValue> for HashKey {
             RuntimeValue::Char(x) => Ok(Self::Char(x)),
             RuntimeValue::Str(x) => Ok(Self::Str(x)),
             RuntimeValue::List(lst) => {
-                let mut out = Vec::with_capacity(lst.as_ref().0.len());
+                let mut out = Vec::with_capacity(lst.0.len());
 
-                for v in lst.as_ref().0.iter() {
+                for v in lst.0.iter() {
                     out.push(HashKey::try_from(RuntimeValue::from(v.clone()))?);
                 }
 
@@ -154,17 +153,17 @@ impl TryFrom<RuntimeValue> for HashKey {
             }
             RuntimeValue::Option(opt) => match opt {
                 Some(inner) => Ok(Self::Option(Some(Box::new(HashKey::try_from(
-                    inner.as_ref().clone(),
+                    inner.get().clone(),
                 )?)))),
                 None => Ok(Self::Option(None)),
             },
             RuntimeValue::Result(res) => match res {
                 Ok(value) => Ok(Self::Result(
-                    Box::new(HashKey::try_from(value.as_ref().clone())?),
+                    Box::new(HashKey::try_from(value.get().clone())?),
                     false,
                 )),
                 Err(value) => Ok(Self::Result(
-                    Box::new(HashKey::try_from(value.as_ref().clone())?),
+                    Box::new(HashKey::try_from(value.get().clone())?),
                     true,
                 )),
             },
@@ -192,19 +191,19 @@ impl From<HashKey> for RuntimeValue {
             HashKey::Big(s) => RuntimeValue::Str(s),
             HashKey::Ptr(p) => RuntimeValue::Ptr(p),
             HashKey::Range(a, b) => RuntimeValue::Range(a, b),
-            HashKey::List(values) => RuntimeValue::List(Arc::new(GcVec::new(
+            HashKey::List(values) => RuntimeValue::List(GcVec::new(
                 values.into_iter().map(RuntimeValue::from).collect(),
-            ))),
+            )),
             HashKey::Option(opt) => match opt {
-                Some(bx) => RuntimeValue::Option(Some(Gc::new(RuntimeValue::from(*bx)))),
+                Some(bx) => RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::from(*bx)))),
                 None => RuntimeValue::Option(None),
             },
             HashKey::Result(bx, is_err) => {
                 let v = RuntimeValue::from(*bx);
                 if is_err {
-                    RuntimeValue::Result(Err(Gc::new(v)))
+                    RuntimeValue::Result(Err(ValueSlot::new(v)))
                 } else {
-                    RuntimeValue::Result(Ok(Gc::new(v)))
+                    RuntimeValue::Result(Ok(ValueSlot::new(v)))
                 }
             }
             HashKey::Aggregate(name, values) => {

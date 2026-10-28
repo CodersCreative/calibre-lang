@@ -100,6 +100,10 @@ impl MutexInner {
         unsafe { (*self.value.get()).clone() }
     }
 
+    pub fn get_mut_unsafe(&self) -> &'static mut RuntimeValue {
+        unsafe { &mut *self.value.get() }
+    }
+
     fn set_value(&self, value: RuntimeValue) -> RuntimeValue {
         unsafe {
             let ptr = self.value.get();
@@ -117,6 +121,10 @@ pub struct MutexGuardInner {
 impl MutexGuardInner {
     pub fn get_clone(&self) -> RuntimeValue {
         self.inner.get_clone()
+    }
+
+    pub fn get_mut_unsafe(&self) -> &'static mut RuntimeValue {
+        self.inner.get_mut_unsafe()
     }
 
     pub fn set_value(&self, value: RuntimeValue) -> RuntimeValue {

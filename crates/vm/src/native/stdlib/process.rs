@@ -2,10 +2,9 @@ use crate::{
     VM,
     error::RuntimeError,
     native::NativeFunction,
-    value::{GcMap, RuntimeValue},
+    value::{GcMap, RuntimeValue, ValueSlot},
 };
 use calibre_parser::ast::{ObjectMap, types::ParserInnerType};
-use dumpster::sync::Gc;
 use std::io::Write;
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -28,7 +27,9 @@ fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<Ustr>, RuntimeError>
 
     let mut out = Vec::with_capacity(values.0.len());
     for value in values.0.iter() {
-        let value = env.resolve_value_ref(value)?;
+        let value = env
+            .resolve_value_ref(&value.get())
+            .map(RuntimeValue::from)?;
         match value {
             RuntimeValue::Str(v) => out.push(v),
             other => {
@@ -57,7 +58,11 @@ fn resolve_field(
     key: &str,
 ) -> Result<Option<RuntimeValue>, RuntimeError> {
     field(map, key)
-        .map(|value| env.resolve_value_ref(&value).map(Some))
+        .map(|value| {
+            env.resolve_value_ref(&value)
+                .map(RuntimeValue::from)
+                .map(Some)
+        })
         .unwrap_or(Ok(None))
 }
 
@@ -78,7 +83,7 @@ fn required_str_field(env: &VM, map: &Arc<GcMap>, key: &str) -> Result<Ustr, Run
 fn parse_optional_string(value: RuntimeValue) -> Result<Option<Ustr>, RuntimeError> {
     match value {
         RuntimeValue::Option(None) => Ok(None),
-        RuntimeValue::Option(Some(v)) => match v.as_ref() {
+        RuntimeValue::Option(Some(v)) => match &*v.get() {
             RuntimeValue::Str(v) => Ok(Some(*v)),
             other => Err(RuntimeError::UnexpectedTypeInConversion {
                 value: Box::new(other.clone()),
@@ -250,7 +255,7 @@ impl NativeFunction for ProcessRawExec {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let mut parsed = None;
         for arg in args {
-            let value = env.resolve_value_ref(&arg)?;
+            let value = env.resolve_value_ref(&arg).map(RuntimeValue::from)?;
             if let RuntimeValue::Aggregate(_, map) = &value
                 && map.as_ref().0.get("command").is_some()
             {
@@ -264,8 +269,10 @@ impl NativeFunction for ProcessRawExec {
         };
 
         let result = match execute_raw(options) {
-            Ok(value) => RuntimeValue::Result(Ok(Gc::new(value))),
-            Err(err) => RuntimeValue::Result(Err(Gc::new(RuntimeValue::Str(Ustr::from(&err))))),
+            Ok(value) => RuntimeValue::Result(Ok(ValueSlot::new(value))),
+            Err(err) => {
+                RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(Ustr::from(&err)))))
+            }
         };
 
         Ok(result)

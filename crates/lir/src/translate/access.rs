@@ -51,6 +51,7 @@ impl LirLowering for MirIndex {
         LirNodeType::Index(LirIndex {
             base: Box::new(env.lower_node(*self.base)),
             index: Box::new(env.lower_node(*self.index)),
+            panic: self.panic,
         })
     }
 
@@ -62,6 +63,7 @@ impl LirLowering for MirIndex {
         LirLValue::Ptr(Box::new(LirNodeType::Index(LirIndex {
             base: Box::new(env.lower_node(*self.base)),
             index: Box::new(env.lower_node(*self.index)),
+            panic: true,
         })))
     }
 }

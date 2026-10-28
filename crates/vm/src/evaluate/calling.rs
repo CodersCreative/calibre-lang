@@ -1,4 +1,4 @@
-use super::{super::VM, write_back::Propagation};
+use super::super::VM;
 use crate::{
     VarName,
     error::RuntimeError,
@@ -75,7 +75,7 @@ impl VM {
         args: Vec<RuntimeValue>,
         get_result: bool,
     ) -> Result<RuntimeValue, RuntimeError> {
-        match self.resolve_value_ref(&callable)? {
+        match self.resolve_value_ref(&callable).map(RuntimeValue::from)? {
             RuntimeValue::Function { name, captures } => {
                 let func = self.resolve_function_by_name(&name)?;
 
@@ -112,21 +112,6 @@ impl VM {
             RuntimeValue::NativeFunction(func) => func.run(self, args),
             #[cfg(feature = "native")]
             RuntimeValue::ExternFunction(func) => func.call(self, &args),
-            RuntimeValue::BoundMethod { callee, receiver } => {
-                let mut full_args = vec![receiver.as_ref().clone()];
-                full_args.extend(args);
-
-                if full_args.len() >= 2 {
-                    let same_identity = matches!((&full_args[0], &full_args[1]), (RuntimeValue::List(a), RuntimeValue::List(b)) if std::ptr::eq(a.as_ref(), b.as_ref()))
-                        || matches!((&full_args[0], &full_args[1]), (RuntimeValue::HashMap(a), RuntimeValue::HashMap(b)) if std::ptr::eq(a.map.as_ref(), b.map.as_ref()))
-                        || matches!((&full_args[0], &full_args[1]), (RuntimeValue::HashSet(a), RuntimeValue::HashSet(b)) if std::ptr::eq(a.set.as_ref(), b.set.as_ref()));
-                    if same_identity {
-                        full_args.truncate(1);
-                    }
-                }
-
-                self.call_runtime_callable(*callee, full_args, get_result)
-            }
             other => Err(RuntimeError::InvalidFunctionCallValue(Box::new(other))),
         }
     }
@@ -216,7 +201,6 @@ impl VM {
         trace!("running function with budget");
         let caller_frame = self.frames.len().saturating_sub(1);
         state.yielded = None;
-        let mut propagateable_args = None;
 
         let prev_vars = if state.block.is_none() {
             let func_ptr = function as *const VMFunction as usize;
@@ -233,18 +217,10 @@ impl VM {
                     }
                 }
                 FunctionArgs::Regs(args) => {
-                    propagateable_args = Some(args.to_vec());
-
                     for (reg, arg_reg) in function.param_regs.iter().zip(args.iter().copied()) {
                         let arg = self.get_reg_value_in_frame(caller_frame, arg_reg).clone();
                         self.set_reg_value(*reg, arg);
                     }
-
-                    self.propagate_member_source_args_into(
-                        args,
-                        caller_frame,
-                        &function.param_regs,
-                    );
                 }
             }
 
@@ -337,10 +313,6 @@ impl VM {
             result = self.get_reg_value_in_frame(frame, reg).clone();
         }
 
-        if let Some(args) = propagateable_args {
-            self.propagate_member_source_args(&args, caller_frame)?;
-        }
-
         self.pop_frame();
         self.restore_captures(prev_vars);
 
@@ -349,36 +321,6 @@ impl VM {
         }
 
         Ok(Some(result))
-    }
-
-    fn run_bound_method_call(
-        &mut self,
-        callee: RuntimeValue,
-        receiver: RuntimeValue,
-        args: &[u16],
-        get_result: bool,
-    ) -> Result<RuntimeValue, RuntimeError> {
-        let _ = self.resolve_value_ref(&receiver)?;
-
-        let receiver_reg = if let RuntimeValue::RegRef { frame, reg } = &receiver {
-            Some((*frame, *reg))
-        } else {
-            None
-        };
-
-        let mut full_args = vec![receiver];
-        full_args.extend(self.collect_call_args_vec(args));
-        let out = self.call_runtime_callable(callee, full_args, get_result)?;
-
-        if let Some((frame_idx, reg)) = receiver_reg
-            && frame_idx == self.frames.len().saturating_sub(1)
-            && let Some(handle) = self.current_frame().get_mutation_handle(reg)
-        {
-            let updated_field = self.get_reg_value(reg).clone();
-            let _ = self.replace_mutation_handle(&handle, updated_field);
-        }
-
-        Ok(out)
     }
 
     fn handle_call_result(
@@ -397,8 +339,6 @@ impl VM {
             if let Some(dst) = dst {
                 self.set_reg_value(dst, yielded.clone());
             }
-            let frame_idx = self.frames.len().saturating_sub(1);
-            self.propagate_member_source_args(args, frame_idx)?;
 
             return Ok(Some(TerminateValue::Yield {
                 block: block.id,
@@ -427,21 +367,11 @@ impl VM {
             if value.is_callable() {
                 value.clone()
             } else {
-                self.resolve_value_ref(value)?
+                self.resolve_value_ref(value).map(RuntimeValue::from)?
             }
         };
 
         match func {
-            RuntimeValue::BoundMethod { callee, receiver } => {
-                let value = self.run_bound_method_call(
-                    *callee,
-                    receiver.as_ref().clone(),
-                    args,
-                    dst.is_some(),
-                )?;
-
-                self.store_call_result(dst, value);
-            }
             RuntimeValue::Function { name, captures } => {
                 let func = self.resolve_function_by_name(&name)?;
 
@@ -473,8 +403,6 @@ impl VM {
             other => return Err(RuntimeError::InvalidFunctionCallValue(Box::new(other))),
         }
 
-        let frame_idx = self.frames.len().saturating_sub(1);
-        self.propagate_member_source_args(args, frame_idx)?;
         Ok(None)
     }
 }

@@ -2,7 +2,7 @@ use crate::{
     VM,
     error::RuntimeError,
     value::{
-        GcVec, Host, RuntimeValue,
+        GcVec, Host, RuntimeValue, ValueSlot,
         hashable::{HashKey, RuntimeHashMap, RuntimeHashSet},
         spawn::{ChannelInner, MutexInner, WaitGroupInner},
     },
@@ -163,7 +163,7 @@ pub fn resolve_mutex(env: &VM, value: RuntimeValue) -> Result<Arc<MutexInner>, R
 // Collections
 
 #[inline]
-pub fn resolve_list(env: &mut VM, value: RuntimeValue) -> Result<Arc<GcVec>, RuntimeError> {
+pub fn resolve_list(env: &mut VM, value: RuntimeValue) -> Result<GcVec, RuntimeError> {
     let resolved = env.resolve_value(value)?;
     if let RuntimeValue::List(lst) = resolved {
         Ok(lst)
@@ -175,13 +175,31 @@ pub fn resolve_list(env: &mut VM, value: RuntimeValue) -> Result<Arc<GcVec>, Run
     }
 }
 
+#[inline]
+pub fn update_list_mut<'a, T, F>(
+    env: &'a mut VM,
+    value: &'a mut RuntimeValue,
+    func: F,
+) -> Result<T, RuntimeError>
+where
+    F: FnOnce(&mut Vec<ValueSlot>) -> Result<T, RuntimeError>,
+{
+    env.update_value_mut(value, |value| match value {
+        RuntimeValue::List(x) => func(&mut x.0),
+        value => Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(value.clone()),
+            target_type: ParserInnerType::List(Box::new(ParserDataType::auto(Span::default()))),
+        }),
+    })
+}
+
 pub fn resolve_hash_key(env: &VM, value: RuntimeValue) -> Result<HashKey, RuntimeError> {
     let resolved = env.resolve_value(value)?;
     HashKey::try_from(resolved)
 }
 
 pub fn resolve_hash_key_ref(env: &VM, value: &RuntimeValue) -> Result<HashKey, RuntimeError> {
-    let resolved = env.resolve_value_ref(value)?;
+    let resolved = env.resolve_value_ref(value).map(RuntimeValue::from)?;
     HashKey::try_from(resolved)
 }
 

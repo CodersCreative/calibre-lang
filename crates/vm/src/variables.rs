@@ -5,102 +5,28 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, Default)]
 pub struct VariableStore {
-    values: Arc<Vec<Option<RuntimeValue>>>,
-    free: Vec<usize>,
-    map: FxHashMap<VariableKey, usize>,
+    values: Arc<FxHashMap<VariableKey, RuntimeValue>>,
 }
 
 impl VariableStore {
     pub fn get(&self, name: &VariableKey) -> Option<&RuntimeValue> {
-        let idx = *self.map.get(name)?;
-        self.values.get(idx)?.as_ref()
-    }
-
-    pub fn get_by_id(&self, id: usize) -> Option<&RuntimeValue> {
-        self.values.get(id)?.as_ref()
+        self.values.get(name)
     }
 
     pub fn get_mut(&mut self, name: &VariableKey) -> Option<&mut RuntimeValue> {
-        let idx = *self.map.get(name)?;
-        Arc::make_mut(&mut self.values).get_mut(idx)?.as_mut()
-    }
-
-    pub fn get_mut_by_id(&mut self, id: usize) -> Option<&mut RuntimeValue> {
-        Arc::make_mut(&mut self.values).get_mut(id)?.as_mut()
-    }
-
-    pub fn set_by_id(&mut self, id: usize, value: RuntimeValue) -> Option<RuntimeValue> {
-        let slot = Arc::make_mut(&mut self.values).get_mut(id)?;
-        slot.replace(value)
+        Arc::make_mut(&mut self.values).get_mut(name)
     }
 
     pub fn insert(&mut self, name: VariableKey, value: RuntimeValue) -> Option<RuntimeValue> {
-        if let Some(&idx) = self.map.get(&name) {
-            let slot = Arc::make_mut(&mut self.values).get_mut(idx)?;
-            return slot.replace(value);
-        }
-
-        let idx = if let Some(free_idx) = self.free.pop() {
-            Arc::make_mut(&mut self.values)[free_idx] = Some(value);
-            free_idx
-        } else {
-            Arc::make_mut(&mut self.values).push(Some(value));
-            self.values.len() - 1
-        };
-        self.map.insert(name, idx);
-        None
-    }
-
-    pub fn insert_with_id(&mut self, name: VariableKey, value: RuntimeValue) -> usize {
-        if let Some(&idx) = self.map.get(&name) {
-            if let Some(slot) = Arc::make_mut(&mut self.values).get_mut(idx) {
-                let _ = slot.replace(value);
-            }
-            return idx;
-        }
-
-        let idx = if let Some(free_idx) = self.free.pop() {
-            Arc::make_mut(&mut self.values)[free_idx] = Some(value);
-            free_idx
-        } else {
-            Arc::make_mut(&mut self.values).push(Some(value));
-            self.values.len() - 1
-        };
-        self.map.insert(name, idx);
-        idx
-    }
-
-    pub fn id_of(&self, name: &VariableKey) -> Option<usize> {
-        self.map.get(name).copied()
-    }
-
-    pub fn name_of(&self, id: usize) -> Option<VariableKey> {
-        self.map.iter().find(|x| x.1 == &id).map(|x| x.0).cloned()
-    }
-
-    pub fn bind_alias_by_id(&mut self, name: VariableKey, id: usize) {
-        self.map.insert(name, id);
-    }
-
-    pub fn remove_name_only(&mut self, name: &VariableKey) -> bool {
-        self.map.remove(name).is_some()
+        Arc::make_mut(&mut self.values).insert(name, value)
     }
 
     pub fn remove(&mut self, name: &VariableKey) -> Option<RuntimeValue> {
-        let id = self.map.remove(name)?;
-        self.remove_by_id(id)
-    }
-
-    pub fn remove_by_id(&mut self, id: usize) -> Option<RuntimeValue> {
-        let out = Arc::make_mut(&mut self.values).get_mut(id)?.take();
-        if out.is_some() {
-            self.free.push(id);
-        }
-        out
+        Arc::make_mut(&mut self.values).remove(name)
     }
 
     pub fn contains_key(&self, name: &VariableKey) -> bool {
-        self.map.contains_key(name)
+        self.values.contains_key(name)
     }
 
     pub fn slot_len(&self) -> usize {
@@ -108,6 +34,6 @@ impl VariableStore {
     }
 
     pub fn keys(&self) -> impl Iterator<Item = &VariableKey> {
-        self.map.keys()
+        self.values.keys()
     }
 }

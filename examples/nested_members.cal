@@ -1,0 +1,22 @@
+@default
+type Stack := struct {
+  data : list:<int?> = [none for 30],
+  top_of_stack : int = -1,
+};
+
+impl Stack {
+  const push := fn(self : &mut Self, value : int) -> bool => {
+    // if self.top_of_stack > 29 => return false;
+
+    self.top_of_stack += 1;
+    self.data[self.top_of_stack] := some(value);
+    print(self);
+    return true
+  }
+}
+
+const main := fn => {
+  let mut stack := Stack.default();
+  stack.push(100);
+  print(stack);
+}

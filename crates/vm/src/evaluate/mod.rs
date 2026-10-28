@@ -19,12 +19,10 @@ pub mod memory;
 pub mod registers;
 pub mod termination;
 pub mod variables;
-pub mod write_back;
 
 #[derive(Debug)]
 enum CaptureRestore {
     Value(Option<RuntimeValue>),
-    AliasOnly,
     Keep,
 }
 
@@ -51,24 +49,10 @@ impl VM {
                     return;
                 }
 
-                let old = self.variables.get(&key).cloned();
-
-                if let RuntimeValue::VarRef(id) = value {
-                    self.variables.bind_alias_by_id(key.clone(), *id);
-                    prev_vars.push((
-                        key,
-                        if old.is_some() {
-                            CaptureRestore::Value(old)
-                        } else {
-                            CaptureRestore::AliasOnly
-                        },
-                    ));
-                } else {
-                    prev_vars.push((
-                        key.clone(),
-                        CaptureRestore::Value(self.variables.insert(key, value.clone())),
-                    ));
-                }
+                prev_vars.push((
+                    key.clone(),
+                    CaptureRestore::Value(self.variables.insert(key, value.clone())),
+                ));
             };
 
         for (name, value) in captures {
@@ -92,9 +76,6 @@ impl VM {
                 }
                 CaptureRestore::Value(None) => {
                     self.variables.remove(&name);
-                }
-                CaptureRestore::AliasOnly => {
-                    let _ = self.variables.remove_name_only(&name);
                 }
                 CaptureRestore::Keep => {}
             }
@@ -134,17 +115,6 @@ impl VM {
                     RuntimeValue::Ref(name.clone())
                 }
             }
-            RuntimeValue::VarRef(id) => {
-                if let Ok(resolved) = self.resolve_value(RuntimeValue::VarRef(*id)) {
-                    if resolved.should_pass_by_reg_ref() {
-                        RuntimeValue::VarRef(*id)
-                    } else {
-                        resolved
-                    }
-                } else {
-                    RuntimeValue::VarRef(*id)
-                }
-            }
             other => other.clone(),
         }
     }
@@ -182,10 +152,9 @@ impl VM {
             MirDataType::List(inner) => {
                 if let RuntimeValue::List(items) = value {
                     items
-                        .as_ref()
                         .0
                         .iter()
-                        .all(|item| self.runtime_matches_type(item, inner))
+                        .all(|item| self.runtime_matches_type(&item.get(), inner))
                 } else {
                     false
                 }
@@ -201,7 +170,7 @@ impl VM {
                             .0
                             .iter()
                             .find(|(name, _)| name == &i.to_string())
-                            .map(|(_, v)| self.runtime_matches_type(v, t))
+                            .map(|(_, v)| self.runtime_matches_type(&v.get(), t))
                             .unwrap_or(false)
                     })
                 } else {
@@ -209,13 +178,13 @@ impl VM {
                 }
             }
             MirDataType::Option(inner) => match value {
-                RuntimeValue::Option(Some(v)) => self.runtime_matches_type(v.as_ref(), inner),
+                RuntimeValue::Option(Some(v)) => self.runtime_matches_type(&v.get(), inner),
                 RuntimeValue::Option(None) => true,
                 _ => false,
             },
             MirDataType::Result { ok, err } => match value {
-                RuntimeValue::Result(Ok(v)) => self.runtime_matches_type(v.as_ref(), ok),
-                RuntimeValue::Result(Err(v)) => self.runtime_matches_type(v.as_ref(), err),
+                RuntimeValue::Result(Ok(v)) => self.runtime_matches_type(&v.get(), ok),
+                RuntimeValue::Result(Err(v)) => self.runtime_matches_type(&v.get(), err),
                 _ => false,
             },
             MirDataType::Function { .. } | MirDataType::NativeFunction { .. } => {

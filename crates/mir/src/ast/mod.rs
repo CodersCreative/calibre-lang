@@ -132,6 +132,7 @@ impl MiddleNode {
             | MiddleNodeType::IndexAccess(MirIndex {
                 base: left,
                 index: right,
+                panic: _,
             })
             | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,
@@ -235,7 +236,11 @@ impl MiddleNode {
                 body.substitute(repl);
             }
             MiddleNodeType::FieldAccess(MirField { base, .. }) => base.substitute(repl),
-            MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
+            MiddleNodeType::IndexAccess(MirIndex {
+                base,
+                index,
+                panic: _,
+            }) => {
                 base.substitute(repl);
                 index.substitute(repl);
             }
@@ -290,9 +295,11 @@ impl MiddleNode {
             }) => values.iter().any(|v| v.calls_self(name)),
             MiddleNodeType::LoopDeclaration(MirLoop { body, .. }) => body.calls_self(name),
             MiddleNodeType::FieldAccess(MirField { base, .. }) => base.calls_self(name),
-            MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
-                base.calls_self(name) || index.calls_self(name)
-            }
+            MiddleNodeType::IndexAccess(MirIndex {
+                base,
+                index,
+                panic: _,
+            }) => base.calls_self(name) || index.calls_self(name),
             MiddleNodeType::EnumExpression(MirEnum { data, .. }) => {
                 data.as_ref().is_some_and(|d| d.calls_self(name))
             }
@@ -460,6 +467,7 @@ pub struct MirField {
 pub struct MirIndex {
     pub base: Box<MiddleNode>,
     pub index: Box<MiddleNode>,
+    pub panic: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]
@@ -808,7 +816,7 @@ impl From<MiddleNodeType> for AstNodeType {
             MiddleNodeType::IndexAccess(value) => AstNodeType::IndexAccess(AstIndex {
                 base: Box::new((*value.base).into()),
                 index: Box::new((*value.index).into()),
-                panic: false,
+                panic: value.panic,
             }),
             MiddleNodeType::Discriminant(MirDiscriminant { value }) => {
                 AstNodeType::CallExpression(AstCall {

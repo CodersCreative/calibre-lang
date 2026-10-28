@@ -138,7 +138,11 @@ impl MirRenamable for LirNodeType {
                     p.rename(state);
                 }
             }
-            Self::Index(LirIndex { base, index }) => {
+            Self::Index(LirIndex {
+                base,
+                index,
+                panic: _,
+            }) => {
                 base.rename(state);
                 index.rename(state);
             }

@@ -199,7 +199,11 @@ impl MirRenamable for MiddleNodeType {
                 data_type.rename(state);
             }
             MiddleNodeType::FieldAccess(MirField { base, field: _ }) => base.rename(state),
-            MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
+            MiddleNodeType::IndexAccess(MirIndex {
+                base,
+                index,
+                panic: _,
+            }) => {
                 base.rename(state);
                 index.rename(state);
             }

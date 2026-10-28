@@ -7,18 +7,12 @@ EnumExpression
 */
 
 use crate::{
-    ast::{
-        LirAggregate, LirAssign, LirDeclare, LirEnum, LirIndex, LirLValue, LirLoad, LirMember,
-        LirNode, LirNodeType,
-    },
+    ast::{LirAggregate, LirAssign, LirEnum, LirNodeType},
     environment::LirEnvironment,
     translate::LirLowering,
 };
 use calibre_mir::{
-    ast::{
-        MiddleNode, MiddleNodeType, MirAggregate, MirAssignment, MirDeref, MirEnum, MirField,
-        MirIdentifier, MirIndex, types::MirDataType,
-    },
+    ast::{MirAggregate, MirAssignment, MirEnum},
     typing::MiddleTypeDefType,
 };
 use calibre_parser::{Span, ast::ObjectMap};
@@ -26,87 +20,12 @@ use calibre_parser::{Span, ast::ObjectMap};
 impl LirLowering for MirAssignment {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         let rhs = env.lower_node(*self.value);
-        let ident_span = self.identifier.span;
+        let lhs = env.lower_lvalue(*self.identifier);
 
-        let lhs = match self.identifier.node_type {
-            MiddleNodeType::Identifier(MirIdentifier { identifier }) => {
-                Some(LirLValue::Var(identifier))
-            }
-            MiddleNodeType::DerefStatement(MirDeref { value }) => {
-                let ptr_expr = env.lower_node(*value);
-                let ptr_tmp = env.get_temp();
-                env.add_instr(LirNode::new(
-                    ident_span,
-                    LirNodeType::Declare(LirDeclare {
-                        dest: ptr_tmp.clone(),
-                        data_type: MirDataType::Dynamic,
-                        value: Box::new(ptr_expr),
-                        is_referenced: true,
-                    }),
-                ));
-                let ptr_load = LirNodeType::Load(LirLoad { value: ptr_tmp });
-
-                Some(LirLValue::Ptr(Box::new(ptr_load.clone())))
-            }
-            MiddleNodeType::FieldAccess(MirField { base, field }) => {
-                let base_expr = env.lower_node(*base);
-                let base_tmp = env.get_temp();
-                env.add_instr(LirNode::new(
-                    ident_span,
-                    LirNodeType::Declare(LirDeclare {
-                        dest: base_tmp.clone(),
-                        data_type: MirDataType::Dynamic,
-                        value: Box::new(base_expr),
-                        is_referenced: true,
-                    }),
-                ));
-                let base_load = LirNodeType::Load(LirLoad { value: base_tmp });
-
-                Some(LirLValue::Ptr(Box::new(LirNodeType::Member(LirMember {
-                    base: Box::new(base_load.clone()),
-                    field,
-                }))))
-            }
-            MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
-                let base_load = if let MiddleNodeType::Identifier(MirIdentifier { identifier }) =
-                    &base.node_type
-                {
-                    LirNodeType::Load(LirLoad {
-                        value: identifier.clone(),
-                    })
-                } else {
-                    let base_expr = env.lower_node(*base);
-                    let base_tmp = env.get_temp();
-                    env.add_instr(LirNode::new(
-                        ident_span,
-                        LirNodeType::Declare(LirDeclare {
-                            dest: base_tmp.clone(),
-                            data_type: MirDataType::Dynamic,
-                            value: Box::new(base_expr),
-                            is_referenced: true,
-                        }),
-                    ));
-                    LirNodeType::Load(LirLoad { value: base_tmp })
-                };
-
-                let index = env.lower_node(*index);
-
-                Some(LirLValue::Ptr(Box::new(LirNodeType::Index(LirIndex {
-                    base: Box::new(base_load.clone()),
-                    index: Box::new(index.clone()),
-                }))))
-            }
-            other => Some(env.lower_lvalue(MiddleNode::new(other, ident_span))),
-        };
-
-        if let Some(lhs) = lhs {
-            LirNodeType::Assign(LirAssign {
-                dest: lhs,
-                value: Box::new(rhs),
-            })
-        } else {
-            LirNodeType::null()
-        }
+        LirNodeType::Assign(LirAssign {
+            dest: lhs,
+            value: Box::new(rhs),
+        })
     }
 }
 

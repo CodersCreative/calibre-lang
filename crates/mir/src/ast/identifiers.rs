@@ -130,7 +130,11 @@ impl MirVarKeysUsed for MiddleNode {
                 amt
             }
             MiddleNodeType::FieldAccess(MirField { base, .. }) => base.identifiers_used(),
-            MiddleNodeType::IndexAccess(MirIndex { base, index }) => {
+            MiddleNodeType::IndexAccess(MirIndex {
+                base,
+                index,
+                panic: _,
+            }) => {
                 let mut amt = base.identifiers_used();
                 amt.append(&mut index.identifiers_used());
                 amt
@@ -250,6 +254,7 @@ impl MiddleNode {
             | MiddleNodeType::IndexAccess(MirIndex {
                 base: left,
                 index: right,
+                panic: _,
             })
             | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,
@@ -405,6 +410,7 @@ impl MiddleNode {
             | MiddleNodeType::IndexAccess(MirIndex {
                 base: left,
                 index: right,
+                panic: _,
             })
             | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,

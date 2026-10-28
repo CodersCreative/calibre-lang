@@ -8,18 +8,11 @@ Assign
 use crate::{
     Reg, VMLiteral,
     instructions::{
-        VMInstruction,
-        access::{VMLoadMember, VMSetIndex, VMSetMember},
-        literals::VMLoadLiteral,
-        memory::VMSetRef,
-        registers::VMCopy,
-        variables::{VMLoadVarRef, VMStoreVar},
+        VMInstruction, literals::VMLoadLiteral, memory::VMSetRef, variables::VMStoreVar,
     },
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
-use calibre_lir::ast::{
-    LirAssign, LirDeclare, LirExtern, LirIndex, LirLValue, LirLoad, LirMember, LirNodeType,
-};
+use calibre_lir::ast::{LirAssign, LirDeclare, LirExtern, LirLValue};
 use calibre_parser::Span;
 
 impl VMLowering for LirDeclare {
@@ -105,128 +98,17 @@ fn lower_assignment<'a>(
             );
         }
         LirLValue::Ptr(ptr) => {
-            let value_reg = env.lower_node(*node.value, span);
-            match *ptr {
-                LirNodeType::Member(LirMember { base, field }) => {
-                    let base_reg = env.lower_node(*base, span);
-                    let member = env.add_string(field);
-                    env.emit(
-                        VMInstruction::SetMember(VMSetMember {
-                            dst,
-                            target: base_reg,
-                            member,
-                            value: value_reg,
-                        }),
-                        span,
-                    );
-                }
-                LirNodeType::Index(LirIndex { base, index }) => {
-                    let index_reg = env.lower_node(*index, span);
-                    match *base {
-                        LirNodeType::Member(LirMember {
-                            base: owner,
-                            field: member,
-                        }) => {
-                            let owner_reg = env.lower_node(*owner, span);
-                            let member_idx = env.add_string(member);
-                            let member_val_reg = env.alloc_reg();
+            let value = env.lower_node(*node.value, span);
+            let target = env.lower_node(*ptr, span);
 
-                            env.emit(
-                                VMInstruction::LoadMember(VMLoadMember {
-                                    dst: member_val_reg,
-                                    value: owner_reg,
-                                    member: member_idx,
-                                }),
-                                span,
-                            );
-
-                            env.emit(
-                                VMInstruction::SetIndex(VMSetIndex {
-                                    dst,
-                                    target: member_val_reg,
-                                    index: index_reg,
-                                    value: value_reg,
-                                }),
-                                span,
-                            );
-
-                            env.emit(
-                                VMInstruction::SetMember(VMSetMember {
-                                    dst,
-                                    target: owner_reg,
-                                    member: member_idx,
-                                    value: member_val_reg,
-                                }),
-                                span,
-                            );
-                        }
-                        LirNodeType::Load(LirLoad { value }) => {
-                            let base_reg = env.alloc_reg();
-                            if let Some(reg) = env.map.get(&value) {
-                                env.emit(
-                                    VMInstruction::Copy(VMCopy {
-                                        dst: base_reg,
-                                        src: *reg,
-                                    }),
-                                    span,
-                                );
-
-                                env.emit(
-                                    VMInstruction::SetIndex(VMSetIndex {
-                                        dst,
-                                        target: base_reg,
-                                        index: index_reg,
-                                        value: value_reg,
-                                    }),
-                                    span,
-                                );
-                            } else {
-                                let idx = env.add_variable(value);
-                                env.emit(
-                                    VMInstruction::LoadVarRef(VMLoadVarRef {
-                                        dst: base_reg,
-                                        name: idx,
-                                    }),
-                                    span,
-                                );
-
-                                env.emit(
-                                    VMInstruction::SetIndex(VMSetIndex {
-                                        dst,
-                                        target: base_reg,
-                                        index: index_reg,
-                                        value: value_reg,
-                                    }),
-                                    span,
-                                );
-                            }
-                        }
-                        other_base => {
-                            let base_reg = env.lower_node(other_base, span);
-                            env.emit(
-                                VMInstruction::SetIndex(VMSetIndex {
-                                    dst,
-                                    target: base_reg,
-                                    index: index_reg,
-                                    value: value_reg,
-                                }),
-                                span,
-                            );
-                        }
-                    }
-                }
-                other => {
-                    let target_reg = env.lower_node(other, span);
-                    env.emit(
-                        VMInstruction::SetRef(VMSetRef {
-                            dst,
-                            target: target_reg,
-                            value: value_reg,
-                        }),
-                        span,
-                    );
-                }
-            }
+            env.emit(
+                VMInstruction::SetRef(VMSetRef {
+                    dst: assigned.unwrap_or(dst),
+                    target,
+                    value,
+                }),
+                span,
+            );
         }
     }
     dst

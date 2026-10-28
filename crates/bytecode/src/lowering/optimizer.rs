@@ -2,7 +2,7 @@ use crate::{
     Reg, VMBlock,
     instructions::{
         VMInstruction::{self},
-        access::{VMLoadMember, VMSetMember},
+        access::VMLoadMember,
         literals::{VMAggregate, VMEnum, VMLoadLiteral},
         registers::VMCopy,
         termination::{VMBranch, VMJump},
@@ -309,8 +309,7 @@ impl VMBlock {
 
                     VMInstruction::Enum(VMEnum { name, .. }) => *name += start_types_index,
 
-                    VMInstruction::LoadMember(VMLoadMember { member: name, .. })
-                    | VMInstruction::SetMember(VMSetMember { member: name, .. }) => {
+                    VMInstruction::LoadMember(VMLoadMember { member: name, .. }) => {
                         *name += start_strings_index
                     }
 

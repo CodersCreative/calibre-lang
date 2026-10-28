@@ -17,7 +17,7 @@ use dumpster::{TraceWith, Visitor};
 use ustr::Ustr;
 
 use dyn_hash::DynHash;
-use std::{any::Any, io::BufRead, ops::DerefMut};
+use std::{any::Any, io::BufRead, ops::DerefMut, sync::MutexGuard};
 use std::{
     fmt::{Debug, Display},
     ops::Deref,
@@ -32,7 +32,6 @@ pub mod embedded;
 pub mod hashable;
 pub mod natives;
 pub mod spawn;
-pub mod write_back;
 
 #[cfg(feature = "native")]
 pub mod ffi;
@@ -44,29 +43,34 @@ pub const BIG_PRECISION: usize = 128;
 pub const BIG_ROUNDING: RoundingMode = RoundingMode::ToEven;
 
 #[derive(Debug, Clone)]
-pub struct ValueSlot(Arc<RuntimeValue>);
+pub struct ValueSlot(Gc<Mutex<RuntimeValue>>);
 
 impl ValueSlot {
     #[inline]
     pub fn new(value: RuntimeValue) -> Self {
-        Self(Arc::new(value))
+        Self(Gc::new(Mutex::new(value)))
     }
 
     #[inline]
-    pub fn make_mut(&mut self) -> &mut RuntimeValue {
-        Arc::make_mut(&mut self.0)
+    pub fn get(&self) -> MutexGuard<'_, RuntimeValue> {
+        self.0.lock().expect("Value was poisoned")
+    }
+
+    #[inline]
+    pub fn replace(&self, value: RuntimeValue) -> RuntimeValue {
+        std::mem::replace(&mut *self.get(), value)
     }
 }
 
 impl From<ValueSlot> for RuntimeValue {
     fn from(value: ValueSlot) -> Self {
-        value.as_ref().clone()
+        value.get().clone()
     }
 }
 
-impl AsRef<RuntimeValue> for ValueSlot {
-    fn as_ref(&self) -> &RuntimeValue {
-        self.0.as_ref()
+impl From<&ValueSlot> for RuntimeValue {
+    fn from(value: &ValueSlot) -> Self {
+        value.get().clone()
     }
 }
 
@@ -76,17 +80,9 @@ impl From<RuntimeValue> for ValueSlot {
     }
 }
 
-impl Deref for ValueSlot {
-    type Target = RuntimeValue;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_ref()
-    }
-}
-
 unsafe impl<V: Visitor> TraceWith<V> for ValueSlot {
     fn accept(&self, visitor: &mut V) -> Result<(), ()> {
-        self.as_ref().accept(visitor)
+        self.0.accept(visitor)
     }
 }
 
@@ -199,6 +195,40 @@ dyn_hash::hash_trait_object!(HostInner);
 
 pub type Host = Arc<Mutex<dyn HostInner + Send>>;
 
+#[derive(Clone, Debug)]
+pub enum SlotOrRuntimeValue<'a> {
+    Slot(ValueSlot),
+    Value(&'a RuntimeValue),
+    Owned(RuntimeValue),
+}
+
+impl<'a> From<SlotOrRuntimeValue<'a>> for RuntimeValue {
+    fn from(value: SlotOrRuntimeValue) -> Self {
+        match value {
+            SlotOrRuntimeValue::Slot(x) => RuntimeValue::from(x),
+            SlotOrRuntimeValue::Value(x) => x.clone(),
+            SlotOrRuntimeValue::Owned(x) => x,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum SlotOrRuntimeValueMut<'a> {
+    Slot(ValueSlot),
+    Value(&'a mut RuntimeValue),
+    Owned(RuntimeValue),
+}
+
+impl<'a> From<SlotOrRuntimeValueMut<'a>> for RuntimeValue {
+    fn from(value: SlotOrRuntimeValueMut) -> Self {
+        match value {
+            SlotOrRuntimeValueMut::Slot(x) => RuntimeValue::from(x),
+            SlotOrRuntimeValueMut::Value(x) => x.clone(),
+            SlotOrRuntimeValueMut::Owned(x) => x,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub enum RuntimeValue {
     #[default]
@@ -214,16 +244,16 @@ pub enum RuntimeValue {
     Str(Ustr),
     Char(char),
     Aggregate(Option<TypeKey>, Arc<GcMap>),
-    Enum(TypeKey, usize, Option<Gc<RuntimeValue>>),
+    Enum(TypeKey, usize, Option<ValueSlot>),
     Ref(VariableKey),
-    VarRef(usize),
+    GcRef(ValueSlot),
     RegRef {
         frame: usize,
         reg: Reg,
     },
-    List(Arc<GcVec>),
-    Option(Option<Gc<RuntimeValue>>),
-    Result(Result<Gc<RuntimeValue>, Gc<RuntimeValue>>),
+    List(GcVec),
+    Option(Option<ValueSlot>),
+    Result(Result<ValueSlot, ValueSlot>),
     Channel(Arc<ChannelInner>),
     WaitGroup(Arc<WaitGroupInner>),
     Mutex(Arc<MutexInner>),
@@ -242,10 +272,6 @@ pub enum RuntimeValue {
         type_name: TypeImplKey,
         state: Arc<Mutex<GeneratorState>>,
     },
-    BoundMethod {
-        callee: Box<RuntimeValue>,
-        receiver: Gc<RuntimeValue>,
-    },
     GeneratorSuspend(Box<RuntimeValue>),
     Host(Host),
 }
@@ -255,7 +281,7 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
         match self {
             RuntimeValue::Aggregate(_, map) => map.as_ref().accept(visitor),
             RuntimeValue::Enum(_, _, Some(x)) => x.accept(visitor),
-            RuntimeValue::List(x) => x.as_ref().accept(visitor),
+            RuntimeValue::List(x) => x.accept(visitor),
             RuntimeValue::Option(Some(x)) => x.accept(visitor),
             RuntimeValue::Result(Ok(x)) => x.accept(visitor),
             RuntimeValue::Result(Err(x)) => x.accept(visitor),
@@ -288,15 +314,10 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
                 Ok(())
             }
             RuntimeValue::Generator { .. } => Ok(()),
-            RuntimeValue::BoundMethod { callee, receiver } => {
-                callee.accept(visitor)?;
-                receiver.accept(visitor)
-            }
             RuntimeValue::GeneratorSuspend(value) => value.accept(visitor),
             #[cfg(feature = "native")]
             RuntimeValue::ExternFunction(_) => Ok(()),
             RuntimeValue::Ptr(_) => Ok(()),
-            RuntimeValue::VarRef(_) => Ok(()),
             _ => Ok(()),
         }
     }
@@ -310,7 +331,6 @@ impl RuntimeValue {
             RuntimeValue::Function { .. }
                 | RuntimeValue::NativeFunction(_)
                 | RuntimeValue::Channel(_)
-                | RuntimeValue::BoundMethod { .. }
         );
 
         #[cfg(feature = "native")]
@@ -329,26 +349,7 @@ impl RuntimeValue {
                 | RuntimeValue::Enum(_, _, _)
                 | RuntimeValue::Option(_)
                 | RuntimeValue::Result(_)
-                | RuntimeValue::BoundMethod { .. }
         )
-    }
-
-    #[inline]
-    pub fn bind_if_callable(self, receiver: RuntimeValue) -> RuntimeValue {
-        match self {
-            RuntimeValue::Function { .. } | RuntimeValue::NativeFunction(_) => {
-                RuntimeValue::BoundMethod {
-                    callee: Box::new(self),
-                    receiver: Gc::new(receiver),
-                }
-            }
-            #[cfg(feature = "native")]
-            RuntimeValue::ExternFunction(_) => RuntimeValue::BoundMethod {
-                callee: Box::new(self),
-                receiver: Gc::new(receiver),
-            },
-            other => other,
-        }
     }
 
     pub fn is_null(&self) -> bool {
@@ -360,9 +361,9 @@ impl RuntimeValue {
         matches!(
             self,
             RuntimeValue::Ref(_)
-                | RuntimeValue::VarRef(_)
                 | RuntimeValue::RegRef { .. }
                 | RuntimeValue::MutexGuard(_)
+                | RuntimeValue::GcRef(_)
         )
     }
 

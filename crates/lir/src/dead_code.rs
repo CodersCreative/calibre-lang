@@ -330,7 +330,7 @@ impl LirNodeType {
                 );
             }
 
-            LirNodeType::Index(LirIndex { base, index }) => {
+            LirNodeType::Index(LirIndex { base, index, .. }) => {
                 base.collect_references(
                     registry,
                     reachable_functions,

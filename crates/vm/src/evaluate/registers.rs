@@ -26,7 +26,6 @@ impl VMEvaluation for VMLoadRegRef {
                 reg: *reg,
             },
             RuntimeValue::Ref(name) => RuntimeValue::Ref(name.clone()),
-            RuntimeValue::VarRef(id) => RuntimeValue::VarRef(*id),
             other => other.clone(),
         };
 
@@ -54,19 +53,6 @@ impl VMEvaluation for VMCopy {
         }
 
         let value = vm.get_reg_value(self.src).clone();
-
-        let handle = vm
-            .current_frame()
-            .mutation_handles
-            .get(self.src as usize)
-            .and_then(Option::as_ref)
-            .cloned();
-
         vm.set_reg_value(self.dst, value);
-
-        if let Some(handle) = handle {
-            vm.current_frame_mut()
-                .set_shared_mutation_handle(self.dst, handle);
-        }
     }
 }
