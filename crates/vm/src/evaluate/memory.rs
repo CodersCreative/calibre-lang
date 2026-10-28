@@ -1,8 +1,5 @@
 use crate::{
-    VM,
-    error::RuntimeError,
-    evaluate::{instruction::VMEvaluation, write_back::Propagation},
-    value::{RuntimeValue, TerminateValue},
+    VM, error::RuntimeError, evaluate::instruction::VMEvaluation, value::{RuntimeValue, TerminateValue},
 };
 use calibre_bytecode::{
     VMBlock,
@@ -40,7 +37,6 @@ impl VMEvaluation for VMRef {
         };
 
         vm.set_reg_value(self.dst, out);
-        vm.propagate_member_source_alias(self.value, self.dst);
         Ok(TerminateValue::None)
     }
 }

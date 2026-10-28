@@ -10,19 +10,11 @@ pub(crate) trait WriteBack {
 }
 
 pub(crate) trait Propagation {
-    fn propagate_member_source_alias(&mut self, src: Reg, dst: Reg);
-
     fn propagate_member_source_args(
         &mut self,
         args: &[Reg],
         caller_frame: usize,
     ) -> Result<(), RuntimeError>;
-
-    fn propagate_member_source_reg(
-        &mut self,
-        reg: Reg,
-        frame_idx: usize,
-    ) -> Result<Option<RuntimeValue>, RuntimeError>;
 }
 
 impl VM {
@@ -172,21 +164,6 @@ impl VM {
 
 impl Propagation for VM {
     #[instrument(skip_all)]
-    fn propagate_member_source_alias(&mut self, src: Reg, dst: Reg) {
-        let source = self.current_frame().get_mutation_handle(src);
-
-        match source {
-            Some(source) => {
-                self.current_frame_mut()
-                    .set_shared_mutation_handle(dst, source);
-            }
-            None => {
-                self.current_frame_mut().remove_mutation_handle(dst);
-            }
-        }
-    }
-
-    #[instrument(skip_all)]
     fn propagate_member_source_args(
         &mut self,
         args: &[Reg],
@@ -218,24 +195,6 @@ impl Propagation for VM {
             let _ = self.replace_mutation_handle(&handle, field);
         }
         Ok(())
-    }
-
-    #[instrument(skip_all)]
-    fn propagate_member_source_reg(
-        &mut self,
-        reg: Reg,
-        frame_idx: usize,
-    ) -> Result<Option<RuntimeValue>, RuntimeError> {
-        let Some(handle) = self
-            .frames
-            .get(frame_idx)
-            .and_then(|frame| frame.get_mutation_handle(reg))
-        else {
-            return Ok(None);
-        };
-
-        let field = self.get_reg_value_in_frame(frame_idx, reg).clone();
-        Ok(self.replace_mutation_handle(&handle, field))
     }
 }
 

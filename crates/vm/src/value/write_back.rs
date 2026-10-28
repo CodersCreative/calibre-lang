@@ -51,7 +51,21 @@ impl RuntimeValue {
                 RuntimeValue::Enum(_, _, Some(inner)) => inner.as_ref().path_exists(rest),
                 _ => false,
             },
-            PathSegment::Slice(_, _) => unimplemented!(),
+            PathSegment::Slice(start, end) => match self {
+                RuntimeValue::List(list) => {
+                    let len = list.as_ref().0.len();
+                    let s = if *start < len { *start } else { return false };
+                    let e = if *end <= len { *end } else { return false };
+                    s <= e && rest.is_empty()
+                }
+                RuntimeValue::Str(s) => {
+                    let len = s.chars().count();
+                    let s = if *start < len { *start } else { return false };
+                    let e = if *end <= len { *end } else { return false };
+                    s <= e && rest.is_empty()
+                }
+                _ => false,
+            },
         }
     }
 
@@ -101,7 +115,9 @@ impl RuntimeValue {
                 RuntimeValue::Enum(_, _, Some(inner)) => inner.as_ref().read_path(rest),
                 _ => None,
             },
-            PathSegment::Slice(_, _) => unimplemented!(),
+            PathSegment::Slice(_, _) => {
+                None
+            },
         }
     }
 
@@ -160,7 +176,9 @@ impl RuntimeValue {
                 RuntimeValue::Enum(_, _, Some(inner)) => Self::update_gc(inner, rest, op),
                 _ => None,
             },
-            PathSegment::Slice(_, _) => unimplemented!(),
+            PathSegment::Slice(_, _) => {
+                None
+            },
         }
     }
 }
