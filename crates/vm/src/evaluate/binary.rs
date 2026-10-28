@@ -80,8 +80,12 @@ impl VMEvaluation for VMBinary {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let left = vm.resolve_value_ref(vm.get_reg_value(self.left))?;
-        let right = vm.resolve_value_ref(vm.get_reg_value(self.right))?;
+        let left = vm
+            .resolve_value_ref(vm.get_reg_value(self.left))
+            .map(RuntimeValue::from)?;
+        let right = vm
+            .resolve_value_ref(vm.get_reg_value(self.right))
+            .map(RuntimeValue::from)?;
 
         let value = binary(vm, &self.op, left, right)?;
         vm.set_reg_value(self.dst, value);
@@ -99,8 +103,12 @@ impl VMEvaluation for VMComparison {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let left = vm.resolve_value_ref(vm.get_reg_value(self.left))?;
-        let right = vm.resolve_value_ref(vm.get_reg_value(self.right))?;
+        let left = vm
+            .resolve_value_ref(vm.get_reg_value(self.left))
+            .map(RuntimeValue::from)?;
+        let right = vm
+            .resolve_value_ref(vm.get_reg_value(self.right))
+            .map(RuntimeValue::from)?;
 
         let value = comparison(&self.op, left, right)?;
         vm.set_reg_value(self.dst, value);
@@ -118,7 +126,9 @@ impl VMEvaluation for VMBoolean {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let left = vm.resolve_value_ref(vm.get_reg_value(self.left))?;
+        let left = vm
+            .resolve_value_ref(vm.get_reg_value(self.left))
+            .map(RuntimeValue::from)?;
 
         if let RuntimeValue::Bool(x) = &left {
             if BooleanOperator::And == self.op && !*x {
@@ -130,7 +140,9 @@ impl VMEvaluation for VMBoolean {
             }
         }
 
-        let right = vm.resolve_value_ref(vm.get_reg_value(self.right))?;
+        let right = vm
+            .resolve_value_ref(vm.get_reg_value(self.right))
+            .map(RuntimeValue::from)?;
         vm.set_reg_value(self.dst, boolean(&self.op, left, right)?);
 
         Ok(TerminateValue::None)

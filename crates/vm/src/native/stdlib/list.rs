@@ -3,7 +3,7 @@ use crate::{
     error::RuntimeError,
     native::{
         NativeFunction,
-        utils::{expect_num_args, pop_or_null, resolve_int, resolve_list, resolve_list_mut},
+        utils::{expect_num_args, pop_or_null, resolve_int, resolve_list, update_list_mut},
     },
     value::{GcVec, RuntimeValue, ValueSlot},
 };
@@ -115,16 +115,17 @@ impl NativeFunction for ListRawRemove {
         expect_num_args(&args, &[2])?;
 
         let index = resolve_int(env, pop_or_null(&mut args))?;
-        let list = resolve_list_mut(env, pop_or_null(&mut args))?;
 
-        if index > 0 && (index as usize) < list.len() {
-            let value = list.remove(index as usize);
-            Ok(RuntimeValue::Option(Some(ValueSlot::new(
-                RuntimeValue::from(value),
-            ))))
-        } else {
-            Ok(RuntimeValue::Option(None))
-        }
+        update_list_mut(env, &mut pop_or_null(&mut args), |list| {
+            if index > 0 && (index as usize) < list.len() {
+                let value = list.remove(index as usize);
+                Ok(RuntimeValue::Option(Some(ValueSlot::new(
+                    RuntimeValue::from(value),
+                ))))
+            } else {
+                Ok(RuntimeValue::Option(None))
+            }
+        })
     }
 }
 
@@ -140,13 +141,14 @@ impl NativeFunction for ListRawInsert {
 
         let value = pop_or_null(&mut args);
         let index = resolve_int(env, pop_or_null(&mut args))?;
-        let list = resolve_list_mut(env, pop_or_null(&mut args))?;
 
-        if index > 0 && (index as usize) < list.len() {
-            list.insert(index as usize, value.into());
-            Ok(RuntimeValue::Bool(false))
-        } else {
-            Ok(RuntimeValue::Bool(false))
-        }
+        update_list_mut(env, &mut pop_or_null(&mut args), |list| {
+            if index > 0 && (index as usize) < list.len() {
+                list.insert(index as usize, value.into());
+                Ok(RuntimeValue::Bool(false))
+            } else {
+                Ok(RuntimeValue::Bool(false))
+            }
+        })
     }
 }

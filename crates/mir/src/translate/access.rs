@@ -198,12 +198,18 @@ impl MirLowering for AstScope {
 impl MirLowering for AstIndex {
     #[instrument(skip_all)]
     fn lower(
-        self,
+        mut self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
+        if self.panic
+            && let AstNodeType::IndexAccess(x) = &mut self.base.node_type
+        {
+            x.panic = true
+        }
+
         if let Some(overloaded) = env.handle_operator_overloads(
             scope,
             span,

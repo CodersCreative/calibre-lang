@@ -85,7 +85,12 @@ impl ExternFunction {
 
         for (param, value) in self.parameters.iter().zip(args) {
             match &param {
-                x if !x.is_ffi() => match (env.resolve_value_ref(value).unwrap_or_default(), x) {
+                x if !x.is_ffi() => match (
+                    env.resolve_value_ref(value)
+                        .map(RuntimeValue::from)
+                        .unwrap_or_default(),
+                    x,
+                ) {
                     (RuntimeValue::Str(x), MirDataType::Str) => {
                         arg_types.push(Type::pointer());
                         let value = CString::new(x.as_str())
@@ -168,7 +173,11 @@ impl ExternFunction {
                         arg_types.push(Type::pointer());
                         let mut bytes = Vec::new();
                         for item in list.0.iter() {
-                            match env.resolve_value_ref(&item.get()).unwrap_or_default() {
+                            match env
+                                .resolve_value_ref(&item.get())
+                                .map(RuntimeValue::from)
+                                .unwrap_or_default()
+                            {
                                 RuntimeValue::UInt(x) => bytes.push(x as u8),
                                 RuntimeValue::Int(x) => bytes.push(x as u8),
                                 RuntimeValue::Float(x) => bytes.push(x as u8),
@@ -221,7 +230,10 @@ impl ExternFunction {
                 },
                 MirDataType::FfiType(x) => {
                     arg_types.push(Self::type_to_libffi_type(param));
-                    let value = env.resolve_value_ref(value).unwrap_or_default();
+                    let value = env
+                        .resolve_value_ref(value)
+                        .map(RuntimeValue::from)
+                        .unwrap_or_default();
                     let arg = match (x, value) {
                         (
                             ParserFfiInnerType::U8 | ParserFfiInnerType::UChar,

@@ -53,7 +53,9 @@ impl VMEvaluation for VMDeref {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let out = vm.resolve_value_ref(vm.get_reg_value(self.value))?;
+        let out = vm
+            .resolve_value_ref(vm.get_reg_value(self.value))
+            .map(RuntimeValue::from)?;
         vm.set_reg_value(self.dst, out);
         Ok(TerminateValue::None)
     }

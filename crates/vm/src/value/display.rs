@@ -1,7 +1,7 @@
 use super::*;
 
 impl RuntimeValue {
-    pub fn display(&self, vm: &mut VM) -> String {
+    pub fn display(&self, vm: &VM) -> String {
         match self {
             Self::Str(x) => format!("{}", x),
             Self::Char(x) => format!("{}", x),
@@ -11,13 +11,12 @@ impl RuntimeValue {
             Self::Byte(x) => format!("{}", x),
             Self::Ptr(x) => format!("{:x}", x),
             Self::Int(x) => format!("{}", x),
-            Self::Ref(_) | Self::RegRef { .. } => {
-                if let Ok(x) = vm.resolve_value_ref(self) {
-                    x.display(vm)
-                } else {
-                    self.to_string()
-                }
-            }
+            Self::Ref(_) | Self::RegRef { .. } => match vm.resolve_value_ref(self) {
+                Ok(SlotOrRuntimeValue::Owned(x)) => x.display(vm),
+                Ok(SlotOrRuntimeValue::Value(x)) => x.display(vm),
+                Ok(SlotOrRuntimeValue::Slot(x)) => x.get().display(vm),
+                Err(_) => self.to_string(),
+            },
             Self::GcRef(x) => x.get().display(vm),
             Self::HashMap(map) => {
                 let mut parts = Vec::new();

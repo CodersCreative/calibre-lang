@@ -114,7 +114,7 @@ impl NativeFunction for OkFn {
         expect_num_args(&args, &[1])?;
 
         Ok(RuntimeValue::Result(Ok(ValueSlot::new(
-            env.resolve_value_ref(&pop_or_null(&mut args))?,
+            env.resolve_value(pop_or_null(&mut args))?,
         ))))
     }
 }
@@ -162,7 +162,7 @@ impl NativeFunction for SomeFn {
         expect_num_args(&args, &[1])?;
 
         Ok(RuntimeValue::Option(Some(ValueSlot::new(
-            env.resolve_value_ref(&pop_or_null(&mut args))?,
+            env.resolve_value(pop_or_null(&mut args))?,
         ))))
     }
 }

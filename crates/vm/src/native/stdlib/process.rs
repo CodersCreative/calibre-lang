@@ -27,7 +27,9 @@ fn to_str_list(env: &VM, value: RuntimeValue) -> Result<Vec<Ustr>, RuntimeError>
 
     let mut out = Vec::with_capacity(values.0.len());
     for value in values.0.iter() {
-        let value = env.resolve_value_ref(&value.get())?;
+        let value = env
+            .resolve_value_ref(&value.get())
+            .map(RuntimeValue::from)?;
         match value {
             RuntimeValue::Str(v) => out.push(v),
             other => {
@@ -56,7 +58,11 @@ fn resolve_field(
     key: &str,
 ) -> Result<Option<RuntimeValue>, RuntimeError> {
     field(map, key)
-        .map(|value| env.resolve_value_ref(&value).map(Some))
+        .map(|value| {
+            env.resolve_value_ref(&value)
+                .map(RuntimeValue::from)
+                .map(Some)
+        })
         .unwrap_or(Ok(None))
 }
 
@@ -249,7 +255,7 @@ impl NativeFunction for ProcessRawExec {
     fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let mut parsed = None;
         for arg in args {
-            let value = env.resolve_value_ref(&arg)?;
+            let value = env.resolve_value_ref(&arg).map(RuntimeValue::from)?;
             if let RuntimeValue::Aggregate(_, map) = &value
                 && map.as_ref().0.get("command").is_some()
             {

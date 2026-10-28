@@ -75,7 +75,7 @@ impl VM {
         args: Vec<RuntimeValue>,
         get_result: bool,
     ) -> Result<RuntimeValue, RuntimeError> {
-        match self.resolve_value_ref(&callable)? {
+        match self.resolve_value_ref(&callable).map(RuntimeValue::from)? {
             RuntimeValue::Function { name, captures } => {
                 let func = self.resolve_function_by_name(&name)?;
 
@@ -367,7 +367,7 @@ impl VM {
             if value.is_callable() {
                 value.clone()
             } else {
-                self.resolve_value_ref(value)?
+                self.resolve_value_ref(value).map(RuntimeValue::from)?
             }
         };
 

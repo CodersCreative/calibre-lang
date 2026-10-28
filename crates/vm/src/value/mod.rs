@@ -195,6 +195,40 @@ dyn_hash::hash_trait_object!(HostInner);
 
 pub type Host = Arc<Mutex<dyn HostInner + Send>>;
 
+#[derive(Clone, Debug)]
+pub enum SlotOrRuntimeValue<'a> {
+    Slot(ValueSlot),
+    Value(&'a RuntimeValue),
+    Owned(RuntimeValue),
+}
+
+impl<'a> From<SlotOrRuntimeValue<'a>> for RuntimeValue {
+    fn from(value: SlotOrRuntimeValue) -> Self {
+        match value {
+            SlotOrRuntimeValue::Slot(x) => RuntimeValue::from(x),
+            SlotOrRuntimeValue::Value(x) => x.clone(),
+            SlotOrRuntimeValue::Owned(x) => x,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum SlotOrRuntimeValueMut<'a> {
+    Slot(ValueSlot),
+    Value(&'a mut RuntimeValue),
+    Owned(RuntimeValue),
+}
+
+impl<'a> From<SlotOrRuntimeValueMut<'a>> for RuntimeValue {
+    fn from(value: SlotOrRuntimeValueMut) -> Self {
+        match value {
+            SlotOrRuntimeValueMut::Slot(x) => RuntimeValue::from(x),
+            SlotOrRuntimeValueMut::Value(x) => x.clone(),
+            SlotOrRuntimeValueMut::Owned(x) => x,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub enum RuntimeValue {
     #[default]
