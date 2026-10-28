@@ -101,7 +101,7 @@ impl ExternFunction {
 
                     max_align = max_align.max(align);
                     let padding = (align - (offset % align)) % align;
-                    
+
                     if padding > 0 {
                         bytes.extend(std::iter::repeat_n(0u8, padding));
                         offset += padding;

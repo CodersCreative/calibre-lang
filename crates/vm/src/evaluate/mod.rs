@@ -152,7 +152,6 @@ impl VM {
             MirDataType::List(inner) => {
                 if let RuntimeValue::List(items) = value {
                     items
-                        .as_ref()
                         .0
                         .iter()
                         .all(|item| self.runtime_matches_type(&item.get(), inner))

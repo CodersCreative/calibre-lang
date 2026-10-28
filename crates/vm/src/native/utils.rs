@@ -9,7 +9,10 @@ use crate::{
 };
 use calibre_parser::{
     Span,
-    ast::types::{ParserDataType, ParserInnerType},
+    ast::{
+        RefMutability,
+        types::{ParserDataType, ParserInnerType},
+    },
 };
 use std::ops::Range;
 use std::sync::Arc;
@@ -163,7 +166,7 @@ pub fn resolve_mutex(env: &VM, value: RuntimeValue) -> Result<Arc<MutexInner>, R
 // Collections
 
 #[inline]
-pub fn resolve_list(env: &mut VM, value: RuntimeValue) -> Result<Arc<GcVec>, RuntimeError> {
+pub fn resolve_list(env: &mut VM, value: RuntimeValue) -> Result<GcVec, RuntimeError> {
     let resolved = env.resolve_value(value)?;
     if let RuntimeValue::List(lst) = resolved {
         Ok(lst)
@@ -171,6 +174,25 @@ pub fn resolve_list(env: &mut VM, value: RuntimeValue) -> Result<Arc<GcVec>, Run
         Err(RuntimeError::UnexpectedTypeInConversion {
             value: Box::new(resolved),
             target_type: ParserInnerType::List(Box::new(ParserDataType::auto(Span::default()))),
+        })
+    }
+}
+
+#[inline]
+pub fn resolve_list_mut(env: &mut VM, value: RuntimeValue) -> Result<&mut GcVec, RuntimeError> {
+    // TODO Replace with one that returns &mut RuntimeValue
+    let resolved = env.resolve_value(value)?;
+    if let RuntimeValue::List(lst) = resolved {
+        todo!()
+    } else {
+        Err(RuntimeError::UnexpectedTypeInConversion {
+            value: Box::new(resolved),
+            target_type: ParserInnerType::Ref(
+                Box::new(ParserDataType::from(ParserInnerType::List(Box::new(
+                    ParserDataType::auto(Span::default()),
+                )))),
+                RefMutability::MutRef,
+            ),
         })
     }
 }

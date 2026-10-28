@@ -1,5 +1,8 @@
 use crate::{
-    VM, error::RuntimeError, native::NativeFunction, value::{GcMap, RuntimeValue, ValueSlot},
+    VM,
+    error::RuntimeError,
+    native::NativeFunction,
+    value::{GcMap, RuntimeValue, ValueSlot},
 };
 use calibre_parser::ast::{ObjectMap, types::ParserInnerType};
 use std::io::Write;
@@ -261,7 +264,9 @@ impl NativeFunction for ProcessRawExec {
 
         let result = match execute_raw(options) {
             Ok(value) => RuntimeValue::Result(Ok(ValueSlot::new(value))),
-            Err(err) => RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(Ustr::from(&err))))),
+            Err(err) => {
+                RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(Ustr::from(&err)))))
+            }
         };
 
         Ok(result)

@@ -1,8 +1,12 @@
 use crate::{
-    TaskState, VM, error::RuntimeError, evaluate::calling::FunctionArgs, native::{
+    TaskState, VM,
+    error::RuntimeError,
+    evaluate::calling::FunctionArgs,
+    native::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null},
-    }, value::{RuntimeValue, ValueSlot},
+    },
+    value::{RuntimeValue, ValueSlot},
 };
 use calibre_lir::VariableKey;
 use std::{fmt::Debug, sync::Arc};

@@ -626,7 +626,6 @@ dependencies = [
  "rustc-hash",
  "serde",
  "sha2",
- "smallvec",
  "socket2",
  "thiserror",
  "tracing",

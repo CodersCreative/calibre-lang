@@ -1,8 +1,11 @@
 use crate::{
-    VM, error::RuntimeError, native::{
+    VM,
+    error::RuntimeError,
+    native::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null, resolve_host, resolve_int, resolve_str},
-    }, value::{RuntimeValue, ValueSlot},
+    },
+    value::{RuntimeValue, ValueSlot},
 };
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{Arc, OnceLock};
@@ -145,9 +148,9 @@ impl NativeFunction for HttpRequestTry {
             Ok(text) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::Str(
                 Ustr::from(&text),
             ))))),
-            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
-                Ustr::from(&e.to_string()),
-            ))))),
+            Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(
+                RuntimeValue::Str(Ustr::from(&e.to_string())),
+            )))),
         }
     }
 }

@@ -1,8 +1,11 @@
 use crate::{
-    VM, error::RuntimeError, native::{
+    VM,
+    error::RuntimeError,
+    native::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null, resolve_str},
-    }, value::{RuntimeValue, ValueSlot},
+    },
+    value::{RuntimeValue, ValueSlot},
 };
 use regex::Regex;
 use ustr::Ustr;

@@ -167,7 +167,7 @@ impl ExternFunction {
                     (RuntimeValue::List(list), MirDataType::Ptr(_)) => {
                         arg_types.push(Type::pointer());
                         let mut bytes = Vec::new();
-                        for item in list.as_ref().0.iter() {
+                        for item in list.0.iter() {
                             match env.resolve_value_ref(&item.get()).unwrap_or_default() {
                                 RuntimeValue::UInt(x) => bytes.push(x as u8),
                                 RuntimeValue::Int(x) => bytes.push(x as u8),

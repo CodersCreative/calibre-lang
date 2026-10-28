@@ -101,6 +101,7 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<VariableKey, InlineFn>)
         | MiddleNodeType::IndexAccess(MirIndex {
             base: left,
             index: right,
+            ..
         })
         | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
         | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. })

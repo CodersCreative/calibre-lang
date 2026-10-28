@@ -1,9 +1,10 @@
 use crate::{
-    VM, error::RuntimeError, value::{BIG_PRECISION, GcVec, RuntimeValue, ValueSlot},
+    VM,
+    error::RuntimeError,
+    value::{BIG_PRECISION, GcVec, RuntimeValue, ValueSlot},
 };
 use astro_float::BigFloat;
 use calibre_lir::MirDataType;
-use std::sync::Arc;
 use ustr::Ustr;
 
 impl RuntimeValue {
@@ -14,6 +15,10 @@ impl RuntimeValue {
     ) -> Result<RuntimeValue, RuntimeError> {
         if matches!(data_type, MirDataType::Dynamic) {
             return Ok(self);
+        }
+
+        if matches!(data_type, MirDataType::Str) {
+            return Ok(RuntimeValue::Str(Ustr::from(&self.display(env))));
         }
 
         self = env.resolve_value(self)?;
@@ -151,18 +156,18 @@ impl RuntimeValue {
                 Ok(RuntimeValue::Char(ch))
             }
             (RuntimeValue::Str(x), MirDataType::List(t)) if **t == MirDataType::Str => {
-                Ok(RuntimeValue::List(Arc::new(GcVec::new(
+                Ok(RuntimeValue::List(GcVec::new(
                     x.chars()
                         .map(|x| RuntimeValue::Str(Ustr::from(&x.to_string())))
                         .collect::<Vec<RuntimeValue>>(),
-                ))))
+                )))
             }
             (RuntimeValue::Str(x), MirDataType::List(t)) if **t == MirDataType::Char => {
-                Ok(RuntimeValue::List(Arc::new(GcVec::new(
+                Ok(RuntimeValue::List(GcVec::new(
                     x.chars()
                         .map(RuntimeValue::Char)
                         .collect::<Vec<RuntimeValue>>(),
-                ))))
+                )))
             }
             (RuntimeValue::Ptr(id), MirDataType::Ptr(_)) => Ok(RuntimeValue::Ptr(id)),
             (RuntimeValue::Ptr(x), MirDataType::Bool) => Ok(RuntimeValue::Bool(x > 0)),
@@ -193,15 +198,15 @@ impl RuntimeValue {
             (RuntimeValue::List(data), MirDataType::List(t)) => {
                 let mut lst = Vec::new();
 
-                for d in data.as_ref().0.iter() {
+                for d in data.0.iter() {
                     lst.push(RuntimeValue::from(d.clone()).convert(env, t)?);
                 }
 
-                Ok(RuntimeValue::List(Arc::new(GcVec::new(lst))))
+                Ok(RuntimeValue::List(GcVec::new(lst)))
             }
             (x, MirDataType::List(t)) => {
                 let x = x.convert(env, t)?;
-                Ok(RuntimeValue::List(Arc::new(GcVec::new(vec![x]))))
+                Ok(RuntimeValue::List(GcVec::new(vec![x])))
             }
             (RuntimeValue::Option(x), MirDataType::Option(t)) => {
                 if let Some(x) = x {

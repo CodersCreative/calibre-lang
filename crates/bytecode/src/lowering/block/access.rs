@@ -74,7 +74,15 @@ impl VMLowering for LirIndex {
         let index = env.lower_node(*self.index, span);
         let value = env.lower_node(*self.base, span);
         let dst = env.alloc_reg();
-        env.emit(VMInstruction::Index(VMIndex { dst, value, index }), span);
+        env.emit(
+            VMInstruction::Index(VMIndex {
+                dst,
+                value,
+                index,
+                panic: self.panic,
+            }),
+            span,
+        );
         dst
     }
 }

@@ -1,11 +1,13 @@
 use crate::{
-    VM, error::RuntimeError, native::{
+    VM,
+    error::RuntimeError,
+    native::{
         NativeFunction,
-        utils::{expect_num_args, pop_or_null, resolve_int, resolve_list},
-    }, value::{GcVec, RuntimeValue, ValueSlot},
+        utils::{expect_num_args, pop_or_null, resolve_int, resolve_list, resolve_list_mut},
+    },
+    value::{GcVec, RuntimeValue, ValueSlot},
 };
 use std::cmp::Ordering;
-use std::sync::Arc;
 
 fn compare_callback_result(env: &VM, result: RuntimeValue) -> Result<Ordering, RuntimeError> {
     match env.resolve_value(result)? {
@@ -29,16 +31,9 @@ impl NativeFunction for ListSortBy {
         expect_num_args(&args, &[2])?;
 
         let comparator = pop_or_null(&mut args);
-        let list = resolve_list(env, pop_or_null(&mut args))?;
 
-        let mut list: Vec<RuntimeValue> = match Arc::try_unwrap(list) {
-            Ok(gc_vec) => gc_vec.0.into_iter().map(RuntimeValue::from).collect(),
-            Err(arc) => arc
-                .0
-                .iter()
-                .map(|v| RuntimeValue::from(v.clone()))
-                .collect(),
-        };
+        let list = resolve_list(env, pop_or_null(&mut args))?;
+        let mut list: Vec<RuntimeValue> = list.0.into_iter().map(RuntimeValue::from).collect();
 
         let mut compare_error = None;
         list.sort_by(|a, b| {
@@ -61,7 +56,7 @@ impl NativeFunction for ListSortBy {
             return Err(err);
         }
 
-        Ok(RuntimeValue::List(Arc::new(GcVec::new(list))))
+        Ok(RuntimeValue::List(GcVec::new(list)))
     }
 }
 
@@ -98,9 +93,9 @@ impl NativeFunction for ListBinarySearchBy {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid,
                 Ordering::Equal => {
-                    return Ok(RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::Int(
-                        mid as isize,
-                    )))));
+                    return Ok(RuntimeValue::Option(Some(ValueSlot::new(
+                        RuntimeValue::Int(mid as isize),
+                    ))));
                 }
             }
         }
@@ -120,15 +115,13 @@ impl NativeFunction for ListRawRemove {
         expect_num_args(&args, &[2])?;
 
         let index = resolve_int(env, pop_or_null(&mut args))?;
-
-        let mut list = resolve_list(env, pop_or_null(&mut args))?;
-        let list = Arc::make_mut(&mut list);
+        let list = resolve_list_mut(env, pop_or_null(&mut args))?;
 
         if index > 0 && (index as usize) < list.len() {
             let value = list.remove(index as usize);
-            Ok(RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::from(
-                value,
-            )))))
+            Ok(RuntimeValue::Option(Some(ValueSlot::new(
+                RuntimeValue::from(value),
+            ))))
         } else {
             Ok(RuntimeValue::Option(None))
         }
@@ -147,9 +140,7 @@ impl NativeFunction for ListRawInsert {
 
         let value = pop_or_null(&mut args);
         let index = resolve_int(env, pop_or_null(&mut args))?;
-
-        let mut list = resolve_list(env, pop_or_null(&mut args))?;
-        let list = Arc::make_mut(&mut list);
+        let list = resolve_list_mut(env, pop_or_null(&mut args))?;
 
         if index > 0 && (index as usize) < list.len() {
             list.insert(index as usize, value.into());

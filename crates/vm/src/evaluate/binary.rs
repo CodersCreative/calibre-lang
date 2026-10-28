@@ -1,6 +1,10 @@
 use crate::{
-    VM, error::RuntimeError, evaluate::instruction::VMEvaluation, value::{
-        RuntimeValue, TerminateValue, ValueSlot, operation::{binary, boolean, comparison},
+    VM,
+    error::RuntimeError,
+    evaluate::instruction::VMEvaluation,
+    value::{
+        RuntimeValue, TerminateValue, ValueSlot,
+        operation::{binary, boolean, comparison},
     },
 };
 use calibre_bytecode::{
@@ -39,9 +43,9 @@ impl VMEvaluation for VMAs {
             },
             AsFailureMode::Result => match conversion {
                 Ok(value) => RuntimeValue::Result(Ok(ValueSlot::new(value))),
-                Err(err) => RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(Ustr::from(
-                    &err.to_string(),
-                ))))),
+                Err(err) => RuntimeValue::Result(Err(ValueSlot::new(RuntimeValue::Str(
+                    Ustr::from(&err.to_string()),
+                )))),
             },
         };
 

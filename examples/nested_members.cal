@@ -9,8 +9,8 @@ impl Stack {
     // if self.top_of_stack > 29 => return false;
 
     self.top_of_stack += 1;
-    self.data[self.top_of_stack]! := some(value);
-    
+    self.data[self.top_of_stack] := some(value);
+    print(self);
     return true
   }
 }

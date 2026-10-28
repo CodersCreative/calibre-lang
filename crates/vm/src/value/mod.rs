@@ -74,7 +74,6 @@ impl From<&ValueSlot> for RuntimeValue {
     }
 }
 
-
 impl From<RuntimeValue> for ValueSlot {
     fn from(value: RuntimeValue) -> Self {
         Self::new(value)
@@ -218,7 +217,7 @@ pub enum RuntimeValue {
         frame: usize,
         reg: Reg,
     },
-    List(Arc<GcVec>),
+    List(GcVec),
     Option(Option<ValueSlot>),
     Result(Result<ValueSlot, ValueSlot>),
     Channel(Arc<ChannelInner>),
@@ -248,7 +247,7 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
         match self {
             RuntimeValue::Aggregate(_, map) => map.as_ref().accept(visitor),
             RuntimeValue::Enum(_, _, Some(x)) => x.accept(visitor),
-            RuntimeValue::List(x) => x.as_ref().accept(visitor),
+            RuntimeValue::List(x) => x.accept(visitor),
             RuntimeValue::Option(Some(x)) => x.accept(visitor),
             RuntimeValue::Result(Ok(x)) => x.accept(visitor),
             RuntimeValue::Result(Err(x)) => x.accept(visitor),

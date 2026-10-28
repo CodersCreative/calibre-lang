@@ -267,7 +267,7 @@ impl From<&str> for RuntimeValue {
 impl<T: Into<RuntimeValue>> From<Vec<T>> for RuntimeValue {
     fn from(value: Vec<T>) -> Self {
         let vec = value.into_iter().map(|v| v.into()).collect();
-        Self::List(Arc::new(GcVec::new(vec)))
+        Self::List(GcVec::new(vec))
     }
 }
 
@@ -550,13 +550,11 @@ impl<T: TryFrom<RuntimeValue, Error = RuntimeError>> TryFrom<RuntimeValue> for V
 
     fn try_from(value: RuntimeValue) -> Result<Self, Self::Error> {
         match value {
-            RuntimeValue::List(gc_vec) => {
-                let vec = gc_vec.as_ref();
-                vec.0
-                    .iter()
-                    .map(|v| T::try_from(RuntimeValue::from(v.clone())))
-                    .collect()
-            }
+            RuntimeValue::List(vec) => vec
+                .0
+                .iter()
+                .map(|v| T::try_from(RuntimeValue::from(v.clone())))
+                .collect(),
             _ => Err(RuntimeError::UnexpectedTypeInConversion {
                 value: Box::new(value),
                 target_type: ParserInnerType::Str,

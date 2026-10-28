@@ -1,5 +1,8 @@
 use crate::{
-    VM, error::RuntimeError, evaluate::instruction::VMEvaluation, value::{RuntimeValue, TerminateValue},
+    VM,
+    error::RuntimeError,
+    evaluate::instruction::VMEvaluation,
+    value::{RuntimeValue, TerminateValue},
 };
 use calibre_bytecode::{
     VMBlock,

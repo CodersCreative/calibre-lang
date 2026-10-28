@@ -87,6 +87,10 @@ pub enum RuntimeError {
     ExpectedIntIndexFound {
         found: Box<RuntimeValue>,
     },
+    InvalidIndex {
+        target: Box<RuntimeValue>,
+        index: Box<RuntimeValue>,
+    },
     // Member access type errors (codes 450-459)
     UnexpectedTypeInMemberAccess {
         target: Box<RuntimeValue>,
@@ -228,6 +232,12 @@ impl std::fmt::Display for RuntimeError {
             RuntimeError::UnexpectedTypeInIndexAccess { target, index } => {
                 write!(f, "Unexpected type in index access: {target:?}[{index:?}]")
             }
+            RuntimeError::InvalidIndex { target, index } => {
+                write!(
+                    f,
+                    "Invalid index access when using panic: {target:?}[{index:?}]"
+                )
+            }
             RuntimeError::ExpectedListOrStrFound { found } => {
                 write!(
                     f,
@@ -354,6 +364,7 @@ impl calibre_parser::CalibreError for RuntimeError {
             Self::ExpectedListOrStrFound { .. } => "V041",
             Self::ExpectedAggregateFound { .. } => "V042",
             Self::ExpectedIntIndexFound { .. } => "V043",
+            Self::InvalidIndex { .. } => "V044",
             // Member access type errors (codes V050-V059)
             Self::UnexpectedTypeInMemberAccess { .. } => "V050",
             Self::ExpectedStructOrAggregateFound { .. } => "V051",
@@ -466,6 +477,10 @@ impl calibre_parser::CalibreError for RuntimeError {
             // Index access type errors
             Self::UnexpectedTypeInIndexAccess { .. } => Some(
                 "Ensure the target is a list, string, or aggregate and the index is an integer."
+                    .to_string(),
+            ),
+            Self::InvalidIndex { .. } => Some(
+                "Ensure that there is some form of bounds checking before using '!' with an index operation."
                     .to_string(),
             ),
             Self::ExpectedListOrStrFound { .. } => {

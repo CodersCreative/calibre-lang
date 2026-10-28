@@ -68,11 +68,14 @@ impl MirTypable for MirIndex {
         };
 
         data_type.map(|data_type| {
-            if let Some(ref_mutability) = ref_mutability {
-                MirDataType::Option(Box::new(MirDataType::Ref(
-                    Box::new(data_type),
-                    ref_mutability,
-                )))
+            let data_type = if let Some(ref_mutability) = ref_mutability {
+                MirDataType::Ref(Box::new(data_type), ref_mutability)
+            } else {
+                data_type
+            };
+
+            if self.panic {
+                data_type
             } else {
                 MirDataType::Option(Box::new(data_type))
             }

@@ -1,4 +1,4 @@
-use super::{super::VM};
+use super::super::VM;
 use crate::{
     VarName,
     error::RuntimeError,

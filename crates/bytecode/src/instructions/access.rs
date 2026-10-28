@@ -36,14 +36,18 @@ pub struct VMIndex {
     pub dst: Reg,
     pub value: Reg,
     pub index: Reg,
+    pub panic: bool,
 }
 
 impl Display for VMIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "%r{} = INDEX %r{}[%r{}]",
-            self.dst, self.value, self.index
+            "%r{} = INDEX %r{}[%r{}]{}",
+            self.dst,
+            self.value,
+            self.index,
+            if self.panic { "!" } else { "" }
         )
     }
 }

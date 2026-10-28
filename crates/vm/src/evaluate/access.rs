@@ -1,5 +1,9 @@
 use crate::{
-    VM, error::RuntimeError, evaluate::instruction::{VMEvaluation, resolve_slice_range}, native::stdlib::generator::GeneratorResumeFn, value::{GcVec, RuntimeValue, TerminateValue, ValueSlot, hashable::HashKey},
+    VM,
+    error::RuntimeError,
+    evaluate::instruction::{VMEvaluation, resolve_slice_range},
+    native::stdlib::generator::GeneratorResumeFn,
+    value::{GcVec, RuntimeValue, TerminateValue, ValueSlot, hashable::HashKey},
 };
 use calibre_bytecode::{
     VMBlock,
@@ -174,15 +178,10 @@ impl VMEvaluation for VMLoadMember {
                     )));
                 }
             }
-            RuntimeValue::Enum(_, _, Some(x)) if is_next_or_zero => {
-                RuntimeValue::GcRef(x)
-            }
-            RuntimeValue::Enum(_, _, Some(x)) => 
-                RuntimeValue::GcRef(x),
+            RuntimeValue::Enum(_, _, Some(x)) if is_next_or_zero => RuntimeValue::GcRef(x),
+            RuntimeValue::Enum(_, _, Some(x)) => RuntimeValue::GcRef(x),
             RuntimeValue::Enum(_, _, None) if is_next_or_zero => RuntimeValue::Null,
-            RuntimeValue::Option(Some(x)) if is_next_or_zero => {
-                RuntimeValue::GcRef(x)
-            }
+            RuntimeValue::Option(Some(x)) if is_next_or_zero => RuntimeValue::GcRef(x),
             RuntimeValue::Option(None) if is_next_or_zero => RuntimeValue::Null,
             RuntimeValue::Result(Ok(x)) | RuntimeValue::Result(Err(x))
                 if is_next_or_zero || member.as_str() == "ok" || member.as_str() == "err" =>
@@ -215,28 +214,18 @@ impl VMEvaluation for VMIndex {
         let target_val = vm.resolve_and_unwrap_values_ref(vm.get_reg_value(self.value))?;
         let index_val = vm.resolve_value_ref(vm.get_reg_value(self.index))?;
 
-        let val = match target_val {
+        let val: Option<ValueSlot> = match &target_val {
             RuntimeValue::List(list) => {
-                let items = &list.as_ref().0;
+                let items = &list.0;
                 match &index_val {
                     RuntimeValue::Range(start, end) => {
                         resolve_slice_range(items.len(), *start, *end)
                             .and_then(|(s, e)| items.get(s..e))
-                            .map(|x| {
-                                RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::List(Arc::new(
-                                    GcVec::from(x.to_vec()),
-                                )))))
-                            })
-                            .unwrap_or_else(|| RuntimeValue::Option(None))
+                            .map(|x| ValueSlot::new(RuntimeValue::List(GcVec::from(x.to_vec()))))
                     }
                     other => {
                         let resolved = resolve_element_index(items.len(), other)?;
-                        match resolved {
-                            Some(i) => RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::GcRef(
-                                items[i].clone(),
-                            )))),
-                            None => RuntimeValue::Option(None),
-                        }
+                        resolved.map(|i| ValueSlot::new(RuntimeValue::GcRef(items[i].clone())))
                     }
                 }
             }
@@ -248,38 +237,27 @@ impl VMEvaluation for VMIndex {
                     }
                 })?;
 
-                RuntimeValue::Option(
-                    map.map
-                        .get(&key)
-                        .map(|slot| ValueSlot::new(RuntimeValue::GcRef(slot.clone()))),
-                )
+                map.map
+                    .get(&key)
+                    .map(|slot| ValueSlot::new(RuntimeValue::GcRef(slot.clone())))
             }
             RuntimeValue::Range(start, end) => {
                 let len = (end - start).max(0) as usize;
                 match &index_val {
                     RuntimeValue::Range(slice_start, slice_end) => {
-                        resolve_slice_range(len, *slice_start, *slice_end)
-                            .map(|(s, e)| {
-                                RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::Range(
-                                    start + s as isize,
-                                    start + e as isize,
-                                ))))
-                            })
-                            .unwrap_or_else(|| RuntimeValue::Option(None))
+                        resolve_slice_range(len, *slice_start, *slice_end).map(|(s, e)| {
+                            ValueSlot::new(RuntimeValue::Range(
+                                start + s as isize,
+                                start + e as isize,
+                            ))
+                        })
                     }
                     other => {
                         let resolved = resolve_element_index(len, other)?;
-                        match resolved {
-                            Some(i) => {
-                                let num = start + i as isize;
-                                if num > end {
-                                    RuntimeValue::Option(None)
-                                } else {
-                                    RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::Int(num))))
-                                }
-                            }
-                            None => RuntimeValue::Option(None),
-                        }
+                        resolved.map(|i| {
+                            let num = start + i as isize;
+                            ValueSlot::new(RuntimeValue::Int(num))
+                        })
                     }
                 }
             }
@@ -290,36 +268,44 @@ impl VMEvaluation for VMIndex {
                         resolve_slice_range(chars.len(), *start, *end)
                             .and_then(|(s, e)| chars.get(s..e))
                             .map(|x| {
-                                RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::Str(Ustr::from(
+                                ValueSlot::new(RuntimeValue::Str(Ustr::from(
                                     &x.iter().collect::<String>(),
-                                )))))
+                                )))
                             })
-                            .unwrap_or_else(|| RuntimeValue::Option(None))
                     }
                     other => {
                         let resolved = resolve_element_index(chars.len(), other)?;
-                        match resolved.and_then(|i| chars.get(i)) {
-                            Some(&ch) => {
-                                RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::Char(ch))))
-                            }
-                            None => RuntimeValue::Option(None),
-                        }
+                        resolved
+                            .and_then(|i| chars.get(i))
+                            .map(|ch| ValueSlot::new(RuntimeValue::Char(*ch)))
                     }
                 }
             }
-            other => match &index_val {
+            _ => match &index_val {
                 RuntimeValue::Range(..) => {
                     return Err(RuntimeError::ExpectedListOrStrFound {
-                        found: Box::new(other),
+                        found: Box::new(target_val),
                     });
                 }
                 _ => {
                     return Err(RuntimeError::UnexpectedTypeInIndexAccess {
-                        target: Box::new(other),
+                        target: Box::new(target_val),
                         index: Box::new(index_val),
                     });
                 }
             },
+        };
+
+        let val = match val {
+            Some(x) if self.panic => RuntimeValue::GcRef(x),
+            Some(x) => RuntimeValue::Option(Some(x)),
+            _ if self.panic => {
+                return Err(RuntimeError::InvalidIndex {
+                    target: Box::new(target_val),
+                    index: Box::new(index_val),
+                });
+            }
+            _ => RuntimeValue::Option(None),
         };
 
         vm.set_reg_value(self.dst, val);

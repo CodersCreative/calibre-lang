@@ -120,27 +120,27 @@ pub fn comparison(
                 )),
             }
         }
-        (RuntimeValue::List(a), RuntimeValue::List(b), op) => match op {
-            ComparisonOperator::Equal => Ok(RuntimeValue::Bool(
-                a.0.len() == b.0.len()
-                    && a.0
-                        .iter()
-                        .zip(b.0.iter())
-                        .all(|(left, right)| eq_value(&left.get(), &right.get()).unwrap_or(false)),
-            )),
-            ComparisonOperator::NotEqual => Ok(RuntimeValue::Bool(
-                a.0.len() != b.0.len()
-                    || a.0
-                        .iter()
-                        .zip(b.0.iter())
-                        .any(|(left, right)| !eq_value(&left.get(), &right.get()).unwrap_or(false)),
-            )),
-            _ => Err(RuntimeError::Comparison(
-                Box::new(RuntimeValue::List(a)),
-                Box::new(RuntimeValue::List(b)),
-                *op,
-            )),
-        },
+        (RuntimeValue::List(a), RuntimeValue::List(b), op) => {
+            match op {
+                ComparisonOperator::Equal => Ok(RuntimeValue::Bool(
+                    a.0.len() == b.0.len()
+                        && a.0.iter().zip(b.0.iter()).all(|(left, right)| {
+                            eq_value(&left.get(), &right.get()).unwrap_or(false)
+                        }),
+                )),
+                ComparisonOperator::NotEqual => Ok(RuntimeValue::Bool(
+                    a.0.len() != b.0.len()
+                        || a.0.iter().zip(b.0.iter()).any(|(left, right)| {
+                            !eq_value(&left.get(), &right.get()).unwrap_or(false)
+                        }),
+                )),
+                _ => Err(RuntimeError::Comparison(
+                    Box::new(RuntimeValue::List(a)),
+                    Box::new(RuntimeValue::List(b)),
+                    *op,
+                )),
+            }
+        }
         (RuntimeValue::List(a), other, op) | (other, RuntimeValue::List(a), op) => match op {
             ComparisonOperator::Equal => {
                 Ok(RuntimeValue::Bool(matches!(other, RuntimeValue::List(_))))
@@ -507,7 +507,7 @@ impl RuntimeValue {
             }
             Self::List(data) => {
                 let mut data = data.clone();
-                Arc::make_mut(&mut data).push(self.into());
+                data.push(self.into());
                 Ok(Self::List(data))
             }
             _ => Err((self, rhs)),
@@ -529,7 +529,7 @@ impl RuntimeValue {
             }
             Self::List(data) => {
                 let mut data = data.clone();
-                Arc::make_mut(&mut data).push(rhs.into());
+                data.push(rhs.into());
                 Ok(Self::List(data))
             }
             _ => Err((self, rhs)),

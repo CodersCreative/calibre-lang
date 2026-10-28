@@ -1,5 +1,9 @@
 use crate::{
-    VM, error::RuntimeError, evaluate::instruction::VMEvaluation, native::stdlib::generator::GeneratorState, value::{GcMap, GcVec, RuntimeValue, TerminateValue, ValueSlot},
+    VM,
+    error::RuntimeError,
+    evaluate::instruction::VMEvaluation,
+    native::stdlib::generator::GeneratorState,
+    value::{GcMap, GcVec, RuntimeValue, TerminateValue, ValueSlot},
 };
 use calibre_bytecode::{
     VMBlock, VMLiteral,
@@ -126,7 +130,7 @@ impl VMEvaluation for VMRange {
                 RuntimeValue::Float(v) => Ok(v as isize),
                 RuntimeValue::Bool(v) => Ok(v as isize),
                 RuntimeValue::Char(v) => Ok(v as isize),
-                RuntimeValue::List(v) => Ok(v.as_ref().0.len() as isize),
+                RuntimeValue::List(v) => Ok(v.0.len() as isize),
                 RuntimeValue::Aggregate(_, v) => Ok(v.as_ref().0.0.len() as isize),
                 RuntimeValue::Str(v) => Ok(v.len() as isize),
                 RuntimeValue::Range(from, to) => Ok((to - from).max(0)),
@@ -165,7 +169,7 @@ impl VMEvaluation for VMList {
             .map(|item| vm.get_reg_value(*item).clone())
             .collect();
 
-        vm.set_reg_value(self.dst, RuntimeValue::List(Arc::new(GcVec::new(values))));
+        vm.set_reg_value(self.dst, RuntimeValue::List(GcVec::new(values)));
         Ok(TerminateValue::None)
     }
 }

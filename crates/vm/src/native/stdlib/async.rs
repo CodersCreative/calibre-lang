@@ -1,12 +1,16 @@
 use crate::{
-    VM, error::RuntimeError, native::{
+    VM,
+    error::RuntimeError,
+    native::{
         NativeFunction,
         utils::{
             expect_num_args, pop_or_null, resolve_channel, resolve_int, resolve_mutex,
             resolve_waitgroup,
         },
-    }, value::{
-        RuntimeValue, ValueSlot, spawn::{ChannelInner, MutexInner, WaitGroupInner},
+    },
+    value::{
+        RuntimeValue, ValueSlot,
+        spawn::{ChannelInner, MutexInner, WaitGroupInner},
     },
 };
 use std::sync::{Arc, atomic::Ordering};

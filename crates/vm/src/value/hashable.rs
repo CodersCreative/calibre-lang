@@ -132,9 +132,9 @@ impl TryFrom<RuntimeValue> for HashKey {
             RuntimeValue::Char(x) => Ok(Self::Char(x)),
             RuntimeValue::Str(x) => Ok(Self::Str(x)),
             RuntimeValue::List(lst) => {
-                let mut out = Vec::with_capacity(lst.as_ref().0.len());
+                let mut out = Vec::with_capacity(lst.0.len());
 
-                for v in lst.as_ref().0.iter() {
+                for v in lst.0.iter() {
                     out.push(HashKey::try_from(RuntimeValue::from(v.clone()))?);
                 }
 
@@ -191,9 +191,9 @@ impl From<HashKey> for RuntimeValue {
             HashKey::Big(s) => RuntimeValue::Str(s),
             HashKey::Ptr(p) => RuntimeValue::Ptr(p),
             HashKey::Range(a, b) => RuntimeValue::Range(a, b),
-            HashKey::List(values) => RuntimeValue::List(Arc::new(GcVec::new(
+            HashKey::List(values) => RuntimeValue::List(GcVec::new(
                 values.into_iter().map(RuntimeValue::from).collect(),
-            ))),
+            )),
             HashKey::Option(opt) => match opt {
                 Some(bx) => RuntimeValue::Option(Some(ValueSlot::new(RuntimeValue::from(*bx)))),
                 None => RuntimeValue::Option(None),

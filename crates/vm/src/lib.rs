@@ -10,7 +10,6 @@ use astro_float::Consts;
 use calibre_bytecode::{Reg, VMBlock, VMFunction, VMRegistry};
 use calibre_lir::{VariableKey, ast::BlockId};
 use rustc_hash::{FxHashMap, FxHashSet};
-use smallvec::SmallVec;
 use std::sync::{
     OnceLock,
     atomic::{AtomicBool, Ordering},
@@ -35,28 +34,6 @@ pub mod scheduler;
 pub mod value;
 pub mod variables;
 mod vm_lookup;
-
-#[derive(Debug, Clone)]
-pub enum RootBinding {
-    FrameReg { frame: usize, reg: Reg },
-    Ref(VariableKey),
-    RegRef { frame: usize, reg: Reg },
-}
-
-#[derive(Debug, Clone)]
-pub enum PathSegment {
-    Field(Ustr),
-    Index(usize),
-    Slice(usize, usize),
-    MapKey(HashKey),
-    Payload,
-}
-
-#[derive(Debug, Clone)]
-pub struct MutationHandle {
-    pub root: RootBinding,
-    pub path: SmallVec<[PathSegment; 4]>,
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct VMFrame {
@@ -542,12 +519,11 @@ impl VM {
         self.gc.in_flight.store(false, Ordering::Release);
     }
 
+    // Create a version of this that returns a &mut RuntimeValue
     #[inline]
     pub(crate) fn resolve_value(&self, value: RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
         match value {
-            RuntimeValue::Ref(_) | RuntimeValue::RegRef { .. } | RuntimeValue::MutexGuard(_) => {
-                self.resolve_value_ref(&value)
-            }
+            value if value.is_ref_like() => self.resolve_value_ref(&value),
             other => Ok(other),
         }
     }
@@ -640,7 +616,7 @@ impl VM {
         let mut seen = FxHashSet::default();
         let mut seen_refs = FxHashSet::default();
 
-        self.drop_runtime_value_inner_ref(&value, &mut seen,&mut seen_refs);
+        self.drop_runtime_value_inner_ref(&value, &mut seen, &mut seen_refs);
     }
 
     fn drop_runtime_value_inner_ref(
@@ -669,7 +645,7 @@ impl VM {
                 self.drop_runtime_value_inner_ref(&inner, seen, seen_regs);
             }
             RuntimeValue::List(list) => {
-                for item in list.as_ref().0.iter() {
+                for item in list.0.iter() {
                     self.drop_runtime_value_inner_ref(&item.get(), seen, seen_regs);
                 }
             }

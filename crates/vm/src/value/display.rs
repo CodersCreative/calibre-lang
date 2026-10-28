@@ -18,9 +18,7 @@ impl RuntimeValue {
                     self.to_string()
                 }
             }
-            Self::GcRef(x) => {
-                x.get().display(vm)
-            }
+            Self::GcRef(x) => x.get().display(vm),
             Self::HashMap(map) => {
                 let mut parts = Vec::new();
 
@@ -86,7 +84,8 @@ impl RuntimeValue {
                         txt.push_str(field_name);
                         txt.push_str(" : ");
 
-                        let indented = field_value.get()
+                        let indented = field_value
+                            .get()
                             .display(vm)
                             .lines()
                             .enumerate()

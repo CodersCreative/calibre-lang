@@ -198,22 +198,12 @@ impl MirLowering for AstScope {
 impl MirLowering for AstIndex {
     #[instrument(skip_all)]
     fn lower(
-        mut self,
+        self,
         env: &mut MiddleEnvironment,
         scope: ScopeId,
         span: Span,
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        if self.panic {
-            self.panic = false;
-            return AstNode::unwrap_or(
-                span,
-                AstNode::new(span, AstNodeType::IndexAccess(self)),
-                AstNode::call(span, AstNode::identifier(span, "panic"), Vec::new()),
-            )
-            .lower(env, scope, span, data_type);
-        }
-
         if let Some(overloaded) = env.handle_operator_overloads(
             scope,
             span,
@@ -230,6 +220,7 @@ impl MirLowering for AstIndex {
             MiddleNodeType::IndexAccess(MirIndex {
                 base: Box::new(self.base.lower_or_empty(env, scope, span, None)),
                 index: Box::new(self.index.lower_or_empty(env, scope, span, None)),
+                panic: self.panic,
             }),
             span,
         ))

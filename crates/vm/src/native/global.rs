@@ -1,8 +1,11 @@
 use crate::{
-    VM, error::RuntimeError, native::{
+    VM,
+    error::RuntimeError,
+    native::{
         NativeFunction,
         utils::{expect_num_args, first_or_null, panic_message_arg, pop_or_null, resolve_int},
-    }, value::{GcMap, RuntimeValue, ValueSlot},
+    },
+    value::{GcMap, RuntimeValue, ValueSlot},
 };
 use calibre_parser::ast::types::ParserInnerType;
 use std::{
@@ -128,9 +131,9 @@ impl NativeFunction for Wait {
         let val = resolve_int(env, pop_or_null(&mut args))? as u64;
         thread::sleep(Duration::from_millis(val));
 
-        Ok(RuntimeValue::Result(Ok(ValueSlot::new(RuntimeValue::UInt(
-            val as usize,
-        )))))
+        Ok(RuntimeValue::Result(Ok(ValueSlot::new(
+            RuntimeValue::UInt(val as usize),
+        ))))
     }
 }
 
@@ -216,7 +219,7 @@ impl NativeFunction for Len {
 
         Ok(RuntimeValue::UInt(
             match env.resolve_value(pop_or_null(&mut args))? {
-                RuntimeValue::List(data) => data.as_ref().0.len(),
+                RuntimeValue::List(data) => data.0.len(),
                 RuntimeValue::Aggregate(_, data) => data.as_ref().0.0.len(),
                 RuntimeValue::Range(from, to) => (to - from).max(0).unsigned_abs(),
                 RuntimeValue::Str(x) => x.len(),
