@@ -183,7 +183,6 @@ impl MirLowering for AstNode {
             AstNodeType::LoopDeclaration(x) => x.lower(env, scope, span, data_type),
 
             // Scopes
-            AstNodeType::ScopeAlias(x) => x.lower(env, scope, span, data_type),
             AstNodeType::ScopeDeclaration(x) => x.lower(env, scope, span, data_type),
 
             // Generator

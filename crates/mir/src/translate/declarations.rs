@@ -385,10 +385,10 @@ impl MirLowering for AstDeclareDestructure {
         body.extend(env.emit_destructure_statements(&tmp_ident, &self.pattern, span, true));
 
         AstScopeDef {
-            body: Some(body),
+            body,
             named: None,
             is_temp: true,
-            create_new_scope: Some(false),
+            create_new_scope: false,
             define: false,
             is_function_body: false,
         }

@@ -152,7 +152,6 @@ impl MiddleEnvironment {
             | AstNodeType::DestructureDeclaration { .. }
             | AstNodeType::DestructureAssignment { .. }
             | AstNodeType::TestDeclaration { .. }
-            | AstNodeType::ScopeAlias { .. }
             | AstNodeType::DataType { .. } => None,
             AstNodeType::Null
             | AstNodeType::Defer { .. }

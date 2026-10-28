@@ -315,15 +315,12 @@ pub fn template_call_parts(
                 .unwrap_or_else(|| "failed to parse template".into())
         })?;
 
-        let AstNodeType::ScopeDeclaration(scope) = parsed.node_type else {
+        let AstNodeType::ScopeDeclaration(mut scope) = parsed.node_type else {
             return Err("expected expression inside template".into());
         };
 
-        let mut body = scope
+        let node = scope
             .body
-            .ok_or_else(|| "expected expression inside template".to_string())?;
-
-        let node = body
             .drain(..1)
             .next()
             .ok_or_else(|| "expected expression inside template".to_string())?;

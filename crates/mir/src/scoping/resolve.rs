@@ -164,7 +164,7 @@ impl MiddleEnvironment {
                             body,
                             named: None,
                             is_temp: false,
-                            create_new_scope: Some(false),
+                            create_new_scope: false,
                             define: false,
                             is_function_body: false,
                         }),
@@ -173,9 +173,8 @@ impl MiddleEnvironment {
                     _ => program,
                 };
 
-                if let AstNodeType::ScopeDeclaration(AstScopeDef {
-                    body: Some(body), ..
-                }) = &mut program.node_type
+                if let AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) =
+                    &mut program.node_type
                 {
                     self.predeclare_nodes(scope, body);
                 }
@@ -222,10 +221,7 @@ impl MiddleEnvironment {
             });
         }
 
-        if let AstNodeType::ScopeDeclaration(AstScopeDef {
-            body: Some(body), ..
-        }) = &mut program.node_type
-        {
+        if let AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) = &mut program.node_type {
             self.predeclare_nodes(scope, body);
         }
 

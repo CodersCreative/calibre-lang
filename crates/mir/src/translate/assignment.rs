@@ -291,6 +291,6 @@ impl MirLowering for AstAssignDestructure {
         let mut body = vec![tmp_decl];
         body.extend(env.emit_destructure_statements(&tmp_ident, &self.pattern, span, false));
 
-        AstNode::new_temp_scope_with_create(body, Some(false)).lower(env, scope, span, None)
+        AstNode::new_temp_scope_with_create(body, false).lower(env, scope, span, None)
     }
 }

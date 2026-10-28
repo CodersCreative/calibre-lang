@@ -900,7 +900,7 @@ impl MirLowering for AstPipe {
                     let point: AstNode = point.into();
                     value = match point.node_type {
                         AstNodeType::ScopeDeclaration(AstScopeDef {
-                            body: Some(mut body),
+                            mut body,
                             named: None,
                             is_temp,
                             create_new_scope: _,
@@ -911,10 +911,10 @@ impl MirLowering for AstPipe {
 
                             AstNode {
                                 node_type: AstNodeType::ScopeDeclaration(AstScopeDef {
-                                    body: Some(body),
+                                    body,
                                     named: None,
                                     is_temp,
-                                    create_new_scope: Some(!keep_scope),
+                                    create_new_scope: !keep_scope,
                                     is_function_body,
                                     define,
                                 }),
@@ -924,10 +924,10 @@ impl MirLowering for AstPipe {
                         _ => AstNode::new(
                             span,
                             AstNodeType::ScopeDeclaration(AstScopeDef {
-                                body: Some(vec![var_dec, point]),
+                                body: vec![var_dec, point],
                                 named: None,
                                 is_temp: true,
-                                create_new_scope: Some(!keep_scope),
+                                create_new_scope: !keep_scope,
 
                                 is_function_body: false,
                                 define: false,

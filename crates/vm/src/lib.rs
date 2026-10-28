@@ -662,6 +662,24 @@ impl VM {
         }
     }
 
+    #[inline]
+    pub fn with_value<'a, T, F>(
+        &'a self,
+        value: &'a RuntimeValue,
+        func: F,
+    ) -> Result<T, RuntimeError>
+    where
+        F: FnOnce(&RuntimeValue) -> Result<T, RuntimeError>,
+    {
+        let resolved = self.resolve_value_ref(value)?;
+
+        match resolved {
+            SlotOrRuntimeValue::Value(x) => func(x),
+            SlotOrRuntimeValue::Owned(mut x) => func(&mut x),
+            SlotOrRuntimeValue::Slot(x) => func(&mut x.get()),
+        }
+    }
+
     #[instrument(skip_all)]
     pub(crate) fn resolve_value_mut<'a>(
         &'a mut self,

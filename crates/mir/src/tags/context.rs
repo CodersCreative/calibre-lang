@@ -3,6 +3,7 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::{MiddleScope, ScopeId},
+    symbols::resolve::ResolutionOptions,
     translate::MirLowering,
 };
 use calibre_parser::ast::{
@@ -123,17 +124,14 @@ impl MiddleEnvironment {
             }),
         )];
 
-        let mut body = match node.node_type {
-            AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) => body.unwrap_or_default(),
-            _ => vec![node],
-        };
+        let mut body = node.nodes();
         prefix.append(&mut body);
 
         AstScopeDef {
-            body: Some(prefix),
+            body: prefix,
             named: None,
             is_temp: false,
-            create_new_scope: Some(false),
+            create_new_scope: false,
             define: false,
             is_function_body: false,
         }
@@ -147,6 +145,19 @@ impl MiddleEnvironment {
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let span = node.span;
+
+        let ty = self.resolve_data_type(
+            scope,
+            &ParserDataType::object(span, "ExecContext"),
+            ResolutionOptions::typing(),
+        )?;
+        let _ = self.register_variable_with_temp_scope(
+            scope,
+            Ustr::from("current_context"),
+            ty,
+            VarType::Constant,
+            true,
+        )?;
 
         let Ok(scope_ref) = self.scoping.scope_or_err(scope) else {
             return node.lower(self, scope, span, data_type);
@@ -198,21 +209,18 @@ impl MiddleEnvironment {
                         ]),
                     }),
                 )),
-                declared: false,
+                declared: true,
             }),
         )];
 
-        let mut body = match node.node_type {
-            AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) => body.unwrap_or_default(),
-            _ => vec![node],
-        };
+        let mut body = node.nodes();
         nodes.append(&mut body);
 
         AstScopeDef {
-            body: Some(nodes),
+            body: nodes,
             named: None,
             is_temp: false,
-            create_new_scope: Some(false),
+            create_new_scope: false,
             define: false,
             is_function_body: false,
         }

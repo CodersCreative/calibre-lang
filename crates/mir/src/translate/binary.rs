@@ -338,13 +338,11 @@ impl MirLowering for AstComparison {
         let mut left_type = self
             .left
             .type_of(env, scope, span)
-            .or(data_type.clone())
             .unwrap_or(MirDataType::Dynamic);
 
         let mut right_type = self
             .right
             .type_of(env, scope, span)
-            .or(data_type.clone())
             .unwrap_or(MirDataType::Dynamic);
 
         if !env

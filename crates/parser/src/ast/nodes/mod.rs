@@ -27,7 +27,7 @@ use crate::{
             matching::{AstFnMatch, AstMatch},
             memory::{AstDeref, AstDrop, AstMove, AstRef},
             misc::{AstImport, AstParen, AstTag, AstTest},
-            scopes::{AstScopeAlias, AstScopeDef},
+            scopes::AstScopeDef,
             spawn::{AstSelect, AstSpawn},
             types::{AstImpl, AstType},
             unary::{AstNeg, AstNot},
@@ -139,9 +139,7 @@ impl AstNode {
 
     pub fn nodes(self) -> Vec<AstNode> {
         match self.node_type {
-            AstNodeType::ScopeDeclaration(AstScopeDef {
-                body: Some(items), ..
-            }) => items,
+            AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) => body,
             _ => vec![self],
         }
     }
@@ -164,10 +162,10 @@ impl AstNode {
     }
 
     pub fn new_temp_scope(body: Vec<AstNode>) -> AstNode {
-        Self::new_temp_scope_with_create(body, Some(true))
+        Self::new_temp_scope_with_create(body, true)
     }
 
-    pub fn new_temp_scope_with_create(body: Vec<AstNode>, create_new_scope: Option<bool>) -> Self {
+    pub fn new_temp_scope_with_create(body: Vec<AstNode>, create_new_scope: bool) -> Self {
         Self::new(
             if body.is_empty() {
                 Span::default()
@@ -175,7 +173,7 @@ impl AstNode {
                 Span::new_from_spans(body.first().unwrap().span, body.last().unwrap().span)
             },
             AstNodeType::ScopeDeclaration(AstScopeDef {
-                body: Some(body),
+                body,
                 named: None,
                 is_temp: true,
                 create_new_scope,
@@ -406,7 +404,7 @@ impl AstNode {
     pub fn rewrite_main_emits_to_returns(self) -> Self {
         match self.node_type {
             AstNodeType::ScopeDeclaration(AstScopeDef {
-                body: Some(body),
+                body,
                 create_new_scope,
                 is_temp,
                 named,
@@ -414,19 +412,17 @@ impl AstNode {
                 is_function_body,
             }) => AstNode {
                 node_type: AstNodeType::ScopeDeclaration(AstScopeDef {
-                    body: Some(
-                        body.into_iter()
-                            .map(|x| match x.node_type {
-                                AstNodeType::Emit(AstEmit::Scope(value)) => AstNode {
-                                    node_type: AstNodeType::Return(AstReturn {
-                                        value: Some(value),
-                                    }),
-                                    span: self.span,
-                                },
-                                _ => x,
-                            })
-                            .collect(),
-                    ),
+                    body: body
+                        .into_iter()
+                        .map(|x| match x.node_type {
+                            AstNodeType::Emit(AstEmit::Scope(value)) => AstNode {
+                                node_type: AstNodeType::Return(AstReturn { value: Some(value) }),
+                                span: self.span,
+                            },
+                            _ => x,
+                        })
+                        .collect(),
+
                     create_new_scope,
                     is_temp,
                     named,
@@ -482,9 +478,7 @@ impl IdentifiersUsed for AstNode {
                     }
                 }
             }
-            AstNodeType::ScopeDeclaration(AstScopeDef {
-                body: Some(body), ..
-            }) => {
+            AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) => {
                 for stmt in body {
                     names.extend(stmt.identifiers_used());
                 }
@@ -586,7 +580,6 @@ pub enum AstNodeType {
     IterExpression(AstIter),
 
     // Scopes
-    ScopeAlias(AstScopeAlias),
     ScopeDeclaration(AstScopeDef),
 
     // Generator
@@ -887,15 +880,6 @@ impl Substitutable for AstNodeType {
                 base: Box::new(base.substitute(subst)),
                 field,
             }),
-            Self::ScopeAlias(AstScopeAlias {
-                identifier,
-                value,
-                create_new_scope,
-            }) => Self::ScopeAlias(AstScopeAlias {
-                identifier,
-                value: value.substitute(subst),
-                create_new_scope,
-            }),
             Self::ScopeDeclaration(AstScopeDef {
                 body,
                 named,
@@ -904,7 +888,7 @@ impl Substitutable for AstNodeType {
                 define,
                 is_function_body,
             }) => Self::ScopeDeclaration(AstScopeDef {
-                body: body.map(|x| x.into_iter().map(|x| x.substitute(subst)).collect()),
+                body: body.into_iter().map(|x| x.substitute(subst)).collect(),
                 named: named.map(|x| x.substitute(subst)),
                 is_temp,
                 create_new_scope,

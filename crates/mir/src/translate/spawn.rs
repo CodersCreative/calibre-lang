@@ -167,10 +167,10 @@ impl MirLowering for AstSelect {
                         let done_and_arm = AstNode::new(
                             span,
                             AstNodeType::ScopeDeclaration(AstScopeDef {
-                                body: Some(vec![set_done_node(), arm.body.clone(), break_node()]),
+                                body: vec![set_done_node(), arm.body.clone(), break_node()],
                                 named: None,
                                 is_temp: true,
-                                create_new_scope: Some(true),
+                                create_new_scope: true,
                                 define: false,
                                 is_function_body: false,
                             }),
@@ -202,10 +202,10 @@ impl MirLowering for AstSelect {
                         let body = AstNode::new(
                             span,
                             AstNodeType::ScopeDeclaration(AstScopeDef {
-                                body: Some(body_items),
+                                body: body_items,
                                 named: None,
                                 is_temp: true,
-                                create_new_scope: Some(true),
+                                create_new_scope: true,
                                 define: false,
                                 is_function_body: false,
                             }),
@@ -236,10 +236,10 @@ impl MirLowering for AstSelect {
                         let body = AstNode::new(
                             span,
                             AstNodeType::ScopeDeclaration(AstScopeDef {
-                                body: Some(vec![set_done_node(), arm.body.clone(), break_node()]),
+                                body: vec![set_done_node(), arm.body.clone(), break_node()],
                                 named: None,
                                 is_temp: true,
-                                create_new_scope: Some(true),
+                                create_new_scope: true,
                                 define: false,
                                 is_function_body: false,
                             }),
@@ -268,10 +268,10 @@ impl MirLowering for AstSelect {
                         let default_body = AstNode::new(
                             span,
                             AstNodeType::ScopeDeclaration(AstScopeDef {
-                                body: Some(body_items),
+                                body: body_items,
                                 named: None,
                                 is_temp: true,
-                                create_new_scope: Some(true),
+                                create_new_scope: true,
                                 define: false,
                                 is_function_body: false,
                             }),
@@ -330,10 +330,10 @@ impl MirLowering for AstSelect {
         let loop_body = AstNode::new(
             span,
             AstNodeType::ScopeDeclaration(AstScopeDef {
-                body: Some(loop_body),
+                body: loop_body,
                 named: None,
                 is_temp: true,
-                create_new_scope: Some(true),
+                create_new_scope: true,
                 define: false,
                 is_function_body: false,
             }),
@@ -351,10 +351,10 @@ impl MirLowering for AstSelect {
         );
 
         AstScopeDef {
-            body: Some(vec![done_decl, select_loop]),
+            body: vec![done_decl, select_loop],
             named: None,
             is_temp: true,
-            create_new_scope: Some(false),
+            create_new_scope: false,
             define: false,
             is_function_body: false,
         }
@@ -398,7 +398,7 @@ impl MirLowering for AstSpawn {
                         Vec::new(),
                     ),
                 ],
-                Some(false),
+                false,
             )
             .lower(env, scope, span, None)
         } else if self.items.len() == 1 {
@@ -476,7 +476,7 @@ impl MirLowering for AstSpawn {
                             loop_type,
                             body: Box::new(AstNode::new_temp_scope_with_create(
                                 vec![join_call],
-                                Some(false),
+                                false,
                             )),
                             until,
                             label,
@@ -571,10 +571,10 @@ impl MirLowering for AstSpawn {
             ));
 
             AstScopeDef {
-                body: Some(body),
+                body,
                 named: None,
                 is_temp: true,
-                create_new_scope: Some(false),
+                create_new_scope: false,
                 define: false,
                 is_function_body: false,
             }

@@ -206,11 +206,11 @@ fn empty_scope_node() -> AstNode {
     AstNode::new(
         Span::default(),
         AstNodeType::ScopeDeclaration(AstScopeDef {
-            body: Some(Vec::new()),
+            body: Vec::new(),
             is_temp: false,
             define: false,
             named: None,
-            create_new_scope: Some(false),
+            create_new_scope: false,
             is_function_body: false,
         }),
     )

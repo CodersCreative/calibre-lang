@@ -20,7 +20,7 @@ use crate::{
             matching::{AstFnMatch, AstMatch},
             memory::{AstDrop, AstMove},
             misc::{AstImport, AstParen, AstTag, AstTest},
-            scopes::{AstScopeAlias, AstScopeDef},
+            scopes::AstScopeDef,
             spawn::{AstSelect, AstSpawn},
             types::{AstImpl, AstType},
         },
@@ -271,7 +271,7 @@ impl<'a> AstNode {
                 AstDeclaration::parser(data.clone()).map(AstNodeType::VariableDeclaration),
                 AstDeclareDestructure::parser(data.clone())
                     .map(AstNodeType::DestructureDeclaration),
-                AstScopeAlias::parser(data.clone()).map(AstNodeType::ScopeAlias),
+                data.scope.clone().map(|x| x.node_type),
             )));
 
         let misc = select! {Token::Import | Token::Test | Token::At => ()}
@@ -363,10 +363,10 @@ pub fn parse_program_with_source<'a, I: ValueInput<'a, Token = Token<'a>, Span =
         return Ok(AstNode::new(
             sp,
             AstNodeType::ScopeDeclaration(AstScopeDef {
-                body: Some(items.clone()),
+                body: items.clone(),
                 named: None,
                 is_temp: false,
-                create_new_scope: Some(false),
+                create_new_scope: false,
                 define: false,
                 is_function_body: false,
             }),

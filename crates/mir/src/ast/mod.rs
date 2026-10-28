@@ -691,11 +691,11 @@ impl From<MiddleNodeType> for AstNodeType {
                         lst.push(node.into());
                     }
 
-                    Some(lst)
+                    lst
                 },
                 named: None,
                 is_temp: value.is_temp,
-                create_new_scope: Some(value.create_new_scope),
+                create_new_scope: value.create_new_scope,
                 define: false,
                 is_function_body: false,
             }),

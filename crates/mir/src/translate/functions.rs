@@ -101,7 +101,7 @@ impl MiddleEnvironment {
             }),
         );
 
-        AstNode::new_temp_scope_with_create(vec![next_decl, AstNode::ret(gen_value)], Some(true))
+        AstNode::new_temp_scope_with_create(vec![next_decl, AstNode::ret(gen_value)], true)
     }
 
     pub fn get_caller_context(&self, scope: ScopeId, span: Span) -> Option<AstNode> {
@@ -426,7 +426,7 @@ impl MirLowering for AstFunction {
 
             body = match body.node_type {
                 AstNodeType::ScopeDeclaration(AstScopeDef {
-                    body: Some(mut inner),
+                    body: mut inner,
                     named,
                     is_temp,
                     create_new_scope,
@@ -438,7 +438,7 @@ impl MirLowering for AstFunction {
                     AstNode::new(
                         body.span,
                         AstNodeType::ScopeDeclaration(AstScopeDef {
-                            body: Some(new_body),
+                            body: new_body,
                             named,
                             is_temp,
                             create_new_scope,
@@ -450,7 +450,7 @@ impl MirLowering for AstFunction {
                 _ => {
                     let mut new_body = destructures;
                     new_body.push(body);
-                    AstNode::new_temp_scope_with_create(new_body, Some(false))
+                    AstNode::new_temp_scope_with_create(new_body, false)
                 }
             };
         }

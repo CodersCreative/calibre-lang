@@ -1,4 +1,5 @@
 // TODO Fix - FAILING - Scope Declarations Parsing
+// TODO Remove scope aliases
 import (Channel, WaitGroup) from std::async;
 
 type NumType := struct { num : int } @overload {

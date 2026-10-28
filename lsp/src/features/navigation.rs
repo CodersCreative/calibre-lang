@@ -99,6 +99,7 @@ impl CalibreLanguageServer {
                 | MiddleNodeType::IndexAccess(MirIndex {
                     base: left,
                     index: right,
+                    ..
                 })
                 | MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
                 | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })

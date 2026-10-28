@@ -10,12 +10,7 @@ use calibre_parser::{
     Span,
     ast::{
         idents::PotentialDollarIdentifier,
-        nodes::{
-            AstNode, AstNodeType,
-            flow::AstBreak,
-            loops::{AstLoop, LoopType},
-            scopes::{AstScopeAlias, AstScopeDef},
-        },
+        nodes::{AstNode, scopes::AstScopeDef},
     },
 };
 use tracing::instrument;
@@ -31,7 +26,6 @@ impl MirLowering for AstScopeDef {
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
         let mut stmts = Vec::new();
-        let mut create_new_scope = self.create_new_scope.unwrap_or(true);
         let mut macro_args_to_insert: Vec<(Ustr, AstNode)> = Vec::new();
 
         let in_temp_scope = env.context.in_temp_scope;
@@ -50,8 +44,8 @@ impl MirLowering for AstScopeDef {
                 let scope_macro = ScopeMacro {
                     name,
                     args: named.args.clone(),
-                    body: self.body.clone().unwrap_or_default(),
-                    create_new_scope: self.create_new_scope.unwrap_or(create_new_scope),
+                    body: self.body.clone(),
+                    create_new_scope: self.create_new_scope,
                 };
 
                 env.scoping
@@ -67,49 +61,6 @@ impl MirLowering for AstScopeDef {
                 });
             }
 
-            if env.scoping.resolve_macro(scope, &name).is_none() {
-                if !named.args.is_empty() {
-                    let scope_macro = ScopeMacro {
-                        name,
-                        args: named.args.clone(),
-                        body: self.body.clone().unwrap_or_default(),
-                        create_new_scope,
-                    };
-                    env.scoping
-                        .scope_mut_or_err(scope)?
-                        .macros
-                        .insert(name, scope_macro);
-                }
-
-                let mut body_nodes = self.body.unwrap_or_default();
-                let last = body_nodes.pop();
-                let break_value = last.map(Box::new);
-
-                body_nodes.push(AstNode::new(
-                    span,
-                    AstNodeType::Break(AstBreak {
-                        label: Some(named.name.clone()),
-                        value: break_value,
-                    }),
-                ));
-
-                env.context.in_temp_scope = in_temp_scope;
-
-                return AstLoop {
-                    loop_type: Box::new(LoopType::Loop),
-                    body: Box::new(AstNode::new_temp_scope_with_create(
-                        body_nodes,
-                        Some(create_new_scope),
-                    )),
-                    until: None,
-                    label: Some(named.name),
-                    else_body: Some(Box::new(AstNode::new_temp_scope(vec![AstNode::new(
-                        span,
-                        AstNodeType::Null,
-                    )]))),
-                }
-                .lower(env, scope, span, None);
-            }
             let mut added = Vec::new();
 
             let scope_macro_args: Vec<(PotentialDollarIdentifier, AstNode)> = {
@@ -117,11 +68,7 @@ impl MirLowering for AstScopeDef {
                     MiddleErr::At(span, Box::new(MiddleErr::Scope(name.to_string())))
                 })?;
 
-                if self.create_new_scope.is_none() {
-                    self.create_new_scope = Some(scope_macro.create_new_scope);
-                }
-
-                self.body = Some(scope_macro.body.clone());
+                self.body = scope_macro.body.clone();
                 scope_macro.args.clone()
             };
 
@@ -146,11 +93,7 @@ impl MirLowering for AstScopeDef {
             }
         }
 
-        if let Some(og) = self.create_new_scope {
-            create_new_scope = og;
-        }
-
-        let new_scope = if create_new_scope && !self.define {
+        let new_scope = if self.create_new_scope && !self.define {
             env.scoping.new_scope_from_parent_shallow(scope)
         } else {
             scope
@@ -163,63 +106,59 @@ impl MirLowering for AstScopeDef {
             }
         }
 
-        if let Some(body) = self.body {
-            if self.is_temp {
-                for statement in body {
-                    let span = statement.span;
-                    let is_emit = statement.is_emit();
-                    stmts.extend(
-                        statement
-                            .lower_or_empty(
-                                env,
-                                new_scope,
-                                span,
-                                if is_emit { data_type.clone() } else { None },
-                            )
-                            .nodes_if_no_new_scope(),
-                    );
-                }
+        if self.is_temp {
+            for statement in self.body {
+                let span = statement.span;
+                let is_emit = statement.is_emit();
+                stmts.extend(
+                    statement
+                        .lower_or_empty(
+                            env,
+                            new_scope,
+                            span,
+                            if is_emit { data_type.clone() } else { None },
+                        )
+                        .nodes_if_no_new_scope(),
+                );
+            }
 
-                for x in env.scoping.scope_or_err(new_scope)?.defers.clone() {
+            for x in env.scoping.scope_or_err(new_scope)?.defers.clone() {
+                let span = x.span;
+                stmts.extend(
+                    x.lower_or_empty(env, new_scope, span, None)
+                        .nodes_if_no_new_scope(),
+                );
+            }
+
+            if self.is_function_body {
+                for x in env.symbols.function_defers.clone() {
                     let span = x.span;
                     stmts.extend(
                         x.lower_or_empty(env, new_scope, span, None)
                             .nodes_if_no_new_scope(),
                     );
                 }
+            }
+        } else {
+            for statement in self.body.into_iter() {
+                let x = statement
+                    .clone()
+                    .lower_or_empty(env, new_scope, statement.span, None);
 
-                if self.is_function_body {
-                    for x in env.symbols.function_defers.clone() {
-                        let span = x.span;
+                if !env.monomorphizer.awaiting_lowering.is_empty() {
+                    for (node, scope) in std::mem::take(&mut env.monomorphizer.awaiting_lowering) {
                         stmts.extend(
-                            x.lower_or_empty(env, new_scope, span, None)
-                                .nodes_if_no_new_scope(),
+                            node.lower_or_empty(env, scope, span, None)
+                                .nodes_if_isnt_temp(),
                         );
                     }
                 }
-            } else {
-                for statement in body.into_iter() {
-                    let x = statement
-                        .clone()
-                        .lower_or_empty(env, new_scope, statement.span, None);
 
-                    if !env.monomorphizer.awaiting_lowering.is_empty() {
-                        for (node, scope) in
-                            std::mem::take(&mut env.monomorphizer.awaiting_lowering)
-                        {
-                            stmts.extend(
-                                node.lower_or_empty(env, scope, span, None)
-                                    .nodes_if_isnt_temp(),
-                            );
-                        }
-                    }
-
-                    stmts.extend(x.nodes_if_isnt_temp());
-                }
+                stmts.extend(x.nodes_if_isnt_temp());
             }
         }
 
-        if new_scope != scope && !self.create_new_scope.unwrap_or(create_new_scope) {
+        if new_scope != scope && !self.create_new_scope {
             let (mappings, macros) = {
                 let scope = env.scoping.scope_or_err(new_scope)?;
                 (scope.mappings.clone(), scope.macros.clone())
@@ -251,7 +190,7 @@ impl MirLowering for AstScopeDef {
                         .collect()
                 },
                 is_temp: self.is_temp,
-                create_new_scope: self.create_new_scope.unwrap_or(create_new_scope),
+                create_new_scope: self.create_new_scope,
                 scope_id: new_scope,
                 function_body: false,
             }),
@@ -267,10 +206,10 @@ impl MirLowering for AstScopeDef {
     ) -> Option<MirDataType> {
         if self.define {
             None
-        } else if let Some(body) = &self.body {
+        } else if !self.body.is_empty() {
             let mut typ = None;
 
-            for node in body {
+            for node in &self.body {
                 typ = env.resolve_emit_type_from_node(scope, node);
                 if typ.is_some() {
                     break;
@@ -291,73 +230,5 @@ impl MirLowering for AstScopeDef {
         } else {
             unreachable!()
         }
-    }
-}
-
-impl MirLowering for AstScopeAlias {
-    #[instrument(skip_all)]
-    fn lower(
-        self,
-        env: &mut MiddleEnvironment,
-        scope: ScopeId,
-        span: Span,
-        _data_type: Option<MirDataType>,
-    ) -> Result<MiddleNode, MiddleErr> {
-        let identifer = env.resolve(
-            scope,
-            &self.identifier,
-            ResolutionOptions::default().with_dollar(),
-        )?;
-
-        let name = env
-            .resolve(
-                scope,
-                &self.value.name,
-                ResolutionOptions::default().with_dollar(),
-            )?
-            .unwrap_dollar();
-
-        let scope_macro = env
-            .scoping
-            .resolve_macro(scope, &name)
-            .cloned()
-            .ok_or_else(|| MiddleErr::At(span, Box::new(MiddleErr::Scope(name.to_string()))))?;
-
-        let mut args = Vec::new();
-        let mut added = Vec::new();
-
-        for arg in self.value.args {
-            added.push(env.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?);
-            args.push(arg);
-        }
-
-        for arg in scope_macro.args {
-            let arg_text =
-                env.resolve(scope, &arg.0, ResolutionOptions::default().with_dollar())?;
-
-            if !added.contains(&arg_text) {
-                added.push(arg_text);
-                args.push(arg);
-            }
-        }
-
-        let scope_macro = ScopeMacro {
-            name,
-            args,
-            create_new_scope: self
-                .create_new_scope
-                .unwrap_or(scope_macro.create_new_scope),
-            ..scope_macro
-        };
-
-        env.scoping
-            .scope_mut_or_err(scope)?
-            .macros
-            .insert(identifer.unwrap_dollar(), scope_macro);
-
-        Ok(MiddleNode {
-            node_type: MiddleNodeType::EmptyLine,
-            span,
-        })
     }
 }

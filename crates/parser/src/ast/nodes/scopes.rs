@@ -25,17 +25,10 @@ impl Substitutable for NamedScope {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct AstScopeAlias {
-    pub identifier: PotentialDollarIdentifier,
-    pub value: NamedScope,
-    pub create_new_scope: Option<bool>,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AstScopeDef {
-    pub body: Option<Vec<AstNode>>,
+    pub body: Vec<AstNode>,
     pub named: Option<NamedScope>,
-    pub create_new_scope: Option<bool>,
+    pub create_new_scope: bool,
     pub is_temp: bool,
     pub is_function_body: bool,
     pub define: bool,

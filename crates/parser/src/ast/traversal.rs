@@ -16,7 +16,7 @@ use crate::ast::{
         matching::{AstFnMatch, AstMatch, MatchBody},
         memory::{AstDeref, AstMove, AstRef},
         misc::{AstImport, AstParen, AstTag, AstTest},
-        scopes::{AstScopeAlias, AstScopeDef},
+        scopes::AstScopeDef,
         spawn::{AstSelect, AstSpawn},
         types::{AstImpl, AstType},
         unary::{AstNeg, AstNot},
@@ -111,7 +111,7 @@ pub trait NodeVisitor {
                 define,
                 is_function_body,
             }) => AstNodeType::ScopeDeclaration(AstScopeDef {
-                body: body.map(|items| items.into_iter().map(|n| self.visit(n)).collect()),
+                body: body.into_iter().map(|n| self.visit(n)).collect(),
                 named,
                 is_temp,
                 create_new_scope,
@@ -363,15 +363,6 @@ pub trait NodeVisitor {
                 value,
                 data: data.map(|n| Box::new(self.visit(*n))),
             }),
-            AstNodeType::ScopeAlias(AstScopeAlias {
-                identifier,
-                value,
-                create_new_scope,
-            }) => AstNodeType::ScopeAlias(AstScopeAlias {
-                identifier,
-                value,
-                create_new_scope,
-            }),
             AstNodeType::FnMatchDeclaration(AstFnMatch { header, body }) => {
                 AstNodeType::FnMatchDeclaration(AstFnMatch {
                     header,
@@ -541,9 +532,9 @@ pub trait NodeAnalyzer {
                 };
                 comp_ok && self.analyze(then) && otherwise.as_ref().is_none_or(|n| self.analyze(n))
             }
-            AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) => body
-                .as_ref()
-                .is_none_or(|items| items.iter().all(|n| self.analyze(n))),
+            AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) => {
+                body.iter().all(|n| self.analyze(n))
+            }
             AstNodeType::ParenExpression(AstParen { value })
             | AstNodeType::NotExpression(AstNot { value })
             | AstNodeType::NegExpression(AstNeg { value })

@@ -22,12 +22,14 @@ impl VMEvaluation for VMDiscriminant {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let value = match vm.get_reg_value(self.value) {
-            RuntimeValue::Enum(_, index, _) => *index,
-            RuntimeValue::Option(Some(_)) | RuntimeValue::Result(Ok(_)) => 0,
-            RuntimeValue::Option(None) | RuntimeValue::Result(Err(_)) => 1,
-            _ => 0,
-        };
+        let value = vm.with_value(vm.get_reg_value(self.value), |value| {
+            Ok(match value {
+                RuntimeValue::Enum(_, index, _) => *index,
+                RuntimeValue::Option(Some(_)) | RuntimeValue::Result(Ok(_)) => 0,
+                RuntimeValue::Option(None) | RuntimeValue::Result(Err(_)) => 1,
+                _ => 0,
+            })
+        })?;
 
         vm.set_reg_value(self.dst, RuntimeValue::UInt(value));
         Ok(TerminateValue::None)

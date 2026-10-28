@@ -302,10 +302,7 @@ impl MiddleEnvironment {
             }
         }
 
-        if let AstNodeType::ScopeDeclaration(AstScopeDef {
-            body: Some(body), ..
-        }) = &mut node.node_type
-        {
+        if let AstNodeType::ScopeDeclaration(AstScopeDef { body, .. }) = &mut node.node_type {
             debug!("predeclaring nodes");
             env.predeclare_nodes(scope, body);
         }

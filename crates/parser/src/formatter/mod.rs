@@ -298,7 +298,6 @@ impl AstFormatting for AstNode {
             AstNodeType::IterExpression(x) => x.format(formatter),
 
             // Scopes
-            AstNodeType::ScopeAlias(x) => x.format(formatter),
             AstNodeType::ScopeDeclaration(x) => x.format(formatter),
 
             // Generator
@@ -341,10 +340,6 @@ impl Formatter {
             parser.produce_ast(contents).node_type
         else {
             return Err("Expected scope declaration".into());
-        };
-
-        let Some(body) = body else {
-            return Ok(Vec::new());
         };
 
         Ok(body

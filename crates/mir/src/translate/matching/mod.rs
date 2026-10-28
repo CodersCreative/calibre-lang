@@ -287,7 +287,7 @@ impl MirLowering for AstFnMatch {
                 body: Box::new(AstNode::new(
                     span,
                     AstNodeType::ScopeDeclaration(AstScopeDef {
-                        body: Some(vec![AstNode::new(
+                        body: vec![AstNode::new(
                             span,
                             AstNodeType::MatchStatement(AstMatch {
                                 value: Some(Box::new(AstNode::identifier(
@@ -296,10 +296,10 @@ impl MirLowering for AstFnMatch {
                                 ))),
                                 body: self.body,
                             }),
-                        )]),
+                        )],
                         named: None,
                         is_temp: true,
-                        create_new_scope: Some(true),
+                        create_new_scope: true,
                         define: false,
                         is_function_body: false,
                     }),
