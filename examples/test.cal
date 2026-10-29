@@ -2,15 +2,15 @@
 // TODO Remove scope aliases
 import (Channel, WaitGroup) from std::async;
 
-type NumType := struct { num : int } @overload {
-	const "+" := fn (self : NumType, value : int) -> int => {
-		// TODO Add support for Self type
-		return self.num + value;
-	};
+type NumType := struct { num : int } 
 
-	const "/" := fn (self : NumType, value : int) -> int => {
-		return self.num / value;
-	};
+@overload("+") fn (self : NumType, value : int) -> int => {
+	// TODO Add support for Self type
+	return self.num + value;
+};
+
+@overload("/") fn (self : NumType, value : int) -> int => {
+	return self.num / value;
 };
 
 let => @mult_scope [$ident := adder_int, $t := type : int] const $ident := fn (first : dyn, second : $t) -> $t => {
@@ -18,10 +18,10 @@ let => @mult_scope [$ident := adder_int, $t := type : int] const $ident := fn (f
 	
 	return first * second;
 };
-let @float_mult_scope => @mult_scope [$ident := adder_float, $t := type : float];
-=> @mult_scope;
-=> @float_mult_scope;
-=> @float_mult_scope [$ident = adder_flt];
+
+=> @mult_scope {};
+=> @mult_scope [$ident := adder_float, $t := type : float] {};
+=> @mult_scope [$ident := adder_flt, $t := type : float] {};
 
 const print_text := fn (values : list:<str>) => {
 	print(values);
@@ -85,8 +85,8 @@ const main := fn => {
 	
 	match_res := 60;
 	
-	=> @add_scope;
-	=> @add_scope [$first := (5f / 99f)];
+	=> @add_scope {};
+	=> @add_scope [$first := (5f / 99f)] {};
 	=> @add_scope [$first := 30, $second := 70, $t := type : int] {{}};
 	
 	// Now it doesn't create a new scope overriding the default implementation
@@ -109,7 +109,7 @@ const main := fn => {
 	
 	// until also works with list comprehensions
 	let lst := [10 for i in 10 until i > 4];
-	print(lst);
+	print(lst as! str);
 	
 	print(correct);
 	print(other);
@@ -122,20 +122,17 @@ const main := fn => {
 		=> {
 			let mut s := 0;
 			for i in 0..1000 => s += i;
-			emit sum_ch s;
+			emit sum_ch <- s;
 		},
 		=> {
 			let mut f := 1;
 			for i in 1..6 => f *= i;
-			emit fac_ch f;
+			emit fac_ch <- f;
 		}
 	};
 	
 	wg.wait();
-	let sum := match sum_ch.get() {
-		.Some : v => emit v,
-		.None => emit 0
-	};
+	let sum := try sum_ch.get() => 0
 	
 	let fac := match fac_ch.get() {
 		.Some : v => emit v,

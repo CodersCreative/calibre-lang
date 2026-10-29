@@ -95,10 +95,8 @@ impl ExternFunction {
                 let mut max_align = 1usize;
 
                 for (_, field) in data.as_ref().0.0.iter() {
-                    let resolved = env
-                        .resolve_value_ref(&field.get())
-                        .map(RuntimeValue::from)
-                        .unwrap_or_default();
+                    let resolved = env.resolve_value_from_ref(&field.get()).unwrap_or_default();
+
                     let (field_bytes, field_ty, size, align) =
                         Self::struct_field_to_bytes(resolved)?;
 

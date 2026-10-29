@@ -120,12 +120,9 @@ impl VMEvaluation for VMRange {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let from = vm
-            .resolve_value_ref(vm.get_reg_value(self.from))
-            .map(RuntimeValue::from)?;
-        let to = vm
-            .resolve_value_ref(vm.get_reg_value(self.to))
-            .map(RuntimeValue::from)?;
+        let from = vm.resolve_value_from_ref(vm.get_reg_value(self.from))?;
+
+        let to = vm.resolve_value_from_ref(vm.get_reg_value(self.to))?;
 
         let as_range_bound = |value: RuntimeValue| -> Result<isize, RuntimeError> {
             match value {
@@ -194,9 +191,7 @@ impl VMEvaluation for VMAggregate {
 
         let mut entries = Vec::with_capacity(layout.members.len());
         for (name, reg) in layout.members.iter().zip(self.fields.iter()) {
-            let value = vm
-                .resolve_value_ref(vm.get_reg_value(*reg))
-                .map(RuntimeValue::from)?;
+            let value = vm.resolve_value_from_ref(vm.get_reg_value(*reg))?;
             entries.push((name, value));
         }
 
@@ -212,10 +207,7 @@ impl VMEvaluation for VMAggregate {
                 let resolved_caps: Vec<(VariableKey, RuntimeValue)> = captures
                     .iter()
                     .map(|(k, v)| {
-                        let resolved = vm
-                            .resolve_value_ref(v)
-                            .map(RuntimeValue::from)
-                            .unwrap_or_else(|_| v.clone());
+                        let resolved = vm.resolve_value_from_ref(v).unwrap_or_else(|_| v.clone());
                         (k.clone(), resolved)
                     })
                     .collect();

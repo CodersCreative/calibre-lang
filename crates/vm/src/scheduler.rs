@@ -142,14 +142,6 @@ impl SchedulerHandle {
             vm.set_current_task_id(task_id);
         }
 
-        /*for id in 0..vm.variables.slot_len() {
-            if let Some(value) = vm.variables.get_by_id(id)
-                && let Ok(resolved) = base_vm.resolve_value_ref(value)
-            {
-                let _ = vm.variables.set_by_id(id, resolved);
-            }
-        }*/
-
         if !base_vm.ptr_heap.is_empty() {
             vm.ptr_heap = base_vm.ptr_heap.clone();
         }

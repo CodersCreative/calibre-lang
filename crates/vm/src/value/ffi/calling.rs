@@ -85,155 +85,145 @@ impl ExternFunction {
 
         for (param, value) in self.parameters.iter().zip(args) {
             match &param {
-                x if !x.is_ffi() => match (
-                    env.resolve_value_ref(value)
-                        .map(RuntimeValue::from)
-                        .unwrap_or_default(),
-                    x,
-                ) {
-                    (RuntimeValue::Str(x), MirDataType::Str) => {
-                        arg_types.push(Type::pointer());
-                        let value = CString::new(x.as_str())
-                            .map_err(|_| RuntimeError::InvalidFunctionCall)?;
-                        let ptr = value.as_ptr() as *const c_void;
-                        Self::push_arg(&mut ffi_args, FfiArg::CString { _value: value, ptr });
-                    }
-                    (RuntimeValue::UInt(x), MirDataType::UInt) => {
-                        arg_types.push(Type::u64());
-                        Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
-                    }
-                    (RuntimeValue::UInt(x), MirDataType::Int) => {
-                        arg_types.push(Type::i64());
-                        Self::push_arg(&mut ffi_args, FfiArg::I64(x as i64));
-                    }
-                    (RuntimeValue::UInt(x), MirDataType::Float) => {
-                        arg_types.push(Type::f64());
-                        Self::push_arg(&mut ffi_args, FfiArg::F64(x as f64));
-                    }
-                    (RuntimeValue::Int(x), MirDataType::Int) => {
-                        arg_types.push(Type::i64());
-                        Self::push_arg(&mut ffi_args, FfiArg::I64(x as i64));
-                    }
-                    (RuntimeValue::Int(x), MirDataType::Float) => {
-                        arg_types.push(Type::f64());
-                        Self::push_arg(&mut ffi_args, FfiArg::F64(x as f64));
-                    }
-                    (RuntimeValue::Int(x), MirDataType::UInt) => {
-                        arg_types.push(Type::u64());
-                        Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
-                    }
-                    (RuntimeValue::Float(x), MirDataType::Float) => {
-                        arg_types.push(Type::f64());
-                        Self::push_arg(&mut ffi_args, FfiArg::F64(x));
-                    }
-                    (RuntimeValue::Float(x), MirDataType::UInt) => {
-                        arg_types.push(Type::u64());
-                        Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
-                    }
-                    (RuntimeValue::Float(x), MirDataType::Int) => {
-                        arg_types.push(Type::i64());
-                        Self::push_arg(&mut ffi_args, FfiArg::I64(x as i64));
-                    }
-                    (RuntimeValue::Char(x), MirDataType::Char) => {
-                        arg_types.push(Type::u8());
-                        Self::push_arg(&mut ffi_args, FfiArg::Char(x as u8));
-                    }
-                    (RuntimeValue::Bool(x), MirDataType::Bool) => {
-                        arg_types.push(Type::u8());
-                        Self::push_arg(&mut ffi_args, FfiArg::Bool(x as u8));
-                    }
-                    (RuntimeValue::Bool(x), MirDataType::UInt) => {
-                        arg_types.push(Type::u64());
-                        Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
-                    }
-                    (RuntimeValue::Bool(x), MirDataType::Int) => {
-                        arg_types.push(Type::i64());
-                        Self::push_arg(&mut ffi_args, FfiArg::I64(x as i64));
-                    }
-                    (RuntimeValue::UInt(x), MirDataType::Ptr(_)) => {
-                        arg_types.push(Type::pointer());
-                        Self::push_arg(&mut ffi_args, FfiArg::Ptr(x as *const c_void));
-                    }
-                    (RuntimeValue::Int(x), MirDataType::Ptr(_)) => {
-                        arg_types.push(Type::pointer());
-                        Self::push_arg(&mut ffi_args, FfiArg::Ptr(x as usize as *const c_void));
-                    }
-                    (RuntimeValue::Str(x), MirDataType::Ptr(_)) => {
-                        arg_types.push(Type::pointer());
-                        let value = CString::new(x.as_str())
-                            .map_err(|_| RuntimeError::InvalidFunctionCall)?;
-                        let ptr = value.as_ptr() as *const c_void;
-                        Self::push_arg(&mut ffi_args, FfiArg::CString { _value: value, ptr });
-                    }
-                    (RuntimeValue::Ptr(id), MirDataType::Ptr(_)) => {
-                        arg_types.push(Type::pointer());
-                        Self::push_arg(&mut ffi_args, FfiArg::Ptr(id as *const c_void));
-                    }
-                    (RuntimeValue::List(list), MirDataType::Ptr(_)) => {
-                        arg_types.push(Type::pointer());
-                        let mut bytes = Vec::new();
-                        for item in list.0.iter() {
-                            match env
-                                .resolve_value_ref(&item.get())
-                                .map(RuntimeValue::from)
-                                .unwrap_or_default()
-                            {
-                                RuntimeValue::UInt(x) => bytes.push(x as u8),
-                                RuntimeValue::Int(x) => bytes.push(x as u8),
-                                RuntimeValue::Float(x) => bytes.push(x as u8),
-                                RuntimeValue::Bool(x) => bytes.push(x as u8),
-                                RuntimeValue::Char(x) => bytes.push(x as u8),
-                                _ => {
-                                    return Err(RuntimeError::InvalidFunctionCall);
+                x if !x.is_ffi() => {
+                    match (env.resolve_value_from_ref(value).unwrap_or_default(), x) {
+                        (RuntimeValue::Str(x), MirDataType::Str) => {
+                            arg_types.push(Type::pointer());
+                            let value = CString::new(x.as_str())
+                                .map_err(|_| RuntimeError::InvalidFunctionCall)?;
+                            let ptr = value.as_ptr() as *const c_void;
+                            Self::push_arg(&mut ffi_args, FfiArg::CString { _value: value, ptr });
+                        }
+                        (RuntimeValue::UInt(x), MirDataType::UInt) => {
+                            arg_types.push(Type::u64());
+                            Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
+                        }
+                        (RuntimeValue::UInt(x), MirDataType::Int) => {
+                            arg_types.push(Type::i64());
+                            Self::push_arg(&mut ffi_args, FfiArg::I64(x as i64));
+                        }
+                        (RuntimeValue::UInt(x), MirDataType::Float) => {
+                            arg_types.push(Type::f64());
+                            Self::push_arg(&mut ffi_args, FfiArg::F64(x as f64));
+                        }
+                        (RuntimeValue::Int(x), MirDataType::Int) => {
+                            arg_types.push(Type::i64());
+                            Self::push_arg(&mut ffi_args, FfiArg::I64(x as i64));
+                        }
+                        (RuntimeValue::Int(x), MirDataType::Float) => {
+                            arg_types.push(Type::f64());
+                            Self::push_arg(&mut ffi_args, FfiArg::F64(x as f64));
+                        }
+                        (RuntimeValue::Int(x), MirDataType::UInt) => {
+                            arg_types.push(Type::u64());
+                            Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
+                        }
+                        (RuntimeValue::Float(x), MirDataType::Float) => {
+                            arg_types.push(Type::f64());
+                            Self::push_arg(&mut ffi_args, FfiArg::F64(x));
+                        }
+                        (RuntimeValue::Float(x), MirDataType::UInt) => {
+                            arg_types.push(Type::u64());
+                            Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
+                        }
+                        (RuntimeValue::Float(x), MirDataType::Int) => {
+                            arg_types.push(Type::i64());
+                            Self::push_arg(&mut ffi_args, FfiArg::I64(x as i64));
+                        }
+                        (RuntimeValue::Char(x), MirDataType::Char) => {
+                            arg_types.push(Type::u8());
+                            Self::push_arg(&mut ffi_args, FfiArg::Char(x as u8));
+                        }
+                        (RuntimeValue::Bool(x), MirDataType::Bool) => {
+                            arg_types.push(Type::u8());
+                            Self::push_arg(&mut ffi_args, FfiArg::Bool(x as u8));
+                        }
+                        (RuntimeValue::Bool(x), MirDataType::UInt) => {
+                            arg_types.push(Type::u64());
+                            Self::push_arg(&mut ffi_args, FfiArg::U64(x as u64));
+                        }
+                        (RuntimeValue::Bool(x), MirDataType::Int) => {
+                            arg_types.push(Type::i64());
+                            Self::push_arg(&mut ffi_args, FfiArg::I64(x as i64));
+                        }
+                        (RuntimeValue::UInt(x), MirDataType::Ptr(_)) => {
+                            arg_types.push(Type::pointer());
+                            Self::push_arg(&mut ffi_args, FfiArg::Ptr(x as *const c_void));
+                        }
+                        (RuntimeValue::Int(x), MirDataType::Ptr(_)) => {
+                            arg_types.push(Type::pointer());
+                            Self::push_arg(&mut ffi_args, FfiArg::Ptr(x as usize as *const c_void));
+                        }
+                        (RuntimeValue::Str(x), MirDataType::Ptr(_)) => {
+                            arg_types.push(Type::pointer());
+                            let value = CString::new(x.as_str())
+                                .map_err(|_| RuntimeError::InvalidFunctionCall)?;
+                            let ptr = value.as_ptr() as *const c_void;
+                            Self::push_arg(&mut ffi_args, FfiArg::CString { _value: value, ptr });
+                        }
+                        (RuntimeValue::Ptr(id), MirDataType::Ptr(_)) => {
+                            arg_types.push(Type::pointer());
+                            Self::push_arg(&mut ffi_args, FfiArg::Ptr(id as *const c_void));
+                        }
+                        (RuntimeValue::List(list), MirDataType::Ptr(_)) => {
+                            arg_types.push(Type::pointer());
+                            let mut bytes = Vec::new();
+                            for item in list.0.iter() {
+                                match env.resolve_value_from_ref(&item.get()).unwrap_or_default() {
+                                    RuntimeValue::UInt(x) => bytes.push(x as u8),
+                                    RuntimeValue::Int(x) => bytes.push(x as u8),
+                                    RuntimeValue::Float(x) => bytes.push(x as u8),
+                                    RuntimeValue::Bool(x) => bytes.push(x as u8),
+                                    RuntimeValue::Char(x) => bytes.push(x as u8),
+                                    _ => {
+                                        return Err(RuntimeError::InvalidFunctionCall);
+                                    }
                                 }
                             }
-                        }
-                        let ptr = bytes.as_ptr() as *const c_void;
-                        Self::push_arg(&mut ffi_args, FfiArg::Bytes { _value: bytes, ptr });
-                    }
-                    (value, MirDataType::Ptr(_)) => {
-                        arg_types.push(Type::pointer());
-                        if let Some(bytes) = Self::pack_aggregate_bytes(
-                            &env.resolve_value(value).unwrap_or_default(),
-                        ) {
                             let ptr = bytes.as_ptr() as *const c_void;
                             Self::push_arg(&mut ffi_args, FfiArg::Bytes { _value: bytes, ptr });
-                        } else {
-                            return Err(RuntimeError::InvalidFunctionCall);
                         }
-                    }
-                    (value, MirDataType::Struct { .. }) => {
-                        let resolved = env.resolve_value(value).unwrap_or_default();
-
-                        let (bytes, ty) = match Self::pack_struct_arg(env, resolved) {
-                            Some(data) => data,
-                            None => {
-                                return Err(RuntimeError::Ffi(String::from(
-                                    "unsupported struct arg",
-                                )));
+                        (value, MirDataType::Ptr(_)) => {
+                            arg_types.push(Type::pointer());
+                            if let Some(bytes) = Self::pack_aggregate_bytes(
+                                &env.resolve_value(value).unwrap_or_default(),
+                            ) {
+                                let ptr = bytes.as_ptr() as *const c_void;
+                                Self::push_arg(&mut ffi_args, FfiArg::Bytes { _value: bytes, ptr });
+                            } else {
+                                return Err(RuntimeError::InvalidFunctionCall);
                             }
-                        };
-
-                        arg_types.push(ty.clone());
-                        let mut backing = vec![0u64; bytes.len().div_ceil(8)];
-
-                        if !bytes.is_empty() {
-                            let raw = backing.as_mut_ptr() as *mut u8;
-                            let raw_len = backing.len() * std::mem::size_of::<u64>();
-                            let dst = unsafe { std::slice::from_raw_parts_mut(raw, raw_len) };
-                            dst[..bytes.len()].copy_from_slice(&bytes);
                         }
+                        (value, MirDataType::Struct { .. }) => {
+                            let resolved = env.resolve_value(value).unwrap_or_default();
 
-                        Self::push_arg(&mut ffi_args, FfiArg::Struct { backing });
+                            let (bytes, ty) = match Self::pack_struct_arg(env, resolved) {
+                                Some(data) => data,
+                                None => {
+                                    return Err(RuntimeError::Ffi(String::from(
+                                        "unsupported struct arg",
+                                    )));
+                                }
+                            };
+
+                            arg_types.push(ty.clone());
+                            let mut backing = vec![0u64; bytes.len().div_ceil(8)];
+
+                            if !bytes.is_empty() {
+                                let raw = backing.as_mut_ptr() as *mut u8;
+                                let raw_len = backing.len() * std::mem::size_of::<u64>();
+                                let dst = unsafe { std::slice::from_raw_parts_mut(raw, raw_len) };
+                                dst[..bytes.len()].copy_from_slice(&bytes);
+                            }
+
+                            Self::push_arg(&mut ffi_args, FfiArg::Struct { backing });
+                        }
+                        _ => return Err(RuntimeError::InvalidFunctionCall),
                     }
-                    _ => return Err(RuntimeError::InvalidFunctionCall),
-                },
+                }
                 MirDataType::FfiType(x) => {
                     arg_types.push(Self::type_to_libffi_type(param));
-                    let value = env
-                        .resolve_value_ref(value)
-                        .map(RuntimeValue::from)
-                        .unwrap_or_default();
+                    let value = env.resolve_value_from_ref(value).unwrap_or_default();
                     let arg = match (x, value) {
                         (
                             ParserFfiInnerType::U8 | ParserFfiInnerType::UChar,

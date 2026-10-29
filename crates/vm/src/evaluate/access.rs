@@ -86,9 +86,7 @@ impl VMEvaluation for VMLoadMember {
             member: member.to_string(),
         };
 
-        let resolved = vm
-            .resolve_value_ref(vm.get_reg_value(self.value))
-            .map(RuntimeValue::from)?;
+        let resolved = vm.resolve_value_from_ref(vm.get_reg_value(self.value))?;
 
         let val = match resolved {
             RuntimeValue::Null if member == "done" => RuntimeValue::Bool(true),
@@ -143,9 +141,7 @@ impl VMEvaluation for VMLoadMember {
                     if tuple_index.is_some() {
                         RuntimeValue::GcRef(wrapped.clone())
                     } else {
-                        let wrapped_val = vm
-                            .resolve_value_ref(&wrapped.get())
-                            .map(RuntimeValue::from)?;
+                        let wrapped_val = vm.resolve_value_from_ref(&wrapped.get())?;
 
                         let RuntimeValue::Aggregate(inner_type, inner_map) = wrapped_val else {
                             return Err(missing(RuntimeValue::Aggregate(Some(type_name), map)));
@@ -216,17 +212,13 @@ impl VMEvaluation for VMIndex {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let mut target_val = vm
-            .resolve_value_ref(vm.get_reg_value(self.value))
-            .map(RuntimeValue::from)?;
+        let mut target_val = vm.resolve_value_from_ref(vm.get_reg_value(self.value))?;
 
         while let RuntimeValue::Option(Some(x)) = target_val {
             target_val = x.get().clone();
         }
 
-        let index_val = vm
-            .resolve_value_ref(vm.get_reg_value(self.index))
-            .map(RuntimeValue::from)?;
+        let index_val = vm.resolve_value_from_ref(vm.get_reg_value(self.index))?;
 
         let val: Option<ValueSlot> = match &target_val {
             RuntimeValue::List(list) => {

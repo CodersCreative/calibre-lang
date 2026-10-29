@@ -274,8 +274,7 @@ impl VM {
                 .iter()
                 .map(|(key, value)| {
                     let resolved = self
-                        .resolve_value_ref(value)
-                        .map(RuntimeValue::from)
+                        .resolve_value_from_ref(value)
                         .unwrap_or_else(|_| RuntimeValue::Null);
                     (key.clone(), resolved)
                 })
@@ -550,9 +549,19 @@ impl VM {
     #[inline]
     pub(crate) fn resolve_value(&self, value: RuntimeValue) -> Result<RuntimeValue, RuntimeError> {
         match value {
-            value if value.is_ref_like() => self.resolve_value_ref(&value).map(RuntimeValue::from),
+            value if value.is_ref_like() => {
+                self.resolve_value(self.resolve_value_ref(&value).map(RuntimeValue::from)?)
+            }
             other => Ok(other),
         }
+    }
+
+    #[inline]
+    pub(crate) fn resolve_value_from_ref<'a>(
+        &'a self,
+        value: &'a RuntimeValue,
+    ) -> Result<RuntimeValue, RuntimeError> {
+        self.resolve_value(self.resolve_value_ref(value).map(RuntimeValue::from)?)
     }
 
     #[instrument(skip_all)]
@@ -609,6 +618,7 @@ impl VM {
                             frame, reg
                         )));
                     }
+
                     owned = Some(SlotOrRuntimeValue::Value(
                         self.get_reg_value_in_frame(*frame, *reg),
                     ));
@@ -636,7 +646,7 @@ impl VM {
     }
 
     #[inline]
-    pub fn update_value_mut<'a, T, F>(
+    pub fn update_value<'a, T, F>(
         &'a mut self,
         value: &'a mut RuntimeValue,
         func: F,

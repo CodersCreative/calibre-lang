@@ -184,7 +184,7 @@ pub fn update_list_mut<'a, T, F>(
 where
     F: FnOnce(&mut Vec<ValueSlot>) -> Result<T, RuntimeError>,
 {
-    env.update_value_mut(value, |value| match value {
+    env.update_value(value, |value| match value {
         RuntimeValue::List(x) => func(&mut x.0),
         value => Err(RuntimeError::UnexpectedTypeInConversion {
             value: Box::new(value.clone()),
@@ -199,7 +199,7 @@ pub fn resolve_hash_key(env: &VM, value: RuntimeValue) -> Result<HashKey, Runtim
 }
 
 pub fn resolve_hash_key_ref(env: &VM, value: &RuntimeValue) -> Result<HashKey, RuntimeError> {
-    let resolved = env.resolve_value_ref(value).map(RuntimeValue::from)?;
+    let resolved = env.resolve_value_from_ref(value)?;
     HashKey::try_from(resolved)
 }
 

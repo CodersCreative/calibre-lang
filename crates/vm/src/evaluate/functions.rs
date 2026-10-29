@@ -140,9 +140,8 @@ impl VMEvaluation for VMSpawn {
         _ip: u32,
         _prev_block: Option<BlockId>,
     ) -> Result<TerminateValue, RuntimeError> {
-        let resolved = vm
-            .resolve_value_ref(vm.get_reg_value(self.callee))
-            .map(RuntimeValue::from)?;
+        let resolved = vm.resolve_value_from_ref(vm.get_reg_value(self.callee))?;
+
         let wg = Arc::new(WaitGroupInner::default());
         wg.count.store(1, Ordering::Release);
         vm.spawn_async_task(resolved, Some(wg.clone()));
