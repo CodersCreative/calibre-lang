@@ -123,12 +123,26 @@ impl MirLowering for AstField {
         }
 
         if let MirDataType::Struct { identifier, .. } = &ty
-            && let Some(MiddleTypeDefType::Enum { .. }) = env
+            && let Some(MiddleTypeDefType::Enum { variants, .. }) = env
                 .typing
                 .find_object_for_struct_name(identifier)
                 .map(|x| &x.object_type)
         {
-            return Some(ty);
+            let mut ty: Option<MirDataType> = None;
+
+            for variant in variants {
+                if let (_, Some(variant)) = variant {
+                    if let Some(x) = &ty
+                        && !x.loose_eq(variant)
+                    {
+                        return Some(MirDataType::Dynamic);
+                    } else if ty.is_none() {
+                        ty = Some(variant.clone())
+                    }
+                }
+            }
+
+            return ty;
         }
 
         env.resolve_member_field_type(&ty, &member)

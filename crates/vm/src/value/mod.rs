@@ -325,22 +325,6 @@ unsafe impl<V: Visitor> TraceWith<V> for RuntimeValue {
 
 impl RuntimeValue {
     #[inline]
-    pub(crate) fn is_callable(&self) -> bool {
-        let val = matches!(
-            self,
-            RuntimeValue::Function { .. }
-                | RuntimeValue::NativeFunction(_)
-                | RuntimeValue::Channel(_)
-        );
-
-        #[cfg(feature = "native")]
-        return val || matches!(self, RuntimeValue::ExternFunction(_));
-
-        #[cfg(not(feature = "native"))]
-        return val;
-    }
-
-    #[inline]
     pub fn might_contain_list(&self) -> bool {
         matches!(
             self,

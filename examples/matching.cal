@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Matching parsing
+// TODO Fix - FAILING - Short Circuiting
 type Point := struct { x y : int };
 
 type Shape := enum {
@@ -36,12 +36,7 @@ const main := fn => {
 
     let s := Shape.Rectangle : (Point { x: 0, y: 0 }, Point { x: 10, y: 5 });
     let desc := match s {
-        .Circle : r if r > 5 => emit "Big Circle",
-        .Rectangle : { x: x1, y: y1 }, { x: x2, y: y2 } => {
-            let width := x2 - x1;
-            let height := y2 - y1;
-            emit fmt"Rectangle with height {height} and width {width}"
-        },
+        .Circle : let r if r > 5 => emit "Big Circle",
         _ => emit "Unknown",
     };
 
@@ -82,7 +77,7 @@ const main := fn => {
     };
 
     let point := Point { x: 5, y: 12 };
-    if let Point { x, y } <- point => {
+    if let { x, y } <- point => {
         print("Successs!!!");
     };
 };

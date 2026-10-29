@@ -223,10 +223,6 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                     .then(
                         just(Token::Colon)
                             .ignore_then(choice((
-                                // tuple
-                                DestructurePattern::parser(data.clone())
-                                    .map(|d| (None, None, Some(d))),
-                                // struct
                                 DestructurePattern::parser(data.clone())
                                     .map(|d| (None, None, Some(d))),
                                 // binding
@@ -244,6 +240,7 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                         } else {
                             (VarType::Immutable, None)
                         };
+
                         MatchArmType::Enum {
                             value,
                             var_type,
