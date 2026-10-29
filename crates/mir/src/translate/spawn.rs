@@ -106,8 +106,11 @@ impl MirLowering for AstSelect {
                             env.context.get_temp("select_ident"),
                         );
 
-                        let try_get_call =
-                            AstNode::call(span, AstNode::member(span, right, "try_get"), vec![]);
+                        let get_call = AstNode::call(
+                            span,
+                            AstNode::member(span, right, "get"),
+                            vec![CallArg::Value(AstNode::int(span, "10u"))],
+                        );
 
                         loop_body.push(AstNode::new(
                             span,
@@ -115,7 +118,7 @@ impl MirLowering for AstSelect {
                                 var_type: VarType::Immutable,
                                 identifier: tmp_ident.clone(),
                                 data_type: ParserDataType::auto(span),
-                                value: Box::new(try_get_call),
+                                value: Box::new(get_call),
                                 declared: false,
                             }),
                         ));
@@ -227,7 +230,7 @@ impl MirLowering for AstSelect {
                         let cond = fold_guards(
                             AstNode::call(
                                 span,
-                                AstNode::member(span, left, "try_send"),
+                                AstNode::member(span, left, "send"),
                                 vec![CallArg::Value(right)],
                             ),
                             &arm.conditionals,
