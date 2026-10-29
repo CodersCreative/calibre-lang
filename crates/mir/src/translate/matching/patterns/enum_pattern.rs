@@ -79,16 +79,11 @@ impl PatternTranslator for EnumPatternTranslator {
             })
             .collect::<Result<Vec<_>, MiddleErr>>()?;
 
-        let member = match resolved_variant.as_str() {
-            "Ok" => "ok",
-            "Err" => "err",
-            _ => "next",
-        };
-
         let payload_type =
-            value_type.and_then(|x| env.resolve_member_field_type(x, &Ustr::from(member)));
+            value_type.and_then(|x| env.resolve_member_field_type(x, &resolved_variant));
 
-        let payload_value = AstNode::member(env.context.current_span(), value.clone(), member);
+        let payload_value =
+            AstNode::member(env.context.current_span(), value.clone(), resolved_variant);
 
         if let Some(payload_pattern) = payload_pattern {
             if name.is_some() || destructure.is_some() {

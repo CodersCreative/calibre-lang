@@ -404,7 +404,7 @@ impl MirLowering for AstLoop {
                 } else {
                     AstNode::call(
                         span,
-                        AstNode::member(span, next_node.clone(), "next"),
+                        AstNode::member(span, next_node.clone(), "Some"),
                         Vec::new(),
                     )
                 };

@@ -64,22 +64,10 @@ impl MirLowering for AstField {
             }
         }
 
-        if let Some(ty) = self.base.type_of(env, scope, span)
-            && let Some(x) = env
-                .typing
-                .find_impl_member(&ty, field_name)
-                .map(|x| x.symbol_name.clone())
-        {
-            return Ok(MiddleNode::identifier(span, x));
-        }
-
-        Ok(MiddleNode::new(
-            MiddleNodeType::FieldAccess(MirField {
-                base: Box::new(
-                    self.base
-                        .clone()
-                        .lower(env, scope, span, None)
-                        .map_err(|_| {
+        let middle = MiddleNode::new(
+                MiddleNodeType::FieldAccess(MirField {
+                    base: Box::new(self.base.clone().lower(env, scope, span, None).map_err(
+                        |_| {
                             env.context.err_at_span(
                                 span,
                                 MiddleErr::FieldAccess(
@@ -87,12 +75,39 @@ impl MirLowering for AstField {
                                     field_name.to_string(),
                                 ),
                             )
-                        })?,
-                ),
-                field: field_name,
-            }),
-            span,
-        ))
+                        },
+                    )?),
+                    field: field_name,
+                }),
+                span,
+            );
+
+        let Some(ty) = self.base.type_of(env, scope, span) else {
+            //TODO Fix monomorphization and remove this
+            return Ok(middle)
+            /*return Err(env.context.err_at_span(
+                span,
+                MiddleErr::CannotInferMemberAccessType(field_name.to_string()),
+            ));*/
+        };
+
+        if let Some(x) = env
+            .typing
+            .find_impl_member(&ty, field_name)
+            .map(|x| x.symbol_name.clone())
+        {
+            return Ok(MiddleNode::identifier(span, x));
+        }
+
+        // TODO Fix monomorphization and remove the "|| true"
+        if env.resolve_member_field_type(&ty, &field_name).is_some() || true {
+            Ok(middle)
+        } else {
+            Err(env.context.err_at_span(
+                span,
+                MiddleErr::CannotInferMemberAccessType(field_name.to_string()),
+            ))
+        }
     }
 
     fn type_of(
@@ -120,29 +135,6 @@ impl MirLowering for AstField {
 
         if let Some(member_type) = env.resolve_member_fn_type(&ty, &member) {
             return Some(member_type);
-        }
-
-        if let MirDataType::Struct { identifier, .. } = &ty
-            && let Some(MiddleTypeDefType::Enum { variants, .. }) = env
-                .typing
-                .find_object_for_struct_name(identifier)
-                .map(|x| &x.object_type)
-        {
-            let mut ty: Option<MirDataType> = None;
-
-            for variant in variants {
-                if let (_, Some(variant)) = variant {
-                    if let Some(x) = &ty
-                        && !x.loose_eq(variant)
-                    {
-                        return Some(MirDataType::Dynamic);
-                    } else if ty.is_none() {
-                        ty = Some(variant.clone())
-                    }
-                }
-            }
-
-            return ty;
         }
 
         env.resolve_member_field_type(&ty, &member)

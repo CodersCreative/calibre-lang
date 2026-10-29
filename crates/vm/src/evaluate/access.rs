@@ -94,11 +94,9 @@ impl VMEvaluation for VMLoadMember {
                 type_name: TypeImplKey::Nominal(type_name),
                 state,
             } => match member.as_str() {
-                "data" | "next" | "0" => {
-                    RuntimeValue::NativeFunction(Arc::new(GeneratorResumeFn {
-                        state: state.clone(),
-                    }))
-                }
+                "data" | "next" => RuntimeValue::NativeFunction(Arc::new(GeneratorResumeFn {
+                    state: state.clone(),
+                })),
                 "index" => RuntimeValue::Int(state.lock().unwrap().index),
                 "done" => RuntimeValue::Bool(state.lock().unwrap().completed),
                 _ => {
@@ -179,13 +177,12 @@ impl VMEvaluation for VMLoadMember {
                     )));
                 }
             }
-            RuntimeValue::Enum(_, _, Some(x)) if is_next_or_zero => RuntimeValue::GcRef(x),
             RuntimeValue::Enum(_, _, Some(x)) => RuntimeValue::GcRef(x),
-            RuntimeValue::Enum(_, _, None) if is_next_or_zero => RuntimeValue::Null,
-            RuntimeValue::Option(Some(x)) if is_next_or_zero => RuntimeValue::GcRef(x),
-            RuntimeValue::Option(None) if is_next_or_zero => RuntimeValue::Null,
+            RuntimeValue::Enum(_, _, None) => RuntimeValue::Null,
+            RuntimeValue::Option(Some(x)) if member.as_str() == "Some" => RuntimeValue::GcRef(x),
+            RuntimeValue::Option(None) if member.as_str() == "None" => RuntimeValue::Null,
             RuntimeValue::Result(Ok(x)) | RuntimeValue::Result(Err(x))
-                if is_next_or_zero || member.as_str() == "ok" || member.as_str() == "err" =>
+                if member.as_str() == "Ok" || member.as_str() == "Err" =>
             {
                 RuntimeValue::GcRef(x)
             }

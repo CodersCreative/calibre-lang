@@ -247,6 +247,8 @@ impl MiddleEnvironment {
         let mut add = |name, load| self.setup_std_module(scope, Ustr::from(name), load);
 
         // TODO Fix stdlib modules that arent auto-loaded not being imported properly later.
+        add("option", true);
+        add("result", true);
         add("traits", true);
         add("thread", true);
         add("libc", false);
@@ -265,8 +267,6 @@ impl MiddleEnvironment {
         add("regex", false);
         add("process", false);
         add("net", false);
-        add("option", true);
-        add("result", true);
         add("json", false);
     }
 

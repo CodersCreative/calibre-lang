@@ -92,7 +92,7 @@ impl PatternTranslator for StringPatternTranslator {
                     );
 
                     current =
-                        AstNode::member(env.context.current_span(), strip_prefix_call, "next");
+                        AstNode::member(env.context.current_span(), strip_prefix_call, "Some");
                     ends_with_capture = false;
                 }
                 MatchStringPatternPart::Binding { var_type, name } => {

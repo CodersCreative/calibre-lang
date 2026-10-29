@@ -142,7 +142,7 @@ impl MirLowering for AstSelect {
                                     span,
                                     AstNodeType::Identifier(tmp_ident.clone().into()),
                                 )),
-                                field: PotentialDollarIdentifier::new(span, "next"),
+                                field: PotentialDollarIdentifier::new(span, "Some"),
                             }),
                         );
 

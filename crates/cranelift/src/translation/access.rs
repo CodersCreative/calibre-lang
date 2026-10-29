@@ -19,7 +19,6 @@ impl CraneliftTranslation for LirMember {
     ) -> Result<CompiledValue, Box<dyn Error>> {
         let base = self.base.translate(translator, None)?;
         let member = self.field.as_str();
-        let is_next_or_zero = member == "next" || member == "0";
 
         let is_enum = if let MirDataType::Struct { identifier, .. } = &base.data_type
             && let Some(lir_type) = translator.registry.types.get(identifier)
@@ -29,11 +28,9 @@ impl CraneliftTranslation for LirMember {
             false
         };
 
-        if matches!(
-            &base.data_type,
-            MirDataType::Option(_) | MirDataType::Result { .. }
-        ) || (is_enum && is_next_or_zero)
-            || (base.data_type.is_result() && (member == "ok" || member == "err"))
+        if matches!(&base.data_type, MirDataType::Option(_) if member == "Some" || member == "None")
+            || matches!(&base.data_type, MirDataType::Result { .. } if member == "Ok" || member == "Err")
+            || is_enum
         {
             let stack_slot = translator.builder.create_sized_stack_slot(StackSlotData {
                 kind: StackSlotKind::ExplicitSlot,

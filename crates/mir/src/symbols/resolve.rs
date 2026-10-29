@@ -246,7 +246,7 @@ impl MiddleEnvironment {
             MirDataType::Struct {
                 identifier,
                 generic_types,
-            } if identifier.name() == "gen" && member == "next" || member == "0" => {
+            } if identifier.name() == "gen" && member == "next" => {
                 let return_type = MirDataType::Option(Box::new(
                     generic_types
                         .first()
@@ -265,28 +265,24 @@ impl MiddleEnvironment {
                     MiddleTypeDefType::Struct(fields) => {
                         fields.get(member).map(|(ty, _)| ty.clone())
                     }
+                    MiddleTypeDefType::Enum { variants, .. } => variants
+                        .iter()
+                        .find(|x| &x.0 == member)
+                        .and_then(|x| x.1.clone()),
                     _ => None,
                 }),
             MirDataType::Tuple(values) => member
                 .parse::<usize>()
                 .ok()
                 .and_then(|idx| values.get(idx).cloned()),
-            MirDataType::Option(inner) | MirDataType::Ptr(inner)
-                if member == "next" || member == "0" =>
-            {
-                Some((**inner).clone())
-            }
+            MirDataType::Ptr(inner) if member == "next" => Some((**inner).clone()),
+            MirDataType::Option(inner) if member == "Some" => Some((**inner).clone()),
+            MirDataType::Option(inner) if member == "None" => Some(MirDataType::Null),
             MirDataType::Result { ok, err } => {
-                if member == "ok" || member == "0" {
+                if member == "Ok" {
                     Some((**ok).clone())
-                } else if member == "err" || member == "1" {
+                } else if member == "Err" {
                     Some((**err).clone())
-                } else if member == "next" {
-                    if ok.loose_eq(err) {
-                        Some((**ok).clone())
-                    } else {
-                        Some(MirDataType::Dynamic)
-                    }
                 } else {
                     None
                 }

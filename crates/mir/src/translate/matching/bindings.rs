@@ -120,7 +120,7 @@ impl BindingExtractor {
                 name,
                 destructure,
                 pattern: payload_pattern,
-                ..
+                value: variant,
             } => {
                 if name.is_some() || destructure.is_some() || payload_pattern.is_some() {
                     let name = match name {
@@ -130,8 +130,12 @@ impl BindingExtractor {
                         _ => Ustr::from("match_destructure"),
                     };
 
+                    let variant = env
+                        .resolve(scope, variant, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar();
+
                     let payload_value =
-                        AstNode::member(env.context.current_span(), value.clone(), "next");
+                        AstNode::member(env.context.current_span(), value.clone(), variant);
 
                     bindings.push(BindingDeclaration {
                         name,
@@ -145,7 +149,7 @@ impl BindingExtractor {
                             env,
                             scope,
                             payload_pattern,
-                            &AstNode::member(env.context.current_span(), value.clone(), "next"),
+                            &AstNode::member(env.context.current_span(), value.clone(), variant),
                         )?);
                     }
                 }

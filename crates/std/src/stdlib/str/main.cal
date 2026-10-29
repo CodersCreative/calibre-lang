@@ -3,6 +3,28 @@
 	for i in len(self) => 
 		return self[i]!;
 
+impl char {
+	@pure
+	const lowercase := fn (self : char) -> char => return char_lowercase(self);
+
+	@pure
+	const uppercase := fn (self : char) -> char => return char_uppercase(self);
+
+	@pure
+	const is_whitespace := fn (self : char) -> bool => {
+		return (self = ' ') || (self = '\n') || (self = '\r') || (self = '\t');
+	};
+
+	@pure
+	const is_digit := fn (self : char) -> bool => return (self >= '0') && (self <= '9');
+
+	@pure
+	const is_alphabetic := fn (self : char) -> bool => return self.lowercase() != self.uppercase();
+
+	@pure
+	const is_alphanumeric := fn (self : char) -> bool => return self.is_digit() || self.is_alphabetic();
+};
+
 impl str {
 	@pure
 	const len := fn (self : str) -> uint => return len(self);
@@ -135,26 +157,4 @@ impl str {
 		for i in len(self) => if !(self[i]!).is_whitespace() => return false;
 		return true;
 	};
-};
-
-impl char {
-	@pure
-	const lowercase := fn (self : char) -> char => return char_lowercase(self);
-
-	@pure
-	const uppercase := fn (self : char) -> char => return char_uppercase(self);
-
-	@pure
-	const is_whitespace := fn (self : char) -> bool => {
-		return (self = ' ') || (self = '\n') || (self = '\r') || (self = '\t');
-	};
-
-	@pure
-	const is_digit := fn (self : char) -> bool => return (self >= '0') && (self <= '9');
-
-	@pure
-	const is_alphabetic := fn (self : char) -> bool => return self.lowercase() != self.uppercase();
-
-	@pure
-	const is_alphanumeric := fn (self : char) -> bool => return self.is_digit() || self.is_alphabetic();
 };
