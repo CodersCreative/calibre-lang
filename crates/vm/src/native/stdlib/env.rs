@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
     VM,
     error::RuntimeError,
@@ -5,8 +7,9 @@ use crate::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null, resolve_int, resolve_str},
     },
-    value::{GcVec, RuntimeValue, ValueSlot},
+    value::{GcMap, GcVec, RuntimeValue, ValueSlot},
 };
+use calibre_parser::ast::ObjectMap;
 use ustr::Ustr;
 
 pub struct EnvGet;
@@ -99,7 +102,21 @@ impl NativeFunction for EnvVars {
 
     fn run(&self, _env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         let vars = std::env::vars()
-            .map(|(k, v)| RuntimeValue::Str(Ustr::from(&format!("{k}={v}"))))
+            .map(|(k, v)| {
+                RuntimeValue::Aggregate(
+                    None,
+                    Arc::new(GcMap(ObjectMap(vec![
+                        (
+                            Ustr::from("0"),
+                            ValueSlot::new(RuntimeValue::Str(Ustr::from(&k))),
+                        ),
+                        (
+                            Ustr::from("1"),
+                            ValueSlot::new(RuntimeValue::Str(Ustr::from(&v))),
+                        ),
+                    ]))),
+                )
+            })
             .collect();
 
         Ok(RuntimeValue::List(GcVec::new(vars)))

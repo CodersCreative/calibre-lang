@@ -188,7 +188,12 @@ impl ParserDataType {
                 (
                     "env.vars",
                     vec![],
-                    ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Str))),
+                    ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Tuple(
+                        vec![
+                            Self::native_type(ParserInnerType::Str),
+                            Self::native_type(ParserInnerType::Str),
+                        ],
+                    )))),
                 ),
                 #[cfg(feature = "native")]
                 (

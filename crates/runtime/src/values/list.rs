@@ -5,31 +5,34 @@ use crate::{
 
 #[repr(C)]
 pub struct GcList {
-    pub len: usize,
-    pub capacity: usize,
     pub data: Vec<Value>,
+}
+
+impl GcList {
+    pub fn alloc(self) -> *mut GcList {
+        let header = register_alloc(GcObject::List(self));
+
+        unsafe {
+            let object = &mut (*header).inner;
+
+            let ptr = object as *mut GcObject as usize;
+            calibre_gc_add_root(ptr);
+
+            if let GcObject::List(value) = object {
+                value as *mut GcList
+            } else {
+                std::ptr::null_mut()
+            }
+        }
+    }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_gc_alloc_list(capacity: usize) -> *mut GcList {
-    let header = register_alloc(GcObject::List(GcList {
-        len: 0,
-        capacity,
+    GcList {
         data: Vec::with_capacity(capacity),
-    }));
-
-    unsafe {
-        let object = &mut (*header).inner;
-
-        let ptr = object as *mut GcObject as usize;
-        calibre_gc_add_root(ptr);
-
-        if let GcObject::List(value) = object {
-            value as *mut GcList
-        } else {
-            std::ptr::null_mut()
-        }
     }
+    .alloc()
 }
 
 #[unsafe(no_mangle)]
@@ -43,7 +46,7 @@ pub extern "C" fn calibre_list_set_index(
         if !lst.is_null() {
             let data = (*lst).data.as_mut_ptr();
 
-            if index < (*lst).capacity {
+            if index < (*lst).data.capacity() {
                 *data.add(index) = Value::from_tag(tag, payload);
             }
         }

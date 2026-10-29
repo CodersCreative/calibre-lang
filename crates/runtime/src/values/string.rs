@@ -5,27 +5,39 @@ use crate::{
 
 #[repr(C)]
 pub struct GcString {
-    pub len: usize,
-    pub data: Vec<u8>,
+    pub data: String,
+}
+
+impl GcString {
+    pub fn alloc(self) -> *mut GcString {
+        let header = register_alloc(GcObject::String(self));
+
+        unsafe {
+            let object = &mut (*header).inner;
+
+            let ptr = object as *mut GcObject as usize;
+            calibre_gc_add_root(ptr);
+
+            if let GcObject::String(value) = object {
+                value as *mut GcString
+            } else {
+                std::ptr::null_mut()
+            }
+        }
+    }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_gc_alloc_string(len: usize) -> *mut GcString {
-    let header = register_alloc(GcObject::String(GcString {
-        len,
-        data: vec![0u8; len],
-    }));
+pub extern "C" fn calibre_gc_alloc_string(capacity: usize) -> *mut GcString {
+    let data = String::from_utf8(vec![0u8; capacity]).unwrap_or_default();
+    GcString { data }.alloc()
+}
 
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_string_push(string: *mut GcString, char: u32) {
     unsafe {
-        let object = &mut (*header).inner;
-
-        let ptr = object as *mut GcObject as usize;
-        calibre_gc_add_root(ptr);
-
-        if let GcObject::String(value) = object {
-            value as *mut GcString
-        } else {
-            std::ptr::null_mut()
+        if !string.is_null() {
+            (*string).data.push(char::from_u32_unchecked(char));
         }
     }
 }

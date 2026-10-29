@@ -9,25 +9,32 @@ pub struct GcAggregate {
     pub data: Vec<Value>,
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn calibre_gc_alloc_aggregate(field_count: usize) -> *mut GcAggregate {
-    let header = register_alloc(GcObject::Aggregate(GcAggregate {
-        field_count,
-        data: vec![Value::Null; field_count],
-    }));
+impl GcAggregate {
+    pub fn alloc(self) -> *mut GcAggregate {
+        let header = register_alloc(GcObject::Aggregate(self));
 
-    unsafe {
-        let object = &mut (*header).inner;
+        unsafe {
+            let object = &mut (*header).inner;
 
-        let ptr = object as *mut GcObject as usize;
-        calibre_gc_add_root(ptr);
+            let ptr = object as *mut GcObject as usize;
+            calibre_gc_add_root(ptr);
 
-        if let GcObject::Aggregate(value) = object {
-            value as *mut GcAggregate
-        } else {
-            std::ptr::null_mut()
+            if let GcObject::Aggregate(value) = object {
+                value as *mut GcAggregate
+            } else {
+                std::ptr::null_mut()
+            }
         }
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_gc_alloc_aggregate(field_count: usize) -> *mut GcAggregate {
+    GcAggregate {
+        field_count,
+        data: vec![Value::Null; field_count],
+    }
+    .alloc()
 }
 
 #[unsafe(no_mangle)]

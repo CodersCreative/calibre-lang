@@ -1,6 +1,8 @@
 use crate::values::{Value, ValueTag};
 use std::io::{self, Write};
 
+pub mod env;
+
 // TODO Add debug information
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_panic(tag: ValueTag, value: i64) {
@@ -39,7 +41,7 @@ pub extern "C" fn calibre_len(tag: ValueTag, value: i64) -> u64 {
         }
         Value::List(list) => {
             let list = unsafe { &*list };
-            list.len as u64
+            list.data.len() as u64
         }
         Value::Struct(agg) => {
             let agg = unsafe { &*agg };

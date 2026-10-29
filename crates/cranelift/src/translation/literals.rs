@@ -80,11 +80,12 @@ impl CraneliftTranslation for LirLiteral {
                 let ptr = translator.builder.ins().call(alloc_func_ref, &[len]);
                 let ptr = translator.builder.inst_results(ptr)[0];
 
-                let data_ptr =
-                    translator
-                        .builder
-                        .ins()
-                        .load(translator.types.ptr(), MemFlags::new(), ptr, 16);
+                let data_ptr = translator.builder.ins().load(
+                    translator.types.ptr(),
+                    MemFlags::new(),
+                    ptr,
+                    translator.layouts.pointer_bytes() as i32,
+                );
 
                 for (i, &byte) in s.as_bytes().iter().enumerate() {
                     let value = translator

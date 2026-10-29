@@ -37,6 +37,10 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             name: "calibre_gc_alloc_string",
             ptr: string::calibre_gc_alloc_string as *const u8,
         },
+        RuntimeSymbol {
+            name: "calibre_string_push",
+            ptr: string::calibre_string_push as *const u8,
+        },
         // aggregate
         RuntimeSymbol {
             name: "calibre_gc_alloc_aggregate",

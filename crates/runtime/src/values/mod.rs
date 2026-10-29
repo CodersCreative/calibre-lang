@@ -109,7 +109,7 @@ impl Display for Value {
                     write!(f, "null")
                 } else {
                     let string = unsafe { &**s };
-                    write!(f, "{}", String::from_utf8_lossy(&string.data))
+                    write!(f, "{}", string.data)
                 }
             }
             Value::Char(c) => {

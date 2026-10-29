@@ -58,5 +58,5 @@ impl Vars {
 
 	const remove := fn (name : str) => remove_var(name);
 
-	const vars := fn -> list:<str> => return vars();
+	const vars := fn -> list:<<str, str>> => return vars();
 };
