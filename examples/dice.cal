@@ -1,0 +1,32 @@
+import (Channel, WaitGroup) from std::async;
+import range from std::random;
+const TOTAL_ROLLS := 1_000_000
+const THREADS := 10_000
+const ROLLS_PER_THREAD := TOTAL_ROLLS / THREADS
+
+const main := fn => {
+    let mut ch : Channel:<list:<uint>> = Channel:<byte>.new();
+    
+    let wg := spawn for THREADS => {
+        let mut lst := list:<uint>[0 for 6]
+
+        for ROLLS_PER_THREAD => {
+            let face := range(0, 6)
+            lst[face]! += 1
+        }
+
+        emit ch <- lst
+    }
+
+    defer wg.wait();
+
+    let mut rolls := list:<uint>[0 for 6];
+
+	for let .Some : lst <- ch.get(timeout_ms : (ROLLS_PER_THREAD * 10) as! uint) => {
+        for i in 6 =>
+            rolls[i]! += lst[i]!
+    };
+
+    for i in len(rolls) =>
+        print(fmt"{i+1} rolled {rolls[i]!} times")
+}

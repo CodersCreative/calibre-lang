@@ -7,9 +7,7 @@ type LazyLock:<T> := struct { inner : Mutex:<T?>, init_fn : fn () -> T };
 impl<T> Channel:<T> {
 	const new := fn -> Channel:<T> => return Channel:<T> { inner : channel_new() };
 
-	const get := fn (self : &Channel:<T>) -> T? => return channel_get(self.inner);
-
-	const try_get := fn (self : &Channel:<T>) -> T? => return channel_try_get(self.inner);
+	const get := fn (self : &Channel:<T>, timeout_ms : uint = 100u) -> T? => return channel_get(self.inner, timeout_ms);
 
 	const close := fn (self : &mut Channel:<T>) => channel_close(self.inner);
 
@@ -20,7 +18,7 @@ impl<T> Channel:<T> {
 	};
 
 	const send := fn (self : &mut Self, value : T) -> bool => {
-		return channel_try_send(self.inner, value);
+		return channel_send(self.inner, value);
 	};
 };
 

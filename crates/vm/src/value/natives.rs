@@ -185,14 +185,6 @@ impl RuntimeValue {
                 ("async.channel_send", Arc::new(stdlib::r#async::ChannelSend)),
                 ("async.channel_get", Arc::new(stdlib::r#async::ChannelGet)),
                 (
-                    "async.channel_try_get",
-                    Arc::new(stdlib::r#async::ChannelTryGet),
-                ),
-                (
-                    "async.channel_try_send",
-                    Arc::new(stdlib::r#async::ChannelTrySend),
-                ),
-                (
                     "async.channel_close",
                     Arc::new(stdlib::r#async::ChannelClose),
                 ),

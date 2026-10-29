@@ -13,7 +13,10 @@ use crate::{
         spawn::{ChannelInner, MutexInner, WaitGroupInner},
     },
 };
-use std::sync::{Arc, atomic::Ordering};
+use std::{
+    sync::{Arc, atomic::Ordering},
+    time::Duration,
+};
 
 pub struct ChannelNew;
 
@@ -32,32 +35,6 @@ pub struct ChannelSend;
 impl NativeFunction for ChannelSend {
     fn name(&self) -> String {
         String::from("async.channel_send")
-    }
-
-    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[2])?;
-
-        let value = env.resolve_value(pop_or_null(&mut args))?;
-        let ch = resolve_channel(env, pop_or_null(&mut args))?;
-
-        if ch.closed.load(Ordering::Acquire) {
-            return Ok(RuntimeValue::Null);
-        }
-
-        if let Ok(mut queue) = ch.queue.try_lock() {
-            queue.push_back(value);
-            ch.cvar.notify_one();
-        }
-
-        Ok(RuntimeValue::Null)
-    }
-}
-
-pub struct ChannelTrySend;
-
-impl NativeFunction for ChannelTrySend {
-    fn name(&self) -> String {
-        String::from("async.channel_try_send")
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
@@ -87,8 +64,9 @@ impl NativeFunction for ChannelGet {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
+        expect_num_args(&args, &[2])?;
 
+        let timeout = resolve_int(env, pop_or_null(&mut args))?;
         let ch = resolve_channel(env, pop_or_null(&mut args))?;
 
         let mut guard = ch.queue.lock().unwrap();
@@ -102,30 +80,16 @@ impl NativeFunction for ChannelGet {
                 return Ok(RuntimeValue::Option(None));
             }
 
-            guard = ch.cvar.wait(guard).unwrap();
+            let result = ch
+                .cvar
+                .wait_timeout(guard, Duration::from_millis(timeout.cast_unsigned() as u64))
+                .unwrap();
+            if result.1.timed_out() {
+                return Ok(RuntimeValue::Option(None));
+            }
+
+            guard = result.0
         }
-    }
-}
-
-pub struct ChannelTryGet;
-
-impl NativeFunction for ChannelTryGet {
-    fn name(&self) -> String {
-        String::from("async.channel_try_get")
-    }
-
-    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
-
-        let ch = resolve_channel(env, pop_or_null(&mut args))?;
-
-        let mut guard = ch.queue.lock().unwrap();
-
-        if let Some(value) = guard.pop_front() {
-            return Ok(RuntimeValue::Option(Some(ValueSlot::new(value))));
-        }
-
-        Ok(RuntimeValue::Option(None))
     }
 }
 

@@ -481,22 +481,12 @@ impl ParserDataType {
                 (
                     "async.channel_send",
                     vec![ParserInnerType::Host, ParserInnerType::Dynamic],
-                    ParserInnerType::Null,
+                    ParserInnerType::Bool,
                 ),
                 (
                     "async.channel_get",
-                    vec![ParserInnerType::Host],
+                    vec![ParserInnerType::Host, ParserInnerType::UInt],
                     ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Dynamic))),
-                ),
-                (
-                    "async.channel_try_get",
-                    vec![ParserInnerType::Host],
-                    ParserInnerType::Option(Box::new(Self::native_type(ParserInnerType::Dynamic))),
-                ),
-                (
-                    "async.channel_try_send",
-                    vec![ParserInnerType::Host, ParserInnerType::Dynamic],
-                    ParserInnerType::Bool,
                 ),
                 (
                     "async.channel_close",
