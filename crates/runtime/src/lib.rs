@@ -113,5 +113,35 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             name: "calibre_panic",
             ptr: native::calibre_panic as *const u8,
         },
+        // native env
+        RuntimeSymbol {
+            name: "calibre_env_vars",
+            ptr: native::env::calibre_env_vars as *const u8,
+        },
+        // native str
+        RuntimeSymbol {
+            name: "calibre_str_char_lowercase",
+            ptr: native::str::calibre_str_char_lowercase as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_str_char_uppercase",
+            ptr: native::str::calibre_str_char_uppercase as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_str_split",
+            ptr: native::str::calibre_str_split as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_str_contains",
+            ptr: native::str::calibre_str_contains as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_str_starts_with",
+            ptr: native::str::calibre_str_starts_with as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_str_ends_with",
+            ptr: native::str::calibre_str_ends_with as *const u8,
+        },
     ]
 }

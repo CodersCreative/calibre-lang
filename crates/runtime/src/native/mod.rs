@@ -2,6 +2,7 @@ use crate::values::{Value, ValueTag};
 use std::io::{self, Write};
 
 pub mod env;
+pub mod str;
 
 // TODO Add debug information
 #[unsafe(no_mangle)]
@@ -47,11 +48,15 @@ pub extern "C" fn calibre_len(tag: ValueTag, value: i64) -> u64 {
             let agg = unsafe { &*agg };
             agg.data.len() as u64
         }
+        Value::Tuple(agg) => {
+            let agg = unsafe { &*agg };
+            agg.data.len() as u64
+        }
         Value::Int(x) => x.cast_unsigned(),
         Value::UInt(x) => x,
         Value::Float(x) => x as u64,
-        Value::Char(x) => x.cast_unsigned() as u64,
-        _ => 0,
+        Value::Char(x) => x as u64,
+        Value::Ptr(_) | Value::Null | Value::Bool(_) | Value::Big(_) | Value::Enum(_) => 0,
     }
 }
 

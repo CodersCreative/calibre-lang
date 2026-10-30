@@ -232,6 +232,79 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     typed_return: Some(MirDataType::Dynamic),
                 },
             ),
+            // env
+            (
+                "calibre_env_vars",
+                RuntimeFunction {
+                    params: Vec::new(),
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::List(Box::new(MirDataType::Tuple(vec![
+                        MirDataType::Str,
+                        MirDataType::Str,
+                    ])))),
+                },
+            ),
+            // str
+            (
+                "calibre_str_char_lowercase",
+                RuntimeFunction {
+                    params: vec![(types::I32, ArgumentKind::Direct)],
+                    returns: Some(types::I32),
+                    typed_return: Some(MirDataType::Char),
+                },
+            ),
+            (
+                "calibre_str_char_uppercase",
+                RuntimeFunction {
+                    params: vec![(types::I32, ArgumentKind::Direct)],
+                    returns: Some(types::I32),
+                    typed_return: Some(MirDataType::Char),
+                },
+            ),
+            (
+                "calibre_str_split",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::List(Box::new(MirDataType::Str))),
+                },
+            ),
+            (
+                "calibre_str_contains",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_str_starts_with",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_str_ends_with",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
         ];
 
         lst.into_iter().collect()
@@ -251,6 +324,15 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("len", "calibre_len"),
             ("min_or_zero", "calibre_min_or_zero"),
             ("gen_suspend", "calibre_gen_suspend"),
+            // env
+            ("env.vars", "calibre_env_vars"),
+            // str
+            ("str.split", "calibre_str_split"),
+            ("str.contains", "calibre_str_contains"),
+            ("str.starts_with", "calibre_str_starts_with"),
+            ("str.ends_with", "calibre_str_ends_with"),
+            ("str.char_lowercase", "calibre_str_char_lowercase"),
+            ("str.char_uppercase", "calibre_str_char_uppercase"),
         ];
 
         lst.into_iter().collect()

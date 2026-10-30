@@ -64,7 +64,8 @@ impl MirLowering for AstField {
             }
         }
 
-        let middle = MiddleNode::new(
+        let middle =
+            MiddleNode::new(
                 MiddleNodeType::FieldAccess(MirField {
                     base: Box::new(self.base.clone().lower(env, scope, span, None).map_err(
                         |_| {
@@ -84,7 +85,7 @@ impl MirLowering for AstField {
 
         let Some(ty) = self.base.type_of(env, scope, span) else {
             //TODO Fix monomorphization and remove this
-            return Ok(middle)
+            return Ok(middle);
             /*return Err(env.context.err_at_span(
                 span,
                 MiddleErr::CannotInferMemberAccessType(field_name.to_string()),

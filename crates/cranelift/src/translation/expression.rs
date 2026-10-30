@@ -262,10 +262,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             MirDataType::Int => Ok(value.value),
             MirDataType::UInt => Ok(value.value),
             MirDataType::Float => Ok(self.builder.ins().fcvt_to_sint(types::I64, value.value)),
-            MirDataType::Bool => {
-                let value = self.builder.ins().uextend(types::I8, value.value);
-                Ok(self.builder.ins().uextend(types::I64, value))
-            }
+            MirDataType::Bool => Ok(self.builder.ins().uextend(types::I64, value.value)),
             MirDataType::Byte => Ok(self.builder.ins().sextend(types::I64, value.value)),
             MirDataType::Char => Ok(self.builder.ins().sextend(types::I64, value.value)),
             _ => Ok(value.value),

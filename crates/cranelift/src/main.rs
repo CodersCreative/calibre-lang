@@ -150,6 +150,18 @@ const main := fn (x : int) -> int => {
     }
     console_output(0, '\n');
 
+    console_output(0, "hello".contains("he"))
+    console_output(0, '\n');
+
+    console_output(0, "hello".contains("hi"))
+    console_output(0, '\n');
+
+    console_output(0, "hello".split(""))
+    console_output(0, '\n');
+
+    console_output(0, "x=x+y;x+=1;++x;x=2".split(";"))
+    console_output(0, '\n');
+
     console_output(0, fib_value);
     console_output(0, '\n');
     test_string_literal();

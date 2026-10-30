@@ -433,17 +433,19 @@ impl MirDataType {
     pub fn type_tag<'a>(&self, mut enums: impl Iterator<Item = &'a TypeKey>) -> usize {
         match self {
             MirDataType::Null => 0,
-            MirDataType::Int => 1,
-            MirDataType::UInt => 2,
-            MirDataType::Float => 3,
-            MirDataType::Str => 4,
-            MirDataType::Char => 5,
-            MirDataType::Struct { identifier, .. } if !enums.any(|x| x == identifier) => 6,
-            MirDataType::Tuple(_) => 7,
-            MirDataType::Struct { .. } | MirDataType::Result { .. } | MirDataType::Option(_) => 8,
-            MirDataType::List(_) => 9,
-            MirDataType::Range => 10,
-            _ => 11,
+            MirDataType::Bool => 1,
+            MirDataType::Int => 2,
+            MirDataType::UInt => 3,
+            MirDataType::Float => 4,
+            MirDataType::Big => 5,
+            MirDataType::Str => 6,
+            MirDataType::Char => 7,
+            MirDataType::Struct { identifier, .. } if !enums.any(|x| x == identifier) => 8,
+            MirDataType::Tuple(_) => 9,
+            MirDataType::Struct { .. } | MirDataType::Result { .. } | MirDataType::Option(_) => 10,
+            MirDataType::List(_) => 11,
+            MirDataType::Range => 12,
+            _ => 13,
         }
     }
 

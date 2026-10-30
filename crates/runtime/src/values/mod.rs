@@ -37,11 +37,14 @@ fn register_alloc(inner: GcObject) -> *mut GcHeader {
 #[derive(Clone, Copy)]
 pub enum Value {
     Null,
+    Bool(bool),
     Int(i64),
     UInt(u64),
     Float(f64),
+    // TODO Implement big currently just being treated a ptr
+    Big(usize),
     String(*const GcString),
-    Char(i32),
+    Char(u32),
     Struct(*const GcAggregate),
     Tuple(*const GcAggregate),
     Enum(*const GcAggregate),
@@ -54,11 +57,13 @@ impl Value {
     pub fn from_tag(tag: ValueTag, value: i64) -> Self {
         match tag {
             ValueTag::Null => Self::Null,
+            ValueTag::Bool => Self::Bool(value != 0),
             ValueTag::Int => Self::Int(value),
             ValueTag::UInt => Self::UInt(value.cast_unsigned()),
             ValueTag::Float => Self::Float(f64::from_bits(value.cast_unsigned())),
+            ValueTag::Big => Self::Big(value.cast_unsigned() as usize),
             ValueTag::String => Self::String(value.cast_unsigned() as *const GcString),
-            ValueTag::Char => Self::Char(value as i32),
+            ValueTag::Char => Self::Char(value.cast_unsigned() as u32),
             ValueTag::Struct => Self::Struct(value.cast_unsigned() as *const GcAggregate),
             ValueTag::Tuple => Self::Tuple(value.cast_unsigned() as *const GcAggregate),
             ValueTag::Enum => Self::Enum(value.cast_unsigned() as *const GcAggregate),
@@ -76,9 +81,12 @@ impl Value {
 impl From<Value> for i64 {
     fn from(value: Value) -> Self {
         match value {
+            Value::Null => 0,
+            Value::Bool(x) => x as i64,
             Value::Int(x) => x,
             Value::UInt(x) => x as i64,
             Value::Float(x) => x.to_bits() as i64,
+            Value::Big(x) => x as i64,
             Value::Ptr(x) => x as i64,
             Value::String(x) => x as i64,
             Value::Char(x) => x as i64,
@@ -91,7 +99,6 @@ impl From<Value> for i64 {
                 let to_i32 = to as i32;
                 ((to_i32 as i64) << 32) | (from_i32 as i64 & 0xFFFFFFFF)
             }
-            Value::Null => 0,
         }
     }
 }
@@ -99,11 +106,13 @@ impl From<Value> for i64 {
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Value::Null => write!(f, "null"),
+            Value::Bool(x) => write!(f, "{}", x),
             Value::Int(x) => write!(f, "{}", x),
             Value::UInt(x) => write!(f, "{}", x),
             Value::Float(x) => write!(f, "{}", x),
+            Value::Big(x) => write!(f, "0x{:x}", x),
             Value::Ptr(x) => write!(f, "0x{:x}", x),
-            Value::Null => write!(f, "null"),
             Value::String(s) => {
                 if s.is_null() {
                     write!(f, "null")
@@ -113,11 +122,7 @@ impl Display for Value {
                 }
             }
             Value::Char(c) => {
-                write!(
-                    f,
-                    "{}",
-                    char::from_u32(c.cast_unsigned()).unwrap_or('\u{FFFD}')
-                )
+                write!(f, "{}", char::from_u32(*c).unwrap_or('\u{FFFD}'))
             }
             Value::Struct(ptr) => {
                 if ptr.is_null() {
@@ -202,9 +207,11 @@ impl Display for Value {
 #[derive(Clone, Copy)]
 pub enum ValueTag {
     Null,
+    Bool,
     Int,
     UInt,
     Float,
+    Big,
     String,
     Char,
     Struct,
