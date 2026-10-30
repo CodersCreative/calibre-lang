@@ -198,12 +198,36 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_console_input",
+                RuntimeFunction {
+                    params: Vec::new(),
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Str),
+                },
+            ),
+            (
                 "calibre_console_output",
                 RuntimeFunction {
                     params: vec![
                         (types::I64, ArgumentKind::Direct),
                         (types::I64, ArgumentKind::TagPayload),
                     ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_trim",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Str),
+                },
+            ),
+            (
+                "calibre_wait",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: None,
                     typed_return: None,
                 },
@@ -321,6 +345,9 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("some", "calibre_option_some"),
             ("panic", "calibre_panic"),
             ("console_output", "calibre_console_output"),
+            ("console_input", "calibre_console_input"),
+            ("trim", "calibre_trim"),
+            ("wait", "calibre_wait"),
             ("len", "calibre_len"),
             ("min_or_zero", "calibre_min_or_zero"),
             ("gen_suspend", "calibre_gen_suspend"),

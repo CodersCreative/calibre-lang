@@ -94,6 +94,10 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         },
         // native
         RuntimeSymbol {
+            name: "calibre_console_input",
+            ptr: native::calibre_console_input as *const u8,
+        },
+        RuntimeSymbol {
             name: "calibre_console_output",
             ptr: native::calibre_console_output as *const u8,
         },
@@ -112,6 +116,14 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_panic",
             ptr: native::calibre_panic as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_trim",
+            ptr: native::calibre_trim as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_wait",
+            ptr: native::calibre_wait as *const u8,
         },
         // native env
         RuntimeSymbol {

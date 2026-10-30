@@ -1,5 +1,9 @@
-use crate::values::{Value, ValueTag};
-use std::io::{self, Write};
+use crate::values::{Value, ValueTag, string::GcString};
+use std::{
+    io::{self, BufRead, Write},
+    thread,
+    time::Duration,
+};
 
 pub mod env;
 pub mod str;
@@ -12,6 +16,18 @@ pub extern "C" fn calibre_panic(tag: ValueTag, value: i64) {
 
     eprintln!("calibre panicked with message: {}", value);
     std::process::exit(1);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_console_input() -> *mut GcString {
+    let stdin = io::stdin();
+    let mut handle = stdin.lock();
+    let mut line = String::new();
+
+    match handle.read_line(&mut line) {
+        Ok(_) => GcString { data: line }.alloc(),
+        _ => GcString::default().alloc(),
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -72,4 +88,23 @@ pub extern "C" fn calibre_min_or_zero(tag: ValueTag, value: i64) -> i64 {
 pub extern "C" fn calibre_gen_suspend(value: i64) -> i64 {
     // TODO Implement proper suspend with state machine
     value
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_trim(text: *mut GcString) -> *mut GcString {
+    if text.is_null() {
+        return text;
+    }
+
+    unsafe {
+        GcString {
+            data: (*text).data.trim().to_string(),
+        }
+        .alloc()
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_wait(time: u64) {
+    thread::sleep(Duration::from_millis(time));
 }

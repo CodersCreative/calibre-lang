@@ -173,7 +173,6 @@ impl RuntimeValue {
                 ),
                 #[cfg(feature = "native")]
                 ("fs.file_flush", Arc::new(stdlib::fs::FsFileFlush)),
-                ("tuple", Arc::new(native::global::TupleFn)),
                 ("panic", Arc::new(native::global::PanicFn)),
                 ("assert", Arc::new(native::global::AssertFn)),
                 (

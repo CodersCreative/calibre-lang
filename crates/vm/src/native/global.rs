@@ -5,12 +5,11 @@ use crate::{
         NativeFunction,
         utils::{expect_num_args, first_or_null, panic_message_arg, pop_or_null, resolve_int},
     },
-    value::{GcMap, RuntimeValue, ValueSlot},
+    value::{RuntimeValue, ValueSlot},
 };
 use calibre_parser::ast::types::ParserInnerType;
 use std::{
     io::{self, BufRead, Write},
-    sync::Arc,
     time::Duration,
 };
 use ustr::Ustr;
@@ -131,24 +130,7 @@ impl NativeFunction for Wait {
         let val = resolve_int(env, pop_or_null(&mut args))? as u64;
         thread::sleep(Duration::from_millis(val));
 
-        Ok(RuntimeValue::Result(Ok(ValueSlot::new(
-            RuntimeValue::UInt(val as usize),
-        ))))
-    }
-}
-
-pub struct TupleFn;
-
-impl NativeFunction for TupleFn {
-    fn name(&self) -> String {
-        String::from("tuple")
-    }
-
-    fn run(&self, _env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        Ok(RuntimeValue::Aggregate(
-            None,
-            Arc::new(GcMap::new(args.into())),
-        ))
+        Ok(RuntimeValue::Null)
     }
 }
 
@@ -271,66 +253,6 @@ impl NativeFunction for Trim {
 
         match env.resolve_value(pop_or_null(&mut args))? {
             RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Ustr::from(s.trim()))),
-            other => Err(RuntimeError::UnexpectedTypeInConversion {
-                value: Box::new(other),
-                target_type: ParserInnerType::Str,
-            }),
-        }
-    }
-}
-
-pub struct TrimStart;
-
-impl NativeFunction for TrimStart {
-    fn name(&self) -> String {
-        String::from("trim_start")
-    }
-
-    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
-
-        match env.resolve_value(pop_or_null(&mut args))? {
-            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Ustr::from(s.trim_start()))),
-            other => Err(RuntimeError::UnexpectedTypeInConversion {
-                value: Box::new(other),
-                target_type: ParserInnerType::Str,
-            }),
-        }
-    }
-}
-
-pub struct TrimEnd;
-
-impl NativeFunction for TrimEnd {
-    fn name(&self) -> String {
-        String::from("trim_end")
-    }
-
-    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
-
-        match env.resolve_value(pop_or_null(&mut args))? {
-            RuntimeValue::Str(s) => Ok(RuntimeValue::Str(Ustr::from(s.trim_end()))),
-            other => Err(RuntimeError::UnexpectedTypeInConversion {
-                value: Box::new(other),
-                target_type: ParserInnerType::Str,
-            }),
-        }
-    }
-}
-
-pub struct IsWhitespace;
-
-impl NativeFunction for IsWhitespace {
-    fn name(&self) -> String {
-        String::from("is_whitespace")
-    }
-    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
-
-        match env.resolve_value(pop_or_null(&mut args))? {
-            RuntimeValue::Str(s) => Ok(RuntimeValue::Bool(s.chars().all(|c| c.is_whitespace()))),
-            RuntimeValue::Char(c) => Ok(RuntimeValue::Bool(c.is_whitespace())),
             other => Err(RuntimeError::UnexpectedTypeInConversion {
                 value: Box::new(other),
                 target_type: ParserInnerType::Str,

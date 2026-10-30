@@ -132,6 +132,12 @@ const test_range := fn () -> int => {
 }
 
 const main := fn (x : int) -> int => {
+    console_output(0, "Say anything : ");
+    let val := console_input();
+    console_output(0, "You said : ");
+    console_output(0, trim(val));
+    console_output(0, '\n');
+
     let result := calc(x) if x is int else calc(x+1);
     let value := conversions();
     let fib_value := fib(28);
@@ -141,6 +147,10 @@ const main := fn (x : int) -> int => {
     test_enum_literal();
     test_list_literal();
     test_range();
+
+    console_output(0, "I'm gonna wait a bit hey...\n")
+    wait(2000)
+    console_output(0, "Okay I'm done\n")
 
     let mut i := 0;
     for i < 30 => {
