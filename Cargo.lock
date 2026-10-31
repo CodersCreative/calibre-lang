@@ -594,6 +594,12 @@ dependencies = [
 name = "calibre-runtime"
 version = "0.0.1"
 dependencies = [
+ "blake3",
+ "errno",
+ "fastrand",
+ "hex",
+ "regex",
+ "sha2",
  "wasm_sync",
 ]
 

@@ -124,6 +124,15 @@ pub struct VariableKey {
     pub shadow_counter: Option<u32>,
 }
 
+impl<'a> From<&'a str> for VariableKey {
+    fn from(value: &'a str) -> Self {
+        VariableKey {
+            fully_qualified_path: FullyQualifiedPath::combine(None, Ustr::from(value)),
+            shadow_counter: None,
+        }
+    }
+}
+
 impl VariableKey {
     pub fn name(&self) -> &Ustr {
         self.fully_qualified_path.name.as_ref().unwrap()

@@ -10,6 +10,7 @@ use calibre_parser::Parser;
 use std::{fmt::Debug, path::PathBuf, str::FromStr, time::Instant};
 
 const BASIC_CODE: &str = r#"
+import range from std::random;
 let sixty : int = 60;
 
 const add := fn (a : int, b : int) -> int => {
@@ -72,7 +73,7 @@ const test_string_literal := fn () -> int => {
 
 const test_char_literal := fn () -> int => {
     let c := '€';
-    console_output(0, c);
+    console_output(0, c as! str);
     return 42;
 }
 
@@ -83,23 +84,23 @@ type Point := struct {
 
 const test_struct_literal := fn () => {
     let p := Point { x: 10, y: 20 };
-    console_output(0, p);
-    console_output(0, '\n');
+    console_output(0, p as! str);
+    console_output(0, "\n");
 }
 
 const test_tuple_literal := fn () => {
     let t := (1, 2, 3);
-    console_output(0, t);
-    console_output(0, '\n');
+    console_output(0, t as! str);
+    console_output(0, "\n");
 }
 
 const test_list_literal := fn () => {
     let lst := [1, 2, 3];
-    console_output(0, lst);
-    console_output(0, '\n');
+    console_output(0, lst as! str);
+    console_output(0, "\n");
     let lst := [420 for 69];
-    console_output(0, lst);
-    console_output(0, '\n');
+    console_output(0, lst as! str);
+    console_output(0, "\n");
 }
 
 type Language := enum {
@@ -110,24 +111,24 @@ type Language := enum {
 const test_enum_literal := fn () => {
     let lang := Language.ENGLISH : 42000;
     console_output(0, "hi\n");
-    console_output(0, lang);
-    console_output(0, '\n');
-    console_output(0, lang.next);
-    console_output(0, '\n');
-    console_output(0, discriminant(lang));
-    console_output(0, '\n');
+    console_output(0, lang as! str);
+    console_output(0, "\n");
+    console_output(0, lang.next as! str);
+    console_output(0, "\n");
+    console_output(0, discriminant(lang) as! str);
+    console_output(0, "\n");
 }
 
 const test_range := fn () -> int => {
     let r := 0..10;
-    console_output(0, r);
-    console_output(0, '\n');
+    console_output(0, r as! str);
+    console_output(0, "\n");
     let l := len(r);
-    console_output(0, l);
-    console_output(0, '\n');
+    console_output(0, l as! str);
+    console_output(0, "\n");
     let m := min_or_zero(r);
-    console_output(0, m);
-    console_output(0, '\n');
+    console_output(0, m as! str);
+    console_output(0, "\n");
     return l as! int + m;
 }
 
@@ -136,7 +137,7 @@ const main := fn (x : int) -> int => {
     let val := console_input();
     console_output(0, "You said : ");
     console_output(0, trim(val));
-    console_output(0, '\n');
+    console_output(0, "\n");
 
     let result := calc(x) if x is int else calc(x+1);
     let value := conversions();
@@ -148,36 +149,49 @@ const main := fn (x : int) -> int => {
     test_list_literal();
     test_range();
 
+    console_output(0, 90.89 as! str)
+    console_output(0, "\n")
+
     console_output(0, "I'm gonna wait a bit hey...\n")
     wait(2000)
     console_output(0, "Okay I'm done\n")
 
     let mut i := 0;
     for i < 30 => {
-        console_output(0, i);
-        console_output(0, ' ');
+        console_output(0, i as! str);
+        console_output(0, " ");
         i += 1;
     }
-    console_output(0, '\n');
+    console_output(0, "\n");
 
-    console_output(0, "hello".contains("he"))
-    console_output(0, '\n');
+    console_output(0, "hello".contains("he") as! str)
+    console_output(0, "\n");
 
-    console_output(0, "hello".contains("hi"))
-    console_output(0, '\n');
+    console_output(0, "hello".contains("hi") as! str)
+    console_output(0, "\n");
 
     console_output(0, "hello".split(""))
-    console_output(0, '\n');
+    console_output(0, "\n");
 
-    console_output(0, "x=x+y;x+=1;++x;x=2".split(";"))
-    console_output(0, '\n');
+    console_output(0, "x=x+y;x+=1;++x;x=2".split(";") as! str)
+    console_output(0, "\n");
 
-    console_output(0, fib_value);
-    console_output(0, '\n');
+    console_output(0, "random1 : ");
+    // let mut num := range(0, 100);
+    // console_output(0, num as! str);
+    console_output(0, "\n");
+
+    console_output(0, "random2 : ");
+    // num := range(0, 100);
+    // console_output(0, num as! str);
+    console_output(0, "\n");
+
+    console_output(0, fib_value as! str);
+    console_output(0, "\n");
     test_string_literal();
-    console_output(0, '\n');
+    console_output(0, "\n");
     test_char_literal();
-    console_output(0, '\n');
+    console_output(0, "\n");
     return result + value + test_option_next() + test_result_discriminant() + test_result_ok() + test_result_err() + fib_value;
 };
 "#;

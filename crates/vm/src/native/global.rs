@@ -3,7 +3,10 @@ use crate::{
     error::RuntimeError,
     native::{
         NativeFunction,
-        utils::{expect_num_args, first_or_null, panic_message_arg, pop_or_null, resolve_int},
+        utils::{
+            expect_num_args, first_or_null, panic_message_arg, pop_or_null, resolve_int,
+            resolve_str,
+        },
     },
     value::{RuntimeValue, ValueSlot},
 };
@@ -23,24 +26,19 @@ impl NativeFunction for ConsoleOutput {
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        let handle_type = resolve_int(env, first_or_null(&mut args))?;
+        expect_num_args(&args, &[2])?;
 
-        let rendered = args
-            .into_iter()
-            .map(|arg| match arg {
-                RuntimeValue::Str(value) => value.to_string(),
-                other => other.display(env),
-            })
-            .collect::<String>();
+        let text = resolve_str(env, pop_or_null(&mut args))?;
+        let handle_type = resolve_int(env, pop_or_null(&mut args))?;
 
         if env.suppress_output {
-            env.captured_output.push(Ustr::from(&rendered));
+            env.captured_output.push(text);
         } else if handle_type == 2 {
             let stderr = io::stderr();
             let mut handle = stderr.lock();
 
             handle
-                .write_all(rendered.as_bytes())
+                .write_all(text.as_bytes())
                 .map_err(|e| RuntimeError::Io(e.to_string()))?;
             handle
                 .flush()
@@ -50,7 +48,7 @@ impl NativeFunction for ConsoleOutput {
             let mut handle = stdout.lock();
 
             handle
-                .write_all(rendered.as_bytes())
+                .write_all(text.as_bytes())
                 .map_err(|e| RuntimeError::Io(e.to_string()))?;
             handle
                 .flush()
@@ -68,7 +66,9 @@ impl NativeFunction for ConsoleInput {
         String::from("console_input")
     }
 
-    fn run(&self, env: &mut VM, _args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+    fn run(&self, env: &mut VM, args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
+        expect_num_args(&args, &[0])?;
+
         if !env.input_buffer.is_empty() {
             let input = env.input_buffer.remove(0);
             return Ok(RuntimeValue::Str(Ustr::from(&input)));

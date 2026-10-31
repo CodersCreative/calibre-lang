@@ -41,6 +41,10 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             name: "calibre_string_push",
             ptr: string::calibre_string_push as *const u8,
         },
+        RuntimeSymbol {
+            name: "calibre_to_string",
+            ptr: string::calibre_to_string as *const u8,
+        },
         // aggregate
         RuntimeSymbol {
             name: "calibre_gc_alloc_aggregate",
@@ -154,6 +158,63 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_str_ends_with",
             ptr: native::str::calibre_str_ends_with as *const u8,
+        },
+        // native crypto
+        RuntimeSymbol {
+            name: "calibre_crypto_sha256",
+            ptr: native::crypto::calibre_crypto_sha256 as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_crypto_sha512",
+            ptr: native::crypto::calibre_crypto_sha512 as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_crypto_blake3",
+            ptr: native::crypto::calibre_crypto_blake3 as *const u8,
+        },
+        // native libc
+        RuntimeSymbol {
+            name: "calibre_libc_get_c_errno",
+            ptr: native::libc::calibre_libc_get_c_errno as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_libc_get_c_errno_description",
+            ptr: native::libc::calibre_libc_get_c_errno_description as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_libc_set_c_errno",
+            ptr: native::libc::calibre_libc_set_c_errno as *const u8,
+        },
+        // native list
+        RuntimeSymbol {
+            name: "calibre_list_raw_remove",
+            ptr: native::list::calibre_list_raw_remove as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_list_raw_insert",
+            ptr: native::list::calibre_list_raw_insert as *const u8,
+        },
+        // native random
+        RuntimeSymbol {
+            name: "calibre_random_rand",
+            ptr: native::random::calibre_random_rand as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_random_seed",
+            ptr: native::random::calibre_random_seed as *const u8,
+        },
+        // native regex
+        RuntimeSymbol {
+            name: "calibre_regex_is_match",
+            ptr: native::regex::calibre_regex_is_match as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_regex_find",
+            ptr: native::regex::calibre_regex_find as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_regex_replace",
+            ptr: native::regex::calibre_regex_replace as *const u8,
         },
     ]
 }

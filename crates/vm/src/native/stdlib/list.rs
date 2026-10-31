@@ -117,7 +117,7 @@ impl NativeFunction for ListRawRemove {
         let index = resolve_int(env, pop_or_null(&mut args))?;
 
         update_list_mut(env, &mut pop_or_null(&mut args), |list| {
-            if index > 0 && (index as usize) < list.len() {
+            if index >= 0 && (index as usize) < list.len() {
                 let value = list.remove(index as usize);
                 Ok(RuntimeValue::Option(Some(ValueSlot::new(
                     RuntimeValue::from(value),
@@ -143,7 +143,7 @@ impl NativeFunction for ListRawInsert {
         let index = resolve_int(env, pop_or_null(&mut args))?;
 
         update_list_mut(env, &mut pop_or_null(&mut args), |list| {
-            if index > 0 && (index as usize) < list.len() {
+            if index >= 0 && (index as usize) < list.len() {
                 list.insert(index as usize, value.into());
                 Ok(RuntimeValue::Bool(false))
             } else {

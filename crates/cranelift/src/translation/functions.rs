@@ -22,6 +22,8 @@ impl CraneliftTranslation for LirCall {
             }
         };
 
+        let callee_str = callee_value.name().as_str();
+
         let mut arg_types = Vec::new();
 
         if let Some(&func_id) = translator.functions.get(&callee_value) {
@@ -60,7 +62,15 @@ impl CraneliftTranslation for LirCall {
                     MirDataType::Null,
                 ))
             }
-        } else if let Some(&runtime_name) = translator.natives.get(&callee_value) {
+        } else if let Some(runtime_name) = {
+            if let Some(x) = translator.natives.get(&callee_value) {
+                Some(*x)
+            } else if runtime_functions().contains_key(callee_str) {
+                Some(callee_str)
+            } else {
+                None
+            }
+        } {
             let func_id = translator
                 .runtime_functions
                 .get(runtime_name)

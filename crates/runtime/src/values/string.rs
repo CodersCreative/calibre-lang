@@ -1,6 +1,6 @@
 use crate::{
     gc::calibre_gc_add_root,
-    values::{GcObject, register_alloc},
+    values::{GcObject, Value, ValueTag, register_alloc},
 };
 
 #[repr(C)]
@@ -41,4 +41,14 @@ pub extern "C" fn calibre_string_push(string: *mut GcString, char: u32) {
             (*string).data.push(char::from_u32_unchecked(char));
         }
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_to_string(tag: ValueTag, value: i64) -> *mut GcString {
+    let value = Value::from_tag(tag, value);
+
+    GcString {
+        data: value.to_string(),
+    }
+    .alloc()
 }

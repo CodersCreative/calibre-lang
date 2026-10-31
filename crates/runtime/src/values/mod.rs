@@ -53,6 +53,27 @@ pub enum Value {
     Ptr(usize),
 }
 
+impl From<&Value> for ValueTag {
+    fn from(value: &Value) -> Self {
+        match value {
+            Value::Null => Self::Null,
+            Value::Bool(_) => Self::Bool,
+            Value::Int(_) => Self::Int,
+            Value::UInt(_) => Self::UInt,
+            Value::Float(_) => Self::Float,
+            Value::Big(_) => Self::Big,
+            Value::String(_) => Self::String,
+            Value::Char(_) => Self::Char,
+            Value::Struct(_) => Self::Struct,
+            Value::Tuple(_) => Self::Tuple,
+            Value::Enum(_) => Self::Enum,
+            Value::List(_) => Self::List,
+            Value::Range(_, _) => Self::Range,
+            Value::Ptr(_) => Self::Ptr,
+        }
+    }
+}
+
 impl Value {
     pub fn from_tag(tag: ValueTag, value: i64) -> Self {
         match tag {
@@ -75,6 +96,12 @@ impl Value {
             }
             ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
         }
+    }
+
+    pub fn to_tag_and_payload(self) -> (ValueTag, i64) {
+        let tag = ValueTag::from(&self);
+        let payload = i64::from(self);
+        (tag, payload)
     }
 }
 

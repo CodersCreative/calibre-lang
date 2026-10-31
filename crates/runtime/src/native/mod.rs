@@ -5,7 +5,13 @@ use std::{
     time::Duration,
 };
 
+pub mod crypto;
 pub mod env;
+pub mod fs;
+pub mod libc;
+pub mod list;
+pub mod random;
+pub mod regex;
 pub mod str;
 
 // TODO Add debug information
@@ -31,9 +37,12 @@ pub extern "C" fn calibre_console_input() -> *mut GcString {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_console_output(handle_type: i64, tag: ValueTag, value: i64) {
-    let value = Value::from_tag(tag, value);
-    let value = value.to_string();
+pub extern "C" fn calibre_console_output(handle_type: i64, value: *mut GcString) {
+    if value.is_null() {
+        return;
+    }
+
+    let value = unsafe { (*value).data.to_string() };
 
     if handle_type == 2 {
         let stderr = io::stderr();
@@ -60,11 +69,7 @@ pub extern "C" fn calibre_len(tag: ValueTag, value: i64) -> u64 {
             let list = unsafe { &*list };
             list.data.len() as u64
         }
-        Value::Struct(agg) => {
-            let agg = unsafe { &*agg };
-            agg.data.len() as u64
-        }
-        Value::Tuple(agg) => {
+        Value::Struct(agg) | Value::Tuple(agg) => {
             let agg = unsafe { &*agg };
             agg.data.len() as u64
         }

@@ -3,15 +3,15 @@ use crate::{
     values::CompiledValue,
 };
 use calibre_lir::{
-    MirDataType,
-    ast::{LirAs, LirBinary, LirBoolean, LirComparison, LirIs},
+    MirDataType, VariableKey,
+    ast::{LirAs, LirBinary, LirBoolean, LirCall, LirComparison, LirIs, LirLoad, LirNodeType},
 };
 use calibre_parser::ast::{
     binary::BinaryOperator,
     comparison::{BooleanOperator, ComparisonOperator},
 };
 use cranelift::codegen::ir::{
-    InstBuilder, Value,
+    InstBuilder, MemFlags, Value,
     condcodes::{FloatCC, IntCC},
     types,
 };
@@ -261,7 +261,12 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         match value.data_type {
             MirDataType::Int => Ok(value.value),
             MirDataType::UInt => Ok(value.value),
-            MirDataType::Float => Ok(self.builder.ins().fcvt_to_sint(types::I64, value.value)),
+            MirDataType::Float => {
+                Ok(self
+                    .builder
+                    .ins()
+                    .bitcast(types::I64, MemFlags::new(), value.value))
+            }
             MirDataType::Bool => Ok(self.builder.ins().uextend(types::I64, value.value)),
             MirDataType::Byte => Ok(self.builder.ins().sextend(types::I64, value.value)),
             MirDataType::Char => Ok(self.builder.ins().sextend(types::I64, value.value)),
@@ -276,6 +281,15 @@ impl CraneliftTranslation for LirAs {
         translator: &mut FunctionTranslator<'a, M>,
         _data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
+        if matches!(&self.data_type, MirDataType::Str) {
+            return LirCall {
+                caller: Box::new(LirNodeType::load(VariableKey::from("calibre_to_string"))),
+                args: Box::new([*self.value]),
+                returns_value: true,
+            }
+            .translate(translator, Some(MirDataType::Str));
+        }
+
         let value = self.value.translate(translator, None)?;
         let target = translator.types.to_cranelift_type(&self.data_type);
 

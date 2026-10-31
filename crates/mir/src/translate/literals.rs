@@ -696,20 +696,23 @@ impl MirLowering for AstChar {
         span: Span,
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        if let Some(data_type) = data_type
-            && !matches!(data_type, MirDataType::Char)
-        {
-            AstAs {
+        match data_type {
+            Some(MirDataType::Char) | None => Ok(MiddleNode {
+                node_type: MiddleNodeType::CharLiteral(MirChar { value: self.value }),
+                span,
+            }),
+            Some(MirDataType::Str) => Ok(MiddleNode {
+                node_type: MiddleNodeType::StringLiteral(MirString {
+                    value: Ustr::from(&self.value.to_string()),
+                }),
+                span,
+            }),
+            Some(data_type) => AstAs {
                 value: Box::new(AstNode::new(span, AstNodeType::CharLiteral(self))),
                 failure_mode: AsFailureMode::Panic,
                 data_type: data_type.into(),
             }
-            .lower(env, scope, span, None)
-        } else {
-            Ok(MiddleNode {
-                node_type: MiddleNodeType::CharLiteral(MirChar { value: self.value }),
-                span,
-            })
+            .lower(env, scope, span, None),
         }
     }
 

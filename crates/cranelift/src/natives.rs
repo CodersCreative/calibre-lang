@@ -210,7 +210,26 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![
                         (types::I64, ArgumentKind::Direct),
-                        (types::I64, ArgumentKind::TagPayload),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_to_string",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::TagPayload)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Str),
+                },
+            ),
+            (
+                "calibre_string_push",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I32, ArgumentKind::Direct),
                     ],
                     returns: None,
                     typed_return: None,
@@ -329,6 +348,132 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     typed_return: Some(MirDataType::Bool),
                 },
             ),
+            // crypto
+            (
+                "calibre_crypto_sha256",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Str),
+                },
+            ),
+            (
+                "calibre_crypto_sha512",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Str),
+                },
+            ),
+            (
+                "calibre_crypto_blake3",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Str),
+                },
+            ),
+            // libc
+            (
+                "calibre_libc_get_c_errno",
+                RuntimeFunction {
+                    params: Vec::new(),
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Int),
+                },
+            ),
+            (
+                "calibre_libc_get_c_errno_description",
+                RuntimeFunction {
+                    params: Vec::new(),
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Str),
+                },
+            ),
+            (
+                "calibre_libc_set_c_errno",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            // list
+            (
+                "calibre_list_raw_remove",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
+                },
+            ),
+            (
+                "calibre_list_raw_remove",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::TagPayload),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            // random
+            (
+                "calibre_random_rand",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::F64),
+                    typed_return: Some(MirDataType::Float),
+                },
+            ),
+            (
+                "calibre_random_seed",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            // regex
+            (
+                "calibre_regex_is_match",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_regex_find",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Str))),
+                },
+            ),
+            (
+                "calibre_regex_replace",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Str),
+                },
+            ),
         ];
 
         lst.into_iter().collect()
@@ -360,6 +505,27 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("str.ends_with", "calibre_str_ends_with"),
             ("str.char_lowercase", "calibre_str_char_lowercase"),
             ("str.char_uppercase", "calibre_str_char_uppercase"),
+            // crypto
+            ("crypto.sha256", "calibre_crypto_sha256"),
+            ("crypto.sha512", "calibre_crypto_sha512"),
+            ("crypto.blake3", "calibre_crypto_blake3"),
+            // libc
+            ("libc.get_c_errno", "calibre_libc_get_c_errno"),
+            (
+                "libc.get_c_errno_description",
+                "calibre_libc_get_c_errno_description",
+            ),
+            ("libc.set_c_errno", "calibre_libc_set_c_errno"),
+            // list
+            ("list.raw_remove", "calibre_list_raw_remove"),
+            ("list.raw_insert", "calibre_list_raw_insert"),
+            // random
+            ("random.rand", "calibre_random_rand"),
+            ("random.seed", "calibre_random_seed"),
+            // regex
+            ("regex.is_match", "calibre_regex_is_match"),
+            ("regex.find", "calibre_regex_find"),
+            ("regex.replace", "calibre_regex_replace"),
         ];
 
         lst.into_iter().collect()

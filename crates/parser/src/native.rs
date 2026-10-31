@@ -44,7 +44,7 @@ impl ParserDataType {
             let lst: Vec<(&str, Vec<ParserInnerType>, ParserInnerType)> = vec![
                 (
                     "console_output",
-                    vec![ParserInnerType::Int, ParserInnerType::Dynamic],
+                    vec![ParserInnerType::Int, ParserInnerType::Str],
                     ParserInnerType::Null,
                 ),
                 ("len", vec![ParserInnerType::Dynamic], ParserInnerType::UInt),

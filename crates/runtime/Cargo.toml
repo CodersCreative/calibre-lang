@@ -13,6 +13,12 @@ license.workspace = true
 
 [dependencies]
 wasm_sync = { workspace = true }
+fastrand = { workspace = true }
+regex = "1.10"
+sha2 = "0.11"
+blake3 = "1.5"
+errno = { version = "0.3"}
+hex = "0.4"
 
 [lints]
 workspace = true
