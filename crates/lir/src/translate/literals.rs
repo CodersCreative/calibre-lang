@@ -26,11 +26,11 @@ impl LirLowering for MirIdentifier {
     }
 
     #[inline(always)]
-    fn lower_lvalue<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirLValue
+    fn lower_lvalue<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> Option<LirLValue>
     where
         Self: Sized,
     {
-        LirLValue::Var(self.identifier)
+        Some(LirLValue::Var(self.identifier))
     }
 }
 

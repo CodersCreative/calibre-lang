@@ -37,37 +37,47 @@ impl LirLowering for MirField {
     }
 
     #[inline(always)]
-    fn lower_lvalue<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirLValue
+    fn lower_lvalue<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> Option<LirLValue>
     where
         Self: Sized,
     {
-        LirLValue::Ptr(Box::new(LirNodeType::Member(LirMember {
-            base: Box::new(LirNodeType::from(env.lower_lvalue(*self.base))),
+        Some(LirLValue::Ptr(Box::new(LirNodeType::Member(LirMember {
+            base: Box::new(
+                env.lower_lvalue(*self.base.clone())
+                    .map(LirNodeType::from)
+                    .unwrap_or_else(|| env.lower_node(*self.base)),
+            ),
             field: self.field,
-        })))
+        }))))
     }
 }
 
 impl LirLowering for MirIndex {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Index(LirIndex {
-            base: Box::new(env.lower_node(*self.base)),
-            index: Box::new(env.lower_node(*self.index)),
-            panic: self.panic,
+        LirNodeType::Deref(LirDeref {
+            value: Box::new(LirNodeType::Index(LirIndex {
+                base: Box::new(env.lower_node(*self.base)),
+                index: Box::new(env.lower_node(*self.index)),
+                panic: self.panic,
+            })),
         })
     }
 
     #[inline(always)]
-    fn lower_lvalue<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirLValue
+    fn lower_lvalue<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> Option<LirLValue>
     where
         Self: Sized,
     {
-        LirLValue::Ptr(Box::new(LirNodeType::Index(LirIndex {
-            base: Box::new(LirNodeType::from(env.lower_lvalue(*self.base))),
+        Some(LirLValue::Ptr(Box::new(LirNodeType::Index(LirIndex {
+            base: Box::new(
+                env.lower_lvalue(*self.base.clone())
+                    .map(LirNodeType::from)
+                    .unwrap_or_else(|| env.lower_node(*self.base)),
+            ),
             index: Box::new(env.lower_node(*self.index)),
             panic: true,
-        })))
+        }))))
     }
 }
 

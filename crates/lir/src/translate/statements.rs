@@ -20,7 +20,9 @@ use calibre_parser::{Span, ast::ObjectMap};
 impl LirLowering for MirAssignment {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
         let rhs = env.lower_node(*self.value);
-        let lhs = env.lower_lvalue(*self.identifier);
+        let lhs = env
+            .lower_lvalue(*self.identifier)
+            .expect("Unable to get L-Value");
 
         LirNodeType::Assign(LirAssign {
             dest: lhs,

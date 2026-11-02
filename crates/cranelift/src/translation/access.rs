@@ -238,23 +238,27 @@ impl CraneliftTranslation for LirDeref {
             .value
             .translate(translator, data_type.map(|x| x.unwrap_all_refs().clone()))?;
 
-        let runtime_name = "calibre_deref";
+        if matches!(&ptr.data_type, MirDataType::Ref(_, _)) {
+            let runtime_name = "calibre_deref";
 
-        let func_id = translator
-            .runtime_functions
-            .get(runtime_name)
-            .ok_or(format!("{} not found in runtime_functions", runtime_name))?;
+            let func_id = translator
+                .runtime_functions
+                .get(runtime_name)
+                .ok_or(format!("{} not found in runtime_functions", runtime_name))?;
 
-        let func_ref = translator
-            .module
-            .declare_func_in_func(*func_id, translator.builder.func);
+            let func_ref = translator
+                .module
+                .declare_func_in_func(*func_id, translator.builder.func);
 
-        let call = translator.builder.ins().call(func_ref, &[ptr.value]);
-        let result = translator.builder.inst_results(call)[0];
+            let call = translator.builder.ins().call(func_ref, &[ptr.value]);
+            let result = translator.builder.inst_results(call)[0];
 
-        Ok(CompiledValue::new(
-            result,
-            ptr.data_type.unwrap_all_refs().clone(),
-        ))
+            Ok(CompiledValue::new(
+                result,
+                ptr.data_type.unwrap_all_refs().clone(),
+            ))
+        } else {
+            Ok(ptr)
+        }
     }
 }

@@ -23,11 +23,11 @@ pub trait LirLowering {
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirNodeType;
 
     #[inline(always)]
-    fn lower_lvalue<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> LirLValue
+    fn lower_lvalue<'a>(self, _env: &mut LirEnvironment<'a>, _span: Span) -> Option<LirLValue>
     where
         Self: Sized,
     {
-        unreachable!()
+        None
     }
 }
 
@@ -223,14 +223,14 @@ impl<'a> LirEnvironment<'a> {
         }
     }
 
-    pub fn lower_lvalue(&mut self, node: MiddleNode) -> LirLValue {
+    pub fn lower_lvalue(&mut self, node: MiddleNode) -> Option<LirLValue> {
         match node.node_type {
             MiddleNodeType::Identifier(x) => x.lower_lvalue(self, node.span),
             MiddleNodeType::DerefStatement(x) => x.lower_lvalue(self, node.span),
             MiddleNodeType::FieldAccess(x) => x.lower_lvalue(self, node.span),
             MiddleNodeType::IndexAccess(x) => x.lower_lvalue(self, node.span),
             MiddleNodeType::Emit(x) => x.lower_lvalue(self, node.span),
-            _ => unreachable!(),
+            _ => None,
         }
     }
 }

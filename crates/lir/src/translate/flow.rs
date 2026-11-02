@@ -9,7 +9,7 @@ RangeDeclaration
 */
 
 use crate::{
-    ast::{LirLoad, LirNodeType, LirRange, LirTerminator},
+    ast::{LirLValue, LirLoad, LirNodeType, LirRange, LirTerminator},
     environment::LirEnvironment,
     translate::LirLowering,
 };
@@ -189,7 +189,7 @@ impl LirLowering for MirEmit {
         env.lower_node(*self.value)
     }
 
-    fn lower_lvalue<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> crate::ast::LirLValue
+    fn lower_lvalue<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> Option<LirLValue>
     where
         Self: Sized,
     {

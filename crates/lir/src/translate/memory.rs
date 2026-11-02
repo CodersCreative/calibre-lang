@@ -43,7 +43,7 @@ impl LirLowering for MirDeref {
         })
     }
 
-    fn lower_lvalue<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> LirLValue
+    fn lower_lvalue<'a>(self, env: &mut LirEnvironment<'a>, span: Span) -> Option<LirLValue>
     where
         Self: Sized,
     {
@@ -62,7 +62,11 @@ impl LirLowering for MirRef {
             LirNodeType::RefLoad(LirRefLoad { value: identifier })
         } else {
             LirNodeType::Ref(LirRef {
-                value: Box::new(env.lower_node(*self.value)),
+                value: Box::new(
+                    env.lower_lvalue(*self.value.clone())
+                        .map(LirNodeType::from)
+                        .unwrap_or_else(|| env.lower_node(*self.value)),
+                ),
             })
         }
     }
