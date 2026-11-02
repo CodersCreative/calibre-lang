@@ -204,6 +204,7 @@ const main := fn (x : int) -> int => {
     console_output(0, "\n");
     test_char_literal();
     console_output(0, "\n");
+    print("Outputted using print!!!!")
     return result + value + test_option_some() + test_result_discriminant() + test_result_ok() + test_result_err() + fib_value;
 };
 "#;

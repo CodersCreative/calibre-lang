@@ -13,7 +13,7 @@ const print := fn (msg : list:<str>) => {
 	let mut txt := "";
 	for m in msg => txt &= m;
 	
-	return console_output(1, txt & "\n");
+	console_output(1, txt & "\n");
 };
 
 @pure
