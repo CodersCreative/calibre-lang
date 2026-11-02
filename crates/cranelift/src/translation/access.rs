@@ -4,7 +4,7 @@ use crate::{
 };
 use calibre_lir::{
     MirDataType,
-    ast::{LirDeref, LirDiscriminant, LirMember, LirRef, LirRefLoad},
+    ast::{LirDeref, LirDiscriminant, LirIndex, LirMember, LirRef, LirRefLoad},
     environment::LirType,
 };
 use calibre_parser::ast::RefMutability;
@@ -141,6 +141,69 @@ impl CraneliftTranslation for LirMember {
     }
 }
 
+impl CraneliftTranslation for LirIndex {
+    fn translate<'a, M: Module>(
+        self,
+        translator: &mut FunctionTranslator<'a, M>,
+        mut data_type: Option<MirDataType>,
+    ) -> Result<CompiledValue, Box<dyn Error>> {
+        let base = self.base.translate(translator, None)?;
+        let index = self.index.translate(translator, None)?;
+
+        let is_slice = matches!(&index.data_type, MirDataType::Range);
+
+        data_type = match base.data_type.unwrap_all_refs() {
+            x @ MirDataType::List(_) | x @ MirDataType::Range | x @ MirDataType::Str
+                if is_slice =>
+            {
+                Some(x.clone())
+            }
+            MirDataType::List(x) => Some(MirDataType::Ref(x.clone(), RefMutability::MutRef)),
+            MirDataType::Range => Some(MirDataType::Int),
+            MirDataType::Str => Some(MirDataType::Char),
+            _ => data_type,
+        };
+
+        let is_ref = matches!(base.data_type, MirDataType::Ref(_, _));
+
+        let runtime_name = match base.data_type.unwrap_all_refs() {
+            MirDataType::List(_) if is_slice => "calibre_list_slice",
+            MirDataType::List(_) if is_ref => "calibre_list_ref_index",
+            MirDataType::List(_) => "calibre_list_index",
+            MirDataType::Range if is_slice => "calibre_range_slice",
+            MirDataType::Range => "calibre_range_index",
+            MirDataType::Str if is_slice => "calibre_string_slice",
+            MirDataType::Str => "calibre_string_index",
+            x => unimplemented!("{}", x),
+        };
+
+        let func_id = translator
+            .runtime_functions
+            .get(runtime_name)
+            .ok_or(format!("{} not found in runtime_functions", runtime_name))?;
+
+        let func_ref = translator
+            .module
+            .declare_func_in_func(*func_id, translator.builder.func);
+
+        let index = translator.convert_to_i64(index)?;
+
+        let call = translator
+            .builder
+            .ins()
+            .call(func_ref, &[base.value, index]);
+        let result = translator.builder.inst_results(call)[0];
+
+        Ok(CompiledValue::new(
+            result,
+            data_type.unwrap_or(MirDataType::Ref(
+                Box::new(MirDataType::Dynamic),
+                RefMutability::MutRef,
+            )),
+        ))
+    }
+}
+
 impl CraneliftTranslation for LirDiscriminant {
     fn translate<'a, M: Module>(
         self,
@@ -212,15 +275,19 @@ impl CraneliftTranslation for LirRefLoad {
             let global_handle = translator
                 .module
                 .declare_data_in_func(*data_id, translator.builder.func);
+
             let addr = translator
                 .builder
                 .ins()
                 .global_value(translator.types.ptr(), global_handle);
+
             let cl_type = translator.types.to_cranelift_type(data_type);
+
             let value = translator
                 .builder
                 .ins()
                 .load(cl_type, MemFlags::new(), addr, 0);
+
             Ok(CompiledValue::new(value, data_type.clone()))
         } else {
             Err(format!("Unable to find variable for ref load: {}", self.value).into())

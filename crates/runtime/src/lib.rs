@@ -1,4 +1,4 @@
-use crate::values::{aggregate, enums, list, operation, string};
+use crate::values::{aggregate, enums, list, operation, range, string};
 use astro_float::RoundingMode;
 
 pub mod gc;
@@ -54,6 +54,15 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             name: "calibre_gc_remove_root",
             ptr: gc::calibre_gc_remove_root as *const u8,
         },
+        // range
+        RuntimeSymbol {
+            name: "calibre_range_slice",
+            ptr: range::calibre_range_slice as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_range_index",
+            ptr: range::calibre_range_index as *const u8,
+        },
         // string
         RuntimeSymbol {
             name: "calibre_gc_alloc_string",
@@ -66,6 +75,14 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_to_string",
             ptr: string::calibre_to_string as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_string_index",
+            ptr: string::calibre_string_index as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_string_slice",
+            ptr: string::calibre_string_slice as *const u8,
         },
         // aggregate
         RuntimeSymbol {
@@ -88,6 +105,18 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_list_push",
             ptr: list::calibre_list_push as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_list_index",
+            ptr: list::calibre_list_index as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_list_ref_index",
+            ptr: list::calibre_list_ref_index as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_list_slice",
+            ptr: list::calibre_list_slice as *const u8,
         },
         // enums
         RuntimeSymbol {

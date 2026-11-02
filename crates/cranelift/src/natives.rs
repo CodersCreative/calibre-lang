@@ -101,6 +101,45 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_list_index",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Ref(
+                        Box::new(MirDataType::Dynamic),
+                        RefMutability::MutRef,
+                    )),
+                },
+            ),
+            (
+                "calibre_list_ref_index",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Ref(
+                        Box::new(MirDataType::Dynamic),
+                        RefMutability::MutRef,
+                    )),
+                },
+            ),
+            (
+                "calibre_list_slice",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::List(Box::new(MirDataType::Dynamic))),
+                },
+            ),
+            (
                 "calibre_gc_collect",
                 RuntimeFunction {
                     params: vec![],
@@ -130,6 +169,28 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: None,
                     typed_return: None,
+                },
+            ),
+            (
+                "calibre_range_index",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Int),
+                },
+            ),
+            (
+                "calibre_range_slice",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Range),
                 },
             ),
             (
@@ -278,6 +339,28 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 "calibre_to_string",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::TagPayload)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Str),
+                },
+            ),
+            (
+                "calibre_string_index",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: Some(types::I32),
+                    typed_return: Some(MirDataType::Char),
+                },
+            ),
+            (
+                "calibre_string_slice",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::Str),
                 },

@@ -95,7 +95,12 @@ const test_tuple_literal := fn () => {
 }
 
 const test_list_literal := fn () => {
-    let lst := [1, 2, 3];
+    let mut lst := [1, 2, 3];
+    console_output(0, lst as! str);
+    console_output(0, "\n");
+    console_output(0, lst[1] as! str);
+    console_output(0, "\n");
+    lst[1]! += 90;
     console_output(0, lst as! str);
     console_output(0, "\n");
     let lst := [420 for 69];

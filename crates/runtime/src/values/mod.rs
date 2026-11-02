@@ -10,6 +10,7 @@ pub mod aggregate;
 pub mod enums;
 pub mod list;
 pub mod operation;
+pub mod range;
 pub mod string;
 
 pub static BIG_CONSTS: LazyLock<Mutex<Consts>> =
@@ -55,6 +56,46 @@ pub fn alloc_big(value: BigFloat) -> *mut BigFloat {
             std::ptr::null_mut()
         }
     }
+}
+
+#[inline]
+fn normalize_index(len: u64, index: i64) -> Option<usize> {
+    let len_i64 = len as i64;
+    let actual = if index < 0 { len_i64 + index } else { index };
+
+    if actual >= 0 && actual < len_i64 {
+        Some(actual as usize)
+    } else {
+        None
+    }
+}
+
+#[inline]
+pub(crate) fn resolve_slice_range(len: usize, start: i64, end: i64) -> Option<(usize, usize)> {
+    let mut s = start;
+    let mut e = end;
+    if s < 0 {
+        s += len as i64;
+    }
+    if e < 0 {
+        e += len as i64;
+    }
+    if s < 0 {
+        s = 0;
+    }
+    if e < 0 {
+        e = 0;
+    }
+
+    if s > len as i64 || e > len as i64 {
+        return None;
+    }
+
+    Some(if e < s {
+        (e as usize, s as usize)
+    } else {
+        (s as usize, e as usize)
+    })
 }
 
 #[unsafe(no_mangle)]

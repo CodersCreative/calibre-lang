@@ -53,15 +53,6 @@ fn resolve_element_index(len: usize, index: &RuntimeValue) -> Result<Option<usiz
     match index {
         RuntimeValue::Int(idx) => Ok(normalize_index(len, *idx)),
         RuntimeValue::UInt(idx) => Ok((*idx < len).then_some(*idx)),
-        RuntimeValue::Str(s) => {
-            if let Ok(idx) = s.parse::<isize>() {
-                Ok(normalize_index(len, idx))
-            } else {
-                Err(RuntimeError::ExpectedIntIndexFound {
-                    found: Box::new(index.clone()),
-                })
-            }
-        }
         other => Err(RuntimeError::ExpectedIntIndexFound {
             found: Box::new(other.clone()),
         }),
