@@ -1,3 +1,4 @@
+use crate::building::standalone::CalibreStandalone;
 use building::embedded::NativeBinding;
 use calibre_bytecode::VMRegistry;
 use calibre_frontend::config::ProjectContext;
@@ -9,8 +10,14 @@ use calibre_mir::{
 use calibre_parser::{ParserError, ast::nodes::AstNode};
 use calibre_vm::{VM, config::VMConfig, error::RuntimeError, value::RuntimeValue};
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, path::PathBuf, time::Duration};
+use std::{
+    error::Error,
+    fmt::Debug,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 use thiserror::Error;
+
 pub mod building;
 
 #[cfg(all(feature = "wasm", target_family = "wasm"))]
@@ -114,6 +121,60 @@ pub struct CalibreArtifacts {
     pub init_functions: Vec<(i32, VariableKey)>,
     pub fin_functions: Vec<(i32, VariableKey)>,
     pub testing: Testing,
+}
+
+impl CalibreArtifacts {
+    pub fn compile_and_output_errors(
+        engine: &CalibreEngine,
+        path: impl AsRef<Path>,
+        show_ast: bool,
+        cache: bool,
+        source: impl Into<String> + Clone,
+        readable: bool,
+        include_tests: bool,
+    ) -> Result<Self, Box<dyn Error>> {
+        match if cache {
+            engine.compile_cached_program_source(source.clone(), readable)
+        } else {
+            engine.compile_source(source.clone(), include_tests)
+        } {
+            Ok(artifacts) => Ok(artifacts),
+            Err(CalibreError::Parse { errors, .. }) => {
+                calibre_frontend::diagnostics::emit_calibre_errors(
+                    path.as_ref(),
+                    &source.into(),
+                    &errors,
+                );
+                Err("parse failed".into())
+            }
+            Err(CalibreError::Middle {
+                error,
+                ast_artifacts,
+                ..
+            }) => {
+                if show_ast && let Some(ast) = ast_artifacts {
+                    println!("{}", ast);
+                }
+
+                calibre_frontend::diagnostics::emit_mir_error(
+                    path.as_ref(),
+                    &source.into(),
+                    &error,
+                );
+                Err("compile failed".into())
+            }
+            Err(CalibreError::MissingEntryPoint(name)) => {
+                calibre_frontend::diagnostics::emit_error(
+                    path.as_ref(),
+                    &source.into(),
+                    format!("Missing entry point: {name}"),
+                    None,
+                );
+                Err("runtime error".into())
+            }
+            Err(other) => Err(other.to_string().into()),
+        }
+    }
 }
 
 pub struct RunResult {

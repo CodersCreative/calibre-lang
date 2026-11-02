@@ -21,5 +21,8 @@ errno = { version = "0.3"}
 hex = "0.4"
 astro-float = "0.9"
 
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [lints]
 workspace = true

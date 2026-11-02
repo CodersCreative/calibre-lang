@@ -17,6 +17,13 @@ pub struct Args {
 }
 
 #[derive(Debug, Default, Clone, Parser, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum BuildOutputType {
+    Binary,
+    #[default]
+    Object,
+}
+
+#[derive(Debug, Default, Clone, Parser, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum Verbosity {
     All,
     Ast,
@@ -27,18 +34,18 @@ pub enum Verbosity {
     None,
 }
 
+impl Verbosity {
+    pub fn is_level(&self, other: &Verbosity) -> bool {
+        matches!(self, Verbosity::All) || self == other
+    }
+}
+
 #[derive(Debug, Default, Clone, Parser, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 pub enum Backend {
     #[default]
     Interpreter,
     Jit,
-    Object,
-}
-
-impl Verbosity {
-    pub fn is_level(&self, other: &Verbosity) -> bool {
-        matches!(self, Verbosity::All) || self == other
-    }
+    Aot,
 }
 
 #[derive(Subcommand, Debug)]
@@ -157,6 +164,29 @@ pub enum Commands {
         sequential: bool,
         #[arg(long, default_value_t = false)]
         readable: bool,
+    },
+    Build {
+        paths: Vec<String>,
+        #[arg(short, long)]
+        example: Option<String>,
+        #[arg(long)]
+        verbosity: Option<Verbosity>,
+        #[arg(long)]
+        no_std: Option<bool>,
+        #[arg(long, default_value_t = false)]
+        no_type_check: bool,
+        #[arg(long, default_value_t = false)]
+        no_cache: bool,
+        #[arg(long, default_value_t = false)]
+        sequential: bool,
+        #[arg(long, default_value_t = false)]
+        time: bool,
+        #[arg(long, default_value_t = false)]
+        readable: bool,
+        #[arg(long)]
+        output_type: Option<BuildOutputType>,
+        #[arg(long)]
+        out: Option<String>,
     },
     #[command(external_subcommand)]
     External(Vec<String>),

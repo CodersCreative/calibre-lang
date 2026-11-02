@@ -1,8 +1,9 @@
 use crate::cli::Verbosity;
+use crate::commands::output_debug_info;
 use crate::commands::repl::{Repl, ReplBuilder};
 use crate::commands::utils::{is_repl_file, package_metadata_from_project};
-use calibre::PackagedProgramBlob;
-use calibre::{CalibreEngine, CalibreError, building::standalone::CalibreStandalone};
+use calibre::CalibreEngine;
+use calibre::{CalibreArtifacts, PackagedProgramBlob};
 use calibre_frontend::config::ProjectContext;
 use calibre_frontend::paths::resolve_run_targets;
 use calibre_mir::tags::context::PackageMetadata;
@@ -132,89 +133,17 @@ impl CheckSource {
             engine = engine.with_no_std(no_std);
         }
 
-        let artifacts = match engine.compile_source(self.contents.clone(), true) {
-            Ok(artifacts) => artifacts,
-            Err(CalibreError::Parse { errors, .. }) => {
-                calibre_frontend::diagnostics::emit_calibre_errors(
-                    &self.path,
-                    &self.contents,
-                    &errors,
-                );
-                return Err("parse failed".into());
-            }
-            Err(CalibreError::Middle {
-                error,
-                ast_artifacts,
-                ..
-            }) => {
-                if self.verbosity.is_level(&Verbosity::Ast)
-                    && let Some(ast) = ast_artifacts
-                {
-                    println!("{}", ast);
-                }
+        let artifacts = CalibreArtifacts::compile_and_output_errors(
+            &engine,
+            &self.path,
+            self.verbosity.is_level(&Verbosity::Ast),
+            false,
+            self.contents.clone(),
+            false,
+            false,
+        )?;
 
-                calibre_frontend::diagnostics::emit_mir_error(&self.path, &self.contents, &error);
-                return Err("compile failed".into());
-            }
-            Err(CalibreError::MissingEntryPoint(name)) => {
-                calibre_frontend::diagnostics::emit_error(
-                    &self.path,
-                    &self.contents,
-                    format!("Missing entry point: {name}"),
-                    None,
-                );
-                return Err("runtime error".into());
-            }
-            Err(other) => return Err(other.to_string().into()),
-        };
-
-        if let Some(elapsed) = &artifacts.cache_elapsed
-            && self.time
-        {
-            println!("Cache - elapsed {}ms", elapsed.as_millis());
-        }
-
-        if let Some(ast) = &artifacts.ast {
-            if self.time {
-                println!("Parser - elapsed {}ms", ast.elapsed.as_millis());
-            }
-
-            if self.verbosity.is_level(&Verbosity::Ast) {
-                println!("AST : ");
-                println!("{}", ast.data);
-                println!("Starting MIR...");
-            }
-        } else if self.verbosity.is_level(&Verbosity::Ast) {
-            println!("AST - unavailable: loaded from cache");
-        }
-
-        if let Some(mir) = &artifacts.mir {
-            if self.time {
-                println!("MIR - elapsed {}ms", mir.elapsed.as_millis());
-            }
-
-            if self.verbosity.is_level(&Verbosity::Mir) {
-                println!("MIR : ");
-                println!("{}", mir.data);
-                println!("Starting LIR...");
-            }
-        } else if self.verbosity.is_level(&Verbosity::Mir) {
-            println!("MIR - unavailable: loaded from cache");
-        }
-
-        if let Some(lir) = &artifacts.lir {
-            if self.time {
-                println!("LIR - elapsed {}ms", lir.elapsed.as_millis());
-            }
-
-            if self.verbosity.is_level(&Verbosity::Lir) {
-                println!("LIR : ");
-                println!("{}", lir.data);
-                println!("Starting VM...");
-            }
-        } else if self.verbosity.is_level(&Verbosity::Lir) {
-            println!("LIR - unavailable: loaded from cache");
-        }
+        output_debug_info(&artifacts, &self.verbosity, self.time);
 
         let mut ran = false;
         for (_, func_name) in artifacts.init_functions {

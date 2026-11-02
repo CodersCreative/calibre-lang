@@ -1,6 +1,7 @@
 use crate::commands::{
-    bench::BenchmarksBuilder, check::CheckBuilder, clear::Clear, get::GetBuilder, new::NewBuilder,
-    package::PackageBuilder, repl::Repl, run::RunBuilder, test::TestingBuilder,
+    bench::BenchmarksBuilder, build::BuildBuilder, check::CheckBuilder, clear::Clear,
+    get::GetBuilder, new::NewBuilder, package::PackageBuilder, repl::Repl, run::RunBuilder,
+    test::TestingBuilder,
 };
 use clap::Parser;
 use cli::{Args, Commands};
@@ -212,6 +213,35 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .out(out)
                     .parallel(!sequential)
                     .readable(readable)
+                    .build()?
+                    .execute()
+                    .await
+            }
+            Some(Commands::Build {
+                paths,
+                example,
+                verbosity,
+                no_std,
+                out,
+                no_cache,
+                sequential,
+                no_type_check,
+                readable,
+                time,
+                output_type,
+            }) => {
+                BuildBuilder::default()
+                    .paths(paths)
+                    .example(example)
+                    .verbosity(verbosity)
+                    .no_std(no_std)
+                    .out(out)
+                    .cache_enabled(!no_cache)
+                    .parallel(!sequential)
+                    .type_check(!no_type_check)
+                    .readable(readable)
+                    .time(time)
+                    .output_type(output_type)
                     .build()?
                     .execute()
                     .await

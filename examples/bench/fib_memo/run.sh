@@ -17,7 +17,9 @@ hyperfine \
   "calibre run --no-type-check test_tail.cal" \
   "calibre run --no-type-check --no-cache test_tail.cal" \
   "calibre run test_none.cal" \
+  "calibre run --backend jit test_none.cal" \
   "calibre run --no-cache test_none.cal" \
+  "calibre run --backend jit --no-cache test_none.cal" \
   "calibre run --no-type-check test_none.cal" \
   "calibre run --no-type-check --no-cache test_none.cal" \
   "python test_gen.py" \

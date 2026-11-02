@@ -2,11 +2,11 @@ use crate::layout::Layouts;
 use crate::natives::{ArgumentKind, runtime_functions};
 use crate::translation::FunctionTranslator;
 use crate::values::CraneliftTypes;
+use calibre_lir::MirDataType;
 use calibre_lir::ast::{
     BlockId, LirAssign, LirBlock, LirLValue, LirNode, LirNodeType, LirTerminator,
 };
 use calibre_lir::environment::{LirFunction, LirRegistry};
-use calibre_lir::{FullyQualifiedPath, MirDataType};
 use calibre_mir::symbols::VariableKey;
 use calibre_parser::Span;
 use cranelift::codegen::isa::CallConv;
@@ -56,7 +56,12 @@ fn create_target_isa() -> Result<Arc<dyn isa::TargetIsa>, Box<dyn Error>> {
 }
 
 impl CompilerData {
-    fn compile<M: Module>(&mut self, module: &mut M) -> Result<(), Box<dyn Error>> {
+    fn compile<M: Module>(
+        &mut self,
+        module: &mut M,
+        init_functions: Vec<(i32, VariableKey)>,
+        fin_functions: Vec<(i32, VariableKey)>,
+    ) -> Result<(), Box<dyn Error>> {
         for (name, sig) in runtime_functions() {
             let mut signature = module.make_signature();
             signature.call_conv = CallConv::SystemV;
@@ -120,13 +125,7 @@ impl CompilerData {
                 });
             }
 
-            let name = VariableKey {
-                fully_qualified_path: FullyQualifiedPath::combine(
-                    None,
-                    ustr::Ustr::from("calibre_init_globals"),
-                ),
-                shadow_counter: None,
-            };
+            let name = VariableKey::from("calibre_init_globals");
 
             let func = LirFunction {
                 name: name.clone(),
@@ -230,6 +229,60 @@ impl CompilerData {
             module.clear_context(&mut self.context);
         }
 
+        let mut start_signature = module.make_signature();
+        start_signature.call_conv = CallConv::SystemV;
+        let start_func_id = module.declare_function("_start", Linkage::Export, &start_signature)?;
+
+        let start_name = VariableKey::from("_start");
+        self.functions.insert(start_name.clone(), start_func_id);
+
+        self.context.func.signature.params.clear();
+        self.context.func.signature.returns.clear();
+
+        {
+            let mut builder =
+                FunctionBuilder::new(&mut self.context.func, &mut self.builder_context);
+
+            let entry_block = builder.create_block();
+            builder.append_block_params_for_function_params(entry_block);
+            builder.switch_to_block(entry_block);
+
+            let init_globals_key = VariableKey::from("calibre_init_globals");
+
+            if let Some(&func_id) = self.functions.get(&init_globals_key) {
+                let func_ref = module.declare_func_in_func(func_id, builder.func);
+                builder.ins().call(func_ref, &[]);
+            }
+
+            for (_, func_key) in init_functions {
+                if let Some(&func_id) = self.functions.get(&func_key) {
+                    let func_ref = module.declare_func_in_func(func_id, builder.func);
+                    builder.ins().call(func_ref, &[]);
+                }
+            }
+
+            for (_, func_key) in fin_functions {
+                if let Some(&func_id) = self.functions.get(&func_key) {
+                    let func_ref = module.declare_func_in_func(func_id, builder.func);
+                    builder.ins().call(func_ref, &[]);
+                }
+            }
+
+            builder.ins().return_(&[]);
+        }
+
+        match module.define_function(start_func_id, &mut self.context) {
+            Ok(_) => {}
+            Err(ModuleError::Compilation(CodegenError::Verifier(verifier_errors))) => {
+                let formatted_error =
+                    pretty_verifier_error(&self.context.func, None, verifier_errors);
+                return Err(format!("Verifier error in _start:\n{}", formatted_error).into());
+            }
+            Err(x) => return Err(Box::new(x)),
+        };
+
+        module.clear_context(&mut self.context);
+
         Ok(())
     }
 }
@@ -240,7 +293,11 @@ pub struct JitCompiler {
 }
 
 impl JitCompiler {
-    pub fn new(registry: LirRegistry) -> Result<Self, Box<dyn Error>> {
+    pub fn new(
+        registry: LirRegistry,
+        init_functions: Vec<(i32, VariableKey)>,
+        fin_functions: Vec<(i32, VariableKey)>,
+    ) -> Result<Self, Box<dyn Error>> {
         let isa = create_target_isa()?;
         let mut builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
 
@@ -266,7 +323,7 @@ impl JitCompiler {
             runtime_functions: FxHashMap::default(),
         };
 
-        data.compile(&mut module)?;
+        data.compile(&mut module, init_functions, fin_functions)?;
 
         module.finalize_definitions()?;
 
@@ -286,7 +343,12 @@ pub struct AotCompiler {
 }
 
 impl AotCompiler {
-    pub fn new(module_name: &str, registry: LirRegistry) -> Result<Self, Box<dyn Error>> {
+    pub fn new(
+        module_name: &str,
+        registry: LirRegistry,
+        init_functions: Vec<(i32, VariableKey)>,
+        fin_functions: Vec<(i32, VariableKey)>,
+    ) -> Result<Self, Box<dyn Error>> {
         let isa = create_target_isa()?;
 
         let builder = ObjectBuilder::new(
@@ -313,7 +375,7 @@ impl AotCompiler {
             runtime_functions: FxHashMap::default(),
         };
 
-        data.compile(&mut module)?;
+        data.compile(&mut module, init_functions, fin_functions)?;
 
         Ok(Self { module, data })
     }

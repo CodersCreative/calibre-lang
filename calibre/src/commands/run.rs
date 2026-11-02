@@ -1,10 +1,12 @@
 use crate::cli::{Backend, Verbosity};
+use crate::commands::output_debug_info;
 use crate::commands::repl::{Repl, ReplBuilder};
 use crate::commands::utils::{is_repl_file, package_metadata_from_project};
-use calibre::PackagedProgramBlob;
-use calibre::{CalibreEngine, CalibreError, building::standalone::CalibreStandalone};
+use calibre::CalibreEngine;
+use calibre::{CalibreArtifacts, PackagedProgramBlob};
 use calibre_frontend::config::ProjectContext;
 use calibre_frontend::paths::resolve_run_targets;
+use calibre_lir::VariableKey;
 use calibre_mir::tags::context::PackageMetadata;
 use calibre_vm::{VM, config::VMConfig};
 use derive_builder::Builder;
@@ -40,6 +42,7 @@ impl Run {
             self.paths,
             self.example,
         )?;
+
         if targets.is_empty() {
             return Repl::default().execute().await;
         }
@@ -142,8 +145,10 @@ impl RunSource {
             .with_cache_enabled(self.cache)
             .with_included(self.included);
 
-        if let Some(dir) = self.cache_base_dir {
+        if let Some(dir) = &self.cache_base_dir {
             engine = engine.with_cache_dir(dir.join("target").join("calibre"));
+        } else {
+            engine = engine.with_cache_dir(PathBuf::from("target/calibre"));
         }
 
         if let Some(metadata) = self.package_metadata {
@@ -160,97 +165,22 @@ impl RunSource {
 
         engine = engine.with_type_check(self.type_check);
 
-        let artifacts = match if self.cache {
-            engine.compile_cached_program_source(self.contents.clone(), self.readable)
-        } else {
-            engine.compile_source(self.contents.clone(), false)
-        } {
-            Ok(artifacts) => artifacts,
-            Err(CalibreError::Parse { errors, .. }) => {
-                calibre_frontend::diagnostics::emit_calibre_errors(
-                    &self.path,
-                    &self.contents,
-                    &errors,
-                );
-                return Err("parse failed".into());
-            }
-            Err(CalibreError::Middle {
-                error,
-                ast_artifacts,
-                ..
-            }) => {
-                if self.verbosity.is_level(&Verbosity::Ast)
-                    && let Some(ast) = ast_artifacts
-                {
-                    println!("{}", ast);
-                }
+        let artifacts = CalibreArtifacts::compile_and_output_errors(
+            &engine,
+            &self.path,
+            self.verbosity.is_level(&Verbosity::Ast),
+            self.cache,
+            self.contents.clone(),
+            self.readable,
+            false,
+        )?;
 
-                calibre_frontend::diagnostics::emit_mir_error(&self.path, &self.contents, &error);
-                return Err("compile failed".into());
-            }
-            Err(CalibreError::MissingEntryPoint(name)) => {
-                calibre_frontend::diagnostics::emit_error(
-                    &self.path,
-                    &self.contents,
-                    format!("Missing entry point: {name}"),
-                    None,
-                );
-                return Err("runtime error".into());
-            }
-            Err(other) => return Err(other.to_string().into()),
-        };
-
-        if let Some(elapsed) = &artifacts.cache_elapsed
-            && self.time
-        {
-            println!("Cache - elapsed {}ms", elapsed.as_millis());
-        }
-
-        if let Some(ast) = &artifacts.ast {
-            if self.time {
-                println!("Parser - elapsed {}ms", ast.elapsed.as_millis());
-            }
-
-            if self.verbosity.is_level(&Verbosity::Ast) {
-                println!("AST : ");
-                println!("{}", ast.data);
-                println!("Starting MIR...");
-            }
-        } else if self.verbosity.is_level(&Verbosity::Ast) {
-            println!("AST - unavailable: loaded from cache");
-        }
-
-        if let Some(mir) = &artifacts.mir {
-            if self.time {
-                println!("MIR - elapsed {}ms", mir.elapsed.as_millis());
-            }
-
-            if self.verbosity.is_level(&Verbosity::Mir) {
-                println!("MIR : ");
-                println!("{}", mir.data);
-                println!("Starting LIR...");
-            }
-        } else if self.verbosity.is_level(&Verbosity::Mir) {
-            println!("MIR - unavailable: loaded from cache");
-        }
-
-        if let Some(lir) = &artifacts.lir {
-            if self.time {
-                println!("LIR - elapsed {}ms", lir.elapsed.as_millis());
-            }
-
-            if self.verbosity.is_level(&Verbosity::Lir) {
-                println!("LIR : ");
-                println!("{}", lir.data);
-                println!("Starting VM...");
-            }
-        } else if self.verbosity.is_level(&Verbosity::Lir) {
-            println!("LIR - unavailable: loaded from cache");
-        }
+        output_debug_info(&artifacts, &self.verbosity, self.time);
 
         let vm_begin = start.elapsed();
 
         let entry_name = artifacts.entry_name.clone();
+        let program_args = self.program_args.clone();
         let mut vm_config = self.vm_config;
         vm_config.profiling = self.profiling;
         vm_config.profiling_output = self.profiling_output.clone();
@@ -260,8 +190,8 @@ impl RunSource {
         vm.set_source_file_override(&self.path);
         vm.set_program_args(
             self.program_args
-                .into_iter()
-                .map(|x| Ustr::from(&x))
+                .iter()
+                .map(|x| Ustr::from(x.as_str()))
                 .collect(),
         );
 
@@ -287,33 +217,23 @@ impl RunSource {
                     return Err("LIR artifacts not available for Cranelift JIT backend".into());
                 };
 
-                let jit = JitCompiler::new(lir.data)?;
+                let jit =
+                    JitCompiler::new(lir.data, artifacts.init_functions, artifacts.fin_functions)?;
 
                 if self.time {
                     println!(
-                        "Cranelift JIT - elapsed {}ms",
+                        "Cranelift - elapsed {}ms",
                         (start.elapsed() - jit_begin).as_millis()
                     );
                 }
 
-                let mut ran = false;
-                for (_, func_name) in &artifacts.init_functions {
-                    if let Some(code_ptr) = jit.get_function(func_name) {
-                        let func: extern "C" fn() = unsafe { std::mem::transmute(code_ptr) };
-                        func();
-                        ran = true;
-                    }
-                }
+                let start_key = VariableKey::from("_start");
 
-                if !ran {
-                    return Err(format!("Missing entry point in JIT: {}", entry_name).into());
-                }
-
-                for (_, func_name) in &artifacts.fin_functions {
-                    if let Some(code_ptr) = jit.get_function(func_name) {
-                        let func: extern "C" fn() = unsafe { std::mem::transmute(code_ptr) };
-                        func();
-                    }
+                if let Some(code_ptr) = jit.get_function(&start_key) {
+                    let start_fn: extern "C" fn() = unsafe { std::mem::transmute(code_ptr) };
+                    start_fn();
+                } else {
+                    return Err(format!("Missing _start entry point in JIT").into());
                 }
 
                 if self.time {
@@ -330,26 +250,101 @@ impl RunSource {
                 );
             }
             #[cfg(feature = "cranelift")]
-            Backend::Object => {
+            Backend::Aot => {
+                use crate::commands::find_runtime_static_lib;
                 use calibre_cranelift::AotCompiler;
+                use std::process::Command;
 
                 let Some(lir) = artifacts.lir else {
                     return Err("LIR artifacts not available for Cranelift Object backend".into());
                 };
 
-                let aot = AotCompiler::new(&entry_name.to_string(), lir.data)?;
+                let aot = AotCompiler::new(
+                    &entry_name.to_string(),
+                    lir.data,
+                    artifacts.init_functions,
+                    artifacts.fin_functions,
+                )?;
+
                 let obj = aot.finish()?;
 
-                let out_path = PathBuf::from(format!("{}.o", entry_name));
+                let cache_dir = if let Some(ref dir) = self.cache_base_dir {
+                    dir.join("target").join("calibre")
+                } else {
+                    PathBuf::from("target/calibre")
+                };
 
-                fs::write(&out_path, &obj).await?;
-                println!("Object file written to {}", out_path.display());
+                fs::create_dir_all(&cache_dir).await?;
+
+                let obj_path = cache_dir.join(format!("{}.o", entry_name));
+                let bin_path = cache_dir.join(entry_name.to_string());
+
+                fs::write(&obj_path, &obj).await?;
+                println!("Object file written to {}", obj_path.display());
+
+                let runtime_lib_path = find_runtime_static_lib()
+                    .ok_or("Failed to locate calibre_runtime static library. Please build the runtime crate first with: cargo build --release -p calibre-runtime")?;
+
+                let linker = if cfg!(target_os = "linux") || cfg!(target_os = "freebsd") {
+                    "cc"
+                } else if cfg!(target_os = "macos") {
+                    "clang"
+                } else if cfg!(target_os = "windows") {
+                    "cl.exe"
+                } else {
+                    return Err(format!("Unsupported platform for linking").into());
+                };
+
+                let link_result = Command::new(linker)
+                    .arg(&obj_path)
+                    .arg("-o")
+                    .arg(&bin_path)
+                    .arg(&runtime_lib_path)
+                    .arg("-lm")
+                    .output();
+
+                match link_result {
+                    Ok(output) => {
+                        if !output.status.success() {
+                            let stderr = String::from_utf8_lossy(&output.stderr);
+                            eprintln!("{}", stderr);
+
+                            let _ = fs::remove_file(&obj_path).await;
+                            return Err(format!("Linking failed: {}", stderr).into());
+                        }
+
+                        println!("Binary written to {}", bin_path.display());
+                    }
+                    Err(e) => {
+                        let _ = fs::remove_file(&obj_path).await;
+                        return Err(format!("Failed to execute linker: {}", e).into());
+                    }
+                }
+
+                let exec_result = Command::new(&bin_path).args(&program_args).status();
+
+                match exec_result {
+                    Ok(status) => {
+                        if !status.success() {
+                            eprintln!("Execution failed with exit code: {:?}", status.code());
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to execute: {}", e);
+                    }
+                };
+
+                let _ = fs::remove_file(&obj_path).await;
+                let _ = fs::remove_file(&bin_path).await;
 
                 return Ok(());
             }
             #[cfg(not(feature = "cranelift"))]
-            Backend::Object => {
-                return Err("Calibre was compiled without the 'cranelift' feature. Cannot use Object backend.".into());
+            Backend::Aot => {
+                return Err(
+                    "Calibre was compiled without the 'cranelift' feature. Cannot use AOT backend."
+                        .into(),
+                );
             }
             Backend::Interpreter => {}
         }

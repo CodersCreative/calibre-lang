@@ -1,4 +1,5 @@
 pub mod bench;
+pub mod build;
 pub mod check;
 pub mod clear;
 pub mod get;
@@ -9,8 +10,9 @@ pub mod run;
 pub mod test;
 pub mod utils;
 
+use crate::{cli::Verbosity, commands::utils::package_metadata_from_project};
 use calibre::{
-    CalibreEngine, CalibreError, CompileMode, PackagedProgramBlob,
+    CalibreArtifacts, CalibreEngine, CalibreError, CompileMode, PackagedProgramBlob,
     building::standalone::CalibreStandalone,
 };
 use calibre_bytecode::VMRegistry;
@@ -23,8 +25,62 @@ use calibre_mir::testing::{Test, TestOrBench};
 use calibre_vm::config::VMConfig;
 use derive_builder::Builder;
 use smol::fs;
-use std::error::Error;
+use std::{error::Error, path::PathBuf};
 use ustr::Ustr;
+
+pub(crate) fn find_runtime_static_lib() -> Option<PathBuf> {
+    None
+}
+
+pub fn output_debug_info(artifacts: &CalibreArtifacts, verbosity: &Verbosity, time: bool) {
+    if let Some(elapsed) = &artifacts.cache_elapsed
+        && time
+    {
+        println!("Cache - elapsed {}ms", elapsed.as_millis());
+    }
+
+    if let Some(ast) = &artifacts.ast {
+        if time {
+            println!("Parser - elapsed {}ms", ast.elapsed.as_millis());
+        }
+
+        if verbosity.is_level(&Verbosity::Ast) {
+            println!("AST : ");
+            println!("{}", ast.data);
+            println!("Starting MIR...");
+        }
+    } else if verbosity.is_level(&Verbosity::Ast) {
+        println!("AST - unavailable: loaded from cache");
+    }
+
+    if let Some(mir) = &artifacts.mir {
+        if time {
+            println!("MIR - elapsed {}ms", mir.elapsed.as_millis());
+        }
+
+        if verbosity.is_level(&Verbosity::Mir) {
+            println!("MIR : ");
+            println!("{}", mir.data);
+            println!("Starting LIR...");
+        }
+    } else if verbosity.is_level(&Verbosity::Mir) {
+        println!("MIR - unavailable: loaded from cache");
+    }
+
+    if let Some(lir) = &artifacts.lir {
+        if time {
+            println!("LIR - elapsed {}ms", lir.elapsed.as_millis());
+        }
+
+        if verbosity.is_level(&Verbosity::Lir) {
+            println!("LIR : ");
+            println!("{}", lir.data);
+            println!("Starting VM...");
+        }
+    } else if verbosity.is_level(&Verbosity::Lir) {
+        println!("LIR - unavailable: loaded from cache");
+    }
+}
 
 #[derive(Builder, Debug)]
 pub struct RunSuite<'a> {
@@ -44,8 +100,7 @@ impl<'a> RunSuite<'a> {
         let cwd = std::env::current_dir()?;
         let project = ProjectContext::load(&cwd).map_err(|e| format!("config error: {e}"))?;
         let vm_config = project.as_ref().map(VMConfig::from).unwrap_or_default();
-        let package_metadata =
-            crate::commands::utils::package_metadata_from_project(project.as_ref());
+        let package_metadata = package_metadata_from_project(project.as_ref());
         let cache_base_dir = project.as_ref().map(|p| p.root.clone());
         let included = PackagedProgramBlob::load(project.as_ref());
 
