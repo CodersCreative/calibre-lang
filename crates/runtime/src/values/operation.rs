@@ -1,7 +1,7 @@
 use crate::values::aggregate::GcAggregate;
 use crate::values::list::GcList;
 use crate::values::string::GcString;
-use crate::values::{BIG_CONSTS, Value, alloc_big};
+use crate::values::{BIG_CONSTS, Value, ValueTag, alloc_big};
 use crate::{BIG_PRECISION, BIG_ROUNDING};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
 
@@ -32,11 +32,39 @@ pub enum ComparisonOperator {
     NotEqual,
 }
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum BooleanOperator {
-    And,
-    Or,
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_comparison(
+    op: ComparisonOperator,
+    left_tag: ValueTag,
+    left: i64,
+    right_tag: ValueTag,
+    right: i64,
+) -> bool {
+    let left = Value::from_tag(left_tag, left);
+    let right = Value::from_tag(right_tag, right);
+
+    if let Ok(Value::Bool(x)) = comparison(&op, left, right) {
+        x
+    } else {
+        false
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_binary(
+    op: BinaryOperator,
+    left_tag: ValueTag,
+    left: i64,
+    right_tag: ValueTag,
+    right: i64,
+) -> i64 {
+    let left = Value::from_tag(left_tag, left);
+    let right = Value::from_tag(right_tag, right);
+
+    match binary(&op, left, right) {
+        Ok(x) => i64::from(x),
+        Err(e) => panic!("{}", e),
+    }
 }
 
 fn comparison_value_handle<T: PartialEq + PartialOrd>(
@@ -220,14 +248,6 @@ pub fn comparison(op: &ComparisonOperator, left: Value, right: Value) -> Result<
         (left, right, ComparisonOperator::NotEqual) => {
             Ok(Value::Bool(!matches!(eq_value(&left, &right), Some(true))))
         }
-        (left, right, op) => Err(format!("Unable to perform {op:?} on {left} and {right}")),
-    }
-}
-
-pub fn boolean(op: &BooleanOperator, left: Value, right: Value) -> Result<Value, String> {
-    match (left, right, op) {
-        (Value::Bool(x), Value::Bool(y), BooleanOperator::And) => Ok(Value::Bool(x && y)),
-        (Value::Bool(x), Value::Bool(y), BooleanOperator::Or) => Ok(Value::Bool(x || y)),
         (left, right, op) => Err(format!("Unable to perform {op:?} on {left} and {right}")),
     }
 }

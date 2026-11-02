@@ -29,10 +29,7 @@ impl CraneliftTranslation for LirComparison {
             .right
             .translate(translator, Some(left.data_type.clone()))?;
 
-        let is_float =
-            left.data_type == MirDataType::Float || right.data_type == MirDataType::Float;
-
-        let res = if is_float {
+        let res = if left.data_type == MirDataType::Float && right.data_type == MirDataType::Float {
             let left_value = if left.data_type == MirDataType::Float {
                 left.value
             } else {
@@ -87,9 +84,8 @@ impl CraneliftTranslation for LirComparison {
                     right_value,
                 ),
             }
-        } else {
-            let is_unsigned =
-                left.data_type == MirDataType::UInt || right.data_type == MirDataType::UInt;
+        } else if left.data_type.is_int_or_bool() && right.data_type.is_int_or_bool() {
+            let is_unsigned = left.data_type.is_unsigned() || right.data_type.is_unsigned();
 
             let left_value = left.value;
             let right_value = right.value;
@@ -140,6 +136,8 @@ impl CraneliftTranslation for LirComparison {
                     translator.builder.ins().icmp(cc, left_value, right_value)
                 }
             }
+        } else {
+            todo!("{} and {}", left.data_type, right.data_type)
         };
 
         Ok(CompiledValue::new(res, MirDataType::Bool))
@@ -150,17 +148,14 @@ impl CraneliftTranslation for LirBinary {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
-        _data_type: Option<MirDataType>,
+        data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         let left = self.left.translate(translator, None)?;
         let right = self
             .right
             .translate(translator, Some(left.data_type.clone()))?;
 
-        let is_float =
-            left.data_type == MirDataType::Float || right.data_type == MirDataType::Float;
-
-        if is_float {
+        if left.data_type == MirDataType::Float && right.data_type == MirDataType::Float {
             let left_value = if left.data_type == MirDataType::Float {
                 left.value
             } else {
@@ -187,9 +182,8 @@ impl CraneliftTranslation for LirBinary {
             };
 
             Ok(CompiledValue::new(res, MirDataType::Float))
-        } else {
-            let is_unsigned =
-                left.data_type == MirDataType::UInt || right.data_type == MirDataType::UInt;
+        } else if left.data_type.is_int_or_bool() && right.data_type.is_int_or_bool() {
+            let is_unsigned = left.data_type.is_unsigned() || right.data_type.is_unsigned();
 
             let left_value = left.value;
             let right_value = right.value;
@@ -226,14 +220,9 @@ impl CraneliftTranslation for LirBinary {
                 _ => translator.builder.ins().iadd(left_value, right_value),
             };
 
-            Ok(CompiledValue::new(
-                res,
-                if is_unsigned {
-                    MirDataType::UInt
-                } else {
-                    MirDataType::Int
-                },
-            ))
+            Ok(CompiledValue::new(res, data_type.unwrap_or(left.data_type)))
+        } else {
+            todo!()
         }
     }
 }

@@ -471,6 +471,24 @@ impl MirDataType {
         )
     }
 
+    pub fn is_int_or_bool(&self) -> bool {
+        matches!(
+            self.unwrap_all_refs(),
+            MirDataType::Int
+                | MirDataType::UInt
+                | MirDataType::Byte
+                | MirDataType::FfiType(_)
+                | MirDataType::Bool
+        )
+    }
+
+    pub fn is_unsigned(&self) -> bool {
+        matches!(
+            self.unwrap_all_refs(),
+            MirDataType::UInt | MirDataType::Byte | MirDataType::Bool
+        )
+    }
+
     pub fn is_native(&self) -> bool {
         !matches!(self.unwrap_all_refs(), MirDataType::Struct { .. })
     }
