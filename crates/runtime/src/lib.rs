@@ -1,4 +1,4 @@
-use crate::values::{aggregate, enums, list, string};
+use crate::values::{aggregate, enums, list, operation, string};
 use astro_float::RoundingMode;
 
 pub mod gc;
@@ -19,6 +19,15 @@ unsafe impl Sync for RuntimeSymbol {}
 
 pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
     &[
+        // operation
+        RuntimeSymbol {
+            name: "calibre_comparison",
+            ptr: operation::calibre_comparison as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_binary",
+            ptr: operation::calibre_binary as *const u8,
+        },
         // gc
         RuntimeSymbol {
             name: "calibre_gc_collect",

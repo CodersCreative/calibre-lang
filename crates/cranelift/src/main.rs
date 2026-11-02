@@ -186,6 +186,10 @@ const main := fn (x : int) -> int => {
     // console_output(0, num as! str);
     console_output(0, "\n");
 
+    console_output(0, "string concat: ")
+    console_output(0, "hey " & 800 & " whatever");
+    console_output(0, "\n");
+    
     console_output(0, fib_value as! str);
     console_output(0, "\n");
     test_string_literal();

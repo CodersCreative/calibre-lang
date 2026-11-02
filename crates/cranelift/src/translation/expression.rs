@@ -4,7 +4,7 @@ use crate::{
 };
 use calibre_lir::{
     MirDataType, VariableKey,
-    ast::{LirAs, LirBinary, LirBoolean, LirCall, LirComparison, LirIs, LirLoad, LirNodeType},
+    ast::{LirAs, LirBinary, LirBoolean, LirCall, LirComparison, LirIs, LirNodeType},
 };
 use calibre_parser::ast::{
     binary::BinaryOperator,
@@ -137,7 +137,43 @@ impl CraneliftTranslation for LirComparison {
                 }
             }
         } else {
-            todo!("{} and {}", left.data_type, right.data_type)
+            let discriminant = self.operator as u8;
+            let discriminant = translator
+                .builder
+                .ins()
+                .iconst(translator.types.int(), discriminant as i64);
+
+            let runtime_name = "calibre_comparison";
+
+            let func_id = translator
+                .runtime_functions
+                .get(runtime_name)
+                .ok_or(format!("{} not found in runtime_functions", runtime_name))?;
+
+            let func_ref = translator
+                .module
+                .declare_func_in_func(*func_id, translator.builder.func);
+
+            let left_tag = left.data_type.type_tag(translator.registry.enums()) as i64;
+            let left_tag = translator
+                .builder
+                .ins()
+                .iconst(translator.types.int(), left_tag);
+            let left = translator.convert_to_i64(left)?;
+
+            let right_tag = right.data_type.type_tag(translator.registry.enums()) as i64;
+            let right_tag = translator
+                .builder
+                .ins()
+                .iconst(translator.types.int(), right_tag);
+            let right = translator.convert_to_i64(right)?;
+
+            let call = translator
+                .builder
+                .ins()
+                .call(func_ref, &[discriminant, left_tag, left, right_tag, right]);
+
+            translator.builder.inst_results(call)[0]
         };
 
         Ok(CompiledValue::new(res, MirDataType::Bool))
@@ -148,7 +184,7 @@ impl CraneliftTranslation for LirBinary {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
-        data_type: Option<MirDataType>,
+        mut data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         let left = self.left.translate(translator, None)?;
         let right = self
@@ -222,7 +258,50 @@ impl CraneliftTranslation for LirBinary {
 
             Ok(CompiledValue::new(res, data_type.unwrap_or(left.data_type)))
         } else {
-            todo!()
+            data_type = Some(data_type.unwrap_or(left.data_type.clone()));
+
+            let discriminant = self.operator as u8;
+            let discriminant = translator
+                .builder
+                .ins()
+                .iconst(translator.types.int(), discriminant as i64);
+
+            let runtime_name = "calibre_binary";
+
+            let func_id = translator
+                .runtime_functions
+                .get(runtime_name)
+                .ok_or(format!("{} not found in runtime_functions", runtime_name))?;
+
+            let func_ref = translator
+                .module
+                .declare_func_in_func(*func_id, translator.builder.func);
+
+            let left_tag = left.data_type.type_tag(translator.registry.enums()) as i64;
+            let left_tag = translator
+                .builder
+                .ins()
+                .iconst(translator.types.int(), left_tag);
+            let left = translator.convert_to_i64(left)?;
+
+            let right_tag = right.data_type.type_tag(translator.registry.enums()) as i64;
+            let right_tag = translator
+                .builder
+                .ins()
+                .iconst(translator.types.int(), right_tag);
+            let right = translator.convert_to_i64(right)?;
+
+            let call = translator
+                .builder
+                .ins()
+                .call(func_ref, &[discriminant, left_tag, left, right_tag, right]);
+
+            let result = translator.builder.inst_results(call)[0];
+
+            Ok(CompiledValue::new(
+                result,
+                data_type.unwrap_or(MirDataType::Dynamic),
+            ))
         }
     }
 }

@@ -113,6 +113,30 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_comparison",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::TagPayload),
+                        (types::I64, ArgumentKind::TagPayload),
+                    ],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_binary",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::TagPayload),
+                        (types::I64, ArgumentKind::TagPayload),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
+                },
+            ),
+            (
                 "calibre_option_none",
                 RuntimeFunction {
                     params: vec![],
