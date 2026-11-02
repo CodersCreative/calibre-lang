@@ -57,6 +57,24 @@ pub fn alloc_big(value: BigFloat) -> *mut BigFloat {
     }
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_deref(val: *mut Value) -> i64 {
+    if val.is_null() {
+        return 0;
+    }
+
+    unsafe { i64::from((*val).clone()) }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_set_ref(val: *mut Value, tag: ValueTag, payload: i64) -> i64 {
+    if val.is_null() {
+        return payload;
+    }
+
+    unsafe { i64::from(std::ptr::replace(val, Value::from_tag(tag, payload))) }
+}
+
 #[repr(C)]
 #[derive(Clone)]
 pub enum Value {

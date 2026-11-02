@@ -45,9 +45,9 @@ const conversions := fn () -> int => {
     return fi + bi + ci + ui;
 };
 
-const test_option_next := fn () -> int => {
+const test_option_some := fn () -> int => {
     let res := some(50);
-    return res.next;
+    return res.Some;
 }
 
 const test_result_ok := fn () -> int => {
@@ -113,7 +113,7 @@ const test_enum_literal := fn () => {
     console_output(0, "hi\n");
     console_output(0, lang as! str);
     console_output(0, "\n");
-    console_output(0, lang.next as! str);
+    console_output(0, lang.ENGLISH as! str);
     console_output(0, "\n");
     console_output(0, discriminant(lang) as! str);
     console_output(0, "\n");
@@ -196,7 +196,7 @@ const main := fn (x : int) -> int => {
     console_output(0, "\n");
     test_char_literal();
     console_output(0, "\n");
-    return result + value + test_option_next() + test_result_discriminant() + test_result_ok() + test_result_err() + fib_value;
+    return result + value + test_option_some() + test_result_discriminant() + test_result_ok() + test_result_err() + fib_value;
 };
 "#;
 

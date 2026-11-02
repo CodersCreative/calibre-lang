@@ -19,6 +19,15 @@ unsafe impl Sync for RuntimeSymbol {}
 
 pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
     &[
+        // memory
+        RuntimeSymbol {
+            name: "calibre_deref",
+            ptr: values::calibre_deref as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_set_ref",
+            ptr: values::calibre_set_ref as *const u8,
+        },
         // operation
         RuntimeSymbol {
             name: "calibre_comparison",
@@ -100,6 +109,10 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_enum_get",
             ptr: enums::calibre_enum_get as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_enum_ref_get",
+            ptr: enums::calibre_enum_ref_get as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_enum_discriminant",

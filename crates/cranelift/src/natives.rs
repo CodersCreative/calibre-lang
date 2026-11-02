@@ -1,4 +1,5 @@
 use calibre_lir::{Key, MirDataType, TypeKey, VariableKey, environment::LirRegistry};
+use calibre_parser::ast::RefMutability;
 use cranelift::prelude::*;
 use rustc_hash::FxHashMap;
 use std::sync::OnceLock;
@@ -55,6 +56,25 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     ],
                     returns: None,
                     typed_return: None,
+                },
+            ),
+            (
+                "calibre_deref",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
+                },
+            ),
+            (
+                "calibre_set_ref",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::TagPayload),
+                    ],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Dynamic),
                 },
             ),
             (
@@ -188,7 +208,21 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Dynamic),
+                    typed_return: Some(MirDataType::Ref(
+                        Box::new(MirDataType::Dynamic),
+                        RefMutability::MutRef,
+                    )),
+                },
+            ),
+            (
+                "calibre_enum_ref_get",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Ref(
+                        Box::new(MirDataType::Dynamic),
+                        RefMutability::MutRef,
+                    )),
                 },
             ),
             (

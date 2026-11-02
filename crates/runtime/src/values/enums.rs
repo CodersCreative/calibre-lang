@@ -32,12 +32,24 @@ pub extern "C" fn calibre_gc_alloc_enum(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_enum_get(val: *mut GcAggregate) -> i64 {
+pub extern "C" fn calibre_enum_get(val: *mut GcAggregate) -> *mut Value {
     if val.is_null() {
-        return 0;
+        return std::ptr::null_mut();
     }
 
-    unsafe { i64::from((&(*val).data).get(1).cloned().unwrap_or(Value::Null)) }
+    unsafe { (&mut (*val).data).get_mut(1).unwrap() as *mut Value }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_enum_ref_get(val: *mut Value) -> *mut Value {
+    if val.is_null() {
+        return val;
+    }
+
+    match unsafe { &mut (*val) } {
+        Value::Enum(x) => calibre_enum_get(*x),
+        _ => val,
+    }
 }
 
 #[unsafe(no_mangle)]
