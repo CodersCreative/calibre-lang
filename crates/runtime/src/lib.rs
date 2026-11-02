@@ -1,8 +1,12 @@
 use crate::values::{aggregate, enums, list, string};
+use astro_float::RoundingMode;
 
 pub mod gc;
 pub mod native;
 pub mod values;
+
+pub const BIG_PRECISION: usize = 128;
+pub const BIG_ROUNDING: RoundingMode = RoundingMode::ToEven;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeSymbol {

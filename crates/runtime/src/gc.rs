@@ -58,7 +58,7 @@ pub extern "C" fn calibre_gc_collect() {
             }
 
             unsafe {
-                let object = &(*header.0).inner as *const GcObject as usize;
+                let object = &mut (*header.0).inner as *mut GcObject as usize;
 
                 if (header.0 as usize == addr || object == addr) && !(*header.0).marked {
                     (*header.0).marked = true;
@@ -83,6 +83,7 @@ pub extern "C" fn calibre_gc_collect() {
                             }
                         }
                         GcObject::String(_) => {}
+                        GcObject::Big(_) => {}
                     }
                 }
             }

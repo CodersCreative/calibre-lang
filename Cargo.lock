@@ -594,6 +594,7 @@ dependencies = [
 name = "calibre-runtime"
 version = "0.0.1"
 dependencies = [
+ "astro-float",
  "blake3",
  "errno",
  "fastrand",

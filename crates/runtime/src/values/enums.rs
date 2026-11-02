@@ -32,22 +32,22 @@ pub extern "C" fn calibre_gc_alloc_enum(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_enum_get(val: *const GcAggregate) -> i64 {
+pub extern "C" fn calibre_enum_get(val: *mut GcAggregate) -> i64 {
     if val.is_null() {
         return 0;
     }
 
-    unsafe { i64::from((&(*val).data).get(1).copied().unwrap_or(Value::Null)) }
+    unsafe { i64::from((&(*val).data).get(1).cloned().unwrap_or(Value::Null)) }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_enum_discriminant(val: *const GcAggregate) -> u64 {
+pub extern "C" fn calibre_enum_discriminant(val: *mut GcAggregate) -> u64 {
     if val.is_null() {
         return 0;
     }
 
     unsafe {
-        match (&(*val).data).first().copied().unwrap_or(Value::Null) {
+        match (&(*val).data).first().cloned().unwrap_or(Value::Null) {
             Value::Int(x) => x.cast_unsigned(),
             Value::UInt(x) => x,
             _ => 0,

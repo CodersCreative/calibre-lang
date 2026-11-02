@@ -75,6 +75,7 @@ pub extern "C" fn calibre_len(tag: ValueTag, value: i64) -> u64 {
         }
         Value::Int(x) => x.cast_unsigned(),
         Value::UInt(x) => x,
+        Value::Byte(x) => x as u64,
         Value::Float(x) => x as u64,
         Value::Char(x) => x as u64,
         Value::Ptr(_) | Value::Null | Value::Bool(_) | Value::Big(_) | Value::Enum(_) => 0,

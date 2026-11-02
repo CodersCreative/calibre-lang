@@ -1,15 +1,22 @@
 use crate::{
-    gc::{GC_HEAP, GC_STATS, GcHeader, SendPtr},
+    gc::{GC_HEAP, GC_STATS, GcHeader, SendPtr, calibre_gc_add_root},
     values::{aggregate::GcAggregate, list::GcList, string::GcString},
 };
-use std::fmt::Display;
+use astro_float::{BigFloat, Consts};
+use std::{fmt::Display, sync::LazyLock};
+use wasm_sync::Mutex;
 
 pub mod aggregate;
 pub mod enums;
 pub mod list;
+pub mod operation;
 pub mod string;
 
+pub static BIG_CONSTS: LazyLock<Mutex<Consts>> =
+    LazyLock::new(|| Mutex::new(Consts::new().expect("Big floats failed to load")));
+
 pub enum GcObject {
+    Big(BigFloat),
     List(GcList),
     String(GcString),
     Aggregate(GcAggregate),
@@ -33,22 +40,40 @@ fn register_alloc(inner: GcObject) -> *mut GcHeader {
     header
 }
 
+pub fn alloc_big(value: BigFloat) -> *mut BigFloat {
+    let header = register_alloc(GcObject::Big(value));
+
+    unsafe {
+        let object = &mut (*header).inner;
+
+        let ptr = object as *mut GcObject as usize;
+        calibre_gc_add_root(ptr);
+
+        if let GcObject::Big(value) = object {
+            value as *mut BigFloat
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+}
+
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum Value {
     Null,
     Bool(bool),
     Int(i64),
     UInt(u64),
+    Byte(u8),
     Float(f64),
     // TODO Implement big currently just being treated a ptr
-    Big(usize),
-    String(*const GcString),
+    Big(*const BigFloat),
+    String(*mut GcString),
     Char(u32),
-    Struct(*const GcAggregate),
-    Tuple(*const GcAggregate),
-    Enum(*const GcAggregate),
-    List(*const GcList),
+    Struct(*mut GcAggregate),
+    Tuple(*mut GcAggregate),
+    Enum(*mut GcAggregate),
+    List(*mut GcList),
     Range(i64, i64),
     Ptr(usize),
 }
@@ -60,6 +85,7 @@ impl From<&Value> for ValueTag {
             Value::Bool(_) => Self::Bool,
             Value::Int(_) => Self::Int,
             Value::UInt(_) => Self::UInt,
+            Value::Byte(_) => Self::Byte,
             Value::Float(_) => Self::Float,
             Value::Big(_) => Self::Big,
             Value::String(_) => Self::String,
@@ -81,14 +107,15 @@ impl Value {
             ValueTag::Bool => Self::Bool(value != 0),
             ValueTag::Int => Self::Int(value),
             ValueTag::UInt => Self::UInt(value.cast_unsigned()),
+            ValueTag::Byte => Self::Byte(value.cast_unsigned() as u8),
             ValueTag::Float => Self::Float(f64::from_bits(value.cast_unsigned())),
-            ValueTag::Big => Self::Big(value.cast_unsigned() as usize),
-            ValueTag::String => Self::String(value.cast_unsigned() as *const GcString),
+            ValueTag::Big => Self::Big(value.cast_unsigned() as *const BigFloat),
+            ValueTag::String => Self::String(value.cast_unsigned() as *mut GcString),
             ValueTag::Char => Self::Char(value.cast_unsigned() as u32),
-            ValueTag::Struct => Self::Struct(value.cast_unsigned() as *const GcAggregate),
-            ValueTag::Tuple => Self::Tuple(value.cast_unsigned() as *const GcAggregate),
-            ValueTag::Enum => Self::Enum(value.cast_unsigned() as *const GcAggregate),
-            ValueTag::List => Self::List(value.cast_unsigned() as *const GcList),
+            ValueTag::Struct => Self::Struct(value.cast_unsigned() as *mut GcAggregate),
+            ValueTag::Tuple => Self::Tuple(value.cast_unsigned() as *mut GcAggregate),
+            ValueTag::Enum => Self::Enum(value.cast_unsigned() as *mut GcAggregate),
+            ValueTag::List => Self::List(value.cast_unsigned() as *mut GcList),
             ValueTag::Range => {
                 let from = value as i32 as i64;
                 let to = (value >> 32) as i32 as i64;
@@ -112,6 +139,7 @@ impl From<Value> for i64 {
             Value::Bool(x) => x as i64,
             Value::Int(x) => x,
             Value::UInt(x) => x as i64,
+            Value::Byte(x) => x as i64,
             Value::Float(x) => x.to_bits() as i64,
             Value::Big(x) => x as i64,
             Value::Ptr(x) => x as i64,
@@ -137,8 +165,16 @@ impl Display for Value {
             Value::Bool(x) => write!(f, "{}", x),
             Value::Int(x) => write!(f, "{}", x),
             Value::UInt(x) => write!(f, "{}", x),
+            Value::Byte(x) => write!(f, "{}", x),
             Value::Float(x) => write!(f, "{}", x),
-            Value::Big(x) => write!(f, "0x{:x}", x),
+            Value::Big(x) => {
+                if x.is_null() {
+                    write!(f, "null")
+                } else {
+                    let flt = unsafe { &**x };
+                    write!(f, "{}", flt)
+                }
+            }
             Value::Ptr(x) => write!(f, "0x{:x}", x),
             Value::String(s) => {
                 if s.is_null() {
@@ -237,6 +273,7 @@ pub enum ValueTag {
     Bool,
     Int,
     UInt,
+    Byte,
     Float,
     Big,
     String,
