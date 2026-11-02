@@ -1,6 +1,5 @@
 use crate::building::standalone::CalibreStandalone;
 use building::embedded::NativeBinding;
-use calibre_bytecode::VMRegistry;
 use calibre_frontend::config::ProjectContext;
 use calibre_lir::{VariableKey, environment::LirRegistry};
 use calibre_mir::{
@@ -109,13 +108,21 @@ pub struct Timed<T: Clone + Debug> {
     pub elapsed: Duration,
 }
 
+impl<T: Clone + Debug> From<T> for Timed<T> {
+    fn from(value: T) -> Self {
+        Self {
+            data: value,
+            elapsed: Duration::from_secs(0),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CalibreArtifacts {
     pub cache_elapsed: Option<Duration>,
     pub ast: Option<Timed<AstNode>>,
     pub mir: Option<Timed<MiddleNode>>,
-    pub lir: Option<Timed<LirRegistry>>,
-    pub registry: VMRegistry,
+    pub lir: Timed<LirRegistry>,
     pub mappings: Vec<VariableKey>,
     pub entry_name: VariableKey,
     pub init_functions: Vec<(i32, VariableKey)>,
@@ -134,7 +141,7 @@ impl CalibreArtifacts {
         include_tests: bool,
     ) -> Result<Self, Box<dyn Error>> {
         match if cache {
-            engine.compile_cached_program_source(source.clone(), readable)
+            engine.compile_cached_program_source(source.clone(), include_tests, readable)
         } else {
             engine.compile_source(source.clone(), include_tests)
         } {

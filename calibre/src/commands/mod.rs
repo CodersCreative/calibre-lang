@@ -67,18 +67,14 @@ pub fn output_debug_info(artifacts: &CalibreArtifacts, verbosity: &Verbosity, ti
         println!("MIR - unavailable: loaded from cache");
     }
 
-    if let Some(lir) = &artifacts.lir {
-        if time {
-            println!("LIR - elapsed {}ms", lir.elapsed.as_millis());
-        }
+    if time && !artifacts.lir.elapsed.is_zero() {
+        println!("LIR - elapsed {}ms", artifacts.lir.elapsed.as_millis());
+    }
 
-        if verbosity.is_level(&Verbosity::Lir) {
-            println!("LIR : ");
-            println!("{}", lir.data);
-            println!("Starting VM...");
-        }
-    } else if verbosity.is_level(&Verbosity::Lir) {
-        println!("LIR - unavailable: loaded from cache");
+    if verbosity.is_level(&Verbosity::Lir) {
+        println!("LIR : ");
+        println!("{}", artifacts.lir.data);
+        println!("Starting VM/Cranelift...");
     }
 }
 
@@ -197,7 +193,7 @@ impl<'a> RunSuite<'a> {
 
                 out.push((
                     path.to_string_lossy().to_string(),
-                    artifacts.registry.clone(),
+                    VMRegistry::from(artifacts.lir.data.clone()),
                     artifacts.mappings.clone(),
                     test.clone(),
                 ));

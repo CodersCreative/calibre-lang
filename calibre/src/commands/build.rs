@@ -161,13 +161,9 @@ impl BuildSource {
             use crate::commands::find_runtime_static_lib;
             use calibre_cranelift::AotCompiler;
 
-            let Some(lir) = artifacts.lir else {
-                return Err("LIR artifacts not available for Cranelift Object backend".into());
-            };
-
             let aot = AotCompiler::new(
                 &artifacts.entry_name.to_string(),
-                lir.data,
+                artifacts.lir.data,
                 artifacts.init_functions,
                 artifacts.fin_functions,
             )?;

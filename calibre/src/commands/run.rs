@@ -4,6 +4,7 @@ use crate::commands::repl::{Repl, ReplBuilder};
 use crate::commands::utils::{is_repl_file, package_metadata_from_project};
 use calibre::CalibreEngine;
 use calibre::{CalibreArtifacts, PackagedProgramBlob};
+use calibre_bytecode::VMRegistry;
 use calibre_frontend::config::ProjectContext;
 use calibre_frontend::paths::resolve_run_targets;
 use calibre_lir::VariableKey;
@@ -186,7 +187,12 @@ impl RunSource {
         vm_config.profiling_output = self.profiling_output.clone();
         vm_config.backtrace = self.backtrace;
 
-        let mut vm: VM = VM::new(artifacts.registry, artifacts.mappings, vm_config);
+        let mut vm: VM = VM::new(
+            VMRegistry::from(artifacts.lir.data.clone()),
+            artifacts.mappings,
+            vm_config,
+        );
+
         vm.set_source_file_override(&self.path);
         vm.set_program_args(
             self.program_args
@@ -213,12 +219,12 @@ impl RunSource {
                 use calibre_cranelift::JitCompiler;
 
                 let jit_begin = start.elapsed();
-                let Some(lir) = artifacts.lir else {
-                    return Err("LIR artifacts not available for Cranelift JIT backend".into());
-                };
 
-                let jit =
-                    JitCompiler::new(lir.data, artifacts.init_functions, artifacts.fin_functions)?;
+                let jit = JitCompiler::new(
+                    artifacts.lir.data,
+                    artifacts.init_functions,
+                    artifacts.fin_functions,
+                )?;
 
                 if self.time {
                     println!(
@@ -255,13 +261,9 @@ impl RunSource {
                 use calibre_cranelift::AotCompiler;
                 use std::process::Command;
 
-                let Some(lir) = artifacts.lir else {
-                    return Err("LIR artifacts not available for Cranelift Object backend".into());
-                };
-
                 let aot = AotCompiler::new(
                     &entry_name.to_string(),
-                    lir.data,
+                    artifacts.lir.data,
                     artifacts.init_functions,
                     artifacts.fin_functions,
                 )?;

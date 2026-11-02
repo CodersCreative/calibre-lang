@@ -1,7 +1,7 @@
 use crate::{CalibreArtifacts, CalibreEngine, CalibreError, RunResult, Timed};
 use calibre_bytecode::VMRegistry;
 use calibre_lir::VariableKey;
-use calibre_lir::environment::LirEnvironment;
+use calibre_lir::environment::{LirEnvironment, LirRegistry};
 use calibre_mir::symbols::resolve::ResolutionOptions;
 use calibre_mir::{environment::MiddleEnvironment, errors::MiddleErr, testing::Testing};
 use calibre_parser::Parser;
@@ -16,12 +16,13 @@ use ustr::Ustr;
 #[cfg(feature = "cli")]
 use std::fs::{self, File};
 
-const CACHE_FORMAT_VERSION: &str = "v10";
+const CACHE_FORMAT_VERSION: &str = "v11";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedProgramBlob {
     entry_name: VariableKey,
     mappings: Vec<VariableKey>,
+    lir_registry: LirRegistry,
     registry: VMRegistry,
     init_functions: Option<Vec<(i32, VariableKey)>>,
     fin_functions: Option<Vec<(i32, VariableKey)>>,
@@ -61,6 +62,7 @@ pub trait CalibreStandalone {
     fn compile_cached_program_source(
         &self,
         source: impl Into<String>,
+        include_tests: bool,
         readable: bool,
     ) -> Result<CalibreArtifacts, CalibreError>;
 
@@ -115,13 +117,14 @@ impl CalibreStandalone for CalibreEngine {
             .clone()
             .unwrap_or_else(|| PathBuf::from("<embedded>"));
 
-        let artifacts = self.compile_cached_program_source(source, readable)?;
+        let artifacts = self.compile_cached_program_source(source, false, readable)?;
 
         let mut vm = VM::new(
-            artifacts.registry.clone(),
+            VMRegistry::from(artifacts.lir.data.clone()),
             artifacts.mappings.clone(),
             self.vm_config.clone(),
         );
+
         vm.set_source_file_override(&path);
         vm.suppress_output = self.suppress_output;
         vm.input_buffer = self.input_buffer.iter().map(|x| Ustr::from(x)).collect();
@@ -346,7 +349,8 @@ impl CalibreStandalone for CalibreEngine {
         let cache = CachedProgramBlob {
             entry_name: artifacts.entry_name.clone(),
             mappings: artifacts.mappings.clone(),
-            registry: artifacts.registry.clone(),
+            lir_registry: artifacts.lir.data.clone(),
+            registry: VMRegistry::from(artifacts.lir.data.clone()),
             init_functions: Some(artifacts.init_functions.clone()),
             fin_functions: Some(artifacts.fin_functions.clone()),
             testing: Some(artifacts.testing.clone()),
@@ -382,6 +386,7 @@ impl CalibreStandalone for CalibreEngine {
     fn compile_cached_program_source(
         &self,
         source: impl Into<String>,
+        include_tests: bool,
         readable: bool,
     ) -> Result<CalibreArtifacts, CalibreError> {
         let start = std::time::Instant::now();
@@ -390,16 +395,36 @@ impl CalibreStandalone for CalibreEngine {
         let full_source = self.compose_source(&input);
 
         if self.cache_enabled
-            && let Some(cached) = self.try_load_cached_program(&full_source, readable)?
+            && let Some(mut cached) = self.try_load_cached_program(&full_source, readable)?
         {
+            if !include_tests {
+                cached.lir_registry = cached.lir_registry.eliminate_dead_code(
+                    cached
+                        .init_functions
+                        .clone()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|x| x.1)
+                        .chain(
+                            cached
+                                .fin_functions
+                                .clone()
+                                .unwrap_or_default()
+                                .into_iter()
+                                .map(|x| x.1),
+                        )
+                        .collect(),
+                    include_tests,
+                );
+            }
+
             debug!("loaded program from cache");
             return Ok(CalibreArtifacts {
                 cache_elapsed: Some(start.elapsed()),
                 ast: None,
                 mir: None,
-                lir: None,
+                lir: Timed::from(cached.lir_registry),
                 mappings: cached.mappings,
-                registry: cached.registry,
                 entry_name: cached.entry_name,
                 init_functions: cached.init_functions.unwrap_or_default(),
                 fin_functions: cached.fin_functions.unwrap_or_default(),
@@ -418,6 +443,19 @@ impl CalibreStandalone for CalibreEngine {
         }
 
         artifacts.cache_elapsed = Some(start.elapsed() + cache_elapsed);
+
+        if !include_tests {
+            artifacts.lir.data = artifacts.lir.data.eliminate_dead_code(
+                artifacts
+                    .init_functions
+                    .clone()
+                    .into_iter()
+                    .map(|x| x.1)
+                    .chain(artifacts.fin_functions.clone().into_iter().map(|x| x.1))
+                    .collect(),
+                include_tests,
+            );
+        }
 
         Ok(artifacts)
     }
@@ -535,12 +573,11 @@ impl CalibreStandalone for CalibreEngine {
                 data: mir,
                 elapsed: mir_elapsed,
             }),
-            lir: Some(Timed {
+            lir: Timed {
                 data: lir.clone(),
                 elapsed: lir_elapsed,
-            }),
+            },
             mappings: env.symbols.variables.keys().cloned().collect(),
-            registry: VMRegistry::from(lir),
             entry_name,
             init_functions,
             fin_functions,

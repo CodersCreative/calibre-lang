@@ -147,14 +147,7 @@ impl CheckSource {
 
         let mut ran = false;
         for (_, func_name) in artifacts.init_functions {
-            if artifacts
-                .lir
-                .as_ref()
-                .expect("LIR should be present")
-                .data
-                .functions
-                .contains_key(&func_name)
-            {
+            if artifacts.lir.data.functions.contains_key(&func_name) {
                 ran = true;
                 break;
             }
