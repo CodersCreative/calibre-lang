@@ -50,7 +50,7 @@ impl LirLowering for MirDeref {
         if let MiddleNodeType::Identifier(x) = &self.value.node_type {
             x.clone().lower_lvalue(env, span)
         } else {
-            LirLValue::Ptr(Box::new(env.lower_node(*self.value)))
+            env.lower_lvalue(*self.value)
         }
     }
 }

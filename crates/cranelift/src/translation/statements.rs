@@ -77,11 +77,38 @@ impl CraneliftTranslation for LirAssign {
                     Err(format!("Unable to find variable: {key}").into())
                 }
             }
-            LirLValue::Ptr(_) => {
+            LirLValue::Ptr(ptr) => {
+                let ptr = ptr.translate(translator, None)?;
+
                 let value = self.value.translate(translator, None)?;
 
-                // TODO
-                Ok(value)
+                let data_type = if ptr.data_type.is_dyn() {
+                    value.data_type.clone()
+                } else {
+                    ptr.data_type.clone()
+                };
+
+                let tag = value.data_type.type_tag(translator.registry.enums()) as i64;
+                let tag = translator.builder.ins().iconst(translator.types.int(), tag);
+
+                let runtime_name = "calibre_set_ref";
+
+                let func_id = translator
+                    .runtime_functions
+                    .get(runtime_name)
+                    .ok_or(format!("{} not found in runtime_functions", runtime_name))?;
+
+                let func_ref = translator
+                    .module
+                    .declare_func_in_func(*func_id, translator.builder.func);
+
+                let call = translator
+                    .builder
+                    .ins()
+                    .call(func_ref, &[ptr.value, tag, value.value]);
+                let result = translator.builder.inst_results(call)[0];
+
+                Ok(CompiledValue::new(result, data_type))
             }
         }
     }

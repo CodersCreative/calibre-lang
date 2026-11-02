@@ -473,6 +473,15 @@ impl Display for LirLValue {
     }
 }
 
+impl From<LirLValue> for LirNodeType {
+    fn from(value: LirLValue) -> Self {
+        match value {
+            LirLValue::Ptr(x) => *x,
+            LirLValue::Var(x) => LirNodeType::Load(LirLoad { value: x }),
+        }
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LirTerminator {

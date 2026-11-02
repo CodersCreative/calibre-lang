@@ -229,6 +229,7 @@ impl<'a> LirEnvironment<'a> {
             MiddleNodeType::DerefStatement(x) => x.lower_lvalue(self, node.span),
             MiddleNodeType::FieldAccess(x) => x.lower_lvalue(self, node.span),
             MiddleNodeType::IndexAccess(x) => x.lower_lvalue(self, node.span),
+            MiddleNodeType::Emit(x) => x.lower_lvalue(self, node.span),
             _ => unreachable!(),
         }
     }

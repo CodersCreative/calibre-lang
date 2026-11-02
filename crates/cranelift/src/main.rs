@@ -109,10 +109,13 @@ type Language := enum {
 };
 
 const test_enum_literal := fn () => {
-    let lang := Language.ENGLISH : 42000;
+    let mut lang := Language.ENGLISH : 42000;
     console_output(0, "hi\n");
     console_output(0, lang as! str);
     console_output(0, "\n");
+    console_output(0, lang.ENGLISH as! str);
+    console_output(0, "\n");
+    lang.ENGLISH := 10000;
     console_output(0, lang.ENGLISH as! str);
     console_output(0, "\n");
     console_output(0, discriminant(lang) as! str);

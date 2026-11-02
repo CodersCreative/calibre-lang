@@ -8,7 +8,8 @@ CallExpression
 
 use crate::{
     ast::{
-        LirCall, LirDiscriminant, LirIndex, LirLValue, LirLoad, LirMember, LirMove, LirNodeType,
+        LirCall, LirDeref, LirDiscriminant, LirIndex, LirLValue, LirLoad, LirMember, LirMove,
+        LirNodeType,
     },
     environment::LirEnvironment,
     translate::LirLowering,
@@ -27,9 +28,11 @@ impl LirLowering for MirDiscriminant {
 impl LirLowering for MirField {
     #[inline(always)]
     fn lower<'a>(self, env: &mut LirEnvironment<'a>, _span: Span) -> LirNodeType {
-        LirNodeType::Member(LirMember {
-            base: Box::new(env.lower_node(*self.base)),
-            field: self.field,
+        LirNodeType::Deref(LirDeref {
+            value: Box::new(LirNodeType::Member(LirMember {
+                base: Box::new(env.lower_node(*self.base)),
+                field: self.field,
+            })),
         })
     }
 
@@ -39,7 +42,7 @@ impl LirLowering for MirField {
         Self: Sized,
     {
         LirLValue::Ptr(Box::new(LirNodeType::Member(LirMember {
-            base: Box::new(env.lower_node(*self.base)),
+            base: Box::new(LirNodeType::from(env.lower_lvalue(*self.base))),
             field: self.field,
         })))
     }
@@ -61,7 +64,7 @@ impl LirLowering for MirIndex {
         Self: Sized,
     {
         LirLValue::Ptr(Box::new(LirNodeType::Index(LirIndex {
-            base: Box::new(env.lower_node(*self.base)),
+            base: Box::new(LirNodeType::from(env.lower_lvalue(*self.base))),
             index: Box::new(env.lower_node(*self.index)),
             panic: true,
         })))
