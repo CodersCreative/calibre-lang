@@ -600,6 +600,7 @@ dependencies = [
  "fastrand",
  "hex",
  "regex",
+ "rustc-hash",
  "sha2",
  "wasm_sync",
 ]

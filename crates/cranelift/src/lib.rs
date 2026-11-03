@@ -40,6 +40,7 @@ pub struct CompilerData {
     globals: Globals,
     layouts: Layouts,
     runtime_functions: RuntimeFunctions,
+    counter: i64,
 }
 
 fn create_target_isa() -> Result<Arc<dyn isa::TargetIsa>, Box<dyn Error>> {
@@ -210,6 +211,7 @@ impl CompilerData {
                     &self.globals,
                     &self.functions,
                     &self.runtime_functions,
+                    &mut self.counter,
                     func.return_type.clone(),
                 );
 
@@ -321,6 +323,7 @@ impl JitCompiler {
             layouts,
             registry,
             runtime_functions: FxHashMap::default(),
+            counter: 1,
         };
 
         data.compile(&mut module, init_functions, fin_functions)?;
@@ -373,6 +376,7 @@ impl AotCompiler {
             layouts,
             registry,
             runtime_functions: FxHashMap::default(),
+            counter: 1,
         };
 
         data.compile(&mut module, init_functions, fin_functions)?;

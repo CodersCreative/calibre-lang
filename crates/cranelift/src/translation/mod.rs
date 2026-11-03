@@ -40,6 +40,8 @@ pub struct FunctionTranslator<'a, M: Module> {
     pub registry: &'a LirRegistry,
     pub natives: Natives,
     pub runtime_functions: &'a RuntimeFunctions,
+    pub counter: &'a mut i64,
+    pub memo_function_key: Option<Value>,
     pub gc_managed_vars: FxHashSet<VariableKey>,
     pub return_type: MirDataType,
 }
@@ -54,6 +56,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         globals: &'a Globals,
         functions: &'a Functions,
         runtime_functions: &'a RuntimeFunctions,
+        counter: &'a mut i64,
         return_type: MirDataType,
     ) -> Self {
         let natives = build_native_mapping(registry);
@@ -70,6 +73,8 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             natives,
             runtime_functions,
             gc_managed_vars: FxHashSet::default(),
+            counter,
+            memo_function_key: None,
             return_type,
         }
     }
@@ -92,16 +97,29 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         self.builder.switch_to_block(entry_block);
 
         let block_params = self.builder.block_params(entry_block).to_vec();
+
+        let mut memo_hasher = None;
+
         for (i, (name, data_type)) in function.params.iter().enumerate() {
             let cl_ty = self.types.to_cranelift_type(data_type);
             let var = self.builder.declare_var(cl_ty);
 
             if let Some(&value) = block_params.get(i) {
                 self.builder.def_var(var, value);
+
+                if function.memo {
+                    // Whilst I'm here I should add the param to the memo_hasher
+                }
             }
 
             self.variables
                 .insert(name.clone(), (data_type.clone(), var));
+        }
+
+        if function.memo {
+            // TODO Finalize the memo hasher and send it back to the runtime to get a value from the cache
+            // Then add the value to the FunctionTranslator
+            // Add an if statement so that if the cache contains the value we can return
         }
 
         let first_id = function.blocks.iter().flatten().next().map(|b| b.id);
@@ -196,6 +214,11 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             LirTerminator::Return { value, .. } => {
                 if let Some(value) = value {
                     let compiled = value.translate(self, Some(self.return_type.clone()))?;
+
+                    if let Some(key) = self.memo_function_key.clone() {
+                        // TODO Add the return value to the memo cache for future use using this key before returning
+                    }
+
                     self.builder.ins().return_(&[compiled.value]);
                 } else {
                     self.builder.ins().return_(&[]);

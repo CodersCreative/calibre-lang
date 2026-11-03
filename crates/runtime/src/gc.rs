@@ -84,6 +84,7 @@ pub extern "C" fn calibre_gc_collect() {
                         }
                         GcObject::String(_) => {}
                         GcObject::Big(_) => {}
+                        GcObject::Hasher(_) => {}
                     }
                 }
             }

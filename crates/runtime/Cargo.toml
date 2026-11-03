@@ -20,6 +20,7 @@ blake3 = "1.5"
 errno = { version = "0.3"}
 hex = "0.4"
 astro-float = "0.9"
+rustc-hash = { workspace = true }
 
 [lib]
 crate-type = ["staticlib", "cdylib", "rlib"]

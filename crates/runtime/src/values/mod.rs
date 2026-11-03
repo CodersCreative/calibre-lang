@@ -3,11 +3,12 @@ use crate::{
     values::{aggregate::GcAggregate, list::GcList, string::GcString},
 };
 use astro_float::{BigFloat, Consts};
-use std::{fmt::Display, sync::LazyLock};
+use std::{fmt::Display, hash::Hasher, sync::LazyLock};
 use wasm_sync::Mutex;
 
 pub mod aggregate;
 pub mod enums;
+pub mod hasher;
 pub mod list;
 pub mod operation;
 pub mod range;
@@ -17,6 +18,7 @@ pub static BIG_CONSTS: LazyLock<Mutex<Consts>> =
     LazyLock::new(|| Mutex::new(Consts::new().expect("Big floats failed to load")));
 
 pub enum GcObject {
+    Hasher(Box<dyn Hasher>),
     Big(BigFloat),
     List(GcList),
     String(GcString),
