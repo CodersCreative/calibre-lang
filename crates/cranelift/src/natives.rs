@@ -671,6 +671,314 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     typed_return: None,
                 },
             ),
+            // fs
+            (
+                "calibre_fs_path_new",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Host),
+                },
+            ),
+            (
+                "calibre_fs_path_as_str",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Str),
+                },
+            ),
+            (
+                "calibre_fs_path_exists",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_fs_path_is_file",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_fs_path_is_dir",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_fs_path_canonicalize",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Host), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_path_parent",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Host))),
+                },
+            ),
+            (
+                "calibre_fs_path_file_name",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Str))),
+                },
+            ),
+            (
+                "calibre_fs_path_extension",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Str))),
+                },
+            ),
+            (
+                "calibre_fs_path_stem",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Option(Box::new(MirDataType::Str))),
+                },
+            ),
+            (
+                "calibre_fs_path_join",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_fs_path_with_extension",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct), (types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Host),
+                },
+            ),
+            (
+                "calibre_fs_path_with_file_name",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct), (types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Host),
+                },
+            ),
+            (
+                "calibre_fs_path_read_dir",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::List(Box::new(MirDataType::Host))), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_direntry_path",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Host),
+                },
+            ),
+            (
+                "calibre_fs_direntry_file_name",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Str),
+                },
+            ),
+            (
+                "calibre_fs_direntry_file_type",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Host), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_direntry_metadata",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Host), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_filetype_is_file",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_fs_filetype_is_dir",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_fs_filetype_is_symlink",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_fs_metadata_is_file",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_fs_metadata_is_dir",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_fs_metadata_len",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::UInt),
+                },
+            ),
+            (
+                "calibre_fs_metadata_modified",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::UInt), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_metadata_created",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::UInt), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_metadata_accessed",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::UInt), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_metadata_is_readonly",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_fs_file_open",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct), (types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Host), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_file_close",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_file_write",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct), (types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_file_write_line",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct), (types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_file_read_all",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Str), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_file_flush",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_dir_create",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_dir_create_all",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_dir_remove",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                },
+            ),
+            (
+                "calibre_fs_dir_remove_all",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                },
+            ),
         ];
 
         lst.into_iter().collect()
@@ -723,6 +1031,45 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("regex.is_match", "calibre_regex_is_match"),
             ("regex.find", "calibre_regex_find"),
             ("regex.replace", "calibre_regex_replace"),
+            // fs
+            ("fs.path_new", "calibre_fs_path_new"),
+            ("fs.path_as_str", "calibre_fs_path_as_str"),
+            ("fs.path_exists", "calibre_fs_path_exists"),
+            ("fs.path_is_file", "calibre_fs_path_is_file"),
+            ("fs.path_is_dir", "calibre_fs_path_is_dir"),
+            ("fs.path_canonicalize", "calibre_fs_path_canonicalize"),
+            ("fs.path_parent", "calibre_fs_path_parent"),
+            ("fs.path_file_name", "calibre_fs_path_file_name"),
+            ("fs.path_extension", "calibre_fs_path_extension"),
+            ("fs.path_stem", "calibre_fs_path_stem"),
+            ("fs.path_join", "calibre_fs_path_join"),
+            ("fs.path_with_extension", "calibre_fs_path_with_extension"),
+            ("fs.path_with_file_name", "calibre_fs_path_with_file_name"),
+            ("fs.path_read_dir", "calibre_fs_path_read_dir"),
+            ("fs.direntry_path", "calibre_fs_direntry_path"),
+            ("fs.direntry_file_name", "calibre_fs_direntry_file_name"),
+            ("fs.direntry_file_type", "calibre_fs_direntry_file_type"),
+            ("fs.direntry_metadata", "calibre_fs_direntry_metadata"),
+            ("fs.filetype_is_file", "calibre_fs_filetype_is_file"),
+            ("fs.filetype_is_dir", "calibre_fs_filetype_is_dir"),
+            ("fs.filetype_is_symlink", "calibre_fs_filetype_is_symlink"),
+            ("fs.metadata_is_file", "calibre_fs_metadata_is_file"),
+            ("fs.metadata_is_dir", "calibre_fs_metadata_is_dir"),
+            ("fs.metadata_len", "calibre_fs_metadata_len"),
+            ("fs.metadata_modified", "calibre_fs_metadata_modified"),
+            ("fs.metadata_created", "calibre_fs_metadata_created"),
+            ("fs.metadata_accessed", "calibre_fs_metadata_accessed"),
+            ("fs.metadata_is_readonly", "calibre_fs_metadata_is_readonly"),
+            ("fs.file_open", "calibre_fs_file_open"),
+            ("fs.file_close", "calibre_fs_file_close"),
+            ("fs.file_write", "calibre_fs_file_write"),
+            ("fs.file_write_line", "calibre_fs_file_write_line"),
+            ("fs.file_read_all", "calibre_fs_file_read_all"),
+            ("fs.file_flush", "calibre_fs_file_flush"),
+            ("fs.dir_create", "calibre_fs_dir_create"),
+            ("fs.dir_create_all", "calibre_fs_dir_create_all"),
+            ("fs.dir_remove", "calibre_fs_dir_remove"),
+            ("fs.dir_remove_all", "calibre_fs_dir_remove_all"),
         ];
 
         lst.into_iter().collect()

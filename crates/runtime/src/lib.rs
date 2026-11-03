@@ -1,4 +1,4 @@
-use crate::values::{aggregate, enums, hasher, list, operation, range, string};
+use crate::{native::fs, values::{aggregate, enums, hasher, list, operation, range, string}};
 use astro_float::RoundingMode;
 
 pub mod gc;
@@ -295,6 +295,159 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_memo_set",
             ptr: hasher::calibre_memo_set as *const u8,
+        },
+        // native fs
+        RuntimeSymbol {
+            name: "calibre_fs_path_new",
+            ptr: fs::calibre_fs_path_new as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_as_str",
+            ptr: fs::calibre_fs_path_as_str as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_exists",
+            ptr: fs::calibre_fs_path_exists as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_is_file",
+            ptr: fs::calibre_fs_path_is_file as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_is_dir",
+            ptr: fs::calibre_fs_path_is_dir as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_canonicalize",
+            ptr: fs::calibre_fs_path_canonicalize as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_parent",
+            ptr: fs::calibre_fs_path_parent as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_file_name",
+            ptr: fs::calibre_fs_path_file_name as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_extension",
+            ptr: fs::calibre_fs_path_extension as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_stem",
+            ptr: fs::calibre_fs_path_stem as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_join",
+            ptr: fs::calibre_fs_path_join as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_with_extension",
+            ptr: fs::calibre_fs_path_with_extension as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_with_file_name",
+            ptr: fs::calibre_fs_path_with_file_name as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_path_read_dir",
+            ptr: fs::calibre_fs_path_read_dir as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_direntry_path",
+            ptr: fs::calibre_fs_direntry_path as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_direntry_file_name",
+            ptr: fs::calibre_fs_direntry_file_name as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_direntry_file_type",
+            ptr: fs::calibre_fs_direntry_file_type as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_direntry_metadata",
+            ptr: fs::calibre_fs_direntry_metadata as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_filetype_is_file",
+            ptr: fs::calibre_fs_filetype_is_file as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_filetype_is_dir",
+            ptr: fs::calibre_fs_filetype_is_dir as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_filetype_is_symlink",
+            ptr: fs::calibre_fs_filetype_is_symlink as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_metadata_is_file",
+            ptr: fs::calibre_fs_metadata_is_file as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_metadata_is_dir",
+            ptr: fs::calibre_fs_metadata_is_dir as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_metadata_len",
+            ptr: fs::calibre_fs_metadata_len as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_metadata_modified",
+            ptr: fs::calibre_fs_metadata_modified as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_metadata_created",
+            ptr: fs::calibre_fs_metadata_created as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_metadata_accessed",
+            ptr: fs::calibre_fs_metadata_accessed as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_metadata_is_readonly",
+            ptr: fs::calibre_fs_metadata_is_readonly as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_file_open",
+            ptr: fs::calibre_fs_file_open as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_file_close",
+            ptr: fs::calibre_fs_file_close as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_file_write",
+            ptr: fs::calibre_fs_file_write as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_file_write_line",
+            ptr: fs::calibre_fs_file_write_line as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_file_read_all",
+            ptr: fs::calibre_fs_file_read_all as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_file_flush",
+            ptr: fs::calibre_fs_file_flush as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_dir_create",
+            ptr: fs::calibre_fs_dir_create as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_dir_create_all",
+            ptr: fs::calibre_fs_dir_create_all as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_dir_remove",
+            ptr: fs::calibre_fs_dir_remove as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_fs_dir_remove_all",
+            ptr: fs::calibre_fs_dir_remove_all as *const u8,
         },
     ]
 }
