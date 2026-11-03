@@ -596,6 +596,7 @@ version = "0.0.1"
 dependencies = [
  "astro-float",
  "blake3",
+ "dyn-hash",
  "errno",
  "fastrand",
  "hex",

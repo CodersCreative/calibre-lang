@@ -337,7 +337,7 @@ pub fn binary(op: &BinaryOperator, left: Value, right: Value) -> Result<Value, S
                         Value::Big(x)
                     }
                 }
-                _ => return Value::Big(x_ref).panic_operator(&Value::Big(y_ref), op),
+                _ => return Value::Big(x).panic_operator(&Value::Big(y), op),
             })
         }
         (left, right) => Ok(match op {

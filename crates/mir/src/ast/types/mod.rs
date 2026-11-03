@@ -446,7 +446,8 @@ impl MirDataType {
             MirDataType::Struct { .. } | MirDataType::Result { .. } | MirDataType::Option(_) => 11,
             MirDataType::List(_) => 12,
             MirDataType::Range => 13,
-            _ => 14,
+            MirDataType::Host => 14,
+            _ => 15,
         }
     }
 

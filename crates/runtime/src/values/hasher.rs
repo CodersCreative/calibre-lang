@@ -55,6 +55,7 @@ impl Hash for Value {
                 b.hash(state);
             }
             Value::List(v) => unsafe { &**v }.data.hash(state),
+            Value::Host(v) => unsafe { &**v }.data.hash(state),
             Value::Tuple(v) | Value::Enum(v) | Value::Struct(v) => unsafe { &**v }.data.hash(state),
         }
     }
@@ -76,15 +77,26 @@ pub extern "C" fn calibre_hash_finish(hasher: *mut Box<dyn Hasher>) -> u64 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_memo_contains(hash: u64) -> bool {
-    MEMO_CACHE.lock().unwrap().contains_key(&hash)
+    MEMO_CACHE
+        .lock()
+        .expect("Unable to get memo cache lock")
+        .contains_key(&hash)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_memo_get(hash: u64) -> i64 {
-    MEMO_CACHE.lock().unwrap().get(&hash).copied().unwrap_or(0)
+    MEMO_CACHE
+        .lock()
+        .expect("Unable to get memo cache lock")
+        .get(&hash)
+        .copied()
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn calibre_memo_set(hash: u64, value: i64) {
-    MEMO_CACHE.lock().unwrap().insert(hash, value);
+    MEMO_CACHE
+        .lock()
+        .expect("Unable to get memo cache lock")
+        .insert(hash, value);
 }

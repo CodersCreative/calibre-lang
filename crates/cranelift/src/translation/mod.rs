@@ -140,28 +140,24 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
 
                 if function.memo
                     && let Some(hasher_ptr) = memo_hasher
+                    && (function.memo_params == 0 || (function.memo_params & (1 << i) != 0))
                 {
-                    let should_hash =
-                        function.memo_params == 0 || (function.memo_params & (1 << i) != 0);
+                    let tag = data_type.type_tag(self.registry.enums()) as i64;
+                    let tag = self.builder.ins().iconst(self.types.int(), tag);
 
-                    if should_hash {
-                        let tag = data_type.type_tag(self.registry.enums()) as i64;
-                        let tag = self.builder.ins().iconst(self.types.int(), tag);
+                    let value = CompiledValue::new(value, data_type.clone());
+                    let value = self.convert_to_i64(value.clone())?;
 
-                        let value = CompiledValue::new(value, data_type.clone());
-                        let value = self.convert_to_i64(value.clone())?;
-
-                        let hash_add_func = *self
-                            .runtime_functions
-                            .get("calibre_hash_add")
-                            .ok_or("calibre_hash_add not found in runtime_functions")?;
-                        let hash_add_ref = self
-                            .module
-                            .declare_func_in_func(hash_add_func, self.builder.func);
-                        self.builder
-                            .ins()
-                            .call(hash_add_ref, &[hasher_ptr, tag, value]);
-                    }
+                    let hash_add_func = *self
+                        .runtime_functions
+                        .get("calibre_hash_add")
+                        .ok_or("calibre_hash_add not found in runtime_functions")?;
+                    let hash_add_ref = self
+                        .module
+                        .declare_func_in_func(hash_add_func, self.builder.func);
+                    self.builder
+                        .ins()
+                        .call(hash_add_ref, &[hasher_ptr, tag, value]);
                 }
             }
 

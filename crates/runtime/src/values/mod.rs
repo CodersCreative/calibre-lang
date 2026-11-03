@@ -1,6 +1,12 @@
 use crate::{
     gc::{GC_HEAP, GC_STATS, GcHeader, SendPtr, calibre_gc_add_root},
-    values::{aggregate::GcAggregate, list::GcList, string::GcString},
+    values::{
+        aggregate::GcAggregate,
+        enums::{calibre_option_some, calibre_result_err, calibre_result_ok},
+        host::GcHost,
+        list::GcList,
+        string::GcString,
+    },
 };
 use astro_float::{BigFloat, Consts};
 use std::{fmt::Display, hash::Hasher, sync::LazyLock};
@@ -9,6 +15,7 @@ use wasm_sync::Mutex;
 pub mod aggregate;
 pub mod enums;
 pub mod hasher;
+pub mod host;
 pub mod list;
 pub mod operation;
 pub mod range;
@@ -19,6 +26,7 @@ pub static BIG_CONSTS: LazyLock<Mutex<Consts>> =
 
 pub enum GcObject {
     Hasher(Box<dyn Hasher>),
+    Host(GcHost),
     Big(BigFloat),
     List(GcList),
     String(GcString),
@@ -128,7 +136,7 @@ pub enum Value {
     Byte(u8),
     Float(f64),
     // TODO Implement big currently just being treated a ptr
-    Big(*const BigFloat),
+    Big(*mut BigFloat),
     String(*mut GcString),
     Char(u32),
     Struct(*mut GcAggregate),
@@ -136,6 +144,7 @@ pub enum Value {
     Enum(*mut GcAggregate),
     List(*mut GcList),
     Range(i64, i64),
+    Host(*mut GcHost),
     Ptr(usize),
 }
 
@@ -156,6 +165,7 @@ impl From<&Value> for ValueTag {
             Value::Enum(_) => Self::Enum,
             Value::List(_) => Self::List,
             Value::Range(_, _) => Self::Range,
+            Value::Host(_) => Self::Host,
             Value::Ptr(_) => Self::Ptr,
         }
     }
@@ -170,7 +180,7 @@ impl Value {
             ValueTag::UInt => Self::UInt(value.cast_unsigned()),
             ValueTag::Byte => Self::Byte(value.cast_unsigned() as u8),
             ValueTag::Float => Self::Float(f64::from_bits(value.cast_unsigned())),
-            ValueTag::Big => Self::Big(value.cast_unsigned() as *const BigFloat),
+            ValueTag::Big => Self::Big(value.cast_unsigned() as *mut BigFloat),
             ValueTag::String => Self::String(value.cast_unsigned() as *mut GcString),
             ValueTag::Char => Self::Char(value.cast_unsigned() as u32),
             ValueTag::Struct => Self::Struct(value.cast_unsigned() as *mut GcAggregate),
@@ -182,6 +192,7 @@ impl Value {
                 let to = (value >> 32) as i32 as i64;
                 Self::Range(from, to)
             }
+            ValueTag::Host => Self::Host(value.cast_unsigned() as *mut GcHost),
             ValueTag::Ptr => Self::Ptr(value.cast_unsigned() as usize),
         }
     }
@@ -190,6 +201,21 @@ impl Value {
         let tag = ValueTag::from(&self);
         let payload = i64::from(self);
         (tag, payload)
+    }
+
+    pub fn ok(self) -> *mut GcAggregate {
+        let (tag, payload) = self.to_tag_and_payload();
+        calibre_result_ok(tag, payload)
+    }
+
+    pub fn err(self) -> *mut GcAggregate {
+        let (tag, payload) = self.to_tag_and_payload();
+        calibre_result_err(tag, payload)
+    }
+
+    pub fn some(self) -> *mut GcAggregate {
+        let (tag, payload) = self.to_tag_and_payload();
+        calibre_option_some(tag, payload)
     }
 }
 
@@ -210,6 +236,7 @@ impl From<Value> for i64 {
             Value::Tuple(x) => x as i64,
             Value::Enum(x) => x as i64,
             Value::List(x) => x as i64,
+            Value::Host(x) => x as i64,
             Value::Range(from, to) => {
                 let from_i32 = from as i32;
                 let to_i32 = to as i32;
@@ -320,6 +347,15 @@ impl Display for Value {
                     )
                 }
             }
+            Value::Host(ptr) => {
+                if ptr.is_null() {
+                    write!(f, "null")
+                } else {
+                    let value = unsafe { &**ptr };
+
+                    write!(f, "{:?}", value.data)
+                }
+            }
             Value::Range(from, to) => {
                 write!(f, "{}..{}", from, to)
             }
@@ -344,5 +380,6 @@ pub enum ValueTag {
     Enum,
     List,
     Range,
+    Host,
     Ptr,
 }
