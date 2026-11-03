@@ -10,6 +10,7 @@ hyperfine \
   "calibre run test.cal" \
   "calibre run --backend jit test.cal" \
   "calibre run test_memo.cal" \
+  "calibre run --backend jit test_memo.cal" \
   "calibre run ../fib_big/test.cal" \
   "calibre run ../fib_big/test_memo.cal" \
   "calibre run --no-cache test.cal" \

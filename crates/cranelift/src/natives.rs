@@ -615,6 +615,62 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     typed_return: Some(MirDataType::Str),
                 },
             ),
+            // hasher
+            (
+                "calibre_new_hasher",
+                RuntimeFunction {
+                    params: vec![],
+                    returns: Some(types::I64),
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_hash_add",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_hash_finish",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_memo_contains",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I8),
+                    typed_return: Some(MirDataType::Bool),
+                },
+            ),
+            (
+                "calibre_memo_get",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: None,
+                },
+            ),
+            (
+                "calibre_memo_set",
+                RuntimeFunction {
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
+                    returns: None,
+                    typed_return: None,
+                },
+            ),
         ];
 
         lst.into_iter().collect()

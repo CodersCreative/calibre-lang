@@ -73,3 +73,18 @@ pub extern "C" fn calibre_hash_add(hasher: *mut Box<dyn Hasher>, tag: ValueTag, 
 pub extern "C" fn calibre_hash_finish(hasher: *mut Box<dyn Hasher>) -> u64 {
     unsafe { (&*hasher).finish() }
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_memo_contains(hash: u64) -> bool {
+    MEMO_CACHE.lock().unwrap().contains_key(&hash)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_memo_get(hash: u64) -> i64 {
+    MEMO_CACHE.lock().unwrap().get(&hash).copied().unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn calibre_memo_set(hash: u64, value: i64) {
+    MEMO_CACHE.lock().unwrap().insert(hash, value);
+}

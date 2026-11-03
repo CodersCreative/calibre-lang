@@ -1,4 +1,4 @@
-use crate::values::{aggregate, enums, list, operation, range, string};
+use crate::values::{aggregate, enums, hasher, list, operation, range, string};
 use astro_float::RoundingMode;
 
 pub mod gc;
@@ -270,6 +270,31 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_regex_replace",
             ptr: native::regex::calibre_regex_replace as *const u8,
+        },
+        // hasher
+        RuntimeSymbol {
+            name: "calibre_new_hasher",
+            ptr: hasher::calibre_new_hasher as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_hash_add",
+            ptr: hasher::calibre_hash_add as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_hash_finish",
+            ptr: hasher::calibre_hash_finish as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_memo_contains",
+            ptr: hasher::calibre_memo_contains as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_memo_get",
+            ptr: hasher::calibre_memo_get as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_memo_set",
+            ptr: hasher::calibre_memo_set as *const u8,
         },
     ]
 }

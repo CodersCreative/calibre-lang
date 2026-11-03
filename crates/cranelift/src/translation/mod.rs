@@ -41,7 +41,7 @@ pub struct FunctionTranslator<'a, M: Module> {
     pub natives: Natives,
     pub runtime_functions: &'a RuntimeFunctions,
     pub counter: &'a mut i64,
-    pub memo_function_key: Option<Value>,
+    pub memo_hash: Option<Value>,
     pub gc_managed_vars: FxHashSet<VariableKey>,
     pub return_type: MirDataType,
 }
@@ -74,7 +74,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             runtime_functions,
             gc_managed_vars: FxHashSet::default(),
             counter,
-            memo_function_key: None,
+            memo_hash: None,
             return_type,
         }
     }
@@ -98,7 +98,38 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
 
         let block_params = self.builder.block_params(entry_block).to_vec();
 
-        let mut memo_hasher = None;
+        let memo_hasher = if function.memo {
+            let new_hasher_func = *self
+                .runtime_functions
+                .get("calibre_new_hasher")
+                .ok_or("calibre_new_hasher not found in runtime_functions")?;
+            let new_hasher_ref = self
+                .module
+                .declare_func_in_func(new_hasher_func, self.builder.func);
+            let hasher = self.builder.ins().call(new_hasher_ref, &[]);
+            let hasher = self.builder.inst_results(hasher)[0];
+
+            let counter = self.builder.ins().iconst(self.types.int(), *self.counter);
+            *self.counter += 1;
+
+            let tag = MirDataType::Int.type_tag(self.registry.enums()) as i64;
+            let tag = self.builder.ins().iconst(self.types.int(), tag);
+
+            let hash_add_func = *self
+                .runtime_functions
+                .get("calibre_hash_add")
+                .ok_or("calibre_hash_add not found in runtime_functions")?;
+            let hash_add_ref = self
+                .module
+                .declare_func_in_func(hash_add_func, self.builder.func);
+            self.builder
+                .ins()
+                .call(hash_add_ref, &[hasher, tag, counter]);
+
+            Some(hasher)
+        } else {
+            None
+        };
 
         for (i, (name, data_type)) in function.params.iter().enumerate() {
             let cl_ty = self.types.to_cranelift_type(data_type);
@@ -107,8 +138,30 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             if let Some(&value) = block_params.get(i) {
                 self.builder.def_var(var, value);
 
-                if function.memo {
-                    // Whilst I'm here I should add the param to the memo_hasher
+                if function.memo
+                    && let Some(hasher_ptr) = memo_hasher
+                {
+                    let should_hash =
+                        function.memo_params == 0 || (function.memo_params & (1 << i) != 0);
+
+                    if should_hash {
+                        let tag = data_type.type_tag(self.registry.enums()) as i64;
+                        let tag = self.builder.ins().iconst(self.types.int(), tag);
+
+                        let value = CompiledValue::new(value, data_type.clone());
+                        let value = self.convert_to_i64(value.clone())?;
+
+                        let hash_add_func = *self
+                            .runtime_functions
+                            .get("calibre_hash_add")
+                            .ok_or("calibre_hash_add not found in runtime_functions")?;
+                        let hash_add_ref = self
+                            .module
+                            .declare_func_in_func(hash_add_func, self.builder.func);
+                        self.builder
+                            .ins()
+                            .call(hash_add_ref, &[hasher_ptr, tag, value]);
+                    }
                 }
             }
 
@@ -116,10 +169,51 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                 .insert(name.clone(), (data_type.clone(), var));
         }
 
-        if function.memo {
-            // TODO Finalize the memo hasher and send it back to the runtime to get a value from the cache
-            // Then add the value to the FunctionTranslator
-            // Add an if statement so that if the cache contains the value we can return
+        if function.memo
+            && let Some(hasher_ptr) = memo_hasher
+        {
+            let hash_finish_func = *self
+                .runtime_functions
+                .get("calibre_hash_finish")
+                .ok_or("calibre_hash_finish not found in runtime_functions")?;
+            let hash_finish_ref = self
+                .module
+                .declare_func_in_func(hash_finish_func, self.builder.func);
+            let hash = self.builder.ins().call(hash_finish_ref, &[hasher_ptr]);
+            let hash = self.builder.inst_results(hash)[0];
+
+            let memo_contains_func = *self
+                .runtime_functions
+                .get("calibre_memo_contains")
+                .ok_or("calibre_memo_contains not found in runtime_functions")?;
+            let memo_contains_ref = self
+                .module
+                .declare_func_in_func(memo_contains_func, self.builder.func);
+            let contains = self.builder.ins().call(memo_contains_ref, &[hash]);
+            let contains = self.builder.inst_results(contains)[0];
+
+            let cache_hit_block = self.builder.create_block();
+            let cache_miss_block = self.builder.create_block();
+
+            self.builder
+                .ins()
+                .brif(contains, cache_hit_block, &[], cache_miss_block, &[]);
+            self.builder.switch_to_block(cache_hit_block);
+
+            let memo_get_func = *self
+                .runtime_functions
+                .get("calibre_memo_get")
+                .ok_or("calibre_memo_get not found in runtime_functions")?;
+            let memo_get_ref = self
+                .module
+                .declare_func_in_func(memo_get_func, self.builder.func);
+            let value = self.builder.ins().call(memo_get_ref, &[hash]);
+            let value = self.builder.inst_results(value)[0];
+
+            self.builder.ins().return_(&[value]);
+            self.builder.switch_to_block(cache_miss_block);
+
+            self.memo_hash = Some(hash);
         }
 
         let first_id = function.blocks.iter().flatten().next().map(|b| b.id);
@@ -213,13 +307,20 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             }
             LirTerminator::Return { value, .. } => {
                 if let Some(value) = value {
-                    let compiled = value.translate(self, Some(self.return_type.clone()))?;
+                    let value = value.translate(self, Some(self.return_type.clone()))?;
 
-                    if let Some(key) = self.memo_function_key.clone() {
-                        // TODO Add the return value to the memo cache for future use using this key before returning
+                    if let Some(hash) = self.memo_hash {
+                        let memo_set_func = *self
+                            .runtime_functions
+                            .get("calibre_memo_set")
+                            .ok_or("calibre_memo_set not found in runtime_functions")?;
+                        let memo_set_ref = self
+                            .module
+                            .declare_func_in_func(memo_set_func, self.builder.func);
+                        self.builder.ins().call(memo_set_ref, &[hash, value.value]);
                     }
 
-                    self.builder.ins().return_(&[compiled.value]);
+                    self.builder.ins().return_(&[value.value]);
                 } else {
                     self.builder.ins().return_(&[]);
                 }
