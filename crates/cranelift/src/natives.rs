@@ -717,7 +717,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Host), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Host),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -766,7 +769,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
             (
                 "calibre_fs_path_with_extension",
                 RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct), (types::I64, ArgumentKind::Direct)],
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::Host),
                 },
@@ -774,7 +780,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
             (
                 "calibre_fs_path_with_file_name",
                 RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct), (types::I64, ArgumentKind::Direct)],
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::Host),
                 },
@@ -784,7 +793,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::List(Box::new(MirDataType::Host))), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::List(Box::new(MirDataType::Host))),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -808,7 +820,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Host), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Host),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -816,7 +831,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Host), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Host),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -872,7 +890,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::UInt), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::UInt),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -880,7 +901,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::UInt), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::UInt),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -888,7 +912,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::UInt), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::UInt),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -902,9 +929,15 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
             (
                 "calibre_fs_file_open",
                 RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct), (types::I64, ArgumentKind::Direct)],
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Host), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Host),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -912,23 +945,38 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Null),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
                 "calibre_fs_file_write",
                 RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct), (types::I64, ArgumentKind::Direct)],
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Null),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
                 "calibre_fs_file_write_line",
                 RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct), (types::I64, ArgumentKind::Direct)],
+                    params: vec![
+                        (types::I64, ArgumentKind::Direct),
+                        (types::I64, ArgumentKind::Direct),
+                    ],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Null),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -936,7 +984,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Str), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Str),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -944,7 +995,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Null),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -952,7 +1006,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Null),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -960,7 +1017,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Null),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -968,7 +1028,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Null),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
             (
@@ -976,7 +1039,10 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
-                    typed_return: Some(MirDataType::Result { ok: Box::new(MirDataType::Null), err: Box::new(MirDataType::Str) }),
+                    typed_return: Some(MirDataType::Result {
+                        ok: Box::new(MirDataType::Null),
+                        err: Box::new(MirDataType::Str),
+                    }),
                 },
             ),
         ];
