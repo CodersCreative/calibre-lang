@@ -41,6 +41,7 @@ pub struct CompilerData {
     layouts: Layouts,
     runtime_functions: RuntimeFunctions,
     counter: i64,
+    isa: Arc<dyn isa::TargetIsa>,
 }
 
 fn create_target_isa() -> Result<Arc<dyn isa::TargetIsa>, Box<dyn Error>> {
@@ -213,6 +214,7 @@ impl CompilerData {
                     &self.runtime_functions,
                     &mut self.counter,
                     func.return_type.clone(),
+                    self.isa.clone(),
                 );
 
                 translator.translate_function(func)?;
@@ -301,7 +303,8 @@ impl JitCompiler {
         fin_functions: Vec<(i32, VariableKey)>,
     ) -> Result<Self, Box<dyn Error>> {
         let isa = create_target_isa()?;
-        let mut builder = JITBuilder::with_isa(isa, cranelift_module::default_libcall_names());
+        let mut builder =
+            JITBuilder::with_isa(isa.clone(), cranelift_module::default_libcall_names());
 
         for sym in calibre_runtime::get_runtime_symbols() {
             builder.symbol(sym.name, sym.ptr);
@@ -324,6 +327,7 @@ impl JitCompiler {
             registry,
             runtime_functions: FxHashMap::default(),
             counter: 1,
+            isa,
         };
 
         data.compile(&mut module, init_functions, fin_functions)?;
@@ -355,7 +359,7 @@ impl AotCompiler {
         let isa = create_target_isa()?;
 
         let builder = ObjectBuilder::new(
-            isa,
+            isa.clone(),
             module_name.to_string(),
             cranelift_module::default_libcall_names(),
         )?;
@@ -377,6 +381,7 @@ impl AotCompiler {
             registry,
             runtime_functions: FxHashMap::default(),
             counter: 1,
+            isa,
         };
 
         data.compile(&mut module, init_functions, fin_functions)?;

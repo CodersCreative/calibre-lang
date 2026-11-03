@@ -11,10 +11,10 @@ use calibre_parser::ast::{
     comparison::{BooleanOperator, ComparisonOperator},
 };
 use cranelift::codegen::ir::{
-    InstBuilder, MemFlags, Value,
+    InstBuilder, MachMemFlags, Value,
     condcodes::{FloatCC, IntCC},
-    types,
 };
+use cranelift::prelude::types;
 use cranelift_module::Module;
 use std::error::Error;
 
@@ -333,7 +333,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                 Ok(self
                     .builder
                     .ins()
-                    .bitcast(types::I64, MemFlags::new(), value.value))
+                    .bitcast(types::I64, MachMemFlags::new(), value.value))
             }
             MirDataType::Bool => Ok(self.builder.ins().uextend(types::I64, value.value)),
             MirDataType::Byte => Ok(self.builder.ins().sextend(types::I64, value.value)),

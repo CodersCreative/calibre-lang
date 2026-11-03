@@ -7,10 +7,12 @@ use calibre_lir::ast::{BlockId, LirNodeType, LirTerminator};
 use calibre_lir::environment::{LirFunction, LirRegistry};
 use calibre_mir::symbols::VariableKey;
 use cranelift::codegen::ir::FuncRef;
+use cranelift::codegen::isa::TargetIsa;
 use cranelift::prelude::*;
 use cranelift_module::Module;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::error::Error;
+use std::sync::Arc;
 
 pub mod access;
 pub mod expression;
@@ -44,6 +46,7 @@ pub struct FunctionTranslator<'a, M: Module> {
     pub memo_hash: Option<Value>,
     pub gc_managed_vars: FxHashSet<VariableKey>,
     pub return_type: MirDataType,
+    pub isa: Arc<dyn TargetIsa>,
 }
 
 impl<'a, M: Module> FunctionTranslator<'a, M> {
@@ -58,6 +61,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         runtime_functions: &'a RuntimeFunctions,
         counter: &'a mut i64,
         return_type: MirDataType,
+        isa: Arc<dyn TargetIsa>,
     ) -> Self {
         let natives = build_native_mapping(registry);
 
@@ -76,6 +80,7 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
             counter,
             memo_hash: None,
             return_type,
+            isa,
         }
     }
 
@@ -259,7 +264,8 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
         }
 
         self.builder.seal_all_blocks();
-        self.builder.finalize();
+        let frontend_config = self.isa.frontend_config();
+        self.builder.finalize(frontend_config);
 
         Ok(())
     }

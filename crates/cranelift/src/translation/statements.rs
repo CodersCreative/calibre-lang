@@ -6,6 +6,7 @@ use calibre_lir::{
     MirDataType,
     ast::{LirAssign, LirDeclare, LirLValue},
 };
+use cranelift::codegen::ir::MachMemFlags;
 use cranelift::prelude::*;
 use cranelift_module::Module;
 use std::error::Error;
@@ -65,12 +66,12 @@ impl CraneliftTranslation for LirAssign {
                     let addr = translator
                         .builder
                         .ins()
-                        .global_value(translator.types.ptr(), global);
+                        .symbol_value(translator.types.ptr(), global);
 
                     translator
                         .builder
                         .ins()
-                        .store(MemFlags::new(), value.value, addr, 0);
+                        .store(MachMemFlags::new(), value.value, addr, 0);
 
                     Ok(value)
                 } else {

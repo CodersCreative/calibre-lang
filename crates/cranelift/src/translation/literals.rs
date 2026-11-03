@@ -6,7 +6,7 @@ use calibre_lir::{
     MirDataType, TypeKey,
     ast::{LirAggregate, LirEnum, LirList, LirLiteral, LirRange},
 };
-use cranelift::codegen::ir::{InstBuilder, MemFlags, types};
+use cranelift::codegen::ir::{InstBuilder, MachMemFlags, types};
 use cranelift_module::Module;
 use std::error::Error;
 
@@ -82,7 +82,7 @@ impl CraneliftTranslation for LirLiteral {
 
                 let data_ptr = translator.builder.ins().load(
                     translator.types.ptr(),
-                    MemFlags::new(),
+                    MachMemFlags::new(),
                     ptr,
                     translator.layouts.pointer_bytes() as i32,
                 );
@@ -96,7 +96,7 @@ impl CraneliftTranslation for LirLiteral {
                     translator
                         .builder
                         .ins()
-                        .store(MemFlags::new(), value, data_ptr, i as i32);
+                        .store(MachMemFlags::new(), value, data_ptr, i as i32);
                 }
 
                 Ok(CompiledValue::new(ptr, MirDataType::Str))
@@ -311,7 +311,7 @@ impl CraneliftTranslation for LirRange {
         let to = translator.convert_to_i64(to)?;
         let to = translator.builder.ins().ireduce(types::I32, to);
         let to = translator.builder.ins().sextend(translator.types.int(), to);
-        let to = translator.builder.ins().ishl_imm(to, 32);
+        let to = translator.builder.ins().ishl_imm_u(to, 32);
 
         let value = translator.builder.ins().iadd(from, to);
         Ok(CompiledValue::new(value, MirDataType::Range))

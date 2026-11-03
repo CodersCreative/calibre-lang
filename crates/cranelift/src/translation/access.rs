@@ -8,7 +8,7 @@ use calibre_lir::{
     environment::LirType,
 };
 use calibre_parser::ast::RefMutability;
-use cranelift::codegen::ir::{InstBuilder, MemFlags};
+use cranelift::codegen::ir::{InstBuilder, MachMemFlags};
 use cranelift_module::Module;
 use std::error::Error;
 
@@ -279,14 +279,14 @@ impl CraneliftTranslation for LirRefLoad {
             let addr = translator
                 .builder
                 .ins()
-                .global_value(translator.types.ptr(), global_handle);
+                .symbol_value(translator.types.ptr(), global_handle);
 
             let cl_type = translator.types.to_cranelift_type(data_type);
 
             let value = translator
                 .builder
                 .ins()
-                .load(cl_type, MemFlags::new(), addr, 0);
+                .load(cl_type, MachMemFlags::new(), addr, 0);
 
             Ok(CompiledValue::new(value, data_type.clone()))
         } else {
