@@ -622,10 +622,13 @@ impl MirLowering for AstImpl {
                     MiddleNodeType::VariableDeclaration(MirVarDecl { identifier, .. }) => {
                         identifier
                     }
-                    _ => {
+                    MiddleNodeType::EmptyLine => return None,
+                    x => {
                         return Some(Err(MiddleErr::At(
                             dec.span,
-                            Box::new(MiddleErr::InternalImplBodyNotVariableDeclaration),
+                            Box::new(MiddleErr::InternalImplBodyNotVariableDeclaration(Box::new(
+                                x.clone().into(),
+                            ))),
                         )));
                     }
                 };

@@ -200,8 +200,8 @@ pub enum MiddleErr {
     InvalidListRepeatCount,
     #[error("Internal error: expected variable declaration in impl")]
     InternalExpectedVariableInImpl,
-    #[error("Internal error: impl body did not lower to variable declaration")]
-    InternalImplBodyNotVariableDeclaration,
+    #[error("Internal error: impl body did not lower to variable declaration, instead found {0}")]
+    InternalImplBodyNotVariableDeclaration(Box<AstNodeType>),
     #[error("Internal error: no dollar resolution allowed but dollar ident provided")]
     InternalNoDollarResolutionAllowed,
     #[error("Internal error: @builder can only be used on structs")]
@@ -302,7 +302,7 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::InvalidIntegerLiteral(_) => "M112",
             Self::InvalidListRepeatCount => "M113",
             Self::InternalExpectedVariableInImpl => "M114",
-            Self::InternalImplBodyNotVariableDeclaration => "M115",
+            Self::InternalImplBodyNotVariableDeclaration(_) => "M115",
             Self::InternalNoDollarResolutionAllowed => "M116",
             Self::InternalBuilderOnlyForStructs => "M117",
             Self::InternalCannotGenerateDefaultImpl => "M118",
@@ -492,37 +492,16 @@ impl calibre_parser::CalibreError for MiddleErr {
             Self::CannotInferGenericTypeParameter(param) => Some(format!(
                 "add explicit type annotation for generic parameter `{param}`"
             )),
-            // Internal errors
-            Self::InternalMissingFunction(_)
-            | Self::InternalMissingImpl(_)
-            | Self::InternalMissingType(_)
-            | Self::InternalInvalidScopeHierarchy(_, _)
-            | Self::InternalInvalidVariableState(_, _)
-            | Self::InternalInvalidFunctionState(_, _)
-            | Self::InternalInvalidTypeState(_, _)
-            | Self::InternalLoopResultMissing
-            | Self::InternalLoopBrokeMissing
-            | Self::InternalInvalidDefaultVariantIndex
-            | Self::InternalMissingDefaultVariant
-            | Self::InternalMissingReferenceMutability
-            | Self::InvalidIntegerLiteral(_)
-            | Self::InvalidListRepeatCount
-            | Self::InternalExpectedVariableInImpl
-            | Self::InternalImplBodyNotVariableDeclaration
-            | Self::InternalNoDollarResolutionAllowed
-            | Self::InternalBuilderOnlyForStructs
-            | Self::InternalCannotGenerateDefaultImpl
-            | Self::FileReadFailed { .. }
-            | Self::InternalInvalidParentFilename(_)
-            | Self::InternalInvalidParentDirectory(_)
-            | Self::InternalUnexpectedState { .. } => {
-                Some("this is a compiler bug - please report it".to_string())
-            }
             // Fallbacks
             Self::InferImpossible => {
                 Some("add explicit type annotations to help type inference".to_string())
             }
             Self::Internal(msg) => Some(format!("internal error: {msg} - please report this bug")),
+            // Internal errors
+            x => Some(format!(
+                "'{}' - this is a compiler bug - please report it",
+                x
+            )),
         }
     }
 

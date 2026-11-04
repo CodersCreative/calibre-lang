@@ -12,7 +12,7 @@ impl ThingEnum {
 	const age := 90;
 
 	// TODO Fix : It's running correctly but the return type is being messed up somehow
-	@ignore_invalid_return const name := fn match &ThingEnum -> str {
+	const name := fn match &ThingEnum -> str {
 		.Person | .Animal | .Object : thing => return thing.name,
 		_ => return "None"
 	};
@@ -28,7 +28,7 @@ const main := fn => {
 	let thing := ThingEnum.Person : thing;
 	print(thing);
 	
-	// print(global_thing.name());
+	print(global_thing.name());
 	print("mentioned object : " & ThingEnum.name(thing.&));
 	print("object inferred : " & thing.name());
 	print("static from object : " & ThingEnum.age);

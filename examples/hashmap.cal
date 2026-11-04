@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Automatic coercion with generics
 const main := fn => {
 	let mut map := HashMap:<str, int>.new(("a", 1), ("b", 2), ("c", 3));
 	
