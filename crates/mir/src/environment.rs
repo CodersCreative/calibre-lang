@@ -350,13 +350,14 @@ impl MiddleEnvironment {
             .objects
             .retain(|name, _| !rename_state.types.contains_key(name));
 
-        for (_key, impl_list) in std::mem::take(&mut manifest.typing.inherent_impls) {
+        for (_, impl_list) in std::mem::take(&mut manifest.typing.inherent_impls) {
             for mut imp in impl_list {
                 imp.rename(&mut rename_state);
                 self.typing.add_inherent_impl(imp);
             }
         }
 
+        manifest.monomorphizer.rename(&mut rename_state);
         self.monomorphizer
             .append(std::mem::take(&mut manifest.monomorphizer));
 

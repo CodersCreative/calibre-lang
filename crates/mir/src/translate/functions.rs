@@ -7,7 +7,7 @@ use crate::{
     errors::MiddleErr,
     scoping::{FullyQualifiedPath, ScopeId},
     symbols::{
-        FunctionParamDefault, TypeKey,
+        FunctionParamDefault, TypeKey, VariableKey,
         resolve::{Key, ResolutionOptions},
     },
     tags::TagInfo,
@@ -883,6 +883,401 @@ impl MiddleEnvironment {
     }
 }
 
+fn method_receiver(env: &MiddleEnvironment, base: AstNode, symbol_name: &VariableKey) -> AstNode {
+    let mutability = env
+        .symbols
+        .variables
+        .get(symbol_name)
+        .and_then(|var| match &var.data_type {
+            MirDataType::Function { parameters, .. } => parameters.first(),
+            _ => None,
+        })
+        .and_then(|parameter| match parameter {
+            MirDataType::Ref(_, mutability) => Some(*mutability),
+            _ => None,
+        });
+
+    if let Some(mutability) = mutability {
+        AstNode::new(
+            base.span,
+            AstNodeType::RefStatement(AstRef {
+                value: Box::new(base),
+                mutability,
+            }),
+        )
+    } else {
+        base
+    }
+}
+
+trait AstCallLowering {
+    fn lower_field_call(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+        data_type: Option<MirDataType>,
+    ) -> Result<Option<AstCall>, MiddleErr>;
+}
+
+impl AstCallLowering for AstCall {
+    fn lower_field_call(
+        &self,
+        env: &mut MiddleEnvironment,
+        scope: ScopeId,
+        span: Span,
+        data_type: Option<MirDataType>,
+    ) -> Result<Option<Self>, MiddleErr> {
+        let AstNodeType::FieldAccess(AstField { base, field }) = self.caller.node_type.clone()
+        else {
+            return Ok(None);
+        };
+
+        let field_name = env
+            .resolve(scope, &field, ResolutionOptions::default().with_dollar())?
+            .unwrap_dollar();
+
+        let base_type = base.type_of(env, scope, span);
+        let is_instance_call = base_type.is_some();
+
+        let base_type = base_type.or_else(|| {
+            if let AstNodeType::Identifier(ident) = &base.node_type {
+                env.resolve_to_data_type(scope, &ident.value).ok()
+            } else {
+                None
+            }
+        });
+
+        if let Some(ty) = base_type {
+            if let Some((member, bindings)) =
+                env.typing.find_impl_member_with_subst(&ty, field_name)
+            {
+                let symbol_name = member.symbol_name.clone();
+                let generic_params = env
+                    .monomorphizer
+                    .function_template(&symbol_name)
+                    .map(|(params, _, _)| params.clone())
+                    .unwrap_or_else(|| member.generic_params.clone());
+
+                if member.has_method_generics
+                    || env
+                        .monomorphizer
+                        .function_template_key(&symbol_name)
+                        .is_some()
+                {
+                    let mut concrete_args = generic_params
+                        .iter()
+                        .map(|param| {
+                            bindings
+                                .get(param.as_str())
+                                .cloned()
+                                .unwrap_or(MirDataType::Dynamic)
+                        })
+                        .collect::<Vec<_>>();
+                    
+                    let mut arg_types = Vec::new();
+                    
+                    if is_instance_call {
+                        arg_types.push(ty.clone());
+                    }
+
+                    arg_types.extend(self.args.iter().filter_map(|arg| match arg {
+                        CallArg::Value(node) => node.type_of(env, scope, span),
+                        CallArg::Named(_, _) => None,
+                    }));
+
+                    if let Some(MirDataType::Function {
+                        return_type,
+                        parameters,
+                    }) = env
+                        .symbols
+                        .variables
+                        .get(&symbol_name)
+                        .map(|var| var.data_type.clone())
+                        && let Ok(inferred_types) = env.infer_concrete_type_args(
+                            scope,
+                            &generic_params,
+                            &parameters,
+                            &return_type,
+                            &arg_types,
+                            data_type.as_ref(),
+                        )
+                    {
+                        concrete_args = inferred_types
+                            .into_iter()
+                            .enumerate()
+                            .map(|(index, inferred)| {
+                                let param = generic_params[index];
+                                bindings.get(param.as_str()).cloned().unwrap_or(inferred)
+                            })
+                            .collect();
+                    }
+
+                    let key =
+                        env.monomorphize_function(scope, symbol_name.clone(), concrete_args)?;
+
+                    let mut node = self.clone();
+                    
+                    node.caller = Box::new(AstNode::identifier(
+                        self.caller.span,
+                        env.context
+                            .convert_key_to_ustr(Key::VariableKey(key.clone())),
+                    ));
+
+                    if is_instance_call {
+                        node
+                            .args
+                            .insert(0, CallArg::Value(method_receiver(env, *base, &key)));
+                    }
+
+                    return Ok(Some(node));
+                }
+
+                if is_instance_call {
+                    let mut node = self.clone();
+                    
+                    node.caller = Box::new(AstNode::identifier(
+                        self.caller.span,
+                        env.context
+                            .convert_key_to_ustr(Key::VariableKey(symbol_name.clone())),
+                    ));
+                    
+                    node
+                        .args
+                        .insert(0, CallArg::Value(method_receiver(env, *base, &symbol_name)));
+
+                    return Ok(Some(node));
+                }
+            }
+
+            if is_instance_call
+                && let Some(symbol_name) = env
+                    .typing
+                    .find_impl_member(&ty, field_name)
+                    .map(|member| member.symbol_name.clone())
+            {
+                let mut node = self.clone();
+                
+                node.caller = Box::new(AstNode::identifier(
+                    self.caller.span,
+                    env.context
+                        .convert_key_to_ustr(Key::VariableKey(symbol_name.clone())),
+                ));
+                
+                node
+                    .args
+                    .insert(0, CallArg::Value(method_receiver(env, *base, &symbol_name)));
+                
+                return Ok(Some(node));
+            }
+        }
+
+        if let Ok(resolved) = (AstField { base, field }).lower(env, scope, span, None)
+            && let MiddleNodeType::Identifier(symbol) = resolved.node_type
+        {
+            let mut node = self.clone();
+            
+            node.caller = Box::new(AstNode::identifier(
+                self.caller.span,
+                env.context
+                    .convert_key_to_ustr(Key::VariableKey(symbol.identifier)),
+            ));
+
+            return Ok(Some(node));
+        }
+
+        Ok(None)
+    }
+}
+
+fn lower_basic_call(
+    call: &mut AstCall,
+    env: &mut MiddleEnvironment,
+    scope: ScopeId,
+    span: Span,
+    data_type: Option<&MirDataType>,
+) -> Result<Option<MiddleNode>, MiddleErr> {
+    let AstNodeType::Identifier(caller) = &call.caller.node_type else {
+        return Ok(None);
+    };
+
+    let parameters = data_type
+        .map(|ty| ParserInnerType::from(ty.clone()))
+        .and_then(|ty| match ty {
+            ParserInnerType::Function { parameters, .. } => Some(parameters),
+            _ => None,
+        });
+
+    match caller.value.get_ident().text().as_str() {
+        "discriminant" if call.args.len() == 1 => {
+            let value = AstNode::from(call.args.pop().unwrap()).lower(env, scope, span, None)?;
+            Ok(Some(MiddleNode::new(
+                MiddleNodeType::Discriminant(MirDiscriminant {
+                    value: Box::new(value),
+                }),
+                span,
+            )))
+        }
+        "tuple" => Ok(Some(env.aggregate_from_call_nodes(
+            scope,
+            span,
+            None,
+            std::mem::take(&mut call.args),
+            std::mem::take(&mut call.reverse_args),
+            parameters.as_deref(),
+        ))),
+        "curry" if call.args.len() == 1 && call.reverse_args.is_empty() => {
+            let value = env.rewrite_curry_call(scope, span, call.args.pop().unwrap().into())?;
+            Ok(Some(value.lower(env, scope, span, None)?))
+        }
+        _ => {
+            let Ok(Key::TypeKey(caller)) =
+                env.resolve(scope, &caller.value, ResolutionOptions::typing())
+            else {
+                return Ok(None);
+            };
+
+            if !env.typing.objects.contains_key(&caller) {
+                return Ok(None);
+            }
+
+            Ok(Some(env.aggregate_from_call_nodes(
+                scope,
+                span,
+                Some(caller),
+                std::mem::take(&mut call.args),
+                std::mem::take(&mut call.reverse_args),
+                parameters.as_deref(),
+            )))
+        }
+    }
+}
+
+fn prepare_call(
+    call: &mut AstCall,
+    env: &mut MiddleEnvironment,
+    scope: ScopeId,
+    span: Span,
+    data_type: Option<&MirDataType>,
+) -> Result<(), MiddleErr> {
+    let AstNodeType::Identifier(ident) = &call.caller.node_type else {
+        return Ok(());
+    };
+
+    let caller_name = env
+        .resolve(scope, &ident.value, ResolutionOptions::idents())?
+        .unwrap_variable();
+
+    let explicit_args = match &ident.value {
+        PotentialGenericTypeIdentifier::Generic { generic_types, .. } => Some(
+            generic_types
+                .iter()
+                .map(|ty| env.resolve_data_type(scope, ty, ResolutionOptions::typing()))
+                .collect::<Result<Vec<_>, _>>(),
+        ),
+        _ => None,
+    };
+
+    if let Some((generic_params, header, _)) =
+        env.monomorphizer.function_template(&caller_name).cloned()
+    {
+        let concrete_args = if let Some(explicit) = explicit_args {
+            Some(explicit?)
+        } else {
+            let arg_types = call
+                .args
+                .iter()
+                .filter_map(|arg| arg.get_node().type_of(env, scope, span))
+                .collect::<Vec<_>>();
+
+            let param_types = header
+                .parameters
+                .iter()
+                .map(|parameter| {
+                    if let Some(data_type) = &parameter.1 {
+                        if let ParserInnerType::Struct(name) = &data_type.data_type
+                            && generic_params
+                                .iter()
+                                .any(|param| param.as_str() == name.as_str())
+                        {
+                            return Ok(MirDataType::Struct {
+                                identifier: TypeKey {
+                                    fully_qualified_path: Arc::new(FullyQualifiedPath {
+                                        name: Some(Ustr::from(name.as_str())),
+                                        parent: None,
+                                    }),
+                                },
+                                generic_types: Vec::new(),
+                            });
+                        }
+
+                        env.resolve_data_type(scope, data_type, ResolutionOptions::typing())
+                    } else if let Some(node) = &parameter.2 {
+                        node.type_of(env, scope, span)
+                            .ok_or(MiddleErr::InferImpossible)
+                    } else {
+                        Err(MiddleErr::InferImpossible)
+                    }
+                })
+                .collect::<Result<Vec<_>, MiddleErr>>()?;
+
+            let return_type = if let ParserInnerType::Struct(name) = &header.return_type.data_type
+                && generic_params
+                    .iter()
+                    .any(|param| param.as_str() == name.as_str())
+            {
+                MirDataType::Struct {
+                    identifier: TypeKey {
+                        fully_qualified_path: Arc::new(FullyQualifiedPath {
+                            name: Some(Ustr::from(name.as_str())),
+                            parent: None,
+                        }),
+                    },
+                    generic_types: Vec::new(),
+                }
+            } else {
+                data_type.cloned().unwrap_or(MirDataType::Dynamic)
+            };
+
+            Some(env.infer_concrete_type_args(
+                scope,
+                &generic_params,
+                &param_types,
+                &return_type,
+                &arg_types,
+                None,
+            )?)
+        };
+
+        if let Some(concrete_args) = concrete_args
+            && !concrete_args
+                .iter()
+                .all(|ty| matches!(ty, MirDataType::Dynamic))
+        {
+            let key = env.monomorphize_function(scope, caller_name.clone(), concrete_args)?;
+            *call.caller = AstNode::identifier(call.caller.span, *key.name());
+        }
+    }
+
+    let needs_caller_context = env
+        .symbols
+        .variables
+        .get(&caller_name)
+        .is_some_and(|var| match var.data_type.unwrap_all_refs() {
+            MirDataType::Function { parameters, .. } if !parameters.is_empty() => matches!(
+                parameters.last(),
+                Some(MirDataType::Struct { identifier, .. }) if identifier.name() == "ExecContext"
+            ),
+            _ => false,
+        });
+
+    if needs_caller_context && let Some(context) = env.get_caller_context(scope, span) {
+        call.reverse_args.push(context);
+    }
+
+    Ok(())
+}
+
 impl MirLowering for AstCall {
     #[instrument(skip_all)]
     #[allow(clippy::only_used_in_recursion)]
@@ -893,368 +1288,23 @@ impl MirLowering for AstCall {
         span: Span,
         data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
-        match self.caller.node_type.clone() {
-            AstNodeType::FieldAccess(AstField { base, field }) => {
-                let field_name = env
-                    .resolve(scope, &field, ResolutionOptions::default().with_dollar())?
-                    .unwrap_dollar();
-
-                if let Some(ty) = base.type_of(env, scope, span) {
-                    if let Some((member, bindings)) =
-                        env.typing.find_impl_member_with_subst(&ty, field_name)
-                    {
-                        let symbol_name = member.symbol_name.clone();
-                        let generic_params = member.generic_params.clone();
-
-                        if member.has_method_generics
-                            || env
-                                .monomorphizer
-                                .generic_fn_templates
-                                .contains_key(&symbol_name)
-                        {
-                            let mut concrete_args = Vec::new();
-                            for param in &generic_params {
-                                if let Some(concrete) = bindings.get(param.as_str()) {
-                                    concrete_args.push(concrete.clone());
-                                } else {
-                                    concrete_args.push(MirDataType::Dynamic);
-                                }
-                            }
-
-                            let arg_types: Vec<_> = self
-                                .args
-                                .iter()
-                                .filter_map(|arg| {
-                                    if let CallArg::Value(node) = arg {
-                                        node.type_of(env, scope, span)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect();
-
-                            let inferred = env.infer_concrete_type_args(
-                                scope,
-                                &generic_params,
-                                &[],
-                                &ty,
-                                arg_types.as_slice(),
-                                None,
-                            );
-
-                            if let Ok(inferred_types) = inferred {
-                                concrete_args = inferred_types;
-                            }
-
-                            let key = env.monomorphize_function(
-                                scope,
-                                symbol_name.clone(),
-                                concrete_args,
-                            )?;
-
-                            let base = if let Some(var) = env.symbols.variables.get(&key)
-                                && let MirDataType::Function { parameters, .. } = &var.data_type
-                                && let Some(MirDataType::Ref(_, mutability)) = parameters.first()
-                            {
-                                AstNode::new(
-                                    base.span,
-                                    AstNodeType::RefStatement(AstRef {
-                                        value: base.clone(),
-                                        mutability: *mutability,
-                                    }),
-                                )
-                            } else {
-                                *base
-                            };
-
-                            self.args.insert(0, CallArg::Value(base));
-
-                            return AstCall {
-                                string_fn: None,
-                                caller: Box::new(AstNode::identifier(
-                                    self.caller.span,
-                                    env.context.convert_key_to_ustr(Key::VariableKey(key)),
-                                )),
-                                ..self
-                            }
-                            .lower(env, scope, span, data_type);
-                        }
-
-                        let base = if let Some(var) = env.symbols.variables.get(&symbol_name)
-                            && let MirDataType::Function { parameters, .. } = &var.data_type
-                            && let Some(MirDataType::Ref(_, mutability)) = parameters.first()
-                        {
-                            AstNode::new(
-                                base.span,
-                                AstNodeType::RefStatement(AstRef {
-                                    value: base.clone(),
-                                    mutability: *mutability,
-                                }),
-                            )
-                        } else {
-                            *base
-                        };
-
-                        self.args.insert(0, CallArg::Value(base));
-
-                        return AstCall {
-                            string_fn: None,
-                            caller: Box::new(AstNode::identifier(
-                                self.caller.span,
-                                env.context
-                                    .convert_key_to_ustr(Key::VariableKey(symbol_name)),
-                            )),
-                            ..self
-                        }
-                        .lower(env, scope, span, data_type);
-                    }
-
-                    if let Some(x) = env
-                        .typing
-                        .find_impl_member(&ty, field_name)
-                        .map(|x| x.symbol_name.clone())
-                    {
-                        let base = if let Some(var) = env.symbols.variables.get(&x)
-                            && let MirDataType::Function { parameters, .. } = &var.data_type
-                            && let Some(MirDataType::Ref(_, mutability)) = parameters.first()
-                        {
-                            AstNode::new(
-                                base.span,
-                                AstNodeType::RefStatement(AstRef {
-                                    value: base.clone(),
-                                    mutability: *mutability,
-                                }),
-                            )
-                        } else {
-                            *base
-                        };
-
-                        self.args.insert(0, CallArg::Value(base));
-
-                        return AstCall {
-                            string_fn: None,
-                            caller: Box::new(AstNode::identifier(
-                                self.caller.span,
-                                env.context.convert_key_to_ustr(Key::VariableKey(x)),
-                            )),
-                            ..self
-                        }
-                        .lower(env, scope, span, data_type);
-                    }
-                }
-
-                if let Ok(resolved) = (AstField {
-                    base: base.clone(),
-                    field: field.clone(),
-                }
-                .lower(env, scope, span, None))
-                    && let MiddleNodeType::Identifier(symbol) = resolved.node_type
-                {
-                    return AstCall {
-                        string_fn: None,
-                        caller: Box::new(AstNode::identifier(
-                            self.caller.span,
-                            env.context
-                                .convert_key_to_ustr(Key::VariableKey(symbol.identifier)),
-                        )),
-                        ..self
-                    }
-                    .lower(env, scope, span, data_type);
-                }
-            }
-            AstNodeType::Identifier(caller_ident) => {
-                let parser_inner_type = data_type
-                    .as_ref()
-                    .map(|dt| ParserInnerType::from(dt.clone()));
-
-                let parameters = match &parser_inner_type {
-                    Some(ParserInnerType::Function { parameters, .. }) => {
-                        Some(parameters.as_slice())
-                    }
-                    _ => None,
-                };
-
-                match caller_ident.value.get_ident().text().as_str() {
-                    "discriminant" if self.args.len() == 1 => {
-                        return Ok(MiddleNode::new(
-                            MiddleNodeType::Discriminant(MirDiscriminant {
-                                value: Box::new(
-                                    AstNode::from(self.args.pop().unwrap())
-                                        .lower(env, scope, span, None)?,
-                                ),
-                            }),
-                            span,
-                        ));
-                    }
-                    "tuple" => {
-                        return Ok(env.aggregate_from_call_nodes(
-                            scope,
-                            span,
-                            None,
-                            self.args,
-                            self.reverse_args,
-                            parameters,
-                        ));
-                    }
-                    "curry" if self.args.len() == 1 && self.reverse_args.is_empty() => {
-                        let rewritten =
-                            env.rewrite_curry_call(scope, span, self.args.pop().unwrap().into())?;
-                        return rewritten.lower(env, scope, span, None);
-                    }
-                    _ => {}
-                }
-
-                if let Ok(Key::TypeKey(caller)) =
-                    env.resolve(scope, &caller_ident.value, ResolutionOptions::typing())
-                    && env.typing.objects.contains_key(&caller)
-                {
-                    return Ok(env.aggregate_from_call_nodes(
-                        scope,
-                        span,
-                        Some(caller),
-                        self.args,
-                        self.reverse_args,
-                        parameters,
-                    ));
-                }
-            }
-            _ => {}
+        if let Some(node) = self.lower_field_call(env, scope, span, data_type.clone())? {
+            return node.lower(env, scope, span, data_type);
         }
 
-        let data_type = self
+        if let Some(node) = lower_basic_call(&mut self, env, scope, span, data_type.as_ref())? {
+            return Ok(node);
+        }
+
+        let caller_type = self
             .caller
             .type_of(env, scope, span)
             .map(|x| x.unwrap_all_refs().clone());
 
-        if let AstNodeType::Identifier(ident) = &self.caller.node_type {
-            let caller_name = env
-                .resolve(scope, &ident.value, ResolutionOptions::idents())?
-                .unwrap_variable();
-
-            let explicit_args = match &ident.value {
-                PotentialGenericTypeIdentifier::Generic {
-                    identifier: _,
-                    generic_types,
-                } => Some(
-                    generic_types
-                        .iter()
-                        .map(|gt| env.resolve_data_type(scope, gt, ResolutionOptions::typing()))
-                        .collect::<Result<Vec<_>, _>>(),
-                ),
-                _ => None,
-            };
-
-            if let Some((generic_params, header, _)) = env
-                .monomorphizer
-                .generic_fn_templates
-                .get(&caller_name)
-                .cloned()
-            {
-                if let Some(explicit) = explicit_args {
-                    let concrete_args = explicit?;
-
-                    let key =
-                        env.monomorphize_function(scope, caller_name.clone(), concrete_args)?;
-
-                    self.caller = Box::new(AstNode::identifier(self.caller.span, *key.name()));
-                } else {
-                    let arg_types: Vec<MirDataType> = self
-                        .args
-                        .iter()
-                        .filter_map(|arg| arg.get_node().type_of(env, scope, span))
-                        .collect();
-
-                    let param_types: Vec<MirDataType> = header
-                        .parameters
-                        .iter()
-                        .map(|p| {
-                            if let Some(data_type) = &p.1 {
-                                if let ParserInnerType::Struct(name) = &data_type.data_type
-                                    && generic_params.iter().any(|gp| gp.as_str() == name.as_str())
-                                {
-                                    return Ok(MirDataType::Struct {
-                                        identifier: TypeKey {
-                                            fully_qualified_path: Arc::new(FullyQualifiedPath {
-                                                name: Some(Ustr::from(name.as_str())),
-                                                parent: None,
-                                            }),
-                                        },
-                                        generic_types: vec![],
-                                    });
-                                }
-
-                                env.resolve_data_type(scope, data_type, ResolutionOptions::typing())
-                            } else if let Some(node) = &p.2 {
-                                node.type_of(env, scope, span)
-                                    .ok_or(MiddleErr::InferImpossible)
-                            } else {
-                                Err(MiddleErr::InferImpossible)
-                            }
-                        })
-                        .collect::<Result<Vec<_>, MiddleErr>>()?;
-
-                    let return_type = if let ParserInnerType::Struct(name) =
-                        &header.return_type.data_type
-                        && generic_params.iter().any(|gp| gp.as_str() == name.as_str())
-                    {
-                        MirDataType::Struct {
-                            identifier: TypeKey {
-                                fully_qualified_path: Arc::new(FullyQualifiedPath {
-                                    name: Some(Ustr::from(name.as_str())),
-                                    parent: None,
-                                }),
-                            },
-                            generic_types: vec![],
-                        }
-                    } else {
-                        data_type.clone().unwrap_or(MirDataType::Dynamic)
-                    };
-
-                    let concrete_args = env.infer_concrete_type_args(
-                        scope,
-                        &generic_params,
-                        &param_types,
-                        &return_type,
-                        &arg_types,
-                        None,
-                    )?;
-
-                    if concrete_args
-                        .iter()
-                        .all(|t| matches!(t, MirDataType::Dynamic))
-                    {
-                        // TODO Potentially output error because no concrete types could be inferred
-                    } else {
-                        let key =
-                            env.monomorphize_function(scope, caller_name.clone(), concrete_args)?;
-
-                        self.caller = Box::new(AstNode::identifier(self.caller.span, *key.name()));
-                    }
-                }
-            }
-
-            let needs_caller_context = if let Some(var) = env.symbols.variables.get(&caller_name) {
-                match var.data_type.unwrap_all_refs() {
-                    MirDataType::Function {
-                        return_type: _,
-                        parameters,
-                    } if !parameters.is_empty() => {
-                        matches!(parameters.last(), Some(MirDataType::Struct { identifier, .. }) if identifier.name() == "ExecContext")
-                    }
-                    _ => false,
-                }
-            } else {
-                false
-            };
-
-            if needs_caller_context && let Some(x) = env.get_caller_context(scope, span) {
-                self.reverse_args.push(x);
-            }
-        };
-
+        prepare_call(&mut self, env, scope, span, caller_type.as_ref())?;
         let caller = self.caller.lower(env, scope, span, None)?;
 
-        let parser_inner_type = data_type
+        let parser_inner_type = caller_type
             .as_ref()
             .map(|dt| ParserInnerType::from(dt.clone()));
 
@@ -1278,7 +1328,7 @@ impl MirLowering for AstCall {
 
         if env.context.type_check
             && let Some(MirDataType::Function { parameters, .. })
-            | Some(MirDataType::NativeFunction { parameters, .. }) = &data_type
+            | Some(MirDataType::NativeFunction { parameters, .. }) = &caller_type
         {
             for (i, arg) in args.iter().enumerate() {
                 let span = arg.span;

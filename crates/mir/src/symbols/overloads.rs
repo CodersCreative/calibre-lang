@@ -113,8 +113,8 @@ impl MiddleEnvironment {
                     node_type: MiddleNodeType::CallExpression(MirCall {
                         caller: Box::new(MiddleNode::identifier(span, key)),
                         args: Box::new([
-                            left.lower(self, scope, span, overload.parameters.first().cloned())?,
-                            right.lower(self, scope, span, overload.parameters.last().cloned())?,
+                            left.lower(self, scope, span, Some(left_ty.clone()))?,
+                            right.lower(self, scope, span, Some(right_ty.clone()))?,
                         ]),
                     }),
                     span,
@@ -194,12 +194,7 @@ impl MiddleEnvironment {
             return Ok(Some(MiddleNode {
                 node_type: MiddleNodeType::CallExpression(MirCall {
                     caller: Box::new(MiddleNode::identifier(span, key)),
-                    args: Box::new([value.lower(
-                        self,
-                        scope,
-                        span,
-                        overload.parameters.first().cloned(),
-                    )?]),
+                    args: Box::new([value.lower(self, scope, span, Some(left_ty.clone()))?]),
                 }),
                 span,
             }));
@@ -330,9 +325,9 @@ impl MiddleEnvironment {
                 node_type: MiddleNodeType::CallExpression(MirCall {
                     caller: Box::new(MiddleNode::identifier(span, key)),
                     args: Box::new([
-                        base.lower(self, scope, span, overload.parameters.first().cloned())?,
-                        index.lower(self, scope, span, overload.parameters.get(1).cloned())?,
-                        value.lower(self, scope, span, overload.parameters.last().cloned())?,
+                        base.lower(self, scope, span, Some(base_ty.clone()))?,
+                        index.lower(self, scope, span, Some(index_ty.clone()))?,
+                        value.lower(self, scope, span, Some(value_ty.clone()))?,
                     ]),
                 }),
                 span,

@@ -435,6 +435,20 @@ impl MiddleEnvironment {
                     return Ok(KeyOrAstNode::Key(Key::TypeKey(key.clone())));
                 }
 
+                if let Some(MirDataType::Struct { identifier, .. }) = self
+                    .monomorphizer
+                    .generic_type_templates
+                    .keys()
+                    .find(|ty| match ty {
+                        MirDataType::Struct { identifier, .. } => {
+                            identifier.fully_qualified_path.name == Some(ident)
+                        }
+                        _ => false,
+                    })
+                {
+                    return Ok(KeyOrAstNode::Key(Key::TypeKey(identifier.clone())));
+                }
+
                 let ty = ParserDataType::from(
                     ParserInnerType::from_str(&ident)
                         .unwrap_or(ParserInnerType::Struct(ident.to_string())),
@@ -457,14 +471,17 @@ impl MiddleEnvironment {
                     .get(&Ustr::from(&ty.impl_name()))
                     .cloned()
                 {
-                    let mapped_name = Ustr::from(&ParserDataType::from(x).impl_name());
-                    let type_key = TypeKey {
-                        fully_qualified_path: Arc::new(FullyQualifiedPath {
-                            name: Some(mapped_name),
-                            parent: None,
-                        }),
+                    let identifier = match x {
+                        MirDataType::Struct { identifier, .. } => identifier,
+                        ty => TypeKey {
+                            fully_qualified_path: Arc::new(FullyQualifiedPath {
+                                name: Some(Ustr::from(&ParserDataType::from(ty).impl_name())),
+                                parent: None,
+                            }),
+                        },
                     };
-                    return Ok(KeyOrAstNode::Key(Key::TypeKey(type_key)));
+
+                    return Ok(KeyOrAstNode::Key(Key::TypeKey(identifier)));
                 }
 
                 if options.name_resolution

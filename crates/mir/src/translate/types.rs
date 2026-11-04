@@ -33,6 +33,17 @@ use std::sync::Arc;
 use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
+fn function_from_member(node: &AstNode) -> Option<&AstFunction> {
+    match &node.node_type {
+        AstNodeType::FunctionDeclaration(function) => Some(function),
+        AstNodeType::Tag(AstTag { node, .. }) => function_from_member(node),
+        AstNodeType::VariableDeclaration(AstDeclaration { value, .. }) => {
+            function_from_member(value)
+        }
+        _ => None,
+    }
+}
+
 impl MirLowering for AstType {
     #[instrument(skip_all, fields(scope, identifier))]
     fn lower(
@@ -596,9 +607,8 @@ impl MirLowering for AstImpl {
                     Err(e) => return Some(Err(e)),
                 };
 
-                // TODO Try to deal with the function having its own generic params better
-                let func_template = if let AstNodeType::FunctionDeclaration(func) =
-                    &processed.node.node_type
+                let generic_function = function_from_member(&processed.node).cloned();
+                let func_template = if let Some(func) = &generic_function
                     && !func.header.generics.0.is_empty()
                 {
                     Some(processed.node.clone())
@@ -620,6 +630,17 @@ impl MirLowering for AstImpl {
                     }
                 };
 
+                if let Some(function) = &generic_function
+                    && (!generic_params.is_empty() || !function.header.generics.0.is_empty())
+                {
+                    env.add_function_template(
+                        scope,
+                        new_name.clone(),
+                        function,
+                        generic_params.clone(),
+                    );
+                }
+
                 if let Some(impl_ref) = env
                     .typing
                     .inherent_impls
@@ -637,12 +658,6 @@ impl MirLowering for AstImpl {
                             has_method_generics,
                         },
                     );
-
-                    if let Some(AstNodeType::FunctionDeclaration(func)) =
-                        func_template.as_ref().map(|x| &x.node_type)
-                    {
-                        env.add_function_template(scope, new_name.clone(), func);
-                    }
                 }
 
                 Some(Ok(dec))

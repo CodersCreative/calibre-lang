@@ -1,4 +1,5 @@
 use crate::{
+    MirRenamable, MirRenameState,
     ast::types::MirDataType,
     environment::MiddleEnvironment,
     errors::MiddleErr,
@@ -42,6 +43,59 @@ pub struct Monomorphizer {
 }
 
 impl Monomorphizer {
+    pub fn function_template_key(&self, key: &VariableKey) -> Option<&VariableKey> {
+        self.generic_fn_templates
+            .get_key_value(key)
+            .map(|(key, _)| key)
+            .or_else(|| {
+                self.generic_fn_templates
+                    .keys()
+                    .find(|candidate| candidate.to_string() == key.to_string())
+            })
+    }
+
+    pub fn function_template(
+        &self,
+        key: &VariableKey,
+    ) -> Option<&(Vec<Ustr>, FunctionHeader, AstNode)> {
+        let template_key = self.function_template_key(key)?;
+        self.generic_fn_templates.get(template_key)
+    }
+
+    pub fn rename(&mut self, state: &mut MirRenameState) {
+        let generic_fn_templates = std::mem::take(&mut self.generic_fn_templates);
+        for (mut key, template) in generic_fn_templates {
+            key.rename(state);
+            self.generic_fn_templates.entry(key).or_insert(template);
+        }
+
+        let generic_type_templates = std::mem::take(&mut self.generic_type_templates);
+        for (mut key, template) in generic_type_templates {
+            key.rename(state);
+            self.generic_type_templates.entry(key).or_insert(template);
+        }
+
+        let functions = std::mem::take(&mut self.functions);
+        for ((mut key, mut args), mut value) in functions {
+            key.rename(state);
+            for arg in &mut args {
+                arg.rename(state);
+            }
+            value.rename(state);
+            self.functions.entry((key, args)).or_insert(value);
+        }
+
+        let types = std::mem::take(&mut self.types);
+        for ((mut key, mut args), mut value) in types {
+            key.rename(state);
+            for arg in &mut args {
+                arg.rename(state);
+            }
+            value.rename(state);
+            self.types.entry((key, args)).or_insert(value);
+        }
+    }
+
     pub fn append(&mut self, other: Self) {
         for (key, value) in other.generic_fn_templates {
             self.generic_fn_templates.entry(key).or_insert(value);
@@ -115,26 +169,21 @@ impl MiddleEnvironment {
             self.unify_types(scope, return_type, expected, generic_params, &mut subst)?;
         }
 
-        let mut concrete_args = Vec::with_capacity(generic_params.len());
-
-        for param in generic_params {
-            let param_str = param.as_str();
-            if let Some(ty) = subst.get(param_str)
-                && !concrete_args.contains(ty)
-            {
-                concrete_args.push(ty.clone());
-            } else {
-                // TODO Probably deal with this better
-                concrete_args.push(MirDataType::Struct {
-                    identifier: TypeKey {
-                        fully_qualified_path: FullyQualifiedPath::combine(None, *param),
-                    },
-                    generic_types: Vec::new(),
-                });
-            }
-        }
-
-        Ok(concrete_args)
+        Ok(generic_params
+            .into_iter()
+            .map(|param| {
+                if let Some(ty) = subst.get(param.as_str()) {
+                    ty.clone()
+                } else {
+                    MirDataType::Struct {
+                        identifier: TypeKey {
+                            fully_qualified_path: FullyQualifiedPath::combine(None, *param),
+                        },
+                        generic_types: Vec::new(),
+                    }
+                }
+            })
+            .collect())
     }
 
     fn unify_types(
@@ -260,10 +309,16 @@ impl MiddleEnvironment {
         original_key: VariableKey,
         concrete_args: &[MirDataType],
     ) -> Result<VariableKey, MiddleErr> {
+        let template_key = self
+            .monomorphizer
+            .function_template_key(&original_key)
+            .cloned()
+            .ok_or_else(|| MiddleErr::Variable("Generic function not found".to_string()))?;
+
         let (generic_params, header, body) = self
             .monomorphizer
             .generic_fn_templates
-            .get(&original_key)
+            .get(&template_key)
             .cloned()
             .ok_or_else(|| MiddleErr::Variable("Generic function not found".to_string()))?;
 
@@ -286,7 +341,7 @@ impl MiddleEnvironment {
         let original_scope = self
             .symbols
             .variables
-            .get(&original_key)
+            .get(&template_key)
             .map(|x| x.scope)
             .unwrap_or(scope);
 
@@ -350,26 +405,46 @@ impl MiddleEnvironment {
         scope: ScopeId,
         name: VariableKey,
         header: &AstFunction,
+        mut generic_params: Vec<Ustr>,
     ) -> bool {
-        if header.header.generics.0.is_empty() {
-            return false;
+        for param in self.scoping.generic_param_stack.iter().flatten() {
+            if !generic_params.contains(param) {
+                generic_params.push(*param);
+            }
         }
 
-        let generic_params: Vec<Ustr> = header
+        let generics: Vec<Ustr> = header
             .header
             .generics
             .0
             .iter()
-            .map(|g| {
-                self.resolve(scope, g, ResolutionOptions::default().with_dollar())
-                    .map(|x| x.unwrap_dollar())
+            .filter_map(|generic| {
+                self.resolve(scope, generic, ResolutionOptions::default().with_dollar())
+                    .ok()
+                    .map(|key| key.unwrap_dollar())
             })
-            .collect::<Result<Vec<_>, MiddleErr>>()
-            .unwrap_or_default();
+            .collect();
+
+        for param in generics {
+            if !generic_params.contains(&param) {
+                generic_params.push(param);
+            }
+        }
+
+        if generic_params.is_empty() {
+            return false;
+        }
 
         self.monomorphizer
             .generic_fn_templates
             .entry(name)
+            .and_modify(|(existing_params, _, _)| {
+                for param in &generic_params {
+                    if !existing_params.contains(param) {
+                        existing_params.push(*param);
+                    }
+                }
+            })
             .or_insert((
                 generic_params,
                 header.header.clone(),

@@ -77,7 +77,7 @@ impl Typing {
         if let Some(candidates) = self.inherent_impls.get(&key) {
             for imp in candidates {
                 bindings.clear();
-                if (imp.target.can_unify(ty, &imp.generic_params, &mut bindings) || best.is_none())
+                if imp.target.can_unify(ty, &imp.generic_params, &mut bindings)
                     && let Some(m) = imp.get_member(member_name, &[])
                 {
                     let score = imp.target.specificity(&imp.generic_params);

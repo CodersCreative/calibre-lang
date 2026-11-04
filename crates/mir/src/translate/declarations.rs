@@ -272,7 +272,7 @@ impl MirLowering for AstDeclaration {
                 env.register_variable(scope, identifier, data_type.clone().unwrap(), self.var_type)?
             };
 
-            env.add_function_template(scope, key.clone(), func);
+            env.add_function_template(scope, key.clone(), func, Vec::new());
 
             for tag in &env.tagging.tag_info {
                 match tag {
