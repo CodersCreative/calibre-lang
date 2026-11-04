@@ -974,9 +974,9 @@ impl AstCallLowering for AstCall {
                                 .unwrap_or(MirDataType::Dynamic)
                         })
                         .collect::<Vec<_>>();
-                    
+
                     let mut arg_types = Vec::new();
-                    
+
                     if is_instance_call {
                         arg_types.push(ty.clone());
                     }
@@ -1017,7 +1017,7 @@ impl AstCallLowering for AstCall {
                         env.monomorphize_function(scope, symbol_name.clone(), concrete_args)?;
 
                     let mut node = self.clone();
-                    
+
                     node.caller = Box::new(AstNode::identifier(
                         self.caller.span,
                         env.context
@@ -1025,8 +1025,7 @@ impl AstCallLowering for AstCall {
                     ));
 
                     if is_instance_call {
-                        node
-                            .args
+                        node.args
                             .insert(0, CallArg::Value(method_receiver(env, *base, &key)));
                     }
 
@@ -1035,15 +1034,14 @@ impl AstCallLowering for AstCall {
 
                 if is_instance_call {
                     let mut node = self.clone();
-                    
+
                     node.caller = Box::new(AstNode::identifier(
                         self.caller.span,
                         env.context
                             .convert_key_to_ustr(Key::VariableKey(symbol_name.clone())),
                     ));
-                    
-                    node
-                        .args
+
+                    node.args
                         .insert(0, CallArg::Value(method_receiver(env, *base, &symbol_name)));
 
                     return Ok(Some(node));
@@ -1057,17 +1055,16 @@ impl AstCallLowering for AstCall {
                     .map(|member| member.symbol_name.clone())
             {
                 let mut node = self.clone();
-                
+
                 node.caller = Box::new(AstNode::identifier(
                     self.caller.span,
                     env.context
                         .convert_key_to_ustr(Key::VariableKey(symbol_name.clone())),
                 ));
-                
-                node
-                    .args
+
+                node.args
                     .insert(0, CallArg::Value(method_receiver(env, *base, &symbol_name)));
-                
+
                 return Ok(Some(node));
             }
         }
@@ -1076,7 +1073,7 @@ impl AstCallLowering for AstCall {
             && let MiddleNodeType::Identifier(symbol) = resolved.node_type
         {
             let mut node = self.clone();
-            
+
             node.caller = Box::new(AstNode::identifier(
                 self.caller.span,
                 env.context

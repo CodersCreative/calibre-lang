@@ -170,7 +170,7 @@ impl MiddleEnvironment {
         }
 
         Ok(generic_params
-            .into_iter()
+            .iter()
             .map(|param| {
                 if let Some(ty) = subst.get(param.as_str()) {
                     ty.clone()

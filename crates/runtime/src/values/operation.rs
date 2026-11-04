@@ -1,7 +1,8 @@
 use crate::values::aggregate::GcAggregate;
+use crate::values::big::alloc_big;
 use crate::values::list::GcList;
 use crate::values::string::GcString;
-use crate::values::{BIG_CONSTS, Value, ValueTag, alloc_big};
+use crate::values::{BIG_CONSTS, Value, ValueTag};
 use crate::{BIG_PRECISION, BIG_ROUNDING};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
 
@@ -87,7 +88,7 @@ pub fn comparison(op: &ComparisonOperator, left: Value, right: Value) -> Result<
         match (left, right) {
             (Value::Null, Value::Null) => Some(true),
             (Value::Bool(a), Value::Bool(b)) => Some(a == b),
-            (Value::Big(a), Value::Big(b)) => Some(a == b),
+            (Value::Big(a), Value::Big(b)) => Some(unsafe { &**a } == unsafe { &**b }),
             (Value::Int(a), Value::Int(b)) => Some(a == b),
             (Value::UInt(a), Value::UInt(b)) => Some(a == b),
             (Value::Byte(a), Value::Byte(b)) => Some(a == b),
@@ -99,10 +100,9 @@ pub fn comparison(op: &ComparisonOperator, left: Value, right: Value) -> Result<
             (Value::Byte(a), Value::Int(b)) => Some(*b >= 0 && *a == (b.cast_unsigned() as u8)),
             (Value::Float(a), Value::Float(b)) => Some(a == b),
             (Value::Char(a), Value::Char(b)) => Some(a == b),
-            (Value::String(a), Value::String(b)) => Some(a == b),
+            (Value::String(a), Value::String(b)) => Some(unsafe { &**a } == unsafe { &**b }),
             (Value::List(a), Value::List(b)) => {
                 let a = unsafe { &**a };
-
                 let b = unsafe { &**b };
 
                 if a.data.len() != b.data.len() {
@@ -159,16 +159,11 @@ pub fn comparison(op: &ComparisonOperator, left: Value, right: Value) -> Result<
                 )),
             }
         }
-        (Value::List(a), other, op) | (other, Value::List(a), op) => match op {
-            ComparisonOperator::Equal => Ok(Value::Bool(matches!(other, Value::List(_)))),
-            ComparisonOperator::NotEqual => Ok(Value::Bool(!matches!(other, Value::List(_)))),
-            _ => Err(format!(
-                "Unable to perform {op:?} on {} and {}",
-                Value::List(a),
-                other
-            )),
-        },
-        (Value::Big(x), Value::Big(y), op) => Ok(Value::Bool(comparison_value_handle(op, x, y))),
+        (Value::Big(x), Value::Big(y), op) => Ok(Value::Bool(comparison_value_handle(
+            op,
+            unsafe { &*x },
+            unsafe { &*y },
+        ))),
         (Value::Int(x), Value::Int(y), op) => Ok(Value::Bool(comparison_value_handle(op, x, y))),
         (Value::UInt(x), Value::UInt(y), op) => Ok(Value::Bool(comparison_value_handle(op, x, y))),
         (Value::Byte(x), Value::Byte(y), op) => Ok(Value::Bool(comparison_value_handle(op, x, y))),
@@ -239,9 +234,11 @@ pub fn comparison(op: &ComparisonOperator, left: Value, right: Value) -> Result<
         }
         (Value::Bool(x), Value::Bool(y), op) => Ok(Value::Bool(comparison_value_handle(op, x, y))),
         (Value::Char(x), Value::Char(y), op) => Ok(Value::Bool(comparison_value_handle(op, x, y))),
-        (Value::String(x), Value::String(y), op) => {
-            Ok(Value::Bool(comparison_value_handle(op, x, y)))
-        }
+        (Value::String(x), Value::String(y), op) => Ok(Value::Bool(comparison_value_handle(
+            op,
+            unsafe { &*x },
+            unsafe { &*y },
+        ))),
         (left, right, ComparisonOperator::Equal) => {
             Ok(Value::Bool(matches!(eq_value(&left, &right), Some(true))))
         }
@@ -309,7 +306,6 @@ pub fn binary(op: &BinaryOperator, left: Value, right: Value) -> Result<Value, S
     match (left, right) {
         (Value::Big(x), Value::Big(y)) => {
             let x_ref = unsafe { &*x };
-
             let y_ref = unsafe { &*y };
 
             Ok(match op {

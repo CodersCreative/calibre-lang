@@ -14,7 +14,7 @@ impl CraneliftTranslation for LirLiteral {
     fn translate<'a, M: Module>(
         self,
         translator: &mut FunctionTranslator<'a, M>,
-        _data_type: Option<MirDataType>,
+        data_type: Option<MirDataType>,
     ) -> Result<CompiledValue, Box<dyn Error>> {
         match self {
             LirLiteral::Int(i) => {
@@ -106,10 +106,40 @@ impl CraneliftTranslation for LirLiteral {
 
                 Ok(CompiledValue::new(value, MirDataType::Null))
             }
-            _ => {
-                let value = translator.builder.ins().iconst(translator.types.int(), 0);
+            LirLiteral::Big(x) => {
+                if let Ok(x) = x.parse::<f64>() {
+                    let value = translator.builder.ins().f64const(x);
 
-                Ok(CompiledValue::new(value, MirDataType::Int))
+                    let alloc_func_id = translator
+                        .runtime_functions
+                        .get("calibre_gc_alloc_big_from_float")
+                        .ok_or("calibre_gc_alloc_big_from_float not found in runtime_functions")?;
+
+                    let alloc_func_ref = translator
+                        .module
+                        .declare_func_in_func(*alloc_func_id, translator.builder.func);
+
+                    let ptr = translator.builder.ins().call(alloc_func_ref, &[value]);
+                    let ptr = translator.builder.inst_results(ptr)[0];
+
+                    Ok(CompiledValue::new(ptr, MirDataType::Big))
+                } else {
+                    let txt = LirLiteral::String(x).translate(translator, data_type)?;
+
+                    let alloc_func_id = translator
+                        .runtime_functions
+                        .get("calibre_gc_alloc_big")
+                        .ok_or("calibre_gc_alloc_big not found in runtime_functions")?;
+
+                    let alloc_func_ref = translator
+                        .module
+                        .declare_func_in_func(*alloc_func_id, translator.builder.func);
+
+                    let ptr = translator.builder.ins().call(alloc_func_ref, &[txt.value]);
+                    let ptr = translator.builder.inst_results(ptr)[0];
+
+                    Ok(CompiledValue::new(ptr, MirDataType::Big))
+                }
             }
         }
     }

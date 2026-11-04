@@ -23,7 +23,7 @@ pub extern "C" fn calibre_range_slice(range: i64, slice: i64) -> i64 {
     if let Some((s, e)) = resolve_slice_range((end - start).max(0) as usize, s, e) {
         let from_i32 = start + s as i64;
         let to_i32 = start + e as i64;
-        ((to_i32 as i64) << 32) | (from_i32 as i64 & 0xFFFFFFFF)
+        (to_i32 << 32) | (from_i32 & 0xFFFFFFFF)
     } else {
         0
     }

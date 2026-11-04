@@ -4,7 +4,7 @@ use crate::{
 };
 
 #[repr(C)]
-#[derive(Default)]
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GcString {
     pub data: String,
 }

@@ -39,6 +39,22 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
+                "calibre_gc_alloc_big_from_float",
+                RuntimeFunction {
+                    params: vec![(types::F64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Big),
+                },
+            ),
+            (
+                "calibre_gc_alloc_big",
+                RuntimeFunction {
+                    params: vec![(types::I64, ArgumentKind::Direct)],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::Big),
+                },
+            ),
+            (
                 "calibre_gc_alloc_aggregate",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],

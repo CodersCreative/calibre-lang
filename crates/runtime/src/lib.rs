@@ -1,6 +1,6 @@
 use crate::{
     native::fs,
-    values::{aggregate, enums, hasher, list, operation, range, string},
+    values::{aggregate, big, enums, hasher, list, operation, range, string},
 };
 use astro_float::RoundingMode;
 
@@ -56,6 +56,15 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
         RuntimeSymbol {
             name: "calibre_gc_remove_root",
             ptr: gc::calibre_gc_remove_root as *const u8,
+        },
+        // big
+        RuntimeSymbol {
+            name: "calibre_gc_alloc_big_from_float",
+            ptr: big::calibre_gc_alloc_big_from_float as *const u8,
+        },
+        RuntimeSymbol {
+            name: "calibre_gc_alloc_big",
+            ptr: big::calibre_gc_alloc_big as *const u8,
         },
         // range
         RuntimeSymbol {

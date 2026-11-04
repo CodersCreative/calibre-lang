@@ -1,5 +1,5 @@
 use crate::{
-    gc::{GC_HEAP, GC_STATS, GcHeader, SendPtr, calibre_gc_add_root},
+    gc::{GC_HEAP, GC_STATS, GcHeader, SendPtr},
     values::{
         aggregate::GcAggregate,
         enums::{calibre_option_some, calibre_result_err, calibre_result_ok},
@@ -13,6 +13,7 @@ use std::{fmt::Display, hash::Hasher, sync::LazyLock};
 use wasm_sync::Mutex;
 
 pub mod aggregate;
+pub mod big;
 pub mod enums;
 pub mod hasher;
 pub mod host;
@@ -49,23 +50,6 @@ fn register_alloc(inner: GcObject) -> *mut GcHeader {
     }
 
     header
-}
-
-pub fn alloc_big(value: BigFloat) -> *mut BigFloat {
-    let header = register_alloc(GcObject::Big(value));
-
-    unsafe {
-        let object = &mut (*header).inner;
-
-        let ptr = object as *mut GcObject as usize;
-        calibre_gc_add_root(ptr);
-
-        if let GcObject::Big(value) = object {
-            value as *mut BigFloat
-        } else {
-            std::ptr::null_mut()
-        }
-    }
 }
 
 #[inline]
