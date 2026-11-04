@@ -5,13 +5,13 @@ use crate::{
     },
     environment::MiddleEnvironment,
     errors::MiddleErr,
-    scoping::{FullyQualifiedPath, ScopeId},
+    scoping::ScopeId,
     symbols::{
-        TypeKey, VariableKey,
+        TypeKey,
         resolve::{Key, ResolutionOptions},
     },
     tags::TagInfo,
-    translate::MirLowering,
+    translate::{MirLowering, matching::ast_fn_match_to_function},
     typing::{MiddleImpl, MiddleImplMember, MiddleObject, MiddleTypeDefType},
 };
 use calibre_parser::{
@@ -29,7 +29,6 @@ use calibre_parser::{
     },
 };
 use rustc_hash::FxHashMap;
-use std::sync::Arc;
 use tracing::instrument;
 use ustr::{Ustr, UstrMap};
 
@@ -372,6 +371,21 @@ impl ProcessedVariable {
                 data_type,
                 declared: _,
             }) => {
+                let value_span = value.span;
+                
+                let value = match value.node_type {
+                    AstNodeType::FnMatchDeclaration(function) => Box::new(AstNode::new(
+                        value_span,
+                        AstNodeType::FunctionDeclaration(ast_fn_match_to_function(
+                            function, value_span,
+                        )),
+                    )),
+                    node_type => Box::new(AstNode {
+                        span: value_span,
+                        node_type,
+                    }),
+                };
+
                 let identifier = env
                     .resolve(
                         scope,
@@ -379,6 +393,7 @@ impl ProcessedVariable {
                         ResolutionOptions::default().with_dollar(),
                     )?
                     .unwrap_dollar();
+                
                 let resolved_iden = format!("{}.{}", impl_key, identifier);
 
                 let is_dependant = match &value.node_type {
@@ -524,8 +539,9 @@ impl MirLowering for AstImpl {
                         .unwrap_dollar();
 
                     let resolved_iden = Ustr::from(&format!("{}.{}", impl_key, identifier));
+                    let symbol_name = env.get_new_variable_key(scope, resolved_iden).ok()?;
 
-                    Some((identifier, resolved_iden, generic_params.clone()))
+                    Some((identifier, symbol_name, generic_params.clone()))
                 } else {
                     None
                 }
@@ -564,18 +580,8 @@ impl MirLowering for AstImpl {
             })
             .collect();
 
-        for var in placeholders {
-            imp.insert_member_placeholder(
-                var.0,
-                VariableKey {
-                    fully_qualified_path: Arc::new(FullyQualifiedPath {
-                        name: Some(var.1),
-                        parent: None,
-                    }),
-                    shadow_counter: None,
-                },
-                var.2,
-            );
+        for (identifier, symbol_name, generic_params) in placeholders {
+            imp.insert_member_placeholder(identifier, symbol_name, generic_params);
         }
 
         for (ident, ty) in type_defs {

@@ -31,7 +31,7 @@ impl Tcp {
 
 	const read := fn (stream : TcpStream, size : int = 4096) -> str => return tcp_read(stream.inner, size);
 
-	const write := fn (stream : TcpStream, data : str) -> int => return tcp_write(stream.inner, data);
+	const write := fn (stream : TcpStream, data : str) -> uint => return tcp_write(stream.inner, data);
 
 	const close := fn (stream : TcpStream) => return tcp_close(stream.inner);
 };
@@ -41,7 +41,7 @@ impl TcpStream {
 
 	const read := fn (self : &TcpStream, size : int = 4096) -> str => return tcp_read(self.inner, size);
 
-	const write := fn (self : &TcpStream, data : str) -> int => return tcp_write(self.inner, data);
+	const write := fn (self : &TcpStream, data : str) -> uint => return tcp_write(self.inner, data);
 
 	const close := fn (self : &TcpStream) => return tcp_close(self.inner);
 };

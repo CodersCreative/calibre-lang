@@ -10,6 +10,7 @@ const global_thing : ThingEnum = ThingEnum.Nothing;
 
 impl ThingEnum {
 	const age := 90;
+	let surname = "Smith";
 
 	// TODO Fix : It's running correctly but the return type is being messed up somehow
 	const name := fn match &ThingEnum -> str {
@@ -33,6 +34,8 @@ const main := fn => {
 	print("object inferred : " & thing.name());
 	print("static from object : " & ThingEnum.age);
 	print("static from object inferred : " & thing.age);
+	print("static from object : " & ThingEnum.surname);
+	print("static from object inferred : " & thing.surname);
 };
 
 @bench test "simple" => main();

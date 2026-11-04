@@ -5,7 +5,7 @@ use crate::{
     scoping::ScopeId,
     symbols::{FunctionParamDefault, VariableKey, resolve::ResolutionOptions},
     tags::TagInfo,
-    translate::MirLowering,
+    translate::{MirLowering, matching::ast_fn_match_to_function},
 };
 use calibre_parser::{
     Span,
@@ -199,6 +199,16 @@ impl MirLowering for AstDeclaration {
         span: Span,
         _data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
+        if let AstNodeType::FnMatchDeclaration(function) = self.value.node_type.clone() {
+            *self.value = AstNode::new(
+                self.value.span,
+                AstNodeType::FunctionDeclaration(ast_fn_match_to_function(
+                    function,
+                    self.value.span,
+                )),
+            );
+        }
+
         let identifier = env
             .resolve(
                 scope,

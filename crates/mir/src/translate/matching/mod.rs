@@ -283,32 +283,7 @@ impl MirLowering for AstFnMatch {
     ) -> Result<MiddleNode, MiddleErr> {
         AstNode::new(
             span,
-            AstNodeType::FunctionDeclaration(AstFunction {
-                body: Box::new(AstNode::new(
-                    span,
-                    AstNodeType::ScopeDeclaration(AstScopeDef {
-                        body: vec![AstNode::new(
-                            span,
-                            AstNodeType::MatchStatement(AstMatch {
-                                value: Some(Box::new(AstNode::identifier(
-                                    span,
-                                    self.header.parameters[0].0.clone(),
-                                ))),
-                                body: self.body,
-                            }),
-                        )],
-                        named: None,
-                        is_temp: true,
-                        create_new_scope: true,
-                        define: false,
-                        is_function_body: false,
-                    }),
-                )),
-                header: FunctionHeader {
-                    param_destructures: Vec::new(),
-                    ..self.header
-                },
-            }),
+            AstNodeType::FunctionDeclaration(ast_fn_match_to_function(self, span)),
         )
         .lower(env, scope, span, data_type)
     }
@@ -320,5 +295,34 @@ impl MirLowering for AstFnMatch {
         span: Span,
     ) -> Option<MirDataType> {
         self.header.type_of(env, scope, span)
+    }
+}
+
+pub(crate) fn ast_fn_match_to_function(value: AstFnMatch, span: Span) -> AstFunction {
+    AstFunction {
+        body: Box::new(AstNode::new(
+            span,
+            AstNodeType::ScopeDeclaration(AstScopeDef {
+                body: vec![AstNode::new(
+                    span,
+                    AstNodeType::MatchStatement(AstMatch {
+                        value: Some(Box::new(AstNode::identifier(
+                            span,
+                            value.header.parameters[0].0.clone(),
+                        ))),
+                        body: value.body,
+                    }),
+                )],
+                named: None,
+                is_temp: true,
+                create_new_scope: true,
+                define: false,
+                is_function_body: false,
+            }),
+        )),
+        header: FunctionHeader {
+            param_destructures: Vec::new(),
+            ..value.header
+        },
     }
 }

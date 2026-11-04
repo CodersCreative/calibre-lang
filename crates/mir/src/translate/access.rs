@@ -3,7 +3,10 @@ use crate::{
     environment::MiddleEnvironment,
     errors::MiddleErr,
     scoping::ScopeId,
-    symbols::resolve::{KeyOrAstNode, ResolutionOptions},
+    symbols::{
+        VariableKey,
+        resolve::{KeyOrAstNode, ResolutionOptions},
+    },
     translate::MirLowering,
     typing::MiddleTypeDefType,
 };
@@ -21,6 +24,20 @@ use calibre_parser::{
 };
 use tracing::instrument;
 use ustr::Ustr;
+
+fn lower_impl_member(
+    env: &mut MiddleEnvironment,
+    scope: ScopeId,
+    span: Span,
+    member: &VariableKey,
+    data_type: Option<MirDataType>,
+) -> Result<MiddleNode, MiddleErr> {
+    if let Some(value) = env.symbols.constants.get(member).cloned() {
+        value.lower(env, scope, span, data_type)
+    } else {
+        Ok(MiddleNode::identifier(span, member.clone()))
+    }
+}
 
 impl MirLowering for AstField {
     #[instrument(skip_all)]
@@ -43,7 +60,8 @@ impl MirLowering for AstField {
             && let Ok(ty) = env.resolve_to_data_type(scope, &ident.value)
         {
             if let Some(member) = env.typing.find_impl_member(&ty, field_name) {
-                return Ok(MiddleNode::identifier(span, member.symbol_name.clone()));
+                let symbol_name = member.symbol_name.clone();
+                return lower_impl_member(env, scope, span, &symbol_name, data_type);
             }
 
             if let MirDataType::Struct { identifier, .. } = ty
@@ -97,7 +115,7 @@ impl MirLowering for AstField {
             .find_impl_member(&ty, field_name)
             .map(|x| x.symbol_name.clone())
         {
-            return Ok(MiddleNode::identifier(span, x));
+            return lower_impl_member(env, scope, span, &x, data_type);
         }
 
         // TODO Fix monomorphization and remove the "|| true"

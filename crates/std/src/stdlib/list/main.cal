@@ -5,21 +5,21 @@
 
 impl<T> list:<T> {
 	@pure
-	const len := fn (self : list:<T>) -> uint => return len(self);
+	const len := fn (self : &list:<T>) -> uint => return len(self);
 
 	@pure
-	const is_empty := fn (self : list:<T>) -> bool => return len(self) = 0u;
+	const is_empty := fn (self : &list:<T>) -> bool => return len(self) = 0u;
 
 	@pure
-	const first := fn (self : list:<T>) -> T? => return self[0];
+	const first := fn (self : &list:<T>) -> &T? => return self[0];
 
 	@pure
-	const last := fn (self : list:<T>) -> T? => {
+	const last := fn (self : &list:<T>) -> &T? => {
 		return self[-1];
 	};
 
 	@pure
-	const get := fn (self : list:<T>, idx : int) -> T? => {
+	const get := fn (self : &list:<T>, idx : int) -> &T? => {
 		if (idx < 0) || (idx >= len(self)) => return none else => return self[idx];
 	};
 
@@ -27,23 +27,23 @@ impl<T> list:<T> {
 	const clone := fn (self : list:<T>) -> list:<T> => return list:<T>[self[i]! for i in len(self)];
 
 	@pure
-	const contains := fn (self : list:<T>, needle : T) -> bool => {
+	const contains := fn (self : &list:<T>, needle : &T) -> bool => {
 		for i in len(self) => if self[i]! = needle => return true;
 		return false;
 	};
 
 	@pure
-	const index_of := fn (self : list:<T>, needle : T) -> uint? => {
+	const index_of := fn (self : &list:<T>, needle : &T) -> uint? => {
 		for i in len(self) => if self[i]! = needle => return some(i);
 		return none;
 	};
 
 	@pure
-	const last_index_of := fn (self : list:<T>, needle : T) -> uint? => {
+	const last_index_of := fn (self : &list:<T>, needle : &T) -> uint? => {
 		let mut i := len(self) - 1;
 		
 		for i >= 0 => {
-			let value : T? = self[i]!;
+			let value : &T? = self[i]!;
 			if value = needle => return some(i);
 			if i = 0 => return none;
 			i -= 1;
@@ -53,7 +53,7 @@ impl<T> list:<T> {
 	};
 
 	@pure
-	const count := fn (self : list:<T>, needle : T) -> uint => {
+	const count := fn (self : &list:<T>, needle : &T) -> uint => {
 		let mut n := 0u;
 		for i in len(self) => if self[i]! = needle => n += 1u;
 		return n;
@@ -92,9 +92,9 @@ impl<T> list:<T> {
 		return raw_remove(self, idx);
 	};
 
-	const remove_value := fn (self : &mut list:<T>, needle : T) -> bool => {
+	const remove_value := fn (self : &mut list:<T>, needle : &T) -> bool => {
 		let idx := try self.index_of(needle) => return false;
-		let _ := self.remove(idx);
+		let _ := raw_remove(self, idx);
 		return true;
 	};
 
@@ -119,7 +119,7 @@ impl<T> list:<T> {
 	const binary_search := fn (self : list:<T>, needle : T, compare : fn (T, T) -> int) -> int? => return binary_search_by(self, needle, compare);
 
 	@pure
-	const join := fn (self : list:<str>, sep : str = "") -> str => {
+	const join := fn (self : &list:<str>, sep : str = "") -> str => {
 		let mut out := "";
 		
 		for i in len(self) => {
