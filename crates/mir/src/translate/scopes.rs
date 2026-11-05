@@ -145,8 +145,11 @@ impl MirLowering for AstScopeDef {
                     .clone()
                     .lower_or_empty(env, new_scope, statement.span, None);
 
-                if !env.monomorphizer.awaiting_lowering.is_empty() {
-                    for (node, scope) in std::mem::take(&mut env.monomorphizer.awaiting_lowering) {
+                while !env.monomorphizer.awaiting_lowering.is_empty() {
+                    let awaiting_lowering =
+                        std::mem::take(&mut env.monomorphizer.awaiting_lowering);
+
+                    for (node, scope) in awaiting_lowering {
                         stmts.extend(
                             node.lower_or_empty(env, scope, span, None)
                                 .nodes_if_isnt_temp(),

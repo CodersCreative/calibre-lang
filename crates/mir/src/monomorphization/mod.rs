@@ -129,6 +129,14 @@ fn mangle_name(base: &str, concrete_args: &[MirDataType]) -> String {
     )
 }
 
+fn is_function_impl_member(node: &AstNode) -> bool {
+    match &node.node_type {
+        AstNodeType::VariableDeclaration(AstDeclaration { value, .. }) => value.is_callable(),
+        AstNodeType::Tag(tag) => is_function_impl_member(&tag.node),
+        _ => false,
+    }
+}
+
 impl MiddleEnvironment {
     pub fn monomorphize_overload(
         &mut self,
@@ -462,14 +470,16 @@ impl MiddleEnvironment {
         original_type: MirDataType,
         concrete_args: Vec<MirDataType>,
     ) -> Result<(), MiddleErr> {
-        let template = self
-            .monomorphizer
-            .generic_type_templates
-            .get(&original_type)
-            .ok_or_else(|| MiddleErr::Variable("Type template not found".to_string()))?;
+        let (generic_params, impls) = {
+            let template = self
+                .monomorphizer
+                .generic_type_templates
+                .get(&original_type)
+                .ok_or_else(|| MiddleErr::Variable("Type template not found".to_string()))?;
+            (template.generic_params.clone(), template.impls.clone())
+        };
 
-        let subst = template
-            .generic_params
+        let subst = generic_params
             .iter()
             .zip(concrete_args.iter())
             .map(|(param, concrete)| {
@@ -488,12 +498,25 @@ impl MiddleEnvironment {
         }
         .unwrap_or(scope);
 
-        self.monomorphizer.awaiting_lowering.extend(
-            template
-                .impls
-                .iter()
-                .map(|node| (node.clone().substitute(&subst), scope)),
-        );
+        for node in impls {
+            let span = node.span;
+            let AstNodeType::ImplDeclaration(mut implementation) =
+                node.substitute(&subst).node_type
+            else {
+                continue;
+            };
+
+            implementation
+                .variables
+                .retain(|member| !is_function_impl_member(member));
+
+            if !implementation.variables.is_empty() {
+                self.monomorphizer.awaiting_lowering.push((
+                    AstNode::new(span, AstNodeType::ImplDeclaration(implementation)),
+                    scope,
+                ));
+            }
+        }
 
         Ok(())
     }

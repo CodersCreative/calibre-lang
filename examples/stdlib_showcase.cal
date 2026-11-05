@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - Iterators map
+// TODO Fix - FAILING - generators are failing
 import * from std::thread;
 import * from std::option;
 import * from std::crypto;
@@ -33,7 +33,7 @@ const main := fn => {
 	let rng := 3..10;
 	print("range len/contains => " & rng.len() & ", " & rng.contains(5));
 	print("range sum => " & rng.sum());
-	print("range to_list => " & rng.to_list());
+	print("range to_list => " & rng as! list:<int>);
 	print("range is_empty => " & (0..0).is_empty());
 	
 	let squares := list:<int>[
@@ -42,7 +42,7 @@ const main := fn => {
 		3,
 		4,
 		5
-	].into_iter();
+	] as! gen:<int>;
 	print(squares);
 	let squares := squares.map(fn (x : int) -> int => return x * x);
 	print(squares);

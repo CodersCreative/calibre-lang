@@ -1,6 +1,6 @@
 const suspend := fn <T> (value : T) -> T => return gen_suspend(value);
 
-impl gen:<T> {
+impl<T> gen:<T> {
 	const next := fn (self : &mut Self) -> T? => {
 		if self is host =>
 			return self.gen_next;

@@ -30,6 +30,48 @@ use calibre_parser::{
 use tracing::instrument;
 use ustr::{Ustr, UstrSet};
 
+fn contains_active_generic_parameter(data_type: &MirDataType, env: &MiddleEnvironment) -> bool {
+    match data_type {
+        MirDataType::Struct {
+            identifier,
+            generic_types,
+        } => {
+            identifier
+                .fully_qualified_path
+                .name
+                .is_some_and(|name| env.scoping.all_time_generics.contains(&name))
+                || generic_types
+                    .iter()
+                    .any(|data_type| contains_active_generic_parameter(data_type, env))
+        }
+        MirDataType::Tuple(items) => items
+            .iter()
+            .any(|data_type| contains_active_generic_parameter(data_type, env)),
+        MirDataType::List(inner)
+        | MirDataType::Ptr(inner)
+        | MirDataType::Option(inner)
+        | MirDataType::Ref(inner, _) => contains_active_generic_parameter(inner, env),
+        MirDataType::Result { ok, err } => {
+            contains_active_generic_parameter(ok, env)
+                || contains_active_generic_parameter(err, env)
+        }
+        MirDataType::Function {
+            return_type,
+            parameters,
+        }
+        | MirDataType::NativeFunction {
+            return_type,
+            parameters,
+        } => {
+            contains_active_generic_parameter(return_type, env)
+                || parameters
+                    .iter()
+                    .any(|data_type| contains_active_generic_parameter(data_type, env))
+        }
+        _ => false,
+    }
+}
+
 impl MirLowering for AstStruct {
     #[instrument(skip_all)]
     fn lower(
@@ -47,20 +89,27 @@ impl MirLowering for AstStruct {
                     identifier,
                     generic_types,
                 } if !generic_types.is_empty() => {
-                    let ty = MirDataType::Struct {
-                        identifier: identifier.clone(),
-                        generic_types: Vec::new(),
-                    };
+                    let has_active_generic = generic_types
+                        .iter()
+                        .any(|data_type| contains_active_generic_parameter(data_type, env));
+                    if has_active_generic {
+                        identifier.clone()
+                    } else {
+                        let ty = MirDataType::Struct {
+                            identifier: identifier.clone(),
+                            generic_types: Vec::new(),
+                        };
 
-                    match env.monomorphize_type(scope, ty, generic_types.clone())? {
-                        MirDataType::Struct { identifier, .. } => identifier,
-                        _ => {
-                            return Err(MiddleErr::At(
-                                span,
-                                Box::new(MiddleErr::CannotInferFromExpression(
-                                    "struct type inference".to_string(),
-                                )),
-                            ));
+                        match env.monomorphize_type(scope, ty, generic_types.clone())? {
+                            MirDataType::Struct { identifier, .. } => identifier,
+                            _ => {
+                                return Err(MiddleErr::At(
+                                    span,
+                                    Box::new(MiddleErr::CannotInferFromExpression(
+                                        "struct type inference".to_string(),
+                                    )),
+                                ));
+                            }
                         }
                     }
                 }

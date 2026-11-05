@@ -17,6 +17,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
+        Substitutable,
         idents::{ParserText, PotentialDollarIdentifier, PotentialGenericTypeIdentifier},
         nodes::{
             AstNode, AstNodeType,
@@ -25,7 +26,7 @@ use calibre_parser::{
             misc::AstTag,
             types::{AstImpl, AstType, TypeDefType},
         },
-        types::GenericTypes,
+        types::{GenericTypes, ParserDataType},
     },
 };
 use rustc_hash::FxHashMap;
@@ -372,7 +373,7 @@ impl ProcessedVariable {
                 declared: _,
             }) => {
                 let value_span = value.span;
-                
+
                 let value = match value.node_type {
                     AstNodeType::FnMatchDeclaration(function) => Box::new(AstNode::new(
                         value_span,
@@ -386,6 +387,15 @@ impl ProcessedVariable {
                     }),
                 };
 
+                let mut subst = FxHashMap::default();
+
+                subst.insert(
+                    String::from("Self"),
+                    ParserDataType::from(resolved_target.clone()),
+                );
+
+                let value = Box::new((*value).clone().substitute(&subst));
+
                 let identifier = env
                     .resolve(
                         scope,
@@ -393,7 +403,7 @@ impl ProcessedVariable {
                         ResolutionOptions::default().with_dollar(),
                     )?
                     .unwrap_dollar();
-                
+
                 let resolved_iden = format!("{}.{}", impl_key, identifier);
 
                 let is_dependant = match &value.node_type {

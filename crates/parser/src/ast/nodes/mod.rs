@@ -244,6 +244,16 @@ impl AstNode {
         Self::identifier(span, if value { "true" } else { "false" })
     }
 
+    pub fn is_callable(&self) -> bool {
+        match &self.node_type {
+            AstNodeType::FunctionDeclaration(_)
+            | AstNodeType::FnMatchDeclaration(_)
+            | AstNodeType::ExternFunctionDeclaration(_) => true,
+            AstNodeType::Tag(tag) => tag.node.is_callable(),
+            _ => false,
+        }
+    }
+
     #[inline]
     pub fn is_raw_option_value(&self) -> bool {
         match &self.node_type {
