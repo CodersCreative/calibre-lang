@@ -2,7 +2,7 @@ use crate::{
     Reg,
     instructions::{
         access::{VMDiscriminant, VMIndex, VMLoadMember},
-        binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
+        binary::{VMAs, VMBinary, VMComparison, VMIs},
         functions::{VMCall, VMCallSelf, VMSpawn},
         literals::{VMAggregate, VMEnum, VMList, VMRange},
         memory::{VMDeref, VMRef, VMSetRef},
@@ -52,7 +52,6 @@ pub enum VMInstruction {
     Is(VMIs),
     Binary(VMBinary),
     Comparison(VMComparison),
-    Boolean(VMBoolean),
 
     // Functions
     Call(VMCall),
@@ -91,7 +90,6 @@ impl VMInstruction {
         | VMInstruction::Is(VMIs { dst, .. })
         | VMInstruction::Binary(VMBinary { dst, .. })
         | VMInstruction::Comparison(VMComparison { dst, .. })
-        | VMInstruction::Boolean(VMBoolean { dst, .. })
         // Functions
         | VMInstruction::Spawn(VMSpawn { dst, .. })
         // Access
@@ -131,7 +129,6 @@ impl VMInstruction {
         | VMInstruction::Is(VMIs { dst, .. })
         | VMInstruction::Binary(VMBinary { dst, .. })
         | VMInstruction::Comparison(VMComparison { dst, .. })
-        | VMInstruction::Boolean(VMBoolean { dst, .. })
         // Functions
         | VMInstruction::Spawn(VMSpawn { dst, .. })
         // Access
@@ -203,8 +200,7 @@ impl VMInstruction {
                 to: right,
                 ..
             })
-            | VMInstruction::Comparison(VMComparison { left, right, .. })
-            | VMInstruction::Boolean(VMBoolean { left, right, .. }) => {
+            | VMInstruction::Comparison(VMComparison { left, right, .. }) => {
                 add_use(*left);
                 add_use(*right);
             }
@@ -270,7 +266,6 @@ impl Display for VMInstruction {
             VMInstruction::Is(x) => x.fmt(f),
             VMInstruction::Binary(x) => x.fmt(f),
             VMInstruction::Comparison(x) => x.fmt(f),
-            VMInstruction::Boolean(x) => x.fmt(f),
 
             // Functions
             VMInstruction::Call(x) => x.fmt(f),

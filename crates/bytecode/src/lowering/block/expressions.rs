@@ -11,11 +11,11 @@ use crate::{
     Reg,
     instructions::{
         VMInstruction,
-        binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
+        binary::{VMAs, VMBinary, VMComparison, VMIs},
     },
     lowering::{BlockLoweringCtx, block::VMLowering},
 };
-use calibre_lir::ast::{LirAs, LirBinary, LirBoolean, LirComparison, LirIs};
+use calibre_lir::ast::{LirAs, LirBinary, LirComparison, LirIs};
 use calibre_parser::Span;
 
 impl VMLowering for LirBinary {
@@ -48,27 +48,6 @@ impl VMLowering for LirComparison {
 
         env.emit(
             VMInstruction::Comparison(VMComparison {
-                dst,
-                op: self.operator,
-                left,
-                right,
-            }),
-            span,
-        );
-
-        dst
-    }
-}
-
-impl VMLowering for LirBoolean {
-    #[inline(always)]
-    fn lower<'a>(self, env: &mut BlockLoweringCtx<'a>, span: Span) -> Reg {
-        let left = env.lower_node(*self.left, span);
-        let right = env.lower_node(*self.right, span);
-        let dst = env.alloc_reg();
-
-        env.emit(
-            VMInstruction::Boolean(VMBoolean {
                 dst,
                 op: self.operator,
                 left,

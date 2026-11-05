@@ -1,9 +1,7 @@
 use crate::Reg;
 use calibre_lir::MirDataType;
 use calibre_parser::ast::{
-    binary::BinaryOperator,
-    comparison::{BooleanOperator, ComparisonOperator},
-    nodes::binary::AsFailureMode,
+    binary::BinaryOperator, comparison::ComparisonOperator, nodes::binary::AsFailureMode,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -77,24 +75,6 @@ impl Display for VMComparison {
         write!(
             f,
             "%r{} = COMPARE %r{} {} %r{}",
-            self.dst, self.left, self.op, self.right
-        )
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct VMBoolean {
-    pub dst: Reg,
-    pub op: BooleanOperator,
-    pub left: Reg,
-    pub right: Reg,
-}
-
-impl Display for VMBoolean {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "%r{} = BOOLEAN %r{} {} %r{}",
             self.dst, self.left, self.op, self.right
         )
     }

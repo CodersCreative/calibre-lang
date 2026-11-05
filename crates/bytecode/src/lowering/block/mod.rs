@@ -229,7 +229,6 @@ impl<'a> BlockLoweringCtx<'a> {
             LirNodeType::Range(x) => x.lower(self, span),
             LirNodeType::Closure(x) => x.lower(self, span),
 
-            LirNodeType::Boolean(x) => x.lower(self, span),
             LirNodeType::Comparison(x) => x.lower(self, span),
             LirNodeType::Binary(x) => x.lower(self, span),
             LirNodeType::As(x) => x.lower(self, span),

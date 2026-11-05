@@ -359,7 +359,6 @@ impl CraneliftTranslation for LirNodeType {
             LirNodeType::Binary(x) => x.translate(translator, data_type),
             LirNodeType::Comparison(x) => x.translate(translator, data_type),
             LirNodeType::Call(x) => x.translate(translator, data_type),
-            LirNodeType::Boolean(x) => x.translate(translator, data_type),
             LirNodeType::As(x) => x.translate(translator, data_type),
             LirNodeType::Is(x) => x.translate(translator, data_type),
             LirNodeType::Ref(x) => x.translate(translator, data_type),

@@ -4,12 +4,9 @@ use crate::{
 };
 use calibre_lir::{
     MirDataType, VariableKey,
-    ast::{LirAs, LirBinary, LirBoolean, LirCall, LirComparison, LirIs, LirNodeType},
+    ast::{LirAs, LirBinary, LirCall, LirComparison, LirIs, LirNodeType},
 };
-use calibre_parser::ast::{
-    binary::BinaryOperator,
-    comparison::{BooleanOperator, ComparisonOperator},
-};
+use calibre_parser::ast::{binary::BinaryOperator, comparison::ComparisonOperator};
 use cranelift::codegen::ir::{
     InstBuilder, MachMemFlags, Value,
     condcodes::{FloatCC, IntCC},
@@ -303,24 +300,6 @@ impl CraneliftTranslation for LirBinary {
                 data_type.unwrap_or(MirDataType::Dynamic),
             ))
         }
-    }
-}
-
-impl CraneliftTranslation for LirBoolean {
-    fn translate<'a, M: Module>(
-        self,
-        translator: &mut FunctionTranslator<'a, M>,
-        _data_type: Option<MirDataType>,
-    ) -> Result<CompiledValue, Box<dyn Error>> {
-        let left = self.left.translate(translator, Some(MirDataType::Bool))?;
-        let right = self.right.translate(translator, Some(MirDataType::Bool))?;
-
-        let value = match self.operator {
-            BooleanOperator::And => translator.builder.ins().band(left.value, right.value),
-            BooleanOperator::Or => translator.builder.ins().bor(left.value, right.value),
-        };
-
-        Ok(CompiledValue::new(value, MirDataType::Bool))
     }
 }
 

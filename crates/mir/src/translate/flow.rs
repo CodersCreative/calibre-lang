@@ -710,7 +710,9 @@ impl MirLowering for AstReturn {
                                 }
                             });
 
-                            let ret_ty = if let Some(x) = ret_ty.get_gen() {
+                            let ret_ty = if let Some(x) = ret_ty.get_gen()
+                                && !node_ty.is_gen()
+                            {
                                 x
                             } else {
                                 ret_ty

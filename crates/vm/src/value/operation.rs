@@ -3,10 +3,7 @@ use crate::{
     error::RuntimeError,
     value::{BIG_PRECISION, BIG_ROUNDING, RuntimeValue},
 };
-use calibre_parser::ast::{
-    binary::BinaryOperator,
-    comparison::{BooleanOperator, ComparisonOperator},
-};
+use calibre_parser::ast::{binary::BinaryOperator, comparison::ComparisonOperator};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Shl, Shr, Sub};
 use std::sync::Arc;
 use ustr::Ustr;
@@ -253,22 +250,6 @@ pub fn comparison(
             Box::new(right),
             *op,
         )),
-    }
-}
-
-pub fn boolean(
-    op: &BooleanOperator,
-    left: RuntimeValue,
-    right: RuntimeValue,
-) -> Result<RuntimeValue, RuntimeError> {
-    match (left, right, op) {
-        (RuntimeValue::Bool(x), RuntimeValue::Bool(y), BooleanOperator::And) => {
-            Ok(RuntimeValue::Bool(x && y))
-        }
-        (RuntimeValue::Bool(x), RuntimeValue::Bool(y), BooleanOperator::Or) => {
-            Ok(RuntimeValue::Bool(x || y))
-        }
-        (left, right, op) => Err(RuntimeError::Boolean(Box::new(left), Box::new(right), *op)),
     }
 }
 

@@ -4,15 +4,15 @@ use crate::{
     evaluate::instruction::VMEvaluation,
     value::{
         RuntimeValue, TerminateValue, ValueSlot,
-        operation::{binary, boolean, comparison},
+        operation::{binary, comparison},
     },
 };
 use calibre_bytecode::{
     VMBlock,
-    instructions::binary::{VMAs, VMBinary, VMBoolean, VMComparison, VMIs},
+    instructions::binary::{VMAs, VMBinary, VMComparison, VMIs},
 };
 use calibre_lir::ast::BlockId;
-use calibre_parser::ast::{comparison::BooleanOperator, nodes::binary::AsFailureMode};
+use calibre_parser::ast::nodes::binary::AsFailureMode;
 use tracing::instrument;
 use ustr::Ustr;
 
@@ -104,35 +104,6 @@ impl VMEvaluation for VMComparison {
 
         let value = comparison(&self.op, left, right)?;
         vm.set_reg_value(self.dst, value);
-
-        Ok(TerminateValue::None)
-    }
-}
-
-impl VMEvaluation for VMBoolean {
-    #[instrument(skip_all)]
-    fn run(
-        &self,
-        vm: &mut VM,
-        _block: &VMBlock,
-        _ip: u32,
-        _prev_block: Option<BlockId>,
-    ) -> Result<TerminateValue, RuntimeError> {
-        let left = vm.resolve_value_from_ref(vm.get_reg_value(self.left))?;
-
-        if let RuntimeValue::Bool(x) = &left {
-            if BooleanOperator::And == self.op && !*x {
-                vm.set_reg_value(self.dst, RuntimeValue::Bool(false));
-                return Ok(TerminateValue::None);
-            } else if BooleanOperator::Or == self.op && *x {
-                vm.set_reg_value(self.dst, RuntimeValue::Bool(true));
-                return Ok(TerminateValue::None);
-            }
-        }
-
-        let right = vm.resolve_value_from_ref(vm.get_reg_value(self.right))?;
-
-        vm.set_reg_value(self.dst, boolean(&self.op, left, right)?);
 
         Ok(TerminateValue::None)
     }

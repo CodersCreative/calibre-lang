@@ -5,10 +5,7 @@ use calibre_mir::{
 use calibre_parser::{
     Span,
     ast::{
-        ObjectMap,
-        binary::BinaryOperator,
-        comparison::{BooleanOperator, ComparisonOperator},
-        idents::ParserText,
+        ObjectMap, binary::BinaryOperator, comparison::ComparisonOperator, idents::ParserText,
         nodes::binary::AsFailureMode,
     },
 };
@@ -110,13 +107,6 @@ pub struct LirMove {
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
 pub struct LirDrop {
     pub value: VariableKey,
-}
-
-#[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
-pub struct LirBoolean {
-    pub left: Box<LirNodeType>,
-    pub right: Box<LirNodeType>,
-    pub operator: BooleanOperator,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder, Serialize, Deserialize)]
@@ -232,7 +222,6 @@ pub enum LirNodeType {
     Index(LirIndex),
     Member(LirMember),
 
-    Boolean(LirBoolean),
     Binary(LirBinary),
     Comparison(LirComparison),
     As(LirAs),
@@ -400,11 +389,6 @@ impl Display for LirNodeType {
                     to,
                     inclusive,
                 }) => format!("{}..{}{}", from, if *inclusive { "=" } else { "" }, to),
-                Self::Boolean(LirBoolean {
-                    left,
-                    right,
-                    operator,
-                }) => format!("{} {} {}", left, operator, right),
                 Self::Comparison(LirComparison {
                     left,
                     right,

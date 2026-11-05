@@ -39,7 +39,7 @@ fn contains_active_generic_parameter(data_type: &MirDataType, env: &MiddleEnviro
             identifier
                 .fully_qualified_path
                 .name
-                .is_some_and(|name| env.scoping.all_time_generics.contains(&name))
+                .is_some_and(|name| env.scoping.is_generic_param(&name))
                 || generic_types
                     .iter()
                     .any(|data_type| contains_active_generic_parameter(data_type, env))

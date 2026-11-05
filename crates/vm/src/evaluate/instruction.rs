@@ -50,7 +50,6 @@ impl VMEvaluation for VMInstruction {
             VMInstruction::Is(x) => x.run(vm, block, ip, prev_block),
             VMInstruction::Binary(x) => x.run(vm, block, ip, prev_block),
             VMInstruction::Comparison(x) => x.run(vm, block, ip, prev_block),
-            VMInstruction::Boolean(x) => x.run(vm, block, ip, prev_block),
 
             // Functions
             VMInstruction::CallSelf(x) => x.run(vm, block, ip, prev_block),
