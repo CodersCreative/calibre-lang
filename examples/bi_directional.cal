@@ -84,5 +84,46 @@ const main := fn => {
 
     let mut my_list : list:<int> = [90, 39];
     my_list[1]! += 39;
-    print(my_list[1]!); 
+    print(my_list[1]!);
+
+    match "hello" {
+        "he" & _ => print("yess!!"),
+        _ => print("nah")
+    }
+
+    match "hello" {
+        "hello" => print("yess!!"),
+        _ => print("nah")
+    }
+
+    match "hello" {
+        _ & "o" => print("yess!!"),
+        _ => print("nah")
+    }
+
+    match "hello" {
+        "no" => print("nah"),
+        _ => print("yess!!")
+    }
+
+
+    match [1, 2, 3] {
+        [1, 2, _] => print("yess!!"),
+        _ => print("nah")
+    }
+
+    match [1, 2, 3] {
+        [1, 2, 3] => print("yess!!"),
+        _ => print("nah")
+    }
+
+    match [1, 2, 3] {
+        [_, 2, 3] => print("yess!!"),
+        _ => print("nah")
+    }
+
+    match [1, 2, 3] {
+        [4, 5, 6] => print("nah"),
+        _ => print("yess!!")
+    }
 }

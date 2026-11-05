@@ -3,9 +3,14 @@ use crate::{
     ast::types::MirDataType, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
 };
-use calibre_parser::ast::{
-    comparison::ComparisonOperator,
-    nodes::{AstNode, AstNodeType, binary::AstComparison, matching::MatchArmType},
+use calibre_parser::{
+    Span,
+    ast::{
+        comparison::ComparisonOperator,
+        nodes::{
+            AstNode, AstNodeType, access::AstIndex, binary::AstComparison, matching::MatchArmType,
+        },
+    },
 };
 
 pub struct ListPatternTranslator;
@@ -23,11 +28,12 @@ impl PatternTranslator for ListPatternTranslator {
 
         let MatchArmType::ListPattern(items) = inner_pattern else {
             return Err(env.context.err_at_current(MiddleErr::Internal(
-                "ListPatternCompiler called with non-list pattern".to_string(),
+                "ListPatternTranslator called with non-list pattern".to_string(),
             )));
         };
 
-        let mut condition = AstNode::bool(env.context.current_span(), true);
+        let span = env.context.current_span();
+        let mut condition = AstNode::bool(span, true);
 
         let mut bindings = aliases
             .into_iter()
@@ -43,114 +49,136 @@ impl PatternTranslator for ListPatternTranslator {
             })
             .collect::<Result<Vec<_>, MiddleErr>>()?;
 
-        // TODO Eventually allow for multiple rests
         let rest_index = items
             .iter()
-            .position(|item| matches!(item, MatchArmType::Rest(_)));
-        let min_len = rest_index.unwrap_or(items.len());
-        let has_rest = rest_index.is_some();
+            .position(|item| matches!(item.clone().alias_bindings().0, MatchArmType::Rest(_)));
 
-        condition = env.bool_and_nodes(
-            condition,
-            AstNode::new(
-                env.context.current_span(),
-                AstNodeType::ComparisonExpression(AstComparison {
-                    left: Box::new(AstNode::len(env.context.current_span(), value.clone())),
-                    right: Box::new(AstNode::int(env.context.current_span(), min_len)),
-                    operator: if has_rest {
-                        ComparisonOperator::GreaterEqual
-                    } else {
-                        ComparisonOperator::Equal
-                    },
-                }),
-            ),
+        let has_rest = rest_index.is_some();
+        let rest_index = rest_index.unwrap_or(items.len());
+
+        let min_len = if has_rest {
+            items.len().saturating_sub(1)
+        } else {
+            items.len()
+        };
+
+        let len_check = AstNode::new(
+            span,
+            AstNodeType::ComparisonExpression(AstComparison {
+                left: Box::new(AstNode::len(span, value.clone())),
+                right: Box::new(AstNode::int(span, min_len as i64)),
+                operator: if has_rest {
+                    ComparisonOperator::GreaterEqual
+                } else {
+                    ComparisonOperator::Equal
+                },
+            }),
         );
 
-        let mut idx = 0;
-        for item in items {
-            let (inner_item, item_aliases) = item.clone().alias_bindings();
+        condition = env.bool_and_nodes(condition, len_check);
 
-            match inner_item {
-                MatchArmType::Rest(_) => break,
-                MatchArmType::Wildcard(_) => {
-                    idx += 1;
-                }
+        fn translate_item(
+            env: &mut MiddleEnvironment,
+            scope: ScopeId,
+            span: Span,
+            item: &MatchArmType,
+            current: AstNode,
+            condition: &mut AstNode,
+            bindings: &mut Vec<BindingDeclaration>,
+        ) -> Result<(), MiddleErr> {
+            let (arm, aliases) = item.clone().alias_bindings();
+
+            match arm {
+                MatchArmType::Rest(_) => {}
+                MatchArmType::Wildcard(_) => {}
                 MatchArmType::Let { var_type, name } => {
-                    let current = env.match_index_access(value.clone(), idx);
-
+                    let resolved_name = env
+                        .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar();
                     bindings.push(BindingDeclaration {
-                        name: env
-                            .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
-                            .unwrap_dollar(),
-                        value: current,
+                        name: resolved_name,
+                        value: current.clone(),
                         var_type,
                         data_type: None,
                     });
-
-                    let indexed_value = env.match_index_access(value.clone(), idx);
-
-                    bindings.append(
-                        &mut item_aliases
-                            .into_iter()
-                            .map(|(var_type, name)| {
-                                Ok(BindingDeclaration {
-                                    name: env
-                                        .resolve(
-                                            scope,
-                                            &name,
-                                            ResolutionOptions::default().with_dollar(),
-                                        )?
-                                        .unwrap_dollar(),
-                                    value: indexed_value.clone(),
-                                    var_type,
-                                    data_type: None,
-                                })
-                            })
-                            .collect::<Result<_, MiddleErr>>()?,
-                    );
-
-                    idx += 1;
                 }
                 MatchArmType::Value(expected) => {
-                    let current = env.match_index_access(value.clone(), idx);
-
-                    condition = env.bool_and_nodes(
-                        condition,
-                        AstNode::new(
-                            env.context.current_span(),
-                            AstNodeType::ComparisonExpression(AstComparison {
-                                left: Box::new(current.clone()),
-                                right: Box::new(expected),
-                                operator: ComparisonOperator::Equal,
-                            }),
-                        ),
+                    let eq_cond = AstNode::new(
+                        span,
+                        AstNodeType::ComparisonExpression(AstComparison {
+                            left: Box::new(current.clone()),
+                            right: Box::new(expected),
+                            operator: ComparisonOperator::Equal,
+                        }),
                     );
-
-                    bindings.append(
-                        &mut item_aliases
-                            .into_iter()
-                            .map(|(var_type, name)| {
-                                Ok(BindingDeclaration {
-                                    name: env
-                                        .resolve(
-                                            scope,
-                                            &name,
-                                            ResolutionOptions::default().with_dollar(),
-                                        )?
-                                        .unwrap_dollar(),
-                                    value: current.clone(),
-                                    var_type,
-                                    data_type: None,
-                                })
-                            })
-                            .collect::<Result<_, MiddleErr>>()?,
-                    );
-
-                    idx += 1;
+                    let old_cond = std::mem::replace(condition, AstNode::bool(span, true));
+                    *condition = env.bool_and_nodes(old_cond, eq_cond);
                 }
-                _ => {
-                    idx += 1;
-                }
+                _ => {}
+            }
+
+            for (var_type, name) in aliases {
+                let name = env
+                    .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                    .unwrap_dollar();
+
+                bindings.push(BindingDeclaration {
+                    name,
+                    value: current.clone(),
+                    var_type,
+                    data_type: None,
+                });
+            }
+
+            Ok(())
+        }
+
+        for (i, item) in items[..rest_index].iter().enumerate() {
+            let current = AstNode::new(
+                span,
+                AstNodeType::IndexAccess(AstIndex {
+                    base: Box::new(value.clone()),
+                    index: Box::new(AstNode::int(span, i as i64)),
+                    panic: true,
+                }),
+            );
+
+            translate_item(
+                env,
+                scope,
+                span,
+                item,
+                current,
+                &mut condition,
+                &mut bindings,
+            )?;
+        }
+
+        if has_rest {
+            let suffix = &items[rest_index + 1..];
+            let suffix_len = suffix.len() as i64;
+
+            for (s_idx, item) in suffix.iter().enumerate() {
+                let index = -(suffix_len - s_idx as i64);
+
+                let current = AstNode::new(
+                    span,
+                    AstNodeType::IndexAccess(AstIndex {
+                        base: Box::new(value.clone()),
+                        index: Box::new(AstNode::int(span, index)),
+                        panic: true,
+                    }),
+                );
+
+                translate_item(
+                    env,
+                    scope,
+                    span,
+                    item,
+                    current,
+                    &mut condition,
+                    &mut bindings,
+                )?;
             }
         }
 

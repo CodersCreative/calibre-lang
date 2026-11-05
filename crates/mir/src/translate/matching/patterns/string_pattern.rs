@@ -35,25 +35,83 @@ impl PatternTranslator for StringPatternTranslator {
             )));
         };
 
-        let mut condition = AstNode::bool(env.context.current_span(), true);
-        let mut bindings = aliases
-            .into_iter()
-            .map(|(var_type, name)| {
-                Ok(BindingDeclaration {
-                    name: env
-                        .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
-                        .unwrap_dollar(),
-                    value: value.clone(),
-                    var_type,
-                    data_type: None,
-                })
-            })
-            .collect::<Result<Vec<_>, MiddleErr>>()?;
+        let span = env.context.current_span();
+        let mut bindings = Vec::with_capacity(aliases.len() + parts.len());
 
+        for (var_type, name) in aliases {
+            let name = env
+                .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
+                .unwrap_dollar();
+
+            bindings.push(BindingDeclaration {
+                name,
+                value: value.clone(),
+                var_type,
+                data_type: None,
+            });
+        }
+
+        if parts.len() == 1
+            && let MatchStringPatternPart::Literal(text) = &parts[0]
+        {
+            let literal_node = AstNode::new(
+                text.span,
+                AstNodeType::StringLiteral(AstString {
+                    value: text.clone(),
+                }),
+            );
+
+            let condition = AstNode::new(
+                span,
+                AstNodeType::ComparisonExpression(AstComparison {
+                    left: Box::new(value.clone()),
+                    right: Box::new(literal_node),
+                    operator: ComparisonOperator::Equal,
+                }),
+            );
+
+            return Ok(PatternTranslation {
+                condition,
+                bindings,
+            });
+        }
+
+        let mut condition = AstNode::bool(span, true);
         let mut current = value.clone();
+
+        let starts_with_binding = matches!(
+            parts.first(),
+            Some(MatchStringPatternPart::Wildcard(_))
+                | Some(MatchStringPatternPart::Binding { .. })
+        );
+
+        let mut parts = parts.as_slice();
+
+        if starts_with_binding && let Some(MatchStringPatternPart::Literal(text)) = parts.last() {
+            let literal_node = AstNode::new(
+                text.span,
+                AstNodeType::StringLiteral(AstString {
+                    value: text.clone(),
+                }),
+            );
+
+            let ends_with_call = AstNode::call(
+                span,
+                AstNode::member(
+                    text.span,
+                    AstNode::identifier(text.span, "str"),
+                    "ends_with",
+                ),
+                vec![CallArg::Value(value.clone()), CallArg::Value(literal_node)],
+            );
+
+            condition = env.bool_and_nodes(condition, ends_with_call);
+            parts = &parts[..parts.len() - 1];
+        }
+
         let mut ends_with_capture = false;
 
-        for part in parts {
+        for (i, part) in parts.iter().enumerate() {
             match part {
                 MatchStringPatternPart::Literal(text) => {
                     let literal_node = AstNode::new(
@@ -64,7 +122,7 @@ impl PatternTranslator for StringPatternTranslator {
                     );
 
                     let starts_with_call = AstNode::call(
-                        env.context.current_span(),
+                        span,
                         AstNode::member(
                             text.span,
                             AstNode::identifier(text.span, "str"),
@@ -78,35 +136,38 @@ impl PatternTranslator for StringPatternTranslator {
 
                     condition = env.bool_and_nodes(condition, starts_with_call);
 
-                    let strip_prefix_call = AstNode::call(
-                        env.context.current_span(),
-                        AstNode::member(
-                            text.span,
-                            AstNode::identifier(text.span, "str"),
-                            "strip_prefix",
-                        ),
-                        vec![
-                            CallArg::Value(current.clone()),
-                            CallArg::Value(literal_node),
-                        ],
-                    );
+                    if i < parts.len() - 1 {
+                        let strip_prefix_call = AstNode::call(
+                            span,
+                            AstNode::member(
+                                text.span,
+                                AstNode::identifier(text.span, "str"),
+                                "strip_prefix",
+                            ),
+                            vec![
+                                CallArg::Value(current.clone()),
+                                CallArg::Value(literal_node),
+                            ],
+                        );
 
-                    current =
-                        AstNode::member(env.context.current_span(), strip_prefix_call, "Some");
-                    ends_with_capture = false;
+                        current = AstNode::member(span, strip_prefix_call, "Some");
+                        ends_with_capture = false;
+                    } else {
+                        ends_with_capture = true;
+                    }
                 }
                 MatchStringPatternPart::Binding { var_type, name } => {
+                    let name = env
+                        .resolve(scope, name, ResolutionOptions::default().with_dollar())?
+                        .unwrap_dollar();
+
                     bindings.push(BindingDeclaration {
-                        name: env
-                            .resolve(scope, &name, ResolutionOptions::default().with_dollar())?
-                            .unwrap_dollar(),
+                        name,
                         value: current.clone(),
-                        var_type,
-                        data_type: Some(ParserDataType::new(
-                            env.context.current_span(),
-                            ParserInnerType::Str,
-                        )),
+                        var_type: *var_type,
+                        data_type: Some(ParserDataType::new(span, ParserInnerType::Str)),
                     });
+
                     ends_with_capture = true;
                 }
                 MatchStringPatternPart::Wildcard(_) => {
@@ -115,23 +176,22 @@ impl PatternTranslator for StringPatternTranslator {
             }
         }
 
-        if !ends_with_capture {
-            condition = env.bool_and_nodes(
-                condition,
-                AstNode::new(
-                    env.context.current_span(),
-                    AstNodeType::ComparisonExpression(AstComparison {
-                        left: Box::new(current),
-                        right: Box::new(AstNode::new(
-                            env.context.current_span(),
-                            AstNodeType::StringLiteral(AstString {
-                                value: ParserText::from(String::new()),
-                            }),
-                        )),
-                        operator: ComparisonOperator::Equal,
-                    }),
-                ),
+        if !ends_with_capture && !starts_with_binding {
+            let node = AstNode::new(
+                span,
+                AstNodeType::ComparisonExpression(AstComparison {
+                    left: Box::new(current),
+                    right: Box::new(AstNode::new(
+                        span,
+                        AstNodeType::StringLiteral(AstString {
+                            value: ParserText::from(String::new()),
+                        }),
+                    )),
+                    operator: ComparisonOperator::Equal,
+                }),
             );
+
+            condition = env.bool_and_nodes(condition, node);
         }
 
         Ok(PatternTranslation {

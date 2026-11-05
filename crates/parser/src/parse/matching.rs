@@ -114,13 +114,13 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                     ParserText::decode_literal(s),
                 ))
             }),
+            // wildcard
+            select! { Token::Identifier(x) if x == "_" => () }
+                .map_with_span(|_, span| MatchStringPatternPart::Wildcard(span)),
             // binding
             VarType::parser(())
                 .then(data.dollar_ident.clone())
                 .map(|(var_type, name)| MatchStringPatternPart::Binding { var_type, name }),
-            // wildcard
-            select! { Token::Identifier(x) if x == "_" => () }
-                .map_with_span(|_, span| MatchStringPatternPart::Wildcard(span)),
         ))
     }
 }
@@ -214,9 +214,6 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
     fn parser(data: Self::Data) -> impl Parser<'a, I, Self, AstParserErr<'a>> {
         recursive(|arm_type| {
             choice((
-                // wildcard
-                select! { Token::Identifier(x) if x == "_" => () }
-                    .map_with_span(|_, span| MatchArmType::Wildcard(span)),
                 // .enum @
                 just(Token::Dot)
                     .ignore_then(data.dollar_ident.clone())
@@ -258,17 +255,12 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                     .ignore_then(data.node.clone())
                     .map(MatchArmType::In),
                 // string
-                select! { Token::StringLiteral(s) => s }
-                    .map_with_span(|s, span| {
-                        MatchStringPatternPart::Literal(ParserText::new(
-                            span,
-                            ParserText::decode_literal(s),
-                        ))
-                    })
+                MatchStringPatternPart::parser(data.clone())
                     .then(
                         just(Token::BitAnd)
                             .ignore_then(MatchStringPatternPart::parser(data.clone()))
                             .repeated()
+                            .at_least(1)
                             .collect::<Vec<_>>(),
                     )
                     .map(|(head, mut tail)| {
@@ -276,6 +268,11 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                         parts.append(&mut tail);
                         MatchArmType::StringPattern(parts)
                     }),
+                select! { Token::StringLiteral(s) => s }.map_with_span(|s, span| {
+                    MatchArmType::StringPattern(vec![MatchStringPatternPart::Literal(
+                        ParserText::new(span, ParserText::decode_literal(s)),
+                    )])
+                }),
                 // rest
                 just(Token::Range).map_with_span(|_, span| MatchArmType::Rest(span)),
                 // (...)
@@ -304,6 +301,9 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                     .padded_by(potential_new_line())
                     .delimited_by(just(Token::LeftBracket), just(Token::RightBracket))
                     .map(MatchArmType::StructPattern),
+                // wildcard
+                select! { Token::Identifier(x) if x == "_" => () }
+                    .map_with_span(|_, span| MatchArmType::Wildcard(span)),
                 // @
                 VarType::parser(())
                     .then(data.dollar_ident.clone())

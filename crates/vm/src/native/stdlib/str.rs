@@ -99,7 +99,7 @@ impl NativeFunction for StrStartsWith {
         let text = resolve_str(env, pop_or_null(&mut args))?;
 
         Ok(RuntimeValue::Bool(
-            text.as_str().starts_with(prefix.as_str()),
+            prefix == text || text.as_str().starts_with(prefix.as_str()),
         ))
     }
 }
@@ -117,6 +117,8 @@ impl NativeFunction for StrEndsWith {
         let suffix = resolve_str(env, pop_or_null(&mut args))?;
         let text = resolve_str(env, pop_or_null(&mut args))?;
 
-        Ok(RuntimeValue::Bool(text.as_str().ends_with(suffix.as_str())))
+        Ok(RuntimeValue::Bool(
+            suffix == text || text.as_str().ends_with(suffix.as_str()),
+        ))
     }
 }

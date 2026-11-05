@@ -281,18 +281,46 @@ impl MirLowering for AstBoolean {
             }
         }
 
+        let left = self
+            .left
+            .lower_or_empty(env, scope, span, Some(MirDataType::Bool));
+
+        let right = self
+            .right
+            .lower_or_empty(env, scope, span, Some(MirDataType::Bool));
+
+        if let MiddleNodeType::Identifier(x) = &left.node_type
+            && x.identifier.name() == "true"
+            && self.operator == BooleanOperator::And
+        {
+            return Ok(right);
+        }
+
+        if let MiddleNodeType::Identifier(x) = &right.node_type
+            && x.identifier.name() == "true"
+            && self.operator == BooleanOperator::And
+        {
+            return Ok(left);
+        }
+
+        if let MiddleNodeType::Identifier(x) = &left.node_type
+            && x.identifier.name() == "true"
+            && self.operator == BooleanOperator::Or
+        {
+            return Ok(left);
+        }
+
+        if let MiddleNodeType::Identifier(x) = &left.node_type
+            && x.identifier.name() == "false"
+            && self.operator == BooleanOperator::And
+        {
+            return Ok(left);
+        }
+
         Ok(MiddleNode {
             node_type: MiddleNodeType::BooleanExpression(MirBoolean {
-                left: Box::new(
-                    self.left
-                        .lower_or_empty(env, scope, span, Some(MirDataType::Bool)),
-                ),
-                right: Box::new(self.right.lower_or_empty(
-                    env,
-                    scope,
-                    span,
-                    Some(MirDataType::Bool),
-                )),
+                left: Box::new(left),
+                right: Box::new(right),
                 operator: self.operator,
             }),
             span,
