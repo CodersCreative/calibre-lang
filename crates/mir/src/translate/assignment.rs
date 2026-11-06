@@ -12,7 +12,7 @@ use calibre_parser::{
     ast::{
         idents::PotentialDollarIdentifier,
         nodes::{
-            AstNode, AstNodeType, VarType,
+            AstNode, AstNodeType, DestructurePattern, VarType,
             access::{AstField, AstIndex, AstScope},
             assignment::{AstAssignDestructure, AstAssignment},
             conditionals::{AstIf, AstTernary, IfComparisonType, TernaryType},
@@ -62,6 +62,26 @@ impl MirLowering for AstAssignment {
         span: Span,
         original_data_type: Option<MirDataType>,
     ) -> Result<MiddleNode, MiddleErr> {
+        if let AstNodeType::TupleLiteral(values) = self.identifier.node_type {
+            return AstAssignDestructure {
+                pattern: DestructurePattern::Tuple(
+                    values
+                        .values
+                        .into_iter()
+                        .map(|x| {
+                            if let AstNodeType::Identifier(x) = x.node_type {
+                                Some((VarType::Constant, x.value.get_ident().clone()))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                ),
+                value: self.value,
+            }
+            .lower(env, scope, span, original_data_type);
+        }
+
         let mut identifier_type = self
             .identifier
             .type_of(env, scope, self.identifier.span)

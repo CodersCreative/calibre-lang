@@ -134,4 +134,25 @@ const main := fn => {
         above_60 : let num => print(fmt"{num} is above 60"),
         _ => print("Not above 60")
     }
+
+    print("tuple destructure")
+    let (first, second) := (10, 20);
+    print(first, " ", second);
+
+    let (mut second, mut first) := (first, second);
+    print(first, " ", second);
+    
+    (second, first) := (first, second);
+    print(first, " ", second);
+
+    print("struct destructure")
+    let {x : first, y : second} := Vector2{x : 100, y : 200};
+    print(first, " ", second);
+    
+    let {x : mut second, y : mut first} := Vector2{x : first, y : second};
+    print(first, " ", second);
+    
+    {x : second, y : first} := Vector2{x : first, y : second};
+    print(first, " ", second);
+
 }
