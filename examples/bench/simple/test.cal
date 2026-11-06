@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Matching failed
 type Thing := struct { name : str };
 
 type ThingEnum := enum {
@@ -12,7 +11,6 @@ impl ThingEnum {
 	const age := 90;
 	let surname = "Smith";
 
-	// TODO Fix : It's running correctly but the return type is being messed up somehow
 	const name := fn match &ThingEnum -> str {
 		.Person | .Animal | .Object : thing => return thing.name,
 		_ => return "None"

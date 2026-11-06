@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Invalid uri character
 import * from std::net;
 import * from std::thread;
 

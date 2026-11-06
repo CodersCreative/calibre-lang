@@ -3,8 +3,7 @@ import (Channel, Mutex, WaitGroup) from std::async;
 const main := fn => {
 	let mut ch := Channel:<str>.new();
 	
-	// TODO Fix having a spawn by itself without assigning it
-	let _ := spawn => {
+	spawn => {
 		print("Spawned!!!");
 		let v := "Hello, Joe!";
 		emit ch <- v;

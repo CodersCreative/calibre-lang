@@ -3,7 +3,6 @@ import (Channel, WaitGroup) from std::async;
 type NumType := struct { num : int } 
 
 @overload("+") fn (self : NumType, value : int) -> int => {
-	// TODO Add support for Self type
 	return self.num + value;
 };
 
@@ -29,7 +28,6 @@ const main := fn => {
 	let name := "Ty";
 	let age := "10";
 	
-	// TODO Add defer keyword
 	let txt : str = fmt"Hello, my name is {name} and I'm {age} years old!";
 	print(txt);
 	
@@ -37,8 +35,7 @@ const main := fn => {
 	
 	print("piping");
 	
-	// TODO Stabilize pipes
-	// 40 |: forty > adder_float(forty) |> $(80) |> fn (input : float) => print(input);
+	40 |: forty > (curry adder_float)(forty) |> $(80) |> fn (input : float) => print(input);
 	print("overload");
 	let mut num := NumType { num : 10 };
 	let res := num + 10;

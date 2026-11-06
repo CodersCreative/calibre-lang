@@ -35,14 +35,12 @@ const main := fn => {
     for element in lst =>
         console_output(1, element & "\n");
 
-    // TODO Fix variable shadowing
     for i in 2..4 =>
         console_output(1, i & " ");
 
     console_output(1, "\n");
 
-    // TODO when matching is working test the next line:
-    // console_output(1, (try err(10) => emit 1) & "\n");
+    console_output(1, (try err(10) => emit 1) & "\n");
 
     console_output(1, "" & match 4 {
         1 => emit 2,

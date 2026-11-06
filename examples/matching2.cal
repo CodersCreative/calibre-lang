@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - Match BitOr Parsing
 type Point := struct { x y : int };
 
 const main := fn => {

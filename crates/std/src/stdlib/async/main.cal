@@ -22,7 +22,6 @@ impl<T> Channel:<T> {
 	};
 };
 
-// TODO Find out whats still leaking raw WaitGroup's in spawn
 impl WaitGroup {
 	const new := fn -> WaitGroup => return WaitGroup { inner : waitgroup_new() };
 

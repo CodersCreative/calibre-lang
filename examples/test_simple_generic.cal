@@ -1,4 +1,4 @@
-// TODO Fix - FAILING - failed `as!` conversion to list:<T>
+// TODO Fix - FAILING - invalid binary op
 
 const id := fn<T>(x : T) -> T => {
 	return x;

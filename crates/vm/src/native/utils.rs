@@ -87,6 +87,7 @@ pub fn resolve_int(env: &VM, value: RuntimeValue) -> Result<isize, RuntimeError>
         RuntimeValue::UInt(v) => v as isize,
         RuntimeValue::Byte(v) => v as isize,
         RuntimeValue::Float(v) => v as isize,
+        RuntimeValue::Null => 0,
         v => return Err(RuntimeError::ExpectedIntFound { found: Box::new(v) }),
     })
 }
