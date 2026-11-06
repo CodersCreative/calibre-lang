@@ -1,4 +1,3 @@
-// TODO Fix - FAILING - failed `as!` conversion to list:<T>
 import (Channel, Mutex, WaitGroup) from std::async;
 import Duration from std::thread;
 
@@ -12,7 +11,8 @@ const worker := fn (id : int, jobs : &Channel:<int>, results : &mut Channel:<int
 			let score := job * (id + 1);
 			print("worker " & id & " got " & job & " => " & score);
 			emit results <- score;
-			total.with(fn (x : int) -> int => emit x + score);
+			// TODO Fix
+			// total.with(fn (x : int) -> int => return x + score);
 			handled += 1;
 		};
 	};

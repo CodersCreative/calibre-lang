@@ -2,6 +2,13 @@ type Vector2 := struct {
     x y : int
 };
 
+impl Vector2 {
+    const add := fn(self : &mut Self, amount : int = 10) => {
+        self.x += amount;
+        self.y += amount;
+    }
+}
+
 @overload("as") fn(self : Vector2) -> null!str =>
     return ok("x : " & self.x & ", y : " & self.y )
 
@@ -80,6 +87,10 @@ const main := fn => {
     print("coerced vec : ", my_coerced_vec);
     my_coerced_vec := (80, 20);
     print("coerced vec : ", my_coerced_vec);
+    my_coerced_vec.add()
+    print("coerced vec : ", my_coerced_vec);
+    my_coerced_vec.add(200)
+    print("coerced vec : ", my_coerced_vec);
 
     takes_in_coerced_vec((20, 40));
 
@@ -154,5 +165,4 @@ const main := fn => {
     
     {x : second, y : first} := Vector2{x : first, y : second};
     print(first, " ", second);
-
 }

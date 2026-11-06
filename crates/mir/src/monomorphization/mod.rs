@@ -362,6 +362,8 @@ impl MiddleEnvironment {
 
         let substituted_body = body.substitute(&subst);
 
+        self.process_parameter_defaults(scope, &header, key.clone());
+
         let func = AstFunction {
             header,
             body: Box::new(substituted_body),
