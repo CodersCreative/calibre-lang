@@ -1,11 +1,17 @@
 use super::{BindingDeclaration, PatternTranslation, PatternTranslator};
 use crate::{
-    ast::types::MirDataType, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
-    symbols::resolve::ResolutionOptions, translate::matching::PatternTranslatorDispatcher,
+    ast::types::MirDataType,
+    environment::MiddleEnvironment,
+    errors::MiddleErr,
+    scoping::ScopeId,
+    symbols::resolve::ResolutionOptions,
+    translate::{MirLowering, matching::PatternTranslatorDispatcher},
 };
 use calibre_parser::ast::{
     comparison::ComparisonOperator,
-    nodes::{AstNode, AstNodeType, binary::AstComparison, matching::MatchArmType},
+    nodes::{
+        AstNode, AstNodeType, binary::AstComparison, functions::CallArg, matching::MatchArmType,
+    },
 };
 
 pub struct TuplePatternTranslator;
@@ -267,8 +273,63 @@ impl PatternTranslator for TuplePatternTranslator {
                     // TODO
                     idx += 1;
                 }
-                MatchArmType::ActivePattern { .. } => {
-                    todo!()
+                MatchArmType::ActivePattern { function, pattern } => {
+                    let current =
+                        AstNode::member(env.context.current_span(), value.clone(), idx.to_string());
+
+                    let Some(MirDataType::Function { return_type, .. }) =
+                        function.type_of(env, scope, function.span)
+                    else {
+                        return Err(env.context.err_at_current(MiddleErr::Internal(
+                            "ActivePatternTranslator called with non function".to_string(),
+                        )));
+                    };
+
+                    let result = AstNode::call(
+                        env.context.current_span(),
+                        function.clone(),
+                        vec![CallArg::Value(current.clone())],
+                    );
+
+                    let is_some = if return_type.is_option() {
+                        AstNode::call(
+                            env.context.current_span(),
+                            AstNode::member(env.context.current_span(), result.clone(), "is_some"),
+                            Vec::new(),
+                        )
+                    } else {
+                        AstNode::call(
+                            env.context.current_span(),
+                            AstNode::member(env.context.current_span(), result.clone(), "is_ok"),
+                            Vec::new(),
+                        )
+                    };
+
+                    let unwrapped_value = if return_type.is_option() {
+                        AstNode::member(env.context.current_span(), result.clone(), "Some")
+                    } else {
+                        AstNode::member(env.context.current_span(), result.clone(), "Ok")
+                    };
+
+                    let inner_translation = PatternTranslatorDispatcher::translate(
+                        env,
+                        scope,
+                        pattern.as_ref(),
+                        &unwrapped_value,
+                        Some(
+                            &return_type
+                                .unwrap_one_result()
+                                .cloned()
+                                .unwrap_or_else(|| return_type.unwrap_one_option()),
+                        ),
+                    )?;
+
+                    condition = env.bool_and_nodes(condition, is_some);
+
+                    condition = env.bool_and_nodes(condition, inner_translation.condition);
+                    bindings.extend(inner_translation.bindings);
+
+                    idx += 1;
                 }
                 MatchArmType::At { .. } => {
                     return Err(env.context.err_at_current(MiddleErr::Internal(

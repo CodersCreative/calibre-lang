@@ -179,7 +179,7 @@ pub(crate) async fn package_project_targets(
 ) -> Result<Vec<PathBuf>, Box<dyn Error>> {
     let targets = resolve_run_targets(
         ProjectContext::load(start).ok().flatten().as_ref(),
-        vec![],
+        Vec::new(),
         None,
     )?;
 

@@ -172,7 +172,7 @@ fn create_next_assign_node(
         AstNode::call(
             span,
             AstNode::member(span, iter_node.clone(), "next"),
-            vec![],
+            Vec::new(),
         ),
     ))
 }

@@ -42,6 +42,9 @@ const going_to_err := fn -> int!Vector2 => {
 const takes_in_coerced_vec := fn(vec : Vector2) =>
     print("coerced vec as func param " & vec);
 
+@pure(memo)
+const above_60 := fn(num : int) -> int? => return num if? num > 60;
+
 const main := fn => {
     let lst : list:<int> = [];
     print([lst as! str]);
@@ -125,5 +128,10 @@ const main := fn => {
     [1, 2, 3] |> fn match list:<int> {
         [4, 5, 6] => print("nah"),
         _ => print("yess!!")
+    }
+
+    match 80 {
+        above_60 : let num => print(fmt"{num} is above 60"),
+        _ => print("Not above 60")
     }
 }

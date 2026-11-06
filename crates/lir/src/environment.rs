@@ -176,12 +176,12 @@ impl<'a> LirEnvironment<'a> {
             },
             blocks: vec![LirBlock {
                 id: entry_id,
-                instructions: vec![],
+                instructions: Vec::new(),
                 terminator: None,
             }],
             current_block: entry_id,
             referenced_identifiers: FxHashSet::default(),
-            loop_stack: vec![],
+            loop_stack: Vec::new(),
             allow_global_hoist,
             counter: count,
         }
@@ -237,7 +237,7 @@ impl<'a> LirEnvironment<'a> {
         let id = BlockId(self.blocks.len() as u32);
         self.blocks.push(LirBlock {
             id,
-            instructions: vec![],
+            instructions: Vec::new(),
             terminator: None,
         });
         id

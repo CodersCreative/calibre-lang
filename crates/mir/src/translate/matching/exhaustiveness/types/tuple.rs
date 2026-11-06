@@ -95,15 +95,15 @@ fn compute_domain(env: &MiddleEnvironment, data_type: &MirDataType) -> Vec<Strin
                     .map(|(name, _)| format!(".{}", name))
                     .collect();
             }
-            vec![]
+            Vec::new()
         }
-        _ => vec![],
+        _ => Vec::new(),
     }
 }
 
 fn cartesian_product(domains: &[Vec<String>]) -> Vec<Vec<String>> {
     if domains.is_empty() {
-        return vec![vec![]];
+        return vec![Vec::new()];
     }
 
     let first = &domains[0];

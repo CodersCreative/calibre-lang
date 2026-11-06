@@ -508,7 +508,7 @@ impl MirLowering for AstImpl {
             // TODO Probably add the generic types here
             let key = MirDataType::Struct {
                 identifier: identifier.clone(),
-                generic_types: vec![],
+                generic_types: Vec::new(),
             };
 
             if let Some(template) = env.monomorphizer.generic_type_templates.get_mut(&key) {

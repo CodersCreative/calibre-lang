@@ -61,7 +61,7 @@ impl MiddleEnvironment {
                 identifier: PotentialDollarIdentifier::new(span, next_name.clone()),
                 data_type: ParserDataType::function(
                     span,
-                    vec![],
+                    Vec::new(),
                     ParserDataType::new(span, ParserInnerType::Option(Box::new(elem_type.clone()))),
                 ),
                 value: Box::new(AstNode::new(
@@ -69,7 +69,7 @@ impl MiddleEnvironment {
                     AstNodeType::FunctionDeclaration(AstFunction {
                         header: FunctionHeader {
                             generics: GenericTypes::default(),
-                            parameters: vec![],
+                            parameters: Vec::new(),
                             return_type: ParserDataType::new(
                                 span,
                                 ParserInnerType::Option(Box::new(elem_type.clone())),

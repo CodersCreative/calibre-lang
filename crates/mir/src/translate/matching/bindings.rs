@@ -6,6 +6,7 @@ use crate::{
 use calibre_parser::ast::{
     nodes::{
         AstNode,
+        functions::CallArg,
         matching::{MatchArmType, MatchStringPatternPart, MatchStructFieldPattern},
     },
     types::{ParserDataType, ParserInnerType},
@@ -47,8 +48,16 @@ impl BindingExtractor {
                     data_type: None,
                 });
             }
-            MatchArmType::ActivePattern { .. } => {
-                todo!()
+            MatchArmType::ActivePattern { function, pattern } => {
+                let value = AstNode::call(
+                    env.context.current_span(),
+                    function.clone(),
+                    vec![CallArg::Value(value.clone())],
+                );
+
+                let value = AstNode::member(env.context.current_span(), value.clone(), "Some");
+
+                bindings.extend(Self::extract_bindings(env, scope, pattern, &value)?);
             }
             MatchArmType::TuplePattern(items) => {
                 for (idx, item) in items.iter().enumerate() {

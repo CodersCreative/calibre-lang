@@ -7,6 +7,7 @@ use calibre_parser::ast::{
 };
 use ustr::Ustr;
 
+pub mod active_pattern;
 pub mod enum_pattern;
 pub mod list_pattern;
 pub mod string_pattern;

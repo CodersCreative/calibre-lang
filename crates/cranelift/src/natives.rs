@@ -158,7 +158,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
             (
                 "calibre_gc_collect",
                 RuntimeFunction {
-                    params: vec![],
+                    params: Vec::new(),
                     returns: None,
                     typed_return: None,
                 },
@@ -166,7 +166,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
             (
                 "calibre_gc_stats",
                 RuntimeFunction {
-                    params: vec![],
+                    params: Vec::new(),
                     returns: None,
                     typed_return: None,
                 },
@@ -236,7 +236,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
             (
                 "calibre_option_none",
                 RuntimeFunction {
-                    params: vec![],
+                    params: Vec::new(),
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::Option(Box::new(MirDataType::Dynamic))),
                 },
@@ -635,7 +635,7 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
             (
                 "calibre_new_hasher",
                 RuntimeFunction {
-                    params: vec![],
+                    params: Vec::new(),
                     returns: Some(types::I64),
                     typed_return: None,
                 },

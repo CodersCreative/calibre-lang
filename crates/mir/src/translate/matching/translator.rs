@@ -7,6 +7,7 @@ use super::patterns::{
 use crate::{
     ast::types::MirDataType, environment::MiddleEnvironment, errors::MiddleErr, scoping::ScopeId,
     symbols::resolve::ResolutionOptions,
+    translate::matching::patterns::active_pattern::ActivePatternTranslator,
 };
 use calibre_parser::ast::{
     idents::ParserText,
@@ -51,7 +52,7 @@ impl PatternTranslatorDispatcher {
                 StringPatternTranslator.translate(env, scope, &inner_pattern, value, value_type)?
             }
             MatchArmType::ActivePattern { .. } => {
-                todo!()
+                ActivePatternTranslator.translate(env, scope, &inner_pattern, value, value_type)?
             }
             MatchArmType::IsType(data_type) => {
                 let condition = AstNode::new(

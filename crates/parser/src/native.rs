@@ -112,7 +112,7 @@ impl ParserDataType {
                 ("console_input", Vec::new(), ParserInnerType::Str),
                 ("console.input_stream", Vec::new(), ParserInnerType::Host),
                 #[cfg(feature = "native")]
-                ("libc.get_c_errno", vec![], ParserInnerType::Int),
+                ("libc.get_c_errno", Vec::new(), ParserInnerType::Int),
                 #[cfg(feature = "native")]
                 (
                     "libc.set_c_errno",
@@ -120,7 +120,11 @@ impl ParserDataType {
                     ParserInnerType::Null,
                 ),
                 #[cfg(feature = "native")]
-                ("libc.get_c_errno_description", vec![], ParserInnerType::Str),
+                (
+                    "libc.get_c_errno_description",
+                    Vec::new(),
+                    ParserInnerType::Str,
+                ),
                 (
                     "random.rand",
                     vec![ParserInnerType::Range],
@@ -133,7 +137,7 @@ impl ParserDataType {
                 ),
                 ("wait", vec![ParserInnerType::Int], ParserInnerType::Null),
                 ("assert", vec![ParserInnerType::Bool], ParserInnerType::Null),
-                ("gen_suspend", vec![], ParserInnerType::Dynamic),
+                ("gen_suspend", Vec::new(), ParserInnerType::Dynamic),
                 ("trim", vec![ParserInnerType::Str], ParserInnerType::Str),
                 (
                     "str.split",
@@ -187,7 +191,7 @@ impl ParserDataType {
                 ),
                 (
                     "env.vars",
-                    vec![],
+                    Vec::new(),
                     ParserInnerType::List(Box::new(Self::native_type(ParserInnerType::Tuple(
                         vec![
                             Self::native_type(ParserInnerType::Str),
@@ -482,7 +486,7 @@ impl ParserDataType {
                         ok: Box::new(Self::native_type(ParserInnerType::Null)),
                     },
                 ),
-                ("async.channel_new", vec![], ParserInnerType::Host),
+                ("async.channel_new", Vec::new(), ParserInnerType::Host),
                 (
                     "async.channel_send",
                     vec![ParserInnerType::Host, ParserInnerType::Dynamic],
@@ -503,7 +507,7 @@ impl ParserDataType {
                     vec![ParserInnerType::Host],
                     ParserInnerType::Bool,
                 ),
-                ("async.waitgroup_new", vec![], ParserInnerType::Host),
+                ("async.waitgroup_new", Vec::new(), ParserInnerType::Host),
                 (
                     "async.waitgroup_raw_add",
                     vec![ParserInnerType::Host, ParserInnerType::Int],
@@ -557,9 +561,9 @@ impl ParserDataType {
                         RefMutability::MutRef,
                     ),
                 ),
-                ("crypto.sha256", vec![], ParserInnerType::Str),
-                ("crypto.sha512", vec![], ParserInnerType::Str),
-                ("crypto.blake3", vec![], ParserInnerType::Str),
+                ("crypto.sha256", Vec::new(), ParserInnerType::Str),
+                ("crypto.sha512", Vec::new(), ParserInnerType::Str),
+                ("crypto.blake3", Vec::new(), ParserInnerType::Str),
                 (
                     "regex.is_match",
                     vec![ParserInnerType::Str, ParserInnerType::Str],

@@ -120,7 +120,7 @@ impl MiddleEnvironment {
                                     ),
                                 ],
                                 return_type: self_ty.clone(),
-                                param_destructures: vec![],
+                                param_destructures: Vec::new(),
                             },
                             body: Box::new(AstNode::new_temp_scope(vec![AstNode::ret(
                                 AstNode::new(
@@ -208,7 +208,7 @@ impl MiddleEnvironment {
                                     err: Box::new(ParserDataType::new(span, ParserInnerType::Str)),
                                 },
                             ),
-                            param_destructures: vec![],
+                            param_destructures: Vec::new(),
                         },
                         body: Box::new(AstNode::new_temp_scope(vec![
                             if has_default {
