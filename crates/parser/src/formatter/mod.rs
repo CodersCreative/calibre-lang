@@ -710,6 +710,9 @@ impl Formatter {
                 };
                 format!(".{} : {}", value, payload)
             }
+            MatchArmType::ActivePattern { function, pattern } => {
+                format!("{} : {}", function, self.fmt_match_arm(pattern, write_name))
+            }
             MatchArmType::Enum {
                 value,
                 destructure: Some(pattern),

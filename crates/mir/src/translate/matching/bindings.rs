@@ -47,6 +47,9 @@ impl BindingExtractor {
                     data_type: None,
                 });
             }
+            MatchArmType::ActivePattern { .. } => {
+                todo!()
+            }
             MatchArmType::TuplePattern(items) => {
                 for (idx, item) in items.iter().enumerate() {
                     let value =

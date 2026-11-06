@@ -50,6 +50,9 @@ impl PatternTranslatorDispatcher {
             MatchArmType::StringPattern(_) => {
                 StringPatternTranslator.translate(env, scope, &inner_pattern, value, value_type)?
             }
+            MatchArmType::ActivePattern { .. } => {
+                todo!()
+            }
             MatchArmType::IsType(data_type) => {
                 let condition = AstNode::new(
                     env.context.current_span(),

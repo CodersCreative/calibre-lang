@@ -122,7 +122,7 @@ const main := fn => {
         _ => print("nah")
     }
 
-    match [1, 2, 3] {
+    [1, 2, 3] |> fn match list:<int> {
         [4, 5, 6] => print("nah"),
         _ => print("yess!!")
     }

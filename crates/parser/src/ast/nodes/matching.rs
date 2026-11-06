@@ -67,6 +67,10 @@ pub enum MatchArmType {
     TuplePattern(Vec<MatchArmType>),
     ListPattern(Vec<MatchArmType>),
     StructPattern(Vec<MatchStructFieldPattern>),
+    ActivePattern {
+        function: AstNode,
+        pattern: Box<MatchArmType>,
+    },
     Let {
         var_type: VarType,
         name: PotentialDollarIdentifier,
@@ -188,6 +192,7 @@ impl MatchArmType {
                     Self::default_span()
                 }
             }
+            Self::ActivePattern { function, .. } => &function.span,
             Self::Let { var_type: _, name } => name.span(),
             Self::Value(x) => &x.span,
             Self::IsType(x) => &x.span,

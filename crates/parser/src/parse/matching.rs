@@ -301,6 +301,15 @@ impl<'a, I: ValueInput<'a, Token = Token<'a>, Span = SimpleSpan>> AstParser<'a, 
                     .padded_by(potential_new_line())
                     .delimited_by(just(Token::LeftBracket), just(Token::RightBracket))
                     .map(MatchArmType::StructPattern),
+                // active
+                data.node
+                    .clone()
+                    .then_ignore(just(Token::Colon))
+                    .then(arm_type.clone())
+                    .map(|(function, pattern)| MatchArmType::ActivePattern {
+                        function,
+                        pattern: Box::new(pattern),
+                    }),
                 // wildcard
                 select! { Token::Identifier(x) if x == "_" => () }
                     .map_with_span(|_, span| MatchArmType::Wildcard(span)),

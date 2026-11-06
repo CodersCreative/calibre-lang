@@ -267,6 +267,9 @@ impl PatternTranslator for TuplePatternTranslator {
                     // TODO
                     idx += 1;
                 }
+                MatchArmType::ActivePattern { .. } => {
+                    todo!()
+                }
                 MatchArmType::At { .. } => {
                     return Err(env.context.err_at_current(MiddleErr::Internal(
                         "Unwrapped @ pattern still present in tuple".to_string(),
