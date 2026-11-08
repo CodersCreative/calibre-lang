@@ -270,6 +270,11 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             name: "calibre_random_seed",
             ptr: native::random::calibre_random_seed as *const u8,
         },
+        // native time
+        RuntimeSymbol {
+            name: "calibre_time_unix_now",
+            ptr: native::time::calibre_time_unix_now as *const u8,
+        },
         // native regex
         RuntimeSymbol {
             name: "calibre_regex_is_match",
@@ -322,12 +327,8 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             ptr: fs::calibre_fs_path_exists as *const u8,
         },
         RuntimeSymbol {
-            name: "calibre_fs_path_is_file",
-            ptr: fs::calibre_fs_path_is_file as *const u8,
-        },
-        RuntimeSymbol {
-            name: "calibre_fs_path_is_dir",
-            ptr: fs::calibre_fs_path_is_dir as *const u8,
+            name: "calibre_fs_path_file_type",
+            ptr: fs::calibre_fs_path_file_type as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_fs_path_canonicalize",
@@ -382,24 +383,8 @@ pub fn get_runtime_symbols() -> &'static [RuntimeSymbol] {
             ptr: fs::calibre_fs_direntry_metadata as *const u8,
         },
         RuntimeSymbol {
-            name: "calibre_fs_filetype_is_file",
-            ptr: fs::calibre_fs_filetype_is_file as *const u8,
-        },
-        RuntimeSymbol {
-            name: "calibre_fs_filetype_is_dir",
-            ptr: fs::calibre_fs_filetype_is_dir as *const u8,
-        },
-        RuntimeSymbol {
-            name: "calibre_fs_filetype_is_symlink",
-            ptr: fs::calibre_fs_filetype_is_symlink as *const u8,
-        },
-        RuntimeSymbol {
-            name: "calibre_fs_metadata_is_file",
-            ptr: fs::calibre_fs_metadata_is_file as *const u8,
-        },
-        RuntimeSymbol {
-            name: "calibre_fs_metadata_is_dir",
-            ptr: fs::calibre_fs_metadata_is_dir as *const u8,
+            name: "calibre_fs_metadata_file_type",
+            ptr: fs::calibre_fs_metadata_file_type as *const u8,
         },
         RuntimeSymbol {
             name: "calibre_fs_metadata_len",

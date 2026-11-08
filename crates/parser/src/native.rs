@@ -135,6 +135,7 @@ impl ParserDataType {
                     vec![ParserInnerType::Int],
                     ParserInnerType::Null,
                 ),
+                ("time.unix_now", Vec::new(), ParserInnerType::UInt),
                 ("wait", vec![ParserInnerType::Int], ParserInnerType::Null),
                 ("assert", vec![ParserInnerType::Bool], ParserInnerType::Null),
                 ("gen_suspend", Vec::new(), ParserInnerType::Dynamic),
@@ -255,15 +256,10 @@ impl ParserDataType {
                 ),
                 #[cfg(feature = "native")]
                 (
-                    "fs.path_is_file",
+                    "fs.path_file_type",
                     vec![ParserInnerType::Host],
-                    ParserInnerType::Bool,
-                ),
-                #[cfg(feature = "native")]
-                (
-                    "fs.path_is_dir",
-                    vec![ParserInnerType::Host],
-                    ParserInnerType::Bool,
+                    // FileType
+                    ParserInnerType::Dynamic,
                 ),
                 #[cfg(feature = "native")]
                 (
@@ -345,7 +341,8 @@ impl ParserDataType {
                     vec![ParserInnerType::Host],
                     ParserInnerType::Result {
                         err: Box::new(Self::native_type(ParserInnerType::Str)),
-                        ok: Box::new(Self::native_type(ParserInnerType::Host)),
+                        // FileType
+                        ok: Box::new(Self::native_type(ParserInnerType::Dynamic)),
                     },
                 ),
                 #[cfg(feature = "native")]
@@ -359,27 +356,10 @@ impl ParserDataType {
                 ),
                 #[cfg(feature = "native")]
                 (
-                    "fs.filetype_is_file",
+                    "fs.metadata_file_type",
                     vec![ParserInnerType::Host],
-                    ParserInnerType::Bool,
-                ),
-                #[cfg(feature = "native")]
-                (
-                    "fs.filetype_is_dir",
-                    vec![ParserInnerType::Host],
-                    ParserInnerType::Bool,
-                ),
-                #[cfg(feature = "native")]
-                (
-                    "fs.filetype_is_symlink",
-                    vec![ParserInnerType::Host],
-                    ParserInnerType::Bool,
-                ),
-                #[cfg(feature = "native")]
-                (
-                    "fs.metadata_is_file",
-                    vec![ParserInnerType::Host],
-                    ParserInnerType::Bool,
+                    // FileType
+                    ParserInnerType::Dynamic,
                 ),
                 #[cfg(feature = "native")]
                 (

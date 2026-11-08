@@ -42,6 +42,7 @@ impl RuntimeValue {
                 ("wait", Arc::new(native::global::Wait)),
                 ("random.rand", Arc::new(stdlib::random::Rand)),
                 ("random.seed", Arc::new(stdlib::random::Seed)),
+                ("time.unix_now", Arc::new(stdlib::time::UnixNow)),
                 ("str.split", Arc::new(stdlib::str::StrSplit)),
                 ("str.contains", Arc::new(stdlib::str::StrContains)),
                 ("str.starts_with", Arc::new(stdlib::str::StrStartsWith)),
@@ -68,9 +69,7 @@ impl RuntimeValue {
                 #[cfg(feature = "native")]
                 ("fs.path_exists", Arc::new(stdlib::fs::FsPathExists)),
                 #[cfg(feature = "native")]
-                ("fs.path_is_file", Arc::new(stdlib::fs::FsPathIsFile)),
-                #[cfg(feature = "native")]
-                ("fs.path_is_dir", Arc::new(stdlib::fs::FsPathIsDir)),
+                ("fs.path_file_type", Arc::new(stdlib::fs::FsPathFileType)),
                 #[cfg(feature = "native")]
                 (
                     "fs.path_canonicalize",
@@ -117,23 +116,9 @@ impl RuntimeValue {
                 ),
                 #[cfg(feature = "native")]
                 (
-                    "fs.filetype_is_file",
-                    Arc::new(stdlib::fs::FsFileTypeIsFile),
+                    "fs.metadata_file_type",
+                    Arc::new(stdlib::fs::FsMetadataFileType),
                 ),
-                #[cfg(feature = "native")]
-                ("fs.filetype_is_dir", Arc::new(stdlib::fs::FsFileTypeIsDir)),
-                #[cfg(feature = "native")]
-                (
-                    "fs.filetype_is_symlink",
-                    Arc::new(stdlib::fs::FsFileTypeIsSymlink),
-                ),
-                #[cfg(feature = "native")]
-                (
-                    "fs.metadata_is_file",
-                    Arc::new(stdlib::fs::FsMetadataIsFile),
-                ),
-                #[cfg(feature = "native")]
-                ("fs.metadata_is_dir", Arc::new(stdlib::fs::FsMetadataIsDir)),
                 #[cfg(feature = "native")]
                 ("fs.metadata_len", Arc::new(stdlib::fs::FsMetadataLen)),
                 #[cfg(feature = "native")]

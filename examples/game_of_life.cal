@@ -3,7 +3,7 @@
 
 import bool from std::random;
 import stdin from std::console;
-import Duration from std::thread;
+import Duration from std::time;
 
 type Grid := struct {
     rows : uint,

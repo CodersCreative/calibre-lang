@@ -62,35 +62,28 @@ pub extern "C" fn calibre_fs_path_exists(path: *mut GcHost) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_fs_path_is_file(path: *mut GcHost) -> bool {
+pub extern "C" fn calibre_fs_path_file_type(path: *mut GcHost) -> *mut GcAggregate {
     if path.is_null() {
-        return false;
+        return std::ptr::null_mut();
     }
 
-    unsafe {
+    let path_buf = unsafe {
         (*path)
             .data
             .as_any()
             .downcast_ref::<PathBuf>()
             .expect("Invalid type when downcasting host")
-    }
-    .is_file()
-}
+    };
 
-#[unsafe(no_mangle)]
-pub extern "C" fn calibre_fs_path_is_dir(path: *mut GcHost) -> bool {
-    if path.is_null() {
-        return false;
+    GcAggregate {
+        field_count: 3,
+        data: vec![
+            Value::Bool(path_buf.is_file()),
+            Value::Bool(path_buf.is_dir()),
+            Value::Bool(path_buf.is_symlink()),
+        ],
     }
-
-    unsafe {
-        (*path)
-            .data
-            .as_any()
-            .downcast_ref::<PathBuf>()
-            .expect("Invalid type when downcasting host")
-    }
-    .is_dir()
+    .alloc()
 }
 
 #[unsafe(no_mangle)]
@@ -450,7 +443,18 @@ pub extern "C" fn calibre_fs_direntry_file_type(entry: *mut GcHost) -> *mut GcAg
     .0
     .file_type()
     {
-        Ok(ft) => Value::Host(GcHost { data: Box::new(ft) }.alloc()).ok(),
+        Ok(ft) => Value::Struct(
+            GcAggregate {
+                field_count: 3,
+                data: vec![
+                    Value::Bool(ft.is_file()),
+                    Value::Bool(ft.is_dir()),
+                    Value::Bool(ft.is_symlink()),
+                ],
+            }
+            .alloc(),
+        )
+        .ok(),
         Err(e) => Value::String(
             GcString {
                 data: e.to_string(),
@@ -500,88 +504,32 @@ pub extern "C" fn calibre_fs_direntry_metadata(entry: *mut GcHost) -> *mut GcAgg
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn calibre_fs_filetype_is_file(ft: *mut GcHost) -> bool {
-    if ft.is_null() {
-        return false;
-    }
-
-    unsafe {
-        (*ft)
-            .data
-            .as_any()
-            .downcast_ref::<FileType>()
-            .expect("Invalid type when downcasting host")
-    }
-    .is_file()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn calibre_fs_filetype_is_dir(ft: *mut GcHost) -> bool {
-    if ft.is_null() {
-        return false;
-    }
-
-    unsafe {
-        (*ft)
-            .data
-            .as_any()
-            .downcast_ref::<FileType>()
-            .expect("Invalid type when downcasting host")
-    }
-    .is_dir()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn calibre_fs_filetype_is_symlink(ft: *mut GcHost) -> bool {
-    if ft.is_null() {
-        return false;
-    }
-
-    unsafe {
-        (*ft)
-            .data
-            .as_any()
-            .downcast_ref::<FileType>()
-            .expect("Invalid type when downcasting host")
-    }
-    .is_symlink()
-}
-
 // Metadata
 
 #[unsafe(no_mangle)]
-pub extern "C" fn calibre_fs_metadata_is_file(meta: *mut GcHost) -> bool {
+pub extern "C" fn calibre_fs_metadata_file_type(meta: *mut GcHost) -> *mut GcAggregate {
     if meta.is_null() {
-        return false;
+        return std::ptr::null_mut();
     }
 
-    unsafe {
-        (*meta)
+    let meta = unsafe {
+        &(*meta)
             .data
             .as_any()
             .downcast_ref::<HostMetadata>()
             .expect("Invalid type when downcasting host")
-    }
-    .0
-    .is_file()
-}
+            .0
+    };
 
-#[unsafe(no_mangle)]
-pub extern "C" fn calibre_fs_metadata_is_dir(meta: *mut GcHost) -> bool {
-    if meta.is_null() {
-        return false;
+    GcAggregate {
+        field_count: 3,
+        data: vec![
+            Value::Bool(meta.is_file()),
+            Value::Bool(meta.is_dir()),
+            Value::Bool(meta.is_symlink()),
+        ],
     }
-
-    unsafe {
-        (*meta)
-            .data
-            .as_any()
-            .downcast_ref::<HostMetadata>()
-            .expect("Invalid type when downcasting host")
-    }
-    .0
-    .is_dir()
+    .alloc()
 }
 
 #[unsafe(no_mangle)]

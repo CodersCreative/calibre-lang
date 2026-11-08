@@ -5,12 +5,12 @@ use crate::{
         NativeFunction,
         utils::{expect_num_args, pop_or_null, resolve_host, resolve_str},
     },
-    value::{GcVec, RuntimeValue, StringReader, ValueSlot},
+    value::{GcMap, GcVec, RuntimeValue, StringReader, ValueSlot},
 };
-use calibre_parser::ast::types::ParserInnerType;
+use calibre_parser::ast::{ObjectMap, types::ParserInnerType};
 use std::sync::Arc;
 use std::{
-    fs::{DirEntry, File, FileType, Metadata, OpenOptions},
+    fs::{DirEntry, File, Metadata, OpenOptions},
     time::Duration,
 };
 use std::{
@@ -93,54 +93,40 @@ impl NativeFunction for FsPathExists {
     }
 }
 
-pub struct FsPathIsFile;
+pub struct FsPathFileType;
 
-impl NativeFunction for FsPathIsFile {
+impl NativeFunction for FsPathFileType {
     fn name(&self) -> String {
-        String::from("fs.path_is_file")
+        String::from("fs.path_file_type")
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
         let path = resolve_host(env, pop_or_null(&mut args))?;
+        let path_lock = path.lock().unwrap();
 
-        Ok(RuntimeValue::Bool(
-            path.lock()
-                .unwrap()
-                .as_any()
-                .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
-                    value: Box::new(RuntimeValue::Null),
-                    target_type: ParserInnerType::Host,
-                })?
-                .is_file(),
-        ))
-    }
-}
+        let path_buf = path_lock
+            .as_any()
+            .downcast_ref::<PathBuf>()
+            .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                value: Box::new(RuntimeValue::Null),
+                target_type: ParserInnerType::Host,
+            })?;
 
-pub struct FsPathIsDir;
-
-impl NativeFunction for FsPathIsDir {
-    fn name(&self) -> String {
-        String::from("fs.path_is_dir")
-    }
-
-    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
-
-        let path = resolve_host(env, pop_or_null(&mut args))?;
-
-        Ok(RuntimeValue::Bool(
-            path.lock()
-                .unwrap()
-                .as_any()
-                .downcast_ref::<PathBuf>()
-                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
-                    value: Box::new(RuntimeValue::Null),
-                    target_type: ParserInnerType::Host,
-                })?
-                .is_dir(),
+        Ok(RuntimeValue::Aggregate(
+            None,
+            Arc::new(GcMap::new(ObjectMap(vec![
+                (
+                    Ustr::from("is_file"),
+                    RuntimeValue::Bool(path_buf.is_file()),
+                ),
+                (Ustr::from("is_dir"), RuntimeValue::Bool(path_buf.is_dir())),
+                (
+                    Ustr::from("is_symlink"),
+                    RuntimeValue::Bool(path_buf.is_symlink()),
+                ),
+            ]))),
         ))
     }
 }
@@ -524,7 +510,17 @@ impl NativeFunction for FsDirEntryFileType {
             .file_type()
         {
             Ok(ft) => Ok(RuntimeValue::Result(Ok(ValueSlot::new(
-                RuntimeValue::Host(Arc::new(Mutex::new(ft))),
+                RuntimeValue::Aggregate(
+                    None,
+                    Arc::new(GcMap::new(ObjectMap(vec![
+                        (Ustr::from("is_dir"), RuntimeValue::Bool(ft.is_dir())),
+                        (Ustr::from("is_file"), RuntimeValue::Bool(ft.is_file())),
+                        (
+                            Ustr::from("is_symlink"),
+                            RuntimeValue::Bool(ft.is_symlink()),
+                        ),
+                    ]))),
+                ),
             )))),
             Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(
                 RuntimeValue::Str(Ustr::from(&e.to_string())),
@@ -564,138 +560,43 @@ impl NativeFunction for FsDirEntryMetadata {
     }
 }
 
-// FileType
-
-pub struct FsFileTypeIsFile;
-
-impl NativeFunction for FsFileTypeIsFile {
-    fn name(&self) -> String {
-        String::from("fs.filetype_is_file")
-    }
-
-    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
-
-        let ft = resolve_host(env, pop_or_null(&mut args))?;
-
-        Ok(RuntimeValue::Bool(
-            ft.lock()
-                .unwrap()
-                .as_any()
-                .downcast_ref::<FileType>()
-                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
-                    value: Box::new(RuntimeValue::Null),
-                    target_type: ParserInnerType::Host,
-                })?
-                .is_file(),
-        ))
-    }
-}
-
-pub struct FsFileTypeIsDir;
-
-impl NativeFunction for FsFileTypeIsDir {
-    fn name(&self) -> String {
-        String::from("fs.filetype_is_dir")
-    }
-
-    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
-
-        let ft = resolve_host(env, pop_or_null(&mut args))?;
-
-        Ok(RuntimeValue::Bool(
-            ft.lock()
-                .unwrap()
-                .as_any()
-                .downcast_ref::<FileType>()
-                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
-                    value: Box::new(RuntimeValue::Null),
-                    target_type: ParserInnerType::Host,
-                })?
-                .is_dir(),
-        ))
-    }
-}
-
-pub struct FsFileTypeIsSymlink;
-
-impl NativeFunction for FsFileTypeIsSymlink {
-    fn name(&self) -> String {
-        String::from("fs.filetype_is_symlink")
-    }
-
-    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
-
-        let ft = resolve_host(env, pop_or_null(&mut args))?;
-
-        Ok(RuntimeValue::Bool(
-            ft.lock()
-                .unwrap()
-                .as_any()
-                .downcast_ref::<FileType>()
-                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
-                    value: Box::new(RuntimeValue::Null),
-                    target_type: ParserInnerType::Host,
-                })?
-                .is_symlink(),
-        ))
-    }
-}
-
 // Metadata
 
-pub struct FsMetadataIsFile;
+pub struct FsMetadataFileType;
 
-impl NativeFunction for FsMetadataIsFile {
+impl NativeFunction for FsMetadataFileType {
     fn name(&self) -> String {
-        String::from("fs.metadata_is_file")
+        String::from("fs.metadata_file_type")
     }
 
     fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
         expect_num_args(&args, &[1])?;
 
         let meta = resolve_host(env, pop_or_null(&mut args))?;
+        let meta_lock = meta.lock().unwrap();
 
-        Ok(RuntimeValue::Bool(
-            meta.lock()
-                .unwrap()
-                .as_any()
-                .downcast_ref::<HostMetadata>()
-                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
-                    value: Box::new(RuntimeValue::Null),
-                    target_type: ParserInnerType::Host,
-                })?
-                .0
-                .is_file(),
-        ))
-    }
-}
+        let meta_data = &meta_lock
+            .as_any()
+            .downcast_ref::<HostMetadata>()
+            .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
+                value: Box::new(RuntimeValue::Null),
+                target_type: ParserInnerType::Host,
+            })?
+            .0;
 
-pub struct FsMetadataIsDir;
-
-impl NativeFunction for FsMetadataIsDir {
-    fn name(&self) -> String {
-        String::from("fs.metadata_is_dir")
-    }
-
-    fn run(&self, env: &mut VM, mut args: Vec<RuntimeValue>) -> Result<RuntimeValue, RuntimeError> {
-        expect_num_args(&args, &[1])?;
-
-        let meta = resolve_host(env, pop_or_null(&mut args))?;
-
-        Ok(RuntimeValue::Bool(
-            meta.lock()
-                .unwrap()
-                .as_any()
-                .downcast_ref::<HostMetadata>()
-                .ok_or_else(|| RuntimeError::UnexpectedTypeInConversion {
-                    value: Box::new(RuntimeValue::Null),
-                    target_type: ParserInnerType::Host,
-                })?
-                .0
-                .is_dir(),
+        Ok(RuntimeValue::Aggregate(
+            None,
+            Arc::new(GcMap::new(ObjectMap(vec![
+                (
+                    Ustr::from("is_file"),
+                    RuntimeValue::Bool(meta_data.is_file()),
+                ),
+                (Ustr::from("is_dir"), RuntimeValue::Bool(meta_data.is_dir())),
+                (
+                    Ustr::from("is_symlink"),
+                    RuntimeValue::Bool(meta_data.is_symlink()),
+                ),
+            ]))),
         ))
     }
 }
@@ -752,8 +653,9 @@ impl NativeFunction for FsMetadataModified {
                 let duration: Duration = time
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
+
                 Ok(RuntimeValue::Result(Ok(ValueSlot::new(
-                    RuntimeValue::UInt(duration.as_secs() as usize),
+                    RuntimeValue::UInt(duration.as_millis() as usize),
                 ))))
             }
             Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(
@@ -788,8 +690,9 @@ impl NativeFunction for FsMetadataCreated {
                 let duration: Duration = time
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
+
                 Ok(RuntimeValue::Result(Ok(ValueSlot::new(
-                    RuntimeValue::UInt(duration.as_secs() as usize),
+                    RuntimeValue::UInt(duration.as_millis() as usize),
                 ))))
             }
             Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(
@@ -824,8 +727,9 @@ impl NativeFunction for FsMetadataAccessed {
                 let duration: Duration = time
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                     .unwrap_or_default();
+
                 Ok(RuntimeValue::Result(Ok(ValueSlot::new(
-                    RuntimeValue::UInt(duration.as_secs() as usize),
+                    RuntimeValue::UInt(duration.as_millis() as usize),
                 ))))
             }
             Err(e) => Ok(RuntimeValue::Result(Err(ValueSlot::new(

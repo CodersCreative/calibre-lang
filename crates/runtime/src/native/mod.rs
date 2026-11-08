@@ -13,6 +13,7 @@ pub mod list;
 pub mod random;
 pub mod regex;
 pub mod str;
+pub mod time;
 
 // TODO Add debug information
 #[unsafe(no_mangle)]

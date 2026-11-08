@@ -1,5 +1,5 @@
 // TODO Fix - FAILING - generators are failing
-import * from std::thread;
+import * from std::time;
 import * from std::option;
 import * from std::crypto;
 import * from std::regex;

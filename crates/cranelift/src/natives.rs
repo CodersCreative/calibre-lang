@@ -596,6 +596,15 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     typed_return: None,
                 },
             ),
+            // time
+            (
+                "calibre_time_unix_now",
+                RuntimeFunction {
+                    params: vec![],
+                    returns: Some(types::I64),
+                    typed_return: Some(MirDataType::UInt),
+                },
+            ),
             // regex
             (
                 "calibre_regex_is_match",
@@ -713,19 +722,12 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
-                "calibre_fs_path_is_file",
+                "calibre_fs_path_file_type",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                    typed_return: Some(MirDataType::Bool),
-                },
-            ),
-            (
-                "calibre_fs_path_is_dir",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                    typed_return: Some(MirDataType::Bool),
+                    returns: Some(types::I64),
+                    // TODO Come back and type this
+                    typed_return: Some(MirDataType::Dynamic),
                 },
             ),
             (
@@ -837,7 +839,8 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                     params: vec![(types::I64, ArgumentKind::Direct)],
                     returns: Some(types::I64),
                     typed_return: Some(MirDataType::Result {
-                        ok: Box::new(MirDataType::Host),
+                        // TODO Come back and type this
+                        ok: Box::new(MirDataType::Dynamic),
                         err: Box::new(MirDataType::Str),
                     }),
                 },
@@ -854,43 +857,12 @@ pub(crate) fn runtime_functions() -> &'static FxHashMap<&'static str, RuntimeFun
                 },
             ),
             (
-                "calibre_fs_filetype_is_file",
+                "calibre_fs_metadata_file_type",
                 RuntimeFunction {
                     params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                    typed_return: Some(MirDataType::Bool),
-                },
-            ),
-            (
-                "calibre_fs_filetype_is_dir",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                    typed_return: Some(MirDataType::Bool),
-                },
-            ),
-            (
-                "calibre_fs_filetype_is_symlink",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                    typed_return: Some(MirDataType::Bool),
-                },
-            ),
-            (
-                "calibre_fs_metadata_is_file",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                    typed_return: Some(MirDataType::Bool),
-                },
-            ),
-            (
-                "calibre_fs_metadata_is_dir",
-                RuntimeFunction {
-                    params: vec![(types::I64, ArgumentKind::Direct)],
-                    returns: Some(types::I8),
-                    typed_return: Some(MirDataType::Bool),
+                    returns: Some(types::I64),
+                    // TODO Come back and type this
+                    typed_return: Some(MirDataType::Dynamic),
                 },
             ),
             (
@@ -1109,6 +1081,8 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             // random
             ("random.rand", "calibre_random_rand"),
             ("random.seed", "calibre_random_seed"),
+            // time
+            ("time.unix_now", "calibre_time_unix_now"),
             // regex
             ("regex.is_match", "calibre_regex_is_match"),
             ("regex.find", "calibre_regex_find"),
@@ -1117,8 +1091,7 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("fs.path_new", "calibre_fs_path_new"),
             ("fs.path_as_str", "calibre_fs_path_as_str"),
             ("fs.path_exists", "calibre_fs_path_exists"),
-            ("fs.path_is_file", "calibre_fs_path_is_file"),
-            ("fs.path_is_dir", "calibre_fs_path_is_dir"),
+            ("fs.path_file_type", "calibre_fs_path_file_type"),
             ("fs.path_canonicalize", "calibre_fs_path_canonicalize"),
             ("fs.path_parent", "calibre_fs_path_parent"),
             ("fs.path_file_name", "calibre_fs_path_file_name"),
@@ -1132,11 +1105,7 @@ pub(crate) fn natives() -> &'static FxHashMap<&'static str, &'static str> {
             ("fs.direntry_file_name", "calibre_fs_direntry_file_name"),
             ("fs.direntry_file_type", "calibre_fs_direntry_file_type"),
             ("fs.direntry_metadata", "calibre_fs_direntry_metadata"),
-            ("fs.filetype_is_file", "calibre_fs_filetype_is_file"),
-            ("fs.filetype_is_dir", "calibre_fs_filetype_is_dir"),
-            ("fs.filetype_is_symlink", "calibre_fs_filetype_is_symlink"),
-            ("fs.metadata_is_file", "calibre_fs_metadata_is_file"),
-            ("fs.metadata_is_dir", "calibre_fs_metadata_is_dir"),
+            ("fs.metadata_file_type", "calibre_fs_metadata_file_type"),
             ("fs.metadata_len", "calibre_fs_metadata_len"),
             ("fs.metadata_modified", "calibre_fs_metadata_modified"),
             ("fs.metadata_created", "calibre_fs_metadata_created"),

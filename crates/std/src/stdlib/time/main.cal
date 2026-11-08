@@ -1,0 +1,60 @@
+type DateTime := struct { ms : uint };
+type Duration := struct { ms : uint };
+
+@overload("as") fn(self : DateTime) -> null!Duration => 
+	return ok(Duration {ms : self.ms});
+
+@overload("+") fn(self : DateTime, duration : Duration) -> DateTime => 
+	return DateTime {
+		ms : self.ms + duration.ms
+	};
+
+@overload("-") fn(self : DateTime, duration : Duration) -> DateTime => 
+	return DateTime {
+		ms : self.ms - duration.ms
+	};
+
+impl DateTime {
+	@pure
+	const from_unix_duration := fn (duration : Duration) -> DateTime => return DateTime { ms : duration.ms };
+
+	@pure
+	const to_unix_duration := fn (self : Self) -> Duration => return self as! Duration;
+
+	const now := fn -> Self =>
+		return DateTime { ms : unix_now() }
+
+	const elapsed := fn (self : Self) -> Duration => 
+		return Duration {
+			ms : self.ms - DateTime.now().ms
+		}
+
+	const since := fn (self : Self, other : Self) -> Duration =>
+		return Duration {
+			ms : self.ms - other.ms
+		}
+}
+
+impl Duration {
+	@pure
+	const from_ms := fn (ms : uint) -> Duration => return Duration { ms };
+
+	@pure
+	const from_s := fn (secs : uint) -> Duration => return Duration { ms : secs * 1000 };
+
+	@pure
+	const from_us := fn (us : uint) -> Duration => return Duration { ms : us / 1000 };
+
+	@pure
+	const as_ms := fn (self : Duration) -> uint => return self.ms;
+
+	@pure
+	const as_s := fn (self : Duration) -> uint => return self.ms / 1000;
+
+	@pure
+	const is_zero := fn (self : Duration) -> bool => return self.ms <= 0;
+
+	const sleep := fn (self : Duration) => wait(self.ms);
+};
+
+const sleep := fn (d : Duration) => d.sleep();

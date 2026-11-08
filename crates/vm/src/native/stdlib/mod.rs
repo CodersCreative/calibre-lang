@@ -9,6 +9,7 @@ pub mod process;
 pub mod random;
 pub mod regex;
 pub mod str;
+pub mod time;
 
 #[cfg(feature = "native")]
 pub mod fs;
