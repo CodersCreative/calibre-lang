@@ -1,7 +1,7 @@
 import Duration from std::time;
 
 const custom_wait_and_time := fn(time : int) -> int => {
-	Duration.from_s(time).sleep();
+	Duration.from_s(time as! uint).sleep();
 	return time;
 }
 

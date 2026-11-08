@@ -3,7 +3,7 @@ use crate::values::{
     string::GcString,
 };
 use std::{
-    fs::{DirEntry, File, FileType, Metadata, OpenOptions},
+    fs::{DirEntry, File, Metadata, OpenOptions},
     hash::{Hash, Hasher},
     io::{Read, Write},
     path::PathBuf,

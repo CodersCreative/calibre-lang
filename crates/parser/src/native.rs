@@ -136,7 +136,7 @@ impl ParserDataType {
                     ParserInnerType::Null,
                 ),
                 ("time.unix_now", Vec::new(), ParserInnerType::UInt),
-                ("wait", vec![ParserInnerType::Int], ParserInnerType::Null),
+                ("wait", vec![ParserInnerType::UInt], ParserInnerType::Null),
                 ("assert", vec![ParserInnerType::Bool], ParserInnerType::Null),
                 ("gen_suspend", Vec::new(), ParserInnerType::Dynamic),
                 ("trim", vec![ParserInnerType::Str], ParserInnerType::Str),

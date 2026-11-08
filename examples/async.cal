@@ -69,7 +69,7 @@ const main := fn => {
 	
 	spawn@ for i in 0..100 => {
 		if (i % 2) = 0 => {
-			Duration.from_ms(101 - i).sleep();
+			Duration.from_ms((101 - i) as! uint).sleep();
 		};
 		
 		print("num => " & i);
