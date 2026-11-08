@@ -11,7 +11,7 @@ impl<T> gen:<T> {
 	};
 
 	@pure
-	const collect := fn (self : Self) -> list:<T> => {
+	const collect := fn (mut self : Self) -> list:<T> => {
 		let mut out := list:<T>[];
 		
 		for => {
@@ -27,7 +27,7 @@ impl<T> gen:<T> {
 	};
 
 	@pure
-	const map := fn<U>(self : Self, op : fn(T) -> U) -> gen:<U> => {
+	const map := fn<U>(mut self : Self, op : fn(T) -> U) -> gen:<U> => {
 		for => {
 			let v : T? = self.next();
 			if let .Some : value <- v => {
@@ -39,7 +39,7 @@ impl<T> gen:<T> {
 	}
 
 	@pure
-	const filter := fn(self : Self, pred : fn(T) -> bool) -> gen:<T> => {
+	const filter := fn(mut self : Self, pred : fn(T) -> bool) -> gen:<T> => {
 		for => {
 			let v : T? = self.next();
 			if let .Some : value <- v => {
@@ -51,7 +51,7 @@ impl<T> gen:<T> {
 	}
 
 	// Technically pure if op is pure but 9 times out of 10 op wont be pure
-	const for_each := fn(self : Self, op : fn(T)) => {
+	const for_each := fn(mut self : Self, op : fn(T)) => {
 		for => {
 			let v : T? = self.next();
 			if let .Some : value <- v => {
@@ -63,7 +63,7 @@ impl<T> gen:<T> {
 	}
 
 	@pure
-	const fold := fn<U>(self : Self, init : U, op : fn (U, T) -> U) -> U => {
+	const fold := fn<U>(mut self : Self, init : U, op : fn (U, T) -> U) -> U => {
 		let mut acc := init;
 		
 		for => {
@@ -79,7 +79,7 @@ impl<T> gen:<T> {
 	}
 
 	@pure
-	const any := fn(self : Self, pred : fn (T) -> bool) -> bool => {
+	const any := fn(mut self : Self, pred : fn (T) -> bool) -> bool => {
 		for => {
 			let v : T? = self.next();
 			if let .Some : value <- v => {
@@ -93,7 +93,7 @@ impl<T> gen:<T> {
 	}
 
 	@pure
-	const all := fn (self : Self, pred : fn (T) -> bool) -> bool => {
+	const all := fn (mut self : Self, pred : fn (T) -> bool) -> bool => {
 		for => {
 			let v : T? = self.next();
 			if let .Some : value <- v => {
@@ -107,7 +107,7 @@ impl<T> gen:<T> {
 	};
 
 	@pure
-	const find := fn (self : Self, pred : fn (T) -> bool) -> T? => {
+	const find := fn (mut self : Self, pred : fn (T) -> bool) -> T? => {
 		for => {
 			let v : T? = self.next();
 			if let .Some : value <- v => {
@@ -121,7 +121,7 @@ impl<T> gen:<T> {
 	};
 
 	@pure
-	const count := fn (self : Self) -> uint => {
+	const count := fn (mut self : Self) -> uint => {
 		let mut n := 0u;
 		
 		for  => {
@@ -137,7 +137,7 @@ impl<T> gen:<T> {
 	};
 
 	@pure
-	const take := fn (self : Self, n : int) -> gen:<T> => {
+	const take := fn (mut self : Self, n : int) -> gen:<T> => {
 		let mut i := 0;
 		
 		for i < n => {
@@ -152,7 +152,7 @@ impl<T> gen:<T> {
 	};
 
 	@pure
-	const skip := fn (self : Self, n : int) -> gen:<T> => {
+	const skip := fn (mut self : Self, n : int) -> gen:<T> => {
 		let mut i := 0;
 		
 		for i < n => {
@@ -177,7 +177,7 @@ impl<T> gen:<T> {
 	};
 
 	@pure
-	const enumerate := fn (self : Self) -> gen:<<int, T>> => {
+	const enumerate := fn (mut self : Self) -> gen:<<int, T>> => {
 		let mut i := 0;
 	
 		for => {
@@ -192,7 +192,7 @@ impl<T> gen:<T> {
 
 	// TODO Account for step < 1
 	@pure
-	const step_by := fn (self : Self, step : int) -> gen:<T> => {
+	const step_by := fn (mut self : Self, step : int) -> gen:<T> => {
 		let mut i := 0;
 		
 		for => {

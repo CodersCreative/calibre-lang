@@ -104,7 +104,7 @@ impl<T> list:<T> {
 	};
 
 	@pure
-	const concat := fn (self other : list:<T>) -> list:<T> => {
+	const concat := fn (mut self other : list:<T>) -> list:<T> => {
 		for i in len(other) => self <<= other[i]!;
 		return self;
 	};

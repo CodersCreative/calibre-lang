@@ -144,10 +144,7 @@ impl CraneliftTranslation for LirClone {
 
         let value = translator.convert_to_i64(value)?;
 
-        let call = translator
-            .builder
-            .ins()
-            .call(func_ref, &[tag, value]);
+        let call = translator.builder.ins().call(func_ref, &[tag, value]);
 
         Ok(CompiledValue::new(
             translator.builder.inst_results(call)[0],

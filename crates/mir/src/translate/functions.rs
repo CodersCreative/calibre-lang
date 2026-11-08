@@ -890,7 +890,12 @@ impl MiddleEnvironment {
     }
 }
 
-fn method_receiver(env: &MiddleEnvironment, base: AstNode, base_type : &MirDataType, symbol_name: &VariableKey) -> AstNode {
+fn method_receiver(
+    env: &MiddleEnvironment,
+    base: AstNode,
+    base_type: &MirDataType,
+    symbol_name: &VariableKey,
+) -> AstNode {
     let mutability = env
         .symbols
         .variables
@@ -904,7 +909,9 @@ fn method_receiver(env: &MiddleEnvironment, base: AstNode, base_type : &MirDataT
             _ => None,
         });
 
-    if let Some(mutability) = mutability && !base_type.is_ref(){
+    if let Some(mutability) = mutability
+        && !base_type.is_ref()
+    {
         AstNode::new(
             base.span,
             AstNodeType::RefStatement(AstRef {
@@ -1048,8 +1055,10 @@ impl AstCallLowering for AstCall {
                             .convert_key_to_ustr(Key::VariableKey(symbol_name.clone())),
                     ));
 
-                    node.args
-                        .insert(0, CallArg::Value(method_receiver(env, *base, &ty, &symbol_name)));
+                    node.args.insert(
+                        0,
+                        CallArg::Value(method_receiver(env, *base, &ty, &symbol_name)),
+                    );
 
                     return Ok(Some(node));
                 }
@@ -1069,8 +1078,10 @@ impl AstCallLowering for AstCall {
                         .convert_key_to_ustr(Key::VariableKey(symbol_name.clone())),
                 ));
 
-                node.args
-                    .insert(0, CallArg::Value(method_receiver(env, *base, &ty, &symbol_name)));
+                node.args.insert(
+                    0,
+                    CallArg::Value(method_receiver(env, *base, &ty, &symbol_name)),
+                );
 
                 return Ok(Some(node));
             }

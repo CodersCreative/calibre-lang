@@ -10,6 +10,7 @@ use crate::{
 use calibre_parser::{
     Span,
     ast::{
+        RefMutability,
         idents::PotentialDollarIdentifier,
         nodes::{
             AstNode, AstNodeType, DestructurePattern, VarType,
@@ -25,14 +26,14 @@ use calibre_parser::{
 use tracing::instrument;
 
 impl MiddleEnvironment {
-    pub fn check_if_mutable(&self, scope: ScopeId, node: &AstNode) -> Option<bool> {
-        match &node.node_type {
+    pub fn check_if_mutable(&mut self, scope: ScopeId, node: &AstNode) -> Option<bool> {
+        let is_mutable = match &node.node_type {
             AstNodeType::Identifier(x) => {
                 let ident = self
                     .resolve(scope, &x.value, ResolutionOptions::idents())
                     .ok()?
                     .unwrap_variable();
-                Some(self.symbols.variables.get(&ident)?.var_type == VarType::Mutable)
+                self.symbols.variables.get(&ident)?.var_type == VarType::Mutable
             }
             AstNodeType::Ternary(x) => self.check_if_mutable(scope, &x.then).map(|y| {
                 x.otherwise
@@ -40,15 +41,24 @@ impl MiddleEnvironment {
                     .and_then(|y| self.check_if_mutable(scope, y))
                     .unwrap_or(true)
                     && y
-            }),
+            })?,
             AstNodeType::DerefStatement(AstDeref { value })
             | AstNodeType::RefStatement(AstRef { value, .. }) => {
-                self.check_if_mutable(scope, value)
+                self.check_if_mutable(scope, value)?
             }
             AstNodeType::FieldAccess(AstField { base, .. })
             | AstNodeType::IndexAccess(AstIndex { base, .. })
-            | AstNodeType::ScopeAccess(AstScope { base, .. }) => self.check_if_mutable(scope, base),
-            _ => None,
+            | AstNodeType::ScopeAccess(AstScope { base, .. }) => {
+                self.check_if_mutable(scope, base)?
+            }
+            _ => return None,
+        };
+
+        if is_mutable {
+            Some(is_mutable)
+        } else {
+            let ty = node.type_of(self, scope, node.span);
+            Some(ty.is_some_and(|x| matches!(x, MirDataType::Ref(_, RefMutability::MutRef))))
         }
     }
 }

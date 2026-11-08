@@ -167,32 +167,27 @@ impl<'a, M: Module> FunctionTranslator<'a, M> {
                         .call(hash_add_ref, &[hasher_ptr, tag, value]);
                 }
 
-                let value = if param.var_type == VarType::Mutable && !param.data_type.is_ref() {
-                    let func_id =
-                        self.runtime_functions
-                            .get("calibre_deep_clone")
-                            .ok_or(String::from(
-                                "calibre_deep_clone not found in runtime_functions",
-                            ))?;
+                let value =
+                    if param.var_type == VarType::Mutable && !param.data_type.is_ref() {
+                        let func_id = self.runtime_functions.get("calibre_deep_clone").ok_or(
+                            String::from("calibre_deep_clone not found in runtime_functions"),
+                        )?;
 
-                    let func_ref = self
-                        .module
-                        .declare_func_in_func(*func_id, self.builder.func);
+                        let func_ref = self
+                            .module
+                            .declare_func_in_func(*func_id, self.builder.func);
 
-                    let tag = value.data_type.type_tag(self.registry.enums()) as i64;
-                    let tag = self.builder.ins().iconst(self.types.int(), tag);
+                        let tag = value.data_type.type_tag(self.registry.enums()) as i64;
+                        let tag = self.builder.ins().iconst(self.types.int(), tag);
 
-                    let value = self.convert_to_i64(value)?;
+                        let value = self.convert_to_i64(value)?;
 
-                    let call = self
-                        .builder
-                        .ins()
-                        .call(func_ref, &[tag, value]);
+                        let call = self.builder.ins().call(func_ref, &[tag, value]);
 
-                    self.builder.inst_results(call)[0]
-                } else {
-                    value.value
-                };
+                        self.builder.inst_results(call)[0]
+                    } else {
+                        value.value
+                    };
 
                 self.builder.def_var(var, value);
             }
