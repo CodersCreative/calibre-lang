@@ -157,9 +157,14 @@ impl MirRenamable for MiddleNodeType {
                 }
                 body.rename(state);
             }
-            MiddleNodeType::AssignmentExpression(MirAssignment { identifier, value }) => {
+            MiddleNodeType::AssignmentExpression(MirAssignment {
+                identifier,
+                value,
+                data_type,
+            }) => {
                 identifier.rename(state);
                 value.rename(state);
+                data_type.rename(state);
             }
             MiddleNodeType::NegExpression(MirNeg { value }) => value.rename(state),
             MiddleNodeType::AsExpression(MirAs {

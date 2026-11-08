@@ -85,6 +85,7 @@ impl MirVarKeysUsed for MiddleNode {
             | MiddleNodeType::AssignmentExpression(MirAssignment {
                 identifier: left,
                 value: right,
+                ..
             })
             | MiddleNodeType::RangeDeclaration(MirRange {
                 from: left,
@@ -252,6 +253,7 @@ impl MiddleNode {
             | MiddleNodeType::AssignmentExpression(MirAssignment {
                 identifier: left,
                 value: right,
+                ..
             })
             | MiddleNodeType::IndexAccess(MirIndex {
                 base: left,
@@ -409,6 +411,7 @@ impl MiddleNode {
             | MiddleNodeType::AssignmentExpression(MirAssignment {
                 identifier: left,
                 value: right,
+                ..
             })
             | MiddleNodeType::IndexAccess(MirIndex {
                 base: left,

@@ -173,7 +173,7 @@ impl FnMatchPreFormat {
             let mut txt = if param.var_type == VarType::Immutable {
                 String::new()
             } else {
-                format!(" {}", param.var_type)
+                format!(" {}", param.var_type.print_only_ends())
             };
 
             if let Some(dt) = &param.data_type {

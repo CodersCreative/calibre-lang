@@ -97,6 +97,7 @@ fn inline_in_node(node: &mut MiddleNode, map: &FxHashMap<VariableKey, InlineFn>)
         | MiddleNodeType::AssignmentExpression(MirAssignment {
             identifier: left,
             value: right,
+            ..
         })
         | MiddleNodeType::IndexAccess(MirIndex {
             base: left,

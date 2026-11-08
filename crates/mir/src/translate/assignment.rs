@@ -124,7 +124,7 @@ impl MirLowering for AstAssignment {
             ));
         }
 
-        let value = match self.identifier.node_type {
+        let mut value = match self.identifier.node_type {
             AstNodeType::Ternary(AstTernary {
                 comparison,
                 then,
@@ -191,6 +191,7 @@ impl MirLowering for AstAssignment {
                     self.value
                         .lower_or_empty(env, scope, span, data_type.clone()),
                 ),
+                data_type: MirDataType::Dynamic,
             },
             AstNodeType::FieldAccess(AstField { base, field }) => MirAssignment {
                 identifier: Box::new(
@@ -201,6 +202,7 @@ impl MirLowering for AstAssignment {
                     self.value
                         .lower_or_empty(env, scope, span, data_type.clone()),
                 ),
+                data_type: MirDataType::Dynamic,
             },
             AstNodeType::ScopeAccess(AstScope { base, field }) => MirAssignment {
                 identifier: Box::new(
@@ -211,6 +213,7 @@ impl MirLowering for AstAssignment {
                     self.value
                         .lower_or_empty(env, scope, span, data_type.clone()),
                 ),
+                data_type: MirDataType::Dynamic,
             },
             AstNodeType::IndexAccess(AstIndex { base, index, .. }) => {
                 if let Some(overloaded) = env.handle_index_assign_overload(
@@ -250,6 +253,7 @@ impl MirLowering for AstAssignment {
                         self.value
                             .lower_or_empty(env, scope, span, data_type.clone()),
                     ),
+                    data_type: MirDataType::Dynamic,
                 }
             }
             _ => MirAssignment {
@@ -263,15 +267,16 @@ impl MirLowering for AstAssignment {
                     self.value
                         .lower_or_empty(env, scope, span, data_type.clone()),
                 ),
+                data_type: MirDataType::Dynamic,
             },
         };
 
         if env.context.type_check {
             let value_type = value.value.mir_type_of(env, scope, span).or(value_type);
 
-            env.compare_types_ref(
-                value_type.as_ref(),
-                identifier_type.as_ref(),
+            value.data_type = env.compare_types(
+                value_type,
+                identifier_type,
                 Some(&TagInfo::IgnoreInvalidTypeCheck),
                 span,
             )?;

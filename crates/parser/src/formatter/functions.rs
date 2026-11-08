@@ -105,7 +105,7 @@ impl FunctionPreFormat {
             let mut txt = if param.var_type == VarType::Immutable {
                 name.clone()
             } else {
-                format!("{} {}", param.var_type, name)
+                format!("{} {}", param.var_type.print_only_ends(), name)
             };
 
             if let Some(dt) = &data_type {
@@ -142,7 +142,7 @@ impl FunctionPreFormat {
                         if p.var_type == VarType::Immutable {
                             p.name.clone()
                         } else {
-                            format!("{} {}", p.var_type, p.name)
+                            format!("{} {}", p.var_type.print_only_ends(), p.name)
                         }
                     })
                     .collect();

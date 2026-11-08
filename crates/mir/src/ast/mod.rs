@@ -116,7 +116,9 @@ impl MiddleNode {
     pub fn len(&self) -> usize {
         let mut count = 1;
         match &self.node_type {
-            MiddleNodeType::AssignmentExpression(MirAssignment { identifier, value }) => {
+            MiddleNodeType::AssignmentExpression(MirAssignment {
+                identifier, value, ..
+            }) => {
                 count += identifier.len();
                 count += value.len();
             }
@@ -189,7 +191,9 @@ impl MiddleNode {
                     stmt.substitute(repl);
                 }
             }
-            MiddleNodeType::AssignmentExpression(MirAssignment { identifier, value }) => {
+            MiddleNodeType::AssignmentExpression(MirAssignment {
+                identifier, value, ..
+            }) => {
                 identifier.substitute(repl);
                 value.substitute(repl);
             }
@@ -269,9 +273,9 @@ impl MiddleNode {
             MiddleNodeType::Return(MirReturn { value }) => {
                 value.as_ref().is_some_and(|v| v.calls_self(name))
             }
-            MiddleNodeType::AssignmentExpression(MirAssignment { identifier, value }) => {
-                identifier.calls_self(name) || value.calls_self(name)
-            }
+            MiddleNodeType::AssignmentExpression(MirAssignment {
+                identifier, value, ..
+            }) => identifier.calls_self(name) || value.calls_self(name),
             MiddleNodeType::BinaryExpression(MirBinary { left, right, .. })
             | MiddleNodeType::ComparisonExpression(MirComparison { left, right, .. })
             | MiddleNodeType::BooleanExpression(MirBoolean { left, right, .. })
@@ -485,6 +489,7 @@ pub struct MirCall {
 pub struct MirAssignment {
     pub identifier: Box<MiddleNode>,
     pub value: Box<MiddleNode>,
+    pub data_type: MirDataType,
 }
 
 #[derive(Clone, Debug, PartialEq, Builder)]

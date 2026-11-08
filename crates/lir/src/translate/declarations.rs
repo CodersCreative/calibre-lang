@@ -7,7 +7,7 @@ ExternFunction
 */
 
 use crate::{
-    ast::{LirClosure, LirDeclare, LirExtern, LirNode, LirNodeType},
+    ast::{LirClone, LirClosure, LirDeclare, LirExtern, LirNode, LirNodeType},
     environment::{LirEnvironment, LirFunction, LirGlobal},
     translate::LirLowering,
 };
@@ -27,11 +27,17 @@ impl LirLowering for MirVarDecl {
             env.last_ident = None;
         }
 
-        let val = env.lower_node(*self.value);
+        let mut val = env.lower_node(*self.value);
 
         // This works but theres definitely potential to reduce the number of referenced variables substantially
         let is_referenced = self.var_type == VarType::Mutable
             || env.referenced_identifiers.contains(&self.identifier);
+
+        if self.var_type == VarType::Mutable && !self.data_type.is_ref() {
+            val = LirNodeType::Clone(LirClone {
+                value: Box::new(val),
+            });
+        }
 
         env.add_instr(LirNode::new(
             span,

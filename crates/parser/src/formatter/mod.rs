@@ -121,15 +121,19 @@ impl DestructurePattern {
                         txt.push_str(", ");
                     }
                     first = false;
+
                     if *var_type == VarType::Immutable && &name.to_string() == field {
                         txt.push_str(field);
                         continue;
                     }
+
                     txt.push_str(field);
                     txt.push_str(": ");
+
                     if *var_type == VarType::Mutable {
                         txt.push_str("mut ");
                     }
+
                     txt.push_str(&name.to_string());
                 }
 

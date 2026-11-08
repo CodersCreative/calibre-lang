@@ -213,13 +213,36 @@ impl VM {
 
             match args {
                 FunctionArgs::Values(args) => {
-                    for (reg, arg) in function.param_regs.iter().zip(args) {
-                        self.set_reg_value(*reg, arg.clone());
+                    for ((reg, arg), param) in function
+                        .param_regs
+                        .iter()
+                        .zip(args)
+                        .zip(function.params.iter())
+                    {
+                        let arg = if param.var_type == VarType::Mutable && !param.is_ref {
+                            arg.clone().deep_clone(self)
+                        } else {
+                            arg.clone()
+                        };
+
+                        self.set_reg_value(*reg, arg);
                     }
                 }
                 FunctionArgs::Regs(args) => {
-                    for (reg, arg_reg) in function.param_regs.iter().zip(args.iter().copied()) {
+                    for ((reg, arg_reg), param) in function
+                        .param_regs
+                        .iter()
+                        .zip(args.iter().copied())
+                        .zip(function.params.iter())
+                    {
                         let arg = self.get_reg_value_in_frame(caller_frame, arg_reg).clone();
+
+                        let arg = if param.var_type == VarType::Mutable && !param.is_ref {
+                            arg.deep_clone(self)
+                        } else {
+                            arg
+                        };
+
                         self.set_reg_value(*reg, arg);
                     }
                 }
@@ -231,13 +254,6 @@ impl VM {
                 .zip(function.param_regs.iter().copied())
             {
                 let value = self.get_reg_value(reg).clone();
-
-                let value = if param.var_type == VarType::Mutable && !param.is_ref {
-                    value.deep_clone(self)
-                } else {
-                    value
-                };
-
                 let _ = self.variables.insert(param.identifier.clone(), value);
             }
 
